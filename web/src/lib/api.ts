@@ -104,8 +104,17 @@ export const api = {
 
   logout: (data: { refresh_token: string }) =>
     apiCall("/auth/logout", { method: "POST", body: data }),
-  getPosts: async (query: string = "" ) => {
-    const response: ApiResponse<any> = await apiCall(`/posts?${query}`);
+  getPosts: async (query: Record<string, any> = {}) => {
+    const queryString = new URLSearchParams(
+      Object.entries(query)
+        .filter(([_, v]) => v !== undefined && v !== null)
+        .reduce((acc, [k, v]) => {
+          acc[k] = String(v);
+          return acc;
+        }, {} as Record<string, string>)
+    ).toString();
+
+    const response: ApiResponse<any> = await apiCall(`/posts?${queryString}`);
     return {
       data: response.posts || [],
       meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
