@@ -1,10 +1,9 @@
 export function formatDate(isoString: string): string {
   const date = new Date(isoString);
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  const month = date.toLocaleString('en-US', { month: 'long' });
+  const day = date.getDate();
+  const year = date.getFullYear();
+  return `${month} ${day}, ${year}`;
 }
 
 export function formatTime(isoString: string): string {
@@ -15,6 +14,7 @@ export function formatTime(isoString: string): string {
     hour12: true,
   }).replace(/AM|PM/, (m) => m.toLowerCase());
 }
+
 export function formatDateTime(isoString: string): string {
   const date = new Date(isoString);
   // Format: Month Day, Year\nHH:mm am/pm
@@ -36,6 +36,7 @@ export function formatDateTime(isoString: string): string {
   const time = timePart.replace(/AM|PM/, (m) => m.toLowerCase());
   return `${datePart}, ${date.getFullYear()}\n${time}`;
 }
+
 export function formatFullDate(isoString: string): string {
   const date = new Date(isoString);
   return date.toLocaleString(undefined, {
@@ -45,4 +46,21 @@ export function formatFullDate(isoString: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+export function formatRelativeDay(isoString: string): string {
+  const inputDate = new Date(isoString);
+  const now = new Date();
+
+  // Zero out the time for both dates to compare only the date part
+  const utcInput = Date.UTC(inputDate.getFullYear(), inputDate.getMonth(), inputDate.getDate());
+  const utcNow = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const diffDays = Math.round((utcInput - utcNow) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "today";
+  if (diffDays === -1) return "yesterday";
+  if (diffDays === 1) return "tomorrow";
+  if (diffDays < 0) return `${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? "" : "s"} ago`;
+  return `${diffDays} day${diffDays === 1 ? "" : "s"} in the future`;
 }

@@ -93,4 +93,38 @@ caption {
   tbody > tr:hover {
     background: #f8f8f8;
   }
+
+  &__date {
+    color: #6E7376;
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 130%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__heading {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    &-title {
+      color: #333536;
+      font-size: 1rem;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 130%;
+    }
+
+    &-description {
+      color: #6E7376;
+      font-family: Inter;
+      font-size: 0.875rem;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 130%;
+    }
+  }
+
 }
