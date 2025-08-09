@@ -1,27 +1,8 @@
 ---
 import Admin from "@/layouts/Admin/Layout.astro";
 import AdminContent from "@/components/admin/helpers/content";
-import { api } from "@/lib/api";
-import type { Post } from "@/lib/types";
-
-let totalPosts = 0;
-let recentPosts: Post[] = [];
-let error: string | null = null;
-
-try {
-  const [postsResponse] = await Promise.all([
-    api.getPosts(),
-  ]);
-
-  totalPosts = postsResponse.meta.total;
-
-  recentPosts = postsResponse.data;
-} catch (e) {
-  error = e instanceof Error ? e.message : 'Failed to fetch admin data';
-  console.error('Admin dashboard error:', e);
-}
 ---
 
 <Admin title="Admin Dashboard" description="Content management system admin dashboard">
-  <AdminContent client:load recentPosts={recentPosts} />
+  <AdminContent client:load />
 </Admin>
