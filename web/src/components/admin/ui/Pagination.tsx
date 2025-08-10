@@ -14,7 +14,7 @@ type PaginationProps<T, Q = Record<string, any>> = {
 function Pagination<T, Q = Record<string, any>>({
   fetchData,
   query,
-  limitOptions = [10, 25, 50, 100],
+  limitOptions = [8, 16, 24, 48, 64],
   pageWindow = 5, // NEW: default to 5
   children,
 }: PaginationProps<T, Q>) {
@@ -113,7 +113,6 @@ function Pagination<T, Q = Record<string, any>>({
         </button>
         {/* Results per page dropdown */}
         <div className="gl-pagination__limit">
-            <span>Results per page:</span>
             <select value={limit} onChange={handleLimitChange} style={{ padding: 4, borderRadius: 4, border: "1px solid #ccc" }}>
             {limitOptions.map((option) => (
                 <option key={option} value={option}>
