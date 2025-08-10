@@ -62,13 +62,11 @@ function Pagination<T, Q = Record<string, any>>({
     if (totalPages <= pageWindow) {
       return Array.from({ length: totalPages }, (_, i) => i);
     }
-    // Shift window when currentPage is at the last index of the window (windowStart + pageWindow - 1)
-    let windowStart = Math.floor(currentPage / (pageWindow - 1)) * (pageWindow - 1);
-    let windowEnd = windowStart + pageWindow - 1;
-    if (windowEnd >= totalPages) {
-      windowEnd = totalPages - 1;
-      windowStart = Math.max(0, windowEnd - pageWindow + 1);
+    let windowStart = 0;
+    if (currentPage >= pageWindow) {
+      windowStart = Math.floor(currentPage / pageWindow) * pageWindow;
     }
+    let windowEnd = Math.min(windowStart + pageWindow - 1, totalPages - 1);
     return Array.from({ length: windowEnd - windowStart + 1 }, (_, i) => windowStart + i);
   };
 
@@ -85,6 +83,7 @@ function Pagination<T, Q = Record<string, any>>({
         <button onClick={() => setOffset(0)} disabled={currentPage === 0}>
           <Icon name="double-next" reverse={true} color={currentPage === 0 ? "#B8BCBF" : "#333536"} width={navigationIconSize} height={navigationIconSize} />
         </button>
+
         {/* Previous page */}
         <button onClick={() => setOffset((o) => Math.max(0, o - limit))} disabled={currentPage === 0}>
           <Icon name="next" reverse={true} color={currentPage === 0 ? "#B8BCBF" : "#333536"} width={navigationIconSize} height={navigationIconSize} />
@@ -109,10 +108,7 @@ function Pagination<T, Q = Record<string, any>>({
           <Icon name="next" color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"} width={navigationIconSize} height={navigationIconSize} />
         </button>
         {/* Go to last page */}
-        <button
-          onClick={() => setOffset((totalPages - 1) * limit)}
-          disabled={currentPage >= totalPages - 1 || totalPages === 0}
-        >
+        <button onClick={() => setOffset((totalPages - 1) * limit)} disabled={currentPage >= totalPages - 1 || totalPages === 0}>
           <Icon name="double-next" color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"} width={navigationIconSize} height={navigationIconSize} />
         </button>
         {/* Results per page dropdown */}

@@ -7,11 +7,44 @@
     align-items: center;
   }
 
+  &__navigation {
+    button {
+      color: #333536;
+      font-size: 1rem;
+      font-style: normal;
+      font-weight: 500;
+      line-height: normal;
+      width: 2rem;
+      height: 2rem;
+
+      &[disabled] {
+        color: #0050FE;
+        cursor: not-allowed;
+        font-weight: 600;
+      }
+    }
+  }
+
   button {
     border: none;
     background: none;
     padding: .4rem;
     cursor: pointer;
+    border-radius: .25rem;
+
+    &.no-icon {
+      span {
+        opacity: 0;
+      }
+    }
+
+    &[disabled] {
+      cursor: inherit;
+
+      &:hover {
+        background: none;
+      }
+    }
 
     &:hover {
       background: #0000000a;
