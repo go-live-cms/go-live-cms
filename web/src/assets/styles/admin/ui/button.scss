@@ -1,0 +1,50 @@
+// src/components/ui/Button.module.scss
+
+.button {
+  display: flex;
+  padding: 0.5rem 1rem;
+  justify-content: center;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: 0.3125rem;
+  border: none;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  background: linear-gradient(138deg, #181A1A 6.08%, #111313 88.85%);
+  box-shadow:
+    0 0 3.4px rgba(107, 107, 107, 0.5) inset,
+    0 0 4px rgba(0, 0, 0, 0.25);
+
+  color: #fff;
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.active {
+  opacity: 1;
+  filter: brightness(1.05);
+}
+
+.inactive {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Variations */
+.default {
+  // already defined by base styles
+}
+
+.primary {
+  background: linear-gradient(138deg, #0050FE 6.08%, #0085FE 88.85%);
+}
+
+.secondary {
+  background: linear-gradient(138deg, #6b7280 6.08%, #374151 88.85%);
+}
+
+.danger {
+  background: linear-gradient(138deg, #dc2626 6.08%, #991b1b 88.85%);
+}

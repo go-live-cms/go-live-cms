@@ -1,7 +1,8 @@
 ---
-import Admin from '@/layouts/Admin/Layout.astro';
-import { api } from '@/lib/api';
-import type { Post, User, Taxonomy, Media } from '@/lib/types';
+import Admin from "@/layouts/Admin/Layout.astro";
+import Button from "@/components/ui/Button.tsx";
+import { api } from "@/lib/api";
+import type { Post, User, Taxonomy, Media } from "@/lib/types";
 
 let totalPosts = 0;
 let totalUsers = 0;
@@ -33,6 +34,9 @@ try {
 ---
 
 <Admin title="Admin Dashboard" description="Content management system admin dashboard">
+  <Button variation="primary" onClick={() => console.log('Clicked!')}>
+    Add Item
+  </Button>
   <div class="admin-header">
     <h1>🚀 Admin Dashboard</h1>
     <p>Manage your Go Live CMS content and settings</p>
