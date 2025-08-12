@@ -8,12 +8,11 @@ tr,
 th,
 td,
 caption {
-  all: unset; // removes *all* inherited/default browser styles
-  display: revert; // ensures they still behave like their semantic element
+  all: unset;
+  display: revert;
   box-sizing: border-box;
 }
 
-// Alternative to `all: unset` if you want a softer reset:
 table {
   border-collapse: collapse;
   border-spacing: 0;
