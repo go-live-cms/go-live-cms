@@ -1,0 +1,129 @@
+/* Remove default styles for table related tags */
+
+table,
+thead,
+tbody,
+tfoot,
+tr,
+th,
+td,
+caption {
+  all: unset;
+  display: revert;
+  box-sizing: border-box;
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  width: 100%;
+}
+
+th,
+td {
+  margin: 0;
+  padding: 0;
+  border: none;
+  font: inherit;
+  color: inherit;
+  background: none;
+  vertical-align: middle;
+}
+
+caption {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+}
+
+/* Actual g-table styles */
+
+.gl-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  background: #fff;
+
+  thead,
+  tbody {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    align-self: stretch;
+  }
+
+  thead {
+    border-bottom: 1px solid #B3B3B3;
+  }
+
+  thead > tr,
+  tbody > tr {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  th,
+  td {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  th {
+    color: #333536;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 130%;
+  }
+
+  tbody > tr + tr {
+    border-top: 1px solid #e6e6e6;
+  }
+
+  tbody > tr:hover {
+    background: #f8f8f8;
+  }
+
+  &__date {
+    color: #6E7376;
+    font-size: 0.875rem;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 130%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  &__heading {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    &-title {
+      color: #333536;
+      font-size: 1rem;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 130%;
+    }
+
+    &-description {
+      color: #6E7376;
+      font-family: Inter;
+      font-size: 0.875rem;
+      font-style: normal;
+      font-weight: 500;
+      line-height: 130%;
+    }
+  }
+
+}

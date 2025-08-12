@@ -1,0 +1,9 @@
+---
+import Admin from "@/layouts/Admin/Layout.astro";
+import AdminContent from "@/components/admin/helpers/content";
+---
+
+<Admin title="Admin Dashboard" description="Content management system admin dashboard">
+  <h1>All content</h1>
+  <AdminContent client:load />
+</Admin>
