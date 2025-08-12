@@ -6,7 +6,7 @@ type PaginationProps<T, Q = Record<string, any>> = {
   fetchData: (query: Q & { limit: number; offset: number }) => Promise<{ data: T[]; total: number }>;
   query: Q;
   limitOptions?: number[];
-  pageWindow?: number; // NEW: customizable number of visible page buttons
+  pageWindow?: number;
   children: (data: T[], total: number, loading: boolean) => React.ReactNode;
 };
 
@@ -15,7 +15,7 @@ function Pagination<T, Q = Record<string, any>>({
   fetchData,
   query,
   limitOptions = [8, 16, 24, 48, 64],
-  pageWindow = 5, // NEW: default to 5
+  pageWindow = 5,
   children,
 }: PaginationProps<T, Q>) {
   const [limit, setLimit] = useState(limitOptions[0]);
@@ -113,13 +113,13 @@ function Pagination<T, Q = Record<string, any>>({
         </button>
         {/* Results per page dropdown */}
         <div className="gl-pagination__limit">
-            <select value={limit} onChange={handleLimitChange} style={{ padding: 4, borderRadius: 4, border: "1px solid #ccc" }}>
+          <select value={limit} onChange={handleLimitChange} style={{ padding: 4, borderRadius: 4, border: "1px solid #ccc" }}>
             {limitOptions.map((option) => (
-                <option key={option} value={option}>
+              <option key={option} value={option}>
                 {option}
-                </option>
+              </option>
             ))}
-            </select>
+          </select>
         </div>
       </div>
     </div>
