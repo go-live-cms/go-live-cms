@@ -1,0 +1,56 @@
+.gl-pagination {
+  button {
+    background: none;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    padding: 0.4rem;
+
+    &.no-icon {
+      span {
+        opacity: 0;
+      }
+    }
+
+    &[disabled] {
+      cursor: inherit;
+
+      &:hover {
+        background: none;
+      }
+    }
+
+    &:hover {
+      background: #0000000a;
+    }
+  }
+
+  &__limit {
+    margin-left: auto;
+  }
+
+  &__controls {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    margin-top: 0.875rem;
+  }
+
+  &__navigation {
+    button {
+      color: #333536;
+      font-size: 1rem;
+      font-style: normal;
+      font-weight: 500;
+      height: 2rem;
+      line-height: normal;
+      width: 2rem;
+
+      &[disabled] {
+        color: #0050fe;
+        cursor: not-allowed;
+        font-weight: 600;
+      }
+    }
+  }
+}
