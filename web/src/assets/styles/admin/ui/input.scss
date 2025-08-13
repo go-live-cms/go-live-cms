@@ -1,0 +1,91 @@
+/* Container */
+.gl-input {
+  --height: 2.8rem;
+  --radius: 0.25rem;
+  --pad-x: 0.875rem;
+  --pad-y: 0.625rem;
+
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+  height: var(--height);
+  border-radius: var(--radius);
+  border: 1px solid #e1e1e0;
+  font-family: inherit;
+
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+
+  &.is-focused {
+    border-color: #9aa0a6;
+    box-shadow: 0 0 8px 0 #00000011 inset;
+  }
+
+  /* Field */
+  &__field {
+    flex: 1 1 auto;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.875rem;
+    line-height: 1.2;
+    font-weight: 600;
+    color: #333536;
+
+    padding: var(--pad-y) var(--pad-x);
+    padding-top: calc(var(--pad-y) + 0.625rem);
+
+    /* Remove default clear buttons, spin buttons where possible */
+    &::-ms-clear { display: none; }
+    &[type="number"] {
+      -moz-appearance: textfield;
+      &::-webkit-outer-spin-button,
+      &::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    }
+  }
+
+  &__label {
+    position: absolute;
+    left: var(--pad-x);
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666B6D;
+    pointer-events: none;
+    white-space: nowrap;
+
+    /* Before typing: acts like placeholder, slightly larger */
+    font-size: 1rem;
+
+    transition:
+      transform 140ms ease,
+      top 140ms ease,
+      font-size 140ms ease,
+      color 140ms ease,
+      opacity 140ms ease;
+  }
+
+  /* Float when focused or filled (JS class), or when placeholder isn't shown (CSS fallback) */
+  &.is-focused .gl-input__label,
+  &.is-filled .gl-input__label,
+  &:not(:has(input:placeholder-shown)) .gl-input__label {
+    top: 0.25rem;
+    transform: none;
+    font-size: 0.8rem;
+    color: #4c4d50;
+  }
+
+  /* Disabled state */
+  &:has(input:disabled) {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  /* Invalid state (optional: when parent gets .is-invalid) */
+  &.is-invalid {
+    border-color: #d93025;
+    box-shadow: 0 0 0 3px rgba(217, 48, 37, 0.08);
+    .gl-input__label { color: #a33a33!important; }
+  }
+}
