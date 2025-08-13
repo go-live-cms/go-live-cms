@@ -1,5 +1,48 @@
 .gl-admin {
   &-media {
+    &-header {
+      display: flex;
+      justify-content: space-between;
+      &-right {
+        display: flex;
+        gap: 1rem;
+      }
+      &-left {
+        align-items: center;
+        display: flex;
+        gap: 2rem;
+      }
+      &__filters {
+        align-items: center;
+        display: flex;
+        gap: 2rem;
+      }
+      &__button-wrapper {
+        align-items: center;
+        display: flex;
+        gap: 1rem;
+      }
+      &__filter,
+      &__sort {
+        background: none;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: inherit;
+        font-weight: inherit;
+        line-height: inherit;
+
+        &-wrapper {
+          color: #525759;
+          font-family: inherit;
+          font-size: 1rem;
+          font-style: normal;
+          font-weight: 500;
+          line-height: 145%;
+        }
+      }
+    }
     &__grid {
       display: grid;
       gap: 1rem;

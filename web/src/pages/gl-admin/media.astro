@@ -45,14 +45,40 @@ function isImage(mediaPath: string): boolean {
         <!-- adding this later above the load more <p class="gl-admin-media-header__count">{total} {total === 1 ? 'item' : 'items'}</p> -->
       </div>
       <div class="gl-admin-media-header-right">
-        <!-- add filters here -->
-        <!-- add search functionality -->
-       
+        <div class="gl-admin-media-header__filters">
+          <div class="gl-admin-media-header__filter-wrapper">
+            <select class="gl-admin-media-header__filter" id="media-filter-author">
+              <option value="">All Authors</option>
+              <!-- TODO: Add author options dynamically -->
+            </select>
+          </div>
+
+          <div class="gl-admin-media-header__filter-wrapper">
+            <select class="gl-admin-media-header__filter" id="media-filter-type">
+              <option value="">All Types</option>
+              <option value="image">Images</option>
+              <option value="video">Videos</option>
+              <option value="audio">Audio</option>
+              <option value="document">Documents</option>
+            </select>
+          </div>
+          <div class="gl-admin-media-header__sort-wrapper">
+            <label for="media-sort" class="gl-admin-media-header__sort-label">Sort by:</label>
+            <select class="gl-admin-media-header__sort" id="media-sort">
+              <option value="date_desc">Last Added</option>
+              <option value="date_asc">Oldest First</option>
+            </select>
+          </div>
+        </div>
+        <div class="gl-admin-media-header__button-wrapper">
+          <GLAdminButton className="gl-admin-media__bulk-select" id="gl-admin-media__bulk-select" variation='flat'> <Icon name="bulkSelectIcon" color='#333536' width='14' height='14' /> Bulk Select</GLAdminButton>
+          <GLAdminButton className="gl-admin-media__external-files-btn" id="gl-admin-media__external-files-btn" > <Icon name="add" color='white' width='14' height='14' /> New Media </GLAdminButton>
+        </div>
       </div>
     </div>
 
-    <div class="upload-area" id="upload-area">
-      <div class="upload-content">
+    <div class="gl-admin-media__upload-area" id="gl-admin-media__upload-area">
+      <div class="gl-admin-media__upload-area-header">
         <h3>Drop files to upload</h3>
         <div>
           <span>or</span>
@@ -67,16 +93,16 @@ function isImage(mediaPath: string): boolean {
       <input type="file" id="file-input" multiple accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt" style="display: none;" />
     </div>
 
-    <div class="upload-progress" id="upload-progress" style="display: none;">
-      <div class="progress-item" id="progress-template" style="display: none;">
-        <div class="progress-info">
-          <span class="file-name"></span>
-          <span class="file-size"></span>
+    <div class="gl-admin-media__upload-progress" id="upload-progress" style="display: none;">
+      <div class="gl-admin-media__progress-item" id="progress-template" style="display: none;">
+        <div class="gl-admin-media__progress-info">
+          <span class="gl-admin-media__file-name"></span>
+          <span class="gl-admin-media__file-size"></span>
         </div>
-        <div class="progress-bar">
-          <div class="progress-fill"></div>
+        <div class="gl-admin-media__progress-bar">
+          <div class="gl-admin-media__progress-fill"></div>
         </div>
-        <span class="progress-status"></span>
+        <span class="gl-admin-media__progress-status"></span>
       </div>
     </div>
 
