@@ -5,16 +5,17 @@ import {
     useCallback,
     useId,
     type InputHTMLAttributes,
-    type HTMLInputTypeAttribute,
 } from "react";
+import { IMaskInput } from "react-imask";
+import { getInputMask, type InputMaskType } from "@/utils/admin/inputMasks";
 import "@assets/styles/admin/ui/input.scss";
 
 export type InputProps = Omit<
     InputHTMLAttributes<HTMLInputElement>,
-    "title" | "type"
+    "title" | "type" | "placeholder"
 > & {
     title: string;
-    type?: HTMLInputTypeAttribute;
+    type?: InputMaskType;
     containerClassName?: string;
 };
 
@@ -102,10 +103,10 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                     .filter(Boolean)
                     .join(" ")}
             >
-                <input
+                <IMaskInput
                     id={inputId}
                     ref={ref}
-                    type={type}
+                    type="text"
                     className={["gl-input__field", className || ""]
                         .filter(Boolean)
                         .join(" ")}
@@ -115,6 +116,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                     onFocus={handleFocus}
                     onBlur={handleBlur}
                     onChange={handleChange}
+                    onAccept={(value) => {
+                        if (onChange) {
+                            const sanitizedValue = sanitizeInput(value);
+                            onChange({
+                                target: { value: sanitizedValue },
+                                currentTarget: { value: sanitizedValue },
+                            } as any);
+                        }
+                    }}
+                    {...getInputMask(type)}
                     {...rest}
                 />
                 <label className="gl-input__label" htmlFor={inputId}>{title}</label>
