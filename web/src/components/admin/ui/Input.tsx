@@ -3,11 +3,11 @@ import {
     useMemo,
     useState,
     useCallback,
+    useEffect,
     type InputHTMLAttributes,
 } from "react";
 import { getInputMask, getValidationPattern, type InputMaskType } from "@/utils/admin/inputMasks";
 import "@assets/styles/admin/ui/input.scss";
-import { IMaskInput } from "react-imask";
 
 export type InputProps = Omit<
     InputHTMLAttributes<HTMLInputElement>,
@@ -40,8 +40,16 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         const [filled, setFilled] = useState(
             () => (value ?? defaultValue ?? "") !== ""
         );
+        const [IMaskInput, setIMaskInput] = useState<any>(null);
+        const [hydrated, setHydrated] = useState(false);
 
-        // Keep "filled" in sync for controlled usage
+        useEffect(() => {
+            setHydrated(true);
+            import("react-imask").then(mod => {
+                setIMaskInput(() => mod.IMaskInput);
+            });
+        }, []);
+
         const isFilled = useMemo(() => {
             if (value !== undefined) return String(value) !== "";
             return filled;
@@ -65,6 +73,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         );
 
         const isValid = useCallback(() => {
+            console.log("Validating input...", value);
             if (value === undefined) return true;
             return getValidationPattern(type).test(value as string);
         }, [type, value]);
@@ -109,31 +118,34 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                     .filter(Boolean)
                     .join(" ")}
             >
-                <IMaskInput
-                    id={inputId}
-                    ref={ref}
-                    type="text"
-                    className={["gl-input__field", className || ""]
-                        .filter(Boolean)
-                        .join(" ")}
-                    placeholder=" "
-                    value={value as any}
-                    defaultValue={defaultValue}
-                    onFocus={handleFocus}
-                    onBlur={handleBlur}
-                    onChange={handleChange}
-                    onAccept={(value) => {
-                        if (onChange) {
-                            const sanitizedValue = sanitizeInput(value);
-                            onChange({
-                                target: { value: sanitizedValue },
-                                currentTarget: { value: sanitizedValue },
-                            } as any);
-                        }
-                    }}
-                    {...getInputMask(type)}
-                    {...rest}
-                />
+                {/* Render nothing until hydrated */}
+                {!hydrated || !IMaskInput ? null : (
+                    <IMaskInput
+                        id={inputId}
+                        ref={ref}
+                        type="text"
+                        className={["gl-input__field", className || ""]
+                            .filter(Boolean)
+                            .join(" ")}
+                        placeholder=" "
+                        value={value as any}
+                        defaultValue={defaultValue}
+                        onFocus={handleFocus}
+                        onBlur={handleBlur}
+                        onChange={handleChange}
+                        onAccept={(value: string) => {
+                            if (onChange) {
+                                const sanitizedValue = sanitizeInput(value);
+                                onChange({
+                                    target: { value: sanitizedValue },
+                                    currentTarget: { value: sanitizedValue },
+                                } as any);
+                            }
+                        }}
+                        {...getInputMask(type)}
+                        {...rest}
+                    />
+                )}
                 <label className="gl-input__label" htmlFor={inputId}>{title}</label>
             </div>
         );
