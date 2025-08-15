@@ -3,12 +3,11 @@ import {
     useMemo,
     useState,
     useCallback,
-    useId,
     type InputHTMLAttributes,
 } from "react";
-import { IMaskInput } from "react-imask";
-import { getInputMask, type InputMaskType } from "@/utils/admin/inputMasks";
+import { getInputMask, getValidationPattern, type InputMaskType } from "@/utils/admin/inputMasks";
 import "@assets/styles/admin/ui/input.scss";
+import { IMaskInput } from "react-imask";
 
 export type InputProps = Omit<
     InputHTMLAttributes<HTMLInputElement>,
@@ -24,6 +23,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         {
             title,
             type = "text",
+            name,
             value,
             defaultValue,
             className,
@@ -64,6 +64,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             [onBlur, value]
         );
 
+        const isValid = useCallback(() => {
+            if (value === undefined) return true;
+            return getValidationPattern(type).test(value as string);
+        }, [type, value]);
+
         function sanitizeInput(value: string) {
             return value.replace(/<[^>]*>?/gm, "");
         }
@@ -90,7 +95,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             [onChange, value]
         );
 
-        const inputId = id || `input-${useId()}`;
+        const inputId = id ?? `input-${name || type}`;
 
         return (
             <div
@@ -98,6 +103,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                     "gl-input",
                     focused ? "is-focused" : "",
                     isFilled ? "is-filled" : "",
+                    isValid() ? "" : "is-invalid",
                     containerClassName || "",
                 ]
                     .filter(Boolean)
