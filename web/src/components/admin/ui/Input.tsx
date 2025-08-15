@@ -73,8 +73,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         );
 
         const isValid = useCallback(() => {
-            console.log("Validating input...", value);
-            if (value === undefined) return true;
+            if (value === undefined || value === "") return true;
             return getValidationPattern(type).test(value as string);
         }, [type, value]);
 
@@ -114,6 +113,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                     isFilled ? "is-filled" : "",
                     isValid() ? "" : "is-invalid",
                     containerClassName || "",
+                    className || "",
                 ]
                     .filter(Boolean)
                     .join(" ")}
@@ -124,9 +124,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
                         id={inputId}
                         ref={ref}
                         type="text"
-                        className={["gl-input__field", className || ""]
-                            .filter(Boolean)
-                            .join(" ")}
+                        className="gl-input__field"
                         placeholder=" "
                         value={value as any}
                         defaultValue={defaultValue}
