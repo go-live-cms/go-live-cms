@@ -71,8 +71,12 @@ function isImage(mediaPath: string): boolean {
           </div>
         </div>
         <div class="gl-admin-media-header__button-wrapper">
-          <GLAdminButton className="gl-admin-media__bulk-select" id="gl-admin-media__bulk-select" variation='flat'> <Icon name="bulkSelectIcon" color='#333536' width='14' height='14' /> Bulk Select</GLAdminButton>
-          <GLAdminButton className="gl-admin-media__external-files-btn" id="gl-admin-media__external-files-btn" > <Icon name="add" color='white' width='14' height='14' /> New Media </GLAdminButton>
+          <GLAdminButton className="gl-admin-media__bulk-select" id="gl-admin-media__bulk-select" variation='flat'> 
+            <Icon name="bulkSelectIcon" color='#333536' width='14' height='14' /> Bulk Select
+          </GLAdminButton>
+          <GLAdminButton className="gl-admin-media__new-media-btn" id="gl-admin-media__new-media-btn"> 
+            <Icon name="add" color='white' width='14' height='14' /> New Media 
+          </GLAdminButton>
         </div>
       </div>
     </div>
@@ -83,10 +87,13 @@ function isImage(mediaPath: string): boolean {
         <div>
           <span>or</span>
           <div class="gl-admin-media__upload-area-button-wrapper">
-            <GLAdminButton className="gl-admin-media__upload-btn" id="gl-admin-media__upload-btn"> <Icon name="uploadIcon" color='white' width='14' height='14' /> Upload Files</GLAdminButton>
-            <GLAdminButton className="gl-admin-media__external-files-btn" id="gl-admin-media__external-files-btn" variation='flat'>Add External Files</GLAdminButton>
+            <GLAdminButton className="gl-admin-media__upload-btn" id="gl-admin-media__upload-btn"> 
+              <Icon name="uploadIcon" color='white' width='14' height='14' /> Upload Files
+            </GLAdminButton>
+            <GLAdminButton className="gl-admin-media__cancel-upload-btn" id="gl-admin-media__cancel-upload-btn" variation='flat'>
+              Cancel
+            </GLAdminButton>
           </div>
-
         </div>
         <small>Maximum size: 50MB. Supported: Images, Videos, Audio, Documents <!-- TODO:import number from env size limit --> </small>
       </div>
@@ -121,15 +128,14 @@ function isImage(mediaPath: string): boolean {
 
       {mediaItems.length === 0 && !error && (
         <div class="empty-state">
-          <div class="empty-icon">📂</div>
+          <div class="empty-icon"></div>
           <h3>No media files yet</h3>
-          <p>Upload your first file by dropping it above or clicking "select files"</p>
+          <p>Upload your first file by clicking "New Media" above</p>
         </div>
       )}
     </div>
   </div>
 
-  <!-- Edit Modal -->
   <div class="modal" id="edit-modal" style="display: none;">
     <div class="modal-content">
       <div class="modal-header">
@@ -138,17 +144,17 @@ function isImage(mediaPath: string): boolean {
       </div>
       <form class="modal-body" id="edit-form">
         <input type="hidden" id="edit-id" />
-        
+
         <div class="form-group">
           <label for="edit-name">Name:</label>
           <input type="text" id="edit-name" name="name" required />
         </div>
-        
+
         <div class="form-group">
           <label for="edit-description">Description:</label>
           <textarea id="edit-description" name="description" rows="3" required></textarea>
         </div>
-        
+
         <div class="form-group">
           <label for="edit-alt">Alt Text:</label>
           <input type="text" id="edit-alt" name="alt" required />
@@ -162,35 +168,201 @@ function isImage(mediaPath: string): boolean {
     </div>
   </div>
 
-  <!-- Toast Notifications -->
   <div class="toast-container" id="toast-container"></div>
 
 
   <script>
-      import { api, getMediaURL } from '@/lib/api';
-    import type { Media } from '@/lib/types';
+  import { api, getMediaURL } from '@/lib/api';
+  import type { Media } from '@/lib/types';
 
-    // Global variables
-    let mediaItems: Media[] = [];
-    let currentEditId: number | null = null;
+  const newMediaBtn = document.getElementById('gl-admin-media__new-media-btn')!;
+  const uploadArea = document.getElementById('gl-admin-media__upload-area')!;
+  const uploadBtn = document.getElementById('gl-admin-media__upload-btn')!;
+  const cancelUploadBtn = document.getElementById('gl-admin-media__cancel-upload-btn')!;
+  const fileInput = document.getElementById('file-input')! as HTMLInputElement;
+  const uploadProgress = document.getElementById('upload-progress')!;
+  const mediaContainer = document.getElementById('media-container')!;
+  const progressTemplate = document.getElementById('progress-template')!;
 
-    // DOM elements
-    const uploadArea = document.getElementById('upload-area')!;
-    const fileInput = document.getElementById('file-input')! as HTMLInputElement;
-    const selectFilesBtn = document.getElementById('select-files')!;
-    const uploadProgress = document.getElementById('upload-progress')!;
-    const progressTemplate = document.getElementById('progress-template')!;
-    const mediaGrid = document.getElementById('media-grid')!;
-    const editModal = document.getElementById('edit-modal')!;
-    const editForm = document.getElementById('edit-form')! as HTMLFormElement;
-    const closeModal = document.getElementById('close-modal')!;
-    const cancelEdit = document.getElementById('cancel-edit')!;
-    const mediaSearch = document.getElementById('media-search')! as HTMLInputElement;
+  function showUploadArea() {
+    uploadArea.classList.add('gl-admin-media__upload-area--active');
+    mediaContainer.classList.add('gl-admin-media__container--with-upload');
+  }
+
+  function hideUploadArea() {
+    uploadArea.classList.remove('gl-admin-media__upload-area--active');
+    mediaContainer.classList.remove('gl-admin-media__container--with-upload');
+    fileInput.value = '';
+  }
+
+  newMediaBtn.addEventListener('click', () => {
+    showUploadArea();
+  });
+
+  cancelUploadBtn.addEventListener('click', () => {
+    hideUploadArea();
+  });
+
+  uploadBtn.addEventListener('click', () => {
+    fileInput.click();
+  });
+
+  uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('gl-admin-media__upload-area--dragover');
+  });
+
+  uploadArea.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('gl-admin-media__upload-area--dragover');
+  });
+
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('gl-admin-media__upload-area--dragover');
+    const files = Array.from(e.dataTransfer?.files || []);
+    if (files.length > 0) {
+      handleFileUpload(files);
+    }
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      handleFileUpload(files);
+    }
+  });
+
+  
+  function createProgressItem(file: File): HTMLElement {
+    const progressItem = progressTemplate.cloneNode(true) as HTMLElement;
+    progressItem.style.display = 'flex';
+    progressItem.id = `progress-${Date.now()}-${Math.random()}`;
+
+    const fileName = progressItem.querySelector('.gl-admin-media__file-name')!;
+    const fileSize = progressItem.querySelector('.gl-admin-media__file-size')!;
+    const progressFill = progressItem.querySelector('.gl-admin-media__progress-fill')!;
+    const progressStatus = progressItem.querySelector('.gl-admin-media__progress-status')!;
+
+    fileName.textContent = file.name;
+    fileSize.textContent = formatFileSize(file.size);
+    progressStatus.textContent = 'Uploading...';
+
+    return progressItem;
+  }
+
+
+  async function uploadSingleFile(file: File, progressItem: HTMLElement): Promise<boolean> {
+    const progressFill = progressItem.querySelector('.gl-admin-media__progress-fill') as HTMLElement;
+    const progressStatus = progressItem.querySelector('.gl-admin-media__progress-status') as HTMLElement;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', file.name.split('.')[0]);
+      formData.append('description', `Uploaded file: ${file.name}`);
+      formData.append('alt', file.name.split('.')[0]);
+
+      const result = await api.createMedia(formData);
+
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+        progress += Math.random() * 20;
+        if (progress > 90) progress = 90;
+        progressFill.style.width = `${progress}%`;
+        progressStatus.textContent = `${Math.round(progress)}%`;
+      }, 100);
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      clearInterval(progressInterval);
+      progressFill.style.width = '100%';
+      progressFill.classList.add('gl-admin-media__progress-fill--success');
+      progressStatus.textContent = 'Complete';
+      progressStatus.classList.add('gl-admin-media__progress-status--success');
+
+      return true;
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      progressFill.classList.add('gl-admin-media__progress-fill--error');
+      progressStatus.textContent = 'Failed';
+      progressStatus.classList.add('gl-admin-media__progress-status--error');
+      return false;
+    }
+  }
+
+  async function handleFileUpload(files: File[]) {
+    uploadProgress.style.display = 'block';
+    uploadProgress.classList.add('gl-admin-media__upload-progress--active');
+
+    const existingItems = uploadProgress.querySelectorAll('.gl-admin-media__progress-item:not(#progress-template)');
+    existingItems.forEach(item => item.remove());
+
+    const uploadPromises: Promise<boolean>[] = [];
+
+    for (const file of files) {
+      const progressItem = createProgressItem(file);
+      uploadProgress.appendChild(progressItem);
+
+      uploadPromises.push(uploadSingleFile(file, progressItem));
+    }
+    try {
+      const results = await Promise.allSettled(uploadPromises);
+
+      const successCount = results.filter(result => result.status === 'fulfilled' && result.value).length;
+      const failCount = results.length - successCount;
+
+      setTimeout(() => {
+        if (successCount > 0) {
+          showToast(`Successfully uploaded ${successCount} file${successCount !== 1 ? 's' : ''}${failCount > 0 ? `, ${failCount} failed` : ''}`, 'success');
+
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          showToast('All uploads failed', 'error');
+        }
+
+        setTimeout(() => {
+          hideUploadArea();
+          uploadProgress.style.display = 'none';
+        }, 2000);
+      }, 1000);
+    } catch (error) {
+      console.error('Upload error:', error);
+      showToast('Upload failed', 'error');
+      setTimeout(() => {
+        hideUploadArea();
+        uploadProgress.style.display = 'none';
+      }, 2000);
+    }
+  }
+
+  function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
     const toastContainer = document.getElementById('toast-container')!;
+    const toast = document.createElement('div');
+    toast.className = `toast toast--${type}`;
+    toast.textContent = message;
+
+    toastContainer.appendChild(toast);
+
+    setTimeout(() => {
+      toast.remove();
+    }, 5000);
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
   </script>
-   <script>
+
+  <script>
     import { initializeMediaCardHandlers } from '@/scripts/media-card-handlers';
-    
     document.addEventListener('DOMContentLoaded', () => {
       initializeMediaCardHandlers();
     });

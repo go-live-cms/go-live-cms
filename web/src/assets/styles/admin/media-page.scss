@@ -43,11 +43,232 @@
         }
       }
     }
+
+    &__upload-area {
+      background: #ebeae7;
+      border-radius: 8px;
+      box-shadow: 0 0 22.8px 0 rgba(0, 0, 0, 0.1) inset;
+      display: none;
+      margin: 1rem 0;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.3s ease;
+
+      &--active {
+        display: block;
+      }
+
+      &--dragover {
+        background: #f0f6fc;
+        border-color: #0073aa;
+        border-style: solid;
+      }
+
+      &-header {
+        h3 {
+          color: #1d2327;
+          font-size: 1.5rem;
+          font-weight: 600;
+          margin: 0 0 1rem 0;
+        }
+
+        > div {
+          align-items: center;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+
+          span {
+            color: #646970;
+            font-size: 1rem;
+            font-weight: 500;
+          }
+        }
+
+        small {
+          color: #646970;
+          display: block;
+          font-size: 0.875rem;
+          margin-top: 1rem;
+        }
+      }
+
+      &-button-wrapper {
+        align-items: center;
+        display: flex;
+        gap: 0.75rem;
+      }
+    }
+
+    &__upload-progress {
+      background: #fff;
+      border: 1px solid #dcdcde;
+      border-radius: 4px;
+      margin: 1rem 0;
+      padding: 1rem;
+
+      &--active {
+        display: block !important;
+      }
+    }
+
+    &__progress-item {
+      align-items: center;
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      padding: 0.5rem 0;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+
+    &__progress-info {
+      flex: 1;
+      min-width: 0;
+
+      .gl-admin-media__file-name {
+        color: #1d2327;
+        display: block;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .gl-admin-media__file-size {
+        color: #646970;
+        display: block;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+      }
+    }
+
+    &__progress-bar {
+      background: #f0f0f1;
+      border-radius: 2px;
+      flex: 2;
+      height: 8px;
+      overflow: hidden;
+      position: relative;
+
+      .gl-admin-media__progress-fill {
+        background: #00a32a;
+        height: 100%;
+        transition: width 0.3s ease;
+        width: 0%;
+
+        &--error {
+          background: #d63638;
+        }
+
+        &--warning {
+          background: #dba617;
+        }
+      }
+    }
+
+    &__progress-status {
+      color: #646970;
+      font-size: 0.875rem;
+      font-weight: 500;
+      min-width: 80px;
+      text-align: right;
+
+      &--success {
+        color: #00a32a;
+      }
+
+      &--error {
+        color: #d63638;
+      }
+
+      &--warning {
+        color: #dba617;
+      }
+    }
+
     &__grid {
       display: grid;
       gap: 1rem;
       grid-template-columns: repeat(4, 1fr); // todo: make this an attribute?
       padding: 1rem;
     }
+
+    &__container {
+      &--with-upload {
+        .empty-state {
+          display: none;
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 1200px) {
+  .gl-admin-media__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .gl-admin-media__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .gl-admin-media-header {
+    flex-direction: column;
+    gap: 1rem;
+
+    &-right {
+      flex-direction: column;
+      width: 100%;
+    }
+
+    &__filters {
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+  }
+
+  .gl-admin-media__upload-area-button-wrapper {
+    flex-direction: column;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .gl-admin-media__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.toast-container {
+  position: fixed;
+  right: 20px;
+  top: 20px;
+  z-index: 9999;
+}
+
+.toast {
+  background: #fff;
+  border-left: 4px solid;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 10px;
+  max-width: 300px;
+  padding: 12px 16px;
+
+  &--success {
+    border-left-color: #00a32a;
+  }
+
+  &--error {
+    border-left-color: #d63638;
+  }
+
+  &--info {
+    border-left-color: #0073aa;
   }
 }
