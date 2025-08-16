@@ -266,7 +266,7 @@ func (server *Server) createMedia(c *gin.Context) {
 		return
 	}
 
-	mediaPath, err := saveUploadedFileWithOriginalName(file, header, server.config.UploadPath)
+	mediaPath, actualFilename, err := saveUploadedFileWithOriginalName(file, header, server.config.UploadPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save uploaded file"})
 		return
@@ -295,7 +295,7 @@ func (server *Server) createMedia(c *gin.Context) {
 		}
 
 		result, err := server.store.CreateMediaAndLinkTx(c.Request.Context(), db.CreateMediaAndLinkTxParams{
-			Name:             req.Name,
+			Name:             actualFilename,
 			Description:      req.Description,
 			Alt:              req.Alt,
 			MediaPath:        mediaPath,
@@ -326,7 +326,7 @@ func (server *Server) createMedia(c *gin.Context) {
 		})
 	} else {
 		media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
-			Name:             req.Name,
+			Name:             actualFilename,
 			Description:      req.Description,
 			Alt:              req.Alt,
 			MediaPath:        mediaPath,
@@ -369,11 +369,11 @@ func isValidMediaType(filename string) bool {
 	return false
 }
 
-func saveUploadedFileWithOriginalName(file multipart.File, header *multipart.FileHeader, uploadPath string) (string, error) {
+func saveUploadedFileWithOriginalName(file multipart.File, header *multipart.FileHeader, uploadPath string) (string, string, error) {
 
 	uploadsDir := filepath.Join(".", uploadPath)
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	originalName := strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
@@ -393,15 +393,15 @@ func saveUploadedFileWithOriginalName(file multipart.File, header *multipart.Fil
 
 	dst, err := os.Create(filePath)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, file); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return fmt.Sprintf("%s/%s", uploadPath, filename), nil
+	return fmt.Sprintf("%s/%s", uploadPath, filename), filename, nil
 }
 
 func fileExists(filepath string) bool {
@@ -559,7 +559,6 @@ func (server *Server) getMedia(c *gin.Context) {
 	}
 
 	if withCounts == "true" {
-		// Now all queries include counts, so just use regular ListMedia
 		media, err := server.store.ListMedia(c.Request.Context(), db.ListMediaParams{
 			Limit:  int32(limit),
 			Offset: int32(offset),

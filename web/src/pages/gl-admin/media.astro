@@ -250,16 +250,19 @@ function isImage(mediaPath: string): boolean {
     e.preventDefault();
     uploadArea.classList.remove('gl-admin-media__upload-area--dragover');
 
-    const files = Array.from(e.dataTransfer?.files || []);
+    const files = e.dataTransfer?.files ? Array.from(e.dataTransfer.files) : [];
     if (files.length > 0) {
       handleFileUpload(files);
     }
   });
 
-  fileInput.addEventListener('change', (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      handleFileUpload(files);
+  fileInput.addEventListener('change', (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    if (target && target.files) {
+      const files = Array.from(target.files);
+      if (files.length > 0) {
+        handleFileUpload(files);
+      }
     }
   });
 
@@ -287,7 +290,7 @@ function isImage(mediaPath: string): boolean {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('name', file.name.split('.')[0]);
+      formData.append('name', file.name);
       formData.append('description', `Uploaded file: ${file.name}`);
       formData.append('alt', file.name.split('.')[0]);
 
