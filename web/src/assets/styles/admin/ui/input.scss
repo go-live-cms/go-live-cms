@@ -1,4 +1,3 @@
-/* Container */
 .gl-input {
   --height: 2.8rem;
   --radius: 0.25rem;
@@ -20,7 +19,6 @@
     box-shadow: 0 0 8px 0 #00000011 inset;
   }
 
-  /* Field */
   &__field {
     flex: 1 1 auto;
     width: 100%;
@@ -37,7 +35,6 @@
     padding: var(--pad-y) var(--pad-x);
     padding-top: calc(var(--pad-y) + 0.625rem);
 
-    /* Remove default clear buttons, spin buttons where possible */
     &::-ms-clear { display: none; }
     &[type="number"] {
       -moz-appearance: textfield;
@@ -66,7 +63,6 @@
       opacity 140ms ease;
   }
 
-  /* Float when focused or filled (JS class), or when placeholder isn't shown (CSS fallback) */
   &.is-focused .gl-input__label,
   &.is-filled .gl-input__label,
   &:not(:has(input:placeholder-shown)) .gl-input__label {
@@ -76,13 +72,11 @@
     color: #4c4d50;
   }
 
-  /* Disabled state */
   &:has(input:disabled) {
     opacity: 0.6;
     cursor: not-allowed;
   }
 
-  /* Invalid state (optional: when parent gets .is-invalid) */
   &.is-invalid {
     border-color: #d93025;
     box-shadow: 0 0 0 3px rgba(217, 48, 37, 0.08);
