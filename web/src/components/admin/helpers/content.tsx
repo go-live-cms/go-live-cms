@@ -17,17 +17,19 @@ const AdminContent: React.FC = () => {
   const [query, setQuery] = useState({});
 
   return (
-    <Pagination
-      fetchData={async ({ limit, offset }) => {
-        const response = await api.getPosts({ limit, offset });
-        return { data: response.data, total: response.meta.total };
-      }}
-      query={query}
-    >
-      {(data) => (
-        <Table columns={columns} data={data} />
-      )}
-    </Pagination>
+    <>
+      <Pagination
+        fetchData={async ({ limit, offset }) => {
+          const response = await api.getPosts({ limit, offset });
+          return { data: response.data, total: response.meta.total };
+        }}
+        query={query}
+      >
+        {(data) => (
+          <Table columns={columns} data={data} />
+        )}
+      </Pagination>
+    </>
   );
 };
 

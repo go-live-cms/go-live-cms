@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import "@assets/styles/admin/ui/icon.scss";
 
 interface Props {
   name: string; // e.g., 'arrow-right'
@@ -7,7 +8,8 @@ interface Props {
   width?: string;
   height?: string;
   alt?: string;
-  reverse?: boolean;
+  mirror_horizontally?: boolean;
+  mirror_vertically?: boolean;
 }
 
 export const Icon: React.FC<Props> = ({
@@ -17,7 +19,8 @@ export const Icon: React.FC<Props> = ({
   width = "32",
   height = "32",
   alt,
-  reverse = false,
+  mirror_horizontally = false,
+  mirror_vertically = false,
 }) => {
   const [svgContent, setSvgContent] = useState<string>("");
 
@@ -47,14 +50,20 @@ export const Icon: React.FC<Props> = ({
     };
   }, [name, color, className, width, height]);
 
+  // Compute transform for mirroring using rotate
+  const transforms = [];
+  if (mirror_horizontally) transforms.push("rotate(180deg)");
+  if (mirror_vertically) transforms.push("rotate(180deg)");
+
   return (
     <span
+      className={`gl-icon ${className}`}
       style={{
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
         color: "var(--color, black)",
-        transform: reverse ? "scaleX(-1)" : undefined, // Invert horizontally if reverse is true
+        transform: transforms.join(" "),
       }}
       aria-label={alt}
       dangerouslySetInnerHTML={{ __html: svgContent }}

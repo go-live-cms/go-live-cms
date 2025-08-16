@@ -1,3 +1,6 @@
+@import url("./fonts.scss");
+@import url("./admin/admin.scss");
+
 :root {
   font-size: 16px;
 }
@@ -12,6 +15,3 @@
 body {
   font-family: Inter, sans-serif;
 }
-
-@import url("./fonts.scss");
-@import url("./admin/admin.scss");

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react"
 import Icon from "@/components/admin/ui/Icon"
+import Select from "@/components/admin/ui/Select"
 import "@assets/styles/admin/ui/pagination.scss"
 
 type PaginationProps<T, Q = Record<string, any>> = {
@@ -68,8 +69,8 @@ function Pagination<T, Q = Record<string, any>>({
     return Array.from({ length: windowEnd - windowStart + 1 }, (_, i) => windowStart + i)
   }
 
-  const handleLimitChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setLimit(Number(e.target.value))
+  const handleLimitChange = (value: string) => {
+    setLimit(Number(value))
     setOffset(0)
   }
 
@@ -81,7 +82,7 @@ function Pagination<T, Q = Record<string, any>>({
         <button onClick={() => setOffset(0)} disabled={currentPage === 0}>
           <Icon
             name="double-next"
-            reverse={true}
+            mirror_horizontally={true}
             color={currentPage === 0 ? "#B8BCBF" : "#333536"}
             width={navigationIconSize}
             height={navigationIconSize}
@@ -92,7 +93,7 @@ function Pagination<T, Q = Record<string, any>>({
         <button onClick={() => setOffset((o) => Math.max(0, o - limit))} disabled={currentPage === 0}>
           <Icon
             name="next"
-            reverse={true}
+            mirror_horizontally={true}
             color={currentPage === 0 ? "#B8BCBF" : "#333536"}
             width={navigationIconSize}
             height={navigationIconSize}
@@ -132,17 +133,11 @@ function Pagination<T, Q = Record<string, any>>({
         </button>
 
         <div className="gl-pagination__limit">
-          <select
-            value={limit}
+          <Select
+            options={limitOptions.map((option) => ({ value: String(option), label: String(option) }))}
+            value={String(limit)}
             onChange={handleLimitChange}
-            style={{ padding: 4, borderRadius: 4, border: "1px solid #ccc" }}
-          >
-            {limitOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
+          />
         </div>
       </div>
     </div>
