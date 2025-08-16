@@ -351,6 +351,114 @@ func (server *Server) createMedia(c *gin.Context) {
 	}
 }
 
+func (server *Server) createMediaBatch(c *gin.Context) {
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to parse multipart form"})
+		return
+	}
+
+	files := form.File["files"]
+	if len(files) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no files provided"})
+		return
+	}
+
+	if len(files) > 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "maximum 10 files per batch"})
+		return
+	}
+
+	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
+	userID := authPayload.UserID
+
+	var results []gin.H
+	var errors []string
+
+	for i, fileHeader := range files {
+		file, err := fileHeader.Open()
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("failed to open file %s: %v", fileHeader.Filename, err))
+			continue
+		}
+
+		if !isValidMediaType(fileHeader.Filename) {
+			file.Close()
+			errors = append(errors, fmt.Sprintf("invalid file type for %s", fileHeader.Filename))
+			continue
+		}
+
+		maxSize, _ := parseFileSize(server.config.MaxUploadSize)
+		if maxSize == 0 {
+			maxSize = 10 << 20
+		}
+
+		if fileHeader.Size > maxSize {
+			file.Close()
+			errors = append(errors, fmt.Sprintf("file %s too large", fileHeader.Filename))
+			continue
+		}
+
+		mediaPath, actualFilename, err := saveUploadedFileWithOriginalName(file, fileHeader, server.config.UploadPath)
+		file.Close()
+
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("failed to save %s: %v", fileHeader.Filename, err))
+			continue
+		}
+
+		fileSize := fileHeader.Size
+		mimeType := getFileMimeType(fileHeader.Filename)
+		originalFilename := fileHeader.Filename
+
+		var width, height int32 = 0, 0
+		if isImageFile(fileHeader.Filename) {
+			fullPath := filepath.Join(".", mediaPath)
+			if w, h, err := getImageDimensions(fullPath); err == nil {
+				width, height = w, h
+			}
+		}
+
+		media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
+			Name:             actualFilename,
+			Description:      fmt.Sprintf("Uploaded file: %s", fileHeader.Filename),
+			Alt:              strings.TrimSuffix(fileHeader.Filename, filepath.Ext(fileHeader.Filename)),
+			MediaPath:        mediaPath,
+			UserID:           userID,
+			FileSize:         fileSize,
+			MimeType:         mimeType,
+			Width:            width,
+			Height:           height,
+			Duration:         0,
+			OriginalFilename: originalFilename,
+		})
+
+		if err != nil {
+			os.Remove(filepath.Join(".", mediaPath))
+			errors = append(errors, fmt.Sprintf("failed to create media record for %s: %v", fileHeader.Filename, err))
+			continue
+		}
+
+		results = append(results, gin.H{
+			"media": toMediaResponse(media),
+			"index": i,
+		})
+	}
+
+	response := gin.H{
+		"success_count": len(results),
+		"error_count":   len(errors),
+		"total":         len(files),
+		"media":         results,
+	}
+
+	if len(errors) > 0 {
+		response["errors"] = errors
+	}
+
+	c.JSON(http.StatusCreated, response)
+}
+
 func isValidMediaType(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	validExts := []string{

@@ -109,15 +109,16 @@ func (server *Server) setupRoutes() {
 	taxonomies.GET("/:id/posts", server.getTaxonomyPosts)                               // GET /api/v1/taxonomies/:id/posts
 
 	media := v1.Group("/media")
-	media.POST("", authMiddleware(server.tokenMaker), server.createMedia)       // POST /api/v1/media
-	media.GET("", server.getMedia)                                              // GET /api/v1/media
-	media.GET("/popular", server.getPopularMedia)                               // GET /api/v1/media/popular
-	media.GET("/search", server.searchMedia)                                    // GET /api/v1/media/search
-	media.GET("/:id", server.getMediaByID)                                      // GET /api/v1/media/:id
-	media.PUT("/:id", authMiddleware(server.tokenMaker), server.updateMedia)    // PUT /api/v1/media/:id
-	media.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteMedia) // DELETE /api/v1/media/:id
-	media.GET("/user/:id", server.getMediaByUser)                               // GET /api/v1/media/user/:id
-	media.GET("/post/:id", server.getMediaByPost)                               // GET /api/v1/media/post/:id
+	media.POST("", authMiddleware(server.tokenMaker), server.createMedia)            // POST /api/v1/media
+	media.POST("/batch", authMiddleware(server.tokenMaker), server.createMediaBatch) // POST /api/v1/media/batch
+	media.GET("", server.getMedia)                                                   // GET /api/v1/media
+	media.GET("/popular", server.getPopularMedia)                                    // GET /api/v1/media/popular
+	media.GET("/search", server.searchMedia)                                         // GET /api/v1/media/search
+	media.GET("/:id", server.getMediaByID)                                           // GET /api/v1/media/:id
+	media.PUT("/:id", authMiddleware(server.tokenMaker), server.updateMedia)         // PUT /api/v1/media/:id
+	media.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteMedia)      // DELETE /api/v1/media/:id
+	media.GET("/user/:id", server.getMediaByUser)                                    // GET /api/v1/media/user/:id
+	media.GET("/post/:id", server.getMediaByPost)                                    // GET /api/v1/media/post/:id
 
 	router.Static("/uploads", "./uploads")
 

@@ -205,7 +205,6 @@ export const api = {
       const response = await authenticatedFetch(`${API_BASE}/media`, {
         method: "POST",
         body: formData,
-        // Don't set Content-Type for FormData
       })
 
       if (!response.ok) {
@@ -220,7 +219,25 @@ export const api = {
     }
   },
 
-  // Media update - Simplified
+  createMediaBatch: async (formData: FormData) => {
+    try {
+      const response = await authenticatedFetch(`${API_BASE}/media/batch`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Batch upload failed")
+      }
+
+      return response.json()
+    } catch (error) {
+      console.error("Batch upload error:", error)
+      throw error
+    }
+  },
+
   updateMedia: async (id: number, data: { name?: string; description?: string; alt?: string }) => {
     try {
       const response = await authenticatedFetch(`${API_BASE}/media/${id}`, {
@@ -243,7 +260,6 @@ export const api = {
     }
   },
 
-  // Media delete - Simplified
   deleteMedia: async (id: number) => {
     try {
       const response = await authenticatedFetch(`${API_BASE}/media/${id}`, {
