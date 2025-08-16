@@ -1,45 +1,33 @@
 ---
-
 interface Props {
-  name: string; // e.g., 'icons/arrow-right.svg'
-  color?: string;
-  class?: string;
-  width?: string;
-  height?: string;
-  alt?: string;
+  name: string // e.g., 'icons/arrow-right.svg'
+  color?: string
+  class?: string
+  width?: string
+  height?: string
+  alt?: string
 }
 
-const {
-  name,
-  color = 'black',
-  class: className = '',
-  width = '32',
-  height = '32',
-} = Astro.props;
+const { name, color = "black", class: className = "", width = "32", height = "32" } = Astro.props
 
-const Svg = await import(`@assets/icons/${name}.svg?raw`);
+const Svg = await import(`@assets/icons/${name}.svg?raw`)
 
-let svgContent = Svg.default;
+let svgContent = Svg.default
 
 // Replace stroke and fill attributes if they are not 'none'
-svgContent = svgContent.replace(/stroke="(?!none")[^"]*"/g, `stroke="${color}"`);
-svgContent = svgContent.replace(/fill="(?!none")[^"]*"/g, `fill="${color}"`);
+svgContent = svgContent.replace(/stroke="(?!none")[^"]*"/g, `stroke="${color}"`)
+svgContent = svgContent.replace(/fill="(?!none")[^"]*"/g, `fill="${color}"`)
 // Replace width and height attributes
-svgContent = svgContent.replace(
-  /<svg /,
-  `<svg width="${width}" height="${height}" class="${className}" `
-);
+svgContent = svgContent.replace(/<svg /, `<svg width="${width}" height="${height}" class="${className}" `)
 ---
 
 <span set:html={svgContent} />
 
 <style lang="scss" scoped>
-
-span {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color, black);
-}
-
+  span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color, black);
+  }
 </style>

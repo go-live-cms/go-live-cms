@@ -21,8 +21,10 @@
     "@typescript-eslint/parser": "^8.39.1",
     "@typescript-eslint/utils": "^8.39.1",
     "astro": "^5.12.8",
+    "imask": "^7.6.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-imask": "^7.6.1",
     "sharp": "^0.34.2",
     "tailwindcss": "^4.1.11"
   },

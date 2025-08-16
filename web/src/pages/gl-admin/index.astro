@@ -1,53 +1,54 @@
 ---
-import Admin from "@/layouts/Admin/Layout.astro";
-import Button from "@/components/ui/Button.tsx";
-import { api } from "@/lib/api";
-import type { Post, User, Taxonomy, Media } from "@/lib/types";
+import Admin from "@/layouts/Admin/Layout.astro"
+import Button from "@/components/admin/ui/Button.tsx"
+import { api } from "@/lib/api"
+import type { Post, User, Taxonomy, Media } from "@/lib/types"
 
-let totalPosts = 0;
-let totalUsers = 0;
-let totalTaxonomies = 0;
-let totalMedia = 0;
-let recentPosts: Post[] = [];
-let recentUsers: User[] = [];
-let error: string | null = null;
+let totalPosts = 0
+let totalUsers = 0
+let totalTaxonomies = 0
+let totalMedia = 0
+let recentPosts: Post[] = []
+let recentUsers: User[] = []
+let error: string | null = null
 
 try {
   const [postsResponse, usersResponse, taxonomiesResponse, mediaResponse] = await Promise.all([
     api.getPosts(),
     api.getUsers(),
     api.getTaxonomies(),
-    api.getMedia()
-  ]);
+    api.getMedia(),
+  ])
 
-  totalPosts = postsResponse.meta.total;
-  totalUsers = usersResponse.meta.total;
-  totalTaxonomies = taxonomiesResponse.meta.total;
-  totalMedia = mediaResponse.meta.total;
+  totalPosts = postsResponse.meta.total
+  totalUsers = usersResponse.meta.total
+  totalTaxonomies = taxonomiesResponse.meta.total
+  totalMedia = mediaResponse.meta.total
 
-  recentPosts = postsResponse.data.slice(0, 5);
-  recentUsers = usersResponse.data.slice(0, 5);
+  recentPosts = postsResponse.data.slice(0, 5)
+  recentUsers = usersResponse.data.slice(0, 5)
 } catch (e) {
-  error = e instanceof Error ? e.message : 'Failed to fetch admin data';
-  console.error('Admin dashboard error:', e);
+  error = e instanceof Error ? e.message : "Failed to fetch admin data"
+  console.error("Admin dashboard error:", e)
 }
 ---
 
 <Admin title="Admin Dashboard" description="Content management system admin dashboard">
-  <Button variation="primary" onClick={() => console.log('Clicked!')}>
-    Add Item
-  </Button>
+  <Button variation="primary" onClick={() => console.log("Clicked!")}> Add Item </Button>
   <div class="admin-header">
     <h1>🚀 Admin Dashboard</h1>
     <p>Manage your Go Live CMS content and settings</p>
   </div>
 
-  {error && (
-    <div class="admin-error">
-      <strong>Dashboard Error:</strong> {error}<br />
-      <small>Make sure your Go backend is running on port 8080</small>
-    </div>
-  )}
+  {
+    error && (
+      <div class="admin-error">
+        <strong>Dashboard Error:</strong> {error}
+        <br />
+        <small>Make sure your Go backend is running on port 8080</small>
+      </div>
+    )
+  }
 
   <div class="stats-grid">
     <div class="stat-card">
@@ -75,40 +76,42 @@ try {
   <div class="admin-sections">
     <div class="admin-section">
       <h2>📝 Recent Posts</h2>
-      {recentPosts.length > 0 ? (
-        recentPosts.map((post) => (
-          <div class="recent-item">
-            <div class="recent-item-info">
-              <h4>{post.title}</h4>
-              <p>By {post.username}</p>
+      {
+        recentPosts.length > 0 ? (
+          recentPosts.map((post) => (
+            <div class="recent-item">
+              <div class="recent-item-info">
+                <h4>{post.title}</h4>
+                <p>By {post.username}</p>
+              </div>
+              <div class="recent-item-date">{new Date(post.created_at).toLocaleDateString()}</div>
             </div>
-            <div class="recent-item-date">
-              {new Date(post.created_at).toLocaleDateString()}
-            </div>
-          </div>
-        ))
-      ) : (
-        <p>No recent posts found.</p>
-      )}
+          ))
+        ) : (
+          <p>No recent posts found.</p>
+        )
+      }
     </div>
 
     <div class="admin-section">
       <h2>👥 Recent Users</h2>
-      {recentUsers.length > 0 ? (
-        recentUsers.map((user) => (
-          <div class="recent-item">
-            <div class="recent-item-info">
-              <h4>{user.full_name}</h4>
-              <p>@{user.username} • {user.role}</p>
+      {
+        recentUsers.length > 0 ? (
+          recentUsers.map((user) => (
+            <div class="recent-item">
+              <div class="recent-item-info">
+                <h4>{user.full_name}</h4>
+                <p>
+                  @{user.username} • {user.role}
+                </p>
+              </div>
+              <div class="recent-item-date">{new Date(user.created_at).toLocaleDateString()}</div>
             </div>
-            <div class="recent-item-date">
-              {new Date(user.created_at).toLocaleDateString()}
-            </div>
-          </div>
-        ))
-      ) : (
-        <p>No recent users found.</p>
-      )}
+          ))
+        ) : (
+          <p>No recent users found.</p>
+        )
+      }
     </div>
 
     <div class="admin-section quick-actions">
