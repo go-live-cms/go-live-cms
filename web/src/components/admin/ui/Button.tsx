@@ -3,7 +3,7 @@ import '@assets/styles/admin/ui/button.scss';
 
 type ButtonProps = {
   children: ReactNode;
-  variation?: 'default' | 'primary' | 'secondary'; // Add more if needed
+  variation?: 'default' | 'primary' | 'secondary';
   as?: 'button' | 'a';
   href?: string; // Only used when `as === 'a'`
   className?: string;
