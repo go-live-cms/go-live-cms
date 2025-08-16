@@ -21,3 +21,6 @@ web/.astro/
 .env
 .env.local
 app.env
+
+/uploads/media/*
+/api/tmp

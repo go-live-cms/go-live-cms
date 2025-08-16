@@ -2,7 +2,7 @@
 
 import mdx from "@astrojs/mdx";
 import sitemap from "@astrojs/sitemap";
-import path from 'path';
+import path from "path";
 import { defineConfig } from "astro/config";
 
 import react from "@astrojs/react";
@@ -17,11 +17,25 @@ export default defineConfig({
     // plugins: [tailwindcss()],
     resolve: {
       alias: {
-        '@': path.resolve('./src'),
-        '@assets': path.resolve('./src/assets')
+        "@": path.resolve("./src"),
+        "@assets": path.resolve("./src/assets"),
       },
     },
     server: {
+      proxy: {
+        // Proxy uploads to Go API - use the Docker service name
+        "/uploads": {
+          target: "http://api:8080", // Use Docker service name instead of localhost
+          changeOrigin: true,
+          secure: false,
+        },
+        // Proxy API calls to Go API
+        "/api": {
+          target: "http://api:8080", // Use Docker service name instead of localhost
+          changeOrigin: true,
+          secure: false,
+        },
+      },
       watch: {
         usePolling: true,
       },

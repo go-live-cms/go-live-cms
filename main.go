@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 
+	"github.com/gin-gonic/gin"
 	"github.com/go-live-cms/go-live-cms/api"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/util"
@@ -19,6 +20,8 @@ func main() {
 
 	log.Println("🚀 Starting Go Live CMS...")
 
+	gin.SetMode(gin.DebugMode)
+
 	log.Println("📊 Connecting to database...")
 	conn, err := sql.Open(config.DBDriver, config.DBSource)
 	if err != nil {
@@ -32,7 +35,7 @@ func main() {
 		log.Fatal("❌ Cannot set up server:", err)
 	}
 
-	log.Println("🌐 Starting Go Live CMS API on port", config.APIPort)
+	log.Println("🌐 Starting Go Live CMS API on port", config.ServerAddress)
 	err = server.Start(config.ServerAddress)
 	if err != nil {
 		log.Fatal("cannot start server:", err)

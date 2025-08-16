@@ -4,9 +4,15 @@ INSERT INTO media (
     description,
     alt,
     media_path,
-    user_id
+    user_id,
+    file_size,
+    mime_type,
+    width,
+    height,
+    duration,
+    original_filename
 ) VALUES (
-    $1, $2, $3, $4, $5
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 ) RETURNING *;
 
 -- name: GetMedia :one
@@ -14,15 +20,25 @@ SELECT * FROM media
 WHERE id = $1 LIMIT 1;
 
 -- name: GetMediaByUser :many
-SELECT * FROM media
-WHERE user_id = $1
-ORDER BY created_at DESC
+SELECT 
+    m.*,
+    COUNT(pm.post_id) as post_count
+FROM media m
+LEFT JOIN post_media pm ON m.id = pm.media_id
+WHERE m.user_id = $1
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+ORDER BY m.created_at DESC
 LIMIT $2
 OFFSET $3;
 
 -- name: ListMedia :many
-SELECT * FROM media
-ORDER BY created_at DESC
+SELECT 
+    m.*,
+    COUNT(pm.post_id) as post_count
+FROM media m
+LEFT JOIN post_media pm ON m.id = pm.media_id
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+ORDER BY m.created_at DESC
 LIMIT $1
 OFFSET $2;
 
@@ -33,6 +49,12 @@ SET
     description = COALESCE($3, description),
     alt = COALESCE($4, alt),
     media_path = COALESCE($5, media_path),
+    file_size = COALESCE($6, file_size),
+    mime_type = COALESCE($7, mime_type),
+    width = COALESCE($8, width),
+    height = COALESCE($9, height),
+    duration = COALESCE($10, duration),
+    original_filename = COALESCE($11, original_filename),
     changed_at = now()
 WHERE id = $1
 RETURNING *;
@@ -46,9 +68,14 @@ DELETE FROM media
 WHERE user_id = $1;
 
 -- name: SearchMediaByName :many
-SELECT * FROM media
-WHERE name ILIKE '%' || $1 || '%' OR description ILIKE '%' || $1 || '%'
-ORDER BY created_at DESC
+SELECT 
+    m.*,
+    COUNT(pm.post_id) as post_count
+FROM media m
+LEFT JOIN post_media pm ON m.id = pm.media_id
+WHERE m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%'
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+ORDER BY m.created_at DESC
 LIMIT $2
 OFFSET $3;
 
@@ -87,24 +114,13 @@ WHERE media_id = $1;
 SELECT COUNT(*) FROM post_media
 WHERE post_id = $1;
 
--- name: ListMediaWithPostCount :many
-SELECT 
-    m.*,
-    COUNT(pm.post_id) as post_count
-FROM media m
-LEFT JOIN post_media pm ON m.id = pm.media_id
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at
-ORDER BY m.created_at DESC
-LIMIT $1
-OFFSET $2;
-
 -- name: GetPopularMedia :many
 SELECT 
     m.*,
     COUNT(pm.post_id) as post_count
 FROM media m
 JOIN post_media pm ON m.id = pm.media_id
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
 HAVING COUNT(pm.post_id) > 0
 ORDER BY COUNT(pm.post_id) DESC
 LIMIT $1;

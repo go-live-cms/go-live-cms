@@ -5,20 +5,28 @@
 package db
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type Medium struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Alt         string    `json:"alt"`
-	MediaPath   string    `json:"media_path"`
-	UserID      int64     `json:"user_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	ChangedAt   time.Time `json:"changed_at"`
+	ID               int64           `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Alt              string          `json:"alt"`
+	MediaPath        string          `json:"media_path"`
+	UserID           int64           `json:"user_id"`
+	CreatedAt        time.Time       `json:"created_at"`
+	ChangedAt        time.Time       `json:"changed_at"`
+	FileSize         int64           `json:"file_size"`
+	MimeType         string          `json:"mime_type"`
+	Width            int32           `json:"width"`
+	Height           int32           `json:"height"`
+	Duration         int32           `json:"duration"`
+	OriginalFilename string          `json:"original_filename"`
+	Metadata         json.RawMessage `json:"metadata"`
 }
 
 type Post struct {

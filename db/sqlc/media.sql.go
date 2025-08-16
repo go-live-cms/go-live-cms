@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -28,18 +29,30 @@ INSERT INTO media (
     description,
     alt,
     media_path,
-    user_id
+    user_id,
+    file_size,
+    mime_type,
+    width,
+    height,
+    duration,
+    original_filename
 ) VALUES (
-    $1, $2, $3, $4, $5
-) RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+) RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata
 `
 
 type CreateMediaParams struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Alt         string `json:"alt"`
-	MediaPath   string `json:"media_path"`
-	UserID      int64  `json:"user_id"`
+	Name             string `json:"name"`
+	Description      string `json:"description"`
+	Alt              string `json:"alt"`
+	MediaPath        string `json:"media_path"`
+	UserID           int64  `json:"user_id"`
+	FileSize         int64  `json:"file_size"`
+	MimeType         string `json:"mime_type"`
+	Width            int32  `json:"width"`
+	Height           int32  `json:"height"`
+	Duration         int32  `json:"duration"`
+	OriginalFilename string `json:"original_filename"`
 }
 
 func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error) {
@@ -49,6 +62,12 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		arg.Alt,
 		arg.MediaPath,
 		arg.UserID,
+		arg.FileSize,
+		arg.MimeType,
+		arg.Width,
+		arg.Height,
+		arg.Duration,
+		arg.OriginalFilename,
 	)
 	var i Medium
 	err := row.Scan(
@@ -60,6 +79,13 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		&i.UserID,
 		&i.CreatedAt,
 		&i.ChangedAt,
+		&i.FileSize,
+		&i.MimeType,
+		&i.Width,
+		&i.Height,
+		&i.Duration,
+		&i.OriginalFilename,
+		&i.Metadata,
 	)
 	return i, err
 }
@@ -143,7 +169,7 @@ func (q *Queries) DeletePostMedias(ctx context.Context, postID int64) error {
 }
 
 const getMedia = `-- name: GetMedia :one
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata FROM media
 WHERE id = $1 LIMIT 1
 `
 
@@ -159,12 +185,19 @@ func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
 		&i.UserID,
 		&i.CreatedAt,
 		&i.ChangedAt,
+		&i.FileSize,
+		&i.MimeType,
+		&i.Width,
+		&i.Height,
+		&i.Duration,
+		&i.OriginalFilename,
+		&i.Metadata,
 	)
 	return i, err
 }
 
 const getMediaByPost = `-- name: GetMediaByPost :many
-SELECT m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at FROM media m
+SELECT m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata FROM media m
 JOIN post_media pm ON m.id = pm.media_id
 WHERE pm.post_id = $1
 ORDER BY pm."order", m.created_at
@@ -188,6 +221,13 @@ func (q *Queries) GetMediaByPost(ctx context.Context, postID int64) ([]Medium, e
 			&i.UserID,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.FileSize,
+			&i.MimeType,
+			&i.Width,
+			&i.Height,
+			&i.Duration,
+			&i.OriginalFilename,
+			&i.Metadata,
 		); err != nil {
 			return nil, err
 		}
@@ -203,9 +243,14 @@ func (q *Queries) GetMediaByPost(ctx context.Context, postID int64) ([]Medium, e
 }
 
 const getMediaByUser = `-- name: GetMediaByUser :many
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at FROM media
-WHERE user_id = $1
-ORDER BY created_at DESC
+SELECT 
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata,
+    COUNT(pm.post_id) as post_count
+FROM media m
+LEFT JOIN post_media pm ON m.id = pm.media_id
+WHERE m.user_id = $1
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+ORDER BY m.created_at DESC
 LIMIT $2
 OFFSET $3
 `
@@ -216,15 +261,34 @@ type GetMediaByUserParams struct {
 	Offset int32 `json:"offset"`
 }
 
-func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]Medium, error) {
+type GetMediaByUserRow struct {
+	ID               int64           `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Alt              string          `json:"alt"`
+	MediaPath        string          `json:"media_path"`
+	UserID           int64           `json:"user_id"`
+	CreatedAt        time.Time       `json:"created_at"`
+	ChangedAt        time.Time       `json:"changed_at"`
+	FileSize         int64           `json:"file_size"`
+	MimeType         string          `json:"mime_type"`
+	Width            int32           `json:"width"`
+	Height           int32           `json:"height"`
+	Duration         int32           `json:"duration"`
+	OriginalFilename string          `json:"original_filename"`
+	Metadata         json.RawMessage `json:"metadata"`
+	PostCount        int64           `json:"post_count"`
+}
+
+func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error) {
 	rows, err := q.db.QueryContext(ctx, getMediaByUser, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Medium{}
+	items := []GetMediaByUserRow{}
 	for rows.Next() {
-		var i Medium
+		var i GetMediaByUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -234,6 +298,14 @@ func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) 
 			&i.UserID,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.FileSize,
+			&i.MimeType,
+			&i.Width,
+			&i.Height,
+			&i.Duration,
+			&i.OriginalFilename,
+			&i.Metadata,
+			&i.PostCount,
 		); err != nil {
 			return nil, err
 		}
@@ -262,26 +334,33 @@ func (q *Queries) GetMediaPostCount(ctx context.Context, mediaID int64) (int64, 
 
 const getPopularMedia = `-- name: GetPopularMedia :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata,
     COUNT(pm.post_id) as post_count
 FROM media m
 JOIN post_media pm ON m.id = pm.media_id
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
 HAVING COUNT(pm.post_id) > 0
 ORDER BY COUNT(pm.post_id) DESC
 LIMIT $1
 `
 
 type GetPopularMediaRow struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Alt         string    `json:"alt"`
-	MediaPath   string    `json:"media_path"`
-	UserID      int64     `json:"user_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	ChangedAt   time.Time `json:"changed_at"`
-	PostCount   int64     `json:"post_count"`
+	ID               int64           `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Alt              string          `json:"alt"`
+	MediaPath        string          `json:"media_path"`
+	UserID           int64           `json:"user_id"`
+	CreatedAt        time.Time       `json:"created_at"`
+	ChangedAt        time.Time       `json:"changed_at"`
+	FileSize         int64           `json:"file_size"`
+	MimeType         string          `json:"mime_type"`
+	Width            int32           `json:"width"`
+	Height           int32           `json:"height"`
+	Duration         int32           `json:"duration"`
+	OriginalFilename string          `json:"original_filename"`
+	Metadata         json.RawMessage `json:"metadata"`
+	PostCount        int64           `json:"post_count"`
 }
 
 func (q *Queries) GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error) {
@@ -302,6 +381,13 @@ func (q *Queries) GetPopularMedia(ctx context.Context, limit int32) ([]GetPopula
 			&i.UserID,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.FileSize,
+			&i.MimeType,
+			&i.Width,
+			&i.Height,
+			&i.Duration,
+			&i.OriginalFilename,
+			&i.Metadata,
 			&i.PostCount,
 		); err != nil {
 			return nil, err
@@ -481,8 +567,13 @@ func (q *Queries) GetUserMediaCount(ctx context.Context, userID int64) (int64, e
 }
 
 const listMedia = `-- name: ListMedia :many
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at FROM media
-ORDER BY created_at DESC
+SELECT 
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata,
+    COUNT(pm.post_id) as post_count
+FROM media m
+LEFT JOIN post_media pm ON m.id = pm.media_id
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+ORDER BY m.created_at DESC
 LIMIT $1
 OFFSET $2
 `
@@ -492,15 +583,34 @@ type ListMediaParams struct {
 	Offset int32 `json:"offset"`
 }
 
-func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error) {
+type ListMediaRow struct {
+	ID               int64           `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Alt              string          `json:"alt"`
+	MediaPath        string          `json:"media_path"`
+	UserID           int64           `json:"user_id"`
+	CreatedAt        time.Time       `json:"created_at"`
+	ChangedAt        time.Time       `json:"changed_at"`
+	FileSize         int64           `json:"file_size"`
+	MimeType         string          `json:"mime_type"`
+	Width            int32           `json:"width"`
+	Height           int32           `json:"height"`
+	Duration         int32           `json:"duration"`
+	OriginalFilename string          `json:"original_filename"`
+	Metadata         json.RawMessage `json:"metadata"`
+	PostCount        int64           `json:"post_count"`
+}
+
+func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listMedia, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Medium{}
+	items := []ListMediaRow{}
 	for rows.Next() {
-		var i Medium
+		var i ListMediaRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -510,67 +620,13 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium,
 			&i.UserID,
 			&i.CreatedAt,
 			&i.ChangedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listMediaWithPostCount = `-- name: ListMediaWithPostCount :many
-SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at,
-    COUNT(pm.post_id) as post_count
-FROM media m
-LEFT JOIN post_media pm ON m.id = pm.media_id
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at
-ORDER BY m.created_at DESC
-LIMIT $1
-OFFSET $2
-`
-
-type ListMediaWithPostCountParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
-}
-
-type ListMediaWithPostCountRow struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Alt         string    `json:"alt"`
-	MediaPath   string    `json:"media_path"`
-	UserID      int64     `json:"user_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	ChangedAt   time.Time `json:"changed_at"`
-	PostCount   int64     `json:"post_count"`
-}
-
-func (q *Queries) ListMediaWithPostCount(ctx context.Context, arg ListMediaWithPostCountParams) ([]ListMediaWithPostCountRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMediaWithPostCount, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListMediaWithPostCountRow{}
-	for rows.Next() {
-		var i ListMediaWithPostCountRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Description,
-			&i.Alt,
-			&i.MediaPath,
-			&i.UserID,
-			&i.CreatedAt,
-			&i.ChangedAt,
+			&i.FileSize,
+			&i.MimeType,
+			&i.Width,
+			&i.Height,
+			&i.Duration,
+			&i.OriginalFilename,
+			&i.Metadata,
 			&i.PostCount,
 		); err != nil {
 			return nil, err
@@ -667,9 +723,14 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 }
 
 const searchMediaByName = `-- name: SearchMediaByName :many
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at FROM media
-WHERE name ILIKE '%' || $1 || '%' OR description ILIKE '%' || $1 || '%'
-ORDER BY created_at DESC
+SELECT 
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata,
+    COUNT(pm.post_id) as post_count
+FROM media m
+LEFT JOIN post_media pm ON m.id = pm.media_id
+WHERE m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%'
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+ORDER BY m.created_at DESC
 LIMIT $2
 OFFSET $3
 `
@@ -680,15 +741,34 @@ type SearchMediaByNameParams struct {
 	Offset  int32          `json:"offset"`
 }
 
-func (q *Queries) SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]Medium, error) {
+type SearchMediaByNameRow struct {
+	ID               int64           `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Alt              string          `json:"alt"`
+	MediaPath        string          `json:"media_path"`
+	UserID           int64           `json:"user_id"`
+	CreatedAt        time.Time       `json:"created_at"`
+	ChangedAt        time.Time       `json:"changed_at"`
+	FileSize         int64           `json:"file_size"`
+	MimeType         string          `json:"mime_type"`
+	Width            int32           `json:"width"`
+	Height           int32           `json:"height"`
+	Duration         int32           `json:"duration"`
+	OriginalFilename string          `json:"original_filename"`
+	Metadata         json.RawMessage `json:"metadata"`
+	PostCount        int64           `json:"post_count"`
+}
+
+func (q *Queries) SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchMediaByName, arg.Column1, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Medium{}
+	items := []SearchMediaByNameRow{}
 	for rows.Next() {
-		var i Medium
+		var i SearchMediaByNameRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -698,6 +778,14 @@ func (q *Queries) SearchMediaByName(ctx context.Context, arg SearchMediaByNamePa
 			&i.UserID,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.FileSize,
+			&i.MimeType,
+			&i.Width,
+			&i.Height,
+			&i.Duration,
+			&i.OriginalFilename,
+			&i.Metadata,
+			&i.PostCount,
 		); err != nil {
 			return nil, err
 		}
@@ -735,17 +823,29 @@ SET
     description = COALESCE($3, description),
     alt = COALESCE($4, alt),
     media_path = COALESCE($5, media_path),
+    file_size = COALESCE($6, file_size),
+    mime_type = COALESCE($7, mime_type),
+    width = COALESCE($8, width),
+    height = COALESCE($9, height),
+    duration = COALESCE($10, duration),
+    original_filename = COALESCE($11, original_filename),
     changed_at = now()
 WHERE id = $1
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata
 `
 
 type UpdateMediaParams struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Alt         string `json:"alt"`
-	MediaPath   string `json:"media_path"`
+	ID               int64  `json:"id"`
+	Name             string `json:"name"`
+	Description      string `json:"description"`
+	Alt              string `json:"alt"`
+	MediaPath        string `json:"media_path"`
+	FileSize         int64  `json:"file_size"`
+	MimeType         string `json:"mime_type"`
+	Width            int32  `json:"width"`
+	Height           int32  `json:"height"`
+	Duration         int32  `json:"duration"`
+	OriginalFilename string `json:"original_filename"`
 }
 
 func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error) {
@@ -755,6 +855,12 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		arg.Description,
 		arg.Alt,
 		arg.MediaPath,
+		arg.FileSize,
+		arg.MimeType,
+		arg.Width,
+		arg.Height,
+		arg.Duration,
+		arg.OriginalFilename,
 	)
 	var i Medium
 	err := row.Scan(
@@ -766,6 +872,13 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		&i.UserID,
 		&i.CreatedAt,
 		&i.ChangedAt,
+		&i.FileSize,
+		&i.MimeType,
+		&i.Width,
+		&i.Height,
+		&i.Duration,
+		&i.OriginalFilename,
+		&i.Metadata,
 	)
 	return i, err
 }

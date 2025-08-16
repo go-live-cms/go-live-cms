@@ -58,7 +58,14 @@ CREATE TABLE "media" (
   "media_path" varchar NOT NULL,
   "user_id" bigint NOT NULL,
   "created_at" timestamptz NOT NULL DEFAULT (now()),
-  "changed_at" timestamptz NOT NULL DEFAULT '0001-01-01 00:00:00Z'
+  "changed_at" timestamptz NOT NULL DEFAULT '0001-01-01 00:00:00Z',
+  "file_size" bigint NOT NULL DEFAULT 0,
+  "mime_type" varchar NOT NULL DEFAULT '',
+  "width" int NOT NULL DEFAULT 0,
+  "height" int NOT NULL DEFAULT 0,
+  "duration" int NOT NULL DEFAULT 0,
+  "original_filename" varchar NOT NULL DEFAULT '',
+  "metadata" jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE TABLE "post_media" (

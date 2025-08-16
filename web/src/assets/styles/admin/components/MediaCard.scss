@@ -1,0 +1,58 @@
+.gl-admin-media-card {
+  border: 1.176px solid #bdbdbc;
+  border-radius: 4.703px;
+  overflow: hidden;
+  position: relative;
+  &__type-badge {
+    background-blend-mode: hard-light, normal;
+    border-radius: 4.7px;
+    box-shadow: 0 0 4.586px 0 rgba(0, 0, 0, 0.25) inset;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
+    left: 14px;
+    line-height: 130%;
+    padding: 4.7px 7px;
+    position: absolute;
+    top: 14px;
+    &--image {
+      background: linear-gradient(138deg, rgba(0, 0, 0, 0) 5.49%, rgba(0, 0, 0, 0.15) 95.27%), #3f3;
+      color: #0f5e0f;
+    }
+    &--video {
+      background: linear-gradient(138deg, rgba(0, 0, 0, 0) 5.49%, rgba(0, 0, 0, 0.15) 95.27%), #33c2ff;
+      color: #054bce;
+    }
+  }
+  &__image {
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+  }
+  &__thumbnail {
+    height: 220px;
+  }
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 14px;
+  }
+  &__title {
+    color: #000;
+    font-family: inherit;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 145%;
+  }
+  &__meta {
+    color: #6e7376;
+    display: flex;
+    flex-direction: row;
+    font-size: 14px;
+    font-weight: 500;
+    gap: 14px;
+    line-height: 145%;
+  }
+}

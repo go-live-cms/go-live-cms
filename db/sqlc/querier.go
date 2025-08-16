@@ -42,7 +42,7 @@ type Querier interface {
 	DeleteUserSessions(ctx context.Context, id int64) error
 	GetMedia(ctx context.Context, id int64) (Medium, error)
 	GetMediaByPost(ctx context.Context, postID int64) ([]Medium, error)
-	GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]Medium, error)
+	GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error)
 	GetMediaPostCount(ctx context.Context, mediaID int64) (int64, error)
 	GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error)
 	GetPopularTaxonomies(ctx context.Context, limit int32) ([]GetPopularTaxonomiesRow, error)
@@ -61,8 +61,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
-	ListMedia(ctx context.Context, arg ListMediaParams) ([]Medium, error)
-	ListMediaWithPostCount(ctx context.Context, arg ListMediaWithPostCountParams) ([]ListMediaWithPostCountRow, error)
+	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error)
 	ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
@@ -70,7 +69,7 @@ type Querier interface {
 	ListTaxonomies(ctx context.Context, arg ListTaxonomiesParams) ([]Taxonomy, error)
 	ListTaxonomiesWithPostCount(ctx context.Context, arg ListTaxonomiesWithPostCountParams) ([]ListTaxonomiesWithPostCountRow, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
-	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]Medium, error)
+	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	SearchTaxonomiesByName(ctx context.Context, arg SearchTaxonomiesByNameParams) ([]Taxonomy, error)
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error

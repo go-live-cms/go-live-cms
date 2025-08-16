@@ -483,13 +483,19 @@ type UpdatePostMediaTxParams struct {
 }
 
 type CreateMediaAndLinkTxParams struct {
-	Name        string
-	Description string
-	Alt         string
-	MediaPath   string
-	UserID      int64
-	PostID      int64
-	Order       int32
+	Name             string
+	Description      string
+	Alt              string
+	MediaPath        string
+	UserID           int64
+	FileSize         int64
+	MimeType         string
+	Width            int32
+	Height           int32
+	Duration         int32
+	OriginalFilename string
+	PostID           int64
+	Order            int32
 }
 
 type CreateMediaAndLinkTxResult struct {
@@ -627,11 +633,17 @@ func (store *SQLStore) CreateMediaAndLinkTx(ctx context.Context, arg CreateMedia
 		var err error
 
 		result.Media, err = q.CreateMedia(ctx, CreateMediaParams{
-			Name:        arg.Name,
-			Description: arg.Description,
-			Alt:         arg.Alt,
-			MediaPath:   arg.MediaPath,
-			UserID:      arg.UserID,
+			Name:             arg.Name,
+			Description:      arg.Description,
+			Alt:              arg.Alt,
+			MediaPath:        arg.MediaPath,
+			UserID:           arg.UserID,
+			FileSize:         arg.FileSize,
+			MimeType:         arg.MimeType,
+			Width:            arg.Width,
+			Height:           arg.Height,
+			Duration:         arg.Duration,
+			OriginalFilename: arg.OriginalFilename,
 		})
 		if err != nil {
 			return err

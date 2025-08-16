@@ -28,12 +28,18 @@ export interface Taxonomy {
 
 export interface Media {
   id: number;
-  filename: string;
-  original_name: string;
-  mime_type: string;
-  size: number;
-  path: string;
-  url: string;
+  name: string;
+  description: string;
+  alt: string;
+  media_path: string;
   user_id: number;
   created_at: string;
+  changed_at: string;
+  post_count?: number;
+  file_size: number;
+  mime_type: string;
+  width?: number;
+  height?: number;
+  duration?: number;
+  original_filename: string;
 }

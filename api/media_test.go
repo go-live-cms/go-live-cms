@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -194,13 +195,28 @@ func TestCreateMediaAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			data, err := json.Marshal(tc.body)
+			var buf bytes.Buffer
+			writer := multipart.NewWriter(&buf)
+
+			for key, value := range tc.body {
+				if key != "media_path" {
+					err := writer.WriteField(key, fmt.Sprintf("%v", value))
+					require.NoError(t, err)
+				}
+			}
+
+			part, err := writer.CreateFormFile("file", "test.jpg")
+			require.NoError(t, err)
+			_, err = part.Write([]byte("fake image content"))
+			require.NoError(t, err)
+
+			err = writer.Close()
 			require.NoError(t, err)
 
 			url := "/api/v1/media"
-			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+			request, err := http.NewRequest(http.MethodPost, url, &buf)
 			require.NoError(t, err)
-			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Content-Type", writer.FormDataContentType())
 
 			tc.setupAuth(t, request, server.tokenMaker)
 			server.router.ServeHTTP(recorder, request)

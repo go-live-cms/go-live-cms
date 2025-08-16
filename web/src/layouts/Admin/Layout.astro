@@ -13,13 +13,13 @@ const { title, description = "Admin interface for Go Live CMS" } = Astro.props;
 
 <Page title={`${title} - ${SITE_TITLE}`} {description} >
   <Fragment slot="head">
-    <script>
-      import { authManager } from "@/lib/auth";
-
-      const authState = authManager.getState();
-      if (!authState.isAuthenticated) {
-        const currentPath = window.location.pathname;
-        window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+    <script is:inline>
+      if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          const currentPath = window.location.pathname;
+          window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+        }
       }
     </script>
   </Fragment>
@@ -36,18 +36,40 @@ const { title, description = "Admin interface for Go Live CMS" } = Astro.props;
   <Fragment slot="foot">
     <script>
       import { authManager } from "@/lib/auth";
-      import AuthGuard from "@/components/AuthGuard.tsx";
 
-      const authState = authManager.getState();
-      if (!authState.isAuthenticated) {
-        document.getElementById("admin-content")!.innerHTML =
-        "<div style='text-align: center; padding: 2rem;'>Redirecting to login...</div>";
+      document.addEventListener('DOMContentLoaded', async () => {
+        const authState = authManager.getState();
+        if (!authState.isAuthenticated) {
+          // TODO: add a loading spinner in a component.
+          document.getElementById("admin-content")!.innerHTML =
+            "<div style='text-align: center; padding: 2rem;'>Redirecting to login...</div>";
 
-        setTimeout(() => {
+          setTimeout(() => {
+            const currentPath = window.location.pathname;
+            window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+          }, 1000);
+          return;
+        }
+
+        if (authState.refreshToken) {
+          try {
+            await authManager.refreshAccessToken();
+          } catch (error) {
+            console.log('Token refresh failed, redirecting to login');
+            const currentPath = window.location.pathname;
+            window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+          }
+        }
+      });
+
+      window.addEventListener('unhandledrejection', (event) => {
+        if (event.reason?.message?.includes('Authentication required')) {
+          console.log('Global auth error detected, redirecting to login');
+          event.preventDefault(); 
           const currentPath = window.location.pathname;
           window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
-        }, 1000);
-      }
+        }
+      });
     </script>
   </Fragment>
 </Page>

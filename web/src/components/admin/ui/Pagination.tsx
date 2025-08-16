@@ -1,16 +1,15 @@
-import React, { useEffect, useState } from "react";
-import Icon from "@/components/admin/ui/Icon";
-import Select from "@/components/admin/ui/Select";
-import "@assets/styles/admin/ui/pagination.scss";
+import React, { useEffect, useState } from "react"
+import Icon from "@/components/admin/ui/Icon"
+import Select from "@/components/admin/ui/Select"
+import "@assets/styles/admin/components/ui/pagination.scss"
 
 type PaginationProps<T, Q = Record<string, any>> = {
-  fetchData: (query: Q & { limit: number; offset: number }) => Promise<{ data: T[]; total: number }>;
-  query: Q;
-  limitOptions?: number[];
-  pageWindow?: number;
-  children: (data: T[], total: number, loading: boolean) => React.ReactNode;
-};
-
+  fetchData: (query: Q & { limit: number; offset: number }) => Promise<{ data: T[]; total: number }>
+  query: Q
+  limitOptions?: number[]
+  pageWindow?: number
+  children: (data: T[], total: number, loading: boolean) => React.ReactNode
+}
 
 function Pagination<T, Q = Record<string, any>>({
   fetchData,
@@ -19,62 +18,61 @@ function Pagination<T, Q = Record<string, any>>({
   pageWindow = 5,
   children,
 }: PaginationProps<T, Q>) {
-  const [limit, setLimit] = useState(limitOptions[0]);
-  const [offset, setOffset] = useState(0);
-  const [data, setData] = useState<T[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [limit, setLimit] = useState(limitOptions[0])
+  const [offset, setOffset] = useState(0)
+  const [data, setData] = useState<T[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
 
-  const navigationIconSize = "1.2rem";
-
-  useEffect(() => {
-    setOffset(0); // Reset to first page when query changes
-  }, [query, limit]);
+  const navigationIconSize = "1.2rem"
 
   useEffect(() => {
-    let isMounted = true;
-    setLoading(true);
+    setOffset(0)
+  }, [query, limit])
+
+  useEffect(() => {
+    let isMounted = true
+    setLoading(true)
     fetchData({ ...query, limit, offset })
       .then((res) => {
         if (isMounted) {
-          setData(res.data);
-          setTotal(res.total);
+          setData(res.data)
+          setTotal(res.total)
         }
       })
       .catch(() => {
         if (isMounted) {
-          setData([]);
-          setTotal(0);
+          setData([])
+          setTotal(0)
         }
       })
       .finally(() => {
-        if (isMounted) setLoading(false);
-      });
+        if (isMounted) setLoading(false)
+      })
     return () => {
-      isMounted = false;
-    };
-  }, [fetchData, query, limit, offset]);
+      isMounted = false
+    }
+  }, [fetchData, query, limit, offset])
 
-  const totalPages = Math.ceil(total / limit);
-  const currentPage = Math.floor(offset / limit);
+  const totalPages = Math.ceil(total / limit)
+  const currentPage = Math.floor(offset / limit)
 
-  // Calculate visible page numbers
   const getPageNumbers = () => {
     if (totalPages <= pageWindow) {
-      return Array.from({ length: totalPages }, (_, i) => i);
+      return Array.from({ length: totalPages }, (_, i) => i)
     }
-    let windowStart = 0;
+    let windowStart = 0
     if (currentPage >= pageWindow) {
-      windowStart = Math.floor(currentPage / pageWindow) * pageWindow;
+      windowStart = Math.floor(currentPage / pageWindow) * pageWindow
     }
-    let windowEnd = Math.min(windowStart + pageWindow - 1, totalPages - 1);
-    return Array.from({ length: windowEnd - windowStart + 1 }, (_, i) => windowStart + i);
-  };
+    let windowEnd = Math.min(windowStart + pageWindow - 1, totalPages - 1)
+    return Array.from({ length: windowEnd - windowStart + 1 }, (_, i) => windowStart + i)
+  }
 
   const handleLimitChange = (value: string) => {
-    setLimit(Number(value));
-    setOffset(0);
-  };
+    setLimit(Number(value))
+    setOffset(0)
+  }
 
   return (
     <div className="gl-pagination">
@@ -82,21 +80,29 @@ function Pagination<T, Q = Record<string, any>>({
       <div className="gl-pagination__controls">
         {/* Go to first page */}
         <button onClick={() => setOffset(0)} disabled={currentPage === 0}>
-          <Icon name="double-next" mirror_horizontally={true} color={currentPage === 0 ? "#B8BCBF" : "#333536"} width={navigationIconSize} height={navigationIconSize} />
+          <Icon
+            name="double-next"
+            mirror_horizontally={true}
+            color={currentPage === 0 ? "#B8BCBF" : "#333536"}
+            width={navigationIconSize}
+            height={navigationIconSize}
+          />
         </button>
 
         {/* Previous page */}
         <button onClick={() => setOffset((o) => Math.max(0, o - limit))} disabled={currentPage === 0}>
-          <Icon name="next" mirror_horizontally={true} color={currentPage === 0 ? "#B8BCBF" : "#333536"} width={navigationIconSize} height={navigationIconSize} />
+          <Icon
+            name="next"
+            mirror_horizontally={true}
+            color={currentPage === 0 ? "#B8BCBF" : "#333536"}
+            width={navigationIconSize}
+            height={navigationIconSize}
+          />
         </button>
-        {/* Page numbers */}
+
         <div className="gl-pagination__navigation">
           {getPageNumbers().map((page) => (
-            <button
-              key={page}
-              onClick={() => setOffset(page * limit)}
-              disabled={page === currentPage}
-            >
+            <button key={page} onClick={() => setOffset(page * limit)} disabled={page === currentPage}>
               {page + 1}
             </button>
           ))}
@@ -106,13 +112,26 @@ function Pagination<T, Q = Record<string, any>>({
           onClick={() => setOffset((o) => (o + limit < total ? o + limit : o))}
           disabled={currentPage >= totalPages - 1 || totalPages === 0}
         >
-          <Icon name="next" color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"} width={navigationIconSize} height={navigationIconSize} />
+          <Icon
+            name="next"
+            color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"}
+            width={navigationIconSize}
+            height={navigationIconSize}
+          />
         </button>
         {/* Go to last page */}
-        <button onClick={() => setOffset((totalPages - 1) * limit)} disabled={currentPage >= totalPages - 1 || totalPages === 0}>
-          <Icon name="double-next" color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"} width={navigationIconSize} height={navigationIconSize} />
+        <button
+          onClick={() => setOffset((totalPages - 1) * limit)}
+          disabled={currentPage >= totalPages - 1 || totalPages === 0}
+        >
+          <Icon
+            name="double-next"
+            color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"}
+            width={navigationIconSize}
+            height={navigationIconSize}
+          />
         </button>
-        {/* Results per page dropdown */}
+
         <div className="gl-pagination__limit">
           <Select
             options={limitOptions.map((option) => ({ value: String(option), label: String(option) }))}
@@ -122,7 +141,7 @@ function Pagination<T, Q = Record<string, any>>({
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-export default Pagination;
+export default Pagination

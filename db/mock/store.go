@@ -645,10 +645,10 @@ func (mr *MockStoreMockRecorder) GetMediaByPost(arg0, arg1 interface{}) *gomock.
 }
 
 // GetMediaByUser mocks base method.
-func (m *MockStore) GetMediaByUser(arg0 context.Context, arg1 db.GetMediaByUserParams) ([]db.Medium, error) {
+func (m *MockStore) GetMediaByUser(arg0 context.Context, arg1 db.GetMediaByUserParams) ([]db.GetMediaByUserRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMediaByUser", arg0, arg1)
-	ret0, _ := ret[0].([]db.Medium)
+	ret0, _ := ret[0].([]db.GetMediaByUserRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -930,10 +930,10 @@ func (mr *MockStoreMockRecorder) GetUserMediaCount(arg0, arg1 interface{}) *gomo
 }
 
 // ListMedia mocks base method.
-func (m *MockStore) ListMedia(arg0 context.Context, arg1 db.ListMediaParams) ([]db.Medium, error) {
+func (m *MockStore) ListMedia(arg0 context.Context, arg1 db.ListMediaParams) ([]db.ListMediaRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListMedia", arg0, arg1)
-	ret0, _ := ret[0].([]db.Medium)
+	ret0, _ := ret[0].([]db.ListMediaRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -942,21 +942,6 @@ func (m *MockStore) ListMedia(arg0 context.Context, arg1 db.ListMediaParams) ([]
 func (mr *MockStoreMockRecorder) ListMedia(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMedia", reflect.TypeOf((*MockStore)(nil).ListMedia), arg0, arg1)
-}
-
-// ListMediaWithPostCount mocks base method.
-func (m *MockStore) ListMediaWithPostCount(arg0 context.Context, arg1 db.ListMediaWithPostCountParams) ([]db.ListMediaWithPostCountRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListMediaWithPostCount", arg0, arg1)
-	ret0, _ := ret[0].([]db.ListMediaWithPostCountRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListMediaWithPostCount indicates an expected call of ListMediaWithPostCount.
-func (mr *MockStoreMockRecorder) ListMediaWithPostCount(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMediaWithPostCount", reflect.TypeOf((*MockStore)(nil).ListMediaWithPostCount), arg0, arg1)
 }
 
 // ListPosts mocks base method.
@@ -1065,10 +1050,10 @@ func (mr *MockStoreMockRecorder) ListUsers(arg0, arg1 interface{}) *gomock.Call 
 }
 
 // SearchMediaByName mocks base method.
-func (m *MockStore) SearchMediaByName(arg0 context.Context, arg1 db.SearchMediaByNameParams) ([]db.Medium, error) {
+func (m *MockStore) SearchMediaByName(arg0 context.Context, arg1 db.SearchMediaByNameParams) ([]db.SearchMediaByNameRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SearchMediaByName", arg0, arg1)
-	ret0, _ := ret[0].([]db.Medium)
+	ret0, _ := ret[0].([]db.SearchMediaByNameRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
