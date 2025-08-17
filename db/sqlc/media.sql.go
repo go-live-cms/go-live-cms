@@ -248,17 +248,34 @@ SELECT
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
-WHERE m.user_id = $1
+WHERE 
+    m.user_id = $1
+    AND ($2 = '' OR m.mime_type LIKE $2 || '%')
+    AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
 GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
-ORDER BY m.created_at DESC
-LIMIT $2
-OFFSET $3
+ORDER BY 
+    CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
+    CASE WHEN $4 = 'name_asc' THEN m.name END ASC,
+    CASE WHEN $4 = 'name_desc' THEN m.name END DESC,
+    CASE WHEN $4 = 'size_asc' THEN m.file_size END ASC,
+    CASE WHEN $4 = 'size_desc' THEN m.file_size END DESC,
+    CASE WHEN $4 = 'type_asc' THEN m.mime_type END ASC,
+    CASE WHEN $4 = 'type_desc' THEN m.mime_type END DESC,
+    CASE WHEN $4 = 'posts_asc' THEN COUNT(pm.post_id) END ASC,
+    CASE WHEN $4 = 'posts_desc' THEN COUNT(pm.post_id) END DESC,
+    m.created_at DESC
+LIMIT $5
+OFFSET $6
 `
 
 type GetMediaByUserParams struct {
-	UserID int64 `json:"user_id"`
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	UserID  int64       `json:"user_id"`
+	Column2 interface{} `json:"column_2"`
+	Column3 interface{} `json:"column_3"`
+	Column4 interface{} `json:"column_4"`
+	Limit   int32       `json:"limit"`
+	Offset  int32       `json:"offset"`
 }
 
 type GetMediaByUserRow struct {
@@ -281,7 +298,14 @@ type GetMediaByUserRow struct {
 }
 
 func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, getMediaByUser, arg.UserID, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, getMediaByUser,
+		arg.UserID,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -572,15 +596,34 @@ SELECT
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
+WHERE 
+    ($1 = '' OR m.mime_type LIKE $1 || '%')
+    AND ($2 = 0 OR m.user_id = $2)
+    AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
 GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
-ORDER BY m.created_at DESC
-LIMIT $1
-OFFSET $2
+ORDER BY 
+    CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
+    CASE WHEN $4 = 'name_asc' THEN m.name END ASC,
+    CASE WHEN $4 = 'name_desc' THEN m.name END DESC,
+    CASE WHEN $4 = 'size_asc' THEN m.file_size END ASC,
+    CASE WHEN $4 = 'size_desc' THEN m.file_size END DESC,
+    CASE WHEN $4 = 'type_asc' THEN m.mime_type END ASC,
+    CASE WHEN $4 = 'type_desc' THEN m.mime_type END DESC,
+    CASE WHEN $4 = 'posts_asc' THEN COUNT(pm.post_id) END ASC,
+    CASE WHEN $4 = 'posts_desc' THEN COUNT(pm.post_id) END DESC,
+    m.created_at DESC
+LIMIT $5
+OFFSET $6
 `
 
 type ListMediaParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	Column1 interface{} `json:"column_1"`
+	Column2 interface{} `json:"column_2"`
+	Column3 interface{} `json:"column_3"`
+	Column4 interface{} `json:"column_4"`
+	Limit   int32       `json:"limit"`
+	Offset  int32       `json:"offset"`
 }
 
 type ListMediaRow struct {
@@ -603,7 +646,14 @@ type ListMediaRow struct {
 }
 
 func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMedia, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listMedia,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -728,15 +778,32 @@ SELECT
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
-WHERE m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%'
+WHERE 
+    (m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%')
+    AND ($2 = '' OR m.mime_type LIKE $2 || '%')
+    AND ($3 = 0 OR m.user_id = $3)
 GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
-ORDER BY m.created_at DESC
-LIMIT $2
-OFFSET $3
+ORDER BY 
+    CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
+    CASE WHEN $4 = 'name_asc' THEN m.name END ASC,
+    CASE WHEN $4 = 'name_desc' THEN m.name END DESC,
+    CASE WHEN $4 = 'size_asc' THEN m.file_size END ASC,
+    CASE WHEN $4 = 'size_desc' THEN m.file_size END DESC,
+    CASE WHEN $4 = 'type_asc' THEN m.mime_type END ASC,
+    CASE WHEN $4 = 'type_desc' THEN m.mime_type END DESC,
+    CASE WHEN $4 = 'posts_asc' THEN COUNT(pm.post_id) END ASC,
+    CASE WHEN $4 = 'posts_desc' THEN COUNT(pm.post_id) END DESC,
+    m.created_at DESC
+LIMIT $5
+OFFSET $6
 `
 
 type SearchMediaByNameParams struct {
 	Column1 sql.NullString `json:"column_1"`
+	Column2 interface{}    `json:"column_2"`
+	Column3 interface{}    `json:"column_3"`
+	Column4 interface{}    `json:"column_4"`
 	Limit   int32          `json:"limit"`
 	Offset  int32          `json:"offset"`
 }
@@ -761,7 +828,14 @@ type SearchMediaByNameRow struct {
 }
 
 func (q *Queries) SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchMediaByName, arg.Column1, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, searchMediaByName,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}
