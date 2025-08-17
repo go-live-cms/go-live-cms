@@ -183,8 +183,52 @@ export const api = {
   },
   searchTaxonomies: (query: string) => apiCall(`/taxonomies/search?q=${query}`),
 
-  getMedia: async (token?: string) => {
-    const response: ApiResponse<any> = await apiCall("/media", { token })
+  getMedia: async (
+    params: {
+      limit?: number
+      offset?: number
+      type?: string
+      user_id?: number
+      search?: string
+      sort?: string // date_asc, date_desc, name_asc, name_desc, size_asc, size_desc, type_asc, type_desc, posts_asc, posts_desc
+      token?: string
+    } = {}
+  ) => {
+    const queryString = new URLSearchParams(
+      Object.entries(params)
+        .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+        .reduce((acc, [k, v]) => {
+          acc[k] = String(v)
+          return acc
+        }, {} as Record<string, string>)
+    ).toString()
+
+    const url = queryString ? `/media?${queryString}` : "/media"
+    const response: ApiResponse<any> = await apiCall(url, { token: params.token })
+    return {
+      data: response.media || [],
+      meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
+    }
+  },
+
+  searchMedia: async (params: {
+    q: string
+    limit?: number
+    offset?: number
+    type?: string
+    user_id?: number
+    sort?: string
+  }) => {
+    const queryString = new URLSearchParams(
+      Object.entries(params)
+        .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+        .reduce((acc, [k, v]) => {
+          acc[k] = String(v)
+          return acc
+        }, {} as Record<string, string>)
+    ).toString()
+
+    const response: ApiResponse<any> = await apiCall(`/media/search?${queryString}`)
     return {
       data: response.media || [],
       meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
@@ -198,7 +242,6 @@ export const api = {
       meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
     }
   },
-  searchMedia: (query: string) => apiCall(`/media/search?q=${query}`),
 
   createMedia: async (formData: FormData) => {
     try {
