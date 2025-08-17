@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { authManager, type AuthState } from "../lib/auth";
+import { authManager, type AuthState } from "@gl-admin/lib/auth";
 
 interface AuthGuardProps {
   children: React.ReactNode;

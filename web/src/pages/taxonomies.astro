@@ -2,130 +2,134 @@
 import Page from "@/layouts/Page.astro"
 import FormattedDate from "@/components/FormattedDate.astro"
 import { SITE_TITLE } from "@/consts"
-import { api } from "@/lib/api"
-import type { Taxonomy } from "@/lib/types"
+import { api } from "@gl-admin/lib/api"
+import type { Taxonomy } from "@gl-admin/lib/types"
 
-let taxonomies: Taxonomy[] = [];
-let popularTaxonomies: Taxonomy[] = [];
-let error: string | null = null;
+let taxonomies: Taxonomy[] = []
+let popularTaxonomies: Taxonomy[] = []
+let error: string | null = null
 
 try {
-  const response = await api.getTaxonomies();
-  taxonomies = response.data;
-  const popularResponse = await api.getPopularTaxonomies();
-  popularTaxonomies = popularResponse.data;
+  const response = await api.getTaxonomies()
+  taxonomies = response.data
+  const popularResponse = await api.getPopularTaxonomies()
+  popularTaxonomies = popularResponse.data
 } catch (e) {
-  error = e instanceof Error ? e.message : 'Failed to fetch taxonomies';
-  console.error('Error fetching taxonomies:', e);
+  error = e instanceof Error ? e.message : "Failed to fetch taxonomies"
+  console.error("Error fetching taxonomies:", e)
 }
 ---
 
 <Page title={`Taxonomies - ${SITE_TITLE}`} description="Categories and tags from our CMS">
-    <Fragment slot="head">
-        <style>
-            main {
-                width: 960px;
-                max-width: calc(100% - 2em);
-                margin: auto;
-                padding: 3em 1em;
-            }
-            .taxonomies-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 1.5rem;
-                margin-top: 2rem;
-            }
-            .taxonomy-card {
-                border: 1px solid rgb(var(--gray-light));
-                border-radius: 8px;
-                padding: 1.5rem;
-                background: white;
-                transition: transform 0.2s ease;
-            }
-            .taxonomy-card:hover {
-                transform: translateY(-2px);
-                box-shadow: var(--box-shadow);
-            }
-            .taxonomy-name {
-                color: var(--accent);
-                font-size: 1.25rem;
-                font-weight: 600;
-                margin: 0 0 0.5rem 0;
-            }
-            .taxonomy-description {
-                color: rgb(var(--gray-dark));
-                line-height: 1.5;
-            }
-            .popular-section {
-                margin-top: 3rem;
-                padding-top: 2rem;
-                border-top: 1px solid rgb(var(--gray-light));
-            }
-            .popular-tags {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 0.5rem;
-                margin-top: 1rem;
-            }
-            .popular-tag {
-                background: var(--accent);
-                color: white;
-                padding: 0.5rem 1rem;
-                border-radius: 20px;
-                text-decoration: none;
-                font-size: 0.9rem;
-                transition: background 0.2s ease;
-            }
-            .popular-tag:hover {
-                background: var(--accent-dark);
-            }
-            .error {
-                background: #fee;
-                border: 1px solid #fcc;
-                color: #c00;
-                padding: 1rem;
-                border-radius: 8px;
-                margin: 2rem 0;
-            }
-        </style>
-    </Fragment>
+  <Fragment slot="head">
+    <style>
+      main {
+        width: 960px;
+        max-width: calc(100% - 2em);
+        margin: auto;
+        padding: 3em 1em;
+      }
+      .taxonomies-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+      }
+      .taxonomy-card {
+        border: 1px solid rgb(var(--gray-light));
+        border-radius: 8px;
+        padding: 1.5rem;
+        background: white;
+        transition: transform 0.2s ease;
+      }
+      .taxonomy-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--box-shadow);
+      }
+      .taxonomy-name {
+        color: var(--accent);
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem 0;
+      }
+      .taxonomy-description {
+        color: rgb(var(--gray-dark));
+        line-height: 1.5;
+      }
+      .popular-section {
+        margin-top: 3rem;
+        padding-top: 2rem;
+        border-top: 1px solid rgb(var(--gray-light));
+      }
+      .popular-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+      }
+      .popular-tag {
+        background: var(--accent);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: background 0.2s ease;
+      }
+      .popular-tag:hover {
+        background: var(--accent-dark);
+      }
+      .error {
+        background: #fee;
+        border: 1px solid #fcc;
+        color: #c00;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 2rem 0;
+      }
+    </style>
+  </Fragment>
 
-    <main>
-        <h1>Taxonomies</h1>
-        <p>Categories and tags used in our content management system</p>
+  <main>
+    <h1>Taxonomies</h1>
+    <p>Categories and tags used in our content management system</p>
 
-        {error && (
-            <div class="error">
-                <strong>Error:</strong> {error}
+    {
+      error && (
+        <div class="error">
+          <strong>Error:</strong> {error}
+        </div>
+      )
+    }
+
+    {
+      popularTaxonomies.length > 0 && (
+        <section class="popular-section">
+          <h2>Popular Tags</h2>
+          <div class="popular-tags">
+            {popularTaxonomies.map((taxonomy) => (
+              <a href={`/taxonomies/${taxonomy.id}`} class="popular-tag">
+                {taxonomy.name}
+              </a>
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      taxonomies.length > 0 && (
+        <div class="taxonomies-grid">
+          {taxonomies.map((taxonomy) => (
+            <div class="taxonomy-card">
+              <h3 class="taxonomy-name">{taxonomy.name}</h3>
+              <p class="taxonomy-description">{taxonomy.description}</p>
             </div>
-        )}
+          ))}
+        </div>
+      )
+    }
 
-        {popularTaxonomies.length > 0 && (
-            <section class="popular-section">
-                <h2>Popular Tags</h2>
-                <div class="popular-tags">
-                    {popularTaxonomies.map((taxonomy) => (
-                        <a href={`/taxonomies/${taxonomy.id}`} class="popular-tag">
-                            {taxonomy.name}
-                        </a>
-                    ))}
-                </div>
-            </section>
-        )}
-
-        {taxonomies.length > 0 && (
-            <div class="taxonomies-grid">
-                {taxonomies.map((taxonomy) => (
-                    <div class="taxonomy-card">
-                        <h3 class="taxonomy-name">{taxonomy.name}</h3>
-                        <p class="taxonomy-description">{taxonomy.description}</p>
-                    </div>
-                ))}
-            </div>
-        )}
-
-        {taxonomies.length === 0 && !error && (
-            <p>No taxonomies found. Check if your Go backend is running.</p>
-        )}
-    </main>
+    {taxonomies.length === 0 && !error && <p>No taxonomies found. Check if your Go backend is running.</p>}
+  </main>
 </Page>

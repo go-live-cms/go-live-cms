@@ -2,116 +2,123 @@
 import Page from "@/layouts/Page.astro"
 import FormattedDate from "@/components/FormattedDate.astro"
 import { SITE_TITLE } from "@/consts"
-import { api } from "@/lib/api"
-import type { Post } from "@/lib/types"
+import { api } from "@gl-admin/lib/api"
+import type { Post } from "@gl-admin/lib/types"
 
-let posts: Post[] = [];
-let error: string | null = null;
+let posts: Post[] = []
+let error: string | null = null
 
 try {
-  const response = await api.getPosts();
-  posts = response.data;
+  const response = await api.getPosts()
+  posts = response.data
 } catch (e) {
-  error = e instanceof Error ? e.message : 'Failed to fetch posts';
-  console.error('Error fetching posts:', e);
+  error = e instanceof Error ? e.message : "Failed to fetch posts"
+  console.error("Error fetching posts:", e)
 }
 ---
 
 <Page title={`Posts - ${SITE_TITLE}`} description="All blog posts from our CMS">
+  <Fragment slot="head">
+    <style>
+      main {
+        width: 960px;
+        max-width: calc(100% - 2em);
+        margin: auto;
+        padding: 3em 1em;
+      }
+      .posts-grid {
+        display: grid;
+        gap: 2rem;
+        margin-top: 2rem;
+      }
+      .post-card {
+        border: 1px solid rgb(var(--gray-light));
+        border-radius: 12px;
+        padding: 1.5rem;
+        background: white;
+        box-shadow: 0 2px 4px rgba(var(--gray), 10%);
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .post-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--box-shadow);
+      }
+      .post-title {
+        color: rgb(var(--black));
+        font-size: 1.5rem;
+        margin: 0 0 0.5rem 0;
+        line-height: 1.2;
+      }
+      .post-meta {
+        color: rgb(var(--gray));
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+      }
+      .post-description {
+        color: rgb(var(--gray-dark));
+        line-height: 1.6;
+        margin-bottom: 1rem;
+      }
+      .read-more {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .read-more:hover {
+        text-decoration: underline;
+      }
+      .error {
+        background: #fee;
+        border: 1px solid #fcc;
+        color: #c00;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 2rem 0;
+      }
+      .no-posts {
+        text-align: center;
+        color: rgb(var(--gray));
+        font-style: italic;
+        margin: 3rem 0;
+      }
+    </style>
+  </Fragment>
 
-    <Fragment slot="head">
-        <style>
-            main {
-                width: 960px;
-                max-width: calc(100% - 2em);
-                margin: auto;
-                padding: 3em 1em;
-            }
-            .posts-grid {
-                display: grid;
-                gap: 2rem;
-                margin-top: 2rem;
-            }
-            .post-card {
-                border: 1px solid rgb(var(--gray-light));
-                border-radius: 12px;
-                padding: 1.5rem;
-                background: white;
-                box-shadow: 0 2px 4px rgba(var(--gray), 10%);
-                transition: transform 0.2s ease, box-shadow 0.2s ease;
-            }
-            .post-card:hover {
-                transform: translateY(-2px);
-                box-shadow: var(--box-shadow);
-            }
-            .post-title {
-                color: rgb(var(--black));
-                font-size: 1.5rem;
-                margin: 0 0 0.5rem 0;
-                line-height: 1.2;
-            }
-            .post-meta {
-                color: rgb(var(--gray));
-                font-size: 0.9rem;
-                margin-bottom: 1rem;
-            }
-            .post-description {
-                color: rgb(var(--gray-dark));
-                line-height: 1.6;
-                margin-bottom: 1rem;
-            }
-            .read-more {
-                color: var(--accent);
-                text-decoration: none;
-                font-weight: 500;
-            }
-            .read-more:hover {
-                text-decoration: underline;
-            }
-            .error {
-                background: #fee;
-                border: 1px solid #fcc;
-                color: #c00;
-                padding: 1rem;
-                border-radius: 8px;
-                margin: 2rem 0;
-            }
-            .no-posts {
-                text-align: center;
-                color: rgb(var(--gray));
-                font-style: italic;
-                margin: 3rem 0;
-            }
-        </style>
-    </Fragment>
+  <main>
+    <h1>Blog Posts</h1>
+    <p>All posts from our CMS backend</p>
 
-    <main>
-        <h1>Blog Posts</h1>
-        <p>All posts from our CMS backend</p>
-
-        {error && (
-            <div class="error">
-                <strong>Error:</strong> {error}
-            </div>
-        )}
-
-        {posts.length === 0 && !error && (
-            <div class="no-posts">
-                No posts found. Check if your Go backend is running on port 8080.
-            </div>
-        )}
-
-        <div class="posts-grid">
-            {posts.map((post) => (
-                <article class="post-card">
-                    <h2 class="post-title">{post.title}</h2>
-                    <div class="post-meta">
-                        By {post.username} • <FormattedDate date={new Date(post.created_at)} />
-                    </div>
-                    <p class="post-description">{post.description}</p>
-                    <a href={`/posts/${post.id}`} class="read-more">Read more →</a>
-                </article>
-            ))}
+    {
+      error && (
+        <div class="error">
+          <strong>Error:</strong> {error}
         </div>
-    </main>
+      )
+    }
+
+    {
+      posts.length === 0 && !error && (
+        <div class="no-posts">No posts found. Check if your Go backend is running on port 8080.</div>
+      )
+    }
+
+    <div class="posts-grid">
+      {
+        posts.map((post) => (
+          <article class="post-card">
+            <h2 class="post-title">{post.title}</h2>
+            <div class="post-meta">
+              By {post.username} • <FormattedDate date={new Date(post.created_at)} />
+            </div>
+            <p class="post-description">{post.description}</p>
+            <a href={`/posts/${post.id}`} class="read-more">
+              Read more →
+            </a>
+          </article>
+        ))
+      }
+    </div>
+  </main>
 </Page>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react"
-import Icon from "@/components/admin/ui/Icon"
-import Select from "@/components/admin/ui/Select"
-import "@assets/styles/admin/components/ui/pagination.scss"
+import Icon from "@gl-admin/components/ui/Icon"
+import Select from "@gl-admin/components/ui/Select"
+import "@gl-admin/assets/styles/components/ui/pagination.scss"
 
 type PaginationProps<T, Q = Record<string, any>> = {
   fetchData: (query: Q & { limit: number; offset: number }) => Promise<{ data: T[]; total: number }>

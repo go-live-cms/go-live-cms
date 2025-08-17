@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
-import type { Post } from "@/lib/types";
-import { formatRelativeDay } from '@/utils/formatting';
+import type { Post } from "@gl-admin/lib/types";
+import { formatRelativeDay } from '@gl-admin/utils/formatting';
 
 export default function PostTitle({ value }: { value: Post }): JSX.Element {
     const isNeverEdited = !value.changed_at || value.changed_at === "0001-01-01T00:00:00Z";

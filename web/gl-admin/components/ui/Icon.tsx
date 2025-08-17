@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react"
-import "@assets/styles/admin/components/ui/icon.scss"
+import "@gl-admin/assets/styles/components/ui/icon.scss"
 
 interface Props {
   name: string // e.g., 'arrow-right'
@@ -27,7 +27,7 @@ export const Icon: React.FC<Props> = ({
   useEffect(() => {
     let isMounted = true
 
-    import(`@assets/icons/${name}.svg?raw`)
+    import(`@gl-admin/assets/icons/${name}.svg?raw`)
       .then((Svg) => {
         let content = Svg.default as string
 
