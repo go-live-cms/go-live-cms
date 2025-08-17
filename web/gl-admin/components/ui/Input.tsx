@@ -6,8 +6,8 @@ import {
     useEffect,
     type InputHTMLAttributes,
 } from "react";
-import { getInputMask, getValidationPattern, type InputMaskType } from "@/utils/admin/inputMasks";
-import "@assets/styles/admin/ui/input.scss";
+import { getInputMask, getValidationPattern, type InputMaskType } from "@gl-admin/utils/inputMasks";
+import "@gl-admin/styles/ui/input.scss";
 
 export type InputProps = Omit<
     InputHTMLAttributes<HTMLInputElement>,

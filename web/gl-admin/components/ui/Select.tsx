@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react"
-import Icon from "@/components/admin/ui/Icon"
-import "@assets/styles/admin/components/ui/select.scss"
+import Icon from "@gl-admin/components/ui/Icon"
+import "@gl-admin/assets/styles/components/ui/select.scss"
 
 export type SelectOption = {
   value: string

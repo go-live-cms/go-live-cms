@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
-import type { Post } from "@/lib/types";
-import { formatDate, formatTime } from "@/utils/formatting";
+import type { Post } from "@gl-admin/lib/types";
+import { formatDate, formatTime } from "@gl-admin/utils/formatting";
 
 export default function PostDateTime({ value }: { value: Post["created_at"] | Post["changed_at"] }): JSX.Element {
     return (

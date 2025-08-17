@@ -1,6 +1,6 @@
 ---
-import HeaderLink from "@/components/Header/HeaderLink.astro";
-import { SITE_TITLE } from "@/consts";
+import HeaderLink from "@/components/Header/HeaderLink.astro"
+import { SITE_TITLE } from "@/consts"
 ---
 
 <header>
@@ -115,38 +115,38 @@ import { SITE_TITLE } from "@/consts";
 </style>
 
 <script>
-  import { authManager } from '../lib/auth';
-  
-  const loginBtn = document.getElementById('login-btn');
-  const logoutBtn = document.getElementById('logout-btn');
-  const userMenu = document.getElementById('user-menu');
-  const userName = document.getElementById('user-name');
-  const adminLink = document.getElementById('admin-link');
-  
+  import { authManager } from "@gl-admin/lib/auth"
+
+  const loginBtn = document.getElementById("login-btn")
+  const logoutBtn = document.getElementById("logout-btn")
+  const userMenu = document.getElementById("user-menu")
+  const userName = document.getElementById("user-name")
+  const adminLink = document.getElementById("admin-link")
+
   function updateAuthUI() {
-    const authState = authManager.getState();
-    
+    const authState = authManager.getState()
+
     if (authState.isAuthenticated && authState.user) {
-      loginBtn!.style.display = 'none';
-      userMenu!.style.display = 'flex';
-      userName!.textContent = authState.user.username;
-      adminLink!.style.display = 'inline';
+      loginBtn!.style.display = "none"
+      userMenu!.style.display = "flex"
+      userName!.textContent = authState.user.username
+      adminLink!.style.display = "inline"
     } else {
-      loginBtn!.style.display = 'inline-block';
-      userMenu!.style.display = 'none';
-      adminLink!.style.display = 'none';
+      loginBtn!.style.display = "inline-block"
+      userMenu!.style.display = "none"
+      adminLink!.style.display = "none"
     }
   }
-  
-  loginBtn?.addEventListener('click', () => {
-    window.location.href = '/login';
-  });
-  
-  logoutBtn?.addEventListener('click', async () => {
-    await authManager.logout();
-    updateAuthUI();
-    window.location.href = '/';
-  });
-  
-  updateAuthUI();
+
+  loginBtn?.addEventListener("click", () => {
+    window.location.href = "/login"
+  })
+
+  logoutBtn?.addEventListener("click", async () => {
+    await authManager.logout()
+    updateAuthUI()
+    window.location.href = "/"
+  })
+
+  updateAuthUI()
 </script>

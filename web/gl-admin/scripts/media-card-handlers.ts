@@ -1,5 +1,5 @@
-import { api, getMediaURL } from "@/lib/api";
-import type { Media } from "@/lib/types";
+import { api, getMediaURL } from "gl-admin/lib/api";
+import type { Media } from "gl-admin/lib/types";
 
 export function initializeMediaCardHandlers() {
   document.addEventListener("click", (e) => {
