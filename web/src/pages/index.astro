@@ -2,159 +2,158 @@
 import Page from "@/layouts/Page.astro"
 import PostsReloader from "@/components/PostsReloader.jsx"
 import { SITE_DESCRIPTION, SITE_TITLE } from "../consts"
-import { api } from "@/lib/api"
-import "@assets/styles/global.scss"
-import "@/styles/global.css"
+import { api } from "gl-admin/lib/api"
+import "@gl-admin/assets/styles/global.scss"
+import "@/assets/styles/global.css"
 
-import type { Post } from "@/lib/types"
+import type { Post } from "gl-admin/lib/types"
 
-let latestPosts: Post[] = [];
-let totalPosts = 0;
-let totalTaxonomies = 0;
-let totalMedia = 0;
-let totalUsers = 0;
-let error: string | null = null;
+let latestPosts: Post[] = []
+let totalPosts = 0
+let totalTaxonomies = 0
+let totalMedia = 0
+let totalUsers = 0
+let error: string | null = null
 
 try {
   const [postsResponse, taxonomiesResponse, mediaResponse, usersResponse] = await Promise.all([
     api.getPosts(),
     api.getTaxonomies(),
     api.getMedia(),
-    api.getUsers()
-  ]);
+    api.getUsers(),
+  ])
 
-  latestPosts = postsResponse.data.slice(0, 3);
-  totalPosts = postsResponse.meta.total;
-  totalTaxonomies = taxonomiesResponse.meta.total;
-  totalMedia = mediaResponse.meta.total;
-  totalUsers = usersResponse.meta.total;
+  latestPosts = postsResponse.data.slice(0, 3)
+  totalPosts = postsResponse.meta.total
+  totalTaxonomies = taxonomiesResponse.meta.total
+  totalMedia = mediaResponse.meta.total
+  totalUsers = usersResponse.meta.total
 
-  console.log('Server-side fetch - Counts:', { totalPosts, totalTaxonomies, totalMedia, totalUsers });
+  console.log("Server-side fetch - Counts:", { totalPosts, totalTaxonomies, totalMedia, totalUsers })
 } catch (e) {
-  error = e instanceof Error ? e.message : 'Failed to fetch data';
-  console.error('Server-side error:', e);
+  error = e instanceof Error ? e.message : "Failed to fetch data"
+  console.error("Server-side error:", e)
 }
 ---
 
 <Page title={SITE_TITLE} description={SITE_DESCRIPTION}>
-    <Fragment slot="head">
-        <style>
-            main {
-                width: 960px;
-                max-width: calc(100% - 2em);
-                margin: auto;
-                padding: 3em 1em;
-            }
-            .hero {
-                text-align: center;
-                margin-bottom: 4rem;
-                padding: 2rem 0;
-            }
-            .hero h1 {
-                font-size: 3rem;
-                margin: 0 0 1rem 0;
-                background: linear-gradient(135deg, var(--accent), var(--accent-dark));
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
-            }
-            .hero p {
-                font-size: 1.2rem;
-                color: rgb(var(--gray));
-                max-width: 600px;
-                margin: 0 auto;
-            }
-            .stats {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 2rem;
-                margin: 3rem 0;
-            }
-            .stat-card {
-                background: white;
-                border: 1px solid rgb(var(--gray-light));
-                border-radius: 12px;
-                padding: 2rem;
-                text-align: center;
-                box-shadow: 0 2px 4px rgba(var(--gray), 10%);
-            }
-            .stat-number {
-                font-size: 2rem;
-                font-weight: bold;
-                color: var(--accent);
-                margin-bottom: 0.5rem;
-            }
-            .stat-label {
-                color: rgb(var(--gray));
-                text-transform: uppercase;
-                font-size: 0.9rem;
-                letter-spacing: 0.5px;
-            }
-            .error {
-                background: #fee;
-                border: 1px solid #fcc;
-                color: #c00;
-                padding: 1rem;
-                border-radius: 8px;
-                margin: 2rem 0;
-                text-align: center;
-            }
-            .demo-note {
-                background: #f0f9ff;
-                border: 1px solid #0ea5e9;
-                color: #0c4a6e;
-                padding: 1rem;
-                border-radius: 8px;
-                margin: 2rem 0;
-                text-align: center;
-            }
-            .demo-note strong {
-                color: #075985;
-            }
-        </style>
-    </Fragment>
-    <main>
-        <section class="hero">
-            <h1>Welcome to {SITE_TITLE}</h1>
-            <p>{SITE_DESCRIPTION}</p>
-        </section>
+  <Fragment slot="head">
+    <style>
+      main {
+        width: 960px;
+        max-width: calc(100% - 2em);
+        margin: auto;
+        padding: 3em 1em;
+      }
+      .hero {
+        text-align: center;
+        margin-bottom: 4rem;
+        padding: 2rem 0;
+      }
+      .hero h1 {
+        font-size: 3rem;
+        margin: 0 0 1rem 0;
+        background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .hero p {
+        font-size: 1.2rem;
+        color: rgb(var(--gray));
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 2rem;
+        margin: 3rem 0;
+      }
+      .stat-card {
+        background: white;
+        border: 1px solid rgb(var(--gray-light));
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(var(--gray), 10%);
+      }
+      .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+      }
+      .stat-label {
+        color: rgb(var(--gray));
+        text-transform: uppercase;
+        font-size: 0.9rem;
+        letter-spacing: 0.5px;
+      }
+      .error {
+        background: #fee;
+        border: 1px solid #fcc;
+        color: #c00;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 2rem 0;
+        text-align: center;
+      }
+      .demo-note {
+        background: #f0f9ff;
+        border: 1px solid #0ea5e9;
+        color: #0c4a6e;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 2rem 0;
+        text-align: center;
+      }
+      .demo-note strong {
+        color: #075985;
+      }
+    </style>
+  </Fragment>
+  <main>
+    <section class="hero">
+      <h1>Welcome to {SITE_TITLE}</h1>
+      <p>{SITE_DESCRIPTION}</p>
+    </section>
 
-        <section class="stats">
-            <div class="stat-card">
-                <div class="stat-number">{totalPosts}</div>
-                <div class="stat-label">Posts live reload test</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{totalTaxonomies}</div>
-                <div class="stat-label">Taxonomies</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{totalMedia}</div>
-                <div class="stat-label">Media Files</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{totalUsers}</div>
-                <div class="stat-label">Users</div>
-            </div>
-        </section>
+    <section class="stats">
+      <div class="stat-card">
+        <div class="stat-number">{totalPosts}</div>
+        <div class="stat-label">Posts live reload test</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{totalTaxonomies}</div>
+        <div class="stat-label">Taxonomies</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{totalMedia}</div>
+        <div class="stat-label">Media Files</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{totalUsers}</div>
+        <div class="stat-label">Users</div>
+      </div>
+    </section>
 
-        {error && (
-            <div class="error">
-                <strong>API Connection Error:</strong> {error}<br />
-                <small>Make sure your Go backend is running on port 8080</small>
-            </div>
-        )}
-
-        <div class="demo-note">
-            <strong>🚀 Astro Hybrid Demo:</strong> The stats above are fetched server-side (static/cached), 
-            while the posts below can be reloaded client-side with React!
+    {
+      error && (
+        <div class="error">
+          <strong>API Connection Error:</strong> {error}
+          <br />
+          <small>Make sure your Go backend is running on port 8080</small>
         </div>
+      )
+    }
 
-        <!-- This is now a React component that can reload data client-side -->
-        <PostsReloader
-            client:load
-            initialPosts={latestPosts}
-            totalPosts={totalPosts}
-        />
-    </main>
+    <div class="demo-note">
+      <strong>🚀 Astro Hybrid Demo:</strong> The stats above are fetched server-side (static/cached), while the posts below
+      can be reloaded client-side with React!
+    </div>
+
+    <!-- This is now a React component that can reload data client-side -->
+    <PostsReloader client:load initialPosts={latestPosts} totalPosts={totalPosts} />
+  </main>
 </Page>

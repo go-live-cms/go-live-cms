@@ -1,6 +1,6 @@
 ---
 import Page from "@/layouts/Page.astro"
-import { SITE_TITLE } from "@/consts";
+import { SITE_TITLE } from "@/consts"
 ---
 
 <Page title={`Login - ${SITE_TITLE}`} description="Login to access admin features">
@@ -101,8 +101,12 @@ import { SITE_TITLE } from "@/consts";
       }
 
       @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
       }
     </style>
   </Fragment>
@@ -117,24 +121,12 @@ import { SITE_TITLE } from "@/consts";
 
         <div class="form-group">
           <label for="username">Username</label>
-          <input
-            type="text"
-            id="username"
-            name="username"
-            required
-            autocomplete="username"
-          />
+          <input type="text" id="username" name="username" required autocomplete="username" />
         </div>
 
         <div class="form-group">
           <label for="password">Password</label>
-          <input
-            type="password"
-            id="password"
-            name="password"
-            required
-            autocomplete="current-password"
-          />
+          <input type="password" id="password" name="password" required autocomplete="current-password" />
         </div>
 
         <button type="submit" class="login-button" id="loginButton">
@@ -147,59 +139,59 @@ import { SITE_TITLE } from "@/consts";
 
   <Fragment slot="foot">
     <script>
-      import { authManager } from '../../lib/auth.ts';
+      import { authManager } from "@gl-admin/lib/auth.ts"
 
-      const form = document.getElementById('loginForm') as HTMLFormElement;
-      const errorMessage = document.getElementById('errorMessage') as HTMLDivElement;
-      const loginButton = document.getElementById('loginButton') as HTMLButtonElement;
-      const buttonText = document.getElementById('buttonText') as HTMLSpanElement;
-      const buttonLoading = document.getElementById('buttonLoading') as HTMLSpanElement;
+      const form = document.getElementById("loginForm") as HTMLFormElement
+      const errorMessage = document.getElementById("errorMessage") as HTMLDivElement
+      const loginButton = document.getElementById("loginButton") as HTMLButtonElement
+      const buttonText = document.getElementById("buttonText") as HTMLSpanElement
+      const buttonLoading = document.getElementById("buttonLoading") as HTMLSpanElement
 
-      const authState = authManager.getState();
+      const authState = authManager.getState()
       if (authState.isAuthenticated) {
-        const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/gl-admin';
-        window.location.href = redirectTo;
+        const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/gl-admin"
+        window.location.href = redirectTo
       }
 
       function showError(message: string) {
-        errorMessage.textContent = message;
-        errorMessage.style.display = 'block';
+        errorMessage.textContent = message
+        errorMessage.style.display = "block"
       }
 
       function hideError() {
-        errorMessage.style.display = 'none';
+        errorMessage.style.display = "none"
       }
 
       function setLoading(loading: boolean) {
-        loginButton.disabled = loading;
-        buttonText.style.display = loading ? 'none' : 'inline';
-        buttonLoading.style.display = loading ? 'inline' : 'none';
+        loginButton.disabled = loading
+        buttonText.style.display = loading ? "none" : "inline"
+        buttonLoading.style.display = loading ? "inline" : "none"
       }
 
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        hideError();
-        setLoading(true);
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault()
+        hideError()
+        setLoading(true)
 
-        const formData = new FormData(form);
-        const username = formData.get('username') as string;
-        const password = formData.get('password') as string;
+        const formData = new FormData(form)
+        const username = formData.get("username") as string
+        const password = formData.get("password") as string
 
         try {
-          const result = await authManager.login(username, password);
+          const result = await authManager.login(username, password)
 
           if (result.success) {
-            const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/gl-admin';
-            window.location.href = redirectTo;
+            const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/gl-admin"
+            window.location.href = redirectTo
           } else {
-            showError(result.error || 'Login failed');
+            showError(result.error || "Login failed")
           }
         } catch (error) {
-          showError('An unexpected error occurred');
+          showError("An unexpected error occurred")
         } finally {
-          setLoading(false);
+          setLoading(false)
         }
-      });
+      })
     </script>
   </Fragment>
 </Page>

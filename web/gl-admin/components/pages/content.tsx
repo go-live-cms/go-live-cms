@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
-import { api } from "@/lib/api";
-import Table, { type TableColumnWithRender } from "@/components/admin/ui/Table";
-import Pagination from "@/components/admin/ui/Pagination";
-import PostTitle from "@/components/admin/ui/PostTitle";
-import PostDateTime from "../ui/PostDateTime";
-import type { Post } from "@/lib/types";
+import React, { useState } from "react";
+import { api } from "@gl-admin/lib/api";
+import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table";
+import Pagination from "@gl-admin/components/ui/Pagination";
+import PostTitle from "@gl-admin/components/ui/PostTitle";
+import PostDateTime from "@gl-admin/components/ui/PostDateTime";
+import type { Post } from "@gl-admin/lib/types";
 
 const columns: TableColumnWithRender<Post>[] = [
   { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },

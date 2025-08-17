@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import "@assets/styles/admin/components/ui/table.scss"
+import "@gl-admin/assets/styles/components/ui/table.scss"
 
 export type TableColumn<T> = {
   key: keyof T

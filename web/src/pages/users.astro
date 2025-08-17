@@ -2,132 +2,132 @@
 import Page from "@/layouts/Page.astro"
 import FormattedDate from "@/components/FormattedDate.astro"
 import { SITE_TITLE } from "@/consts"
-import { api } from "@/lib/api"
-import type { User } from "@/lib/types"
+import { api } from "@gl-admin/lib/api"
+import type { User } from "@gl-admin/lib/types"
 
-let users: User[] = [];
-let error: string | null = null;
+let users: User[] = []
+let error: string | null = null
 
 try {
-  const response = await api.getUsers();
-  users = response.data;
+  const response = await api.getUsers()
+  users = response.data
 } catch (e) {
-  error = e instanceof Error ? e.message : 'Failed to fetch users';
-  console.error('Error fetching users:', e);
+  error = e instanceof Error ? e.message : "Failed to fetch users"
+  console.error("Error fetching users:", e)
 }
 ---
 
 <Page title={`Users - ${SITE_TITLE}`} description="Users in our CMS">
-    <Fragment slot="head">
-        <style>
-            main {
-                width: 960px;
-                max-width: calc(100% - 2em);
-                margin: auto;
-                padding: 3em 1em;
-            }
-            .users-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 1.5rem;
-                margin-top: 2rem;
-            }
-            .user-card {
-                border: 1px solid rgb(var(--gray-light));
-                border-radius: 12px;
-                padding: 1.5rem;
-                background: white;
-                box-shadow: 0 2px 4px rgba(var(--gray), 10%);
-                transition: transform 0.2s ease;
-            }
-            .user-card:hover {
-                transform: translateY(-2px);
-                box-shadow: var(--box-shadow);
-            }
-            .user-avatar {
-                width: 60px;
-                height: 60px;
-                border-radius: 50%;
-                background: var(--accent);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-size: 1.5rem;
-                font-weight: bold;
-                margin-bottom: 1rem;
-            }
-            .user-name {
-                color: rgb(var(--black));
-                font-size: 1.25rem;
-                font-weight: 600;
-                margin: 0 0 0.25rem 0;
-            }
-            .user-username {
-                color: var(--accent);
-                font-size: 0.9rem;
-                margin: 0 0 0.5rem 0;
-            }
-            .user-email {
-                color: rgb(var(--gray));
-                font-size: 0.9rem;
-                margin: 0 0 1rem 0;
-            }
-            .user-role {
-                display: inline-block;
-                background: rgb(var(--gray-light));
-                color: rgb(var(--gray-dark));
-                padding: 0.25rem 0.75rem;
-                border-radius: 20px;
-                font-size: 0.8rem;
-                text-transform: uppercase;
-                font-weight: 500;
-            }
-            .user-date {
-                color: rgb(var(--gray));
-                font-size: 0.85rem;
-                margin-top: 1rem;
-            }
-            .error {
-                background: #fee;
-                border: 1px solid #fcc;
-                color: #c00;
-                padding: 1rem;
-                border-radius: 8px;
-                margin: 2rem 0;
-            }
-        </style>
-    </Fragment>
+  <Fragment slot="head">
+    <style>
+      main {
+        width: 960px;
+        max-width: calc(100% - 2em);
+        margin: auto;
+        padding: 3em 1em;
+      }
+      .users-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 2rem;
+      }
+      .user-card {
+        border: 1px solid rgb(var(--gray-light));
+        border-radius: 12px;
+        padding: 1.5rem;
+        background: white;
+        box-shadow: 0 2px 4px rgba(var(--gray), 10%);
+        transition: transform 0.2s ease;
+      }
+      .user-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--box-shadow);
+      }
+      .user-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+      }
+      .user-name {
+        color: rgb(var(--black));
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0 0 0.25rem 0;
+      }
+      .user-username {
+        color: var(--accent);
+        font-size: 0.9rem;
+        margin: 0 0 0.5rem 0;
+      }
+      .user-email {
+        color: rgb(var(--gray));
+        font-size: 0.9rem;
+        margin: 0 0 1rem 0;
+      }
+      .user-role {
+        display: inline-block;
+        background: rgb(var(--gray-light));
+        color: rgb(var(--gray-dark));
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        font-weight: 500;
+      }
+      .user-date {
+        color: rgb(var(--gray));
+        font-size: 0.85rem;
+        margin-top: 1rem;
+      }
+      .error {
+        background: #fee;
+        border: 1px solid #fcc;
+        color: #c00;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 2rem 0;
+      }
+    </style>
+  </Fragment>
 
-    <main>
-        <h1>Users</h1>
-        <p>Content creators and administrators</p>
+  <main>
+    <h1>Users</h1>
+    <p>Content creators and administrators</p>
 
-        {error && (
-            <div class="error">
-                <strong>Error:</strong> {error}
-            </div>
-        )}
-
-        {users.length === 0 && !error && (
-            <p>No users found. Check if your Go backend is running.</p>
-        )}
-
-        <div class="users-grid">
-            {users.map((user) => (
-                <div class="user-card">
-                    <div class="user-avatar">
-                        {user.full_name.charAt(0).toUpperCase()}
-                    </div>
-                    <h3 class="user-name">{user.full_name}</h3>
-                    <div class="user-username">@{user.username}</div>
-                    <div class="user-email">{user.email}</div>
-                    <span class="user-role">{user.role}</span>
-                    <div class="user-date">
-                        Joined <FormattedDate date={new Date(user.created_at)} />
-                    </div>
-                </div>
-            ))}
+    {
+      error && (
+        <div class="error">
+          <strong>Error:</strong> {error}
         </div>
-    </main>
+      )
+    }
+
+    {users.length === 0 && !error && <p>No users found. Check if your Go backend is running.</p>}
+
+    <div class="users-grid">
+      {
+        users.map((user) => (
+          <div class="user-card">
+            <div class="user-avatar">{user.full_name.charAt(0).toUpperCase()}</div>
+            <h3 class="user-name">{user.full_name}</h3>
+            <div class="user-username">@{user.username}</div>
+            <div class="user-email">{user.email}</div>
+            <span class="user-role">{user.role}</span>
+            <div class="user-date">
+              Joined <FormattedDate date={new Date(user.created_at)} />
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </main>
 </Page>

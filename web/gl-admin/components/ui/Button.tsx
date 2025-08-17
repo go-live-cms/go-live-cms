@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, AnchorHTMLAttributes, ReactNode } from "react"
-import "@assets/styles/admin/components/ui/button.scss"
+import "@gl-admin/assets/styles/components/ui/button.scss"
 
 type ButtonProps = {
   children: ReactNode
