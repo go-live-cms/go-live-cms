@@ -157,7 +157,6 @@ const Media: React.FC = () => {
     return (
         <>
             <div className="gl-admin-media-library">
-                {/* Header */}
                 <div className="gl-admin-media-header">
                     <div className="gl-admin-media-header-left">
                         <h1 className="gl-admin-media-header__title">Media Library</h1>
@@ -291,14 +290,12 @@ const Media: React.FC = () => {
                     )}
                 </div>
 
-                {/* Toast */}
                 {toast && (
                     <div className={`toast toast--${toast.type}`}>
                         {toast.message}
                     </div>
                 )}
 
-                {/* Modal and other scripts would need to be converted to React logic */}
             </div>
         </>
     );
