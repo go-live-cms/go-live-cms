@@ -1,127 +1,15 @@
 ---
-import Admin from "@/layouts/gl-admin/Layout.astro"
-import Button from "@gl-admin/components/ui/Button"
-import { api } from "@gl-admin/lib/api"
-import type { Post, User, Taxonomy, Media } from "@gl-admin/lib/types"
-
-let totalPosts = 0
-let totalUsers = 0
-let totalTaxonomies = 0
-let totalMedia = 0
-let recentPosts: Post[] = []
-let recentUsers: User[] = []
-let error: string | null = null
-
-try {
-  const [postsResponse, usersResponse, taxonomiesResponse, mediaResponse] = await Promise.all([
-    api.getPosts(),
-    api.getUsers(),
-    api.getTaxonomies(),
-    api.getMedia(),
-  ])
-
-  totalPosts = postsResponse.meta.total
-  totalUsers = usersResponse.meta.total
-  totalTaxonomies = taxonomiesResponse.meta.total
-  totalMedia = mediaResponse.meta.total
-
-  recentPosts = postsResponse.data.slice(0, 5)
-  recentUsers = usersResponse.data.slice(0, 5)
-} catch (e) {
-  error = e instanceof Error ? e.message : "Failed to fetch admin data"
-  console.error("Admin dashboard error:", e)
-}
+import App from "@gl-admin/app"
 ---
 
-<Admin title="Admin Dashboard" description="Content management system admin dashboard">
-  <Button variation="primary" onClick={() => console.log("Clicked!")}> Add Item </Button>
-  <div class="admin-header">
-    <h1>🚀 Admin Dashboard</h1>
-    <p>Manage your Go Live CMS content and settings</p>
-  </div>
-
-  {
-    error && (
-      <div class="admin-error">
-        <strong>Dashboard Error:</strong> {error}
-        <br />
-        <small>Make sure your Go backend is running on port 8080</small>
-      </div>
-    )
-  }
-
-  <div class="stats-grid">
-    <div class="stat-card">
-      <div class="stat-number">{totalPosts}</div>
-      <div class="stat-label">Total Posts</div>
-      <a href="/posts" class="stat-link">Manage Posts</a>
-    </div>
-    <div class="stat-card">
-      <div class="stat-number">{totalUsers}</div>
-      <div class="stat-label">Total Users</div>
-      <a href="/users" class="stat-link">Manage Users</a>
-    </div>
-    <div class="stat-card">
-      <div class="stat-number">{totalTaxonomies}</div>
-      <div class="stat-label">Taxonomies</div>
-      <a href="/taxonomies" class="stat-link">Manage Tags</a>
-    </div>
-    <div class="stat-card">
-      <div class="stat-number">{totalMedia}</div>
-      <div class="stat-label">Media Files</div>
-      <a href="/media" class="stat-link">Media Library</a>
-    </div>
-  </div>
-
-  <div class="admin-sections">
-    <div class="admin-section">
-      <h2>📝 Recent Posts</h2>
-      {
-        recentPosts.length > 0 ? (
-          recentPosts.map((post) => (
-            <div class="recent-item">
-              <div class="recent-item-info">
-                <h4>{post.title}</h4>
-                <p>By {post.username}</p>
-              </div>
-              <div class="recent-item-date">{new Date(post.created_at).toLocaleDateString()}</div>
-            </div>
-          ))
-        ) : (
-          <p>No recent posts found.</p>
-        )
-      }
-    </div>
-
-    <div class="admin-section">
-      <h2>👥 Recent Users</h2>
-      {
-        recentUsers.length > 0 ? (
-          recentUsers.map((user) => (
-            <div class="recent-item">
-              <div class="recent-item-info">
-                <h4>{user.full_name}</h4>
-                <p>
-                  @{user.username} • {user.role}
-                </p>
-              </div>
-              <div class="recent-item-date">{new Date(user.created_at).toLocaleDateString()}</div>
-            </div>
-          ))
-        ) : (
-          <p>No recent users found.</p>
-        )
-      }
-    </div>
-
-    <div class="admin-section quick-actions">
-      <h2>⚡ Quick Actions</h2>
-      <div class="action-buttons">
-        <a href="/gl-admin/posts/new" class="action-button">Create New Post</a>
-        <a href="/gl-admin/users/new" class="action-button">Add User</a>
-        <a href="/gl-admin/media/upload" class="action-button secondary">Upload Media</a>
-        <a href="/gl-admin/settings" class="action-button secondary">Settings</a>
-      </div>
-    </div>
-  </div>
-</Admin>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoLive Admin</title>
+  </head>
+  <body>
+    {/* We mount the React SPA only on the client */}
+    <App client:only="react" />
+  </body>
+</html>
