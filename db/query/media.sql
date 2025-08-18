@@ -25,11 +25,25 @@ SELECT
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
-WHERE m.user_id = $1
+WHERE 
+    m.user_id = $1
+    AND ($2 = '' OR m.mime_type LIKE $2 || '%')
+    AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
 GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
-ORDER BY m.created_at DESC
-LIMIT $2
-OFFSET $3;
+ORDER BY 
+    CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
+    CASE WHEN $4 = 'name_asc' THEN m.name END ASC,
+    CASE WHEN $4 = 'name_desc' THEN m.name END DESC,
+    CASE WHEN $4 = 'size_asc' THEN m.file_size END ASC,
+    CASE WHEN $4 = 'size_desc' THEN m.file_size END DESC,
+    CASE WHEN $4 = 'type_asc' THEN m.mime_type END ASC,
+    CASE WHEN $4 = 'type_desc' THEN m.mime_type END DESC,
+    CASE WHEN $4 = 'posts_asc' THEN COUNT(pm.post_id) END ASC,
+    CASE WHEN $4 = 'posts_desc' THEN COUNT(pm.post_id) END DESC,
+    m.created_at DESC
+LIMIT $5
+OFFSET $6;
 
 -- name: ListMedia :many
 SELECT 
@@ -37,10 +51,25 @@ SELECT
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
+WHERE 
+    ($1 = '' OR m.mime_type LIKE $1 || '%')
+    AND ($2 = 0 OR m.user_id = $2)
+    AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
 GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
-ORDER BY m.created_at DESC
-LIMIT $1
-OFFSET $2;
+ORDER BY 
+    CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
+    CASE WHEN $4 = 'name_asc' THEN m.name END ASC,
+    CASE WHEN $4 = 'name_desc' THEN m.name END DESC,
+    CASE WHEN $4 = 'size_asc' THEN m.file_size END ASC,
+    CASE WHEN $4 = 'size_desc' THEN m.file_size END DESC,
+    CASE WHEN $4 = 'type_asc' THEN m.mime_type END ASC,
+    CASE WHEN $4 = 'type_desc' THEN m.mime_type END DESC,
+    CASE WHEN $4 = 'posts_asc' THEN COUNT(pm.post_id) END ASC,
+    CASE WHEN $4 = 'posts_desc' THEN COUNT(pm.post_id) END DESC,
+    m.created_at DESC
+LIMIT $5
+OFFSET $6;
 
 -- name: UpdateMedia :one
 UPDATE media
@@ -73,11 +102,25 @@ SELECT
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
-WHERE m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%'
+WHERE 
+    (m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%')
+    AND ($2 = '' OR m.mime_type LIKE $2 || '%')
+    AND ($3 = 0 OR m.user_id = $3)
 GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
-ORDER BY m.created_at DESC
-LIMIT $2
-OFFSET $3;
+ORDER BY 
+    CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
+    CASE WHEN $4 = 'name_asc' THEN m.name END ASC,
+    CASE WHEN $4 = 'name_desc' THEN m.name END DESC,
+    CASE WHEN $4 = 'size_asc' THEN m.file_size END ASC,
+    CASE WHEN $4 = 'size_desc' THEN m.file_size END DESC,
+    CASE WHEN $4 = 'type_asc' THEN m.mime_type END ASC,
+    CASE WHEN $4 = 'type_desc' THEN m.mime_type END DESC,
+    CASE WHEN $4 = 'posts_asc' THEN COUNT(pm.post_id) END ASC,
+    CASE WHEN $4 = 'posts_desc' THEN COUNT(pm.post_id) END DESC,
+    m.created_at DESC
+LIMIT $5
+OFFSET $6;
 
 -- name: GetMediaByPost :many
 SELECT m.* FROM media m

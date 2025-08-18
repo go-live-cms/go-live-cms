@@ -646,10 +646,19 @@ func (server *Server) getMediaByID(c *gin.Context) {
 }
 
 func (server *Server) getMedia(c *gin.Context) {
-
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
 	withCounts := c.DefaultQuery("with_counts", "false")
+
+	fileType := c.Query("type")
+	userIDStr := c.Query("user_id")
+	search := c.Query("search")
+	sortBy := c.DefaultQuery("sort", "date_desc")
+
+	if !isValidSortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -666,70 +675,64 @@ func (server *Server) getMedia(c *gin.Context) {
 		return
 	}
 
-	if withCounts == "true" {
-		media, err := server.store.ListMedia(c.Request.Context(), db.ListMediaParams{
-			Limit:  int32(limit),
-			Offset: int32(offset),
-		})
+	// Parse optional user_id filter - use 0 for no filter (matches SQL logic)
+	var userID int64 = 0
+	if userIDStr != "" {
+		uid, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list media"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id parameter"})
 			return
 		}
-
-		mediaResponses := make([]MediaResponse, len(media))
-		for i, m := range media {
-			mediaResponses[i] = toMediaFromListRow(m)
-		}
-
-		totalCount, err := server.store.CountTotalMedia(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total media"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"media": mediaResponses,
-			"meta": gin.H{
-				"total":       totalCount,
-				"limit":       limit,
-				"offset":      offset,
-				"count":       len(mediaResponses),
-				"with_counts": true,
-			},
-		})
-	} else {
-
-		media, err := server.store.ListMedia(c.Request.Context(), db.ListMediaParams{
-			Limit:  int32(limit),
-			Offset: int32(offset),
-		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list media"})
-			return
-		}
-
-		mediaResponses := make([]MediaResponse, len(media))
-		for i, m := range media {
-			mediaResponses[i] = toMediaFromListRow(m)
-		}
-
-		total, err := server.store.CountTotalMedia(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total media"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{
-			"media": mediaResponses,
-			"meta": gin.H{
-				"limit":       limit,
-				"offset":      offset,
-				"count":       len(mediaResponses),
-				"with_counts": false,
-				"total":       total,
-			},
-		})
+		userID = uid
 	}
+
+	mimeTypeFilter := getMimeTypeFilter(fileType)
+
+	searchTerm := ""
+	if search != "" {
+		searchTerm = search
+	}
+
+	media, err := server.store.ListMedia(c.Request.Context(), db.ListMediaParams{
+		Column1: mimeTypeFilter,
+		Column2: userID,
+		Column3: searchTerm,
+		Column4: sortBy,
+		Limit:   int32(limit),
+		Offset:  int32(offset),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list media"})
+		return
+	}
+
+	mediaResponses := make([]MediaResponse, len(media))
+	for i, m := range media {
+		mediaResponses[i] = toMediaFromListRow(m)
+	}
+
+	total, err := server.store.CountTotalMedia(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total media"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"media": mediaResponses,
+		"meta": gin.H{
+			"limit":       limit,
+			"offset":      offset,
+			"count":       len(mediaResponses),
+			"total":       total,
+			"with_counts": withCounts == "true",
+			"filters": gin.H{
+				"type":    fileType,
+				"user_id": userID,
+				"search":  search,
+				"sort":    sortBy,
+			},
+		},
+	})
 }
 
 func (server *Server) getPopularMedia(c *gin.Context) {
@@ -774,6 +777,15 @@ func (server *Server) searchMedia(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
 
+	fileType := c.Query("type")
+	userIDStr := c.Query("user_id")
+	sortBy := c.DefaultQuery("sort", "date_desc")
+
+	if !isValidSortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
+
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit parameter"})
@@ -789,8 +801,23 @@ func (server *Server) searchMedia(c *gin.Context) {
 		return
 	}
 
+	var userID int64 = 0
+	if userIDStr != "" {
+		uid, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id parameter"})
+			return
+		}
+		userID = uid
+	}
+
+	mimeTypeFilter := getMimeTypeFilter(fileType)
+
 	media, err := server.store.SearchMediaByName(c.Request.Context(), db.SearchMediaByNameParams{
 		Column1: sql.NullString{String: query, Valid: true},
+		Column2: mimeTypeFilter,
+		Column3: userID,
+		Column4: sortBy,
 		Limit:   int32(limit),
 		Offset:  int32(offset),
 	})
@@ -811,6 +838,11 @@ func (server *Server) searchMedia(c *gin.Context) {
 			"limit":  limit,
 			"offset": offset,
 			"count":  len(mediaResponses),
+			"filters": gin.H{
+				"type":    fileType,
+				"user_id": userID,
+				"sort":    sortBy,
+			},
 		},
 	})
 }
@@ -825,6 +857,15 @@ func (server *Server) getMediaByUser(c *gin.Context) {
 
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
+
+	fileType := c.Query("type")
+	search := c.Query("search")
+	sortBy := c.DefaultQuery("sort", "date_desc")
+
+	if !isValidSortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -851,10 +892,20 @@ func (server *Server) getMediaByUser(c *gin.Context) {
 		return
 	}
 
+	mimeTypeFilter := getMimeTypeFilter(fileType)
+
+	searchTerm := ""
+	if search != "" {
+		searchTerm = search
+	}
+
 	media, err := server.store.GetMediaByUser(c.Request.Context(), db.GetMediaByUserParams{
-		UserID: userID,
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		UserID:  userID,
+		Column2: mimeTypeFilter,
+		Column3: searchTerm,
+		Column4: sortBy,
+		Limit:   int32(limit),
+		Offset:  int32(offset),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user media"})
@@ -873,6 +924,11 @@ func (server *Server) getMediaByUser(c *gin.Context) {
 			"limit":   limit,
 			"offset":  offset,
 			"count":   len(mediaResponses),
+			"filters": gin.H{
+				"type":   fileType,
+				"search": search,
+				"sort":   sortBy,
+			},
 		},
 	})
 }
@@ -1033,4 +1089,42 @@ func (server *Server) deleteMedia(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "media deleted successfully",
 	})
+}
+
+func isValidSortOption(sort string) bool {
+	validSorts := []string{
+		"date_asc", "date_desc",
+		"name_asc", "name_desc",
+		"size_asc", "size_desc",
+		"type_asc", "type_desc",
+		"posts_asc", "posts_desc",
+	}
+
+	if sort == "" {
+		return true
+	}
+
+	for _, valid := range validSorts {
+		if sort == valid {
+			return true
+		}
+	}
+	return false
+}
+
+func getMimeTypeFilter(fileType string) string {
+	switch fileType {
+	case "image":
+		return "image/"
+	case "video":
+		return "video/"
+	case "audio":
+		return "audio/"
+	case "document":
+		return "application/"
+	case "text":
+		return "text/"
+	default:
+		return ""
+	}
 }
