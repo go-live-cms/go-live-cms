@@ -59,6 +59,25 @@ func toPopularTaxonomyResponse(row db.GetPopularTaxonomiesRow) PopularTaxonomyRe
 	}
 }
 
+func isValidTaxonomySortOption(sort string) bool {
+	validSorts := []string{
+		"name_asc", "name_desc",
+		"id_asc", "id_desc",
+		"posts_asc", "posts_desc",
+	}
+
+	if sort == "" {
+		return true
+	}
+
+	for _, valid := range validSorts {
+		if sort == valid {
+			return true
+		}
+	}
+	return false
+}
+
 func (server *Server) createTaxonomy(c *gin.Context) {
 	var req CreateTaxonomyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -142,10 +161,15 @@ func (server *Server) getTaxonomyByName(c *gin.Context) {
 }
 
 func (server *Server) getTaxonomies(c *gin.Context) {
-
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
 	withCounts := c.DefaultQuery("with_counts", "false")
+	sortBy := c.DefaultQuery("sort", "name_asc")
+
+	if !isValidTaxonomySortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -164,8 +188,9 @@ func (server *Server) getTaxonomies(c *gin.Context) {
 
 	if withCounts == "true" {
 		taxonomies, err := server.store.ListTaxonomiesWithPostCount(c.Request.Context(), db.ListTaxonomiesWithPostCountParams{
-			Limit:  int32(limit),
-			Offset: int32(offset),
+			LimitCount:  int32(limit),
+			OffsetCount: int32(offset),
+			SortBy:      sortBy,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list taxonomies"})
@@ -191,12 +216,14 @@ func (server *Server) getTaxonomies(c *gin.Context) {
 				"count":       len(taxonomyResponses),
 				"with_counts": true,
 				"total":       totalCount,
+				"sort":        sortBy,
 			},
 		})
 	} else {
 		taxonomies, err := server.store.ListTaxonomies(c.Request.Context(), db.ListTaxonomiesParams{
-			Limit:  int32(limit),
-			Offset: int32(offset),
+			LimitCount:  int32(limit),
+			OffsetCount: int32(offset),
+			SortBy:      sortBy,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list taxonomies"})
@@ -222,6 +249,7 @@ func (server *Server) getTaxonomies(c *gin.Context) {
 				"count":       len(taxonomyResponses),
 				"with_counts": false,
 				"total":       total,
+				"sort":        sortBy,
 			},
 		})
 	}
@@ -268,6 +296,12 @@ func (server *Server) searchTaxonomies(c *gin.Context) {
 
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
+	sortBy := c.DefaultQuery("sort", "name_asc")
+
+	if !isValidTaxonomySortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -285,9 +319,10 @@ func (server *Server) searchTaxonomies(c *gin.Context) {
 	}
 
 	taxonomies, err := server.store.SearchTaxonomiesByName(c.Request.Context(), db.SearchTaxonomiesByNameParams{
-		Column1: sql.NullString{String: query, Valid: true},
-		Limit:   int32(limit),
-		Offset:  int32(offset),
+		Column1:     sql.NullString{String: query, Valid: true},
+		LimitCount:  int32(limit),
+		OffsetCount: int32(offset),
+		SortBy:      sortBy,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search taxonomies"})
@@ -306,6 +341,7 @@ func (server *Server) searchTaxonomies(c *gin.Context) {
 			"limit":  limit,
 			"offset": offset,
 			"count":  len(taxonomyResponses),
+			"sort":   sortBy,
 		},
 	})
 }
