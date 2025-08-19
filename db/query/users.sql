@@ -25,9 +25,20 @@ LIMIT 1;
 
 -- name: ListUsers :many
 SELECT * FROM users
-ORDER BY id
-LIMIT $1
-OFFSET $2;
+ORDER BY
+    CASE WHEN @sort_by = 'date_asc' THEN created_at END ASC,
+    CASE WHEN @sort_by = 'date_desc' THEN created_at END DESC,
+    CASE WHEN @sort_by = 'username_asc' THEN username END ASC,
+    CASE WHEN @sort_by = 'username_desc' THEN username END DESC,
+    CASE WHEN @sort_by = 'email_asc' THEN email END ASC,
+    CASE WHEN @sort_by = 'email_desc' THEN email END DESC,
+    CASE WHEN @sort_by = 'role_asc' THEN role END ASC,
+    CASE WHEN @sort_by = 'role_desc' THEN role END DESC,
+    CASE WHEN @sort_by = 'id_asc' THEN id END ASC,
+    CASE WHEN @sort_by = 'id_desc' THEN id END DESC,
+    id DESC
+LIMIT @limit_count
+OFFSET @offset_count;
 
 -- name: UpdateUser :one
 UPDATE users 

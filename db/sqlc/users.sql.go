@@ -170,18 +170,30 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 
 const listUsers = `-- name: ListUsers :many
 SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role FROM users
-ORDER BY id
-LIMIT $1
+ORDER BY
+    CASE WHEN $1 = 'date_asc' THEN created_at END ASC,
+    CASE WHEN $1 = 'date_desc' THEN created_at END DESC,
+    CASE WHEN $1 = 'username_asc' THEN username END ASC,
+    CASE WHEN $1 = 'username_desc' THEN username END DESC,
+    CASE WHEN $1 = 'email_asc' THEN email END ASC,
+    CASE WHEN $1 = 'email_desc' THEN email END DESC,
+    CASE WHEN $1 = 'role_asc' THEN role END ASC,
+    CASE WHEN $1 = 'role_desc' THEN role END DESC,
+    CASE WHEN $1 = 'id_asc' THEN id END ASC,
+    CASE WHEN $1 = 'id_desc' THEN id END DESC,
+    id DESC
+LIMIT $3
 OFFSET $2
 `
 
 type ListUsersParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
 }
 
 func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
-	rows, err := q.db.QueryContext(ctx, listUsers, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listUsers, arg.SortBy, arg.OffsetCount, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}
