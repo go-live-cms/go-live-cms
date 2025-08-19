@@ -24,10 +24,17 @@ SELECT * FROM posts
 WHERE id = $1 LIMIT 1;
 
 -- name: ListPosts :many
-SELECT * FROM posts 
-ORDER BY id DESC
-LIMIT $1
-OFFSET $2;
+SELECT * FROM posts
+ORDER BY
+    CASE WHEN @sort_by = 'date_asc' THEN created_at END ASC,
+    CASE WHEN @sort_by = 'date_desc' THEN created_at END DESC,
+    CASE WHEN @sort_by = 'title_asc' THEN title END ASC,
+    CASE WHEN @sort_by = 'title_desc' THEN title END DESC,
+    CASE WHEN @sort_by = 'id_asc' THEN id END ASC,
+    CASE WHEN @sort_by = 'id_desc' THEN id END DESC,
+    id DESC
+LIMIT @limit_count
+OFFSET @offset_count;
 
 -- name: UpdatePost :one
 UPDATE posts

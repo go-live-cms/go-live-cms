@@ -56,9 +56,14 @@ func toPostResponse(post db.Post) PostResponse {
 }
 
 func (server *Server) getPosts(c *gin.Context) {
-
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
+	sortBy := c.DefaultQuery("sort", "date_desc")
+
+	if !isValidPostSortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -76,8 +81,9 @@ func (server *Server) getPosts(c *gin.Context) {
 	}
 
 	posts, err := server.store.ListPosts(c.Request.Context(), db.ListPostsParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		LimitCount:  int32(limit),
+		OffsetCount: int32(offset),
+		SortBy:      sortBy,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts"})
@@ -102,8 +108,28 @@ func (server *Server) getPosts(c *gin.Context) {
 			"limit":  limit,
 			"offset": offset,
 			"count":  len(postResponses),
+			"sort":   sortBy,
 		},
 	})
+}
+
+func isValidPostSortOption(sort string) bool {
+	validSorts := []string{
+		"date_asc", "date_desc",
+		"title_asc", "title_desc",
+		"id_asc", "id_desc",
+	}
+
+	if sort == "" {
+		return true
+	}
+
+	for _, valid := range validSorts {
+		if sort == valid {
+			return true
+		}
+	}
+	return false
 }
 
 func (server *Server) getPostByID(c *gin.Context) {
