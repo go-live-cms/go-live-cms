@@ -155,9 +155,14 @@ func (server *Server) getUserByEmail(c *gin.Context) {
 }
 
 func (server *Server) getUsers(c *gin.Context) {
-
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
+	sortBy := c.DefaultQuery("sort", "date_desc")
+
+	if !isValidUserSortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -175,8 +180,9 @@ func (server *Server) getUsers(c *gin.Context) {
 	}
 
 	users, err := server.store.ListUsers(c.Request.Context(), db.ListUsersParams{
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		LimitCount:  int32(limit),
+		OffsetCount: int32(offset),
+		SortBy:      sortBy,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
@@ -201,8 +207,30 @@ func (server *Server) getUsers(c *gin.Context) {
 			"offset": offset,
 			"count":  len(userResponses),
 			"total":  totalCount,
+			"sort":   sortBy,
 		},
 	})
+}
+
+func isValidUserSortOption(sort string) bool {
+	validSorts := []string{
+		"date_asc", "date_desc",
+		"username_asc", "username_desc",
+		"email_asc", "email_desc",
+		"role_asc", "role_desc",
+		"id_asc", "id_desc",
+	}
+
+	if sort == "" {
+		return true
+	}
+
+	for _, valid := range validSorts {
+		if sort == valid {
+			return true
+		}
+	}
+	return false
 }
 
 func (server *Server) updateUser(c *gin.Context) {
