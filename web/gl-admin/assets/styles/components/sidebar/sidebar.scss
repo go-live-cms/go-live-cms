@@ -1,0 +1,33 @@
+.admin-sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 21.1875rem;
+    background: #b4b3af05;
+    box-shadow: 0 0 16px 0 #00000033;
+    height: 100vh;
+
+    &__head {
+      display: flex;
+      padding: 1.1rem 1.65rem;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    &__nav {
+      display: flex;
+      overflow-y: auto;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2rem;
+      padding: 0 1rem;
+
+      &_section {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        width: 100%;
+      }
+    }
+  }

@@ -1,0 +1,18 @@
+---
+import App from "@gl-admin/app"
+
+export async function getStaticPaths() {
+  return [{ params: { slug: "" } }, { params: { slug: "*" } }]
+}
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GoLive Admin</title>
+  </head>
+  <body>
+    <App client:only="react" />
+  </body>
+</html>
