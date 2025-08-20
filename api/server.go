@@ -97,6 +97,13 @@ func (server *Server) setupRoutes() {
 	posts.GET("/user/:id", server.getPostsByUser)                              // GET /api/v1/posts/user/:id
 	posts.GET("/:id/taxonomies", server.getPostTaxonomies)                     // GET /api/v1/posts/:id/taxonomies
 
+	postTypes := v1.Group("/post-types")
+	postTypes.GET("", server.getPostTypes)      // GET /api/v1/post-types
+	postTypes.GET("/:name", server.getPostType) // GET /api/v1/post-types/product
+
+	posts.GET("/:id/meta", server.getPostWithMeta)  // GET /api/v1/posts/1/meta
+	posts.GET("/type/:type", server.getPostsByType) // GET /api/v1/posts/type/product
+
 	taxonomies := v1.Group("/taxonomies")
 	taxonomies.POST("", authMiddleware(server.tokenMaker), server.createTaxonomy)       // POST /api/v1/taxonomies
 	taxonomies.GET("", server.getTaxonomies)                                            // GET /api/v1/taxonomies

@@ -7,7 +7,21 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"time"
 )
+
+const countPostsByType = `-- name: CountPostsByType :one
+SELECT COUNT(*) AS total FROM posts
+WHERE post_type = $1
+`
+
+func (q *Queries) CountPostsByType(ctx context.Context, postType string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPostsByType, postType)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
 
 const countTotalPosts = `-- name: CountTotalPosts :one
 SELECT COUNT(*) AS total FROM posts
@@ -27,19 +41,27 @@ INSERT INTO posts (
     user_id,
     username,
     content,
-    url
+    url,
+    post_type,
+    post_status,
+    post_parent,
+    menu_order
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
-) RETURNING id, title, description, content, user_id, username, url, created_at, changed_at
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+) RETURNING id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at
 `
 
 type CreatePostsParams struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	UserID      int64  `json:"user_id"`
-	Username    string `json:"username"`
-	Content     string `json:"content"`
-	Url         string `json:"url"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Content     string        `json:"content"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
 }
 
 func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error) {
@@ -50,6 +72,10 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		arg.Username,
 		arg.Content,
 		arg.Url,
+		arg.PostType,
+		arg.PostStatus,
+		arg.PostParent,
+		arg.MenuOrder,
 	)
 	var i Post
 	err := row.Scan(
@@ -60,6 +86,10 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		&i.UserID,
 		&i.Username,
 		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
 		&i.CreatedAt,
 		&i.ChangedAt,
 	)
@@ -110,7 +140,7 @@ func (q *Queries) DeleteUserPost(ctx context.Context, postID int64) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, title, description, content, user_id, username, url, created_at, changed_at FROM posts 
+SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts 
 WHERE id = $1 LIMIT 1
 `
 
@@ -125,34 +155,24 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.UserID,
 		&i.Username,
 		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
 		&i.CreatedAt,
 		&i.ChangedAt,
 	)
 	return i, err
 }
 
-const listPosts = `-- name: ListPosts :many
-SELECT id, title, description, content, user_id, username, url, created_at, changed_at FROM posts
-ORDER BY
-    CASE WHEN $1 = 'date_asc' THEN created_at END ASC,
-    CASE WHEN $1 = 'date_desc' THEN created_at END DESC,
-    CASE WHEN $1 = 'title_asc' THEN title END ASC,
-    CASE WHEN $1 = 'title_desc' THEN title END DESC,
-    CASE WHEN $1 = 'id_asc' THEN id END ASC,
-    CASE WHEN $1 = 'id_desc' THEN id END DESC,
-    id DESC
-LIMIT $3
-OFFSET $2
+const getPostChildren = `-- name: GetPostChildren :many
+SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts
+WHERE post_parent = $1
+ORDER BY menu_order ASC, title ASC
 `
 
-type ListPostsParams struct {
-	SortBy      interface{} `json:"sort_by"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
-}
-
-func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, listPosts, arg.SortBy, arg.OffsetCount, arg.LimitCount)
+func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, getPostChildren, postParent)
 	if err != nil {
 		return nil, err
 	}
@@ -168,6 +188,202 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 			&i.UserID,
 			&i.Username,
 			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPostWithMeta = `-- name: GetPostWithMeta :one
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+WHERE p.id = $1
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+`
+
+type GetPostWithMetaRow struct {
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Content     string        `json:"content"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	CreatedAt   time.Time     `json:"created_at"`
+	ChangedAt   time.Time     `json:"changed_at"`
+	Meta        interface{}   `json:"meta"`
+}
+
+func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMetaRow, error) {
+	row := q.db.QueryRowContext(ctx, getPostWithMeta, id)
+	var i GetPostWithMetaRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Content,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.Meta,
+	)
+	return i, err
+}
+
+const listPosts = `-- name: ListPosts :many
+SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts
+WHERE 
+    ($1 = '' OR post_type = $1)
+    AND ($2 = '' OR post_status = $2)
+ORDER BY
+    CASE WHEN $3 = 'date_asc' THEN created_at END ASC,
+    CASE WHEN $3 = 'date_desc' THEN created_at END DESC,
+    CASE WHEN $3 = 'title_asc' THEN title END ASC,
+    CASE WHEN $3 = 'title_desc' THEN title END DESC,
+    CASE WHEN $3 = 'menu_order_asc' THEN menu_order END ASC,
+    CASE WHEN $3 = 'menu_order_desc' THEN menu_order END DESC,
+    CASE WHEN $3 = 'id_asc' THEN id END ASC,
+    CASE WHEN $3 = 'id_desc' THEN id END DESC,
+    id DESC
+LIMIT $5
+OFFSET $4
+`
+
+type ListPostsParams struct {
+	Column1     interface{} `json:"column_1"`
+	Column2     interface{} `json:"column_2"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
+}
+
+func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, listPosts,
+		arg.Column1,
+		arg.Column2,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Post{}
+	for rows.Next() {
+		var i Post
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostsByType = `-- name: ListPostsByType :many
+SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts
+WHERE post_type = $1
+    AND ($2 = '' OR post_status = $2)
+ORDER BY
+    CASE WHEN $3 = 'date_asc' THEN created_at END ASC,
+    CASE WHEN $3 = 'date_desc' THEN created_at END DESC,
+    CASE WHEN $3 = 'title_asc' THEN title END ASC,
+    CASE WHEN $3 = 'title_desc' THEN title END DESC,
+    CASE WHEN $3 = 'menu_order_asc' THEN menu_order END ASC,
+    CASE WHEN $3 = 'menu_order_desc' THEN menu_order END DESC,
+    id DESC
+LIMIT $5
+OFFSET $4
+`
+
+type ListPostsByTypeParams struct {
+	PostType    string      `json:"post_type"`
+	Column2     interface{} `json:"column_2"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
+}
+
+func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsByType,
+		arg.PostType,
+		arg.Column2,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Post{}
+	for rows.Next() {
+		var i Post
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
 		); err != nil {
@@ -192,19 +408,27 @@ SET title = COALESCE($1, title),
     username = COALESCE($4, username),
     content = COALESCE($5, content),
     url = COALESCE($6, url),
+    post_type = COALESCE($7, post_type),
+    post_status = COALESCE($8, post_status),
+    post_parent = COALESCE($9, post_parent),
+    menu_order = COALESCE($10, menu_order),
     changed_at = now()
-WHERE id = $7
-RETURNING id, title, description, content, user_id, username, url, created_at, changed_at
+WHERE id = $11
+RETURNING id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at
 `
 
 type UpdatePostParams struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	UserID      int64  `json:"user_id"`
-	Username    string `json:"username"`
-	Content     string `json:"content"`
-	Url         string `json:"url"`
-	ID          int64  `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Content     string        `json:"content"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	ID          int64         `json:"id"`
 }
 
 func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error) {
@@ -215,6 +439,10 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		arg.Username,
 		arg.Content,
 		arg.Url,
+		arg.PostType,
+		arg.PostStatus,
+		arg.PostParent,
+		arg.MenuOrder,
 		arg.ID,
 	)
 	var i Post
@@ -226,6 +454,10 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.UserID,
 		&i.Username,
 		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
 		&i.CreatedAt,
 		&i.ChangedAt,
 	)
