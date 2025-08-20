@@ -283,18 +283,24 @@ func (q *Queries) GetTaxonomyPosts(ctx context.Context, arg GetTaxonomyPostsPara
 
 const listTaxonomies = `-- name: ListTaxonomies :many
 SELECT id, name, description FROM taxonomies
-ORDER BY name
-LIMIT $1
+ORDER BY
+    CASE WHEN $1 = 'name_asc' THEN name END ASC,
+    CASE WHEN $1 = 'name_desc' THEN name END DESC,
+    CASE WHEN $1 = 'id_asc' THEN id END ASC,
+    CASE WHEN $1 = 'id_desc' THEN id END DESC,
+    name ASC
+LIMIT $3
 OFFSET $2
 `
 
 type ListTaxonomiesParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
 }
 
 func (q *Queries) ListTaxonomies(ctx context.Context, arg ListTaxonomiesParams) ([]Taxonomy, error) {
-	rows, err := q.db.QueryContext(ctx, listTaxonomies, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listTaxonomies, arg.SortBy, arg.OffsetCount, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}
@@ -323,14 +329,22 @@ SELECT
 FROM taxonomies t
 LEFT JOIN posts_taxonomies pt ON t.id = pt.taxonomy_id
 GROUP BY t.id, t.name, t.description
-ORDER BY t.name
-LIMIT $1
+ORDER BY
+    CASE WHEN $1 = 'name_asc' THEN t.name END ASC,
+    CASE WHEN $1 = 'name_desc' THEN t.name END DESC,
+    CASE WHEN $1 = 'posts_asc' THEN COUNT(pt.post_id) END ASC,
+    CASE WHEN $1 = 'posts_desc' THEN COUNT(pt.post_id) END DESC,
+    CASE WHEN $1 = 'id_asc' THEN t.id END ASC,
+    CASE WHEN $1 = 'id_desc' THEN t.id END DESC,
+    t.name ASC
+LIMIT $3
 OFFSET $2
 `
 
 type ListTaxonomiesWithPostCountParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
 }
 
 type ListTaxonomiesWithPostCountRow struct {
@@ -341,7 +355,7 @@ type ListTaxonomiesWithPostCountRow struct {
 }
 
 func (q *Queries) ListTaxonomiesWithPostCount(ctx context.Context, arg ListTaxonomiesWithPostCountParams) ([]ListTaxonomiesWithPostCountRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTaxonomiesWithPostCount, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listTaxonomiesWithPostCount, arg.SortBy, arg.OffsetCount, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}
@@ -371,19 +385,30 @@ func (q *Queries) ListTaxonomiesWithPostCount(ctx context.Context, arg ListTaxon
 const searchTaxonomiesByName = `-- name: SearchTaxonomiesByName :many
 SELECT id, name, description FROM taxonomies
 WHERE name ILIKE '%' || $1 || '%'
-ORDER BY name
-LIMIT $2
+ORDER BY
+    CASE WHEN $2 = 'name_asc' THEN name END ASC,
+    CASE WHEN $2 = 'name_desc' THEN name END DESC,
+    CASE WHEN $2 = 'id_asc' THEN id END ASC,
+    CASE WHEN $2 = 'id_desc' THEN id END DESC,
+    name ASC
+LIMIT $4
 OFFSET $3
 `
 
 type SearchTaxonomiesByNameParams struct {
-	Column1 sql.NullString `json:"column_1"`
-	Limit   int32          `json:"limit"`
-	Offset  int32          `json:"offset"`
+	Column1     sql.NullString `json:"column_1"`
+	SortBy      interface{}    `json:"sort_by"`
+	OffsetCount int32          `json:"offset_count"`
+	LimitCount  int32          `json:"limit_count"`
 }
 
 func (q *Queries) SearchTaxonomiesByName(ctx context.Context, arg SearchTaxonomiesByNameParams) ([]Taxonomy, error) {
-	rows, err := q.db.QueryContext(ctx, searchTaxonomiesByName, arg.Column1, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, searchTaxonomiesByName,
+		arg.Column1,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
 	if err != nil {
 		return nil, err
 	}

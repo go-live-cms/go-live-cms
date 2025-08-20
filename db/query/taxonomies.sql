@@ -16,9 +16,14 @@ WHERE name = $1 LIMIT 1;
 
 -- name: ListTaxonomies :many
 SELECT * FROM taxonomies
-ORDER BY name
-LIMIT $1
-OFFSET $2;
+ORDER BY
+    CASE WHEN @sort_by = 'name_asc' THEN name END ASC,
+    CASE WHEN @sort_by = 'name_desc' THEN name END DESC,
+    CASE WHEN @sort_by = 'id_asc' THEN id END ASC,
+    CASE WHEN @sort_by = 'id_desc' THEN id END DESC,
+    name ASC
+LIMIT @limit_count
+OFFSET @offset_count;
 
 -- name: UpdateTaxonomy :one
 UPDATE taxonomies 
@@ -81,9 +86,16 @@ SELECT
 FROM taxonomies t
 LEFT JOIN posts_taxonomies pt ON t.id = pt.taxonomy_id
 GROUP BY t.id, t.name, t.description
-ORDER BY t.name
-LIMIT $1
-OFFSET $2;
+ORDER BY
+    CASE WHEN @sort_by = 'name_asc' THEN t.name END ASC,
+    CASE WHEN @sort_by = 'name_desc' THEN t.name END DESC,
+    CASE WHEN @sort_by = 'posts_asc' THEN COUNT(pt.post_id) END ASC,
+    CASE WHEN @sort_by = 'posts_desc' THEN COUNT(pt.post_id) END DESC,
+    CASE WHEN @sort_by = 'id_asc' THEN t.id END ASC,
+    CASE WHEN @sort_by = 'id_desc' THEN t.id END DESC,
+    t.name ASC
+LIMIT @limit_count
+OFFSET @offset_count;
 
 -- name: GetPopularTaxonomies :many
 SELECT 
@@ -99,9 +111,14 @@ LIMIT $1;
 -- name: SearchTaxonomiesByName :many
 SELECT * FROM taxonomies
 WHERE name ILIKE '%' || $1 || '%'
-ORDER BY name
-LIMIT $2
-OFFSET $3;
+ORDER BY
+    CASE WHEN @sort_by = 'name_asc' THEN name END ASC,
+    CASE WHEN @sort_by = 'name_desc' THEN name END DESC,
+    CASE WHEN @sort_by = 'id_asc' THEN id END ASC,
+    CASE WHEN @sort_by = 'id_desc' THEN id END DESC,
+    name ASC
+LIMIT @limit_count
+OFFSET @offset_count;
 
 -- name: CountTotalTaxonomies :one
 SELECT COUNT(*) AS total FROM taxonomies;
