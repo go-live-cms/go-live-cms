@@ -59,7 +59,10 @@ func (server *Server) getPosts(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
 	sortBy := c.DefaultQuery("sort", "date_desc")
+	postType := c.Query("type") // Add post type filter
+	status := c.Query("status") // Add status filter
 
+	// Validate sort parameter
 	if !isValidPostSortOption(sortBy) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
 		return
@@ -81,9 +84,11 @@ func (server *Server) getPosts(c *gin.Context) {
 	}
 
 	posts, err := server.store.ListPosts(c.Request.Context(), db.ListPostsParams{
-		LimitCount:  int32(limit),
+		Column1:     postType, // post_type filter (empty string means all)
+		Column2:     status,   // status filter (empty string means all)
+		SortBy:      sortBy,   // sort parameter
 		OffsetCount: int32(offset),
-		SortBy:      sortBy,
+		LimitCount:  int32(limit),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts"})
@@ -109,6 +114,8 @@ func (server *Server) getPosts(c *gin.Context) {
 			"offset": offset,
 			"count":  len(postResponses),
 			"sort":   sortBy,
+			"type":   postType,
+			"status": status,
 		},
 	})
 }
@@ -117,6 +124,7 @@ func isValidPostSortOption(sort string) bool {
 	validSorts := []string{
 		"date_asc", "date_desc",
 		"title_asc", "title_desc",
+		"menu_order_asc", "menu_order_desc",
 		"id_asc", "id_desc",
 	}
 
@@ -428,6 +436,84 @@ func (server *Server) getPostsByUser(c *gin.Context) {
 			"limit":   limit,
 			"offset":  offset,
 			"count":   len(postResponses),
+		},
+	})
+}
+
+func (server *Server) getPostsByType(c *gin.Context) {
+	postType := c.Param("type")
+
+	limitStr := c.DefaultQuery("limit", "10")
+	offsetStr := c.DefaultQuery("offset", "0")
+	sortBy := c.DefaultQuery("sort", "date_desc")
+	status := c.DefaultQuery("status", "") // Optional status filter
+
+	// Validate sort parameter
+	if !isValidPostSortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
+
+	limit, err := strconv.ParseInt(limitStr, 10, 32)
+	if err != nil || limit <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit parameter"})
+		return
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	offset, err := strconv.ParseInt(offsetStr, 10, 32)
+	if err != nil || offset < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid offset parameter"})
+		return
+	}
+
+	// Check if post type exists
+	_, err = server.store.GetPostType(c.Request.Context(), postType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post type"})
+		return
+	}
+
+	posts, err := server.store.ListPostsByType(c.Request.Context(), db.ListPostsByTypeParams{
+		PostType:    postType,
+		Column2:     status, // status filter
+		SortBy:      sortBy, // sort parameter
+		OffsetCount: int32(offset),
+		LimitCount:  int32(limit),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts by type"})
+		return
+	}
+
+	postResponses := make([]PostResponse, len(posts))
+	for i, post := range posts {
+		postResponses[i] = toPostResponse(post)
+	}
+
+	// Get total count for this post type
+	totalCount, err := server.store.CountPostsByType(c.Request.Context(), postType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"posts": postResponses,
+		"meta": gin.H{
+			"post_type": postType,
+			"limit":     limit,
+			"offset":    offset,
+			"count":     len(postResponses),
+			"total":     totalCount,
+			"sort":      sortBy,
+			"status":    status,
 		},
 	})
 }
