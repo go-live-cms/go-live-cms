@@ -110,3 +110,60 @@ SELECT COUNT(*) AS total FROM posts;
 -- name: CountPostsByType :one
 SELECT COUNT(*) AS total FROM posts
 WHERE post_type = $1;
+
+-- name: ListPostsWithMeta :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+WHERE 
+    ($1 = '' OR p.post_type = $1)
+    AND ($2 = '' OR p.post_status = $2)
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+ORDER BY
+    CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN @sort_by = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN @sort_by = 'title_asc' THEN p.title END ASC,
+    CASE WHEN @sort_by = 'title_desc' THEN p.title END DESC,
+    CASE WHEN @sort_by = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN @sort_by = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN @sort_by = 'id_asc' THEN p.id END ASC,
+    CASE WHEN @sort_by = 'id_desc' THEN p.id END DESC,
+    p.id DESC
+LIMIT @limit_count
+OFFSET @offset_count;
+
+-- name: ListPostsByTypeWithMeta :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+WHERE p.post_type = $1
+    AND ($2 = '' OR p.post_status = $2)
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+ORDER BY
+    CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN @sort_by = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN @sort_by = 'title_asc' THEN p.title END ASC,
+    CASE WHEN @sort_by = 'title_desc' THEN p.title END DESC,
+    CASE WHEN @sort_by = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN @sort_by = 'menu_order_desc' THEN p.menu_order END DESC,
+    p.id DESC
+LIMIT @limit_count
+OFFSET @offset_count;

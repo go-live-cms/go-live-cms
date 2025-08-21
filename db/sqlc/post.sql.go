@@ -400,6 +400,203 @@ func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams
 	return items, nil
 }
 
+const listPostsByTypeWithMeta = `-- name: ListPostsByTypeWithMeta :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+WHERE p.post_type = $1
+    AND ($2 = '' OR p.post_status = $2)
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+ORDER BY
+    CASE WHEN $3 = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN $3 = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN $3 = 'title_asc' THEN p.title END ASC,
+    CASE WHEN $3 = 'title_desc' THEN p.title END DESC,
+    CASE WHEN $3 = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN $3 = 'menu_order_desc' THEN p.menu_order END DESC,
+    p.id DESC
+LIMIT $5
+OFFSET $4
+`
+
+type ListPostsByTypeWithMetaParams struct {
+	PostType    string      `json:"post_type"`
+	Column2     interface{} `json:"column_2"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
+}
+
+type ListPostsByTypeWithMetaRow struct {
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Content     string        `json:"content"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	CreatedAt   time.Time     `json:"created_at"`
+	ChangedAt   time.Time     `json:"changed_at"`
+	Meta        interface{}   `json:"meta"`
+}
+
+func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsByTypeWithMeta,
+		arg.PostType,
+		arg.Column2,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsByTypeWithMetaRow{}
+	for rows.Next() {
+		var i ListPostsByTypeWithMetaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.Meta,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostsWithMeta = `-- name: ListPostsWithMeta :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+WHERE 
+    ($1 = '' OR p.post_type = $1)
+    AND ($2 = '' OR p.post_status = $2)
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+ORDER BY
+    CASE WHEN $3 = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN $3 = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN $3 = 'title_asc' THEN p.title END ASC,
+    CASE WHEN $3 = 'title_desc' THEN p.title END DESC,
+    CASE WHEN $3 = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN $3 = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN $3 = 'id_asc' THEN p.id END ASC,
+    CASE WHEN $3 = 'id_desc' THEN p.id END DESC,
+    p.id DESC
+LIMIT $5
+OFFSET $4
+`
+
+type ListPostsWithMetaParams struct {
+	Column1     interface{} `json:"column_1"`
+	Column2     interface{} `json:"column_2"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
+}
+
+type ListPostsWithMetaRow struct {
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Content     string        `json:"content"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	CreatedAt   time.Time     `json:"created_at"`
+	ChangedAt   time.Time     `json:"changed_at"`
+	Meta        interface{}   `json:"meta"`
+}
+
+func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsWithMeta,
+		arg.Column1,
+		arg.Column2,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsWithMetaRow{}
+	for rows.Next() {
+		var i ListPostsWithMetaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.Meta,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updatePost = `-- name: UpdatePost :one
 UPDATE posts
 SET title = COALESCE($1, title),
