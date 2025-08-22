@@ -441,7 +441,7 @@ func (q *Queries) GetPostMediaCount(ctx context.Context, postID int64) (int64, e
 
 const getPostWithMedia = `-- name: GetPostWithMedia :one
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
     COALESCE(
         json_agg(
             json_build_object(
@@ -466,16 +466,20 @@ GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
 `
 
 type GetPostWithMediaRow struct {
-	ID          int64       `json:"id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Content     string      `json:"content"`
-	UserID      int64       `json:"user_id"`
-	Username    string      `json:"username"`
-	Url         string      `json:"url"`
-	CreatedAt   time.Time   `json:"created_at"`
-	ChangedAt   time.Time   `json:"changed_at"`
-	Media       interface{} `json:"media"`
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Content     string        `json:"content"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	CreatedAt   time.Time     `json:"created_at"`
+	ChangedAt   time.Time     `json:"changed_at"`
+	Media       interface{}   `json:"media"`
 }
 
 func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error) {
@@ -489,6 +493,10 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.UserID,
 		&i.Username,
 		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
 		&i.CreatedAt,
 		&i.ChangedAt,
 		&i.Media,
@@ -498,7 +506,7 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 
 const getPostsByUserWithMedia = `-- name: GetPostsByUserWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
     COALESCE(
         json_agg(
             json_build_object(
@@ -532,16 +540,20 @@ type GetPostsByUserWithMediaParams struct {
 }
 
 type GetPostsByUserWithMediaRow struct {
-	ID          int64       `json:"id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Content     string      `json:"content"`
-	UserID      int64       `json:"user_id"`
-	Username    string      `json:"username"`
-	Url         string      `json:"url"`
-	CreatedAt   time.Time   `json:"created_at"`
-	ChangedAt   time.Time   `json:"changed_at"`
-	Media       interface{} `json:"media"`
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Content     string        `json:"content"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	CreatedAt   time.Time     `json:"created_at"`
+	ChangedAt   time.Time     `json:"changed_at"`
+	Media       interface{}   `json:"media"`
 }
 
 func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error) {
@@ -561,6 +573,10 @@ func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUse
 			&i.UserID,
 			&i.Username,
 			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.Media,
@@ -694,7 +710,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMed
 
 const listPostsWithMedia = `-- name: ListPostsWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
     COALESCE(
         json_agg(
             json_build_object(
@@ -726,16 +742,20 @@ type ListPostsWithMediaParams struct {
 }
 
 type ListPostsWithMediaRow struct {
-	ID          int64       `json:"id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"`
-	Content     string      `json:"content"`
-	UserID      int64       `json:"user_id"`
-	Username    string      `json:"username"`
-	Url         string      `json:"url"`
-	CreatedAt   time.Time   `json:"created_at"`
-	ChangedAt   time.Time   `json:"changed_at"`
-	Media       interface{} `json:"media"`
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Content     string        `json:"content"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	CreatedAt   time.Time     `json:"created_at"`
+	ChangedAt   time.Time     `json:"changed_at"`
+	Media       interface{}   `json:"media"`
 }
 
 func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error) {
@@ -755,6 +775,10 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 			&i.UserID,
 			&i.Username,
 			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.Media,

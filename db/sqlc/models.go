@@ -5,6 +5,7 @@
 package db
 
 import (
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -30,21 +31,46 @@ type Medium struct {
 }
 
 type Post struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Content     string    `json:"content"`
-	UserID      int64     `json:"user_id"`
-	Username    string    `json:"username"`
-	Url         string    `json:"url"`
-	CreatedAt   time.Time `json:"created_at"`
-	ChangedAt   time.Time `json:"changed_at"`
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Content     string        `json:"content"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	CreatedAt   time.Time     `json:"created_at"`
+	ChangedAt   time.Time     `json:"changed_at"`
 }
 
 type PostMedium struct {
 	PostID  int64 `json:"post_id"`
 	MediaID int64 `json:"media_id"`
 	Order   int32 `json:"order"`
+}
+
+type PostMetum struct {
+	ID        int64          `json:"id"`
+	PostID    int64          `json:"post_id"`
+	MetaKey   string         `json:"meta_key"`
+	MetaValue sql.NullString `json:"meta_value"`
+	CreatedAt time.Time      `json:"created_at"`
+}
+
+type PostType struct {
+	ID           int64           `json:"id"`
+	Name         string          `json:"name"`
+	Label        string          `json:"label"`
+	Description  sql.NullString  `json:"description"`
+	Public       bool            `json:"public"`
+	Hierarchical bool            `json:"hierarchical"`
+	HasArchive   bool            `json:"has_archive"`
+	MenuPosition sql.NullInt32   `json:"menu_position"`
+	Supports     json.RawMessage `json:"supports"`
+	CreatedAt    time.Time       `json:"created_at"`
 }
 
 type PostsTaxonomy struct {

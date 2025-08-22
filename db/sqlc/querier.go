@@ -6,12 +6,14 @@ package db
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
 
 type Querier interface {
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	CountPostsByType(ctx context.Context, postType string) (int64, error)
 	CountTotalMedia(ctx context.Context) (int64, error)
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
@@ -19,20 +21,25 @@ type Querier interface {
 	CountTotalUsers(ctx context.Context) (int64, error)
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
+	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
 	CreatePostTaxonomy(ctx context.Context, arg CreatePostTaxonomyParams) (PostsTaxonomy, error)
+	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
 	CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateTaxonomy(ctx context.Context, arg CreateTaxonomyParams) (Taxonomy, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserPost(ctx context.Context, arg CreateUserPostParams) (UserPost, error)
+	DeleteAllPostMeta(ctx context.Context, postID int64) error
 	DeleteMedia(ctx context.Context, id int64) error
 	DeleteMediaByUserID(ctx context.Context, userID int64) error
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
 	DeletePost(ctx context.Context, id int64) error
 	DeletePostMedia(ctx context.Context, arg DeletePostMediaParams) error
 	DeletePostMedias(ctx context.Context, postID int64) error
+	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
 	DeletePostTaxonomies(ctx context.Context, postID int64) error
 	DeletePostTaxonomy(ctx context.Context, arg DeletePostTaxonomyParams) error
+	DeletePostType(ctx context.Context, name string) error
 	DeletePostsByUserID(ctx context.Context, userID int64) error
 	DeleteTaxonomy(ctx context.Context, id int64) error
 	DeleteTaxonomyPosts(ctx context.Context, taxonomyID int64) error
@@ -47,10 +54,16 @@ type Querier interface {
 	GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error)
 	GetPopularTaxonomies(ctx context.Context, limit int32) ([]GetPopularTaxonomiesRow, error)
 	GetPost(ctx context.Context, id int64) (Post, error)
+	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
+	GetPostMeta(ctx context.Context, postID int64) ([]PostMetum, error)
+	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
 	GetPostTaxonomies(ctx context.Context, postID int64) ([]Taxonomy, error)
 	GetPostTaxonomyCount(ctx context.Context, postID int64) (int64, error)
+	GetPostType(ctx context.Context, name string) (PostType, error)
+	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
 	GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error)
+	GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMetaRow, error)
 	GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetTaxonomy(ctx context.Context, id int64) (Taxonomy, error)
@@ -62,8 +75,12 @@ type Querier interface {
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
+	ListPostTypes(ctx context.Context) ([]PostType, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error)
+	ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error)
+	ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error)
 	ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error)
+	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
 	ListTaxonomies(ctx context.Context, arg ListTaxonomiesParams) ([]Taxonomy, error)
@@ -75,12 +92,15 @@ type Querier interface {
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
+	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
+	UpdatePostType(ctx context.Context, arg UpdatePostTypeParams) (PostType, error)
 	UpdatePostsUsername(ctx context.Context, arg UpdatePostsUsernameParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
 	UpdateSessionsUsername(ctx context.Context, arg UpdateSessionsUsernameParams) ([]Session, error)
 	UpdateTaxonomy(ctx context.Context, arg UpdateTaxonomyParams) (Taxonomy, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserPostsOwnership(ctx context.Context, arg UpdateUserPostsOwnershipParams) error
+	UpsertPostMeta(ctx context.Context, arg UpsertPostMetaParams) (PostMetum, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -55,10 +56,91 @@ func toPostResponse(post db.Post) PostResponse {
 	}
 }
 
+type PostWithMetaResponse struct {
+	ID          int64                  `json:"id"`
+	Title       string                 `json:"title"`
+	Content     string                 `json:"content"`
+	Description string                 `json:"description"`
+	UserID      int64                  `json:"user_id"`
+	Username    string                 `json:"username"`
+	Url         string                 `json:"url"`
+	PostType    string                 `json:"post_type"`
+	PostStatus  string                 `json:"post_status"`
+	PostParent  *int64                 `json:"post_parent"`
+	MenuOrder   int32                  `json:"menu_order"`
+	CreatedAt   time.Time              `json:"created_at"`
+	ChangedAt   time.Time              `json:"changed_at"`
+	Meta        map[string]interface{} `json:"meta,omitempty"`
+}
+
+func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
+	var postParent *int64
+	if post.PostParent.Valid {
+		postParent = &post.PostParent.Int64
+	}
+
+	metaMap := make(map[string]interface{})
+	if post.Meta != nil {
+		if metaBytes, ok := post.Meta.([]byte); ok {
+			json.Unmarshal(metaBytes, &metaMap)
+		}
+	}
+
+	return PostWithMetaResponse{
+		ID:          post.ID,
+		Title:       post.Title,
+		Content:     post.Content,
+		Description: post.Description,
+		UserID:      post.UserID,
+		Username:    post.Username,
+		Url:         post.Url,
+		PostType:    post.PostType,
+		PostStatus:  post.PostStatus,
+		PostParent:  postParent,
+		MenuOrder:   post.MenuOrder,
+		CreatedAt:   post.CreatedAt,
+		ChangedAt:   post.ChangedAt,
+		Meta:        metaMap,
+	}
+}
+func toPostWithMetaResponseFromTypeQuery(post db.ListPostsByTypeWithMetaRow) PostWithMetaResponse {
+	var postParent *int64
+	if post.PostParent.Valid {
+		postParent = &post.PostParent.Int64
+	}
+
+	metaMap := make(map[string]interface{})
+	if post.Meta != nil {
+		if metaBytes, ok := post.Meta.([]byte); ok {
+			json.Unmarshal(metaBytes, &metaMap)
+		}
+	}
+
+	return PostWithMetaResponse{
+		ID:          post.ID,
+		Title:       post.Title,
+		Content:     post.Content,
+		Description: post.Description,
+		UserID:      post.UserID,
+		Username:    post.Username,
+		Url:         post.Url,
+		PostType:    post.PostType,
+		PostStatus:  post.PostStatus,
+		PostParent:  postParent,
+		MenuOrder:   post.MenuOrder,
+		CreatedAt:   post.CreatedAt,
+		ChangedAt:   post.ChangedAt,
+		Meta:        metaMap,
+	}
+}
+
 func (server *Server) getPosts(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
 	sortBy := c.DefaultQuery("sort", "date_desc")
+	postType := c.Query("type")
+	status := c.Query("status")
+	withMeta := c.DefaultQuery("with_meta", "false")
 
 	if !isValidPostSortOption(sortBy) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
@@ -80,43 +162,90 @@ func (server *Server) getPosts(c *gin.Context) {
 		return
 	}
 
-	posts, err := server.store.ListPosts(c.Request.Context(), db.ListPostsParams{
-		LimitCount:  int32(limit),
-		OffsetCount: int32(offset),
-		SortBy:      sortBy,
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts"})
-		return
-	}
+	if withMeta == "true" {
 
-	postResponses := make([]PostResponse, len(posts))
-	for i, post := range posts {
-		postResponses[i] = toPostResponse(post)
-	}
+		posts, err := server.store.ListPostsWithMeta(c.Request.Context(), db.ListPostsWithMetaParams{
+			Column1:     postType,
+			Column2:     status,
+			SortBy:      sortBy,
+			OffsetCount: int32(offset),
+			LimitCount:  int32(limit),
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts with meta"})
+			return
+		}
 
-	total, err := server.store.CountTotalPosts(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total posts"})
-		return
-	}
+		postResponses := make([]PostWithMetaResponse, len(posts))
+		for i, post := range posts {
+			postResponses[i] = toPostWithMetaResponse(post)
+		}
 
-	c.JSON(http.StatusOK, gin.H{
-		"posts": postResponses,
-		"meta": gin.H{
-			"total":  total,
-			"limit":  limit,
-			"offset": offset,
-			"count":  len(postResponses),
-			"sort":   sortBy,
-		},
-	})
+		total, err := server.store.CountTotalPosts(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total posts"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"posts": postResponses,
+			"meta": gin.H{
+				"total":     total,
+				"limit":     limit,
+				"offset":    offset,
+				"count":     len(postResponses),
+				"sort":      sortBy,
+				"type":      postType,
+				"status":    status,
+				"with_meta": true,
+			},
+		})
+	} else {
+
+		posts, err := server.store.ListPosts(c.Request.Context(), db.ListPostsParams{
+			Column1:     postType,
+			Column2:     status,
+			SortBy:      sortBy,
+			OffsetCount: int32(offset),
+			LimitCount:  int32(limit),
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts"})
+			return
+		}
+
+		postResponses := make([]PostResponse, len(posts))
+		for i, post := range posts {
+			postResponses[i] = toPostResponse(post)
+		}
+
+		total, err := server.store.CountTotalPosts(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total posts"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"posts": postResponses,
+			"meta": gin.H{
+				"total":     total,
+				"limit":     limit,
+				"offset":    offset,
+				"count":     len(postResponses),
+				"sort":      sortBy,
+				"type":      postType,
+				"status":    status,
+				"with_meta": false,
+			},
+		})
+	}
 }
 
 func isValidPostSortOption(sort string) bool {
 	validSorts := []string{
 		"date_asc", "date_desc",
 		"title_asc", "title_desc",
+		"menu_order_asc", "menu_order_desc",
 		"id_asc", "id_desc",
 	}
 
@@ -430,4 +559,122 @@ func (server *Server) getPostsByUser(c *gin.Context) {
 			"count":   len(postResponses),
 		},
 	})
+}
+
+func (server *Server) getPostsByType(c *gin.Context) {
+	postType := c.Param("type")
+
+	limitStr := c.DefaultQuery("limit", "10")
+	offsetStr := c.DefaultQuery("offset", "0")
+	sortBy := c.DefaultQuery("sort", "date_desc")
+	status := c.DefaultQuery("status", "")
+	withMeta := c.DefaultQuery("with_meta", "false")
+
+	if !isValidPostSortOption(sortBy) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
+		return
+	}
+
+	limit, err := strconv.ParseInt(limitStr, 10, 32)
+	if err != nil || limit <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit parameter"})
+		return
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	offset, err := strconv.ParseInt(offsetStr, 10, 32)
+	if err != nil || offset < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid offset parameter"})
+		return
+	}
+
+	_, err = server.store.GetPostType(c.Request.Context(), postType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post type"})
+		return
+	}
+
+	if withMeta == "true" {
+
+		posts, err := server.store.ListPostsByTypeWithMeta(c.Request.Context(), db.ListPostsByTypeWithMetaParams{
+			PostType:    postType,
+			Column2:     status,
+			SortBy:      sortBy,
+			OffsetCount: int32(offset),
+			LimitCount:  int32(limit),
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts by type with meta"})
+			return
+		}
+
+		postResponses := make([]PostWithMetaResponse, len(posts))
+		for i, post := range posts {
+			postResponses[i] = toPostWithMetaResponseFromTypeQuery(post)
+		}
+
+		totalCount, err := server.store.CountPostsByType(c.Request.Context(), postType)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"posts": postResponses,
+			"meta": gin.H{
+				"post_type": postType,
+				"limit":     limit,
+				"offset":    offset,
+				"count":     len(postResponses),
+				"total":     totalCount,
+				"sort":      sortBy,
+				"status":    status,
+				"with_meta": true,
+			},
+		})
+	} else {
+
+		posts, err := server.store.ListPostsByType(c.Request.Context(), db.ListPostsByTypeParams{
+			PostType:    postType,
+			Column2:     status,
+			SortBy:      sortBy,
+			OffsetCount: int32(offset),
+			LimitCount:  int32(limit),
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts by type"})
+			return
+		}
+
+		postResponses := make([]PostResponse, len(posts))
+		for i, post := range posts {
+			postResponses[i] = toPostResponse(post)
+		}
+
+		totalCount, err := server.store.CountPostsByType(c.Request.Context(), postType)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"posts": postResponses,
+			"meta": gin.H{
+				"post_type": postType,
+				"limit":     limit,
+				"offset":    offset,
+				"count":     len(postResponses),
+				"total":     totalCount,
+				"sort":      sortBy,
+				"status":    status,
+				"with_meta": false,
+			},
+		})
+	}
 }

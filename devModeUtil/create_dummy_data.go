@@ -2,6 +2,7 @@ package devModeUtil
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -55,8 +56,11 @@ func CreateDummyData(store db.Store, config util.Config) {
 	posts := createDummyPosts(store, users, taxonomies)
 	log.Printf("✅ Created %d dummy posts", len(posts))
 
-	linkMediaToPosts(store, posts, media)
-	log.Println("✅ Linked media to posts")
+	pages := createDummyPages(store, users)
+	log.Printf("✅ Created %d dummy pages", len(pages))
+
+	linkMediaToPosts(store, append(posts, pages...), media)
+	log.Println("✅ Linked media to posts and pages")
 
 	log.Println("🎉 Dummy data creation completed!")
 }
@@ -139,7 +143,6 @@ func createDummyTaxonomies(store db.Store) []db.Taxonomy {
 }
 
 func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.Medium {
-
 	var media []db.Medium
 	gofakeit.Seed(0)
 
@@ -150,7 +153,6 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 	}
 
 	for i, imageURL := range sampleImages {
-
 		filename := fmt.Sprintf("sample-image-%d.jpg", i+1)
 		filePath := filepath.Join(uploadsDir, filename)
 
@@ -197,7 +199,6 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 		createdMedia, err := store.CreateMedia(context.TODO(), mediaParams)
 		if err != nil {
 			log.Printf("❌ Failed to create media record %d: %v", i+1, err)
-
 			os.Remove(filePath)
 			continue
 		}
@@ -217,7 +218,7 @@ func createDummyPosts(store db.Store, users []db.User, taxonomies []db.Taxonomy)
 		return posts
 	}
 
-	postTitles := []string{
+	blogPostTitles := []string{
 		"Getting Started with Go Programming",
 		"The Future of Web Development",
 		"Mobile App Design Best Practices",
@@ -228,40 +229,54 @@ func createDummyPosts(store db.Store, users []db.User, taxonomies []db.Taxonomy)
 		"Database Optimization Techniques",
 		"Modern JavaScript Frameworks Comparison",
 		"DevOps Best Practices for Small Teams",
-		"User Experience Design Principles",
-		"Building Real-time Applications",
 	}
 
-	for i, title := range postTitles {
+	for i, title := range blogPostTitles {
 		userIndex := i % len(users)
-
 		url := generateSlug(title)
+		uniqueURL := fmt.Sprintf("%s-%d", url, time.Now().UnixNano()+int64(i))
 
-		//counter := 1
-		originalURL := url
-		for {
-
-			uniqueURL := fmt.Sprintf("%s-%d", originalURL, time.Now().UnixNano())
-			url = uniqueURL
-			break
+		postParams := db.CreatePostsParams{
+			Title:       title,
+			Description: gofakeit.Sentence(15),
+			Content:     generateDummyContent(),
+			Url:         uniqueURL,
+			UserID:      users[userIndex].ID,
+			Username:    users[userIndex].Username,
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{Valid: false},
+			MenuOrder:   0,
 		}
 
-		postTxParams := db.CreatePostTxParams{
-			CreatePostsParams: db.CreatePostsParams{
-				Title:       title,
-				Description: gofakeit.Sentence(15),
-				Content:     generateDummyContent(),
-				Url:         url,
-				UserID:      users[userIndex].ID,
-				Username:    users[userIndex].Username,
-			},
-			AuthorIDs: []int64{users[userIndex].ID},
-		}
-
-		result, err := store.CreatePostTx(context.TODO(), postTxParams)
+		createdPost, err := store.CreatePosts(context.TODO(), postParams)
 		if err != nil {
 			log.Printf("❌ Failed to create post '%s': %v", title, err)
 			continue
+		}
+
+		blogMeta := map[string]string{
+			"featured_image":   fmt.Sprintf("/uploads/sample-image-%d.jpg", (i%12)+1),
+			"reading_time":     fmt.Sprintf("%d", gofakeit.Number(2, 15)),
+			"seo_title":        title + " - Complete Guide",
+			"seo_description":  gofakeit.Sentence(20),
+			"author_bio":       gofakeit.Sentence(25),
+			"social_image":     fmt.Sprintf("/uploads/sample-image-%d.jpg", (i%12)+1),
+			"enable_comments":  "true",
+			"post_views":       fmt.Sprintf("%d", gofakeit.Number(100, 5000)),
+			"difficulty_level": []string{"beginner", "intermediate", "advanced"}[i%3],
+			"estimated_time":   fmt.Sprintf("%d minutes", gofakeit.Number(5, 30)),
+		}
+
+		for key, value := range blogMeta {
+			_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
+				PostID:    createdPost.ID,
+				MetaKey:   key,
+				MetaValue: sql.NullString{String: value, Valid: true},
+			})
+			if err != nil {
+				log.Printf("❌ Failed to create meta %s for post %s: %v", key, title, err)
+			}
 		}
 
 		if len(taxonomies) > 0 {
@@ -278,7 +293,7 @@ func createDummyPosts(store db.Store, users []db.User, taxonomies []db.Taxonomy)
 				usedTaxonomies[taxonomyID] = true
 
 				linkParams := db.CreatePostTaxonomyParams{
-					PostID:     result.Post.ID,
+					PostID:     createdPost.ID,
 					TaxonomyID: taxonomyID,
 				}
 
@@ -289,10 +304,170 @@ func createDummyPosts(store db.Store, users []db.User, taxonomies []db.Taxonomy)
 			}
 		}
 
-		posts = append(posts, result.Post)
+		posts = append(posts, createdPost)
 	}
 
 	return posts
+}
+
+func createDummyPages(store db.Store, users []db.User) []db.Post {
+	var pages []db.Post
+	gofakeit.Seed(0)
+
+	if len(users) == 0 {
+		log.Println("❌ No users available for page creation")
+		return pages
+	}
+
+	parentPages := []struct {
+		title   string
+		content string
+		meta    map[string]string
+	}{
+		{
+			title:   "About Us",
+			content: "# About Our Company\n\nWe are a leading technology company...",
+			meta: map[string]string{
+				"page_template":      "about-template",
+				"header_image":       "/uploads/sample-image-1.jpg",
+				"show_in_navigation": "true",
+				"navigation_order":   "1",
+				"page_layout":        "full-width",
+				"custom_css":         ".about-page { background: #f8f9fa; }",
+				"meta_description":   "Learn more about our company, mission, and values.",
+			},
+		},
+		{
+			title:   "Services",
+			content: "# Our Services\n\nWe offer a wide range of services...",
+			meta: map[string]string{
+				"page_template":      "services-template",
+				"header_image":       "/uploads/sample-image-2.jpg",
+				"show_in_navigation": "true",
+				"navigation_order":   "2",
+				"page_layout":        "sidebar-right",
+				"service_categories": "web-development,mobile-apps,consulting",
+			},
+		},
+		{
+			title:   "Contact",
+			content: "# Contact Us\n\nGet in touch with our team...",
+			meta: map[string]string{
+				"page_template":      "contact-template",
+				"show_in_navigation": "true",
+				"navigation_order":   "3",
+				"contact_form_id":    "1",
+				"office_address":     "123 Tech Street, San Francisco, CA 94105",
+				"phone_number":       "+1 (555) 123-4567",
+				"email_address":      "contact@example.com",
+				"business_hours":     "Mon-Fri 9AM-6PM PST",
+			},
+		},
+	}
+
+	for i, pageData := range parentPages {
+		userIndex := i % len(users)
+		url := generateSlug(pageData.title)
+
+		pageParams := db.CreatePostsParams{
+			Title:       pageData.title,
+			Description: fmt.Sprintf("Learn more about %s", pageData.title),
+			Content:     pageData.content,
+			Url:         url,
+			UserID:      users[userIndex].ID,
+			Username:    users[userIndex].Username,
+			PostType:    "page",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{Valid: false},
+			MenuOrder:   int32(i + 1),
+		}
+
+		createdPage, err := store.CreatePosts(context.TODO(), pageParams)
+		if err != nil {
+			log.Printf("❌ Failed to create page '%s': %v", pageData.title, err)
+			continue
+		}
+
+		for key, value := range pageData.meta {
+			_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
+				PostID:    createdPage.ID,
+				MetaKey:   key,
+				MetaValue: sql.NullString{String: value, Valid: true},
+			})
+			if err != nil {
+				log.Printf("❌ Failed to create meta %s for page %s: %v", key, pageData.title, err)
+			}
+		}
+
+		pages = append(pages, createdPage)
+
+		if pageData.title == "About Us" {
+			childPages := []struct {
+				title   string
+				content string
+				meta    map[string]string
+			}{
+				{
+					title:   "Our Team",
+					content: "# Meet Our Team\n\nOur talented team members...",
+					meta: map[string]string{
+						"page_template":      "team-template",
+						"show_in_navigation": "false",
+						"team_size":          "25",
+						"departments":        "engineering,design,marketing,sales",
+					},
+				},
+				{
+					title:   "Company History",
+					content: "# Our Story\n\nFounded in 2020, we started with a vision...",
+					meta: map[string]string{
+						"page_template":      "history-template",
+						"show_in_navigation": "false",
+						"founded_year":       "2020",
+						"milestones":         "2020-founding,2021-first-product,2023-series-a",
+					},
+				},
+			}
+
+			for j, childData := range childPages {
+				childURL := generateSlug(childData.title)
+
+				childParams := db.CreatePostsParams{
+					Title:       childData.title,
+					Description: fmt.Sprintf("Learn more about %s", childData.title),
+					Content:     childData.content,
+					Url:         childURL,
+					UserID:      users[userIndex].ID,
+					Username:    users[userIndex].Username,
+					PostType:    "page",
+					PostStatus:  "published",
+					PostParent:  sql.NullInt64{Int64: createdPage.ID, Valid: true},
+					MenuOrder:   int32(j + 1),
+				}
+
+				createdChild, err := store.CreatePosts(context.TODO(), childParams)
+				if err != nil {
+					log.Printf("❌ Failed to create child page '%s': %v", childData.title, err)
+					continue
+				}
+
+				for key, value := range childData.meta {
+					_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
+						PostID:    createdChild.ID,
+						MetaKey:   key,
+						MetaValue: sql.NullString{String: value, Valid: true},
+					})
+					if err != nil {
+						log.Printf("❌ Failed to create meta %s for child page %s: %v", key, childData.title, err)
+					}
+				}
+
+				pages = append(pages, createdChild)
+			}
+		}
+	}
+
+	return pages
 }
 
 func linkMediaToPosts(store db.Store, posts []db.Post, media []db.Medium) {
@@ -331,7 +506,6 @@ func linkMediaToPosts(store db.Store, posts []db.Post, media []db.Medium) {
 }
 
 func downloadImage(url, filepath string) error {
-
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
@@ -357,7 +531,6 @@ func downloadImage(url, filepath string) error {
 }
 
 func generateSlug(title string) string {
-
 	slug := ""
 	for _, char := range title {
 		if char >= 'A' && char <= 'Z' {
