@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { extractSvgPath } from "@gl-admin/components/ui/Icon";
 import SidebarItem from "@gl-admin/components/sidebar/SidebarItem";
-import Profile from "@gl-admin/components/sidebar/Profile";
+import UserProfile from "@gl-admin/components/ui/user-profile/UserProfile";
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw";
 import "@gl-admin/assets/styles/components/sidebar/sidebar.scss";
 
@@ -76,7 +76,7 @@ const Sidebar: React.FC = () => {
         ))}
       </div>
       <div className="admin-sidebar__bottom">
-        <Profile />
+        <UserProfile />
       </div>
     </nav>
   );
