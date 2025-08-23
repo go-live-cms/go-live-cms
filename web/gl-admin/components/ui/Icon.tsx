@@ -66,4 +66,9 @@ export const Icon: React.FC<Props> = ({
   )
 }
 
+export function extractSvgPath(svgString: string) {
+  const match = svgString.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
+  return match ? match[1] : "";
+}
+
 export default Icon
