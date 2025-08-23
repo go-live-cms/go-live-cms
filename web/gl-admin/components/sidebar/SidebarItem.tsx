@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
-import SidebarIcon from "./SidebarIcon";
+import React from "react";
+import { Link } from "react-router-dom";
+import Icon from "@gl-admin/components/ui/Icon";
 import "@gl-admin/assets/styles/components/sidebar/sidebar-item.scss";
 
 
@@ -11,7 +11,6 @@ interface Props {
     name?: string;
     link?: string;
     subItem?: boolean;
-    gradient?: IconGradient;
     type?: "external";
     isActive?: boolean;
 }
@@ -22,43 +21,37 @@ const SidebarItem: React.FC<Props> = ({
     link = '#',
     subItem = false,
     isActive = false,
-    gradient = ["#b3b3b34d", "#00000026"],
     type,
-}) => {
-    const iconGradient = `background: linear-gradient(182deg, ${gradient[0]} 3.56%, ${gradient[1]} 101.28%); box-shadow: 0 0 5.5px 0 #00000026 inset;`;
-
-    return (
-        <>
-            {type === "external" ?
-                <a href={link} className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`} target="_blank" rel="noopener noreferrer">
+}) => (
+    <>
+        {type === "external" ?
+            <a href={link} className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`} target="_blank" rel="noopener noreferrer">
+                {iconPath && (
+                    <div
+                        className="sidebar-item__icon"
+                    >
+                        <Icon name={iconPath} color="#46484A" />
+                    </div>
+                )}
+                <span className="sidebar-item__name">{name}</span>
+            </a>
+            : (
+                <Link
+                    className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`}
+                    to={link}
+                >
                     {iconPath && (
                         <div
                             className="sidebar-item__icon"
                         >
-                            <SidebarIcon path={iconPath} />
+                            <Icon name={iconPath} color="#46484A" />
                         </div>
                     )}
-                    <span>{name}</span>
-                </a>
-                : (
-                    <Link
-                        className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`}
-                        to={link}
-                    >
-                        {iconPath && (
-                            <div
-                                className="sidebar-item__icon"
-                                style={isActive ? { ...parseStyleString(iconGradient) } : undefined}
-                            >
-                                <SidebarIcon path={iconPath} />
-                            </div>
-                        )}
-                        <span>{name}</span>
-                    </Link>
-                )}
-        </>
-    );
-};
+                    <span className="sidebar-item__name">{name}</span>
+                </Link>
+            )}
+    </>
+);
 
 function parseStyleString(style: string): React.CSSProperties {
     const styleObj: Record<string, string> = {};
