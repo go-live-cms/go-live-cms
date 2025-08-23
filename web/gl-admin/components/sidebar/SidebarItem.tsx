@@ -53,16 +53,4 @@ const SidebarItem: React.FC<Props> = ({
     </>
 );
 
-function parseStyleString(style: string): React.CSSProperties {
-    const styleObj: Record<string, string> = {};
-    style.split(';').forEach(rule => {
-        const [key, value] = rule.split(':').map(s => s && s.trim());
-        if (key && value) {
-            const camelKey = key.replace(/-([a-z])/g, g => g[1].toUpperCase());
-            styleObj[camelKey] = value;
-        }
-    });
-    return styleObj as React.CSSProperties;
-}
-
 export default SidebarItem;
