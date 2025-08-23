@@ -1,5 +1,5 @@
 import { getInitials } from "@gl-admin/utils/formatting";
-import "@gl-admin/assets/styles/components/sidebar/profile-icon.scss";
+import "@gl-admin/assets/styles/components/ui/user-profile/user-profile-icon.scss";
 
 type ProfileIconProps = {
     fullName: string;
@@ -10,10 +10,8 @@ export default function ProfileIcon({ fullName, hovered }: ProfileIconProps) {
     const initials = getInitials(fullName);
 
     return (
-        <div className="profile-icon__wrapper">
-            <div className={`profile-icon ${hovered ? "hovered" : ""}`}>
-                <span>{initials}</span>
-            </div>
+        <div className={`user-profile-icon ${hovered ? "hovered" : ""}`}>
+            <span>{initials}</span>
         </div>
     );
 }

@@ -1,11 +1,16 @@
-.user {
+.user-profile {
     display: flex;
     align-items: center;
-    padding: .4rem 1rem;
+    padding: 1.31rem;
+    width: 100%;
+    height: 100%;
     gap: 0.5rem;
     cursor: pointer;
-    border-radius: 0.25rem;
     position: relative;
+
+    &:hover {
+        background: #0000000a;
+    }
 
     &__name {
         color: #333536;
