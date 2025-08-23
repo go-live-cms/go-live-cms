@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation } from "react-router-dom";
 import SidebarItem from "@gl-admin/components/sidebar/SidebarItem";
+import Profile from "@gl-admin/components/sidebar/Profile";
 import Icon from "@gl-admin/components/ui/Icon";
 import "@gl-admin/assets/styles/components/sidebar/sidebar.scss";
 
@@ -68,6 +69,9 @@ const Sidebar: React.FC = () => {
             ))}
           </div>
         ))}
+      </div>
+      <div className="admin-sidebar__bottom">
+        <Profile />
       </div>
     </nav>
   );

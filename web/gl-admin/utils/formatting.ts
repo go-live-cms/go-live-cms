@@ -64,3 +64,16 @@ export function formatRelativeDay(isoString: string): string {
   if (diffDays < 0) return `${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? "" : "s"} ago`;
   return `${diffDays} day${diffDays === 1 ? "" : "s"} in the future`;
 }
+
+export function formatUserName(fullName: string): string {
+    const parts = fullName.trim().split(" ");
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+}
+
+export function getInitials(name: string): string {
+    const parts = name.trim().split(" ");
+    if (parts.length === 0) return "";
+    if (parts.length === 1) return parts[0][0].toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}

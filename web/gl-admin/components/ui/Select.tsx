@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from "react"
+import React from "react"
 import Icon from "@gl-admin/components/ui/Icon"
 import "@gl-admin/assets/styles/components/ui/select.scss"
+import { useSelect } from "@gl-admin/utils/select"
 
 export type SelectOption = {
   value: string
@@ -16,30 +17,15 @@ export type SelectProps = {
 }
 
 export const Select: React.FC<SelectProps> = ({ options, value, onChange, label, disabled = false }) => {
-  const [open, setOpen] = useState(false)
-  const [showAbove, setShowAbove] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
+  const {
+    open,
+    setOpen,
+    optionsStyle,
+    ref,
+    handleSelectClick,
+  } = useSelect(disabled)
 
   const selected = options.find((opt) => opt.value === value)
-
-  const handleSelectClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (disabled) return
-    const mouseY = e.clientY
-    const viewportHeight = window.innerHeight
-    // If mouse is in the bottom 50% of the viewport, show options above
-    setShowAbove(mouseY > viewportHeight * 0.5)
-    setOpen((o) => !o)
-  }
 
   return (
     <div className="gl-select" ref={ref} style={{ position: "relative" }}>
@@ -57,11 +43,7 @@ export const Select: React.FC<SelectProps> = ({ options, value, onChange, label,
       {open && !disabled && (
         <div
           className="gl-select__options"
-          style={{
-            top: showAbove ? undefined : "100%",
-            bottom: showAbove ? "100%" : undefined,
-            borderRadius: showAbove ? "4px 4px 0 0" : "0 0 4px 4px",
-          }}
+          style={optionsStyle}
         >
           {options.map((opt) => (
             <div
