@@ -325,9 +325,9 @@ func TestListMediaAPI(t *testing.T) {
 		media[i].ID = int64(i + 1)
 	}
 
-	mediaWithCount := make([]db.ListMediaWithPostCountRow, n)
+	mediaWithCount := make([]db.ListMediaRow, n)
 	for i := 0; i < n; i++ {
-		mediaWithCount[i] = db.ListMediaWithPostCountRow{
+		mediaWithCount[i] = db.ListMediaRow{
 			ID:          media[i].ID,
 			Name:        media[i].Name,
 			Description: media[i].Description,
@@ -372,9 +372,13 @@ func TestListMediaAPI(t *testing.T) {
 			query: "?limit=5&offset=0&with_counts=true",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					ListMediaWithPostCount(gomock.Any(), db.ListMediaWithPostCountParams{
-						Limit:  5,
-						Offset: 0,
+					ListMedia(gomock.Any(), db.ListMediaParams{
+						Column1: "",
+						Column2: int64(0),
+						Column3: "",
+						Column4: "",
+						Limit:   5,
+						Offset:  0,
 					}).
 					Times(1).
 					Return(mediaWithCount, nil)
@@ -1003,7 +1007,7 @@ func requireBodyMatchMediaList(t *testing.T, body string, media []db.Medium, exp
 	}
 }
 
-func requireBodyMatchMediaWithCount(t *testing.T, body string, media []db.ListMediaWithPostCountRow, expectedTotal int64) {
+func requireBodyMatchMediaWithCount(t *testing.T, body string, media []db.ListMediaRow, expectedTotal int64) {
 	var response struct {
 		Media []MediaResponse `json:"media"`
 		Meta  struct {
