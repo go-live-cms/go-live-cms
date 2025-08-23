@@ -16,11 +16,17 @@ func createTestMedia(t *testing.T) (User, Medium) {
 
 	gofakeit.Seed(0)
 	arg := CreateMediaParams{
-		Name:        gofakeit.Word(),
-		Description: gofakeit.Sentence(10),
-		Alt:         gofakeit.Sentence(5),
-		MediaPath:   fmt.Sprintf("/uploads/media/%s.jpg", gofakeit.UUID()),
-		UserID:      user.ID,
+		Name:             gofakeit.Word(),
+		Description:      gofakeit.Sentence(10),
+		Alt:              gofakeit.Sentence(5),
+		MediaPath:        fmt.Sprintf("/uploads/media/%s.jpg", gofakeit.UUID()),
+		UserID:           user.ID,
+		FileSize:         int64(gofakeit.Number(1000, 100000)),
+		MimeType:         "image/jpeg",
+		Width:            int32(gofakeit.Number(100, 1920)),
+		Height:           int32(gofakeit.Number(100, 1080)),
+		Duration:         0,
+		OriginalFilename: fmt.Sprintf("%s.jpg", gofakeit.UUID()),
 	}
 
 	media, err := testQueries.CreateMedia(context.Background(), arg)
@@ -57,8 +63,12 @@ func TestListMedia(t *testing.T) {
 	}
 
 	media, err := testQueries.ListMedia(context.Background(), ListMediaParams{
-		Limit:  5,
-		Offset: 5,
+		Column1: "",
+		Column2: int64(0),
+		Column3: "",
+		Column4: "",
+		Limit:   5,
+		Offset:  5,
 	})
 	require.NoError(t, err)
 	require.Len(t, media, 5)
@@ -134,6 +144,10 @@ func TestCreatePostWithMediaTx(t *testing.T) {
 			UserID:      user.ID,
 			Username:    user.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", gofakeit.UUID()),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{Valid: false},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 		MediaIDs:  []int64{media1.ID, media2.ID},
@@ -181,7 +195,7 @@ func TestMediaAnalyticsQueries(t *testing.T) {
 
 	mediaWithCount, err := testQueries.ListMedia(context.Background(), ListMediaParams{
 		Column1: "",
-		Column2: "",
+		Column2: int64(0),
 		Column3: "",
 		Column4: "",
 		Limit:   50,
@@ -236,11 +250,17 @@ func TestMediaAnalyticsQueries(t *testing.T) {
 
 func createMediaWithName(t *testing.T, userID int64, name, description string) Medium {
 	arg := CreateMediaParams{
-		Name:        name,
-		Description: description,
-		Alt:         fmt.Sprintf("Alt text for %s", name),
-		MediaPath:   fmt.Sprintf("/uploads/media/%s", name),
-		UserID:      userID,
+		Name:             name,
+		Description:      description,
+		Alt:              fmt.Sprintf("Alt text for %s", name),
+		MediaPath:        fmt.Sprintf("/uploads/media/%s", name),
+		UserID:           userID,
+		FileSize:         int64(gofakeit.Number(1000, 100000)),
+		MimeType:         "image/jpeg",
+		Width:            int32(gofakeit.Number(100, 1920)),
+		Height:           int32(gofakeit.Number(100, 1080)),
+		Duration:         0,
+		OriginalFilename: name,
 	}
 
 	media, err := testQueries.CreateMedia(context.Background(), arg)
@@ -264,6 +284,10 @@ func TestGetPostWithMedia(t *testing.T) {
 			UserID:      user.ID,
 			Username:    user.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", gofakeit.UUID()),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{Valid: false},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 		MediaIDs:  []int64{media1.ID, media2.ID},
@@ -297,6 +321,10 @@ func TestListPostsWithMedia(t *testing.T) {
 			UserID:      user.ID,
 			Username:    user.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", gofakeit.UUID()),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{Valid: false},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 		MediaIDs:  []int64{media1.ID, media2.ID},
@@ -313,6 +341,10 @@ func TestListPostsWithMedia(t *testing.T) {
 			UserID:      user.ID,
 			Username:    user.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", gofakeit.UUID()),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{Valid: false},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 	})
@@ -343,6 +375,10 @@ func TestGetPostsByUserWithMedia(t *testing.T) {
 			UserID:      user.ID,
 			Username:    user.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", gofakeit.UUID()),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{Valid: false},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 		MediaIDs:  []int64{media1.ID},
@@ -379,9 +415,12 @@ func TestGetMediaByUser(t *testing.T) {
 	createMediaWithName(t, user2.ID, fmt.Sprintf("user2_media2_%s.jpg", timestamp), "User 2 second media")
 
 	user1Media, err := testQueries.GetMediaByUser(context.Background(), GetMediaByUserParams{
-		UserID: user1.ID,
-		Limit:  10,
-		Offset: 0,
+		UserID:  user1.ID,
+		Column2: "",
+		Column3: "",
+		Column4: "",
+		Limit:   10,
+		Offset:  0,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(user1Media), 3)
@@ -396,9 +435,12 @@ func TestGetMediaByUser(t *testing.T) {
 	require.ElementsMatch(t, []int64{media1.ID, media2.ID, media3.ID}, user1MediaIDs)
 
 	user2Media, err := testQueries.GetMediaByUser(context.Background(), GetMediaByUserParams{
-		UserID: user2.ID,
-		Limit:  10,
-		Offset: 0,
+		UserID:  user2.ID,
+		Column2: "",
+		Column3: "",
+		Column4: "",
+		Limit:   10,
+		Offset:  0,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(user2Media), 2)
@@ -408,17 +450,23 @@ func TestGetMediaByUser(t *testing.T) {
 	}
 
 	user1MediaPage1, err := testQueries.GetMediaByUser(context.Background(), GetMediaByUserParams{
-		UserID: user1.ID,
-		Limit:  2,
-		Offset: 0,
+		UserID:  user1.ID,
+		Column2: "",
+		Column3: "",
+		Column4: "",
+		Limit:   2,
+		Offset:  0,
 	})
 	require.NoError(t, err)
 	require.Len(t, user1MediaPage1, 2)
 
 	user1MediaPage2, err := testQueries.GetMediaByUser(context.Background(), GetMediaByUserParams{
-		UserID: user1.ID,
-		Limit:  2,
-		Offset: 2,
+		UserID:  user1.ID,
+		Column2: "",
+		Column3: "",
+		Column4: "",
+		Limit:   2,
+		Offset:  2,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(user1MediaPage2), 1)
@@ -434,9 +482,12 @@ func TestGetMediaByUser(t *testing.T) {
 
 	userNoMedia := createTestUser(t)
 	noMedia, err := testQueries.GetMediaByUser(context.Background(), GetMediaByUserParams{
-		UserID: userNoMedia.ID,
-		Limit:  10,
-		Offset: 0,
+		UserID:  userNoMedia.ID,
+		Column2: "",
+		Column3: "",
+		Column4: "",
+		Limit:   10,
+		Offset:  0,
 	})
 	require.NoError(t, err)
 	require.Len(t, noMedia, 0)
@@ -565,6 +616,9 @@ func TestSearchMediaByName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			results, err := testQueries.SearchMediaByName(context.Background(), SearchMediaByNameParams{
 				Column1: sql.NullString{String: tc.searchTerm, Valid: true},
+				Column2: "",
+				Column3: int64(0),
+				Column4: "",
 				Limit:   50,
 				Offset:  0,
 			})
@@ -631,6 +685,9 @@ func TestSearchMediaByNameCaseInsensitive(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			results, err := testQueries.SearchMediaByName(context.Background(), SearchMediaByNameParams{
 				Column1: sql.NullString{String: tc.searchTerm, Valid: true},
+				Column2: "",
+				Column3: int64(0),
+				Column4: "",
 				Limit:   10,
 				Offset:  0,
 			})
@@ -661,6 +718,9 @@ func TestSearchMediaByNamePagination(t *testing.T) {
 
 	page1, err := testQueries.SearchMediaByName(context.Background(), SearchMediaByNameParams{
 		Column1: sql.NullString{String: searchTerm, Valid: true},
+		Column2: "",
+		Column3: int64(0),
+		Column4: "",
 		Limit:   2,
 		Offset:  0,
 	})
@@ -680,6 +740,9 @@ func TestSearchMediaByNamePagination(t *testing.T) {
 
 	page2, err := testQueries.SearchMediaByName(context.Background(), SearchMediaByNameParams{
 		Column1: sql.NullString{String: searchTerm, Valid: true},
+		Column2: "",
+		Column3: int64(0),
+		Column4: "",
 		Limit:   2,
 		Offset:  2,
 	})
@@ -699,6 +762,9 @@ func TestSearchMediaByNamePagination(t *testing.T) {
 
 	page3, err := testQueries.SearchMediaByName(context.Background(), SearchMediaByNameParams{
 		Column1: sql.NullString{String: searchTerm, Valid: true},
+		Column2: "",
+		Column3: int64(0),
+		Column4: "",
 		Limit:   2,
 		Offset:  4,
 	})
@@ -740,6 +806,9 @@ func TestSearchMediaByNameEmptyTerm(t *testing.T) {
 
 	results, err := testQueries.SearchMediaByName(context.Background(), SearchMediaByNameParams{
 		Column1: sql.NullString{String: "", Valid: true},
+		Column2: "",
+		Column3: int64(0),
+		Column4: "",
 		Limit:   10,
 		Offset:  0,
 	})
@@ -749,6 +818,9 @@ func TestSearchMediaByNameEmptyTerm(t *testing.T) {
 
 	results2, err := testQueries.SearchMediaByName(context.Background(), SearchMediaByNameParams{
 		Column1: sql.NullString{Valid: false},
+		Column2: "",
+		Column3: int64(0),
+		Column4: "",
 		Limit:   10,
 		Offset:  0,
 	})
