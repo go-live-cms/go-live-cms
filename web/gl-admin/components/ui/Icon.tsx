@@ -10,6 +10,7 @@ interface Props {
   alt?: string
   mirror_horizontally?: boolean
   mirror_vertically?: boolean
+  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void
 }
 
 export const Icon: React.FC<Props> = ({
@@ -21,8 +22,10 @@ export const Icon: React.FC<Props> = ({
   alt,
   mirror_horizontally = false,
   mirror_vertically = false,
+  onClick
 }) => {
   const [svgContent, setSvgContent] = useState<string>("")
+  const [iconLoaded, setIconLoaded] = useState(false);
 
   useEffect(() => {
     let isMounted = true
@@ -40,6 +43,7 @@ export const Icon: React.FC<Props> = ({
         if (isMounted) setSvgContent(content)
       })
       .catch(() => setSvgContent("")) // Handle missing SVG
+      .finally(() => setIconLoaded(true));
 
     return () => {
       isMounted = false
@@ -50,9 +54,14 @@ export const Icon: React.FC<Props> = ({
   if (mirror_horizontally) transforms.push("rotate(180deg)")
   if (mirror_vertically) transforms.push("rotate(180deg)")
 
+  if (!iconLoaded) {
+    return <div className="gl-icon__skeleton" style={{ width: `${width}px`, height: `${height}px` }} />
+  }
+
   return (
     <span
       className={`gl-icon ${className}`}
+      onClick={onClick}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -64,6 +73,11 @@ export const Icon: React.FC<Props> = ({
       dangerouslySetInnerHTML={{ __html: svgContent }}
     />
   )
+}
+
+export function extractSvgPath(svgString: string) {
+  const match = svgString.match(/<svg[^>]*>([\s\S]*?)<\/svg>/);
+  return match ? match[1] : "";
 }
 
 export default Icon

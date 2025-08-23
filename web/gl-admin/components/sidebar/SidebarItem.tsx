@@ -1,75 +1,76 @@
-import React, { useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
-import SidebarIcon from "./SidebarIcon";
+import React from "react";
+import { Link } from "react-router-dom";
+import Icon from "@gl-admin/components/ui/Icon";
 import "@gl-admin/assets/styles/components/sidebar/sidebar-item.scss";
 
 
-import type { IconPath, IconGradient } from "@gl-admin/types/sidebar";
+import type { IconPath } from "@gl-admin/types/sidebar";
 
 interface Props {
     iconPath?: IconPath;
     name?: string;
-    link?: string;
-    subItem?: boolean;
-    gradient?: IconGradient;
+    link?: string | null;
     type?: "external";
     isActive?: boolean;
+    onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 const SidebarItem: React.FC<Props> = ({
     iconPath = '',
     name = '',
-    link = '#',
-    subItem = false,
+    link = null,
     isActive = false,
-    gradient = ["#b3b3b34d", "#00000026"],
     type,
+    onClick,
 }) => {
-    const iconGradient = `background: linear-gradient(182deg, ${gradient[0]} 3.56%, ${gradient[1]} 101.28%); box-shadow: 0 0 5.5px 0 #00000026 inset;`;
 
-    return (
-        <>
+    if (link) {
+        return <>
             {type === "external" ?
-                <a href={link} className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`} target="_blank" rel="noopener noreferrer">
+                <a href={link} className={`sidebar-item${isActive ? ' active' : ''}`} target="_blank" rel="noopener noreferrer">
                     {iconPath && (
                         <div
                             className="sidebar-item__icon"
                         >
-                            <SidebarIcon path={iconPath} />
+                            <Icon name={iconPath} color="#46484A" />
                         </div>
                     )}
-                    <span>{name}</span>
+                    <span className="sidebar-item__name">{name}</span>
                 </a>
                 : (
                     <Link
-                        className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`}
+                        className={`sidebar-item${isActive ? ' active' : ''}`}
                         to={link}
                     >
                         {iconPath && (
                             <div
                                 className="sidebar-item__icon"
-                                style={isActive ? { ...parseStyleString(iconGradient) } : undefined}
                             >
-                                <SidebarIcon path={iconPath} />
+                                <Icon name={iconPath} color="#46484A" />
                             </div>
                         )}
-                        <span>{name}</span>
+                        <span className="sidebar-item__name">{name}</span>
                     </Link>
-                )}
+                )
+            }
         </>
-    );
-};
-
-function parseStyleString(style: string): React.CSSProperties {
-    const styleObj: Record<string, string> = {};
-    style.split(';').forEach(rule => {
-        const [key, value] = rule.split(':').map(s => s && s.trim());
-        if (key && value) {
-            const camelKey = key.replace(/-([a-z])/g, g => g[1].toUpperCase());
-            styleObj[camelKey] = value;
-        }
-    });
-    return styleObj as React.CSSProperties;
+    } else {
+        return (
+            <div
+                className={`sidebar-item${isActive ? ' active' : ''}`}
+                onClick={onClick}
+            >
+                {iconPath && (
+                    <div
+                        className="sidebar-item__icon"
+                    >
+                        <Icon name={iconPath} color="#46484A" />
+                    </div>
+                )}
+                <span className="sidebar-item__name">{name}</span>
+            </div>
+        );
+    }
 }
 
 export default SidebarItem;

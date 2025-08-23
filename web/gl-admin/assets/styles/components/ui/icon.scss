@@ -4,4 +4,11 @@
     justify-content: center;
     color: var(--color, black);
     transition: .2s;
-  }
+}
+
+.gl-icon__skeleton {
+  border-radius: 0.25rem;
+  background: linear-gradient(90deg, #e6e6e6 25%, #f3f3f3 50%, #e6e6e6 75%);
+  animation: gl-icon-skeleton-loading 1.2s infinite;
+  display: inline-block;
+}
