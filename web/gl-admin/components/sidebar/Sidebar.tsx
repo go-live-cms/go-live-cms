@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { extractSvgPath } from "@gl-admin/components/ui/Icon";
 import SidebarItem from "@gl-admin/components/sidebar/SidebarItem";
@@ -7,6 +7,10 @@ import GLIcon from "@gl-admin/assets/gl-logo.svg?raw";
 import "@gl-admin/assets/styles/components/sidebar/sidebar.scss";
 
 import type { Navigation, Section, IconPath } from "@gl-admin/types/sidebar";
+
+const ORIGINAL_WIDTH = 26 * 16;
+const MIN_WIDTH = ORIGINAL_WIDTH * 0.8;
+const MAX_WIDTH = ORIGINAL_WIDTH * 1.2;
 
 const navigation: Navigation = [
   [
@@ -39,12 +43,58 @@ const navigation: Navigation = [
 const Sidebar: React.FC = () => {
   const location = useLocation();
 
+  const initialWidth = parseInt(localStorage.getItem('sidebarWidth') || '') || ORIGINAL_WIDTH;
+  const [sidebarWidth, setSidebarWidth] = useState(`${initialWidth}px`);
+  const [isClosed, setIsClosed] = useState(false);
+  const resizing = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarWidth', sidebarWidth);
+  }, [sidebarWidth]);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    resizing.current = true;
+    document.body.style.cursor = 'ew-resize';
+
+    const startX = e.clientX;
+    const startWidth = parseInt(sidebarWidth);
+
+    let animationFrameId: number | null = null;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizing.current) return;
+
+      if (animationFrameId) return;
+
+      animationFrameId = window.requestAnimationFrame(() => {
+        let newWidth = startWidth + (moveEvent.clientX - startX);
+        newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+        setSidebarWidth(`${newWidth}px`);
+        animationFrameId = null;
+      });
+    };
+
+    const onMouseUp = () => {
+      resizing.current = false;
+      document.body.style.cursor = '';
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (animationFrameId) {
+        window.cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
   const isActiveLink = (section: Section) => {
     return ((location.pathname === section.link && section.link !== "/") || (location.pathname === "/" && section.name === "Dashboard")) && section.type !== "external";
   };
 
   return (
-    <nav className="admin-sidebar">
+    <nav className={`admin-sidebar${isClosed ? ' closed' : ''}`} style={{ width: sidebarWidth }}>
       <Link to="/" className="admin-sidebar__head">
         <svg width="35" height="35" viewBox="0 0 35 35" className="logo"
           dangerouslySetInnerHTML={{ __html: extractSvgPath(GLIcon) }}
@@ -77,6 +127,7 @@ const Sidebar: React.FC = () => {
       >
         <SidebarUserProfile />
       </div>
+      <div className="admin-sidebar__resize-handle" onMouseDown={handleResizeStart}></div>
     </nav>
   );
 };

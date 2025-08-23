@@ -1,13 +1,28 @@
 .admin-sidebar {
     display: flex;
     flex-direction: column;
-    width: 26rem;
     background: #b4b3af05;
     box-shadow: 0 0 16px 0 #00000033;
     height: 100vh;
     user-select: none;
     padding-top: 1.31rem;
     position: relative;
+
+    &__resize-handle {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 0.25rem;
+      height: 100%;
+      cursor: ew-resize;
+      z-index: 2;
+      background: transparent;
+      transition: background 0.2s;
+
+      &:hover {
+        background: #e6e6e6aa;
+      }
+    }
 
     &__head {
       display: flex;
@@ -60,5 +75,47 @@
     &__bottom {
       margin-top: auto;
       border-top: 1px solid #E6E6E6;
+    }
+
+    &.closed {
+      width: 4.5625rem!important;
+      overflow: hidden;
+
+      .admin-sidebar__head {
+        margin-left: .55rem;
+
+        h1 {
+          display: none;
+        }
+      }
+
+      .admin-sidebar__nav {
+          overflow: hidden;
+
+          &_section .sidebar-item {
+            padding: 0;
+            width: fit-content;
+
+            &__name {
+              display: none;
+            }
+          }
+      }
+
+      .sidebar-user-profile {
+        width: fit-content;
+
+        & > .user-profile {
+          padding: .8rem;
+
+          & > .user-profile__name {
+            display: none;
+          }
+
+          & .user-profile__icon {
+            display: none;
+          }
+        }
+      }
     }
   }
