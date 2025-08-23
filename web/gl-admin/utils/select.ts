@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 
 export function useSelect(disabled: boolean = false) {
     const [open, setOpen] = useState(false);
-    const [showAbove, setShowAbove] = useState(false);
+    const [optionsStyle, setOptionsStyle] = useState<React.CSSProperties>({});
     const ref = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -19,15 +19,21 @@ export function useSelect(disabled: boolean = false) {
         if (disabled) return;
         const mouseY = e.clientY;
         const viewportHeight = window.innerHeight;
-        setShowAbove(mouseY > viewportHeight * 0.5);
+        const showAbove = mouseY > viewportHeight * 0.5;
+
+        setOptionsStyle({
+            top: showAbove ? undefined : "100%",
+            bottom: showAbove ? "100%" : undefined,
+            borderRadius: showAbove ? "4px 4px 0 0" : "0 0 4px 4px",
+        });
+
         setOpen((o) => !o);
     };
 
     return {
         open,
         setOpen,
-        showAbove,
-        setShowAbove,
+        optionsStyle,
         ref,
         handleSelectClick,
     };

@@ -20,7 +20,7 @@ export const Select: React.FC<SelectProps> = ({ options, value, onChange, label,
   const {
     open,
     setOpen,
-    showAbove,
+    optionsStyle,
     ref,
     handleSelectClick,
   } = useSelect(disabled)
@@ -43,11 +43,7 @@ export const Select: React.FC<SelectProps> = ({ options, value, onChange, label,
       {open && !disabled && (
         <div
           className="gl-select__options"
-          style={{
-            top: showAbove ? undefined : "100%",
-            bottom: showAbove ? "100%" : undefined,
-            borderRadius: showAbove ? "4px 4px 0 0" : "0 0 4px 4px",
-          }}
+          style={optionsStyle}
         >
           {options.map((opt) => (
             <div
