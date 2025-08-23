@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { extractSvgPath } from "@gl-admin/components/ui/Icon";
 import SidebarItem from "@gl-admin/components/sidebar/SidebarItem";
-import UserProfile from "@gl-admin/components/ui/user-profile/UserProfile";
+import SidebarUserProfile from "./SidebarUserProfile";
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw";
 import "@gl-admin/assets/styles/components/sidebar/sidebar.scss";
 
@@ -47,15 +47,16 @@ const Sidebar: React.FC = () => {
       </Link>
       <div className="admin-sidebar__nav">
         {navigation.map((section, i) => (
-          <>
-            <div className="admin-sidebar__nav_section" key={i}>
-              {section.map((item) => (
-                <React.Fragment key={item.name}>
+          <React.Fragment key={`sidebar-section-wrapper-${i}`}>
+            <div className="admin-sidebar__nav_section" key={`sidebar-section-${i}`}>
+              {section.map((item, j) => (
+                <React.Fragment key={`sidebar-item-${j}`}>
                   <SidebarItem
                     iconPath={item.icon}
                     name={item.name}
                     link={item.link}
                     type={item?.type}
+                    key={item.name}
                     isActive={isActiveLink(item)}
                   />
                   {item.sub &&
@@ -72,11 +73,13 @@ const Sidebar: React.FC = () => {
               ))}
             </div>
             {i !== navigation.length - 1 && <hr className="admin-sidebar__divider" />}
-          </>
+          </React.Fragment>
         ))}
       </div>
-      <div className="admin-sidebar__bottom">
-        <UserProfile />
+      <div
+        className="admin-sidebar__bottom"
+      >
+        <SidebarUserProfile />
       </div>
     </nav>
   );
