@@ -19,7 +19,7 @@ interface Props {
 const SidebarItem: React.FC<Props> = ({
     iconPath = '',
     name = '',
-    link = '#',
+    link = null,
     subItem = false,
     isActive = false,
     type,
