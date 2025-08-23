@@ -296,7 +296,7 @@ func TestListTaxonomiesAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListTaxonomies(gomock.Any(), db.ListTaxonomiesParams{
-						SortBy:      "name",
+						SortBy:      "name_asc",
 						LimitCount:  5,
 						OffsetCount: 0,
 					}).
@@ -318,7 +318,7 @@ func TestListTaxonomiesAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListTaxonomiesWithPostCount(gomock.Any(), db.ListTaxonomiesWithPostCountParams{
-						SortBy:      "name",
+						SortBy:      "name_asc",
 						LimitCount:  5,
 						OffsetCount: 0,
 					}).
@@ -473,7 +473,7 @@ func TestSearchTaxonomiesAPI(t *testing.T) {
 				store.EXPECT().
 					SearchTaxonomiesByName(gomock.Any(), db.SearchTaxonomiesByNameParams{
 						Column1:     sql.NullString{String: "tech", Valid: true},
-						SortBy:      "name",
+						SortBy:      "name_asc",
 						LimitCount:  10,
 						OffsetCount: 0,
 					}).
