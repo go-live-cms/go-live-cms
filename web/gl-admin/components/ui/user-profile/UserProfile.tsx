@@ -1,52 +1,47 @@
 import { useState } from "react";
-import { useSelect } from "@gl-admin/utils/select";
-import { api } from "@gl-admin/lib/api";
-import { authManager } from "@gl-admin/lib/auth";
 import { formatUserName } from "@gl-admin/utils/formatting";
-import Icon from "@gl-admin/components/ui/Icon";
 import ProfileIcon from "./UserProfileIcon";
 import "@gl-admin/assets/styles/components/ui/user-profile/user-profile.scss";
 
-export default function UserProfile() {
+interface UserProfileProps {
+    user: {
+        full_name: string;
+    } | null;
+    hover?: boolean;
+    ref?: React.Ref<HTMLDivElement>;
+    onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+}
+
+export default function UserProfile({ user, ref, hover = true, onClick }: UserProfileProps) {
     const [hovered, setHovered] = useState(false);
-    const {
-        open,
-        setOpen,
-        ref,
-        handleSelectClick,
-    } = useSelect()
-    const auth = authManager.getState();
-    const user = auth.user;
+
+    const handleMouseEnter = () => {
+        if (hover) {
+            setHovered(true);
+        }
+    }
+
+    const handleMouseLeave = () => {
+        if (hover) {
+            setHovered(false);
+        }
+    }
 
     if (!user) return null;
 
-    async function handleLogout() {
-        authManager.logout();
-        await api.logout({ refresh_token: auth.refreshToken });
-        setOpen(false);
-        window.location.href = "/login";
-    }
-
     return (
         <div
-            className={`user-profile ${open ? "open" : ""}`}
+            className={`user-profile ${hovered ? "hovered" : ""}`}
             ref={ref}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            onClick={handleSelectClick}
+            onClick={onClick}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
         >
             <div className="user-profile__profile">
                 <ProfileIcon fullName={user.full_name} hovered={hovered} />
             </div>
             <div className="user-profile__name">
                 {formatUserName(user.full_name)}
-            </div>
-
-            <div className={`user-profile__options ${open ? "open" : ""}`}>
-                <div onClick={handleLogout}>
-                    <Icon name="logout" color="#333536" />
-                    <span>Logout</span>
-                </div>
             </div>
         </div>
     );
