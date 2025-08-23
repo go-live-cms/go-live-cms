@@ -9,10 +9,11 @@ import type { IconPath, IconGradient } from "@gl-admin/types/sidebar";
 interface Props {
     iconPath?: IconPath;
     name?: string;
-    link?: string;
+    link?: string | null;
     subItem?: boolean;
     type?: "external";
     isActive?: boolean;
+    onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 const SidebarItem: React.FC<Props> = ({
@@ -22,24 +23,13 @@ const SidebarItem: React.FC<Props> = ({
     subItem = false,
     isActive = false,
     type,
-}) => (
-    <>
-        {type === "external" ?
-            <a href={link} className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`} target="_blank" rel="noopener noreferrer">
-                {iconPath && (
-                    <div
-                        className="sidebar-item__icon"
-                    >
-                        <Icon name={iconPath} color="#46484A" />
-                    </div>
-                )}
-                <span className="sidebar-item__name">{name}</span>
-            </a>
-            : (
-                <Link
-                    className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`}
-                    to={link}
-                >
+    onClick,
+}) => {
+
+    if (link) {
+        return <>
+            {type === "external" ?
+                <a href={link} className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`} target="_blank" rel="noopener noreferrer">
                     {iconPath && (
                         <div
                             className="sidebar-item__icon"
@@ -48,9 +38,41 @@ const SidebarItem: React.FC<Props> = ({
                         </div>
                     )}
                     <span className="sidebar-item__name">{name}</span>
-                </Link>
-            )}
-    </>
-);
+                </a>
+                : (
+                    <Link
+                        className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`}
+                        to={link}
+                    >
+                        {iconPath && (
+                            <div
+                                className="sidebar-item__icon"
+                            >
+                                <Icon name={iconPath} color="#46484A" />
+                            </div>
+                        )}
+                        <span className="sidebar-item__name">{name}</span>
+                    </Link>
+                )
+            }
+        </>
+    } else {
+        return (
+            <div
+                className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`}
+                onClick={onClick}
+            >
+                {iconPath && (
+                    <div
+                        className="sidebar-item__icon"
+                    >
+                        <Icon name={iconPath} color="#46484A" />
+                    </div>
+                )}
+                <span className="sidebar-item__name">{name}</span>
+            </div>
+        );
+    }
+}
 
 export default SidebarItem;
