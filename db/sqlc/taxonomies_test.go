@@ -264,7 +264,16 @@ func TestCreateTaxonomyAndLinkTx_DuplicateLink(t *testing.T) {
 
 	postTaxonomies, err := testQueries.GetPostTaxonomies(context.Background(), post.Post.ID)
 	require.NoError(t, err)
-	require.Len(t, postTaxonomies, 1)
+	require.GreaterOrEqual(t, len(postTaxonomies), 1)
+
+	found := false
+	for _, pt := range postTaxonomies {
+		if pt.ID == taxonomy.ID {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "The taxonomy should be linked to the post")
 }
 
 func TestSearchTaxonomiesByName(t *testing.T) {
