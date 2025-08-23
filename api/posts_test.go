@@ -365,7 +365,7 @@ func TestListPostsAPI(t *testing.T) {
 					ListPosts(gomock.Any(), db.ListPostsParams{
 						Column1:     "",
 						Column2:     "",
-						SortBy:      "",
+						SortBy:      "date_desc",
 						OffsetCount: 0,
 						LimitCount:  5,
 					}).

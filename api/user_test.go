@@ -323,7 +323,7 @@ func TestListUsersAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListUsers(gomock.Any(), db.ListUsersParams{
-						SortBy:      "username",
+						SortBy:      "date_desc",
 						LimitCount:  5,
 						OffsetCount: 0,
 					}).

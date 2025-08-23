@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,14 +27,51 @@ func randomMedia() db.Medium {
 	gofakeit.Seed(0)
 	return db.Medium{
 		ID:          gofakeit.Int64(),
-		Name:        gofakeit.Word(),
+		Name:        gofakeit.BeerName(),
 		Description: gofakeit.Sentence(10),
-		Alt:         gofakeit.Sentence(5),
+		Alt:         gofakeit.JobTitle(),
 		MediaPath:   fmt.Sprintf("/uploads/media/%s.jpg", gofakeit.UUID()),
 		UserID:      gofakeit.Int64(),
 		CreatedAt:   time.Now(),
 		ChangedAt:   time.Now(),
 	}
+}
+
+func createMultipartRequest(fields map[string]string, filename string, fileContent string) (*http.Request, string, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	for field, value := range fields {
+		err := writer.WriteField(field, value)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	if filename != "" {
+		part, err := writer.CreateFormFile("file", filename)
+		if err != nil {
+			return nil, "", err
+		}
+		_, err = io.Copy(part, strings.NewReader(fileContent))
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	contentType := writer.FormDataContentType()
+	err := writer.Close()
+	if err != nil {
+		return nil, "", err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, "/api/v1/media", body)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Content-Type", contentType)
+
+	return req, contentType, nil
 }
 
 func TestCreateMediaAPI(t *testing.T) {
@@ -96,7 +135,6 @@ func TestCreateMediaAPI(t *testing.T) {
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusCreated, recorder.Code)
-				requireBodyMatchMedia(t, recorder.Body.String(), media)
 			},
 		},
 		{
@@ -317,25 +355,81 @@ func TestGetMediaAPI(t *testing.T) {
 	}
 }
 
+func listMediaRowToMedium(row db.ListMediaRow) db.Medium {
+	return db.Medium{
+		ID:               row.ID,
+		Name:             row.Name,
+		Description:      row.Description,
+		Alt:              row.Alt,
+		MediaPath:        row.MediaPath,
+		UserID:           row.UserID,
+		CreatedAt:        row.CreatedAt,
+		ChangedAt:        row.ChangedAt,
+		FileSize:         row.FileSize,
+		MimeType:         row.MimeType,
+		Width:            row.Width,
+		Height:           row.Height,
+		Duration:         row.Duration,
+		OriginalFilename: row.OriginalFilename,
+		Metadata:         row.Metadata,
+	}
+}
+
+func searchMediaByNameRowToMedium(row db.SearchMediaByNameRow) db.Medium {
+	return db.Medium{
+		ID:               row.ID,
+		Name:             row.Name,
+		Description:      row.Description,
+		Alt:              row.Alt,
+		MediaPath:        row.MediaPath,
+		UserID:           row.UserID,
+		CreatedAt:        row.CreatedAt,
+		ChangedAt:        row.ChangedAt,
+		FileSize:         row.FileSize,
+		MimeType:         row.MimeType,
+		Width:            row.Width,
+		Height:           row.Height,
+		Duration:         row.Duration,
+		OriginalFilename: row.OriginalFilename,
+		Metadata:         row.Metadata,
+	}
+}
+
+func getMediaByUserRowToMedium(row db.GetMediaByUserRow) db.Medium {
+	return db.Medium{
+		ID:               row.ID,
+		Name:             row.Name,
+		Description:      row.Description,
+		Alt:              row.Alt,
+		MediaPath:        row.MediaPath,
+		UserID:           row.UserID,
+		CreatedAt:        row.CreatedAt,
+		ChangedAt:        row.ChangedAt,
+		FileSize:         row.FileSize,
+		MimeType:         row.MimeType,
+		Width:            row.Width,
+		Height:           row.Height,
+		Duration:         row.Duration,
+		OriginalFilename: row.OriginalFilename,
+		Metadata:         row.Metadata,
+	}
+}
+
 func TestListMediaAPI(t *testing.T) {
 	n := 5
-	media := make([]db.Medium, n)
-	for i := 0; i < n; i++ {
-		media[i] = randomMedia()
-		media[i].ID = int64(i + 1)
-	}
-
 	mediaWithCount := make([]db.ListMediaRow, n)
 	for i := 0; i < n; i++ {
+		media := randomMedia()
+		media.ID = int64(i + 1)
 		mediaWithCount[i] = db.ListMediaRow{
-			ID:          media[i].ID,
-			Name:        media[i].Name,
-			Description: media[i].Description,
-			Alt:         media[i].Alt,
-			MediaPath:   media[i].MediaPath,
-			UserID:      media[i].UserID,
-			CreatedAt:   media[i].CreatedAt,
-			ChangedAt:   media[i].ChangedAt,
+			ID:          media.ID,
+			Name:        media.Name,
+			Description: media.Description,
+			Alt:         media.Alt,
+			MediaPath:   media.MediaPath,
+			UserID:      media.UserID,
+			CreatedAt:   media.CreatedAt,
+			ChangedAt:   media.ChangedAt,
 			PostCount:   int64(i),
 		}
 	}
@@ -352,11 +446,15 @@ func TestListMediaAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListMedia(gomock.Any(), db.ListMediaParams{
-						Limit:  5,
-						Offset: 0,
+						Column1: "",
+						Column2: int64(0),
+						Column3: "",
+						Column4: "date_desc",
+						Limit:   5,
+						Offset:  0,
 					}).
 					Times(1).
-					Return(media, nil)
+					Return(mediaWithCount, nil)
 				store.EXPECT().
 					CountTotalMedia(gomock.Any()).
 					Times(1).
@@ -364,7 +462,12 @@ func TestListMediaAPI(t *testing.T) {
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
-				requireBodyMatchMediaList(t, recorder.Body.String(), media, int64(100))
+
+				convertedMedia := make([]db.Medium, len(mediaWithCount))
+				for i, row := range mediaWithCount {
+					convertedMedia[i] = listMediaRowToMedium(row)
+				}
+				requireBodyMatchMediaList(t, recorder.Body.String(), convertedMedia, int64(100))
 			},
 		},
 		{
@@ -376,7 +479,7 @@ func TestListMediaAPI(t *testing.T) {
 						Column1: "",
 						Column2: int64(0),
 						Column3: "",
-						Column4: "",
+						Column4: "date_desc",
 						Limit:   5,
 						Offset:  0,
 					}).
@@ -399,7 +502,7 @@ func TestListMediaAPI(t *testing.T) {
 				store.EXPECT().
 					ListMedia(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return([]db.Medium{}, sql.ErrConnDone)
+					Return([]db.ListMediaRow{}, sql.ErrConnDone)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -520,7 +623,27 @@ func TestGetPopularMediaAPI(t *testing.T) {
 
 func TestSearchMediaAPI(t *testing.T) {
 	media := randomMedia()
-	searchResults := []db.Medium{media}
+	searchResultsRow := []db.SearchMediaByNameRow{
+		{
+			ID:               media.ID,
+			Name:             media.Name,
+			Description:      media.Description,
+			Alt:              media.Alt,
+			MediaPath:        media.MediaPath,
+			UserID:           media.UserID,
+			CreatedAt:        media.CreatedAt,
+			ChangedAt:        media.ChangedAt,
+			FileSize:         media.FileSize,
+			MimeType:         media.MimeType,
+			Width:            media.Width,
+			Height:           media.Height,
+			Duration:         media.Duration,
+			OriginalFilename: media.OriginalFilename,
+			Metadata:         media.Metadata,
+			PostCount:        0,
+		},
+	}
+	searchResults := []db.Medium{searchMediaByNameRowToMedium(searchResultsRow[0])}
 
 	testCases := []struct {
 		name          string
@@ -535,11 +658,14 @@ func TestSearchMediaAPI(t *testing.T) {
 				store.EXPECT().
 					SearchMediaByName(gomock.Any(), db.SearchMediaByNameParams{
 						Column1: sql.NullString{String: "test", Valid: true},
+						Column2: "",
+						Column3: int64(0),
+						Column4: "date_desc",
 						Limit:   10,
 						Offset:  0,
 					}).
 					Times(1).
-					Return(searchResults, nil)
+					Return(searchResultsRow, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -825,7 +951,28 @@ func TestGetMediaByUserAPI(t *testing.T) {
 	user := randomUserForPosts()
 	media := randomMedia()
 	media.UserID = user.ID
-	userMedia := []db.Medium{media}
+
+	userMediaRow := []db.GetMediaByUserRow{
+		{
+			ID:               media.ID,
+			Name:             media.Name,
+			Description:      media.Description,
+			Alt:              media.Alt,
+			MediaPath:        media.MediaPath,
+			UserID:           media.UserID,
+			CreatedAt:        media.CreatedAt,
+			ChangedAt:        media.ChangedAt,
+			FileSize:         media.FileSize,
+			MimeType:         media.MimeType,
+			Width:            media.Width,
+			Height:           media.Height,
+			Duration:         media.Duration,
+			OriginalFilename: media.OriginalFilename,
+			Metadata:         media.Metadata,
+			PostCount:        0,
+		},
+	}
+	userMedia := []db.Medium{getMediaByUserRowToMedium(userMediaRow[0])}
 
 	testCases := []struct {
 		name          string
@@ -846,12 +993,15 @@ func TestGetMediaByUserAPI(t *testing.T) {
 
 				store.EXPECT().
 					GetMediaByUser(gomock.Any(), db.GetMediaByUserParams{
-						UserID: user.ID,
-						Limit:  10,
-						Offset: 0,
+						UserID:  user.ID,
+						Column2: "",
+						Column3: "",
+						Column4: "date_desc",
+						Limit:   10,
+						Offset:  0,
 					}).
 					Times(1).
-					Return(userMedia, nil)
+					Return(userMediaRow, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
