@@ -1167,6 +1167,21 @@ func (mr *MockStoreMockRecorder) ListPostsByType(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByType", reflect.TypeOf((*MockStore)(nil).ListPostsByType), arg0, arg1)
 }
 
+// ListPostsByTypeWithMeta mocks base method.
+func (m *MockStore) ListPostsByTypeWithMeta(arg0 context.Context, arg1 db.ListPostsByTypeWithMetaParams) ([]db.ListPostsByTypeWithMetaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostsByTypeWithMeta", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostsByTypeWithMetaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostsByTypeWithMeta indicates an expected call of ListPostsByTypeWithMeta.
+func (mr *MockStoreMockRecorder) ListPostsByTypeWithMeta(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByTypeWithMeta", reflect.TypeOf((*MockStore)(nil).ListPostsByTypeWithMeta), arg0, arg1)
+}
+
 // ListPostsWithMedia mocks base method.
 func (m *MockStore) ListPostsWithMedia(arg0 context.Context, arg1 db.ListPostsWithMediaParams) ([]db.ListPostsWithMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -1180,6 +1195,21 @@ func (m *MockStore) ListPostsWithMedia(arg0 context.Context, arg1 db.ListPostsWi
 func (mr *MockStoreMockRecorder) ListPostsWithMedia(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsWithMedia", reflect.TypeOf((*MockStore)(nil).ListPostsWithMedia), arg0, arg1)
+}
+
+// ListPostsWithMeta mocks base method.
+func (m *MockStore) ListPostsWithMeta(arg0 context.Context, arg1 db.ListPostsWithMetaParams) ([]db.ListPostsWithMetaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostsWithMeta", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostsWithMetaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostsWithMeta indicates an expected call of ListPostsWithMeta.
+func (mr *MockStoreMockRecorder) ListPostsWithMeta(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsWithMeta", reflect.TypeOf((*MockStore)(nil).ListPostsWithMeta), arg0, arg1)
 }
 
 // ListSessionsByUser mocks base method.

@@ -363,8 +363,11 @@ func TestListPostsAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListPosts(gomock.Any(), db.ListPostsParams{
-						Limit:  5,
-						Offset: 0,
+						Column1:     "",
+						Column2:     "",
+						SortBy:      "date_desc",
+						OffsetCount: 0,
+						LimitCount:  5,
 					}).
 					Times(1).
 					Return(posts, nil)

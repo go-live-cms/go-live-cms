@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
@@ -63,6 +64,7 @@ func createTestUserWithPosts(t *testing.T) (User, CreatePostTxResult) {
 
 	title := gofakeit.Sentence(3)
 	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	timestamp := time.Now().UnixNano()
 
 	postArg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
@@ -71,7 +73,11 @@ func createTestUserWithPosts(t *testing.T) (User, CreatePostTxResult) {
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
-			Url:         fmt.Sprintf("https://example.com/posts/%s", slug),
+			Url:         fmt.Sprintf("https://example.com/posts/%s-%d", slug, timestamp),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 	}
@@ -132,8 +138,9 @@ func TestListUsers(t *testing.T) {
 	}
 
 	arg := ListUsersParams{
-		Limit:  5,
-		Offset: 5,
+		SortBy:      "",
+		OffsetCount: 5,
+		LimitCount:  5,
 	}
 	users, err := testQueries.ListUsers(context.Background(), arg)
 	require.NoError(t, err)
@@ -221,7 +228,25 @@ func TestDeleteUserTx_NuclearOption(t *testing.T) {
 func TestDeleteUser_WithoutTransaction_ShouldFail(t *testing.T) {
 	user, _ := createTestUserWithPosts(t)
 
-	err := testQueries.DeleteUser(context.Background(), user.ID)
+	gofakeit.Seed(0)
+	mediaArg := CreateMediaParams{
+		Name:             gofakeit.Word(),
+		Description:      gofakeit.Sentence(10),
+		Alt:              gofakeit.Sentence(5),
+		MediaPath:        fmt.Sprintf("/uploads/media/%s.jpg", gofakeit.UUID()),
+		UserID:           user.ID,
+		FileSize:         int64(gofakeit.Number(1000, 100000)),
+		MimeType:         "image/jpeg",
+		Width:            int32(gofakeit.Number(100, 1920)),
+		Height:           int32(gofakeit.Number(100, 1080)),
+		Duration:         0,
+		OriginalFilename: fmt.Sprintf("%s.jpg", gofakeit.UUID()),
+	}
+
+	_, err := testQueries.CreateMedia(context.Background(), mediaArg)
+	require.NoError(t, err)
+
+	err = testQueries.DeleteUser(context.Background(), user.ID)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "foreign key constraint")
 }

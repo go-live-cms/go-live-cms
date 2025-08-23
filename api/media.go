@@ -235,6 +235,15 @@ func toPopularMediaResponse(row db.GetPopularMediaRow) PopularMediaResponse {
 
 func (server *Server) createMedia(c *gin.Context) {
 
+	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
+	userID := authPayload.UserID
+
+	var req CreateMediaRequest
+	if err := c.ShouldBind(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file upload is required"})
@@ -254,15 +263,6 @@ func (server *Server) createMedia(c *gin.Context) {
 
 	if header.Size > maxSize {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("file too large. Maximum size is %s", server.config.MaxUploadSize)})
-		return
-	}
-
-	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
-	userID := authPayload.UserID
-
-	var req CreateMediaRequest
-	if err := c.ShouldBind(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
