@@ -10,9 +10,10 @@ interface UserProfileProps {
     hover?: boolean;
     ref?: React.Ref<HTMLDivElement>;
     onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+    className?: string;
 }
 
-export default function UserProfile({ user, ref, hover = true, onClick }: UserProfileProps) {
+export default function UserProfile({ user, ref, hover = true, onClick, className }: UserProfileProps) {
     const [hovered, setHovered] = useState(false);
 
     const handleMouseEnter = () => {
@@ -31,7 +32,7 @@ export default function UserProfile({ user, ref, hover = true, onClick }: UserPr
 
     return (
         <div
-            className={`user-profile ${hovered ? "hovered" : ""}`}
+            className={`user-profile ${hovered ? "hovered" : ""} ${className}`}
             ref={ref}
             onClick={onClick}
             onMouseEnter={handleMouseEnter}
