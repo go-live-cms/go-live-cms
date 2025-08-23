@@ -10,7 +10,6 @@ interface Props {
     iconPath?: IconPath;
     name?: string;
     link?: string | null;
-    subItem?: boolean;
     type?: "external";
     isActive?: boolean;
     onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
@@ -20,7 +19,6 @@ const SidebarItem: React.FC<Props> = ({
     iconPath = '',
     name = '',
     link = null,
-    subItem = false,
     isActive = false,
     type,
     onClick,
@@ -29,7 +27,7 @@ const SidebarItem: React.FC<Props> = ({
     if (link) {
         return <>
             {type === "external" ?
-                <a href={link} className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`} target="_blank" rel="noopener noreferrer">
+                <a href={link} className={`sidebar-item${isActive ? ' active' : ''}`} target="_blank" rel="noopener noreferrer">
                     {iconPath && (
                         <div
                             className="sidebar-item__icon"
@@ -41,7 +39,7 @@ const SidebarItem: React.FC<Props> = ({
                 </a>
                 : (
                     <Link
-                        className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`}
+                        className={`sidebar-item${isActive ? ' active' : ''}`}
                         to={link}
                     >
                         {iconPath && (
@@ -59,7 +57,7 @@ const SidebarItem: React.FC<Props> = ({
     } else {
         return (
             <div
-                className={`sidebar-item${subItem ? ' sub' : ''}${isActive ? ' active' : ''}`}
+                className={`sidebar-item${isActive ? ' active' : ''}`}
                 onClick={onClick}
             >
                 {iconPath && (

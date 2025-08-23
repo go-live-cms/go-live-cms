@@ -18,10 +18,16 @@ const navigation: Navigation = [
       icon: "content" as IconPath,
       name: "All content",
       link: "/content",
-      sub: [
-        { name: "Pages", link: "/content/pages/" },
-        { name: "Posts", link: "/content/posts/" },
-      ],
+    },
+    {
+      icon: "pages" as IconPath,
+      name: "Pages",
+      link: "/content/pages/",
+    },
+    {
+      icon: "post" as IconPath,
+      name: "Posts",
+      link: "/content/posts/",
     },
   ],
   [
@@ -59,16 +65,6 @@ const Sidebar: React.FC = () => {
                     key={item.name}
                     isActive={isActiveLink(item)}
                   />
-                  {item.sub &&
-                    item.sub.map((subItem) => (
-                      <SidebarItem
-                        key={subItem.name}
-                        name={subItem.name}
-                        link={subItem.link}
-                        subItem={true}
-                        isActive={isActiveLink(subItem)}
-                      />
-                    ))}
                 </React.Fragment>
               ))}
             </div>
