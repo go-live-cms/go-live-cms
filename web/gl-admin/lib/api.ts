@@ -136,7 +136,7 @@ export const api = {
 
   renewAccessToken: (data: { refresh_token: string }) => apiCall("/auth/refresh", { method: "POST", body: data }),
 
-  logout: (data: { refresh_token: string }) => apiCall("/auth/logout", { method: "POST", body: data }),
+  logout: (data: { refresh_token: string | null }) => apiCall("/auth/logout", { method: "POST", body: data }),
   getPosts: async (query: Record<string, any> = {}) => {
     const queryString = new URLSearchParams(
       Object.entries(query)
