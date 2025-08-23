@@ -36,8 +36,9 @@ func TestListTaxonomies(t *testing.T) {
 	}
 
 	taxonomies, err := testQueries.ListTaxonomies(context.Background(), ListTaxonomiesParams{
-		Limit:  5,
-		Offset: 5,
+		SortBy:      "",
+		OffsetCount: 5,
+		LimitCount:  5,
 	})
 	require.NoError(t, err)
 	require.Len(t, taxonomies, 5)
@@ -321,9 +322,10 @@ func TestSearchTaxonomiesByName(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			results, err := testQueries.SearchTaxonomiesByName(context.Background(), SearchTaxonomiesByNameParams{
-				Column1: sql.NullString{String: tc.searchTerm, Valid: true},
-				Limit:   10,
-				Offset:  0,
+				Column1:     sql.NullString{String: tc.searchTerm, Valid: true},
+				SortBy:      "",
+				OffsetCount: 0,
+				LimitCount:  10,
 			})
 			require.NoError(t, err)
 
@@ -372,8 +374,9 @@ func TestListTaxonomiesWithPostCount(t *testing.T) {
 	require.NoError(t, err)
 
 	results, err := testQueries.ListTaxonomiesWithPostCount(context.Background(), ListTaxonomiesWithPostCountParams{
-		Limit:  50,
-		Offset: 0,
+		SortBy:      "",
+		OffsetCount: 0,
+		LimitCount:  50,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(results), 3)

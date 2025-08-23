@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
@@ -25,6 +26,10 @@ func createPostWithTransaction(t *testing.T) CreatePostTxResult {
 			UserID:      user.ID,
 			Username:    user.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", slug),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 	}
@@ -74,6 +79,10 @@ func TestCreatePostTxWithMultipleAuthors(t *testing.T) {
 			UserID:      user1.ID,
 			Username:    user1.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", slug),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user1.ID, user2.ID},
 	}
@@ -110,8 +119,11 @@ func TestListPosts(t *testing.T) {
 	}
 
 	posts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		Limit:  5,
-		Offset: 5,
+		Column1:     "",
+		Column2:     "",
+		SortBy:      "",
+		OffsetCount: 5,
+		LimitCount:  5,
 	})
 	require.NoError(t, err)
 	require.Len(t, posts, 5)
@@ -125,14 +137,17 @@ func TestUpdatePost(t *testing.T) {
 	newContent := gofakeit.Paragraph(3, 5, 10, " ")
 
 	arg := UpdatePostParams{
-		ID:          result.Post.ID,
 		Title:       newTitle,
 		Description: result.Post.Description,
+		UserID:      result.Post.UserID,
+		Username:    result.Post.Username,
 		Content:     newContent,
 		Url:         result.Post.Url,
-
-		UserID:   result.Post.UserID,
-		Username: result.Post.Username,
+		PostType:    result.Post.PostType,
+		PostStatus:  result.Post.PostStatus,
+		PostParent:  result.Post.PostParent,
+		MenuOrder:   result.Post.MenuOrder,
+		ID:          result.Post.ID,
 	}
 
 	updatedPost, err := testQueries.UpdatePost(context.Background(), arg)
@@ -144,14 +159,17 @@ func TestUpdatePost(t *testing.T) {
 
 	result2 := createPostWithTransaction(t)
 	arg2 := UpdatePostParams{
-		ID:          result2.Post.ID,
 		Title:       result2.Post.Title,
 		Description: "",
+		UserID:      result2.Post.UserID,
+		Username:    result2.Post.Username,
 		Content:     result2.Post.Content,
 		Url:         result2.Post.Url,
-
-		UserID:   result2.Post.UserID,
-		Username: result2.Post.Username,
+		PostType:    result2.Post.PostType,
+		PostStatus:  result2.Post.PostStatus,
+		PostParent:  result2.Post.PostParent,
+		MenuOrder:   result2.Post.MenuOrder,
+		ID:          result2.Post.ID,
 	}
 	updatedPost2, err := testQueries.UpdatePost(context.Background(), arg2)
 	require.NoError(t, err)
@@ -177,6 +195,10 @@ func TestCreatePostWithMedia(t *testing.T) {
 			UserID:      user.ID,
 			Username:    user.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", slug),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 		MediaIDs:  []int64{media1.ID, media2.ID},

@@ -179,9 +179,13 @@ func TestMediaAnalyticsQueries(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mediaWithCount, err := testQueries.ListMediaWithPostCount(context.Background(), ListMediaWithPostCountParams{
-		Limit:  50,
-		Offset: 0,
+	mediaWithCount, err := testQueries.ListMedia(context.Background(), ListMediaParams{
+		Column1: "",
+		Column2: "",
+		Column3: "",
+		Column4: "",
+		Limit:   50,
+		Offset:  0,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(mediaWithCount), 3)
@@ -573,7 +577,7 @@ func TestSearchMediaByName(t *testing.T) {
 				}
 			}
 
-			testResults := []Medium{}
+			testResults := []SearchMediaByNameRow{}
 			testResultIDs := []int64{}
 			for _, img := range results {
 				if img.UserID == user.ID &&
@@ -662,7 +666,7 @@ func TestSearchMediaByNamePagination(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	testPage1 := []Medium{}
+	testPage1 := []SearchMediaByNameRow{}
 	for _, img := range page1 {
 		if img.UserID == user.ID {
 			for _, created := range createdMedia {
@@ -681,7 +685,7 @@ func TestSearchMediaByNamePagination(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	testPage2 := []Medium{}
+	testPage2 := []SearchMediaByNameRow{}
 	for _, img := range page2 {
 		if img.UserID == user.ID {
 			for _, created := range createdMedia {
@@ -700,7 +704,7 @@ func TestSearchMediaByNamePagination(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	testPage3 := []Medium{}
+	testPage3 := []SearchMediaByNameRow{}
 	for _, img := range page3 {
 		if img.UserID == user.ID {
 			for _, created := range createdMedia {

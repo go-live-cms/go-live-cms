@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
@@ -72,6 +73,10 @@ func createTestUserWithPosts(t *testing.T) (User, CreatePostTxResult) {
 			UserID:      user.ID,
 			Username:    user.Username,
 			Url:         fmt.Sprintf("https://example.com/posts/%s", slug),
+			PostType:    "post",
+			PostStatus:  "published",
+			PostParent:  sql.NullInt64{},
+			MenuOrder:   0,
 		},
 		AuthorIDs: []int64{user.ID},
 	}
@@ -132,8 +137,9 @@ func TestListUsers(t *testing.T) {
 	}
 
 	arg := ListUsersParams{
-		Limit:  5,
-		Offset: 5,
+		SortBy:      "",
+		OffsetCount: 5,
+		LimitCount:  5,
 	}
 	users, err := testQueries.ListUsers(context.Background(), arg)
 	require.NoError(t, err)

@@ -272,8 +272,9 @@ func TestHighConcurrencyStress(t *testing.T) {
 
 				case 2:
 					_, err := testQueries.ListUsers(context.Background(), ListUsersParams{
-						Limit:  10,
-						Offset: int32(op * 5),
+						SortBy:      "",
+						OffsetCount: int32(op * 5),
+						LimitCount:  10,
 					})
 					if err != nil {
 						errChan <- err
