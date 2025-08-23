@@ -25,6 +25,7 @@ export const Icon: React.FC<Props> = ({
   onClick
 }) => {
   const [svgContent, setSvgContent] = useState<string>("")
+  const [iconLoaded, setIconLoaded] = useState(false);
 
   useEffect(() => {
     let isMounted = true
@@ -42,6 +43,7 @@ export const Icon: React.FC<Props> = ({
         if (isMounted) setSvgContent(content)
       })
       .catch(() => setSvgContent("")) // Handle missing SVG
+      .finally(() => setIconLoaded(true));
 
     return () => {
       isMounted = false
@@ -51,6 +53,10 @@ export const Icon: React.FC<Props> = ({
   const transforms = []
   if (mirror_horizontally) transforms.push("rotate(180deg)")
   if (mirror_vertically) transforms.push("rotate(180deg)")
+
+  if (!iconLoaded) {
+    return <div className="gl-icon__skeleton" style={{ width: `${width}px`, height: `${height}px` }} />
+  }
 
   return (
     <span

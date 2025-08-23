@@ -4,7 +4,7 @@ import Icon from "@gl-admin/components/ui/Icon";
 import "@gl-admin/assets/styles/components/sidebar/sidebar-item.scss";
 
 
-import type { IconPath, IconGradient } from "@gl-admin/types/sidebar";
+import type { IconPath } from "@gl-admin/types/sidebar";
 
 interface Props {
     iconPath?: IconPath;
