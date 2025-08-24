@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
@@ -35,6 +36,10 @@ var sampleImages = []string{
 	"https://picsum.photos/800/600?random=12",
 }
 
+func generateSlug(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+}
+
 func CreateDummyData(store db.Store, config util.Config) {
 	log.Println("🎭 Creating dummy data...")
 
@@ -47,13 +52,13 @@ func CreateDummyData(store db.Store, config util.Config) {
 	users := createDummyUsers(store)
 	log.Printf("✅ Created %d dummy users", len(users))
 
-	taxonomies := createDummyTaxonomies(store)
-	log.Printf("✅ Created %d dummy taxonomies", len(taxonomies))
+	taxonomyTypes, taxonomyTerms := createDummyTaxonomies(store)
+	log.Printf("✅ Created %d taxonomy types and %d taxonomy terms", len(taxonomyTypes), len(taxonomyTerms))
 
 	media := createDummyMedia(store, users, config)
 	log.Printf("✅ Created %d dummy media files", len(media))
 
-	posts := createDummyPosts(store, users, taxonomies)
+	posts := createDummyPosts(store, users, taxonomyTerms)
 	log.Printf("✅ Created %d dummy posts", len(posts))
 
 	pages := createDummyPages(store, users)
@@ -99,47 +104,189 @@ func createDummyUsers(store db.Store) []db.User {
 	return users
 }
 
-func createDummyTaxonomies(store db.Store) []db.Taxonomy {
-	var taxonomies []db.Taxonomy
+func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm) {
+	var taxonomyTypes []db.TaxonomyType
+	var taxonomyTerms []db.TaxonomyTerm
 	gofakeit.Seed(0)
 
-	taxonomyNames := []string{
-		"Technology", "Programming", "Web Development", "Mobile Apps",
-		"Design", "UI/UX", "Lifestyle", "Travel", "Photography",
-		"Business", "Marketing", "Health & Fitness",
+	typeDefinitions := []struct {
+		name         string
+		label        string
+		description  string
+		hierarchical bool
+	}{
+		{"category", "Categories", "Hierarchical categories for organizing content", true},
+		{"post_tag", "Tags", "Non-hierarchical tags for content", false},
+		{"page_category", "Page Categories", "Categories specifically for pages", true},
 	}
 
-	descriptions := []string{
-		"Latest trends in technology and innovation",
-		"Programming tutorials and best practices",
-		"Web development tips and frameworks",
-		"Mobile application development guides",
-		"Design principles and creative inspiration",
-		"User interface and experience design",
-		"Lifestyle tips and personal development",
-		"Travel guides and adventure stories",
-		"Photography techniques and inspiration",
-		"Business strategies and entrepreneurship",
-		"Marketing tactics and growth hacking",
-		"Health tips and fitness routines",
-	}
-
-	for i, name := range taxonomyNames {
-		taxonomy := db.CreateTaxonomyParams{
-			Name:        name,
-			Description: descriptions[i],
+	for _, typeDef := range typeDefinitions {
+		typeParams := db.CreateTaxonomyTypeParams{
+			Name:         typeDef.name,
+			Label:        typeDef.label,
+			Description:  sql.NullString{String: typeDef.description, Valid: true},
+			Hierarchical: typeDef.hierarchical,
+			Public:       true,
+			ShowUi:       true,
+			ShowInMenu:   true,
 		}
 
-		createdTaxonomy, err := store.CreateTaxonomy(context.TODO(), taxonomy)
+		createdType, err := store.CreateTaxonomyType(context.TODO(), typeParams)
 		if err != nil {
-			log.Printf("❌ Failed to create taxonomy %s: %v", name, err)
+			log.Printf("❌ Failed to create taxonomy type %s: %v", typeDef.name, err)
 			continue
 		}
 
-		taxonomies = append(taxonomies, createdTaxonomy)
+		taxonomyTypes = append(taxonomyTypes, createdType)
+		log.Printf("✅ Created taxonomy type: %s", typeDef.label)
 	}
 
-	return taxonomies
+	if len(taxonomyTypes) > 0 {
+		categoryType := taxonomyTypes[0]
+
+		parentCategories := []struct {
+			name        string
+			description string
+		}{
+			{"Technology", "Latest trends in technology and innovation"},
+			{"Design", "Design principles and creative inspiration"},
+			{"Lifestyle", "Lifestyle tips and personal development"},
+			{"Business", "Business strategies and entrepreneurship"},
+		}
+
+		var parentTerms []db.TaxonomyTerm
+		for _, cat := range parentCategories {
+			termParams := db.CreateTaxonomyTermParams{
+				Name:           cat.name,
+				Slug:           generateSlug(cat.name),
+				Description:    sql.NullString{String: cat.description, Valid: true},
+				TaxonomyTypeID: categoryType.ID,
+				SortOrder:      sql.NullInt32{Int32: int32(len(parentTerms) + 1), Valid: true},
+			}
+
+			createdTerm, err := store.CreateTaxonomyTerm(context.TODO(), termParams)
+			if err != nil {
+				log.Printf("❌ Failed to create category %s: %v", cat.name, err)
+				continue
+			}
+
+			parentTerms = append(parentTerms, createdTerm)
+			taxonomyTerms = append(taxonomyTerms, createdTerm)
+		}
+
+		childCategories := map[string][]struct {
+			name        string
+			description string
+		}{
+			"Technology": {
+				{"Programming", "Programming tutorials and best practices"},
+				{"Web Development", "Web development tips and frameworks"},
+				{"Mobile Apps", "Mobile application development guides"},
+			},
+			"Design": {
+				{"UI/UX", "User interface and experience design"},
+				{"Graphic Design", "Visual design and branding"},
+				{"Photography", "Photography techniques and inspiration"},
+			},
+			"Lifestyle": {
+				{"Travel", "Travel guides and adventure stories"},
+				{"Health & Fitness", "Health tips and fitness routines"},
+				{"Food & Cooking", "Recipes and culinary adventures"},
+			},
+			"Business": {
+				{"Marketing", "Marketing tactics and growth strategies"},
+				{"Entrepreneurship", "Startup tips and business building"},
+				{"Finance", "Personal and business finance advice"},
+			},
+		}
+
+		for _, parentTerm := range parentTerms {
+			if children, exists := childCategories[parentTerm.Name]; exists {
+				for _, child := range children {
+					childParams := db.CreateTaxonomyTermParams{
+						Name:           child.name,
+						Slug:           generateSlug(child.name),
+						Description:    sql.NullString{String: child.description, Valid: true},
+						ParentID:       sql.NullInt64{Int64: parentTerm.ID, Valid: true},
+						TaxonomyTypeID: categoryType.ID,
+						SortOrder:      sql.NullInt32{Int32: int32(len(taxonomyTerms) + 1), Valid: true},
+					}
+
+					createdChild, err := store.CreateTaxonomyTerm(context.TODO(), childParams)
+					if err != nil {
+						log.Printf("❌ Failed to create child category %s: %v", child.name, err)
+						continue
+					}
+
+					taxonomyTerms = append(taxonomyTerms, createdChild)
+				}
+			}
+		}
+	}
+
+	if len(taxonomyTypes) > 1 {
+		tagType := taxonomyTypes[1]
+
+		tags := []string{
+			"tutorial", "guide", "tips", "best-practices", "review", "news",
+			"beginner", "advanced", "coding", "design", "productivity", "tools",
+			"framework", "library", "api", "database", "security", "performance",
+			"mobile", "responsive", "javascript", "react", "vue", "angular",
+			"nodejs", "python", "golang", "java", "css", "html",
+		}
+
+		for i, tagName := range tags {
+			tagParams := db.CreateTaxonomyTermParams{
+				Name:           tagName,
+				Slug:           generateSlug(tagName),
+				Description:    sql.NullString{String: fmt.Sprintf("Posts tagged with %s", tagName), Valid: true},
+				TaxonomyTypeID: tagType.ID,
+				SortOrder:      sql.NullInt32{Int32: int32(i + 1), Valid: true},
+			}
+
+			createdTag, err := store.CreateTaxonomyTerm(context.TODO(), tagParams)
+			if err != nil {
+				log.Printf("❌ Failed to create tag %s: %v", tagName, err)
+				continue
+			}
+
+			taxonomyTerms = append(taxonomyTerms, createdTag)
+		}
+	}
+
+	if len(taxonomyTypes) > 2 {
+		pageCategoryType := taxonomyTypes[2]
+
+		pageCategories := []struct {
+			name        string
+			description string
+		}{
+			{"Company", "Company information and about pages"},
+			{"Legal", "Legal documents and policies"},
+			{"Support", "Help and support documentation"},
+			{"Marketing", "Marketing and promotional pages"},
+		}
+
+		for i, cat := range pageCategories {
+			pageCatParams := db.CreateTaxonomyTermParams{
+				Name:           cat.name,
+				Slug:           generateSlug(cat.name),
+				Description:    sql.NullString{String: cat.description, Valid: true},
+				TaxonomyTypeID: pageCategoryType.ID,
+				SortOrder:      sql.NullInt32{Int32: int32(i + 1), Valid: true},
+			}
+
+			createdPageCat, err := store.CreateTaxonomyTerm(context.TODO(), pageCatParams)
+			if err != nil {
+				log.Printf("❌ Failed to create page category %s: %v", cat.name, err)
+				continue
+			}
+
+			taxonomyTerms = append(taxonomyTerms, createdPageCat)
+		}
+	}
+
+	return taxonomyTypes, taxonomyTerms
 }
 
 func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.Medium {
@@ -209,7 +356,7 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 	return media
 }
 
-func createDummyPosts(store db.Store, users []db.User, taxonomies []db.Taxonomy) []db.Post {
+func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.TaxonomyTerm) []db.Post {
 	var posts []db.Post
 	gofakeit.Seed(0)
 
@@ -279,27 +426,27 @@ func createDummyPosts(store db.Store, users []db.User, taxonomies []db.Taxonomy)
 			}
 		}
 
-		if len(taxonomies) > 0 {
-			numTaxonomies := gofakeit.Number(1, min(3, len(taxonomies)))
-			usedTaxonomies := make(map[int64]bool)
+		if len(taxonomyTerms) > 0 {
+			numTerms := gofakeit.Number(1, min(3, len(taxonomyTerms)))
+			usedTerms := make(map[int64]bool)
 
-			for j := 0; j < numTaxonomies; j++ {
-				taxonomyIndex := gofakeit.Number(0, len(taxonomies)-1)
-				taxonomyID := taxonomies[taxonomyIndex].ID
+			for j := 0; j < numTerms; j++ {
+				termIndex := gofakeit.Number(0, len(taxonomyTerms)-1)
+				termID := taxonomyTerms[termIndex].ID
 
-				if usedTaxonomies[taxonomyID] {
+				if usedTerms[termID] {
 					continue
 				}
-				usedTaxonomies[taxonomyID] = true
+				usedTerms[termID] = true
 
-				linkParams := db.CreatePostTaxonomyParams{
-					PostID:     createdPost.ID,
-					TaxonomyID: taxonomyID,
+				linkParams := db.AddPostToTaxonomyTermParams{
+					PostID:         createdPost.ID,
+					TaxonomyTermID: termID,
 				}
 
-				_, err := store.CreatePostTaxonomy(context.TODO(), linkParams)
+				_, err := store.AddPostToTaxonomyTerm(context.TODO(), linkParams)
 				if err != nil {
-					log.Printf("❌ Failed to link post %s to taxonomy: %v", title, err)
+					log.Printf("❌ Failed to link post %s to taxonomy term: %v", title, err)
 				}
 			}
 		}
@@ -528,20 +675,6 @@ func downloadImage(url, filepath string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
-}
-
-func generateSlug(title string) string {
-	slug := ""
-	for _, char := range title {
-		if char >= 'A' && char <= 'Z' {
-			slug += string(char + 32)
-		} else if char >= 'a' && char <= 'z' || char >= '0' && char <= '9' {
-			slug += string(char)
-		} else if char == ' ' {
-			slug += "-"
-		}
-	}
-	return slug
 }
 
 func generateDummyContent() string {

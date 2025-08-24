@@ -37,6 +37,21 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 	return m.recorder
 }
 
+// AddPostToTaxonomyTerm mocks base method.
+func (m *MockStore) AddPostToTaxonomyTerm(arg0 context.Context, arg1 db.AddPostToTaxonomyTermParams) (db.PostTaxonomyRelationship, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddPostToTaxonomyTerm", arg0, arg1)
+	ret0, _ := ret[0].(db.PostTaxonomyRelationship)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddPostToTaxonomyTerm indicates an expected call of AddPostToTaxonomyTerm.
+func (mr *MockStoreMockRecorder) AddPostToTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPostToTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).AddPostToTaxonomyTerm), arg0, arg1)
+}
+
 // BlockSession mocks base method.
 func (m *MockStore) BlockSession(arg0 context.Context, arg1 uuid.UUID) error {
 	m.ctrl.T.Helper()
@@ -49,6 +64,21 @@ func (m *MockStore) BlockSession(arg0 context.Context, arg1 uuid.UUID) error {
 func (mr *MockStoreMockRecorder) BlockSession(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockSession", reflect.TypeOf((*MockStore)(nil).BlockSession), arg0, arg1)
+}
+
+// CountPostsByTaxonomyTerm mocks base method.
+func (m *MockStore) CountPostsByTaxonomyTerm(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountPostsByTaxonomyTerm", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountPostsByTaxonomyTerm indicates an expected call of CountPostsByTaxonomyTerm.
+func (mr *MockStoreMockRecorder) CountPostsByTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPostsByTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).CountPostsByTaxonomyTerm), arg0, arg1)
 }
 
 // CountPostsByType mocks base method.
@@ -64,6 +94,21 @@ func (m *MockStore) CountPostsByType(arg0 context.Context, arg1 string) (int64, 
 func (mr *MockStoreMockRecorder) CountPostsByType(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPostsByType", reflect.TypeOf((*MockStore)(nil).CountPostsByType), arg0, arg1)
+}
+
+// CountTaxonomyTerms mocks base method.
+func (m *MockStore) CountTaxonomyTerms(arg0 context.Context, arg1 string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountTaxonomyTerms", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountTaxonomyTerms indicates an expected call of CountTaxonomyTerms.
+func (mr *MockStoreMockRecorder) CountTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).CountTaxonomyTerms), arg0, arg1)
 }
 
 // CountTotalMedia mocks base method.
@@ -109,21 +154,6 @@ func (m *MockStore) CountTotalSessions(arg0 context.Context) (int64, error) {
 func (mr *MockStoreMockRecorder) CountTotalSessions(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTotalSessions", reflect.TypeOf((*MockStore)(nil).CountTotalSessions), arg0)
-}
-
-// CountTotalTaxonomies mocks base method.
-func (m *MockStore) CountTotalTaxonomies(arg0 context.Context) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CountTotalTaxonomies", arg0)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CountTotalTaxonomies indicates an expected call of CountTotalTaxonomies.
-func (mr *MockStoreMockRecorder) CountTotalTaxonomies(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTotalTaxonomies", reflect.TypeOf((*MockStore)(nil).CountTotalTaxonomies), arg0)
 }
 
 // CountTotalUsers mocks base method.
@@ -201,21 +231,6 @@ func (mr *MockStoreMockRecorder) CreatePostMeta(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostMeta", reflect.TypeOf((*MockStore)(nil).CreatePostMeta), arg0, arg1)
 }
 
-// CreatePostTaxonomy mocks base method.
-func (m *MockStore) CreatePostTaxonomy(arg0 context.Context, arg1 db.CreatePostTaxonomyParams) (db.PostsTaxonomy, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreatePostTaxonomy", arg0, arg1)
-	ret0, _ := ret[0].(db.PostsTaxonomy)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreatePostTaxonomy indicates an expected call of CreatePostTaxonomy.
-func (mr *MockStoreMockRecorder) CreatePostTaxonomy(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostTaxonomy", reflect.TypeOf((*MockStore)(nil).CreatePostTaxonomy), arg0, arg1)
-}
-
 // CreatePostTx mocks base method.
 func (m *MockStore) CreatePostTx(arg0 context.Context, arg1 db.CreatePostTxParams) (db.CreatePostTxResult, error) {
 	m.ctrl.T.Helper()
@@ -261,19 +276,19 @@ func (mr *MockStoreMockRecorder) CreatePostWithMediaTx(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostWithMediaTx", reflect.TypeOf((*MockStore)(nil).CreatePostWithMediaTx), arg0, arg1)
 }
 
-// CreatePostWithTaxonomiesTx mocks base method.
-func (m *MockStore) CreatePostWithTaxonomiesTx(arg0 context.Context, arg1 db.CreatePostWithTaxonomiesTxParams) (db.CreatePostWithTaxonomiesTxResult, error) {
+// CreatePostWithTaxonomyTermsTx mocks base method.
+func (m *MockStore) CreatePostWithTaxonomyTermsTx(arg0 context.Context, arg1 db.CreatePostWithTaxonomyTermsTxParams) (db.CreatePostWithTaxonomyTermsTxResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreatePostWithTaxonomiesTx", arg0, arg1)
-	ret0, _ := ret[0].(db.CreatePostWithTaxonomiesTxResult)
+	ret := m.ctrl.Call(m, "CreatePostWithTaxonomyTermsTx", arg0, arg1)
+	ret0, _ := ret[0].(db.CreatePostWithTaxonomyTermsTxResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CreatePostWithTaxonomiesTx indicates an expected call of CreatePostWithTaxonomiesTx.
-func (mr *MockStoreMockRecorder) CreatePostWithTaxonomiesTx(arg0, arg1 interface{}) *gomock.Call {
+// CreatePostWithTaxonomyTermsTx indicates an expected call of CreatePostWithTaxonomyTermsTx.
+func (mr *MockStoreMockRecorder) CreatePostWithTaxonomyTermsTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostWithTaxonomiesTx", reflect.TypeOf((*MockStore)(nil).CreatePostWithTaxonomiesTx), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostWithTaxonomyTermsTx", reflect.TypeOf((*MockStore)(nil).CreatePostWithTaxonomyTermsTx), arg0, arg1)
 }
 
 // CreatePosts mocks base method.
@@ -306,34 +321,49 @@ func (mr *MockStoreMockRecorder) CreateSession(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSession", reflect.TypeOf((*MockStore)(nil).CreateSession), arg0, arg1)
 }
 
-// CreateTaxonomy mocks base method.
-func (m *MockStore) CreateTaxonomy(arg0 context.Context, arg1 db.CreateTaxonomyParams) (db.Taxonomy, error) {
+// CreateTaxonomyTerm mocks base method.
+func (m *MockStore) CreateTaxonomyTerm(arg0 context.Context, arg1 db.CreateTaxonomyTermParams) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTaxonomy", arg0, arg1)
-	ret0, _ := ret[0].(db.Taxonomy)
+	ret := m.ctrl.Call(m, "CreateTaxonomyTerm", arg0, arg1)
+	ret0, _ := ret[0].(db.TaxonomyTerm)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CreateTaxonomy indicates an expected call of CreateTaxonomy.
-func (mr *MockStoreMockRecorder) CreateTaxonomy(arg0, arg1 interface{}) *gomock.Call {
+// CreateTaxonomyTerm indicates an expected call of CreateTaxonomyTerm.
+func (mr *MockStoreMockRecorder) CreateTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTaxonomy", reflect.TypeOf((*MockStore)(nil).CreateTaxonomy), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).CreateTaxonomyTerm), arg0, arg1)
 }
 
-// CreateTaxonomyAndLinkTx mocks base method.
-func (m *MockStore) CreateTaxonomyAndLinkTx(arg0 context.Context, arg1 db.CreateTaxonomyAndLinkTxParams) (db.CreateTaxonomyAndLinkTxResult, error) {
+// CreateTaxonomyTermAndLinkTx mocks base method.
+func (m *MockStore) CreateTaxonomyTermAndLinkTx(arg0 context.Context, arg1 db.CreateTaxonomyTermAndLinkTxParams) (db.CreateTaxonomyTermAndLinkTxResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateTaxonomyAndLinkTx", arg0, arg1)
-	ret0, _ := ret[0].(db.CreateTaxonomyAndLinkTxResult)
+	ret := m.ctrl.Call(m, "CreateTaxonomyTermAndLinkTx", arg0, arg1)
+	ret0, _ := ret[0].(db.CreateTaxonomyTermAndLinkTxResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CreateTaxonomyAndLinkTx indicates an expected call of CreateTaxonomyAndLinkTx.
-func (mr *MockStoreMockRecorder) CreateTaxonomyAndLinkTx(arg0, arg1 interface{}) *gomock.Call {
+// CreateTaxonomyTermAndLinkTx indicates an expected call of CreateTaxonomyTermAndLinkTx.
+func (mr *MockStoreMockRecorder) CreateTaxonomyTermAndLinkTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTaxonomyAndLinkTx", reflect.TypeOf((*MockStore)(nil).CreateTaxonomyAndLinkTx), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTaxonomyTermAndLinkTx", reflect.TypeOf((*MockStore)(nil).CreateTaxonomyTermAndLinkTx), arg0, arg1)
+}
+
+// CreateTaxonomyType mocks base method.
+func (m *MockStore) CreateTaxonomyType(arg0 context.Context, arg1 db.CreateTaxonomyTypeParams) (db.TaxonomyType, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTaxonomyType", arg0, arg1)
+	ret0, _ := ret[0].(db.TaxonomyType)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateTaxonomyType indicates an expected call of CreateTaxonomyType.
+func (mr *MockStoreMockRecorder) CreateTaxonomyType(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTaxonomyType", reflect.TypeOf((*MockStore)(nil).CreateTaxonomyType), arg0, arg1)
 }
 
 // CreateUser mocks base method.
@@ -492,34 +522,6 @@ func (mr *MockStoreMockRecorder) DeletePostMeta(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostMeta", reflect.TypeOf((*MockStore)(nil).DeletePostMeta), arg0, arg1)
 }
 
-// DeletePostTaxonomies mocks base method.
-func (m *MockStore) DeletePostTaxonomies(arg0 context.Context, arg1 int64) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeletePostTaxonomies", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeletePostTaxonomies indicates an expected call of DeletePostTaxonomies.
-func (mr *MockStoreMockRecorder) DeletePostTaxonomies(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostTaxonomies", reflect.TypeOf((*MockStore)(nil).DeletePostTaxonomies), arg0, arg1)
-}
-
-// DeletePostTaxonomy mocks base method.
-func (m *MockStore) DeletePostTaxonomy(arg0 context.Context, arg1 db.DeletePostTaxonomyParams) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeletePostTaxonomy", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeletePostTaxonomy indicates an expected call of DeletePostTaxonomy.
-func (mr *MockStoreMockRecorder) DeletePostTaxonomy(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostTaxonomy", reflect.TypeOf((*MockStore)(nil).DeletePostTaxonomy), arg0, arg1)
-}
-
 // DeletePostTx mocks base method.
 func (m *MockStore) DeletePostTx(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -562,46 +564,46 @@ func (mr *MockStoreMockRecorder) DeletePostsByUserID(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostsByUserID", reflect.TypeOf((*MockStore)(nil).DeletePostsByUserID), arg0, arg1)
 }
 
-// DeleteTaxonomy mocks base method.
-func (m *MockStore) DeleteTaxonomy(arg0 context.Context, arg1 int64) error {
+// DeleteTaxonomyTerm mocks base method.
+func (m *MockStore) DeleteTaxonomyTerm(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTaxonomy", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteTaxonomyTerm", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DeleteTaxonomy indicates an expected call of DeleteTaxonomy.
-func (mr *MockStoreMockRecorder) DeleteTaxonomy(arg0, arg1 interface{}) *gomock.Call {
+// DeleteTaxonomyTerm indicates an expected call of DeleteTaxonomyTerm.
+func (mr *MockStoreMockRecorder) DeleteTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTaxonomy", reflect.TypeOf((*MockStore)(nil).DeleteTaxonomy), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).DeleteTaxonomyTerm), arg0, arg1)
 }
 
-// DeleteTaxonomyPosts mocks base method.
-func (m *MockStore) DeleteTaxonomyPosts(arg0 context.Context, arg1 int64) error {
+// DeleteTaxonomyTermTx mocks base method.
+func (m *MockStore) DeleteTaxonomyTermTx(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTaxonomyPosts", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteTaxonomyTermTx", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DeleteTaxonomyPosts indicates an expected call of DeleteTaxonomyPosts.
-func (mr *MockStoreMockRecorder) DeleteTaxonomyPosts(arg0, arg1 interface{}) *gomock.Call {
+// DeleteTaxonomyTermTx indicates an expected call of DeleteTaxonomyTermTx.
+func (mr *MockStoreMockRecorder) DeleteTaxonomyTermTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTaxonomyPosts", reflect.TypeOf((*MockStore)(nil).DeleteTaxonomyPosts), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTaxonomyTermTx", reflect.TypeOf((*MockStore)(nil).DeleteTaxonomyTermTx), arg0, arg1)
 }
 
-// DeleteTaxonomyTx mocks base method.
-func (m *MockStore) DeleteTaxonomyTx(arg0 context.Context, arg1 int64) error {
+// DeleteTaxonomyType mocks base method.
+func (m *MockStore) DeleteTaxonomyType(arg0 context.Context, arg1 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteTaxonomyTx", arg0, arg1)
+	ret := m.ctrl.Call(m, "DeleteTaxonomyType", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DeleteTaxonomyTx indicates an expected call of DeleteTaxonomyTx.
-func (mr *MockStoreMockRecorder) DeleteTaxonomyTx(arg0, arg1 interface{}) *gomock.Call {
+// DeleteTaxonomyType indicates an expected call of DeleteTaxonomyType.
+func (mr *MockStoreMockRecorder) DeleteTaxonomyType(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTaxonomyTx", reflect.TypeOf((*MockStore)(nil).DeleteTaxonomyTx), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTaxonomyType", reflect.TypeOf((*MockStore)(nil).DeleteTaxonomyType), arg0, arg1)
 }
 
 // DeleteUser mocks base method.
@@ -777,19 +779,19 @@ func (mr *MockStoreMockRecorder) GetPopularMedia(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPopularMedia", reflect.TypeOf((*MockStore)(nil).GetPopularMedia), arg0, arg1)
 }
 
-// GetPopularTaxonomies mocks base method.
-func (m *MockStore) GetPopularTaxonomies(arg0 context.Context, arg1 int32) ([]db.GetPopularTaxonomiesRow, error) {
+// GetPopularTaxonomyTerms mocks base method.
+func (m *MockStore) GetPopularTaxonomyTerms(arg0 context.Context, arg1 db.GetPopularTaxonomyTermsParams) ([]db.GetPopularTaxonomyTermsRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPopularTaxonomies", arg0, arg1)
-	ret0, _ := ret[0].([]db.GetPopularTaxonomiesRow)
+	ret := m.ctrl.Call(m, "GetPopularTaxonomyTerms", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetPopularTaxonomyTermsRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetPopularTaxonomies indicates an expected call of GetPopularTaxonomies.
-func (mr *MockStoreMockRecorder) GetPopularTaxonomies(arg0, arg1 interface{}) *gomock.Call {
+// GetPopularTaxonomyTerms indicates an expected call of GetPopularTaxonomyTerms.
+func (mr *MockStoreMockRecorder) GetPopularTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPopularTaxonomies", reflect.TypeOf((*MockStore)(nil).GetPopularTaxonomies), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPopularTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).GetPopularTaxonomyTerms), arg0, arg1)
 }
 
 // GetPost mocks base method.
@@ -867,34 +869,19 @@ func (mr *MockStoreMockRecorder) GetPostMetaByKey(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostMetaByKey", reflect.TypeOf((*MockStore)(nil).GetPostMetaByKey), arg0, arg1)
 }
 
-// GetPostTaxonomies mocks base method.
-func (m *MockStore) GetPostTaxonomies(arg0 context.Context, arg1 int64) ([]db.Taxonomy, error) {
+// GetPostTaxonomyTerms mocks base method.
+func (m *MockStore) GetPostTaxonomyTerms(arg0 context.Context, arg1 int64) ([]db.GetPostTaxonomyTermsRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPostTaxonomies", arg0, arg1)
-	ret0, _ := ret[0].([]db.Taxonomy)
+	ret := m.ctrl.Call(m, "GetPostTaxonomyTerms", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetPostTaxonomyTermsRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetPostTaxonomies indicates an expected call of GetPostTaxonomies.
-func (mr *MockStoreMockRecorder) GetPostTaxonomies(arg0, arg1 interface{}) *gomock.Call {
+// GetPostTaxonomyTerms indicates an expected call of GetPostTaxonomyTerms.
+func (mr *MockStoreMockRecorder) GetPostTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostTaxonomies", reflect.TypeOf((*MockStore)(nil).GetPostTaxonomies), arg0, arg1)
-}
-
-// GetPostTaxonomyCount mocks base method.
-func (m *MockStore) GetPostTaxonomyCount(arg0 context.Context, arg1 int64) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetPostTaxonomyCount", arg0, arg1)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetPostTaxonomyCount indicates an expected call of GetPostTaxonomyCount.
-func (mr *MockStoreMockRecorder) GetPostTaxonomyCount(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostTaxonomyCount", reflect.TypeOf((*MockStore)(nil).GetPostTaxonomyCount), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).GetPostTaxonomyTerms), arg0, arg1)
 }
 
 // GetPostType mocks base method.
@@ -957,6 +944,36 @@ func (mr *MockStoreMockRecorder) GetPostWithMeta(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostWithMeta", reflect.TypeOf((*MockStore)(nil).GetPostWithMeta), arg0, arg1)
 }
 
+// GetPostsByMultipleTaxonomyTerms mocks base method.
+func (m *MockStore) GetPostsByMultipleTaxonomyTerms(arg0 context.Context, arg1 db.GetPostsByMultipleTaxonomyTermsParams) ([]db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostsByMultipleTaxonomyTerms", arg0, arg1)
+	ret0, _ := ret[0].([]db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostsByMultipleTaxonomyTerms indicates an expected call of GetPostsByMultipleTaxonomyTerms.
+func (mr *MockStoreMockRecorder) GetPostsByMultipleTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostsByMultipleTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).GetPostsByMultipleTaxonomyTerms), arg0, arg1)
+}
+
+// GetPostsByTaxonomyTerm mocks base method.
+func (m *MockStore) GetPostsByTaxonomyTerm(arg0 context.Context, arg1 db.GetPostsByTaxonomyTermParams) ([]db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostsByTaxonomyTerm", arg0, arg1)
+	ret0, _ := ret[0].([]db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostsByTaxonomyTerm indicates an expected call of GetPostsByTaxonomyTerm.
+func (mr *MockStoreMockRecorder) GetPostsByTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostsByTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).GetPostsByTaxonomyTerm), arg0, arg1)
+}
+
 // GetPostsByUserWithMedia mocks base method.
 func (m *MockStore) GetPostsByUserWithMedia(arg0 context.Context, arg1 db.GetPostsByUserWithMediaParams) ([]db.GetPostsByUserWithMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -987,64 +1004,124 @@ func (mr *MockStoreMockRecorder) GetSession(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSession", reflect.TypeOf((*MockStore)(nil).GetSession), arg0, arg1)
 }
 
-// GetTaxonomy mocks base method.
-func (m *MockStore) GetTaxonomy(arg0 context.Context, arg1 int64) (db.Taxonomy, error) {
+// GetTaxonomyTerm mocks base method.
+func (m *MockStore) GetTaxonomyTerm(arg0 context.Context, arg1 int64) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTaxonomy", arg0, arg1)
-	ret0, _ := ret[0].(db.Taxonomy)
+	ret := m.ctrl.Call(m, "GetTaxonomyTerm", arg0, arg1)
+	ret0, _ := ret[0].(db.TaxonomyTerm)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetTaxonomy indicates an expected call of GetTaxonomy.
-func (mr *MockStoreMockRecorder) GetTaxonomy(arg0, arg1 interface{}) *gomock.Call {
+// GetTaxonomyTerm indicates an expected call of GetTaxonomyTerm.
+func (mr *MockStoreMockRecorder) GetTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomy", reflect.TypeOf((*MockStore)(nil).GetTaxonomy), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).GetTaxonomyTerm), arg0, arg1)
 }
 
-// GetTaxonomyByName mocks base method.
-func (m *MockStore) GetTaxonomyByName(arg0 context.Context, arg1 string) (db.Taxonomy, error) {
+// GetTaxonomyTermBySlug mocks base method.
+func (m *MockStore) GetTaxonomyTermBySlug(arg0 context.Context, arg1 string) (db.GetTaxonomyTermBySlugRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTaxonomyByName", arg0, arg1)
-	ret0, _ := ret[0].(db.Taxonomy)
+	ret := m.ctrl.Call(m, "GetTaxonomyTermBySlug", arg0, arg1)
+	ret0, _ := ret[0].(db.GetTaxonomyTermBySlugRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetTaxonomyByName indicates an expected call of GetTaxonomyByName.
-func (mr *MockStoreMockRecorder) GetTaxonomyByName(arg0, arg1 interface{}) *gomock.Call {
+// GetTaxonomyTermBySlug indicates an expected call of GetTaxonomyTermBySlug.
+func (mr *MockStoreMockRecorder) GetTaxonomyTermBySlug(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyByName", reflect.TypeOf((*MockStore)(nil).GetTaxonomyByName), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyTermBySlug", reflect.TypeOf((*MockStore)(nil).GetTaxonomyTermBySlug), arg0, arg1)
 }
 
-// GetTaxonomyPostCount mocks base method.
-func (m *MockStore) GetTaxonomyPostCount(arg0 context.Context, arg1 int64) (int64, error) {
+// GetTaxonomyTermTree mocks base method.
+func (m *MockStore) GetTaxonomyTermTree(arg0 context.Context, arg1 string) ([]db.GetTaxonomyTermTreeRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTaxonomyPostCount", arg0, arg1)
-	ret0, _ := ret[0].(int64)
+	ret := m.ctrl.Call(m, "GetTaxonomyTermTree", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetTaxonomyTermTreeRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetTaxonomyPostCount indicates an expected call of GetTaxonomyPostCount.
-func (mr *MockStoreMockRecorder) GetTaxonomyPostCount(arg0, arg1 interface{}) *gomock.Call {
+// GetTaxonomyTermTree indicates an expected call of GetTaxonomyTermTree.
+func (mr *MockStoreMockRecorder) GetTaxonomyTermTree(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyPostCount", reflect.TypeOf((*MockStore)(nil).GetTaxonomyPostCount), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyTermTree", reflect.TypeOf((*MockStore)(nil).GetTaxonomyTermTree), arg0, arg1)
 }
 
-// GetTaxonomyPosts mocks base method.
-func (m *MockStore) GetTaxonomyPosts(arg0 context.Context, arg1 db.GetTaxonomyPostsParams) ([]db.Post, error) {
+// GetTaxonomyTermsWithPostCount mocks base method.
+func (m *MockStore) GetTaxonomyTermsWithPostCount(arg0 context.Context, arg1 db.GetTaxonomyTermsWithPostCountParams) ([]db.GetTaxonomyTermsWithPostCountRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTaxonomyPosts", arg0, arg1)
-	ret0, _ := ret[0].([]db.Post)
+	ret := m.ctrl.Call(m, "GetTaxonomyTermsWithPostCount", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetTaxonomyTermsWithPostCountRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetTaxonomyPosts indicates an expected call of GetTaxonomyPosts.
-func (mr *MockStoreMockRecorder) GetTaxonomyPosts(arg0, arg1 interface{}) *gomock.Call {
+// GetTaxonomyTermsWithPostCount indicates an expected call of GetTaxonomyTermsWithPostCount.
+func (mr *MockStoreMockRecorder) GetTaxonomyTermsWithPostCount(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyPosts", reflect.TypeOf((*MockStore)(nil).GetTaxonomyPosts), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyTermsWithPostCount", reflect.TypeOf((*MockStore)(nil).GetTaxonomyTermsWithPostCount), arg0, arg1)
+}
+
+// GetTaxonomyType mocks base method.
+func (m *MockStore) GetTaxonomyType(arg0 context.Context, arg1 string) (db.TaxonomyType, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTaxonomyType", arg0, arg1)
+	ret0, _ := ret[0].(db.TaxonomyType)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTaxonomyType indicates an expected call of GetTaxonomyType.
+func (mr *MockStoreMockRecorder) GetTaxonomyType(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyType", reflect.TypeOf((*MockStore)(nil).GetTaxonomyType), arg0, arg1)
+}
+
+// GetTaxonomyTypeByID mocks base method.
+func (m *MockStore) GetTaxonomyTypeByID(arg0 context.Context, arg1 int64) (db.TaxonomyType, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTaxonomyTypeByID", arg0, arg1)
+	ret0, _ := ret[0].(db.TaxonomyType)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTaxonomyTypeByID indicates an expected call of GetTaxonomyTypeByID.
+func (mr *MockStoreMockRecorder) GetTaxonomyTypeByID(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTaxonomyTypeByID", reflect.TypeOf((*MockStore)(nil).GetTaxonomyTypeByID), arg0, arg1)
+}
+
+// GetTermChildren mocks base method.
+func (m *MockStore) GetTermChildren(arg0 context.Context, arg1 sql.NullInt64) ([]db.TaxonomyTerm, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTermChildren", arg0, arg1)
+	ret0, _ := ret[0].([]db.TaxonomyTerm)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTermChildren indicates an expected call of GetTermChildren.
+func (mr *MockStoreMockRecorder) GetTermChildren(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTermChildren", reflect.TypeOf((*MockStore)(nil).GetTermChildren), arg0, arg1)
+}
+
+// GetTermParents mocks base method.
+func (m *MockStore) GetTermParents(arg0 context.Context, arg1 int64) ([]db.TaxonomyTerm, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTermParents", arg0, arg1)
+	ret0, _ := ret[0].([]db.TaxonomyTerm)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTermParents indicates an expected call of GetTermParents.
+func (mr *MockStoreMockRecorder) GetTermParents(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTermParents", reflect.TypeOf((*MockStore)(nil).GetTermParents), arg0, arg1)
 }
 
 // GetUser mocks base method.
@@ -1242,34 +1319,34 @@ func (mr *MockStoreMockRecorder) ListSessionsByUsername(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSessionsByUsername", reflect.TypeOf((*MockStore)(nil).ListSessionsByUsername), arg0, arg1)
 }
 
-// ListTaxonomies mocks base method.
-func (m *MockStore) ListTaxonomies(arg0 context.Context, arg1 db.ListTaxonomiesParams) ([]db.Taxonomy, error) {
+// ListTaxonomyTermsByType mocks base method.
+func (m *MockStore) ListTaxonomyTermsByType(arg0 context.Context, arg1 db.ListTaxonomyTermsByTypeParams) ([]db.ListTaxonomyTermsByTypeRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListTaxonomies", arg0, arg1)
-	ret0, _ := ret[0].([]db.Taxonomy)
+	ret := m.ctrl.Call(m, "ListTaxonomyTermsByType", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListTaxonomyTermsByTypeRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ListTaxonomies indicates an expected call of ListTaxonomies.
-func (mr *MockStoreMockRecorder) ListTaxonomies(arg0, arg1 interface{}) *gomock.Call {
+// ListTaxonomyTermsByType indicates an expected call of ListTaxonomyTermsByType.
+func (mr *MockStoreMockRecorder) ListTaxonomyTermsByType(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTaxonomies", reflect.TypeOf((*MockStore)(nil).ListTaxonomies), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTaxonomyTermsByType", reflect.TypeOf((*MockStore)(nil).ListTaxonomyTermsByType), arg0, arg1)
 }
 
-// ListTaxonomiesWithPostCount mocks base method.
-func (m *MockStore) ListTaxonomiesWithPostCount(arg0 context.Context, arg1 db.ListTaxonomiesWithPostCountParams) ([]db.ListTaxonomiesWithPostCountRow, error) {
+// ListTaxonomyTypes mocks base method.
+func (m *MockStore) ListTaxonomyTypes(arg0 context.Context) ([]db.TaxonomyType, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListTaxonomiesWithPostCount", arg0, arg1)
-	ret0, _ := ret[0].([]db.ListTaxonomiesWithPostCountRow)
+	ret := m.ctrl.Call(m, "ListTaxonomyTypes", arg0)
+	ret0, _ := ret[0].([]db.TaxonomyType)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// ListTaxonomiesWithPostCount indicates an expected call of ListTaxonomiesWithPostCount.
-func (mr *MockStoreMockRecorder) ListTaxonomiesWithPostCount(arg0, arg1 interface{}) *gomock.Call {
+// ListTaxonomyTypes indicates an expected call of ListTaxonomyTypes.
+func (mr *MockStoreMockRecorder) ListTaxonomyTypes(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTaxonomiesWithPostCount", reflect.TypeOf((*MockStore)(nil).ListTaxonomiesWithPostCount), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTaxonomyTypes", reflect.TypeOf((*MockStore)(nil).ListTaxonomyTypes), arg0)
 }
 
 // ListUsers mocks base method.
@@ -1287,6 +1364,48 @@ func (mr *MockStoreMockRecorder) ListUsers(arg0, arg1 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUsers", reflect.TypeOf((*MockStore)(nil).ListUsers), arg0, arg1)
 }
 
+// RemoveAllPostTaxonomies mocks base method.
+func (m *MockStore) RemoveAllPostTaxonomies(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveAllPostTaxonomies", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveAllPostTaxonomies indicates an expected call of RemoveAllPostTaxonomies.
+func (mr *MockStoreMockRecorder) RemoveAllPostTaxonomies(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAllPostTaxonomies", reflect.TypeOf((*MockStore)(nil).RemoveAllPostTaxonomies), arg0, arg1)
+}
+
+// RemoveAllPostTaxonomiesByTerm mocks base method.
+func (m *MockStore) RemoveAllPostTaxonomiesByTerm(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveAllPostTaxonomiesByTerm", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveAllPostTaxonomiesByTerm indicates an expected call of RemoveAllPostTaxonomiesByTerm.
+func (mr *MockStoreMockRecorder) RemoveAllPostTaxonomiesByTerm(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAllPostTaxonomiesByTerm", reflect.TypeOf((*MockStore)(nil).RemoveAllPostTaxonomiesByTerm), arg0, arg1)
+}
+
+// RemovePostFromTaxonomyTerm mocks base method.
+func (m *MockStore) RemovePostFromTaxonomyTerm(arg0 context.Context, arg1 db.RemovePostFromTaxonomyTermParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemovePostFromTaxonomyTerm", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemovePostFromTaxonomyTerm indicates an expected call of RemovePostFromTaxonomyTerm.
+func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostFromTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).RemovePostFromTaxonomyTerm), arg0, arg1)
+}
+
 // SearchMediaByName mocks base method.
 func (m *MockStore) SearchMediaByName(arg0 context.Context, arg1 db.SearchMediaByNameParams) ([]db.SearchMediaByNameRow, error) {
 	m.ctrl.T.Helper()
@@ -1302,19 +1421,19 @@ func (mr *MockStoreMockRecorder) SearchMediaByName(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchMediaByName", reflect.TypeOf((*MockStore)(nil).SearchMediaByName), arg0, arg1)
 }
 
-// SearchTaxonomiesByName mocks base method.
-func (m *MockStore) SearchTaxonomiesByName(arg0 context.Context, arg1 db.SearchTaxonomiesByNameParams) ([]db.Taxonomy, error) {
+// SearchTaxonomyTerms mocks base method.
+func (m *MockStore) SearchTaxonomyTerms(arg0 context.Context, arg1 db.SearchTaxonomyTermsParams) ([]db.SearchTaxonomyTermsRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SearchTaxonomiesByName", arg0, arg1)
-	ret0, _ := ret[0].([]db.Taxonomy)
+	ret := m.ctrl.Call(m, "SearchTaxonomyTerms", arg0, arg1)
+	ret0, _ := ret[0].([]db.SearchTaxonomyTermsRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SearchTaxonomiesByName indicates an expected call of SearchTaxonomiesByName.
-func (mr *MockStoreMockRecorder) SearchTaxonomiesByName(arg0, arg1 interface{}) *gomock.Call {
+// SearchTaxonomyTerms indicates an expected call of SearchTaxonomyTerms.
+func (mr *MockStoreMockRecorder) SearchTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTaxonomiesByName", reflect.TypeOf((*MockStore)(nil).SearchTaxonomiesByName), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).SearchTaxonomyTerms), arg0, arg1)
 }
 
 // TransferMediaToUser mocks base method.
@@ -1404,18 +1523,18 @@ func (mr *MockStoreMockRecorder) UpdatePostMeta(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostMeta", reflect.TypeOf((*MockStore)(nil).UpdatePostMeta), arg0, arg1)
 }
 
-// UpdatePostTaxonomiesTx mocks base method.
-func (m *MockStore) UpdatePostTaxonomiesTx(arg0 context.Context, arg1 db.UpdatePostTaxonomiesTxParams) error {
+// UpdatePostTaxonomyTermsTx mocks base method.
+func (m *MockStore) UpdatePostTaxonomyTermsTx(arg0 context.Context, arg1 db.UpdatePostTaxonomyTermsTxParams) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePostTaxonomiesTx", arg0, arg1)
+	ret := m.ctrl.Call(m, "UpdatePostTaxonomyTermsTx", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UpdatePostTaxonomiesTx indicates an expected call of UpdatePostTaxonomiesTx.
-func (mr *MockStoreMockRecorder) UpdatePostTaxonomiesTx(arg0, arg1 interface{}) *gomock.Call {
+// UpdatePostTaxonomyTermsTx indicates an expected call of UpdatePostTaxonomyTermsTx.
+func (mr *MockStoreMockRecorder) UpdatePostTaxonomyTermsTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostTaxonomiesTx", reflect.TypeOf((*MockStore)(nil).UpdatePostTaxonomiesTx), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostTaxonomyTermsTx", reflect.TypeOf((*MockStore)(nil).UpdatePostTaxonomyTermsTx), arg0, arg1)
 }
 
 // UpdatePostType mocks base method.
@@ -1477,19 +1596,34 @@ func (mr *MockStoreMockRecorder) UpdateSessionsUsername(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSessionsUsername", reflect.TypeOf((*MockStore)(nil).UpdateSessionsUsername), arg0, arg1)
 }
 
-// UpdateTaxonomy mocks base method.
-func (m *MockStore) UpdateTaxonomy(arg0 context.Context, arg1 db.UpdateTaxonomyParams) (db.Taxonomy, error) {
+// UpdateTaxonomyTerm mocks base method.
+func (m *MockStore) UpdateTaxonomyTerm(arg0 context.Context, arg1 db.UpdateTaxonomyTermParams) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateTaxonomy", arg0, arg1)
-	ret0, _ := ret[0].(db.Taxonomy)
+	ret := m.ctrl.Call(m, "UpdateTaxonomyTerm", arg0, arg1)
+	ret0, _ := ret[0].(db.TaxonomyTerm)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// UpdateTaxonomy indicates an expected call of UpdateTaxonomy.
-func (mr *MockStoreMockRecorder) UpdateTaxonomy(arg0, arg1 interface{}) *gomock.Call {
+// UpdateTaxonomyTerm indicates an expected call of UpdateTaxonomyTerm.
+func (mr *MockStoreMockRecorder) UpdateTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTaxonomy", reflect.TypeOf((*MockStore)(nil).UpdateTaxonomy), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).UpdateTaxonomyTerm), arg0, arg1)
+}
+
+// UpdateTaxonomyType mocks base method.
+func (m *MockStore) UpdateTaxonomyType(arg0 context.Context, arg1 db.UpdateTaxonomyTypeParams) (db.TaxonomyType, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTaxonomyType", arg0, arg1)
+	ret0, _ := ret[0].(db.TaxonomyType)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateTaxonomyType indicates an expected call of UpdateTaxonomyType.
+func (mr *MockStoreMockRecorder) UpdateTaxonomyType(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTaxonomyType", reflect.TypeOf((*MockStore)(nil).UpdateTaxonomyType), arg0, arg1)
 }
 
 // UpdateUser mocks base method.

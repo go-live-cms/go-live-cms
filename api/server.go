@@ -95,7 +95,7 @@ func (server *Server) setupRoutes() {
 	posts.PUT("/:id", authMiddleware(server.tokenMaker), server.updatePost)    // PUT /api/v1/posts/:id
 	posts.DELETE("/:id", authMiddleware(server.tokenMaker), server.deletePost) // DELETE /api/v1/posts/:id
 	posts.GET("/user/:id", server.getPostsByUser)                              // GET /api/v1/posts/user/:id
-	posts.GET("/:id/taxonomies", server.getPostTaxonomies)                     // GET /api/v1/posts/:id/taxonomies
+	posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms)                  // GET /api/v1/posts/:id/taxonomies
 	posts.GET("/:id/meta", server.getPostWithMeta)                             // GET /api/v1/posts/1/meta
 	posts.GET("/type/:type", server.getPostsByType)                            // GET /api/v1/posts/type/product
 
@@ -103,16 +103,26 @@ func (server *Server) setupRoutes() {
 	postTypes.GET("", server.getPostTypes)      // GET /api/v1/post-types
 	postTypes.GET("/:name", server.getPostType) // GET /api/v1/post-types/product
 
+	taxonomyTypes := v1.Group("/taxonomy-types")
+	taxonomyTypes.POST("", authMiddleware(server.tokenMaker), server.createTaxonomyType) // POST /api/v1/taxonomy-types
+	taxonomyTypes.GET("", server.getTaxonomyTypes)                                       // GET /api/v1/taxonomy-types
+	taxonomyTypes.GET("/:name", server.getTaxonomyType)                                  // GET /api/v1/taxonomy-types/category
+
+	taxonomyTerms := v1.Group("/taxonomy-terms")
+	taxonomyTerms.POST("", authMiddleware(server.tokenMaker), server.createTaxonomyTerm)       // POST /api/v1/taxonomy-terms
+	taxonomyTerms.GET("/type/:type", server.getTaxonomyTermsByType)                            // GET /api/v1/taxonomy-terms/type/category
+	taxonomyTerms.GET("/popular", server.getPopularTaxonomyTerms)                              // GET /api/v1/taxonomy-terms/popular?type=category
+	taxonomyTerms.GET("/search", server.searchTaxonomyTerms)                                   // GET /api/v1/taxonomy-terms/search?type=category&q=tech
+	taxonomyTerms.GET("/:id", server.getTaxonomyTermByID)                                      // GET /api/v1/taxonomy-terms/:id
+	taxonomyTerms.GET("/slug/:slug", server.getTaxonomyTermBySlug)                             // GET /api/v1/taxonomy-terms/slug/technology
+	taxonomyTerms.PUT("/:id", authMiddleware(server.tokenMaker), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy-terms/:id
+	taxonomyTerms.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy-terms/:id
+	taxonomyTerms.GET("/:id/posts", server.getTaxonomyTermPosts)                               // GET /api/v1/taxonomy-terms/:id/posts
+
+	// Legacy taxonomy endpoints (for backward compatibility - can be deprecated later)
 	taxonomies := v1.Group("/taxonomies")
-	taxonomies.POST("", authMiddleware(server.tokenMaker), server.createTaxonomy)       // POST /api/v1/taxonomies
-	taxonomies.GET("", server.getTaxonomies)                                            // GET /api/v1/taxonomies
-	taxonomies.GET("/popular", server.getPopularTaxonomies)                             // GET /api/v1/taxonomies/popular
-	taxonomies.GET("/search", server.searchTaxonomies)                                  // GET /api/v1/taxonomies/search
-	taxonomies.GET("/:id", server.getTaxonomyByID)                                      // GET /api/v1/taxonomies/:id
-	taxonomies.GET("/name/:name", server.getTaxonomyByName)                             // GET /api/v1/taxonomies/name/:name
-	taxonomies.PUT("/:id", authMiddleware(server.tokenMaker), server.updateTaxonomy)    // PUT /api/v1/taxonomies/:id
-	taxonomies.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteTaxonomy) // DELETE /api/v1/taxonomies/:id
-	taxonomies.GET("/:id/posts", server.getTaxonomyPosts)                               // GET /api/v1/taxonomies/:id/posts
+	taxonomies.GET("/:id/posts", server.getTaxonomyTermPosts) // GET /api/v1/taxonomies/:id/posts (redirect to taxonomy-terms)
+	taxonomies.GET("", server.getTaxonomyTermsByType)         // GET /api/v1/taxonomies?type=category
 
 	media := v1.Group("/media")
 	media.POST("", authMiddleware(server.tokenMaker), server.createMedia)            // POST /api/v1/media

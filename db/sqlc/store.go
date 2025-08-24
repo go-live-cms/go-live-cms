@@ -15,10 +15,10 @@ type Store interface {
 	DeleteUserWithTransferTx(ctx context.Context, arg DeleteUserWithTransferTxParams) error
 	UpdateUserTx(ctx context.Context, arg UpdateUserTxParams) (UpdateUserTxResult, error)
 
-	CreatePostWithTaxonomiesTx(ctx context.Context, arg CreatePostWithTaxonomiesTxParams) (CreatePostWithTaxonomiesTxResult, error)
-	DeleteTaxonomyTx(ctx context.Context, id int64) error
-	UpdatePostTaxonomiesTx(ctx context.Context, arg UpdatePostTaxonomiesTxParams) error
-	CreateTaxonomyAndLinkTx(ctx context.Context, arg CreateTaxonomyAndLinkTxParams) (CreateTaxonomyAndLinkTxResult, error)
+	CreatePostWithTaxonomyTermsTx(ctx context.Context, arg CreatePostWithTaxonomyTermsTxParams) (CreatePostWithTaxonomyTermsTxResult, error)
+	DeleteTaxonomyTermTx(ctx context.Context, id int64) error
+	UpdatePostTaxonomyTermsTx(ctx context.Context, arg UpdatePostTaxonomyTermsTxParams) error
+	CreateTaxonomyTermAndLinkTx(ctx context.Context, arg CreateTaxonomyTermAndLinkTxParams) (CreateTaxonomyTermAndLinkTxResult, error)
 
 	CreatePostWithMediaTx(ctx context.Context, arg CreatePostWithMediaTxParams) (CreatePostWithMediaTxResult, error)
 	DeleteMediaTx(ctx context.Context, arg DeleteMediaTxParams) error
@@ -276,27 +276,35 @@ func (store *SQLStore) DeleteUserWithTransferTx(ctx context.Context, arg DeleteU
 	return err
 }
 
-type CreatePostWithTaxonomiesTxParams struct {
+type CreatePostWithTaxonomyTermsTxParams struct {
 	CreatePostsParams
-	AuthorIDs   []int64
-	TaxonomyIDs []int64
+	AuthorIDs       []int64
+	TaxonomyTermIDs []int64
 }
 
-type CreatePostWithTaxonomiesTxResult struct {
-	Post           Post            `json:"post"`
-	UserPosts      []UserPost      `json:"user_posts"`
-	PostTaxonomies []PostsTaxonomy `json:"post_taxonomies"`
+type CreatePostWithTaxonomyTermsTxResult struct {
+	Post                      Post                       `json:"post"`
+	UserPosts                 []UserPost                 `json:"user_posts"`
+	PostTaxonomyRelationships []PostTaxonomyRelationship `json:"post_taxonomy_relationships"`
 }
 
-func (store *SQLStore) CreatePostWithTaxonomiesTx(ctx context.Context, arg CreatePostWithTaxonomiesTxParams) (CreatePostWithTaxonomiesTxResult, error) {
-	var result CreatePostWithTaxonomiesTxResult
+func (store *SQLStore) CreatePostWithTaxonomyTermsTx(ctx context.Context, arg CreatePostWithTaxonomyTermsTxParams) (CreatePostWithTaxonomyTermsTxResult, error) {
+	var result CreatePostWithTaxonomyTermsTxResult
 
 	err := store.ExecTx(ctx, func(q *Queries) error {
 		var err error
 
+		// validate all taxonomy terms before creating the post
+		for _, termID := range arg.TaxonomyTermIDs {
+			_, err := q.GetTaxonomyTerm(ctx, termID)
+			if err != nil {
+				return fmt.Errorf("taxonomy term %d not found: %w", termID, err)
+			}
+		}
+
 		result.Post, err = q.CreatePosts(ctx, arg.CreatePostsParams)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to create post: %w", err)
 		}
 
 		userPost, err := q.CreateUserPost(ctx, CreateUserPostParams{
@@ -305,10 +313,11 @@ func (store *SQLStore) CreatePostWithTaxonomiesTx(ctx context.Context, arg Creat
 			Order:  0,
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to create user-post relationship: %w", err)
 		}
 		result.UserPosts = append(result.UserPosts, userPost)
 
+		// create user-post relationships for additional authors
 		for i, authorID := range arg.AuthorIDs {
 			if authorID != arg.UserID {
 				userPost, err := q.CreateUserPost(ctx, CreateUserPostParams{
@@ -317,27 +326,22 @@ func (store *SQLStore) CreatePostWithTaxonomiesTx(ctx context.Context, arg Creat
 					Order:  int32(i + 1),
 				})
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to create user-post relationship for author %d: %w", authorID, err)
 				}
 				result.UserPosts = append(result.UserPosts, userPost)
 			}
 		}
 
-		for _, taxonomyID := range arg.TaxonomyIDs {
-
-			_, err := q.GetTaxonomy(ctx, taxonomyID)
-			if err != nil {
-				return fmt.Errorf("taxonomy %d not found: %w", taxonomyID, err)
-			}
-
-			postTaxonomy, err := q.CreatePostTaxonomy(ctx, CreatePostTaxonomyParams{
-				PostID:     result.Post.ID,
-				TaxonomyID: taxonomyID,
+		// create taxonomy relationships
+		for _, termID := range arg.TaxonomyTermIDs {
+			relationship, err := q.AddPostToTaxonomyTerm(ctx, AddPostToTaxonomyTermParams{
+				PostID:         result.Post.ID,
+				TaxonomyTermID: termID,
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to add taxonomy term %d to post: %w", termID, err)
 			}
-			result.PostTaxonomies = append(result.PostTaxonomies, postTaxonomy)
+			result.PostTaxonomyRelationships = append(result.PostTaxonomyRelationships, relationship)
 		}
 
 		return nil
@@ -346,17 +350,22 @@ func (store *SQLStore) CreatePostWithTaxonomiesTx(ctx context.Context, arg Creat
 	return result, err
 }
 
-func (store *SQLStore) DeleteTaxonomyTx(ctx context.Context, id int64) error {
+func (store *SQLStore) DeleteTaxonomyTermTx(ctx context.Context, termID int64) error {
 	err := store.ExecTx(ctx, func(q *Queries) error {
-
-		err := q.DeleteTaxonomyPosts(ctx, id)
+		// validate that the taxonomy term exists
+		_, err := q.GetTaxonomyTerm(ctx, termID)
 		if err != nil {
-			return err
+			return fmt.Errorf("taxonomy term %d not found: %w", termID, err)
 		}
 
-		err = q.DeleteTaxonomy(ctx, id)
+		err = q.RemoveAllPostTaxonomiesByTerm(ctx, termID)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to remove post relationships for term %d: %w", termID, err)
+		}
+
+		err = q.DeleteTaxonomyTerm(ctx, termID)
+		if err != nil {
+			return fmt.Errorf("failed to delete taxonomy term %d: %w", termID, err)
 		}
 
 		return nil
@@ -365,32 +374,41 @@ func (store *SQLStore) DeleteTaxonomyTx(ctx context.Context, id int64) error {
 	return err
 }
 
-type UpdatePostTaxonomiesTxParams struct {
-	PostID      int64
-	TaxonomyIDs []int64
+type UpdatePostTaxonomyTermsTxParams struct {
+	PostID          int64
+	TaxonomyTermIDs []int64
 }
 
-func (store *SQLStore) UpdatePostTaxonomiesTx(ctx context.Context, arg UpdatePostTaxonomiesTxParams) error {
+func (store *SQLStore) UpdatePostTaxonomyTermsTx(ctx context.Context, arg UpdatePostTaxonomyTermsTxParams) error {
 	err := store.ExecTx(ctx, func(q *Queries) error {
-
-		err := q.DeletePostTaxonomies(ctx, arg.PostID)
+		// Validate that the post exists
+		_, err := q.GetPost(ctx, arg.PostID)
 		if err != nil {
-			return err
+			return fmt.Errorf("post %d not found: %w", arg.PostID, err)
 		}
 
-		for _, taxonomyID := range arg.TaxonomyIDs {
-
-			_, err := q.GetTaxonomy(ctx, taxonomyID)
+		// Validate all taxonomy terms exist
+		for _, termID := range arg.TaxonomyTermIDs {
+			_, err := q.GetTaxonomyTerm(ctx, termID)
 			if err != nil {
-				return fmt.Errorf("taxonomy %d not found: %w", taxonomyID, err)
+				return fmt.Errorf("taxonomy term %d not found: %w", termID, err)
 			}
+		}
 
-			_, err = q.CreatePostTaxonomy(ctx, CreatePostTaxonomyParams{
-				PostID:     arg.PostID,
-				TaxonomyID: taxonomyID,
+		// Remove all existing relationships for this post
+		err = q.RemoveAllPostTaxonomies(ctx, arg.PostID)
+		if err != nil {
+			return fmt.Errorf("failed to remove existing taxonomy relationships for post %d: %w", arg.PostID, err)
+		}
+
+		// Add new relationships
+		for _, termID := range arg.TaxonomyTermIDs {
+			_, err := q.AddPostToTaxonomyTerm(ctx, AddPostToTaxonomyTermParams{
+				PostID:         arg.PostID,
+				TaxonomyTermID: termID,
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to add taxonomy term %d to post %d: %w", termID, arg.PostID, err)
 			}
 		}
 
@@ -398,6 +416,45 @@ func (store *SQLStore) UpdatePostTaxonomiesTx(ctx context.Context, arg UpdatePos
 	})
 
 	return err
+}
+
+func (store *SQLStore) CreateTaxonomyTermAndLinkTx(ctx context.Context, arg CreateTaxonomyTermAndLinkTxParams) (CreateTaxonomyTermAndLinkTxResult, error) {
+	var result CreateTaxonomyTermAndLinkTxResult
+
+	err := store.ExecTx(ctx, func(q *Queries) error {
+		var err error
+
+		// Validate that the taxonomy type exists
+		_, err = q.GetTaxonomyTypeByID(ctx, arg.TaxonomyTypeID)
+		if err != nil {
+			return fmt.Errorf("taxonomy type %d not found: %w", arg.TaxonomyTypeID, err)
+		}
+
+		// Validate that the post exists
+		_, err = q.GetPost(ctx, arg.PostID)
+		if err != nil {
+			return fmt.Errorf("post %d not found: %w", arg.PostID, err)
+		}
+
+		// create the taxonomy term
+		result.TaxonomyTerm, err = q.CreateTaxonomyTerm(ctx, arg.CreateTaxonomyTermParams)
+		if err != nil {
+			return fmt.Errorf("failed to create taxonomy term: %w", err)
+		}
+
+		// link the term to the post
+		result.PostTaxonomyRelationship, err = q.AddPostToTaxonomyTerm(ctx, AddPostToTaxonomyTermParams{
+			PostID:         arg.PostID,
+			TaxonomyTermID: result.TaxonomyTerm.ID,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to link taxonomy term to post: %w", err)
+		}
+
+		return nil
+	})
+
+	return result, err
 }
 
 type CreateTaxonomyAndLinkTxParams struct {
@@ -407,57 +464,18 @@ type CreateTaxonomyAndLinkTxParams struct {
 }
 
 type CreateTaxonomyAndLinkTxResult struct {
-	Taxonomy     Taxonomy      `json:"taxonomy"`
-	PostTaxonomy PostsTaxonomy `json:"post_taxonomy"`
+	TaxonomyTerm             TaxonomyTerm             `json:"taxonomy_term"`
+	PostTaxonomyRelationship PostTaxonomyRelationship `json:"post_taxonomy_relationship"`
 }
 
-func (store *SQLStore) CreateTaxonomyAndLinkTx(ctx context.Context, arg CreateTaxonomyAndLinkTxParams) (CreateTaxonomyAndLinkTxResult, error) {
-	var result CreateTaxonomyAndLinkTxResult
+type CreateTaxonomyTermAndLinkTxParams struct {
+	CreateTaxonomyTermParams
+	PostID int64
+}
 
-	err := store.ExecTx(ctx, func(q *Queries) error {
-		var err error
-
-		existingTaxonomy, err := q.GetTaxonomyByName(ctx, arg.Name)
-		if err == nil {
-			result.Taxonomy = existingTaxonomy
-		} else {
-			result.Taxonomy, err = q.CreateTaxonomy(ctx, CreateTaxonomyParams{
-				Name:        arg.Name,
-				Description: arg.Description,
-			})
-			if err != nil {
-				return err
-			}
-		}
-
-		_, err = q.GetPost(ctx, arg.PostID)
-		if err != nil {
-			return fmt.Errorf("post %d not found: %w", arg.PostID, err)
-		}
-
-		existing, _ := q.GetPostTaxonomies(ctx, arg.PostID)
-		for _, t := range existing {
-			if t.ID == result.Taxonomy.ID {
-				result.PostTaxonomy = PostsTaxonomy{
-					PostID:     arg.PostID,
-					TaxonomyID: result.Taxonomy.ID,
-				}
-				return nil
-			}
-		}
-
-		result.PostTaxonomy, err = q.CreatePostTaxonomy(ctx, CreatePostTaxonomyParams{
-			PostID:     arg.PostID,
-			TaxonomyID: result.Taxonomy.ID,
-		})
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	return result, err
+type CreateTaxonomyTermAndLinkTxResult struct {
+	TaxonomyTerm             TaxonomyTerm             `json:"taxonomy_term"`
+	PostTaxonomyRelationship PostTaxonomyRelationship `json:"post_taxonomy_relationship"`
 }
 
 type CreatePostWithMediaTxParams struct {

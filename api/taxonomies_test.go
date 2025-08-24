@@ -13,6 +13,7 @@ import (
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
+	"github.com/sqlc-dev/pqtype"
 	"github.com/stretchr/testify/require"
 
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
@@ -20,17 +21,42 @@ import (
 	"github.com/go-live-cms/go-live-cms/token"
 )
 
-func randomTaxonomy() db.Taxonomy {
+func randomTaxonomyType() db.TaxonomyType {
 	gofakeit.Seed(0)
-	return db.Taxonomy{
-		ID:          gofakeit.Int64(),
-		Name:        gofakeit.BuzzWord(),
-		Description: gofakeit.Sentence(10),
+	return db.TaxonomyType{
+		ID:           gofakeit.Int64(),
+		Name:         gofakeit.BuzzWord(),
+		Label:        gofakeit.Word(),
+		Description:  sql.NullString{String: gofakeit.Sentence(10), Valid: true},
+		Hierarchical: gofakeit.Bool(),
+		Public:       gofakeit.Bool(),
+		ShowUi:       gofakeit.Bool(),
+		ShowInMenu:   gofakeit.Bool(),
+		CreatedAt:    time.Now(),
 	}
 }
 
-func TestCreateTaxonomyAPI(t *testing.T) {
-	taxonomy := randomTaxonomy()
+func randomTaxonomyTerm() db.TaxonomyTerm {
+	gofakeit.Seed(0)
+	metaJSON, _ := json.Marshal(map[string]interface{}{
+		"color": gofakeit.HexColor(),
+		"icon":  gofakeit.Emoji(),
+	})
+	return db.TaxonomyTerm{
+		ID:             gofakeit.Int64(),
+		Name:           gofakeit.BuzzWord(),
+		Slug:           gofakeit.Word(),
+		Description:    sql.NullString{String: gofakeit.Sentence(10), Valid: true},
+		ParentID:       sql.NullInt64{Int64: 0, Valid: false},
+		TaxonomyTypeID: gofakeit.Int64(),
+		SortOrder:      sql.NullInt32{Int32: int32(gofakeit.Number(1, 100)), Valid: true},
+		Meta:           pqtype.NullRawMessage{RawMessage: metaJSON, Valid: true},
+		CreatedAt:      time.Now(),
+	}
+}
+
+func TestCreateTaxonomyTypeAPI(t *testing.T) {
+	taxonomyType := randomTaxonomyType()
 	user := randomUserNew()
 
 	testCases := []struct {
@@ -43,45 +69,54 @@ func TestCreateTaxonomyAPI(t *testing.T) {
 		{
 			name: "OK",
 			body: gin.H{
-				"name":        taxonomy.Name,
-				"description": taxonomy.Description,
+				"name":         taxonomyType.Name,
+				"label":        taxonomyType.Label,
+				"description":  taxonomyType.Description.String,
+				"hierarchical": taxonomyType.Hierarchical,
+				"public":       taxonomyType.Public,
+				"show_ui":      taxonomyType.ShowUi,
+				"show_in_menu": taxonomyType.ShowInMenu,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-
 				store.EXPECT().
-					GetTaxonomyByName(gomock.Any(), gomock.Eq(taxonomy.Name)).
+					GetTaxonomyType(gomock.Any(), gomock.Eq(taxonomyType.Name)).
 					Times(1).
-					Return(db.Taxonomy{}, sql.ErrNoRows)
+					Return(db.TaxonomyType{}, sql.ErrNoRows)
 
-				arg := db.CreateTaxonomyParams{
-					Name:        taxonomy.Name,
-					Description: taxonomy.Description,
+				arg := db.CreateTaxonomyTypeParams{
+					Name:         taxonomyType.Name,
+					Label:        taxonomyType.Label,
+					Description:  taxonomyType.Description,
+					Hierarchical: taxonomyType.Hierarchical,
+					Public:       taxonomyType.Public,
+					ShowUi:       taxonomyType.ShowUi,
+					ShowInMenu:   taxonomyType.ShowInMenu,
 				}
 				store.EXPECT().
-					CreateTaxonomy(gomock.Any(), gomock.Eq(arg)).
+					CreateTaxonomyType(gomock.Any(), gomock.Eq(arg)).
 					Times(1).
-					Return(taxonomy, nil)
+					Return(taxonomyType, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusCreated, recorder.Code)
-				requireBodyMatchTaxonomy(t, recorder.Body.String(), taxonomy)
+				requireBodyMatchTaxonomyType(t, recorder.Body.String(), taxonomyType)
 			},
 		},
 		{
 			name: "NoAuthorization",
 			body: gin.H{
-				"name":        taxonomy.Name,
-				"description": taxonomy.Description,
+				"name":  taxonomyType.Name,
+				"label": taxonomyType.Label,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				// No authorization
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomyByName(gomock.Any(), gomock.Any()).
+					GetTaxonomyType(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -91,18 +126,17 @@ func TestCreateTaxonomyAPI(t *testing.T) {
 		{
 			name: "DuplicateName",
 			body: gin.H{
-				"name":        taxonomy.Name,
-				"description": taxonomy.Description,
+				"name":  taxonomyType.Name,
+				"label": taxonomyType.Label,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-
 				store.EXPECT().
-					GetTaxonomyByName(gomock.Any(), gomock.Eq(taxonomy.Name)).
+					GetTaxonomyType(gomock.Any(), gomock.Eq(taxonomyType.Name)).
 					Times(1).
-					Return(taxonomy, nil)
+					Return(taxonomyType, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusConflict, recorder.Code)
@@ -111,15 +145,15 @@ func TestCreateTaxonomyAPI(t *testing.T) {
 		{
 			name: "InvalidName",
 			body: gin.H{
-				"name":        "A",
-				"description": taxonomy.Description,
+				"name":  "A",
+				"label": taxonomyType.Label,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomyByName(gomock.Any(), gomock.Any()).
+					GetTaxonomyType(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -127,17 +161,17 @@ func TestCreateTaxonomyAPI(t *testing.T) {
 			},
 		},
 		{
-			name: "InvalidDescription",
+			name: "InvalidLabel",
 			body: gin.H{
-				"name":        taxonomy.Name,
-				"description": "Bad",
+				"name":  taxonomyType.Name,
+				"label": "A",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomyByName(gomock.Any(), gomock.Any()).
+					GetTaxonomyType(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -162,7 +196,7 @@ func TestCreateTaxonomyAPI(t *testing.T) {
 			data, err := json.Marshal(tc.body)
 			require.NoError(t, err)
 
-			url := "/api/v1/taxonomies"
+			url := "/api/v1/taxonomy-types"
 			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "application/json")
@@ -174,61 +208,382 @@ func TestCreateTaxonomyAPI(t *testing.T) {
 	}
 }
 
-func TestGetTaxonomyAPI(t *testing.T) {
-	taxonomy := randomTaxonomy()
+func TestGetTaxonomyTypesAPI(t *testing.T) {
+	n := 5
+	taxonomyTypes := make([]db.TaxonomyType, n)
+	for i := 0; i < n; i++ {
+		taxonomyTypes[i] = randomTaxonomyType()
+	}
 
 	testCases := []struct {
 		name          string
-		taxonomyID    int64
 		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name:       "OK",
-			taxonomyID: taxonomy.ID,
+			name: "OK",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					ListTaxonomyTypes(gomock.Any()).
 					Times(1).
-					Return(taxonomy, nil)
+					Return(taxonomyTypes, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
-				requireBodyMatchTaxonomy(t, recorder.Body.String(), taxonomy)
+				requireBodyMatchTaxonomyTypes(t, recorder.Body.String(), taxonomyTypes)
 			},
 		},
 		{
-			name:       "NotFound",
-			taxonomyID: taxonomy.ID,
+			name: "InternalError",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					ListTaxonomyTypes(gomock.Any()).
 					Times(1).
-					Return(db.Taxonomy{}, sql.ErrNoRows)
+					Return([]db.TaxonomyType{}, sql.ErrConnDone)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			server := newTestServer(t, store)
+			recorder := httptest.NewRecorder()
+
+			url := "/api/v1/taxonomy-types"
+			request, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(recorder)
+		})
+	}
+}
+
+func TestGetTaxonomyTypeAPI(t *testing.T) {
+	taxonomyType := randomTaxonomyType()
+
+	testCases := []struct {
+		name          string
+		typeName      string
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:     "OK",
+			typeName: taxonomyType.Name,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyType(gomock.Any(), gomock.Eq(taxonomyType.Name)).
+					Times(1).
+					Return(taxonomyType, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				requireBodyMatchTaxonomyType(t, recorder.Body.String(), taxonomyType)
+			},
+		},
+		{
+			name:     "NotFound",
+			typeName: taxonomyType.Name,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyType(gomock.Any(), gomock.Eq(taxonomyType.Name)).
+					Times(1).
+					Return(db.TaxonomyType{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
-			name:       "InternalError",
-			taxonomyID: taxonomy.ID,
+			name:     "InternalError",
+			typeName: taxonomyType.Name,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					GetTaxonomyType(gomock.Any(), gomock.Eq(taxonomyType.Name)).
 					Times(1).
-					Return(db.Taxonomy{}, sql.ErrConnDone)
+					Return(db.TaxonomyType{}, sql.ErrConnDone)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			server := newTestServer(t, store)
+			recorder := httptest.NewRecorder()
+
+			url := fmt.Sprintf("/api/v1/taxonomy-types/%s", tc.typeName)
+			request, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(recorder)
+		})
+	}
+}
+
+func TestCreateTaxonomyTermAPI(t *testing.T) {
+	taxonomyTerm := randomTaxonomyTerm()
+	taxonomyType := randomTaxonomyType()
+	user := randomUserNew()
+
+	testCases := []struct {
+		name          string
+		body          gin.H
+		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name: "OK",
+			body: gin.H{
+				"name":             taxonomyTerm.Name,
+				"slug":             taxonomyTerm.Slug,
+				"description":      taxonomyTerm.Description.String,
+				"taxonomy_type_id": taxonomyTerm.TaxonomyTypeID,
+				"sort_order":       taxonomyTerm.SortOrder.Int32,
+				"meta":             map[string]interface{}{"color": "#ff0000"},
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTypeByID(gomock.Any(), gomock.Eq(taxonomyTerm.TaxonomyTypeID)).
+					Times(1).
+					Return(taxonomyType, nil)
+
+				store.EXPECT().
+					CreateTaxonomyTerm(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(taxonomyTerm, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusCreated, recorder.Code)
+				requireBodyMatchTaxonomyTerm(t, recorder.Body.String(), taxonomyTerm)
+			},
+		},
+		{
+			name: "NoAuthorization",
+			body: gin.H{
+				"name":             taxonomyTerm.Name,
+				"taxonomy_type_id": taxonomyTerm.TaxonomyTypeID,
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				// No authorization
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTypeByID(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
+		{
+			name: "InvalidTaxonomyType",
+			body: gin.H{
+				"name":             taxonomyTerm.Name,
+				"taxonomy_type_id": taxonomyTerm.TaxonomyTypeID,
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTypeByID(gomock.Any(), gomock.Eq(taxonomyTerm.TaxonomyTypeID)).
+					Times(1).
+					Return(db.TaxonomyType{}, sql.ErrNoRows)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "InvalidName",
+			body: gin.H{
+				"name":             "A",
+				"taxonomy_type_id": taxonomyTerm.TaxonomyTypeID,
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTypeByID(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name: "WithParent",
+			body: gin.H{
+				"name":             taxonomyTerm.Name,
+				"taxonomy_type_id": taxonomyTerm.TaxonomyTypeID,
+				"parent_id":        int64(123),
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTypeByID(gomock.Any(), gomock.Eq(taxonomyTerm.TaxonomyTypeID)).
+					Times(1).
+					Return(taxonomyType, nil)
+
+				parentTerm := randomTaxonomyTerm()
+				parentTerm.ID = 123
+				store.EXPECT().
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(int64(123))).
+					Times(1).
+					Return(parentTerm, nil)
+
+				termWithParent := taxonomyTerm
+				termWithParent.ParentID = sql.NullInt64{Int64: 123, Valid: true}
+				store.EXPECT().
+					CreateTaxonomyTerm(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(termWithParent, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusCreated, recorder.Code)
+			},
+		},
+		{
+			name: "InvalidParent",
+			body: gin.H{
+				"name":             taxonomyTerm.Name,
+				"taxonomy_type_id": taxonomyTerm.TaxonomyTypeID,
+				"parent_id":        int64(999),
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTypeByID(gomock.Any(), gomock.Eq(taxonomyTerm.TaxonomyTypeID)).
+					Times(1).
+					Return(taxonomyType, nil)
+
+				store.EXPECT().
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(int64(999))).
+					Times(1).
+					Return(db.TaxonomyTerm{}, sql.ErrNoRows)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			server := newTestServer(t, store)
+			recorder := httptest.NewRecorder()
+
+			data, err := json.Marshal(tc.body)
+			require.NoError(t, err)
+
+			url := "/api/v1/taxonomy-terms"
+			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+			require.NoError(t, err)
+			request.Header.Set("Content-Type", "application/json")
+
+			tc.setupAuth(t, request, server.tokenMaker)
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(recorder)
+		})
+	}
+}
+
+func TestGetTaxonomyTermByIDAPI(t *testing.T) {
+	taxonomyTerm := randomTaxonomyTerm()
+
+	testCases := []struct {
+		name          string
+		termID        int64
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:   "OK",
+			termID: taxonomyTerm.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
+					Times(1).
+					Return(taxonomyTerm, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				requireBodyMatchTaxonomyTerm(t, recorder.Body.String(), taxonomyTerm)
+			},
+		},
+		{
+			name:   "NotFound",
+			termID: taxonomyTerm.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
+					Times(1).
+					Return(db.TaxonomyTerm{}, sql.ErrNoRows)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:   "InternalError",
+			termID: taxonomyTerm.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
+					Times(1).
+					Return(db.TaxonomyTerm{}, sql.ErrConnDone)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
 			},
 		},
 		{
-			name:       "InvalidID",
-			taxonomyID: 0,
+			name:   "InvalidID",
+			termID: 0, // This will be overridden in the URL generation
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Any()).
+					GetTaxonomyTerm(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -252,11 +607,10 @@ func TestGetTaxonomyAPI(t *testing.T) {
 
 			var url string
 			if tc.name == "InvalidID" {
-				url = "/api/v1/taxonomies/invalid_id"
+				url = "/api/v1/taxonomy-terms/invalid_id"
 			} else {
-				url = fmt.Sprintf("/api/v1/taxonomies/%d", tc.taxonomyID)
+				url = fmt.Sprintf("/api/v1/taxonomy-terms/%d", tc.termID)
 			}
-
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -266,93 +620,92 @@ func TestGetTaxonomyAPI(t *testing.T) {
 	}
 }
 
-func TestListTaxonomiesAPI(t *testing.T) {
+func TestGetTaxonomyTermsByTypeAPI(t *testing.T) {
+	taxonomyType := randomTaxonomyType()
 	n := 5
-	taxonomies := make([]db.Taxonomy, n)
+	taxonomyTerms := make([]db.ListTaxonomyTermsByTypeRow, n)
 	for i := 0; i < n; i++ {
-		taxonomies[i] = randomTaxonomy()
-		taxonomies[i].ID = int64(i + 1)
-	}
-
-	taxonomiesWithCount := make([]db.ListTaxonomiesWithPostCountRow, n)
-	for i := 0; i < n; i++ {
-		taxonomiesWithCount[i] = db.ListTaxonomiesWithPostCountRow{
-			ID:          taxonomies[i].ID,
-			Name:        taxonomies[i].Name,
-			Description: taxonomies[i].Description,
-			PostCount:   int64(i * 2),
+		term := randomTaxonomyTerm()
+		taxonomyTerms[i] = db.ListTaxonomyTermsByTypeRow{
+			ID:               term.ID,
+			Name:             term.Name,
+			Slug:             term.Slug,
+			Description:      term.Description,
+			ParentID:         term.ParentID,
+			TaxonomyTypeID:   term.TaxonomyTypeID,
+			TaxonomyTypeName: taxonomyType.Name,
+			SortOrder:        term.SortOrder,
+			Meta:             term.Meta,
+			CreatedAt:        term.CreatedAt,
 		}
 	}
 
 	testCases := []struct {
 		name          string
+		typeName      string
 		query         string
 		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name:  "OK",
-			query: "?limit=5&offset=0",
+			name:     "OK",
+			typeName: taxonomyType.Name,
+			query:    "?limit=10&offset=0&sort=name_asc",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					ListTaxonomies(gomock.Any(), db.ListTaxonomiesParams{
-						SortBy:      "name_asc",
-						LimitCount:  5,
-						OffsetCount: 0,
-					}).
+					GetTaxonomyType(gomock.Any(), gomock.Eq(taxonomyType.Name)).
 					Times(1).
-					Return(taxonomies, nil)
+					Return(taxonomyType, nil)
+
 				store.EXPECT().
-					CountTotalTaxonomies(gomock.Any()).
+					ListTaxonomyTermsByType(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(int64(100), nil)
+					Return(taxonomyTerms, nil)
+
+				store.EXPECT().
+					CountTaxonomyTerms(gomock.Any(), gomock.Eq(taxonomyType.Name)).
+					Times(1).
+					Return(int64(len(taxonomyTerms)), nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
-				requireBodyMatchTaxonomies(t, recorder.Body.String(), taxonomies, int64(100))
+				requireBodyMatchTaxonomyTermsByType(t, recorder.Body.String(), taxonomyTerms)
 			},
 		},
 		{
-			name:  "WithCounts",
-			query: "?limit=5&offset=0&with_counts=true",
+			name:     "TaxonomyTypeNotFound",
+			typeName: "nonexistent",
+			query:    "",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					ListTaxonomiesWithPostCount(gomock.Any(), db.ListTaxonomiesWithPostCountParams{
-						SortBy:      "name_asc",
-						LimitCount:  5,
-						OffsetCount: 0,
-					}).
+					GetTaxonomyType(gomock.Any(), gomock.Eq("nonexistent")).
 					Times(1).
-					Return(taxonomiesWithCount, nil)
-				store.EXPECT().
-					CountTotalTaxonomies(gomock.Any()).
-					Times(1).
-					Return(int64(150), nil)
+					Return(db.TaxonomyType{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-				requireBodyMatchTaxonomiesWithCount(t, recorder.Body.String(), taxonomiesWithCount, int64(150))
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
-			name:  "InternalError",
-			query: "?limit=5&offset=0",
+			name:     "InvalidLimit",
+			typeName: taxonomyType.Name,
+			query:    "?limit=0",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					ListTaxonomies(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return([]db.Taxonomy{}, sql.ErrConnDone)
+					GetTaxonomyType(gomock.Any(), gomock.Any()).
+					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 		{
-			name:  "InvalidLimit",
-			query: "?limit=0",
+			name:     "InvalidSort",
+			typeName: taxonomyType.Name,
+			query:    "?sort=invalid_sort",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					ListTaxonomies(gomock.Any(), gomock.Any()).
+					GetTaxonomyType(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -374,7 +727,7 @@ func TestListTaxonomiesAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := "/api/v1/taxonomies" + tc.query
+			url := fmt.Sprintf("/api/v1/taxonomy-terms/type/%s%s", tc.typeName, tc.query)
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -384,17 +737,24 @@ func TestListTaxonomiesAPI(t *testing.T) {
 	}
 }
 
-func TestGetPopularTaxonomiesAPI(t *testing.T) {
+func TestGetPopularTaxonomyTermsAPI(t *testing.T) {
+	taxonomyType := randomTaxonomyType()
 	n := 3
-	popularTaxonomies := make([]db.GetPopularTaxonomiesRow, n)
+	popularTerms := make([]db.GetPopularTaxonomyTermsRow, n)
 	for i := 0; i < n; i++ {
-		taxonomy := randomTaxonomy()
-		taxonomy.ID = int64(i + 1)
-		popularTaxonomies[i] = db.GetPopularTaxonomiesRow{
-			ID:          taxonomy.ID,
-			Name:        taxonomy.Name,
-			Description: taxonomy.Description,
-			PostCount:   int64((n - i) * 10),
+		term := randomTaxonomyTerm()
+		popularTerms[i] = db.GetPopularTaxonomyTermsRow{
+			ID:               term.ID,
+			Name:             term.Name,
+			Slug:             term.Slug,
+			Description:      term.Description,
+			ParentID:         term.ParentID,
+			TaxonomyTypeID:   term.TaxonomyTypeID,
+			TaxonomyTypeName: taxonomyType.Name,
+			SortOrder:        term.SortOrder,
+			Meta:             term.Meta,
+			CreatedAt:        term.CreatedAt,
+			PostCount:        int64(10 - i), // Descending order
 		}
 	}
 
@@ -406,29 +766,40 @@ func TestGetPopularTaxonomiesAPI(t *testing.T) {
 	}{
 		{
 			name:  "OK",
-			query: "?limit=10",
+			query: fmt.Sprintf("?type=%s&limit=5", taxonomyType.Name),
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetPopularTaxonomies(gomock.Any(), int32(10)).
+					GetPopularTaxonomyTerms(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(popularTaxonomies, nil)
+					Return(popularTerms, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
-				requireBodyMatchPopularTaxonomies(t, recorder.Body.String(), popularTaxonomies)
+				requireBodyMatchPopularTaxonomyTerms(t, recorder.Body.String(), popularTerms)
 			},
 		},
 		{
-			name:  "InternalError",
-			query: "?limit=10",
+			name:  "MissingType",
+			query: "?limit=5",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetPopularTaxonomies(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return([]db.GetPopularTaxonomiesRow{}, sql.ErrConnDone)
+					GetPopularTaxonomyTerms(gomock.Any(), gomock.Any()).
+					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name:  "InvalidLimit",
+			query: fmt.Sprintf("?type=%s&limit=0", taxonomyType.Name),
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPopularTaxonomyTerms(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
@@ -446,7 +817,7 @@ func TestGetPopularTaxonomiesAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := "/api/v1/taxonomies/popular" + tc.query
+			url := fmt.Sprintf("/api/v1/taxonomy-terms/popular%s", tc.query)
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -456,9 +827,25 @@ func TestGetPopularTaxonomiesAPI(t *testing.T) {
 	}
 }
 
-func TestSearchTaxonomiesAPI(t *testing.T) {
-	taxonomy := randomTaxonomy()
-	searchResults := []db.Taxonomy{taxonomy}
+func TestSearchTaxonomyTermsAPI(t *testing.T) {
+	taxonomyType := randomTaxonomyType()
+	n := 3
+	searchResults := make([]db.SearchTaxonomyTermsRow, n)
+	for i := 0; i < n; i++ {
+		term := randomTaxonomyTerm()
+		searchResults[i] = db.SearchTaxonomyTermsRow{
+			ID:               term.ID,
+			Name:             term.Name,
+			Slug:             term.Slug,
+			Description:      term.Description,
+			ParentID:         term.ParentID,
+			TaxonomyTypeID:   term.TaxonomyTypeID,
+			TaxonomyTypeName: taxonomyType.Name,
+			SortOrder:        term.SortOrder,
+			Meta:             term.Meta,
+			CreatedAt:        term.CreatedAt,
+		}
+	}
 
 	testCases := []struct {
 		name          string
@@ -468,29 +855,24 @@ func TestSearchTaxonomiesAPI(t *testing.T) {
 	}{
 		{
 			name:  "OK",
-			query: "?q=tech&limit=10&offset=0",
+			query: fmt.Sprintf("?type=%s&q=test&limit=10&offset=0", taxonomyType.Name),
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					SearchTaxonomiesByName(gomock.Any(), db.SearchTaxonomiesByNameParams{
-						Column1:     sql.NullString{String: "tech", Valid: true},
-						SortBy:      "name_asc",
-						LimitCount:  10,
-						OffsetCount: 0,
-					}).
+					SearchTaxonomyTerms(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(searchResults, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
-				requireBodyMatchTaxonomiesWithoutTotal(t, recorder.Body.String(), searchResults)
+				requireBodyMatchSearchTaxonomyTerms(t, recorder.Body.String(), searchResults)
 			},
 		},
 		{
-			name:  "EmptyQuery",
-			query: "?q=&limit=10",
+			name:  "MissingType",
+			query: "?q=test",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					SearchTaxonomiesByName(gomock.Any(), gomock.Any()).
+					SearchTaxonomyTerms(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -499,10 +881,10 @@ func TestSearchTaxonomiesAPI(t *testing.T) {
 		},
 		{
 			name:  "MissingQuery",
-			query: "?limit=10",
+			query: fmt.Sprintf("?type=%s", taxonomyType.Name),
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					SearchTaxonomiesByName(gomock.Any(), gomock.Any()).
+					SearchTaxonomyTerms(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -524,7 +906,7 @@ func TestSearchTaxonomiesAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := "/api/v1/taxonomies/search" + tc.query
+			url := fmt.Sprintf("/api/v1/taxonomy-terms/search%s", tc.query)
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -534,67 +916,59 @@ func TestSearchTaxonomiesAPI(t *testing.T) {
 	}
 }
 
-func TestUpdateTaxonomyAPI(t *testing.T) {
-	taxonomy := randomTaxonomy()
+func TestUpdateTaxonomyTermAPI(t *testing.T) {
+	taxonomyTerm := randomTaxonomyTerm()
 	user := randomUserNew()
-	newName := gofakeit.BuzzWord()
-	newDescription := gofakeit.Sentence(10)
 
 	testCases := []struct {
 		name          string
-		taxonomyID    int64
+		termID        int64
 		body          gin.H
 		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
 		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name:       "OK",
-			taxonomyID: taxonomy.ID,
+			name:   "OK",
+			termID: taxonomyTerm.ID,
 			body: gin.H{
-				"name":        newName,
-				"description": newDescription,
+				"name":        "Updated Name",
+				"description": "Updated description",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
+					Times(1).
+					Return(taxonomyTerm, nil)
+
+				updatedTerm := taxonomyTerm
+				updatedTerm.Name = "Updated Name"
+				updatedTerm.Description = sql.NullString{String: "Updated description", Valid: true}
 
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					UpdateTaxonomyTerm(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(taxonomy, nil)
-
-				store.EXPECT().
-					GetTaxonomyByName(gomock.Any(), gomock.Eq(newName)).
-					Times(1).
-					Return(db.Taxonomy{}, sql.ErrNoRows)
-
-				updatedTaxonomy := taxonomy
-				updatedTaxonomy.Name = newName
-				updatedTaxonomy.Description = newDescription
-
-				store.EXPECT().
-					UpdateTaxonomy(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(updatedTaxonomy, nil)
+					Return(updatedTerm, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
 		},
 		{
-			name:       "NoAuthorization",
-			taxonomyID: taxonomy.ID,
+			name:   "NoAuthorization",
+			termID: taxonomyTerm.ID,
 			body: gin.H{
-				"name": newName,
+				"name": "Updated Name",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				// No authorization
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Any()).
+					GetTaxonomyTerm(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -602,46 +976,40 @@ func TestUpdateTaxonomyAPI(t *testing.T) {
 			},
 		},
 		{
-			name:       "NotFound",
-			taxonomyID: taxonomy.ID,
+			name:   "NotFound",
+			termID: taxonomyTerm.ID,
 			body: gin.H{
-				"name": newName,
+				"name": "Updated Name",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
 					Times(1).
-					Return(db.Taxonomy{}, sql.ErrNoRows)
+					Return(db.TaxonomyTerm{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
-			name:       "DuplicateName",
-			taxonomyID: taxonomy.ID,
+			name:   "InvalidID",
+			termID: 0, // This will be overridden in the URL generation
 			body: gin.H{
-				"name": newName,
+				"name": "Updated Name",
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
-					Times(1).
-					Return(taxonomy, nil)
-
-				store.EXPECT().
-					GetTaxonomyByName(gomock.Any(), gomock.Eq(newName)).
-					Times(1).
-					Return(db.Taxonomy{ID: 999, Name: newName}, nil)
+					GetTaxonomyTerm(gomock.Any(), gomock.Any()).
+					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusConflict, recorder.Code)
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 	}
@@ -662,7 +1030,12 @@ func TestUpdateTaxonomyAPI(t *testing.T) {
 			data, err := json.Marshal(tc.body)
 			require.NoError(t, err)
 
-			url := fmt.Sprintf("/api/v1/taxonomies/%d", tc.taxonomyID)
+			var url string
+			if tc.name == "InvalidID" {
+				url = "/api/v1/taxonomy-terms/invalid_id"
+			} else {
+				url = fmt.Sprintf("/api/v1/taxonomy-terms/%d", tc.termID)
+			}
 			request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(data))
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "application/json")
@@ -674,38 +1047,38 @@ func TestUpdateTaxonomyAPI(t *testing.T) {
 	}
 }
 
-func TestDeleteTaxonomyAPI(t *testing.T) {
-	taxonomy := randomTaxonomy()
+func TestDeleteTaxonomyTermAPI(t *testing.T) {
+	taxonomyTerm := randomTaxonomyTerm()
 	user := randomUserNew()
 
 	testCases := []struct {
 		name          string
-		taxonomyID    int64
+		termID        int64
 		query         string
 		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
 		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
-			name:       "OK_NoPosts",
-			taxonomyID: taxonomy.ID,
-			query:      "",
+			name:   "OK",
+			termID: taxonomyTerm.ID,
+			query:  "",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
 					Times(1).
-					Return(taxonomy, nil)
+					Return(taxonomyTerm, nil)
 
 				store.EXPECT().
-					GetTaxonomyPostCount(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					CountPostsByTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
 					Times(1).
 					Return(int64(0), nil)
 
 				store.EXPECT().
-					DeleteTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					DeleteTaxonomyTermTx(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
 					Times(1).
 					Return(nil)
 			},
@@ -714,36 +1087,47 @@ func TestDeleteTaxonomyAPI(t *testing.T) {
 			},
 		},
 		{
-			name:       "NoAuthorization",
-			taxonomyID: taxonomy.ID,
-			query:      "",
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				// No authorization
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusUnauthorized, recorder.Code)
-			},
-		},
-		{
-			name:       "ConflictWithPosts",
-			taxonomyID: taxonomy.ID,
-			query:      "",
+			name:   "ForceDelete",
+			termID: taxonomyTerm.ID,
+			query:  "?force=true",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
 					Times(1).
-					Return(taxonomy, nil)
+					Return(taxonomyTerm, nil)
 
 				store.EXPECT().
-					GetTaxonomyPostCount(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					CountPostsByTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
+					Times(1).
+					Return(int64(5), nil)
+
+				store.EXPECT().
+					DeleteTaxonomyTermTx(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
+					Times(1).
+					Return(nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:   "TermInUse",
+			termID: taxonomyTerm.ID,
+			query:  "",
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
+					Times(1).
+					Return(taxonomyTerm, nil)
+
+				store.EXPECT().
+					CountPostsByTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
 					Times(1).
 					Return(int64(5), nil)
 			},
@@ -752,52 +1136,36 @@ func TestDeleteTaxonomyAPI(t *testing.T) {
 			},
 		},
 		{
-			name:       "ForceDelete",
-			taxonomyID: taxonomy.ID,
-			query:      "?force=true",
+			name:   "NotFound",
+			termID: taxonomyTerm.ID,
+			query:  "",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
+					GetTaxonomyTerm(gomock.Any(), gomock.Eq(taxonomyTerm.ID)).
 					Times(1).
-					Return(taxonomy, nil)
-
-				store.EXPECT().
-					GetTaxonomyPostCount(gomock.Any(), gomock.Eq(taxonomy.ID)).
-					Times(1).
-					Return(int64(5), nil)
-
-				store.EXPECT().
-					DeleteTaxonomyPosts(gomock.Any(), gomock.Eq(taxonomy.ID)).
-					Times(1).
-					Return(nil)
-
-				store.EXPECT().
-					DeleteTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
-					Times(1).
-					Return(nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:       "NotFound",
-			taxonomyID: taxonomy.ID,
-			query:      "",
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
-					Times(1).
-					Return(db.Taxonomy{}, sql.ErrNoRows)
+					Return(db.TaxonomyTerm{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:   "NoAuthorization",
+			termID: taxonomyTerm.ID,
+			query:  "",
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				// No authorization
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetTaxonomyTerm(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
 		},
 	}
@@ -815,7 +1183,7 @@ func TestDeleteTaxonomyAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := fmt.Sprintf("/api/v1/taxonomies/%d%s", tc.taxonomyID, tc.query)
+			url := fmt.Sprintf("/api/v1/taxonomy-terms/%d%s", tc.termID, tc.query)
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 
@@ -826,214 +1194,105 @@ func TestDeleteTaxonomyAPI(t *testing.T) {
 	}
 }
 
-func TestGetTaxonomyPostsAPI(t *testing.T) {
-	taxonomy := randomTaxonomy()
-	user := randomUserForPosts()
-	post := randomPost(user)
-	posts := []db.Post{post}
-
-	testCases := []struct {
-		name          string
-		taxonomyID    int64
-		query         string
-		buildStubs    func(store *mockdb.MockStore)
-		checkResponse func(recorder *httptest.ResponseRecorder)
-	}{
-		{
-			name:       "OK",
-			taxonomyID: taxonomy.ID,
-			query:      "?limit=10&offset=0",
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
-					Times(1).
-					Return(taxonomy, nil)
-
-				store.EXPECT().
-					GetTaxonomyPosts(gomock.Any(), db.GetTaxonomyPostsParams{
-						TaxonomyID: taxonomy.ID,
-						Limit:      10,
-						Offset:     0,
-					}).
-					Times(1).
-					Return(posts, nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:       "TaxonomyNotFound",
-			taxonomyID: taxonomy.ID,
-			query:      "?limit=10&offset=0",
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetTaxonomy(gomock.Any(), gomock.Eq(taxonomy.ID)).
-					Times(1).
-					Return(db.Taxonomy{}, sql.ErrNoRows)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
-			},
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			store := mockdb.NewMockStore(ctrl)
-			tc.buildStubs(store)
-
-			server := newTestServer(t, store)
-			recorder := httptest.NewRecorder()
-
-			url := fmt.Sprintf("/api/v1/taxonomies/%d/posts%s", tc.taxonomyID, tc.query)
-			request, err := http.NewRequest(http.MethodGet, url, nil)
-			require.NoError(t, err)
-
-			server.router.ServeHTTP(recorder, request)
-			tc.checkResponse(recorder)
-		})
-	}
-}
-
-func TestGetPostTaxonomiesAPI(t *testing.T) {
-	user := randomUserForPosts()
-	post := randomPost(user)
-	taxonomy := randomTaxonomy()
-	taxonomies := []db.Taxonomy{taxonomy}
-
-	testCases := []struct {
-		name          string
-		postID        int64
-		buildStubs    func(store *mockdb.MockStore)
-		checkResponse func(recorder *httptest.ResponseRecorder)
-	}{
-		{
-			name:   "OK",
-			postID: post.ID,
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetPost(gomock.Any(), gomock.Eq(post.ID)).
-					Times(1).
-					Return(post, nil)
-
-				store.EXPECT().
-					GetPostTaxonomies(gomock.Any(), gomock.Eq(post.ID)).
-					Times(1).
-					Return(taxonomies, nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:   "PostNotFound",
-			postID: post.ID,
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetPost(gomock.Any(), gomock.Eq(post.ID)).
-					Times(1).
-					Return(db.Post{}, sql.ErrNoRows)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
-			},
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			store := mockdb.NewMockStore(ctrl)
-			tc.buildStubs(store)
-
-			server := newTestServer(t, store)
-			recorder := httptest.NewRecorder()
-
-			url := fmt.Sprintf("/api/v1/posts/%d/taxonomies", tc.postID)
-			request, err := http.NewRequest(http.MethodGet, url, nil)
-			require.NoError(t, err)
-
-			server.router.ServeHTTP(recorder, request)
-			tc.checkResponse(recorder)
-		})
-	}
-}
-
-func requireBodyMatchTaxonomy(t *testing.T, body string, taxonomy db.Taxonomy) {
+// Helper functions for response validation
+func requireBodyMatchTaxonomyType(t *testing.T, body string, taxonomyType db.TaxonomyType) {
 	var response struct {
-		Taxonomy TaxonomyResponse `json:"taxonomy"`
+		TaxonomyType TaxonomyTypeResponse `json:"taxonomy_type"`
 	}
 	err := json.Unmarshal([]byte(body), &response)
 	require.NoError(t, err)
 
-	require.Equal(t, taxonomy.ID, response.Taxonomy.ID)
-	require.Equal(t, taxonomy.Name, response.Taxonomy.Name)
-	require.Equal(t, taxonomy.Description, response.Taxonomy.Description)
+	require.Equal(t, taxonomyType.ID, response.TaxonomyType.ID)
+	require.Equal(t, taxonomyType.Name, response.TaxonomyType.Name)
+	require.Equal(t, taxonomyType.Label, response.TaxonomyType.Label)
+	require.Equal(t, taxonomyType.Description.String, response.TaxonomyType.Description)
+	require.Equal(t, taxonomyType.Hierarchical, response.TaxonomyType.Hierarchical)
+	require.Equal(t, taxonomyType.Public, response.TaxonomyType.Public)
+	require.Equal(t, taxonomyType.ShowUi, response.TaxonomyType.ShowUI)
+	require.Equal(t, taxonomyType.ShowInMenu, response.TaxonomyType.ShowInMenu)
 }
 
-func requireBodyMatchTaxonomies(t *testing.T, body string, taxonomies []db.Taxonomy, expectedTotal int64) {
+func requireBodyMatchTaxonomyTypes(t *testing.T, body string, taxonomyTypes []db.TaxonomyType) {
 	var response struct {
-		Taxonomies []TaxonomyResponse `json:"taxonomies"`
-		Meta       struct {
-			Total      int64 `json:"total"`
-			Limit      int   `json:"limit"`
-			Offset     int   `json:"offset"`
-			Count      int   `json:"count"`
-			WithCounts bool  `json:"with_counts"`
+		TaxonomyTypes []TaxonomyTypeResponse `json:"taxonomy_types"`
+		Meta          struct {
+			Count int `json:"count"`
 		} `json:"meta"`
 	}
 	err := json.Unmarshal([]byte(body), &response)
 	require.NoError(t, err)
 
-	require.Equal(t, len(taxonomies), len(response.Taxonomies))
-	require.Equal(t, expectedTotal, response.Meta.Total)
-	for i, taxonomy := range taxonomies {
-		require.Equal(t, taxonomy.ID, response.Taxonomies[i].ID)
-		require.Equal(t, taxonomy.Name, response.Taxonomies[i].Name)
-		require.Equal(t, taxonomy.Description, response.Taxonomies[i].Description)
+	require.Equal(t, len(taxonomyTypes), len(response.TaxonomyTypes))
+	require.Equal(t, len(taxonomyTypes), response.Meta.Count)
+	for i, taxonomyType := range taxonomyTypes {
+		require.Equal(t, taxonomyType.ID, response.TaxonomyTypes[i].ID)
+		require.Equal(t, taxonomyType.Name, response.TaxonomyTypes[i].Name)
+		require.Equal(t, taxonomyType.Label, response.TaxonomyTypes[i].Label)
 	}
 }
 
-func requireBodyMatchTaxonomiesWithCount(t *testing.T, body string, taxonomies []db.ListTaxonomiesWithPostCountRow, expectedTotal int64) {
+func requireBodyMatchTaxonomyTerm(t *testing.T, body string, taxonomyTerm db.TaxonomyTerm) {
 	var response struct {
-		Taxonomies []TaxonomyResponse `json:"taxonomies"`
-		Meta       struct {
-			Limit      int64 `json:"limit"`
-			Offset     int   `json:"offset"`
-			Count      int   `json:"count"`
-			WithCounts bool  `json:"with_counts"`
-			Total      int64 `json:"total"`
+		TaxonomyTerm TaxonomyTermResponse `json:"taxonomy_term"`
+	}
+	err := json.Unmarshal([]byte(body), &response)
+	require.NoError(t, err)
+
+	require.Equal(t, taxonomyTerm.ID, response.TaxonomyTerm.ID)
+	require.Equal(t, taxonomyTerm.Name, response.TaxonomyTerm.Name)
+	require.Equal(t, taxonomyTerm.Slug, response.TaxonomyTerm.Slug)
+	require.Equal(t, taxonomyTerm.Description.String, response.TaxonomyTerm.Description)
+	require.Equal(t, taxonomyTerm.TaxonomyTypeID, response.TaxonomyTerm.TaxonomyTypeID)
+}
+
+func requireBodyMatchTaxonomyTermsByType(t *testing.T, body string, taxonomyTerms []db.ListTaxonomyTermsByTypeRow) {
+	var response struct {
+		TaxonomyTerms []TaxonomyTermResponse `json:"taxonomy_terms"`
+		Meta          struct {
+			Count int `json:"count"`
+			Limit int `json:"limit"`
+			Total int `json:"total"`
 		} `json:"meta"`
 	}
 	err := json.Unmarshal([]byte(body), &response)
 	require.NoError(t, err)
 
-	require.Equal(t, len(taxonomies), len(response.Taxonomies))
-	require.True(t, response.Meta.WithCounts)
-	require.Equal(t, expectedTotal, response.Meta.Total)
-	for i, taxonomy := range taxonomies {
-		require.Equal(t, taxonomy.ID, response.Taxonomies[i].ID)
-		require.Equal(t, taxonomy.Name, response.Taxonomies[i].Name)
-		require.Equal(t, taxonomy.Description, response.Taxonomies[i].Description)
-		require.Equal(t, taxonomy.PostCount, *response.Taxonomies[i].PostCount)
+	require.Equal(t, len(taxonomyTerms), len(response.TaxonomyTerms))
+	require.Equal(t, len(taxonomyTerms), response.Meta.Count)
+	for i, term := range taxonomyTerms {
+		require.Equal(t, term.ID, response.TaxonomyTerms[i].ID)
+		require.Equal(t, term.Name, response.TaxonomyTerms[i].Name)
+		require.Equal(t, term.Slug, response.TaxonomyTerms[i].Slug)
+		require.Equal(t, term.TaxonomyTypeName, response.TaxonomyTerms[i].TaxonomyTypeName)
 	}
 }
 
-func requireBodyMatchTaxonomiesWithoutTotal(t *testing.T, body string, taxonomies []db.Taxonomy) {
+func requireBodyMatchPopularTaxonomyTerms(t *testing.T, body string, terms []db.GetPopularTaxonomyTermsRow) {
 	var response struct {
-		Taxonomies []TaxonomyResponse `json:"taxonomies"`
-		Meta       struct {
-			Query  string `json:"query,omitempty"`
+		TaxonomyTerms []TaxonomyTermResponse `json:"taxonomy_terms"`
+		Meta          struct {
+			Limit int `json:"limit"`
+			Count int `json:"count"`
+		} `json:"meta"`
+	}
+	err := json.Unmarshal([]byte(body), &response)
+	require.NoError(t, err)
+
+	require.Equal(t, len(terms), len(response.TaxonomyTerms))
+	require.Equal(t, len(terms), response.Meta.Count)
+	for i, term := range terms {
+		require.Equal(t, term.ID, response.TaxonomyTerms[i].ID)
+		require.Equal(t, term.Name, response.TaxonomyTerms[i].Name)
+		require.Equal(t, term.Slug, response.TaxonomyTerms[i].Slug)
+		require.Equal(t, term.PostCount, *response.TaxonomyTerms[i].PostCount)
+	}
+}
+
+func requireBodyMatchSearchTaxonomyTerms(t *testing.T, body string, terms []db.SearchTaxonomyTermsRow) {
+	var response struct {
+		TaxonomyTerms []TaxonomyTermResponse `json:"taxonomy_terms"`
+		Meta          struct {
+			Query  string `json:"query"`
 			Limit  int    `json:"limit"`
 			Offset int    `json:"offset"`
 			Count  int    `json:"count"`
@@ -1042,30 +1301,12 @@ func requireBodyMatchTaxonomiesWithoutTotal(t *testing.T, body string, taxonomie
 	err := json.Unmarshal([]byte(body), &response)
 	require.NoError(t, err)
 
-	require.Equal(t, len(taxonomies), len(response.Taxonomies))
-	for i, taxonomy := range taxonomies {
-		require.Equal(t, taxonomy.ID, response.Taxonomies[i].ID)
-		require.Equal(t, taxonomy.Name, response.Taxonomies[i].Name)
-		require.Equal(t, taxonomy.Description, response.Taxonomies[i].Description)
-	}
-}
-
-func requireBodyMatchPopularTaxonomies(t *testing.T, body string, taxonomies []db.GetPopularTaxonomiesRow) {
-	var response struct {
-		Taxonomies []PopularTaxonomyResponse `json:"taxonomies"`
-		Meta       struct {
-			Limit int `json:"limit"`
-			Count int `json:"count"`
-		} `json:"meta"`
-	}
-	err := json.Unmarshal([]byte(body), &response)
-	require.NoError(t, err)
-
-	require.Equal(t, len(taxonomies), len(response.Taxonomies))
-	for i, taxonomy := range taxonomies {
-		require.Equal(t, taxonomy.ID, response.Taxonomies[i].ID)
-		require.Equal(t, taxonomy.Name, response.Taxonomies[i].Name)
-		require.Equal(t, taxonomy.Description, response.Taxonomies[i].Description)
-		require.Equal(t, taxonomy.PostCount, response.Taxonomies[i].PostCount)
+	require.Equal(t, len(terms), len(response.TaxonomyTerms))
+	require.Equal(t, len(terms), response.Meta.Count)
+	for i, term := range terms {
+		require.Equal(t, term.ID, response.TaxonomyTerms[i].ID)
+		require.Equal(t, term.Name, response.TaxonomyTerms[i].Name)
+		require.Equal(t, term.Slug, response.TaxonomyTerms[i].Slug)
+		require.Equal(t, term.TaxonomyTypeName, response.TaxonomyTerms[i].TaxonomyTypeName)
 	}
 }
