@@ -1,0 +1,18 @@
+.gl-tooltip {
+    position: absolute;
+    background: #222;
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    z-index: 9999;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    white-space: nowrap;
+    transition: opacity 0.2s;
+    opacity: 0;
+
+    &.visible {
+        opacity: 1;
+    }
+}

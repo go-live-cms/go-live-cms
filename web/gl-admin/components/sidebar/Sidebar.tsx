@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { extractSvgPath, Icon } from "@gl-admin/components/ui/Icon";
 import SidebarItem from "@gl-admin/components/sidebar/SidebarItem";
+import Tooltip from "@gl-admin/components/ui/Tooltip";
 import SidebarUserProfile from "./SidebarUserProfile";
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw";
 import "@gl-admin/assets/styles/components/sidebar/sidebar.scss";
@@ -110,7 +111,7 @@ const Sidebar: React.FC = () => {
           <React.Fragment key={`sidebar-section-wrapper-${i}`}>
             <div className="admin-sidebar__nav_section" key={`sidebar-section-${i}`}>
               {section.map((item, j) => (
-                <React.Fragment key={`sidebar-item-${j}`}>
+                <Tooltip content={item.name} key={`sidebar-item-${j}`}>
                   <SidebarItem
                     iconPath={item.icon}
                     name={item.name}
@@ -119,7 +120,7 @@ const Sidebar: React.FC = () => {
                     key={item.name}
                     isActive={isActiveLink(item)}
                   />
-                </React.Fragment>
+                </Tooltip>
               ))}
             </div>
             {i !== navigation.length - 1 && <hr className="admin-sidebar__divider" />}
