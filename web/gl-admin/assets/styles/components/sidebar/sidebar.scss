@@ -20,8 +20,39 @@
       transition: background 0.2s;
 
       &:hover {
-        background: #e6e6e6aa;
+        background: white #0000000a;
       }
+    }
+
+    &__controller {
+      position: absolute;
+      top: 1.6rem;
+      right: -1rem;
+      padding: .5rem;
+      border-radius: 100%;
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      transition: background 0.2s;
+      border: 1px solid #D2D2D2;
+      pointer-events: none;
+      transform: translateX(-.5rem);
+      opacity: 0;
+      transition: .2s;
+      z-index: 99;
+
+      &:hover {
+        background: #e6e6e6;
+      }
+    }
+
+    &:hover .admin-sidebar__controller {
+      opacity: 1;
+      pointer-events: all;
+      transform: translateX(0);
     }
 
     &__head {
@@ -78,8 +109,7 @@
     }
 
     &.closed {
-      width: 4.5625rem!important;
-      overflow: hidden;
+      width: 4.25rem!important;
 
       .admin-sidebar__head {
         margin-left: .55rem;
@@ -87,6 +117,10 @@
         h1 {
           display: none;
         }
+      }
+
+      .admin-sidebar__resize-handle {
+        display: none;
       }
 
       .admin-sidebar__nav {
@@ -107,13 +141,17 @@
 
         & > .user-profile {
           padding: .8rem;
+          padding-top: 3.8rem;
 
           & > .user-profile__name {
             display: none;
           }
 
           & .user-profile__icon {
-            display: none;
+            left: 50%;
+            transform: translateX(-55%);
+            top: unset;
+            bottom: 2rem;
           }
         }
       }

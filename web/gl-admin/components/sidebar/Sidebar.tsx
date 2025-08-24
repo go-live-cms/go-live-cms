@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { extractSvgPath } from "@gl-admin/components/ui/Icon";
+import { extractSvgPath, Icon } from "@gl-admin/components/ui/Icon";
 import SidebarItem from "@gl-admin/components/sidebar/SidebarItem";
 import SidebarUserProfile from "./SidebarUserProfile";
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw";
@@ -45,12 +45,16 @@ const Sidebar: React.FC = () => {
 
   const initialWidth = parseInt(localStorage.getItem('sidebarWidth') || '') || ORIGINAL_WIDTH;
   const [sidebarWidth, setSidebarWidth] = useState(`${initialWidth}px`);
-  const [isClosed, setIsClosed] = useState(false);
+  const [isClosed, setIsClosed] = useState(localStorage.getItem('sidebarState') === 'true' || false);
   const resizing = useRef(false);
 
   useEffect(() => {
     localStorage.setItem('sidebarWidth', sidebarWidth);
   }, [sidebarWidth]);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarState', isClosed.toString());
+  }, [isClosed]);
 
   const handleResizeStart = (e: React.MouseEvent) => {
     resizing.current = true;
@@ -126,6 +130,9 @@ const Sidebar: React.FC = () => {
         className="admin-sidebar__bottom"
       >
         <SidebarUserProfile />
+      </div>
+      <div className="admin-sidebar__controller" onClick={() => setIsClosed(!isClosed)}>
+        <Icon name="next" color="#46484A" height="16px" mirror_horizontally={!isClosed} />
       </div>
       <div className="admin-sidebar__resize-handle" onMouseDown={handleResizeStart}></div>
     </nav>
