@@ -57,10 +57,10 @@ const Tooltip: React.FC<TooltipProps> = ({
     return (
         <>
             <div
+                className="gl-tooltip-target"
                 ref={childRef}
                 onMouseEnter={() => setVisible(true)}
                 onMouseLeave={() => setVisible(false)}
-                style={{ display: "inline-block" }}
             >
                 {children}
             </div>

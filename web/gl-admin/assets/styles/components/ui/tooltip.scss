@@ -1,3 +1,10 @@
+.gl-tooltip-target {
+    display: inline-block;
+    width: inherit;
+    height: inherit;
+    position: relative;
+}
+
 .gl-tooltip {
     position: absolute;
     background: #222;
