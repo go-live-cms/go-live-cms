@@ -55,7 +55,10 @@ export const Icon: React.FC<Props> = ({
   if (mirror_vertically) transforms.push("rotate(180deg)")
 
   if (!iconLoaded) {
-    return <div className="gl-icon__skeleton" style={{ width: `${width}px`, height: `${height}px` }} />
+    return <div
+      className={`gl-icon skeleton ${className}`}
+      style={{ width: `${width}px`, height: `${height}px`, transform: transforms.join(" ") }}
+    />
   }
 
   return (
@@ -63,9 +66,6 @@ export const Icon: React.FC<Props> = ({
       className={`gl-icon ${className}`}
       onClick={onClick}
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
         color: "var(--color, black)",
         transform: transforms.join(" "),
       }}

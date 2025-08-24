@@ -111,7 +111,7 @@ const Sidebar: React.FC = () => {
           <React.Fragment key={`sidebar-section-wrapper-${i}`}>
             <div className="admin-sidebar__nav_section" key={`sidebar-section-${i}`}>
               {section.map((item, j) => (
-                <Tooltip content={item.name} key={`sidebar-item-${j}`}>
+                <Tooltip content={item.name} key={`sidebar-item-${j}`} enabled={isClosed}>
                   <SidebarItem
                     iconPath={item.icon}
                     name={item.name}
