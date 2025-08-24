@@ -12,21 +12,27 @@ import (
 )
 
 type Querier interface {
+	// Post-Taxonomy Relationships
+	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
+	// Counting functions
+	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
 	CountTotalMedia(ctx context.Context) (int64, error)
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
-	CountTotalTaxonomies(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
-	CreatePostTaxonomy(ctx context.Context, arg CreatePostTaxonomyParams) (PostsTaxonomy, error)
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
 	CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
-	CreateTaxonomy(ctx context.Context, arg CreateTaxonomyParams) (Taxonomy, error)
+	// Taxonomy Terms Management
+	CreateTaxonomyTerm(ctx context.Context, arg CreateTaxonomyTermParams) (TaxonomyTerm, error)
+	// Taxonomy Types Management
+	CreateTaxonomyType(ctx context.Context, arg CreateTaxonomyTypeParams) (TaxonomyType, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserPost(ctx context.Context, arg CreateUserPostParams) (UserPost, error)
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
@@ -37,12 +43,10 @@ type Querier interface {
 	DeletePostMedia(ctx context.Context, arg DeletePostMediaParams) error
 	DeletePostMedias(ctx context.Context, postID int64) error
 	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
-	DeletePostTaxonomies(ctx context.Context, postID int64) error
-	DeletePostTaxonomy(ctx context.Context, arg DeletePostTaxonomyParams) error
 	DeletePostType(ctx context.Context, name string) error
 	DeletePostsByUserID(ctx context.Context, userID int64) error
-	DeleteTaxonomy(ctx context.Context, id int64) error
-	DeleteTaxonomyPosts(ctx context.Context, taxonomyID int64) error
+	DeleteTaxonomyTerm(ctx context.Context, id int64) error
+	DeleteTaxonomyType(ctx context.Context, name string) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserPost(ctx context.Context, postID int64) error
 	DeleteUserPostsByUserID(ctx context.Context, userID int64) error
@@ -52,24 +56,30 @@ type Querier interface {
 	GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error)
 	GetMediaPostCount(ctx context.Context, mediaID int64) (int64, error)
 	GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error)
-	GetPopularTaxonomies(ctx context.Context, limit int32) ([]GetPopularTaxonomiesRow, error)
+	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
 	GetPost(ctx context.Context, id int64) (Post, error)
 	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
 	GetPostMeta(ctx context.Context, postID int64) ([]PostMetum, error)
 	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
-	GetPostTaxonomies(ctx context.Context, postID int64) ([]Taxonomy, error)
-	GetPostTaxonomyCount(ctx context.Context, postID int64) (int64, error)
+	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
 	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
 	GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error)
 	GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMetaRow, error)
+	GetPostsByMultipleTaxonomyTerms(ctx context.Context, arg GetPostsByMultipleTaxonomyTermsParams) ([]Post, error)
+	GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxonomyTermParams) ([]Post, error)
 	GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
-	GetTaxonomy(ctx context.Context, id int64) (Taxonomy, error)
-	GetTaxonomyByName(ctx context.Context, name string) (Taxonomy, error)
-	GetTaxonomyPostCount(ctx context.Context, taxonomyID int64) (int64, error)
-	GetTaxonomyPosts(ctx context.Context, arg GetTaxonomyPostsParams) ([]Post, error)
+	GetTaxonomyTerm(ctx context.Context, id int64) (TaxonomyTerm, error)
+	GetTaxonomyTermBySlug(ctx context.Context, slug string) (GetTaxonomyTermBySlugRow, error)
+	// Hierarchical term tree (for categories)
+	GetTaxonomyTermTree(ctx context.Context, name string) ([]GetTaxonomyTermTreeRow, error)
+	GetTaxonomyTermsWithPostCount(ctx context.Context, arg GetTaxonomyTermsWithPostCountParams) ([]GetTaxonomyTermsWithPostCountRow, error)
+	GetTaxonomyType(ctx context.Context, name string) (TaxonomyType, error)
+	GetTaxonomyTypeByID(ctx context.Context, id int64) (TaxonomyType, error)
+	GetTermChildren(ctx context.Context, parentID sql.NullInt64) ([]TaxonomyTerm, error)
+	GetTermParents(ctx context.Context, id int64) ([]TaxonomyTerm, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
@@ -83,11 +93,15 @@ type Querier interface {
 	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
-	ListTaxonomies(ctx context.Context, arg ListTaxonomiesParams) ([]Taxonomy, error)
-	ListTaxonomiesWithPostCount(ctx context.Context, arg ListTaxonomiesWithPostCountParams) ([]ListTaxonomiesWithPostCountRow, error)
+	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)
+	ListTaxonomyTypes(ctx context.Context) ([]TaxonomyType, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
+	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
+	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
-	SearchTaxonomiesByName(ctx context.Context, arg SearchTaxonomiesByNameParams) ([]Taxonomy, error)
+	// Search and filtering
+	SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTermsParams) ([]SearchTaxonomyTermsRow, error)
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
@@ -97,7 +111,8 @@ type Querier interface {
 	UpdatePostsUsername(ctx context.Context, arg UpdatePostsUsernameParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
 	UpdateSessionsUsername(ctx context.Context, arg UpdateSessionsUsernameParams) ([]Session, error)
-	UpdateTaxonomy(ctx context.Context, arg UpdateTaxonomyParams) (Taxonomy, error)
+	UpdateTaxonomyTerm(ctx context.Context, arg UpdateTaxonomyTermParams) (TaxonomyTerm, error)
+	UpdateTaxonomyType(ctx context.Context, arg UpdateTaxonomyTypeParams) (TaxonomyType, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserPostsOwnership(ctx context.Context, arg UpdateUserPostsOwnershipParams) error
 	UpsertPostMeta(ctx context.Context, arg UpsertPostMetaParams) (PostMetum, error)

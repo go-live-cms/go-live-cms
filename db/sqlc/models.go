@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sqlc-dev/pqtype"
 )
 
 type Medium struct {
@@ -60,6 +61,12 @@ type PostMetum struct {
 	CreatedAt time.Time      `json:"created_at"`
 }
 
+type PostTaxonomyRelationship struct {
+	PostID         int64     `json:"post_id"`
+	TaxonomyTermID int64     `json:"taxonomy_term_id"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
 type PostType struct {
 	ID           int64           `json:"id"`
 	Name         string          `json:"name"`
@@ -71,11 +78,6 @@ type PostType struct {
 	MenuPosition sql.NullInt32   `json:"menu_position"`
 	Supports     json.RawMessage `json:"supports"`
 	CreatedAt    time.Time       `json:"created_at"`
-}
-
-type PostsTaxonomy struct {
-	PostID     int64 `json:"post_id"`
-	TaxonomyID int64 `json:"taxonomy_id"`
 }
 
 type Session struct {
@@ -90,10 +92,28 @@ type Session struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-type Taxonomy struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
+type TaxonomyTerm struct {
+	ID             int64                 `json:"id"`
+	Name           string                `json:"name"`
+	Slug           string                `json:"slug"`
+	Description    sql.NullString        `json:"description"`
+	ParentID       sql.NullInt64         `json:"parent_id"`
+	TaxonomyTypeID int64                 `json:"taxonomy_type_id"`
+	SortOrder      sql.NullInt32         `json:"sort_order"`
+	Meta           pqtype.NullRawMessage `json:"meta"`
+	CreatedAt      time.Time             `json:"created_at"`
+}
+
+type TaxonomyType struct {
+	ID           int64          `json:"id"`
+	Name         string         `json:"name"`
+	Label        string         `json:"label"`
+	Description  sql.NullString `json:"description"`
+	Hierarchical bool           `json:"hierarchical"`
+	Public       bool           `json:"public"`
+	ShowUi       bool           `json:"show_ui"`
+	ShowInMenu   bool           `json:"show_in_menu"`
+	CreatedAt    time.Time      `json:"created_at"`
 }
 
 type User struct {
