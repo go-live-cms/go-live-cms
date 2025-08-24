@@ -8,7 +8,7 @@ type PaginationProps<T, Q = Record<string, any>> = {
   query: Q
   limitOptions?: number[]
   pageWindow?: number
-  children: (data: T[], total: number, loading: boolean) => React.ReactNode
+  children: (args: { data: T[], total: number, loading: boolean }) => React.ReactNode
 }
 
 function Pagination<T, Q = Record<string, any>>({
@@ -22,7 +22,7 @@ function Pagination<T, Q = Record<string, any>>({
   const [offset, setOffset] = useState(0)
   const [data, setData] = useState<T[]>([])
   const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   const navigationIconSize = "1.2rem"
 
@@ -76,70 +76,72 @@ function Pagination<T, Q = Record<string, any>>({
 
   return (
     <div className="gl-pagination">
-      {children(data, total, loading)}
-      <div className="gl-pagination__controls">
-        {/* Go to first page */}
-        <button onClick={() => setOffset(0)} disabled={currentPage === 0}>
-          <Icon
-            name="double-next"
-            mirror_horizontally={true}
-            color={currentPage === 0 ? "#B8BCBF" : "#333536"}
-            width={navigationIconSize}
-            height={navigationIconSize}
-          />
-        </button>
+      {children({ data, total, loading })}
+      {!loading &&
+        <div className="gl-pagination__controls">
+          {/* Go to first page */}
+          <button onClick={() => setOffset(0)} disabled={currentPage === 0}>
+            <Icon
+              name="double-next"
+              mirror_horizontally={true}
+              color={currentPage === 0 ? "#B8BCBF" : "#333536"}
+              width={navigationIconSize}
+              height={navigationIconSize}
+            />
+          </button>
 
-        {/* Previous page */}
-        <button onClick={() => setOffset((o) => Math.max(0, o - limit))} disabled={currentPage === 0}>
-          <Icon
-            name="next"
-            mirror_horizontally={true}
-            color={currentPage === 0 ? "#B8BCBF" : "#333536"}
-            width={navigationIconSize}
-            height={navigationIconSize}
-          />
-        </button>
+          {/* Previous page */}
+          <button onClick={() => setOffset((o) => Math.max(0, o - limit))} disabled={currentPage === 0}>
+            <Icon
+              name="next"
+              mirror_horizontally={true}
+              color={currentPage === 0 ? "#B8BCBF" : "#333536"}
+              width={navigationIconSize}
+              height={navigationIconSize}
+            />
+          </button>
 
-        <div className="gl-pagination__navigation">
-          {getPageNumbers().map((page) => (
-            <button key={page} onClick={() => setOffset(page * limit)} disabled={page === currentPage}>
-              {page + 1}
-            </button>
-          ))}
+          <div className="gl-pagination__navigation">
+            {getPageNumbers().map((page) => (
+              <button key={page} onClick={() => setOffset(page * limit)} disabled={page === currentPage}>
+                {page + 1}
+              </button>
+            ))}
+          </div>
+          {/* Next page */}
+          <button
+            onClick={() => setOffset((o) => (o + limit < total ? o + limit : o))}
+            disabled={currentPage >= totalPages - 1 || totalPages === 0}
+          >
+            <Icon
+              name="next"
+              color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"}
+              width={navigationIconSize}
+              height={navigationIconSize}
+            />
+          </button>
+          {/* Go to last page */}
+          <button
+            onClick={() => setOffset((totalPages - 1) * limit)}
+            disabled={currentPage >= totalPages - 1 || totalPages === 0}
+          >
+            <Icon
+              name="double-next"
+              color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"}
+              width={navigationIconSize}
+              height={navigationIconSize}
+            />
+          </button>
+
+          <div className="gl-pagination__limit">
+            <Select
+              options={limitOptions.map((option) => ({ value: String(option), label: String(option) }))}
+              value={String(limit)}
+              onChange={handleLimitChange}
+            />
+          </div>
         </div>
-        {/* Next page */}
-        <button
-          onClick={() => setOffset((o) => (o + limit < total ? o + limit : o))}
-          disabled={currentPage >= totalPages - 1 || totalPages === 0}
-        >
-          <Icon
-            name="next"
-            color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"}
-            width={navigationIconSize}
-            height={navigationIconSize}
-          />
-        </button>
-        {/* Go to last page */}
-        <button
-          onClick={() => setOffset((totalPages - 1) * limit)}
-          disabled={currentPage >= totalPages - 1 || totalPages === 0}
-        >
-          <Icon
-            name="double-next"
-            color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"}
-            width={navigationIconSize}
-            height={navigationIconSize}
-          />
-        </button>
-
-        <div className="gl-pagination__limit">
-          <Select
-            options={limitOptions.map((option) => ({ value: String(option), label: String(option) }))}
-            value={String(limit)}
-            onChange={handleLimitChange}
-          />
-        </div>
-      </div>
+      }
     </div>
   )
 }
