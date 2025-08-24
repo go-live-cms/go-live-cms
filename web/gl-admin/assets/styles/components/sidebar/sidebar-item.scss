@@ -1,3 +1,5 @@
+@use "@gl-admin/assets/styles/mixins";
+
 .sidebar-item {
     display: flex;
     align-items: center;
@@ -48,7 +50,6 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(90deg, #e6e6e6 25%, #f3f3f3 50%, #e6e6e6 75%);
-        animation: skeleton-loading 1.2s infinite;
+        @include mixins.skeleton-bg;
     }
 }
