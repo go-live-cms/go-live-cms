@@ -13,8 +13,12 @@ import (
 )
 
 func createTestTaxonomyType(t *testing.T, name, label string, hierarchical bool) TaxonomyType {
+
+	timestamp := time.Now().Format("20060102150405")
+	uniqueName := fmt.Sprintf("%s_%s", name, timestamp)
+
 	arg := CreateTaxonomyTypeParams{
-		Name:         name,
+		Name:         uniqueName,
 		Label:        label,
 		Description:  sql.NullString{String: fmt.Sprintf("Test %s taxonomy", label), Valid: true},
 		Hierarchical: hierarchical,
@@ -58,7 +62,10 @@ func createTestTaxonomyTerm(t *testing.T, taxonomyTypeID int64) TaxonomyTerm {
 
 func TestListTaxonomyTermsByType(t *testing.T) {
 
-	taxonomyType := createTestTaxonomyType(t, "test_category", "Test Category", true)
+	gofakeit.Seed(time.Now().UnixNano())
+	suffix := gofakeit.LetterN(8)
+
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_category_%s", suffix), "Test Category", true)
 
 	for range 10 {
 		createTestTaxonomyTerm(t, taxonomyType.ID)
@@ -82,7 +89,10 @@ func TestListTaxonomyTermsByType(t *testing.T) {
 }
 
 func TestUpdateTaxonomyTerm(t *testing.T) {
-	taxonomyType := createTestTaxonomyType(t, "test_tag", "Test Tag", false)
+	gofakeit.Seed(time.Now().UnixNano())
+	suffix := gofakeit.LetterN(8)
+
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_tag_%s", suffix), "Test Tag", false)
 	term1 := createTestTaxonomyTerm(t, taxonomyType.ID)
 
 	newName := gofakeit.Word()
@@ -106,7 +116,10 @@ func TestUpdateTaxonomyTerm(t *testing.T) {
 }
 
 func TestPostTaxonomyRelationship(t *testing.T) {
-	taxonomyType := createTestTaxonomyType(t, "test_category", "Test Category", true)
+	gofakeit.Seed(time.Now().UnixNano())
+	suffix := gofakeit.LetterN(8)
+
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_category_%s", suffix), "Test Category", true)
 	term := createTestTaxonomyTerm(t, taxonomyType.ID)
 	_, post := createTestUserWithPosts(t)
 
@@ -146,8 +159,11 @@ func TestPostTaxonomyRelationship(t *testing.T) {
 }
 
 func TestCreatePostWithTaxonomyTermsTx(t *testing.T) {
+	gofakeit.Seed(time.Now().UnixNano())
+	suffix := gofakeit.LetterN(8)
+
 	user := createTestUser(t)
-	taxonomyType := createTestTaxonomyType(t, "test_category", "Test Category", true)
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_category_%s", suffix), "Test Category", true)
 	term1 := createTestTaxonomyTerm(t, taxonomyType.ID)
 
 	gofakeit.Seed(1)
@@ -185,7 +201,10 @@ func TestCreatePostWithTaxonomyTermsTx(t *testing.T) {
 }
 
 func TestDeleteTaxonomyTermTx(t *testing.T) {
-	taxonomyType := createTestTaxonomyType(t, "test_category", "Test Category", true)
+	gofakeit.Seed(time.Now().UnixNano())
+	suffix := gofakeit.LetterN(8)
+
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_category_%s", suffix), "Test Category", true)
 	term := createTestTaxonomyTerm(t, taxonomyType.ID)
 	_, post := createTestUserWithPosts(t)
 
@@ -208,7 +227,10 @@ func TestDeleteTaxonomyTermTx(t *testing.T) {
 }
 
 func TestUpdatePostTaxonomyTermsTx(t *testing.T) {
-	taxonomyType := createTestTaxonomyType(t, "test_category", "Test Category", true)
+	gofakeit.Seed(time.Now().UnixNano())
+	suffix := gofakeit.LetterN(8)
+
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_category_%s", suffix), "Test Category", true)
 	term1 := createTestTaxonomyTerm(t, taxonomyType.ID)
 
 	gofakeit.Seed(1)
@@ -243,7 +265,10 @@ func TestUpdatePostTaxonomyTermsTx(t *testing.T) {
 }
 
 func TestCreateTaxonomyTermAndLinkTx(t *testing.T) {
-	taxonomyType := createTestTaxonomyType(t, "test_category", "Test Category", true)
+	gofakeit.Seed(time.Now().UnixNano())
+	suffix := gofakeit.LetterN(8)
+
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_category_%s", suffix), "Test Category", true)
 	_, post := createTestUserWithPosts(t)
 
 	name := "Technology"
@@ -280,7 +305,7 @@ func TestSearchTaxonomyTerms(t *testing.T) {
 	gofakeit.Seed(time.Now().UnixNano())
 	suffix := gofakeit.LetterN(5)
 
-	taxonomyType := createTestTaxonomyType(t, "test_search", "Test Search", false)
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_search_%s", suffix), "Test Search", false)
 
 	js := createTaxonomyTermWithName(t, taxonomyType.ID, fmt.Sprintf("JavaScript_%s", suffix), "JS programming posts")
 	java := createTaxonomyTermWithName(t, taxonomyType.ID, fmt.Sprintf("Java_%s", suffix), "Java programming posts")
@@ -360,7 +385,7 @@ func TestSearchTaxonomyTerms(t *testing.T) {
 
 func TestTaxonomyTermsWithPostCount(t *testing.T) {
 	timestamp := time.Now().Format("20060102150405")
-	taxonomyType := createTestTaxonomyType(t, "test_count", "Test Count", false)
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_count_%s", timestamp), "Test Count", false)
 
 	tech := createTaxonomyTermWithName(t, taxonomyType.ID, fmt.Sprintf("Technology_%s", timestamp), "Tech posts")
 	design := createTaxonomyTermWithName(t, taxonomyType.ID, fmt.Sprintf("Design_%s", timestamp), "Design posts")
@@ -411,7 +436,7 @@ func TestTaxonomyTermsWithPostCount(t *testing.T) {
 
 func TestPopularTaxonomyTerms(t *testing.T) {
 	timestamp := time.Now().Format("20060102150405")
-	taxonomyType := createTestTaxonomyType(t, "test_popular", "Test Popular", false)
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_popular_%s", timestamp), "Test Popular", false)
 
 	popular := createTaxonomyTermWithName(t, taxonomyType.ID, fmt.Sprintf("Popular_%s", timestamp), "Most used")
 	moderate := createTaxonomyTermWithName(t, taxonomyType.ID, fmt.Sprintf("Moderate_%s", timestamp), "Some usage")
@@ -482,7 +507,7 @@ func TestPopularTaxonomyTerms(t *testing.T) {
 
 func TestCountPostsByTaxonomyTerm(t *testing.T) {
 	timestamp := time.Now().Format("20060102150405")
-	taxonomyType := createTestTaxonomyType(t, "test_count_posts", "Test Count Posts", false)
+	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_count_posts_%s", timestamp), "Test Count Posts", false)
 
 	term := createTaxonomyTermWithName(t, taxonomyType.ID, fmt.Sprintf("TestTag_%s", timestamp), "Test term")
 
