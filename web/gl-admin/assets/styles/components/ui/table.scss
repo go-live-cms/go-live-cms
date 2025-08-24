@@ -117,8 +117,8 @@ caption {
 
     &.skeleton {
       @include mixins.skeleton-bg;
-      width: 50%;
-      height: 1.4rem;
+      width: 25%;
+      height: 2.4rem;
       border-radius: .25rem;
     }
   }
