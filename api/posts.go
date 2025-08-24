@@ -346,10 +346,10 @@ func (server *Server) createPost(c *gin.Context) {
 		})
 	} else if len(req.TaxonomyIDs) > 0 {
 
-		result, err := server.store.CreatePostWithTaxonomiesTx(c.Request.Context(), db.CreatePostWithTaxonomiesTxParams{
+		result, err := server.store.CreatePostWithTaxonomyTermsTx(c.Request.Context(), db.CreatePostWithTaxonomyTermsTxParams{
 			CreatePostsParams: createParams,
 			AuthorIDs:         req.AuthorIDs,
-			TaxonomyIDs:       req.TaxonomyIDs,
+			TaxonomyTermIDs:   req.TaxonomyIDs,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post with taxonomies"})
@@ -445,9 +445,9 @@ func (server *Server) updatePost(c *gin.Context) {
 	}
 
 	if req.TaxonomyIDs != nil {
-		err = server.store.UpdatePostTaxonomiesTx(c.Request.Context(), db.UpdatePostTaxonomiesTxParams{
-			PostID:      id,
-			TaxonomyIDs: req.TaxonomyIDs,
+		err = server.store.UpdatePostTaxonomyTermsTx(c.Request.Context(), db.UpdatePostTaxonomyTermsTxParams{
+			PostID:          id,
+			TaxonomyTermIDs: req.TaxonomyIDs,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post taxonomies"})

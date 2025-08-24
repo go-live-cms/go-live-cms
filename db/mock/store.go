@@ -1378,6 +1378,20 @@ func (mr *MockStoreMockRecorder) RemoveAllPostTaxonomies(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAllPostTaxonomies", reflect.TypeOf((*MockStore)(nil).RemoveAllPostTaxonomies), arg0, arg1)
 }
 
+// RemoveAllPostTaxonomiesByTerm mocks base method.
+func (m *MockStore) RemoveAllPostTaxonomiesByTerm(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveAllPostTaxonomiesByTerm", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveAllPostTaxonomiesByTerm indicates an expected call of RemoveAllPostTaxonomiesByTerm.
+func (mr *MockStoreMockRecorder) RemoveAllPostTaxonomiesByTerm(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAllPostTaxonomiesByTerm", reflect.TypeOf((*MockStore)(nil).RemoveAllPostTaxonomiesByTerm), arg0, arg1)
+}
+
 // RemovePostFromTaxonomyTerm mocks base method.
 func (m *MockStore) RemovePostFromTaxonomyTerm(arg0 context.Context, arg1 db.RemovePostFromTaxonomyTermParams) error {
 	m.ctrl.T.Helper()
