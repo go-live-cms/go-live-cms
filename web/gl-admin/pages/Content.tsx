@@ -8,7 +8,7 @@ import type { Post } from "@gl-admin/lib/types";
 
 const columns: TableColumnWithRender<Post>[] = [
     { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
-    { key: "created_at", name: "Created at", width: "10.75rem", render: (_, row) => <PostDateTime value={row.created_at} /> },
+    { key: "created_at", name: "Created at", width: "10.75rem", render: (_, row) => <PostDateTime value={row?.created_at || null} /> },
 ];
 
 type ContentProps = {
@@ -28,8 +28,8 @@ const Content: React.FC<ContentProps> = ({ query: queryProp }) => {
                 }}
                 query={query}
             >
-                {(data) => (
-                    <Table columns={columns} data={data} />
+                {({ data, loading }) => (
+                    <Table columns={columns} data={data} loading={loading} />
                 )}
             </Pagination>
         </>

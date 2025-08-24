@@ -1,3 +1,5 @@
+@use "@gl-admin/assets/styles/mixins";
+
 /* Remove default styles for table related tags */
 
 table,
@@ -44,6 +46,17 @@ caption {
   border-collapse: collapse;
   border-spacing: 0;
   width: 100%;
+
+  .skeleton {
+    @include mixins.skeleton-bg;
+    width: 100%;
+    height: 2rem;
+    border-radius: .25rem;
+
+    &:hover {
+      @include mixins.skeleton-bg;
+    }
+  }
 
   thead,
   tbody {
@@ -101,6 +114,13 @@ caption {
     font-style: normal;
     font-weight: 500;
     line-height: 130%;
+
+    &.skeleton {
+      @include mixins.skeleton-bg;
+      width: 25%;
+      height: 2.4rem;
+      border-radius: .25rem;
+    }
   }
 
   &__heading {
@@ -114,6 +134,13 @@ caption {
       font-style: normal;
       font-weight: 500;
       line-height: 130%;
+
+      &.skeleton {
+        @include mixins.skeleton-bg;
+        width: 60%;
+        height: 1.4rem;
+        border-radius: .25rem;
+      }
     }
 
     &-description {
@@ -123,6 +150,13 @@ caption {
       font-style: normal;
       font-weight: 500;
       line-height: 130%;
+
+      &.skeleton {
+        @include mixins.skeleton-bg;
+        width: 70%;
+        height: 1rem;
+        border-radius: .25rem;
+      }
     }
   }
 }

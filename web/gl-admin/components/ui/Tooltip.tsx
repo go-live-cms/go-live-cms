@@ -7,12 +7,14 @@ type Placement = "top" | "bottom" | "left" | "right";
 interface TooltipProps {
     content: React.ReactNode;
     placement?: Placement;
+    enabled?: boolean;
     children: React.ReactElement;
 }
 
 const Tooltip: React.FC<TooltipProps> = ({
     content,
     placement = "right",
+    enabled = true,
     children,
 }) => {
     const [visible, setVisible] = useState(false);
@@ -64,7 +66,7 @@ const Tooltip: React.FC<TooltipProps> = ({
             >
                 {children}
             </div>
-            {adminDiv &&
+            {adminDiv && enabled &&
                 createPortal(
                     <div
                         className={`gl-tooltip ${visible ? "visible" : ""}`}
