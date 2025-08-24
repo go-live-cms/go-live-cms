@@ -16,6 +16,10 @@ body {
   font-family: Inter, sans-serif;
 }
 
+#admin {
+  position: relative;
+}
+
 @keyframes skeleton-loading {
   0% {
     background-position: -2rem 0;
