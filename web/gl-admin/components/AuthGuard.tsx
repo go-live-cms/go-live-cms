@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { authManager, type AuthState } from "@gl-admin/lib/auth";
+import { useEffect, useState } from "react"
+import { authManager, type AuthState } from "@gl-admin/lib/auth"
 
 interface AuthGuardProps {
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
-  redirectTo?: string;
+  children: React.ReactNode
+  fallback?: React.ReactNode
+  redirectTo?: string
 }
 
 export default function AuthGuard({
@@ -17,37 +17,51 @@ export default function AuthGuard({
     user: null,
     accessToken: null,
     refreshToken: null,
-  });
-  const [isLoading, setIsLoading] = useState(true);
+    tokenExpiry: null,
+  })
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasRedirected, setHasRedirected] = useState(false)
 
   useEffect(() => {
     const checkAuth = async () => {
-      const state = authManager.getState();
-
-      if (state.isAuthenticated && state.refreshToken) {
-        const refreshed = await authManager.refreshAccessToken();
-        if (!refreshed) {
-          const currentPath = window.location.pathname;
-          window.location.href = `${redirectTo}?redirect=${encodeURIComponent(
-            currentPath
-          )}`;
-          return;
+      try {
+        // First check if we have valid auth without forcing refresh
+        if (authManager.isValidAuth()) {
+          setAuthState(authManager.getState())
+          setIsLoading(false)
+          return
         }
+
+        // If not valid, try to refresh only if we have a refresh token
+        const currentState = authManager.getState()
+        if (currentState.refreshToken && !hasRedirected) {
+          console.log("🔍 Attempting token refresh in AuthGuard...")
+          const refreshed = await authManager.refreshAccessToken()
+          
+          if (refreshed) {
+            setAuthState(authManager.getState())
+            setIsLoading(false)
+            return
+          }
+        }
+
+        // No valid auth and refresh failed - redirect to login
+        if (!hasRedirected) {
+          setHasRedirected(true)
+          const currentPath = window.location.pathname
+          console.log("🚪 Redirecting to login...")
+          window.location.href = `${redirectTo}?redirect=${encodeURIComponent(currentPath)}`
+          return
+        }
+
+      } catch (error) {
+        console.error("AuthGuard error:", error)
+        setIsLoading(false)
       }
+    }
 
-      setAuthState(authManager.getState());
-      setIsLoading(false);
-
-      if (!state.isAuthenticated) {
-        const currentPath = window.location.pathname;
-        window.location.href = `${redirectTo}?redirect=${encodeURIComponent(
-          currentPath
-        )}`;
-      }
-    };
-
-    checkAuth();
-  }, [redirectTo]);
+    checkAuth()
+  }, [redirectTo, hasRedirected])
 
   if (isLoading) {
     return (
@@ -60,12 +74,12 @@ export default function AuthGuard({
         }}>
         <div>Loading...</div>
       </div>
-    );
+    )
   }
 
-  if (!authState.isAuthenticated) {
-    return <>{fallback}</>;
+  if (!authState.isAuthenticated || hasRedirected) {
+    return <>{fallback}</>
   }
 
-  return <>{children}</>;
+  return <>{children}</>
 }
