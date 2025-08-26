@@ -1,6 +1,6 @@
-import React, { useState } from "react"
-import { posts } from "@gl-admin/lib/api"
+import React from "react"
 import Listing from "@gl-admin/layouts/Listing"
+import { getPosts } from "@gl-admin/lib/api/posts"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import Pagination from "@gl-admin/components/ui/Pagination"
 import PostTitle from "@gl-admin/components/ui/PostTitle"
@@ -26,7 +26,7 @@ type ContentProps = {
 
 const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     const fetchData = async ({ limit, offset, ...query }: ApiMeta) => {
-        const response = await posts.getAll({ limit, offset, with_meta: true, ...query })
+        const response = await getPosts({ limit, offset, with_meta: true, ...query })
         return { data: response.data, total: response.meta.total }
     }
 

@@ -37,7 +37,7 @@ export default function AuthGuard({
         if (currentState.refreshToken && !hasRedirected) {
           console.log("🔍 Attempting token refresh in AuthGuard...")
           const refreshed = await authManager.refreshAccessToken()
-          
+
           if (refreshed) {
             setAuthState(authManager.getState())
             setIsLoading(false)
@@ -53,7 +53,6 @@ export default function AuthGuard({
           window.location.href = `${redirectTo}?redirect=${encodeURIComponent(currentPath)}`
           return
         }
-
       } catch (error) {
         console.error("AuthGuard error:", error)
         setIsLoading(false)
@@ -71,7 +70,8 @@ export default function AuthGuard({
           alignItems: "center",
           justifyContent: "center",
           padding: "2rem",
-        }}>
+        }}
+      >
         <div>Loading...</div>
       </div>
     )
