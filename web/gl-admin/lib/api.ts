@@ -249,6 +249,7 @@ export const posts = {
       search?: string
       sort?: PostSortOption
       status?: string
+      with_meta?: boolean
     } = {}
   ): Promise<ApiResponse<Post>> => {
     const queryString = buildQueryString(params)

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import Listing from "@gl-admin/layouts/Listing";
 import MediaCard from "@gl-admin/components/media/MediaCard";
 import { api, getMediaURL } from "@gl-admin/lib/api";
 import type { Media } from "@gl-admin/lib/types";
@@ -154,58 +155,54 @@ const Media: React.FC = () => {
         if (files.length > 0) handleFileUpload(files);
     };
 
-    return (
+    const listingActions = (
         <>
-            <div className="gl-admin-media-library">
-                <div className="gl-admin-media-header">
-                    <div className="gl-admin-media-header-left">
-                        <h1 className="gl-admin-media-header__title">Media Library</h1>
-                        {/* <p className="gl-admin-media-header__count">{total} {total === 1 ? 'item' : 'items'}</p> */}
-                    </div>
-                    <div className="gl-admin-media-header-right">
-                        <div className="gl-admin-media-header__filters">
-                            <div className="gl-admin-media-header__filter-wrapper">
-                                <select className="gl-admin-media-header__filter" id="media-filter-author">
-                                    <option value="">All Authors</option>
-                                    {/* TODO: Add author options dynamically */}
-                                </select>
-                            </div>
-                            <div className="gl-admin-media-header__filter-wrapper">
-                                <select className="gl-admin-media-header__filter" id="media-filter-type">
-                                    <option value="">All Types</option>
-                                    <option value="image">Images</option>
-                                    <option value="video">Videos</option>
-                                    <option value="audio">Audio</option>
-                                    <option value="document">Documents</option>
-                                </select>
-                            </div>
-                            <div className="gl-admin-media-header__sort-wrapper">
-                                <label htmlFor="media-sort" className="gl-admin-media-header__sort-label">Sort by:</label>
-                                <select className="gl-admin-media-header__sort" id="media-sort">
-                                    <option value="date_desc">Last Added</option>
-                                    <option value="date_asc">Oldest First</option>
-                                    <option value="name_asc">Name A-Z</option>
-                                    <option value="name_desc">Name Z-A</option>
-                                    <option value="size_desc">Largest First</option>
-                                    <option value="size_asc">Smallest First</option>
-                                    <option value="type_asc">Type A-Z</option>
-                                    <option value="type_desc">Type Z-A</option>
-                                    <option value="posts_desc">Most Used</option>
-                                    <option value="posts_asc">Least Used</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="gl-admin-media-header__button-wrapper">
-                            <GLAdminButton className="gl-admin-media__bulk-select" variation="flat">
-                                <Icon name="bulkSelectIcon" color="#333536" width="14" height="14" /> Bulk Select
-                            </GLAdminButton>
-                            <GLAdminButton className="gl-admin-media__new-media-btn" onClick={handleNewMediaClick}>
-                                <Icon name="add" color="white" width="14" height="14" /> New Media
-                            </GLAdminButton>
-                        </div>
-                    </div>
+            <div className="gl-admin-media-header__filters">
+                <div className="gl-admin-media-header__filter-wrapper">
+                    <select className="gl-admin-media-header__filter" id="media-filter-author">
+                        <option value="">All Authors</option>
+                        {/* TODO: Add author options dynamically */}
+                    </select>
                 </div>
+                <div className="gl-admin-media-header__filter-wrapper">
+                    <select className="gl-admin-media-header__filter" id="media-filter-type">
+                        <option value="">All Types</option>
+                        <option value="image">Images</option>
+                        <option value="video">Videos</option>
+                        <option value="audio">Audio</option>
+                        <option value="document">Documents</option>
+                    </select>
+                </div>
+                <div className="gl-admin-media-header__sort-wrapper">
+                    <label htmlFor="media-sort" className="gl-admin-media-header__sort-label">Sort by:</label>
+                    <select className="gl-admin-media-header__sort" id="media-sort">
+                        <option value="date_desc">Last Added</option>
+                        <option value="date_asc">Oldest First</option>
+                        <option value="name_asc">Name A-Z</option>
+                        <option value="name_desc">Name Z-A</option>
+                        <option value="size_desc">Largest First</option>
+                        <option value="size_asc">Smallest First</option>
+                        <option value="type_asc">Type A-Z</option>
+                        <option value="type_desc">Type Z-A</option>
+                        <option value="posts_desc">Most Used</option>
+                        <option value="posts_asc">Least Used</option>
+                    </select>
+                </div>
+            </div>
+            <div className="gl-admin-media-header__button-wrapper">
+                <GLAdminButton className="gl-admin-media__bulk-select" variation="flat">
+                    <Icon name="bulkSelectIcon" color="#333536" width="14" height="14" /> Bulk Select
+                </GLAdminButton>
+                <GLAdminButton className="gl-admin-media__new-media-btn" onClick={handleNewMediaClick}>
+                    <Icon name="add" color="white" width="14" height="14" /> New Media
+                </GLAdminButton>
+            </div>
+        </>
+    )
 
+    return (
+        <Listing title="Media Library" actions={listingActions}>
+            <div className="gl-admin-media-library">
                 {showUploadArea && (
                     <div
                         className={`gl-admin-media__upload-area${dragOver ? " gl-admin-media__upload-area--dragover" : ""}`}
@@ -297,7 +294,7 @@ const Media: React.FC = () => {
                 )}
 
             </div>
-        </>
+        </Listing>
     );
 };
 

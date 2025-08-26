@@ -1,0 +1,24 @@
+.gl-listing {
+
+    &__heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 3.38rem;
+
+        h1 {
+            color: #000;
+            font-size: 1.875rem;
+            font-style: normal;
+            font-weight: 600;
+            line-height: 130%;
+            margin-left: 1rem;
+        }
+    }
+
+    &__actions {
+        display: flex;
+        align-items: center;
+        gap: 2.38rem;
+    }
+}

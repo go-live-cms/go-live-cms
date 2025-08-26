@@ -23,8 +23,8 @@ export default function App() {
                                     <Route path="/" element={<Dashboard />} />
                                     <Route path="/404" element={<NotFound />} />
                                     <Route path="/content" element={<Content />} />
-                                    <Route path="/content/pages" element={<Content query={{ type: "page" }} />} />
-                                    <Route path="/content/posts" element={<Content query={{ type: "post" }} />} />
+                                    <Route path="/content/pages" element={<Content query={{ type: "page" }} title="Pages" />} />
+                                    <Route path="/content/posts" element={<Content query={{ type: "post" }} title="Posts" />} />
                                     <Route path="/media" element={<Media />} />
                                 </Routes>
                             </div>
