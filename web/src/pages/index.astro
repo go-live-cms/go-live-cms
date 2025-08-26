@@ -2,7 +2,10 @@
 import Page from "@/layouts/Page.astro"
 import PostsReloader from "@/components/PostsReloader.jsx"
 import { SITE_DESCRIPTION, SITE_TITLE } from "../consts"
-import { api } from "gl-admin/lib/api"
+import { getPosts } from "gl-admin/lib/api/posts"
+import { getUsers } from "gl-admin/lib/api/users"
+import { getTaxonomyTypes } from "gl-admin/lib/api/taxonomies"
+import { getMedia } from "gl-admin/lib/api/media"
 import "@gl-admin/assets/styles/global.scss"
 import "@/assets/styles/global.css"
 
@@ -17,10 +20,10 @@ let error: string | null = null
 
 try {
   const [postsResponse, taxonomiesResponse, mediaResponse, usersResponse] = await Promise.all([
-    api.getPosts(),
-    api.getTaxonomies(),
-    api.getMedia(),
-    api.getUsers(),
+    getPosts(),
+    getTaxonomyTypes(),
+    getMedia(),
+    getUsers(),
   ])
 
   latestPosts = postsResponse.data.slice(0, 3)
