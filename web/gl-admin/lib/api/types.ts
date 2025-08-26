@@ -98,6 +98,8 @@ export interface Post {
   url: string
   created_at: string
   changed_at: string
+  post_status?: string
+  post_type?: string
 }
 
 export interface User {
