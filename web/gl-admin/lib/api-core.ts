@@ -98,7 +98,6 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
   })
 }
 
-// Export everything for backward compatibility
 export default {
   getMediaURL,
   apiCall,

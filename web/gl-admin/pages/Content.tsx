@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { posts } from "@gl-admin/lib/api"
+import { getPosts } from "@gl-admin/lib/api/posts"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import Pagination from "@gl-admin/components/ui/Pagination"
 import PostTitle from "@gl-admin/components/ui/PostTitle"
@@ -27,7 +27,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp }) => {
     <>
       <Pagination
         fetchData={async ({ limit, offset, type }) => {
-          const response = await posts.getAll({ limit, offset, type })
+          const response = await getPosts({ limit, offset, type })
           return { data: response.data, total: response.meta.total }
         }}
         query={query}
