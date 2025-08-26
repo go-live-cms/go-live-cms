@@ -1,4 +1,4 @@
-import { auth } from "./api"
+import { login, logout, renewAccessToken } from "./api/sessions"
 
 export interface AuthState {
   isAuthenticated: boolean
@@ -80,7 +80,7 @@ export class AuthManager {
 
   async login(username: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await auth.login({ username, password })
+      const response = await login({ username, password })
 
       const tokenExpiry = response.expires_at ? response.expires_at * 1000 : Date.now() + 15 * 60 * 1000
 
@@ -111,7 +111,7 @@ export class AuthManager {
   async logout(): Promise<void> {
     try {
       if (this.state.refreshToken) {
-        await auth.logout({ refresh_token: this.state.refreshToken })
+        await logout({ refresh_token: this.state.refreshToken })
       }
     } catch (error) {
       console.error("Logout error:", error)
@@ -169,7 +169,7 @@ export class AuthManager {
     try {
       console.log("refreshing access token...")
 
-      const response = await auth.renewAccessToken({
+      const response = await renewAccessToken({
         refresh_token: this.state.refreshToken!,
       })
 
