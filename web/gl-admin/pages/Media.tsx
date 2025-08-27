@@ -41,7 +41,6 @@ const Media: React.FC = () => {
     //initializeMediaCardHandlers()
   }, [])
 
-  // Upload logic
   const handleFileUpload = async (files: File[]) => {
     setUploading(true)
     setUploadProgress([])
@@ -116,22 +115,28 @@ const Media: React.FC = () => {
     }
   }
 
-  // Toast logic
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null)
   const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 4700)
   }
 
-  // Upload area show/hide
   const [showUploadArea, setShowUploadArea] = useState(false)
+  const [uploadAreaActive, setUploadAreaActive] = useState(false)
 
-  const handleNewMediaClick = () => setShowUploadArea(true)
+  const handleNewMediaClick = () => {
+    setShowUploadArea(true)
+    setTimeout(() => setUploadAreaActive(true), 10)
+  }
+
   const handleCancelUploadClick = () => {
-    setShowUploadArea(false)
-    setUploading(false)
-    setUploadProgress([])
-    if (fileInputRef.current) fileInputRef.current.value = ""
+    setUploadAreaActive(false)
+    setTimeout(() => {
+      setShowUploadArea(false)
+      setUploading(false)
+      setUploadProgress([])
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }, 400)
   }
 
   const handleUploadBtnClick = () => fileInputRef.current?.click()
@@ -143,7 +148,6 @@ const Media: React.FC = () => {
     }
   }
 
-  // Drag & drop
   const uploadAreaRef = useRef<HTMLDivElement>(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -218,7 +222,9 @@ const Media: React.FC = () => {
 
         {showUploadArea && (
           <div
-            className={`gl-admin-media__upload-area${dragOver ? " gl-admin-media__upload-area--dragover" : ""}`}
+            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${
+              dragOver ? " gl-admin-media__upload-area--dragover" : ""
+            }`}
             ref={uploadAreaRef}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
