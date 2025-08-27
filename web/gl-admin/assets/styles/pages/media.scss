@@ -1,3 +1,4 @@
+@use "@gl-admin/assets/styles/variables";
 @use "@gl-admin/assets/styles/mixins";
 
 .gl-admin {
@@ -5,27 +6,31 @@
     &-header {
       display: flex;
       justify-content: space-between;
+
       &-right {
         display: flex;
         gap: 1rem;
       }
+
       &-left {
         align-items: center;
         display: flex;
         gap: 2rem;
       }
+
       &__filters {
         align-items: center;
         display: flex;
         gap: 2rem;
       }
+
       &__search {
         align-items: center;
         display: flex;
         gap: 0;
 
         &-input {
-          border: 1px solid #ccc;
+          border: 1px solid variabes.$border-color;
           border-radius: 4px 0 0 4px;
           border-right: none;
           font-size: 0.9rem;
@@ -34,12 +39,12 @@
           transition: border-color 0.2s ease;
 
           &:focus {
-            border-color: #0073aa;
+            border-color: variables.$selected-border-color;
             outline: none;
           }
 
           &::placeholder {
-            color: #999;
+            color: variables.$text-quinary;
           }
         }
 
@@ -65,11 +70,13 @@
           }
         }
       }
+
       &__button-wrapper {
         align-items: center;
         display: flex;
         gap: 1rem;
       }
+
       &__filter,
       &__sort {
         background: none;
@@ -86,7 +93,7 @@
         }
 
         &-wrapper {
-          color: #525759;
+          color: variables.$text-secondary;
           font-family: inherit;
           font-size: 1rem;
           font-style: normal;
@@ -99,8 +106,7 @@
     &__upload-area {
       background: #ebeae7;
       border-radius: 8px;
-      box-shadow: 0 0 22.8px 0 rgba(0, 0, 0, 0.1) inset;
-
+      box-shadow: variables.$box-shadow inset;
       height: 0;
       margin: 2.5rem 0;
       opacity: 0;
@@ -113,7 +119,7 @@
 
       &--active {
         height: auto;
-        margin: 2.5rem 0 5rem 0;
+        margin: 2.5rem 0 5rem;
         min-height: 200px;
         opacity: 1;
         padding: 2rem;
@@ -124,8 +130,8 @@
       }
 
       &--dragover {
-        background: #f0f6fc;
-        border: 2px solid #0073aa;
+        background: variables.$upload-area-dragover-background;
+        border: 2px solid variables.$upload-area-dragover-border-color;
         transform: scale(1.02);
         transition: background 0.2s ease, border 0.2s ease, transform 0.2s ease,
           height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -136,7 +142,7 @@
           color: #1d2327;
           font-size: 1.5rem;
           font-weight: 600;
-          margin: 0 0 1rem 0;
+          margin: 0 0 1rem;
           transform: translateY(10px);
           transition: transform 0.3s ease 0.2s;
         }
@@ -150,14 +156,14 @@
           transition: transform 0.3s ease 0.25s;
 
           span {
-            color: #646970;
+            color: variables.$text-quaternary;
             font-size: 1rem;
             font-weight: 500;
           }
         }
 
         small {
-          color: #646970;
+          color: variables.$text-quaternary;
           display: block;
           font-size: 0.875rem;
           margin-top: 1rem;
@@ -182,8 +188,8 @@
     }
 
     &__upload-progress {
-      background: #fff;
-      border: 1px solid #dcdcde;
+      background: variables.$sidebar-popup-background;
+      border: 1px solid variables.$border-color;
       border-radius: 4px;
       margin: 1rem 0;
       padding: 1rem;
@@ -210,7 +216,7 @@
       min-width: 0;
 
       .gl-admin-media__file-name {
-        color: #1d2327;
+        color: variables.$text-primary;
         display: block;
         font-weight: 500;
         overflow: hidden;
@@ -219,7 +225,7 @@
       }
 
       .gl-admin-media__file-size {
-        color: #646970;
+        color: variables.$text-quaternary;
         display: block;
         font-size: 0.875rem;
         margin-top: 0.25rem;
@@ -227,7 +233,7 @@
     }
 
     &__progress-bar {
-      background: #f0f0f1;
+      background: variables.$sidebar-background;
       border-radius: 2px;
       flex: 2;
       height: 8px;
@@ -251,7 +257,7 @@
     }
 
     &__progress-status {
-      color: #646970;
+      color: variables.$text-quaternary;
       font-size: 0.875rem;
       font-weight: 500;
       min-width: 80px;
@@ -279,12 +285,14 @@
 
     &__container {
       margin-top: 4.2rem;
+
       &--with-upload {
         .empty-state {
           display: none;
         }
       }
     }
+
     &__load-more-section {
       align-items: center;
       display: flex;
@@ -293,10 +301,12 @@
       margin-top: 2rem;
       padding: 2rem 0;
     }
+
     &__pagination-info {
-      color: gray;
+      color: variables.$text-secondary;
       font-size: 0.9rem;
     }
+
     &__load-more-btn {
       min-width: 120px;
 
@@ -305,8 +315,9 @@
         opacity: 0.6;
       }
     }
+
     &__end-message {
-      color: gray;
+      color: variables.$text-secondary;
       font-size: 0.9rem;
       font-style: italic;
       margin: 0;
@@ -314,13 +325,13 @@
   }
 }
 
-@media (max-width: 1200px) {
+@media (width <= 1200px) {
   .gl-admin-media__grid {
     grid-template-columns: repeat(3, 1fr);
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .gl-admin-media__grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -346,7 +357,7 @@
   }
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .gl-admin-media__grid {
     grid-template-columns: 1fr;
   }
@@ -360,10 +371,10 @@
 }
 
 .toast {
-  background: #fff;
+  background: variables.$toast-background;
   border-left: 4px solid;
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: variables.$toast-box-shadow;
   margin-bottom: 10px;
   max-width: 300px;
   padding: 12px 16px;
