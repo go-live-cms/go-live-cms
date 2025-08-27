@@ -31,17 +31,7 @@ const Media: React.FC = () => {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    setLoading(true)
-    getMedia({ limit: 12 })
-      .then((response) => {
-        setMediaItems(response.data)
-        setTotal(response.meta.total)
-      })
-      .catch((e) => {
-        setError(e instanceof Error ? e.message : "Failed to fetch media")
-        console.error("Error fetching media:", e)
-      })
-      .finally(() => setLoading(false))
+    refreshMediaData()
 
     //initializeMediaCardHandlers()
   }, [])
@@ -75,7 +65,7 @@ const Media: React.FC = () => {
     const successCount = results.filter((r) => r.status === "fulfilled" && r.value).length
     const failCount = results.length - successCount
 
-    setTimeout(() => {
+    setTimeout(async () => {
       if (successCount > 0) {
         showToast(
           `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${
@@ -83,12 +73,27 @@ const Media: React.FC = () => {
           }`,
           "success"
         )
-        setTimeout(() => window.location.reload(), 1500)
+        await refreshMediaData()
       } else {
         showToast("All uploads failed", "error")
       }
       setUploading(false)
     }, 1000)
+  }
+
+  const refreshMediaData = async () => {
+    try {
+      setLoading(true)
+      const response = await getMedia({ limit: 12 })
+      setMediaItems(response.data)
+      setTotal(response.meta.total)
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to fetch media")
+      console.error("Error fetching media:", e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const uploadSingleFile = async (file: File, idx: number): Promise<boolean> => {
