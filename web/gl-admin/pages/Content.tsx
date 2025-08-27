@@ -5,12 +5,13 @@ import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table
 import Pagination from "@gl-admin/components/ui/Pagination"
 import PostTitle from "@gl-admin/components/ui/PostTitle"
 import PostDateTime from "@gl-admin/components/ui/PostDateTime"
+import PostStatus from "@gl-admin/components/ui/PostStatus"
 import type { Post, ApiMeta } from "@gl-admin/lib/api/types"
 import type { PostQueryParams } from "@gl-admin/lib/api/posts"
 
 const columns: TableColumnWithRender<Post>[] = [
     { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
-    { key: "post_status", name: "Status", width: "10rem" },
+    { key: "post_status", name: "Status", width: "10rem", render: (_, row) => <PostStatus status={row?.post_status || null} iconPath={row?.post_status || null} /> },
     { key: "post_type", name: "Type", width: "10rem" },
     {
         key: "created_at",
