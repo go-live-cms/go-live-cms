@@ -1,17 +1,18 @@
+@use "@gl-admin/assets/styles/variables";
+
 .user-profile-icon {
-    width: 2.4375rem;
-    height: 2.4375rem;
-    border-radius: 0.375rem;
-    background: linear-gradient(0deg, #58B0FF 0%, #02BCFF 100%);
-    box-shadow: 0 0 4px 0 #00000040 inset;
-    color: #144370;
-    font-weight: 500;
-    display: flex;
     align-items: center;
-    justify-content: center;
-    user-select: none;
-    transition: .2s;
-    font-size: 1.02631rem;
+    background: variables.$user-profile-background;
+    border-radius: variables.$user-profile-border-radius;
+    box-shadow: variables.$user-profile-box-shadow;
+    color: variables.$user-profile-color;
+    display: flex;
+    font-size: variables.$text-size-body;
     font-weight: 500;
+    height: 2.4375rem;
+    justify-content: center;
     line-height: 150%;
+    transition: .2s;
+    user-select: none;
+    width: 2.4375rem;
 }
