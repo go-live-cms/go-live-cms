@@ -1,10 +1,6 @@
 import Icon from "./Icon";
+import { capitalize } from "@gl-admin/utils/formatting";
 import "@gl-admin/assets/styles/components/ui/post-status.scss";
-
-function capitalize(str: string | null) {
-    if (!str) return "";
-    return str.charAt(0).toUpperCase() + str.slice(1);
-}
 
 export default function PostStatus({ status, iconPath }: { status: string | null, iconPath: string | null }) {
 
