@@ -1,6 +1,7 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import Listing from "@gl-admin/layouts/Listing"
 import { getPosts } from "@gl-admin/lib/api/posts"
+import { getUsers } from "@gl-admin/lib/api/users"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import Pagination from "@gl-admin/components/ui/Pagination"
 import PostTitle from "@gl-admin/components/ui/PostTitle"
@@ -19,12 +20,26 @@ type ContentProps = {
 }
 
 const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
+    const [loadingUsers, setLoadingUsers] = useState(false);
+    const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([{ label: "All authors", value: "" }]);
+    const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({ user_id: "", status: "", type: "", sort: "" })
 
-    const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({
-        status: "",
-        type: "",
-        sort: "date_asc"
-    })
+    const getAuthorOptions = async () => {
+        const authors = await getAuthors()
+        const authorOptions = authors?.map(author => ({
+            label: author.full_name || author.username,
+            value: String(author.id)
+        })) || []
+        return [{ label: "All authors", value: "" }, ...authorOptions]
+    }
+
+    useEffect(() => {
+        const fetchAuthorOptions = async () => {
+            const options = await getAuthorOptions();
+            setAuthorOptions(options);
+        };
+        fetchAuthorOptions();
+    }, []);
 
     const columns: TableColumnWithRender<Post>[] = [
         { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
@@ -46,6 +61,19 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         })
     }
 
+    const getAuthors = async () => {
+        try {
+            setLoadingUsers(true)
+            const response = await getUsers()
+            return response.data
+        } catch (e) {
+            console.error("Error loading users:", e)
+        } finally {
+            setLoadingUsers(false)
+        }
+        return []
+    }
+
     const getAddButtonName = () => {
         if (queryProp?.type === "post") {
             return "New Post"
@@ -55,6 +83,13 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
 
     const filters = (
         <>
+            <FilterSelect
+                options={authorOptions}
+                prefix="View:"
+                value={selectedFilters.user_id}
+                loading={loadingUsers}
+                onChange={value => setSelectedFilters({ ...selectedFilters, user_id: value })}
+            />
             <FilterSelect
                 options={[
                     { label: "All status", value: "" },
@@ -79,8 +114,15 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
             }
             <FilterSelect
                 options={[
-                    { label: "Created at", value: "date_asc" },
-                    { label: "Title", value: "title_asc" },
+                    { label: "Default", value: "" },
+                    { label: "Newest First", value: "date_desc" },
+                    { label: "Oldest First", value: "date_asc" },
+                    { label: "Name A-Z", value: "title_asc" },
+                    { label: "Name Z-A", value: "title_desc" },
+                    { label: "Smallest First", value: "size_asc" },
+                    { label: "Largest First", value: "size_desc" },
+                    { label: "Type A-Z", value: "type_asc" },
+                    { label: "Type Z-A", value: "type_desc" },
                 ]}
                 value={selectedFilters.sort}
                 onChange={value => setSelectedFilters({ ...selectedFilters, sort: value })}
