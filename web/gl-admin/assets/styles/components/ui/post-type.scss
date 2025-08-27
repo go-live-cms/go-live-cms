@@ -18,4 +18,9 @@
     &:hover svg {
         border-color: rgba(0, 0, 0, 0.24);
     }
+
+    &.skeleton {
+        width: 6rem;
+        box-shadow: none;
+    }
 }

@@ -15,6 +15,10 @@ export default function PostType({ type, iconPath }: { type: string | null, icon
         }
     };
 
+    if (!type || !iconPath) {
+        return <span className="gl-post-type skeleton"></span>;
+    }
+
     return (
         <span className={`gl-post-type ${type}`}>
             {iconPath && <Icon name={iconPath} alt={type || ""} color={getTypeColor()} width="1.8rem" height="1.8rem" className="gl-post-status-icon" />}
