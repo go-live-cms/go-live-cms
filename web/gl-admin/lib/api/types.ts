@@ -45,10 +45,10 @@ export interface PaginationParams {
 
 // API meta info
 export interface ApiMeta {
-  count: number
-  limit: number
-  offset: number
-  total: number
+  count?: number
+  limit?: number
+  offset?: number
+  total?: number
 }
 
 // Generic API response
