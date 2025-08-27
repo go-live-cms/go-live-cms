@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
-import MediaCard from "@gl-admin/components/media/MediaCard"
+import MediaGrid from "@gl-admin/components/media/MediaGrid"
 import { getMedia, createMedia } from "@gl-admin/lib/api/media"
 import { getMediaURL } from "@gl-admin/lib/api"
 import type { Media } from "@gl-admin/lib/types"
@@ -26,9 +26,13 @@ const Media: React.FC = () => {
     { name: string; size: number; progress: number; status: string; error?: boolean }[]
   >([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [selectedMedia, setSelectedMedia] = useState<Media[]>([])
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    getMedia()
+    setLoading(true)
+    getMedia({ limit: 12 })
       .then((response) => {
         setMediaItems(response.data)
         setTotal(response.meta.total)
@@ -37,9 +41,23 @@ const Media: React.FC = () => {
         setError(e instanceof Error ? e.message : "Failed to fetch media")
         console.error("Error fetching media:", e)
       })
+      .finally(() => setLoading(false))
 
     //initializeMediaCardHandlers()
   }, [])
+
+  const handleBulkSelectToggle = () => {
+    setBulkSelectMode(!bulkSelectMode)
+    setSelectedMedia([])
+  }
+
+  const handleMediaSelect = (media: Media) => {
+    if (selectedMedia.some((selected) => selected.id === media.id)) {
+      setSelectedMedia(selectedMedia.filter((selected) => selected.id !== media.id))
+    } else {
+      setSelectedMedia([...selectedMedia, media])
+    }
+  }
 
   const handleFileUpload = async (files: File[]) => {
     setUploading(true)
@@ -172,6 +190,10 @@ const Media: React.FC = () => {
         <div className="gl-admin-media-header">
           <div className="gl-admin-media-header-left">
             <h1 className="gl-admin-media-header__title">Media Library</h1>
+
+            {bulkSelectMode && selectedMedia.length > 0 && (
+              <p className="gl-admin-media-header__count">{selectedMedia.length} selected</p>
+            )}
             {/* <p className="gl-admin-media-header__count">{total} {total === 1 ? 'item' : 'items'}</p> */}
           </div>
           <div className="gl-admin-media-header-right">
@@ -210,8 +232,13 @@ const Media: React.FC = () => {
               </div>
             </div>
             <div className="gl-admin-media-header__button-wrapper">
-              <GLAdminButton className="gl-admin-media__bulk-select" variation="flat">
-                <Icon name="bulkSelectIcon" color="#333536" width="14" height="14" /> Bulk Select
+              <GLAdminButton
+                className="gl-admin-media__bulk-select"
+                variation={bulkSelectMode ? "primary" : "flat"}
+                onClick={handleBulkSelectToggle}
+              >
+                <Icon name="bulkSelectIcon" color={bulkSelectMode ? "white" : "#333536"} width="14" height="14" />
+                {bulkSelectMode ? "Exit Select" : "Bulk Select"}
               </GLAdminButton>
               <GLAdminButton className="gl-admin-media__new-media-btn" onClick={handleNewMediaClick}>
                 <Icon name="add" color="white" width="14" height="14" /> New Media
@@ -305,20 +332,18 @@ const Media: React.FC = () => {
           </div>
         )}
 
-        <div className="gl-admin-media__container">
-          <div className="gl-admin-media__grid">
-            {mediaItems.map((media) => (
-              <MediaCard key={media.id} media={media} />
-            ))}
-          </div>
-          {mediaItems.length === 0 && !error && (
-            <div className="empty-state">
-              <div className="empty-icon" />
-              <h3>No media files yet</h3>
-              <p>Upload your first file by clicking "New Media" above</p>
-            </div>
-          )}
-        </div>
+        <MediaGrid
+          mediaItems={mediaItems}
+          loading={loading}
+          error={error}
+          selectable={bulkSelectMode}
+          selectedMedia={selectedMedia}
+          onMediaSelect={handleMediaSelect}
+          emptyState={{
+            title: "No media files yet",
+            description: 'Upload your first file by clicking "New Media" above',
+          }}
+        />
 
         {toast && <div className={`toast toast--${toast.type}`}>{toast.message}</div>}
       </div>
