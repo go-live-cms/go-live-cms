@@ -17,6 +17,10 @@ export default function PostStatus({ status, iconPath }: { status: string | null
         }
     };
 
+    if (!status || !iconPath) {
+        return <span className="gl-post-status skeleton"></span>;
+    }
+
     return (
         <span className={`gl-post-status ${status}`} style={{ color: getStatusColor() }}>
             {iconPath && <Icon name={iconPath} alt={status || ""} color={getStatusColor()} width="1.125rem" height="1.125rem" className="gl-post-status-icon" />}

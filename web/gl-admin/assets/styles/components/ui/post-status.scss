@@ -1,3 +1,5 @@
+@use "@gl-admin/assets/styles/mixins";
+
 .gl-post-status {
     display: flex;
     padding: 0.3rem 0.5rem;
@@ -23,5 +25,10 @@
     &.private {
         background: linear-gradient(138deg, rgba(0, 0, 0, 0.00) 5.49%, rgba(0, 0, 0, 0.15) 95.27%), rgba(38, 38, 38, 0.20);
         background-blend-mode: hard-light, normal;
+    }
+
+    &.skeleton {
+        width: 12rem;
+        box-shadow: none;
     }
 }
