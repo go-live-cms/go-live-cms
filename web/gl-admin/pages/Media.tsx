@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react"
-import MediaCard from "@gl-admin/components/media/MediaCard"
+import MediaGrid from "@gl-admin/components/media/MediaGrid"
 import { getMedia, createMedia } from "@gl-admin/lib/api/media"
+import { getUsers } from "@gl-admin/lib/api/users"
 import { getMediaURL } from "@gl-admin/lib/api"
-import type { Media } from "@gl-admin/lib/types"
+import type { Media, User, MediaSortOption } from "@gl-admin/lib/types"
 import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 
@@ -26,22 +27,98 @@ const Media: React.FC = () => {
     { name: string; size: number; progress: number; status: string; error?: boolean }[]
   >([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [selectedMedia, setSelectedMedia] = useState<Media[]>([])
+  const [loading, setLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [itemsPerPage] = useState(12)
+
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedType, setSelectedType] = useState("")
+  const [selectedUser, setSelectedUser] = useState("")
+  const [sortBy, setSortBy] = useState<MediaSortOption>("date_desc")
+  const [users, setUsers] = useState<User[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
 
   useEffect(() => {
-    getMedia()
-      .then((response) => {
-        setMediaItems(response.data)
-        setTotal(response.meta.total)
-      })
-      .catch((e) => {
-        setError(e instanceof Error ? e.message : "Failed to fetch media")
-        console.error("Error fetching media:", e)
-      })
-
+    refreshMediaData()
+    loadUsersWithMedia()
     //initializeMediaCardHandlers()
   }, [])
 
-  // Upload logic
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value)
+  }
+
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedType(e.target.value)
+  }
+
+  const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedUser(e.target.value)
+  }
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSortBy(e.target.value as MediaSortOption)
+  }
+
+  const handleFilterSearch = () => {
+    refreshMediaData(true)
+  }
+
+  // deprecated for now, TODO: add a clear filters button
+  const handleClearFilters = () => {
+    setSearchQuery("")
+    setSelectedType("")
+    setSelectedUser("")
+    setSortBy("date_desc")
+    refreshMediaData(true)
+  }
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      refreshMediaData(true)
+    }, 500)
+    return () => clearTimeout(timeoutId)
+  }, [selectedType, selectedUser, sortBy])
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery !== "") {
+        refreshMediaData(true)
+      }
+    }, 800)
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery])
+
+  const handleBulkSelectToggle = () => {
+    setBulkSelectMode(!bulkSelectMode)
+    setSelectedMedia([])
+  }
+
+  const handleMediaSelect = (media: Media) => {
+    if (selectedMedia.some((selected) => selected.id === media.id)) {
+      setSelectedMedia(selectedMedia.filter((selected) => selected.id !== media.id))
+    } else {
+      setSelectedMedia([...selectedMedia, media])
+    }
+  }
+
+  const loadUsersWithMedia = async () => {
+    try {
+      setLoadingUsers(true)
+      const response = await getUsers()
+      // TODO: This could be optimized with a backend endpoint that only returns users with media
+      setUsers(response.data)
+    } catch (e) {
+      console.error("Error loading users:", e)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
+
   const handleFileUpload = async (files: File[]) => {
     setUploading(true)
     setUploadProgress([])
@@ -58,7 +135,7 @@ const Media: React.FC = () => {
     const successCount = results.filter((r) => r.status === "fulfilled" && r.value).length
     const failCount = results.length - successCount
 
-    setTimeout(() => {
+    setTimeout(async () => {
       if (successCount > 0) {
         showToast(
           `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${
@@ -66,12 +143,74 @@ const Media: React.FC = () => {
           }`,
           "success"
         )
-        setTimeout(() => window.location.reload(), 1500)
+        await refreshMediaData(true)
       } else {
         showToast("All uploads failed", "error")
       }
       setUploading(false)
     }, 1000)
+  }
+
+  const refreshMediaData = async (reset: boolean = true) => {
+    try {
+      if (reset) {
+        setLoading(true)
+        setCurrentPage(0)
+      }
+
+      const offset = reset ? 0 : (currentPage + 1) * itemsPerPage
+      const response = await getMedia({
+        limit: itemsPerPage,
+        offset: offset,
+        search: searchQuery || undefined,
+        type: selectedType || undefined,
+        user_id: selectedUser ? parseInt(selectedUser) : undefined,
+        sort: sortBy,
+      })
+
+      if (reset) {
+        setMediaItems(response.data)
+        setCurrentPage(0)
+      } else {
+        setMediaItems((prev) => [...prev, ...response.data])
+        setCurrentPage((prev) => prev + 1)
+      }
+
+      setTotal(response.meta.total)
+      setHasMore(response.data.length === itemsPerPage && offset + response.data.length < response.meta.total)
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to fetch media")
+      console.error("Error fetching media:", e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadMoreMedia = async () => {
+    if (loadingMore || !hasMore) return
+
+    try {
+      setLoadingMore(true)
+      const offset = (currentPage + 1) * itemsPerPage
+      const response = await getMedia({
+        limit: itemsPerPage,
+        offset: offset,
+        search: searchQuery || undefined,
+        type: selectedType || undefined,
+        user_id: selectedUser ? parseInt(selectedUser) : undefined,
+        sort: sortBy,
+      })
+
+      setMediaItems((prev) => [...prev, ...response.data])
+      setCurrentPage((prev) => prev + 1)
+      setHasMore(response.data.length === itemsPerPage && offset + response.data.length < response.meta.total)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load more media")
+      console.error("Error loading more media:", e)
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   const uploadSingleFile = async (file: File, idx: number): Promise<boolean> => {
@@ -116,22 +255,28 @@ const Media: React.FC = () => {
     }
   }
 
-  // Toast logic
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null)
   const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 4700)
   }
 
-  // Upload area show/hide
   const [showUploadArea, setShowUploadArea] = useState(false)
+  const [uploadAreaActive, setUploadAreaActive] = useState(false)
 
-  const handleNewMediaClick = () => setShowUploadArea(true)
+  const handleNewMediaClick = () => {
+    setShowUploadArea(true)
+    setTimeout(() => setUploadAreaActive(true), 10)
+  }
+
   const handleCancelUploadClick = () => {
-    setShowUploadArea(false)
-    setUploading(false)
-    setUploadProgress([])
-    if (fileInputRef.current) fileInputRef.current.value = ""
+    setUploadAreaActive(false)
+    setTimeout(() => {
+      setShowUploadArea(false)
+      setUploading(false)
+      setUploadProgress([])
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }, 400)
   }
 
   const handleUploadBtnClick = () => fileInputRef.current?.click()
@@ -143,7 +288,6 @@ const Media: React.FC = () => {
     }
   }
 
-  // Drag & drop
   const uploadAreaRef = useRef<HTMLDivElement>(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -168,18 +312,50 @@ const Media: React.FC = () => {
         <div className="gl-admin-media-header">
           <div className="gl-admin-media-header-left">
             <h1 className="gl-admin-media-header__title">Media Library</h1>
+
+            {bulkSelectMode && selectedMedia.length > 0 && (
+              <p className="gl-admin-media-header__count">{selectedMedia.length} selected</p>
+            )}
             {/* <p className="gl-admin-media-header__count">{total} {total === 1 ? 'item' : 'items'}</p> */}
           </div>
           <div className="gl-admin-media-header-right">
+            {/* TODO: add this later, its working
+             <div className="gl-admin-media-header__search">
+              <input
+                type="text"
+                placeholder="Search media..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="gl-admin-media-header__search-input"
+              />
+              <button onClick={handleFilterSearch} className="gl-admin-media-header__search-btn" disabled={loading}>
+                <Icon name="search" color="white" width="16" height="16" />
+              </button>
+            </div> */}
             <div className="gl-admin-media-header__filters">
               <div className="gl-admin-media-header__filter-wrapper">
-                <select className="gl-admin-media-header__filter" id="media-filter-author">
-                  <option value="">All Authors</option>
-                  {/* TODO: Add author options dynamically */}
+                <select
+                  className="gl-admin-media-header__filter"
+                  id="media-filter-author"
+                  value={selectedUser}
+                  onChange={handleUserChange}
+                  disabled={loadingUsers}
+                >
+                  <option value="">All Users</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name || user.username}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="gl-admin-media-header__filter-wrapper">
-                <select className="gl-admin-media-header__filter" id="media-filter-type">
+                <select
+                  className="gl-admin-media-header__filter"
+                  id="media-filter-type"
+                  value={selectedType}
+                  onChange={handleTypeChange}
+                >
                   <option value="">All Types</option>
                   <option value="image">Images</option>
                   <option value="video">Videos</option>
@@ -191,23 +367,32 @@ const Media: React.FC = () => {
                 <label htmlFor="media-sort" className="gl-admin-media-header__sort-label">
                   Sort by:
                 </label>
-                <select className="gl-admin-media-header__sort" id="media-sort">
-                  <option value="date_desc">Last Added</option>
-                  <option value="date_asc">Oldest First</option>
-                  <option value="name_asc">Name A-Z</option>
-                  <option value="name_desc">Name Z-A</option>
-                  <option value="size_desc">Largest First</option>
-                  <option value="size_asc">Smallest First</option>
-                  <option value="type_asc">Type A-Z</option>
-                  <option value="type_desc">Type Z-A</option>
-                  <option value="posts_desc">Most Used</option>
-                  <option value="posts_asc">Least Used</option>
+                <select
+                  className="gl-admin-media-header__sort"
+                  id="media-sort"
+                  value={sortBy}
+                  onChange={handleSortChange}
+                >
+                  <option value="date_desc"> Newest First</option>
+                  <option value="date_asc"> Oldest First</option>
+                  <option value="name_asc"> Name A-Z</option>
+                  <option value="name_desc"> Name Z-A</option>
+                  <option value="size_asc"> Smallest First</option>
+                  <option value="size_desc"> Largest First</option>
+                  <option value="type_asc"> Type A-Z</option>
+                  <option value="type_desc"> Type Z-A</option>
+                  {/* TODO: add least used and most used */}
                 </select>
               </div>
             </div>
             <div className="gl-admin-media-header__button-wrapper">
-              <GLAdminButton className="gl-admin-media__bulk-select" variation="flat">
-                <Icon name="bulkSelectIcon" color="#333536" width="14" height="14" /> Bulk Select
+              <GLAdminButton
+                className="gl-admin-media__bulk-select"
+                variation={bulkSelectMode ? "primary" : "flat"}
+                onClick={handleBulkSelectToggle}
+              >
+                <Icon name="bulkSelectIcon" color={bulkSelectMode ? "white" : "#333536"} width="14" height="14" />
+                {bulkSelectMode ? "Exit Select" : "Bulk Select"}
               </GLAdminButton>
               <GLAdminButton className="gl-admin-media__new-media-btn" onClick={handleNewMediaClick}>
                 <Icon name="add" color="white" width="14" height="14" /> New Media
@@ -218,7 +403,9 @@ const Media: React.FC = () => {
 
         {showUploadArea && (
           <div
-            className={`gl-admin-media__upload-area${dragOver ? " gl-admin-media__upload-area--dragover" : ""}`}
+            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${
+              dragOver ? " gl-admin-media__upload-area--dragover" : ""
+            }`}
             ref={uploadAreaRef}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -299,20 +486,41 @@ const Media: React.FC = () => {
           </div>
         )}
 
-        <div className="gl-admin-media__container">
-          <div className="gl-admin-media__grid">
-            {mediaItems.map((media) => (
-              <MediaCard key={media.id} media={media} />
-            ))}
-          </div>
-          {mediaItems.length === 0 && !error && (
-            <div className="empty-state">
-              <div className="empty-icon" />
-              <h3>No media files yet</h3>
-              <p>Upload your first file by clicking "New Media" above</p>
+        <MediaGrid
+          mediaItems={mediaItems}
+          loading={loading}
+          error={error}
+          selectable={bulkSelectMode}
+          selectedMedia={selectedMedia}
+          onMediaSelect={handleMediaSelect}
+          emptyState={{
+            title: "No media files yet",
+            description: 'Upload your first file by clicking "New Media" above',
+          }}
+        />
+
+        {!loading && !error && mediaItems.length > 0 && (
+          <div className="gl-admin-media__load-more-section">
+            <div className="gl-admin-media__pagination-info">
+              Showing {mediaItems.length} of {total} items
             </div>
-          )}
-        </div>
+
+            {hasMore && (
+              <GLAdminButton
+                className="gl-admin-media__load-more-btn"
+                variation="primary"
+                onClick={loadMoreMedia}
+                disabled={loadingMore}
+              >
+                {loadingMore ? <>Loading more...</> : <>Load More</>}
+              </GLAdminButton>
+            )}
+
+            {!hasMore && mediaItems.length < total && (
+              <p className="gl-admin-media__end-message">You've reached the end of the media library</p>
+            )}
+          </div>
+        )}
 
         {toast && <div className={`toast toast--${toast.type}`}>{toast.message}</div>}
       </div>
