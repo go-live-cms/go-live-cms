@@ -5,7 +5,8 @@ import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table
 import Pagination from "@gl-admin/components/ui/Pagination"
 import PostTitle from "@gl-admin/components/ui/PostTitle"
 import PostDateTime from "@gl-admin/components/ui/PostDateTime"
-import type { Post, ApiMeta } from "@gl-admin/lib/types"
+import type { Post, ApiMeta } from "@gl-admin/lib/api/types"
+import type { PostQueryParams } from "@gl-admin/lib/api/posts"
 
 const columns: TableColumnWithRender<Post>[] = [
     { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
@@ -21,20 +22,20 @@ const columns: TableColumnWithRender<Post>[] = [
 
 type ContentProps = {
     title?: string
-    query?: Record<string, any>
+    query?: keyof PostQueryParams
 }
 
 const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
-    const fetchData = async ({ limit, offset, ...query }: ApiMeta) => {
+    const fetchData = async ({ limit, offset, ...query }: ApiMeta & PostQueryParams) => {
         const response = await getPosts({ limit, offset, with_meta: true, ...query })
-        return { data: response.data, total: response.meta.total }
+        return { data: response.data, total: response.meta.total || 0 }
     }
 
     return (
         <Listing title={title || "Content"}>
             <Pagination
                 fetchData={fetchData}
-                query={queryProp}
+                query={queryProp || {}}
             >
                 {({ data, loading }) => <Table columns={columns} data={data} loading={loading} />}
             </Pagination>
