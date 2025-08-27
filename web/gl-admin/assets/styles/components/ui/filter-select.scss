@@ -1,0 +1,60 @@
+@use "@gl-admin/assets/styles/mixins";
+
+.gl-filter-select {
+    color: #525759;
+    font-size: 1rem;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 145%;
+    position: relative;
+    user-select: none;
+
+    &__control {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+
+    &__options {
+        position: absolute;
+        right: 0;
+        height: fit-content;
+        z-index: 10;
+        background: #fff;
+        border-radius: 0 0 4px 4px;
+        box-shadow: 0 2px 8px #0000001f;
+        max-height: 200px;
+        overflow-y: auto;
+        margin-top: 2px;
+        max-width: 400%;
+        min-width: 7rem;
+        margin-top: .5rem;
+        overflow: hidden;
+        border: 1px solid #D2D2D2;
+    }
+
+    &__option {
+        padding: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+        white-space: nowrap;
+
+        &:hover {
+            background: #f0f6ff;
+        }
+
+        &--selected {
+            background: #e6f0ff;
+            font-weight: 500;
+            color: #0050FE;
+        }
+    }
+
+    &.skeleton {
+        border-radius: 0.25rem;
+        width: 9rem;
+        height: 1.6rem;
+        @include mixins.skeleton-bg;
+    }
+}

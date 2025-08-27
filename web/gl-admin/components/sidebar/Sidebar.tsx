@@ -25,7 +25,7 @@ const navigation: Navigation = [
       link: "/content",
     },
     {
-      icon: "pages" as IconPath,
+      icon: "page" as IconPath,
       name: "Pages",
       link: "/content/pages/",
     },

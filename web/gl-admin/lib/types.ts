@@ -26,6 +26,8 @@ export interface Post {
   content: string
   user_id: number
   username: string
+  post_type: string
+  post_status: string
   url: string
   created_at: string
   changed_at: string

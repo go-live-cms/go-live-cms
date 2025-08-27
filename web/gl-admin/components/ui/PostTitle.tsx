@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { Post } from "@gl-admin/lib/types";
+import type { Post } from "@gl-admin/lib/api/types";
 import { formatRelativeDay } from '@gl-admin/utils/formatting';
 
 export default function PostTitle({ value }: { value: Post | null }): JSX.Element {

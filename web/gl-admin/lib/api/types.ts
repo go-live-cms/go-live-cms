@@ -45,10 +45,10 @@ export interface PaginationParams {
 
 // API meta info
 export interface ApiMeta {
-  count: number
-  limit: number
-  offset: number
-  total: number
+  count?: number
+  limit?: number
+  offset?: number
+  total?: number
 }
 
 // Generic API response
@@ -98,6 +98,8 @@ export interface Post {
   url: string
   created_at: string
   changed_at: string
+  post_status?: string
+  post_type?: string
 }
 
 export interface User {

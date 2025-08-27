@@ -2,16 +2,17 @@ import React, { useEffect, useState } from "react"
 import Icon from "@gl-admin/components/ui/Icon"
 import Select from "@gl-admin/components/ui/Select"
 import "@gl-admin/assets/styles/components/ui/pagination.scss"
+import type { ApiMeta } from "@gl-admin/lib/api/types"
 
-type PaginationProps<T, Q = Record<string, any>> = {
-  fetchData: (query: Q & { limit: number; offset: number }) => Promise<{ data: T[]; total: number }>
+type PaginationProps<T, Q> = {
+  fetchData: ({ limit, offset, ...query }: ApiMeta & Q) => Promise<{ data: T[]; total: number }>
   query: Q
   limitOptions?: number[]
   pageWindow?: number
   children: (args: { data: T[], total: number, loading: boolean }) => React.ReactNode
 }
 
-function Pagination<T, Q = Record<string, any>>({
+function Pagination<T, Q>({
   fetchData,
   query,
   limitOptions = [8, 16, 24, 48, 64],
@@ -33,7 +34,7 @@ function Pagination<T, Q = Record<string, any>>({
   useEffect(() => {
     let isMounted = true
     setLoading(true)
-    fetchData({ ...query, limit, offset })
+    fetchData({ limit, offset, ...query })
       .then((res) => {
         if (isMounted) {
           setData(res.data)
