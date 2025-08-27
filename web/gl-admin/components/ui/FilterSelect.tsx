@@ -14,6 +14,7 @@ interface FilterSelectProps {
     onChange: (value: string) => void;
     prefix?: string;
     disabled?: boolean;
+    loading?: boolean;
 }
 
 const FilterSelect: React.FC<FilterSelectProps> = ({
@@ -22,6 +23,7 @@ const FilterSelect: React.FC<FilterSelectProps> = ({
     onChange,
     prefix,
     disabled = false,
+    loading = false,
 }) => {
     const {
         open,
@@ -32,6 +34,10 @@ const FilterSelect: React.FC<FilterSelectProps> = ({
     } = useSelect(disabled);
 
     const selectedOption = options.find(opt => opt.value === value);
+
+    if (loading) {
+        return <div className="gl-filter-select skeleton" />;
+    }
 
     return (
         <div className="gl-filter-select" ref={ref}>
