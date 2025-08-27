@@ -46,7 +46,7 @@ section.admin-main {
 }
 
 .stat-card {
-  background: variables.$sidebar-popup-background;
+  background: variables.$background;
   border: 1px solid rgb(var(--gray-light));
   border-radius: $admin-border-radius;
   box-shadow: $admin-card-shadow;
@@ -98,7 +98,7 @@ section.admin-main {
 }
 
 .admin-section {
-  background: variables.$sidebar-popup-background;
+  background: variables.$background;
   border: 1px solid rgb(var(--gray-light));
   border-radius: $admin-border-radius;
   box-shadow: 0 2px 4px rgb(var(--gray), 5%);
@@ -203,7 +203,7 @@ section.admin-main {
 
 .admin {
   &-form {
-    background: variables.$sidebar-popup-background;
+    background: variables.$background;
     border: 1px solid rgb(var(--gray-light));
     border-radius: $admin-border-radius;
     margin: 0 auto;
@@ -244,7 +244,7 @@ section.admin-main {
   }
 
   &-table {
-    background: variables.$sidebar-popup-background;
+    background: variables.$background;
     border-collapse: collapse;
     border-radius: $admin-border-radius;
     box-shadow: $admin-card-shadow;
