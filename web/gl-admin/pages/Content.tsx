@@ -126,8 +126,6 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
                     { label: "Oldest First", value: "date_asc" },
                     { label: "Name A-Z", value: "title_asc" },
                     { label: "Name Z-A", value: "title_desc" },
-                    { label: "Smallest First", value: "size_asc" },
-                    { label: "Largest First", value: "size_desc" },
                     { label: "Type A-Z", value: "type_asc" },
                     { label: "Type Z-A", value: "type_desc" },
                 ]}
