@@ -22,7 +22,7 @@ const columns: TableColumnWithRender<Post>[] = [
 
 type ContentProps = {
     title?: string
-    query?: keyof PostQueryParams
+    query?: Partial<PostQueryParams>
 }
 
 const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
