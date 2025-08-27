@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react"
 import MediaGrid from "@gl-admin/components/media/MediaGrid"
 import { getMedia, createMedia } from "@gl-admin/lib/api/media"
+import { getUsers } from "@gl-admin/lib/api/users"
 import { getMediaURL } from "@gl-admin/lib/api"
-import type { Media } from "@gl-admin/lib/types"
+import type { Media, User, MediaSortOption } from "@gl-admin/lib/types"
 import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 
@@ -34,11 +35,63 @@ const Media: React.FC = () => {
   const [loadingMore, setLoadingMore] = useState(false)
   const [itemsPerPage] = useState(12)
 
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedType, setSelectedType] = useState("")
+  const [selectedUser, setSelectedUser] = useState("")
+  const [sortBy, setSortBy] = useState<MediaSortOption>("date_desc")
+  const [users, setUsers] = useState<User[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
+
   useEffect(() => {
     refreshMediaData()
-
+    loadUsersWithMedia()
     //initializeMediaCardHandlers()
   }, [])
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value)
+  }
+
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedType(e.target.value)
+  }
+
+  const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedUser(e.target.value)
+  }
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSortBy(e.target.value as MediaSortOption)
+  }
+
+  const handleFilterSearch = () => {
+    refreshMediaData(true)
+  }
+
+  // deprecated for now, TODO: add a clear filters button
+  const handleClearFilters = () => {
+    setSearchQuery("")
+    setSelectedType("")
+    setSelectedUser("")
+    setSortBy("date_desc")
+    refreshMediaData(true)
+  }
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      refreshMediaData(true)
+    }, 500)
+    return () => clearTimeout(timeoutId)
+  }, [selectedType, selectedUser, sortBy])
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery !== "") {
+        refreshMediaData(true)
+      }
+    }, 800)
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery])
 
   const handleBulkSelectToggle = () => {
     setBulkSelectMode(!bulkSelectMode)
@@ -50,6 +103,19 @@ const Media: React.FC = () => {
       setSelectedMedia(selectedMedia.filter((selected) => selected.id !== media.id))
     } else {
       setSelectedMedia([...selectedMedia, media])
+    }
+  }
+
+  const loadUsersWithMedia = async () => {
+    try {
+      setLoadingUsers(true)
+      const response = await getUsers()
+      // TODO: This could be optimized with a backend endpoint that only returns users with media
+      setUsers(response.data)
+    } catch (e) {
+      console.error("Error loading users:", e)
+    } finally {
+      setLoadingUsers(false)
     }
   }
 
@@ -96,6 +162,10 @@ const Media: React.FC = () => {
       const response = await getMedia({
         limit: itemsPerPage,
         offset: offset,
+        search: searchQuery || undefined,
+        type: selectedType || undefined,
+        user_id: selectedUser ? parseInt(selectedUser) : undefined,
+        sort: sortBy,
       })
 
       if (reset) {
@@ -126,6 +196,10 @@ const Media: React.FC = () => {
       const response = await getMedia({
         limit: itemsPerPage,
         offset: offset,
+        search: searchQuery || undefined,
+        type: selectedType || undefined,
+        user_id: selectedUser ? parseInt(selectedUser) : undefined,
+        sort: sortBy,
       })
 
       setMediaItems((prev) => [...prev, ...response.data])
@@ -245,15 +319,43 @@ const Media: React.FC = () => {
             {/* <p className="gl-admin-media-header__count">{total} {total === 1 ? 'item' : 'items'}</p> */}
           </div>
           <div className="gl-admin-media-header-right">
+            {/* TODO: add this later, its working
+             <div className="gl-admin-media-header__search">
+              <input
+                type="text"
+                placeholder="Search media..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="gl-admin-media-header__search-input"
+              />
+              <button onClick={handleFilterSearch} className="gl-admin-media-header__search-btn" disabled={loading}>
+                <Icon name="search" color="white" width="16" height="16" />
+              </button>
+            </div> */}
             <div className="gl-admin-media-header__filters">
               <div className="gl-admin-media-header__filter-wrapper">
-                <select className="gl-admin-media-header__filter" id="media-filter-author">
-                  <option value="">All Authors</option>
-                  {/* TODO: Add author options dynamically */}
+                <select
+                  className="gl-admin-media-header__filter"
+                  id="media-filter-author"
+                  value={selectedUser}
+                  onChange={handleUserChange}
+                  disabled={loadingUsers}
+                >
+                  <option value="">All Users</option>
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name || user.username}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="gl-admin-media-header__filter-wrapper">
-                <select className="gl-admin-media-header__filter" id="media-filter-type">
+                <select
+                  className="gl-admin-media-header__filter"
+                  id="media-filter-type"
+                  value={selectedType}
+                  onChange={handleTypeChange}
+                >
                   <option value="">All Types</option>
                   <option value="image">Images</option>
                   <option value="video">Videos</option>
@@ -265,17 +367,21 @@ const Media: React.FC = () => {
                 <label htmlFor="media-sort" className="gl-admin-media-header__sort-label">
                   Sort by:
                 </label>
-                <select className="gl-admin-media-header__sort" id="media-sort">
-                  <option value="date_desc">Last Added</option>
-                  <option value="date_asc">Oldest First</option>
-                  <option value="name_asc">Name A-Z</option>
-                  <option value="name_desc">Name Z-A</option>
-                  <option value="size_desc">Largest First</option>
-                  <option value="size_asc">Smallest First</option>
-                  <option value="type_asc">Type A-Z</option>
-                  <option value="type_desc">Type Z-A</option>
-                  <option value="posts_desc">Most Used</option>
-                  <option value="posts_asc">Least Used</option>
+                <select
+                  className="gl-admin-media-header__sort"
+                  id="media-sort"
+                  value={sortBy}
+                  onChange={handleSortChange}
+                >
+                  <option value="date_desc"> Newest First</option>
+                  <option value="date_asc"> Oldest First</option>
+                  <option value="name_asc"> Name A-Z</option>
+                  <option value="name_desc"> Name Z-A</option>
+                  <option value="size_asc"> Smallest First</option>
+                  <option value="size_desc"> Largest First</option>
+                  <option value="type_asc"> Type A-Z</option>
+                  <option value="type_desc"> Type Z-A</option>
+                  {/* TODO: add least used and most used */}
                 </select>
               </div>
             </div>
