@@ -29,6 +29,10 @@ const Media: React.FC = () => {
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
   const [selectedMedia, setSelectedMedia] = useState<Media[]>([])
   const [loading, setLoading] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [itemsPerPage] = useState(12)
 
   useEffect(() => {
     refreshMediaData()
@@ -73,7 +77,7 @@ const Media: React.FC = () => {
           }`,
           "success"
         )
-        await refreshMediaData()
+        await refreshMediaData(true)
       } else {
         showToast("All uploads failed", "error")
       }
@@ -81,18 +85,57 @@ const Media: React.FC = () => {
     }, 1000)
   }
 
-  const refreshMediaData = async () => {
+  const refreshMediaData = async (reset: boolean = true) => {
     try {
-      setLoading(true)
-      const response = await getMedia({ limit: 12 })
-      setMediaItems(response.data)
+      if (reset) {
+        setLoading(true)
+        setCurrentPage(0)
+      }
+
+      const offset = reset ? 0 : (currentPage + 1) * itemsPerPage
+      const response = await getMedia({
+        limit: itemsPerPage,
+        offset: offset,
+      })
+
+      if (reset) {
+        setMediaItems(response.data)
+        setCurrentPage(0)
+      } else {
+        setMediaItems((prev) => [...prev, ...response.data])
+        setCurrentPage((prev) => prev + 1)
+      }
+
       setTotal(response.meta.total)
+      setHasMore(response.data.length === itemsPerPage && offset + response.data.length < response.meta.total)
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch media")
       console.error("Error fetching media:", e)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadMoreMedia = async () => {
+    if (loadingMore || !hasMore) return
+
+    try {
+      setLoadingMore(true)
+      const offset = (currentPage + 1) * itemsPerPage
+      const response = await getMedia({
+        limit: itemsPerPage,
+        offset: offset,
+      })
+
+      setMediaItems((prev) => [...prev, ...response.data])
+      setCurrentPage((prev) => prev + 1)
+      setHasMore(response.data.length === itemsPerPage && offset + response.data.length < response.meta.total)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load more media")
+      console.error("Error loading more media:", e)
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -349,6 +392,29 @@ const Media: React.FC = () => {
             description: 'Upload your first file by clicking "New Media" above',
           }}
         />
+
+        {!loading && !error && mediaItems.length > 0 && (
+          <div className="gl-admin-media__load-more-section">
+            <div className="gl-admin-media__pagination-info">
+              Showing {mediaItems.length} of {total} items
+            </div>
+
+            {hasMore && (
+              <GLAdminButton
+                className="gl-admin-media__load-more-btn"
+                variation="primary"
+                onClick={loadMoreMedia}
+                disabled={loadingMore}
+              >
+                {loadingMore ? <>Loading more...</> : <>Load More</>}
+              </GLAdminButton>
+            )}
+
+            {!hasMore && mediaItems.length < total && (
+              <p className="gl-admin-media__end-message">You've reached the end of the media library</p>
+            )}
+          </div>
+        )}
 
         {toast && <div className={`toast toast--${toast.type}`}>{toast.message}</div>}
       </div>
