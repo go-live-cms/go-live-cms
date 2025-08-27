@@ -65,16 +65,18 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
                 value={selectedFilters.status}
                 onChange={value => setSelectedFilters({ ...selectedFilters, status: value })}
             />
-            <FilterSelect
-                options={[
-                    { label: "All types", value: "" },
-                    { label: "Posts", value: "post" },
-                    { label: "Pages", value: "page" },
-                ]}
-                prefix="View:"
-                value={selectedFilters.type}
-                onChange={value => setSelectedFilters({ ...selectedFilters, type: value })}
-            />
+            {!queryProp?.type &&
+                <FilterSelect
+                    options={[
+                        { label: "All types", value: "" },
+                        { label: "Posts", value: "post" },
+                        { label: "Pages", value: "page" },
+                    ]}
+                    prefix="View:"
+                    value={selectedFilters.type}
+                    onChange={value => setSelectedFilters({ ...selectedFilters, type: value })}
+                />
+            }
             <FilterSelect
                 options={[
                     { label: "Created at", value: "date_asc" },
