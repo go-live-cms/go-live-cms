@@ -1,7 +1,9 @@
+@use "@gl-admin/assets/styles/variables";
+
 $admin-max-width: 1200px;
 $admin-padding: 3em 1em;
 $admin-border-radius: 12px;
-$admin-card-shadow: 0 2px 8px rgba(var(--gray), 10%);
+$admin-card-shadow: 0 2px 8px rgb(var(--gray), 10%);
 $admin-card-shadow-hover: var(--box-shadow);
 
 main#admin {
@@ -13,21 +15,21 @@ section.admin-main {
   height: 100vh;
   overflow-y: auto;
   padding: $admin-padding;
-  width: 100%;
   padding: 2rem 6.25rem;
+  width: 100%;
 }
 
 .admin-header {
   background: linear-gradient(135deg, var(--accent), var(--accent-dark));
   border-radius: $admin-border-radius;
-  color: white;
+  color: variables.$text-primary;
   margin-bottom: 3rem;
   padding: 2rem 0;
   text-align: center;
 
   h1 {
     font-size: 2.5rem;
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 0.5rem;
   }
 
   p {
@@ -44,7 +46,7 @@ section.admin-main {
 }
 
 .stat-card {
-  background: white;
+  background: variables.$sidebar-popup-background;
   border: 1px solid rgb(var(--gray-light));
   border-radius: $admin-border-radius;
   box-shadow: $admin-card-shadow;
@@ -84,7 +86,7 @@ section.admin-main {
 
   &:hover {
     background: var(--accent);
-    color: white;
+    color: variables.$text-primary;
   }
 }
 
@@ -96,16 +98,16 @@ section.admin-main {
 }
 
 .admin-section {
-  background: white;
+  background: variables.$sidebar-popup-background;
   border: 1px solid rgb(var(--gray-light));
   border-radius: $admin-border-radius;
-  box-shadow: 0 2px 4px rgba(var(--gray), 5%);
+  box-shadow: 0 2px 4px rgb(var(--gray), 5%);
   padding: 2rem;
 
   h2 {
     border-bottom: 2px solid var(--accent);
     color: rgb(var(--black));
-    margin: 0 0 1rem 0;
+    margin: 0 0 1rem;
     padding-bottom: 0.5rem;
   }
 
@@ -130,7 +132,7 @@ section.admin-main {
     h4 {
       color: rgb(var(--black));
       font-size: 0.9rem;
-      margin: 0 0 0.25rem 0;
+      margin: 0 0 0.25rem;
     }
 
     p {
@@ -157,7 +159,7 @@ section.admin-main {
 .action-button {
   background: var(--accent);
   border-radius: 8px;
-  color: white;
+  color: variables.$text-primary;
   font-weight: 500;
   padding: 1rem 2rem;
   text-decoration: none;
@@ -179,16 +181,16 @@ section.admin-main {
 }
 
 .admin-error {
-  background: #fee;
-  border: 1px solid #fcc;
+  background: variables.$sidebar-background;
+  border: 1px solid variables.$input-invalid-border-color;
   border-radius: 8px;
-  color: #c00;
+  color: variables.$input-invalid-color;
   margin: 2rem 0;
   padding: 1rem;
   text-align: center;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .admin-sections {
     grid-template-columns: 1fr;
   }
@@ -201,7 +203,7 @@ section.admin-main {
 
 .admin {
   &-form {
-    background: white;
+    background: variables.$sidebar-popup-background;
     border: 1px solid rgb(var(--gray-light));
     border-radius: $admin-border-radius;
     margin: 0 auto;
@@ -229,7 +231,7 @@ section.admin-main {
 
         &:focus {
           border-color: var(--accent);
-          box-shadow: 0 0 0 2px rgba(var(--accent), 0.1);
+          box-shadow: 0 0 0 2px rgb(var(--accent), 0.1);
           outline: none;
         }
       }
@@ -242,7 +244,7 @@ section.admin-main {
   }
 
   &-table {
-    background: white;
+    background: variables.$sidebar-popup-background;
     border-collapse: collapse;
     border-radius: $admin-border-radius;
     box-shadow: $admin-card-shadow;
@@ -263,7 +265,7 @@ section.admin-main {
     }
 
     tr:hover {
-      background: rgba(var(--accent), 0.05);
+      background: rgb(var(--accent), 0.05);
     }
 
     .actions {
@@ -278,12 +280,12 @@ section.admin-main {
 
         &.edit {
           background: var(--accent);
-          color: white;
+          color: variables.$text-primary;
         }
 
         &.delete {
-          background: #dc3545;
-          color: white;
+          background: variables.$input-invalid-color;
+          color: variables.$text-primary;
         }
       }
     }
@@ -307,7 +309,7 @@ section.admin-main {
       &.current {
         background: var(--accent);
         border-color: var(--accent);
-        color: white;
+        color: variables.$text-primary;
       }
 
       &:hover:not(.current) {
