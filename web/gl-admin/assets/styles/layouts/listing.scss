@@ -21,4 +21,18 @@
         align-items: center;
         gap: 2.38rem;
     }
+
+    .gl-clear-filters {
+        color: #252727;
+        font-size: 1rem;
+        font-style: normal;
+        font-weight: 500;
+        line-height: 145%;
+        cursor: pointer;
+        user-select: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
 }

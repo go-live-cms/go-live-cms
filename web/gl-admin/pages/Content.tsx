@@ -81,11 +81,18 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         return "New Page"
     }
 
+    const clearFilters = () => {
+        setSelectedFilters({ user_id: "", status: "", type: "", sort: "" })
+    }
+
     const filters = (
         <>
+            {selectedFilters.user_id || selectedFilters.status || selectedFilters.type || selectedFilters.sort ? (
+                <div className="gl-clear-filters" onClick={clearFilters} >Clear filters</div>
+            ) : null}
             <FilterSelect
                 options={authorOptions}
-                prefix="View:"
+                prefix="Author:"
                 value={selectedFilters.user_id}
                 loading={loadingUsers}
                 onChange={value => setSelectedFilters({ ...selectedFilters, user_id: value })}
