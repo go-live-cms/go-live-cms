@@ -8,6 +8,8 @@ import PostDateTime from "@gl-admin/components/ui/PostDateTime"
 import PostStatus from "@gl-admin/components/ui/PostStatus"
 import PostType from "@gl-admin/components/ui/PostType"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
+import Button from "@gl-admin/components/ui/Button"
+import Icon from "@gl-admin/components/ui/Icon"
 import type { Post, ApiMeta } from "@gl-admin/lib/api/types"
 import type { PostQueryParams } from "@gl-admin/lib/api/posts"
 
@@ -44,6 +46,13 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         })
     }
 
+    const getAddButtonName = () => {
+        if (queryProp?.type === "post") {
+            return "New Post"
+        }
+        return "New Page"
+    }
+
     const filters = (
         <>
             <FilterSelect
@@ -73,6 +82,9 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
                 onChange={value => setSelectedFilters({ ...selectedFilters, sort: value })}
                 prefix="Sort by:"
             />
+            <Button className="gl-admin-media__new-media-btn">
+                <Icon name="add" color="white" width="14" height="14" /> {getAddButtonName()}
+            </Button>
         </>
     )
 
