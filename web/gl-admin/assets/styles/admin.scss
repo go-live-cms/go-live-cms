@@ -21,7 +21,7 @@ section.admin-main {
 
 .admin-header {
   background: linear-gradient(135deg, var(--accent), var(--accent-dark));
-  border-radius: $admin-border-radius;
+  border-radius: variables.$admin-border-radius;
   color: variables.$text-primary;
   margin-bottom: 3rem;
   padding: 2rem 0;
@@ -48,8 +48,8 @@ section.admin-main {
 .stat-card {
   background: variables.$background;
   border: 1px solid rgb(var(--gray-light));
-  border-radius: $admin-border-radius;
-  box-shadow: $admin-card-shadow;
+  border-radius: variables.$admin-border-radius;
+  box-shadow: variables.$admin-card-shadow;
   padding: 2rem;
   text-align: center;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
