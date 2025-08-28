@@ -6,7 +6,7 @@
   --pad-x: 0.875rem;
   --pad-y: 0.625rem;
 
-  border: 1px solid variables.$border-color;
+  border: 1px solid var(--border-color);
   border-radius: var(--radius);
   display: inline-flex;
   font-family: inherit;
@@ -16,14 +16,14 @@
   width: 100%;
 
   &.is-focused {
-    border-color: variables.$input-focused-border-color;
-    box-shadow: variables.$input-focused-box-shadow;
+    border-color: var(--input-focused-border-color);
+    box-shadow: var(--input-focused-box-shadow);
   }
 
   &__field {
     background: transparent;
     border: 0;
-    color: variables.$input-color;
+    color: var(--input-color);
     flex: 1 1 auto;
     font-family: inherit;
     font-size: 0.875rem;
@@ -49,7 +49,7 @@
   }
 
   &__label {
-    color: variables.$input-label-color;
+    color: var(--input-label-color);
 
     /* Before typing: acts like placeholder, slightly larger */
     font-size: 1rem;
@@ -68,15 +68,15 @@
   }
 
   &.is-invalid {
-    border-color: variables.$input-invalid-border-color;
-    box-shadow: variables.$input-invalid-box-shadow;
-    .gl-input__label { color: variables.$input-invalid-color!important; }
+    border-color: var(--input-invalid-border-color);
+    box-shadow: var(--input-invalid-box-shadow);
+    .gl-input__label { color: var(--input-invalid-color)!important; }
   }
 
   &.is-focused .gl-input__label,
   &.is-filled .gl-input__label,
   &:not(:has(input:placeholder-shown)) .gl-input__label {
-    color: variables.$input-active-color;
+    color: var(--input-active-color);
     font-size: 0.8rem;
     top: 0.25rem;
     transform: none;

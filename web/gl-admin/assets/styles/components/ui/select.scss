@@ -5,20 +5,21 @@
   position: relative;
 
   &__label {
-    color: variables.$text-secondary;
+    color: var(--text-secondary);
     display: block;
     font-size: 0.95em;
     margin-bottom: 4px;
   }
 
   &__placeholder {
+    color: var(--text-primary);
     min-width: 1.5rem;
     text-align: center;
   }
 
   &__selected {
     align-items: center;
-    background: variables.$background;
+    background: var(--background);
     border-radius: 4px;
     cursor: pointer;
     display: flex;
@@ -28,23 +29,23 @@
     user-select: none;
 
     &:hover {
-      background: variables.$background-hover;
+      background: var(--background-hover);
     }
 
     &:focus {
-      border-color: variables.$selected-border-color;
+      border-color: var(--selected-border-color);
       outline: none;
     }
 
     &--disabled {
-      background: variables.$select-disabled-background;
-      color: variables.$select-disabled-color;
+      background: var(--select-disabled-background);
+      color: var(--select-disabled-color);
       cursor: not-allowed;
     }
   }
 
   &__arrow {
-    color: #888888;
+    color: var(--text-secondary);
     font-size: 0.8em;
     pointer-events: none;
     position: absolute;
@@ -54,10 +55,11 @@
   }
 
   &__options {
-    background: variables.$background;
-    border: 1px solid variables.$border-color;
+    background: var(--background);
+    border: 1px solid var(--border-color);
     border-radius: 0 0 4px 4px;
-    box-shadow: variables.$select-box-shadow;
+    box-shadow: var(--select-box-shadow);
+    color: var(--text-primary);
     height: fit-content;
     left: 0;
     margin-top: 2px;
@@ -74,12 +76,12 @@
         transition: background 0.15s;
 
         &:hover {
-          background: variables.$background-hover;
+          background: var(--background-hover);
         }
 
         &--selected {
-          background: variables.$select-option-selected-background;
-          color: variables.$select-option-selected-color;
+          background: var(--select-option-selected-background);
+          color: var(--select-option-selected-color);
           font-weight: 500;
         }
     }

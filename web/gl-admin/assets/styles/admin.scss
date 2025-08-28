@@ -1,28 +1,29 @@
 @use "@gl-admin/assets/styles/variables";
 
-$admin-max-width: 1200px;
-$admin-padding: 3em 1em;
-$admin-border-radius: 12px;
-$admin-card-shadow: 0 2px 8px rgb(var(--gray), 10%);
-$admin-card-shadow-hover: var(--box-shadow);
 
 main#admin {
   display: flex;
   height: 100vh;
+
+  --admin-max-width: 1200px;
+  --admin-padding: 3em 1em;
+  --admin-border-radius: 12px;
+  --admin-card-shadow: 0 2px 8px rgb(var(--gray), 10%);
+  --admin-card-shadow-hover: var(--box-shadow);
 }
 
 section.admin-main {
   height: 100vh;
   overflow-y: auto;
-  padding: $admin-padding;
+  padding: var(--admin-padding);
   padding: 2rem 6.25rem;
   width: 100%;
 }
 
 .admin-header {
   background: linear-gradient(135deg, var(--accent), var(--accent-dark));
-  border-radius: variables.$admin-border-radius;
-  color: variables.$text-primary;
+  border-radius: var(--admin-border-radius);
+  color: var(--text-primary);
   margin-bottom: 3rem;
   padding: 2rem 0;
   text-align: center;
@@ -46,16 +47,16 @@ section.admin-main {
 }
 
 .stat-card {
-  background: variables.$background;
+  background: var(--background);
   border: 1px solid rgb(var(--gray-light));
-  border-radius: variables.$admin-border-radius;
-  box-shadow: variables.$admin-card-shadow;
+  border-radius: var(--admin-border-radius);
+  box-shadow: var(--admin-card-shadow);
   padding: 2rem;
   text-align: center;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
   &:hover {
-    box-shadow: $admin-card-shadow-hover;
+    box-shadow: var(--admin-card-shadow-hover);
     transform: translateY(-2px);
   }
 }
@@ -86,7 +87,7 @@ section.admin-main {
 
   &:hover {
     background: var(--accent);
-    color: variables.$text-primary;
+    color: var(--text-primary);
   }
 }
 
@@ -98,9 +99,9 @@ section.admin-main {
 }
 
 .admin-section {
-  background: variables.$background;
+  background: var(--background);
   border: 1px solid rgb(var(--gray-light));
-  border-radius: $admin-border-radius;
+  border-radius: var(--admin-border-radius);
   box-shadow: 0 2px 4px rgb(var(--gray), 5%);
   padding: 2rem;
 
@@ -159,7 +160,7 @@ section.admin-main {
 .action-button {
   background: var(--accent);
   border-radius: 8px;
-  color: variables.$text-primary;
+  color: var(--text-primary);
   font-weight: 500;
   padding: 1rem 2rem;
   text-decoration: none;
@@ -181,10 +182,10 @@ section.admin-main {
 }
 
 .admin-error {
-  background: variables.$sidebar-background;
-  border: 1px solid variables.$input-invalid-border-color;
+  background: var(--sidebar-background);
+  border: 1px solid var(--input-invalid-border-color);
   border-radius: 8px;
-  color: variables.$input-invalid-color;
+  color: var(--input-invalid-color);
   margin: 2rem 0;
   padding: 1rem;
   text-align: center;
@@ -203,9 +204,9 @@ section.admin-main {
 
 .admin {
   &-form {
-    background: variables.$background;
+    background: var(--background);
     border: 1px solid rgb(var(--gray-light));
-    border-radius: $admin-border-radius;
+    border-radius: var(--admin-border-radius);
     margin: 0 auto;
     max-width: 600px;
     padding: 2rem;
@@ -244,10 +245,10 @@ section.admin-main {
   }
 
   &-table {
-    background: variables.$background;
+    background: var(--background);
     border-collapse: collapse;
-    border-radius: $admin-border-radius;
-    box-shadow: $admin-card-shadow;
+    border-radius: var(--admin-border-radius);
+    box-shadow: var(--admin-card-shadow);
     overflow: hidden;
     width: 100%;
 
@@ -280,12 +281,12 @@ section.admin-main {
 
         &.edit {
           background: var(--accent);
-          color: variables.$text-primary;
+          color: var(--text-primary);
         }
 
         &.delete {
-          background: variables.$input-invalid-color;
-          color: variables.$text-primary;
+          background: var(--input-invalid-color);
+          color: var(--text-primary);
         }
       }
     }
@@ -309,7 +310,7 @@ section.admin-main {
       &.current {
         background: var(--accent);
         border-color: var(--accent);
-        color: variables.$text-primary;
+        color: var(--text-primary);
       }
 
       &:hover:not(.current) {

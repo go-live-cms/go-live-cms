@@ -2,21 +2,21 @@
 
 .button {
   align-items: center;
-  background: variables.$button-background-default;
+  background: var(--button-background-default);
   border: none;
-  border-radius: variables.$button-border-radius;
-  box-shadow: variables.$button-box-shadow;
-  color: variables.$button-color-default;
+  border-radius: var(--button-border-radius);
+  box-shadow: var(--button-box-shadow);
+  color: var(--button-color-default);
   cursor: pointer;
   display: flex;
   font-family: inherit;
-  font-size: variables.$text-size-body;
+  font-size: var(--text-size-body);
   font-weight: 600;
   gap: 0.625rem;
   justify-content: center;
   padding: 0.5rem 1rem;
   text-decoration: none;
-  transition: all variables.$transition-duration ease;
+  transition: all var(--transition-duration) ease;
   white-space: nowrap;
 }
 
@@ -33,18 +33,18 @@
 /* Variations */
 
 .primary {
-  background: variables.$button-background-primary;
+  background: var(--button-background-primary);
 }
 
 .secondary {
-  background: variables.$button-background-secondary;
+  background: var(--button-background-secondary);
 }
 
 .danger {
-  background: variables.$button-background-danger;
+  background: var(--button-background-danger);
 }
 
 .flat {
-  background: variables.$button-background-flat;
-  color: variables.$button-color-flat;
+  background: var(--button-background-flat);
+  color: var(--button-color-flat);
 }

@@ -2,7 +2,7 @@
 @use "@gl-admin/assets/styles/mixins";
 
 .gl-admin-media-card {
-  border: 1.2px solid variables.$border-color;
+  border: 1.2px solid var(--border-color);
   border-radius: 4.703px;
   overflow: hidden;
   position: relative;
@@ -10,7 +10,7 @@
   &__type-badge {
     background-blend-mode: hard-light, normal;
     border-radius: 4.7px;
-    box-shadow: variables.$media-card-badge-box-shadow;
+    box-shadow: var(--media-card-badge-box-shadow);
     font-size: 14px;
     font-style: normal;
     font-weight: 600;
@@ -21,13 +21,13 @@
     top: 14px;
 
     &--image {
-      background: variables.$media-card-badge-image-background;
-      color: variables.$media-card-badge-image-color;
+      background: var(--media-card-badge-image-background);
+      color: var(--media-card-badge-image-color);
     }
 
     &--video {
-      background: variables.$media-card-badge-video-background;
-      color: variables.$media-card-badge-video-color;
+      background: var(--media-card-badge-video-background);
+      color: var(--media-card-badge-video-color);
     }
   }
 
@@ -56,7 +56,7 @@
   }
 
   &__title {
-    color: variables.$text-primary;
+    color: var(--text-primary);
     font-family: inherit;
     font-size: 16px;
     font-style: normal;
@@ -74,7 +74,7 @@
   }
 
   &__meta {
-    color: variables.$text-quaternary;
+    color: var(--text-quaternary);
     display: flex;
     flex-direction: row;
     font-size: 14px;
@@ -98,14 +98,14 @@
       cursor: pointer;
 
       &:hover {
-        box-shadow: variables.$media-card-box-shadow-hover;
+        box-shadow: var(--media-card-box-shadow-hover);
         transform: translateY(-2px);
       }
     }
 
     &--selected {
       .gl-admin-media-card {
-        border: 1.2px solid variables.$selected-border-color;
+        border: 1.2px solid var(--selected-border-color);
       }
     }
   }
@@ -117,7 +117,7 @@
     z-index: 10;
 
     input[type="checkbox"] {
-      accent-color: variables.$selected-border-color;
+      accent-color: var(--selected-border-color);
       height: 20px;
       width: 20px;
     }

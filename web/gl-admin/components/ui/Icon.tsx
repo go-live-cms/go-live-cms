@@ -66,7 +66,7 @@ export const Icon: React.FC<Props> = ({
       className={`gl-icon ${className}`}
       onClick={onClick}
       style={{
-        color: "var(--color, black)",
+        color: "var(--text-primary)",
         transform: transforms.join(" "),
       }}
       aria-label={alt}

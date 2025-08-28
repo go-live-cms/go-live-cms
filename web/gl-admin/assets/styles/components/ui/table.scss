@@ -43,7 +43,7 @@ caption {
 /* Actual g-table styles */
 
 .gl-table {
-  background: variables.$background;
+  background: var(--background);
   border-collapse: collapse;
   border-spacing: 0;
   width: 100%;
@@ -70,7 +70,7 @@ caption {
   }
 
   thead {
-    border-bottom: 1px solid variables.$border-color;
+    border-bottom: 1px solid var(--border-color);
   }
 
   thead > tr,
@@ -93,7 +93,7 @@ caption {
   }
 
   th {
-    color: variables.$text-secondary;
+    color: var(--text-secondary);
     font-family: Inter, system-ui, sans-serif;
     font-size: 0.875rem;
     font-weight: 500;
@@ -101,15 +101,15 @@ caption {
   }
 
   tbody > tr + tr {
-    border-top: 1px solid variables.$border-color;
+    border-top: 1px solid var(--border-color);
   }
 
   tbody > tr:hover {
-    background: variables.$background-hover;
+    background: var(--background-hover);
   }
 
   &__date {
-    color: variables.$text-quaternary;
+    color: var(--text-quaternary);
     display: flex;
     flex-direction: column;
     font-size: 0.875rem;
@@ -132,7 +132,7 @@ caption {
     gap: 0.5rem;
 
     &-title {
-      color: variables.$text-secondary;
+      color: var(--text-secondary);
       font-size: 1rem;
       font-style: normal;
       font-weight: 500;
@@ -148,7 +148,7 @@ caption {
     }
 
     &-description {
-      color: variables.$text-quaternary;
+      color: var(--text-quaternary);
       font-size: 0.875rem;
       font-style: normal;
       font-weight: 500;

@@ -30,7 +30,7 @@
         gap: 0;
 
         &-input {
-          border: 1px solid variabes.$border-color;
+          border: 1px solid var(--border-color);
           border-radius: 4px 0 0 4px;
           border-right: none;
           font-size: 0.9rem;
@@ -39,12 +39,12 @@
           transition: border-color 0.2s ease;
 
           &:focus {
-            border-color: variables.$selected-border-color;
+            border-color: var(--selected-border-color);
             outline: none;
           }
 
           &::placeholder {
-            color: variables.$text-quinary;
+            color: var(--text-quinary);
           }
         }
 
@@ -93,7 +93,7 @@
         }
 
         &-wrapper {
-          color: variables.$text-secondary;
+          color: var(--text-secondary);
           font-family: inherit;
           font-size: 1rem;
           font-style: normal;
@@ -106,7 +106,7 @@
     &__upload-area {
       background: #ebeae7;
       border-radius: 8px;
-      box-shadow: variables.$box-shadow inset;
+      box-shadow: var(--box-shadow) inset;
       height: 0;
       margin: 2.5rem 0;
       opacity: 0;
@@ -130,8 +130,8 @@
       }
 
       &--dragover {
-        background: variables.$upload-area-dragover-background;
-        border: 2px solid variables.$upload-area-dragover-border-color;
+        background: var(--upload-area-dragover-background);
+        border: 2px solid var(--upload-area-dragover-border-color);
         transform: scale(1.02);
         transition: background 0.2s ease, border 0.2s ease, transform 0.2s ease,
           height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -156,14 +156,14 @@
           transition: transform 0.3s ease 0.25s;
 
           span {
-            color: variables.$text-quaternary;
+            color: var(--text-quaternary);
             font-size: 1rem;
             font-weight: 500;
           }
         }
 
         small {
-          color: variables.$text-quaternary;
+          color: var(--text-quaternary);
           display: block;
           font-size: 0.875rem;
           margin-top: 1rem;
@@ -188,8 +188,8 @@
     }
 
     &__upload-progress {
-      background: variables.$background;
-      border: 1px solid variables.$border-color;
+      background: var(--background);
+      border: 1px solid var(--border-color);
       border-radius: 4px;
       margin: 1rem 0;
       padding: 1rem;
@@ -216,7 +216,7 @@
       min-width: 0;
 
       .gl-admin-media__file-name {
-        color: variables.$text-primary;
+        color: var(--text-primary);
         display: block;
         font-weight: 500;
         overflow: hidden;
@@ -225,7 +225,7 @@
       }
 
       .gl-admin-media__file-size {
-        color: variables.$text-quaternary;
+        color: var(--text-quaternary);
         display: block;
         font-size: 0.875rem;
         margin-top: 0.25rem;
@@ -233,7 +233,7 @@
     }
 
     &__progress-bar {
-      background: variables.$sidebar-background;
+      background: var(--sidebar-background);
       border-radius: 2px;
       flex: 2;
       height: 8px;
@@ -257,7 +257,7 @@
     }
 
     &__progress-status {
-      color: variables.$text-quaternary;
+      color: var(--text-quaternary);
       font-size: 0.875rem;
       font-weight: 500;
       min-width: 80px;
@@ -303,7 +303,7 @@
     }
 
     &__pagination-info {
-      color: variables.$text-secondary;
+      color: var(--text-secondary);
       font-size: 0.9rem;
     }
 
@@ -317,7 +317,7 @@
     }
 
     &__end-message {
-      color: variables.$text-secondary;
+      color: var(--text-secondary);
       font-size: 0.9rem;
       font-style: italic;
       margin: 0;
@@ -371,10 +371,10 @@
 }
 
 .toast {
-  background: variables.$toast-background;
+  background: var(--toast-background);
   border-left: 4px solid;
   border-radius: 4px;
-  box-shadow: variables.$toast-box-shadow;
+  box-shadow: var(--toast-box-shadow);
   margin-bottom: 10px;
   max-width: 300px;
   padding: 12px 16px;

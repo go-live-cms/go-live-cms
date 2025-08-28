@@ -2,12 +2,12 @@
 
 .user-profile-icon {
     align-items: center;
-    background: variables.$user-profile-background;
-    border-radius: variables.$user-profile-border-radius;
-    box-shadow: variables.$user-profile-box-shadow;
-    color: variables.$user-profile-color;
+    background: var(--user-profile-background);
+    border-radius: var(--user-profile-border-radius);
+    box-shadow: var(--user-profile-box-shadow);
+    color: var(--user-profile-color);
     display: flex;
-    font-size: variables.$text-size-body;
+    font-size: var(--text-size-body);
     font-weight: 500;
     height: 2.4375rem;
     justify-content: center;

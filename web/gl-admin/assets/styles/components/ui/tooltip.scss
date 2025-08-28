@@ -8,10 +8,10 @@
 }
 
 .gl-tooltip {
-    background: variables.$tooltip-background;
+    background: var(--tooltip-background);
     border-radius: 4px;
-    box-shadow: variables.$tooltip-box-shadow;
-    color: variables.$tooltip-color;
+    box-shadow: var(--tooltip-box-shadow);
+    color: var(--tooltip-color);
     font-size: 13px;
     opacity: 0;
     padding: 6px 12px;

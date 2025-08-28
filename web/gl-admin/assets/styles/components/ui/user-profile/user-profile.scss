@@ -10,13 +10,13 @@
     width: 100%;
 
     &.hovered, &.active {
-        background: variables.$sidebar-background-hover;
+        background: var(--sidebar-background-hover);
         cursor: pointer;
     }
 
     &__name {
-        color: variables.$text-secondary;
-        font-size: variables.$text-size-body;
+        color: var(--text-secondary);
+        font-size: var(--text-size-body);
         font-weight: 400;
         line-height: 145%;
     }
@@ -29,7 +29,7 @@
         transform: translateY(-50%);
 
         &:hover, &.hovered {
-            background: variables.$sidebar-resize-handle-background;
+            background: var(--sidebar-background-hover);
             cursor: pointer;
         }
     }

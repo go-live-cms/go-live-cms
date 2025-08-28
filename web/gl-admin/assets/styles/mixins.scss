@@ -2,7 +2,7 @@
 
 @mixin skeleton-bg {
   animation: skeleton-loading 1.2s infinite linear alternate;
-  background: variables.$skeleton-background;
+  background: var(--skeleton-background);
   background-repeat: no-repeat;
   background-size: 200% 100%;
 }

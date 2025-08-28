@@ -4,10 +4,10 @@
 .sidebar-item {
     align-items: center;
     border-radius: 0.25rem;
-    color: variables.$text-secondary;
+    color: var(--text-secondary);
     cursor: pointer;
     display: flex;
-    font-size: variables.$text-size-body;
+    font-size: var(--text-size-body);
     gap: 0.5rem;
     height: fit-content;
     padding: 0.25rem .5rem;
@@ -15,7 +15,7 @@
     width: 100%;
 
     &:hover {
-        background: variables.$sidebar-background-hover;
+        background: var(--sidebar-background-hover);
 
         .sidebar-item__name {
             padding-left: .2rem;
@@ -23,9 +23,9 @@
     }
 
     &.active {
-        background: variables.$sidebar-background-hover;
-        box-shadow: inset variables.$box-shadow;
-        color: variables.$text-primary;
+        background: var(--sidebar-background-hover);
+        box-shadow: inset var(--box-shadow);
+        color: var(--text-primary);
         font-weight: 600;
     }
 
@@ -40,13 +40,13 @@
     }
 
     &__icon {
-        border-radius: variables.$icon-border-radius;
+        border-radius: var(--icon-border-radius);
         display: inline-flex;
     }
 
     &__skeleton {
         align-items: center;
-        border-radius: variables.$border-radius;
+        border-radius: var(--border-radius);
         display: inline-flex;
         height: 2rem;
         justify-content: center;

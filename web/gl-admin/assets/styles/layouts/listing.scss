@@ -8,7 +8,7 @@
         margin-bottom: 3.38rem;
 
         h1 {
-            color: variables.$text-primary;
+            color: var(--text-primary);
             font-size: 1.875rem;
             font-style: normal;
             font-weight: 600;
@@ -24,7 +24,7 @@
     }
 
     .gl-clear-filters {
-        color: variables.$text-secondary;
+        color: var(--text-secondary);
         cursor: pointer;
         font-size: 1rem;
         font-style: normal;

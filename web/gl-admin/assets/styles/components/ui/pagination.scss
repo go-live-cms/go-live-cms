@@ -3,7 +3,7 @@
 .gl-pagination {
   &__navigation {
     button {
-      color: variables.$text-secondary;
+      color: var(--text-secondary);
       font-size: 1rem;
       font-style: normal;
       font-weight: 500;
@@ -12,7 +12,7 @@
       width: 2rem;
 
       &[disabled] {
-        color: variables.$text-selected;
+        color: var(--text-selected);
         cursor: not-allowed;
         font-weight: 600;
       }
@@ -41,7 +41,7 @@
     }
 
     &:hover {
-      background: variables.$background-hover;
+      background: var(--background-hover);
     }
   }
 
