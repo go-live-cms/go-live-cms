@@ -1,11 +1,13 @@
 import Icon from "./Icon";
 import { capitalize } from "@gl-admin/utils/formatting";
+import { useDarkMode } from "@gl-admin/contexts/DarkModeContext";
 import "@gl-admin/assets/styles/components/ui/post-status.scss";
 
 export default function PostStatus({ status, iconPath }: { status: string | null, iconPath: string | null }) {
 
+    const isDark = useDarkMode();
+
     const getStatusColor = () => {
-        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
         if (isDark) {
             switch (status) {
                 case "published":
