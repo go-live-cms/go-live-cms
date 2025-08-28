@@ -6,6 +6,7 @@ import { getMediaURL } from "@gl-admin/lib/api"
 import type { Media, User, MediaSortOption } from "@gl-admin/lib/types"
 import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
+import MediaEditModal from "@gl-admin/components/media/MediaEditModal"
 
 //import { initializeMediaCardHandlers } from "@gl-admin/scripts/media-card-handlers"
 import "@gl-admin/assets/styles/pages/media.scss"
@@ -41,6 +42,8 @@ const Media: React.FC = () => {
   const [sortBy, setSortBy] = useState<MediaSortOption>("date_desc")
   const [users, setUsers] = useState<User[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [selectedMediaForEdit, setSelectedMediaForEdit] = useState<Media | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   useEffect(() => {
     refreshMediaData()
@@ -314,6 +317,16 @@ const Media: React.FC = () => {
     if (files.length > 0) handleFileUpload(files)
   }
 
+  const handleMediaCardClick = (media: Media) => {
+    setSelectedMediaForEdit(media)
+    setIsEditModalOpen(true)
+  }
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false)
+    setSelectedMediaForEdit(null)
+  }
+
   return (
     <>
       <div className="gl-admin-media-library">
@@ -501,6 +514,7 @@ const Media: React.FC = () => {
           selectable={bulkSelectMode}
           selectedMedia={selectedMedia}
           onMediaSelect={handleMediaSelect}
+          onMediaClick={handleMediaCardClick}
           emptyState={{
             title: "No media files yet",
             description: 'Upload your first file by clicking "New Media" above',
@@ -531,6 +545,8 @@ const Media: React.FC = () => {
         )}
 
         {toast && <div className={`toast toast--${toast.type}`}>{toast.message}</div>}
+
+        <MediaEditModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} media={selectedMediaForEdit} />
       </div>
     </>
   )

@@ -15,6 +15,7 @@ interface MediaGridProps {
   onMediaSelect?: (media: Media) => void
   selectedMedia?: Media[]
   selectable?: boolean
+  onMediaClick?: (media: Media) => void
 }
 
 const MediaGrid: React.FC<MediaGridProps> = ({
@@ -29,10 +30,17 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   onMediaSelect,
   selectedMedia = [],
   selectable = false,
+  onMediaClick,
 }) => {
   const handleMediaClick = (media: Media) => {
     if (selectable && onMediaSelect) {
       onMediaSelect(media)
+    }
+  }
+
+  const handleCardClick = (media: Media) => {
+    if (!selectable && onMediaClick) {
+      onMediaClick(media)
     }
   }
 
@@ -91,7 +99,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
             }`}
             onClick={() => handleMediaClick(media)}
           >
-            <MediaCard media={media} />
+            <MediaCard media={media} onClick={handleCardClick} />
             {selectable && (
               <div className="gl-admin-media-card__checkbox">
                 <input
