@@ -138,7 +138,8 @@ const Media: React.FC = () => {
     setTimeout(async () => {
       if (successCount > 0) {
         showToast(
-          `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${failCount > 0 ? `, ${failCount} failed` : ""
+          `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${
+            failCount > 0 ? `, ${failCount} failed` : ""
           }`,
           "success"
         )
@@ -175,8 +176,12 @@ const Media: React.FC = () => {
         setCurrentPage((prev) => prev + 1)
       }
 
-      setTotal(response.meta.total || 0)
-      setHasMore(response.data.length === itemsPerPage && offset + response.data.length < (response.meta.total || 0))
+      const totalItems = response.meta?.total ?? 0
+      const currentOffset = offset + response.data.length
+
+      setTotal(totalItems)
+      setHasMore(response.data.length === itemsPerPage && currentOffset < totalItems)
+
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch media")
@@ -203,7 +208,11 @@ const Media: React.FC = () => {
 
       setMediaItems((prev) => [...prev, ...response.data])
       setCurrentPage((prev) => prev + 1)
-      setHasMore(response.data.length === itemsPerPage && offset + response.data.length < response.meta.total)
+
+      const totalItems = response.meta?.total ?? 0
+      const currentOffset = offset + response.data.length
+
+      setHasMore(response.data.length === itemsPerPage && currentOffset < totalItems)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load more media")
       console.error("Error loading more media:", e)
@@ -402,8 +411,9 @@ const Media: React.FC = () => {
 
         {showUploadArea && (
           <div
-            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${dragOver ? " gl-admin-media__upload-area--dragover" : ""
-              }`}
+            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${
+              dragOver ? " gl-admin-media__upload-area--dragover" : ""
+            }`}
             ref={uploadAreaRef}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -452,22 +462,24 @@ const Media: React.FC = () => {
                 </div>
                 <div className="gl-admin-media__progress-bar">
                   <div
-                    className={`gl-admin-media__progress-fill${item.error
-                      ? " gl-admin-media__progress-fill--error"
-                      : item.progress === 100
+                    className={`gl-admin-media__progress-fill${
+                      item.error
+                        ? " gl-admin-media__progress-fill--error"
+                        : item.progress === 100
                         ? " gl-admin-media__progress-fill--success"
                         : ""
-                      }`}
+                    }`}
                     style={{ width: `${item.progress}%` }}
                   ></div>
                 </div>
                 <span
-                  className={`gl-admin-media__progress-status${item.error
-                    ? " gl-admin-media__progress-status--error"
-                    : item.progress === 100
+                  className={`gl-admin-media__progress-status${
+                    item.error
+                      ? " gl-admin-media__progress-status--error"
+                      : item.progress === 100
                       ? " gl-admin-media__progress-status--success"
                       : ""
-                    }`}
+                  }`}
                 >
                   {item.status}
                 </span>
