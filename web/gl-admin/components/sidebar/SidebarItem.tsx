@@ -1,8 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { useDarkMode } from "@gl-admin/contexts/DarkModeContext";
 import Icon from "@gl-admin/components/ui/Icon";
 import "@gl-admin/assets/styles/components/sidebar/sidebar-item.scss";
-
 
 import type { IconPath } from "@gl-admin/types/sidebar";
 
@@ -23,6 +23,8 @@ const SidebarItem: React.FC<Props> = ({
     type,
     onClick,
 }) => {
+    const isDark = useDarkMode();
+    const navIconColor = isDark ? "#FFFFFF" : "#46484A";
 
     if (link) {
         return <>
@@ -32,7 +34,7 @@ const SidebarItem: React.FC<Props> = ({
                         <div
                             className="sidebar-item__icon"
                         >
-                            <Icon name={iconPath} color="#46484A" />
+                            <Icon name={iconPath} color={navIconColor} />
                         </div>
                     )}
                     <span className="sidebar-item__name">{name}</span>
@@ -46,7 +48,7 @@ const SidebarItem: React.FC<Props> = ({
                             <div
                                 className="sidebar-item__icon"
                             >
-                                <Icon name={iconPath} color="#46484A" />
+                                <Icon name={iconPath} color={navIconColor} />
                             </div>
                         )}
                         <span className="sidebar-item__name">{name}</span>
@@ -64,7 +66,7 @@ const SidebarItem: React.FC<Props> = ({
                     <div
                         className="sidebar-item__icon"
                     >
-                        <Icon name={iconPath} color="#46484A" />
+                        <Icon name={iconPath} color={navIconColor} />
                     </div>
                 )}
                 <span className="sidebar-item__name">{name}</span>
