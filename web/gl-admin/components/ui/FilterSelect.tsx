@@ -1,4 +1,5 @@
 import React from "react";
+import { useDarkMode } from "@gl-admin/contexts/DarkModeContext";
 import { useSelect } from "@gl-admin/utils/select";
 import Icon from "@gl-admin/components/ui/Icon";
 import "@gl-admin/assets/styles/components/ui/filter-select.scss";
@@ -32,7 +33,8 @@ const FilterSelect: React.FC<FilterSelectProps> = ({
         ref,
         handleSelectClick,
     } = useSelect(disabled);
-
+    const isDark = useDarkMode();
+    const iconColor = isDark ? "#FFFFFF" : "#333536";
     const selectedOption = options.find(opt => opt.value === value);
 
     if (loading) {
@@ -52,7 +54,7 @@ const FilterSelect: React.FC<FilterSelectProps> = ({
                 <span className="gl-filter-select__value">
                     {selectedOption ? selectedOption.label : "Select..."}
                 </span>
-                <Icon name="dropdown" mirror_vertically={open} color="#333536" width="7px" height="4.3px" />
+                <Icon name="dropdown" mirror_vertically={open} color={iconColor} width="7px" height="4.3px" />
             </div>
             {open && (
                 <div className="gl-filter-select__options" style={optionsStyle}>
