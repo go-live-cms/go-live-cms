@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react"
+import { useDarkMode } from "@gl-admin/contexts/DarkModeContext"
 import Listing from "@gl-admin/layouts/Listing"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import { getUsers } from "@gl-admin/lib/api/users"
@@ -23,6 +24,8 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     const [loadingUsers, setLoadingUsers] = useState(false);
     const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([{ label: "All authors", value: "" }]);
     const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({ user_id: "", status: "", type: "", sort: "" })
+    const isDark = useDarkMode();
+    const iconColor = isDark ? "#000000" : "#FFFFFF";
 
     const getAuthorOptions = async () => {
         const authors = await getAuthors()
@@ -134,7 +137,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
                 prefix="Sort by:"
             />
             <Button className="gl-admin-media__new-media-btn">
-                <Icon name="add" color="white" width="14" height="14" /> {getAddButtonName()}
+                <Icon name="add" color={iconColor} width="14" height="14" /> {getAddButtonName()}
             </Button>
         </>
     )
