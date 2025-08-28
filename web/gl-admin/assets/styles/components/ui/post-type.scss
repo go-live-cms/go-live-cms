@@ -1,26 +1,25 @@
+@use "@gl-admin/assets/styles/variables";
+
 .gl-post-type {
-    display: flex;
-    padding: 0.25rem 0;
     align-items: center;
-    gap: 0.5rem;
-    user-select: none;
+    color: var(--text-primary);
     cursor: default;
+    display: flex;
     font-size: 1rem;
     font-style: normal;
     font-weight: 400;
+    gap: 0.5rem;
     line-height: 145%;
+    padding: 0.25rem 0;
+    user-select: none;
 
     svg {
-        border: 1px solid rgba(0, 0, 0, 0.12);
+        border: 1px solid var(--border-color);
         border-radius: .25rem;
     }
 
-    &:hover svg {
-        border-color: rgba(0, 0, 0, 0.24);
-    }
-
     &.skeleton {
-        width: 6rem;
         box-shadow: none;
+        width: 6rem;
     }
 }

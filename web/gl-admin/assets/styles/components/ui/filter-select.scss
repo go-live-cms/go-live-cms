@@ -1,8 +1,9 @@
+@use "@gl-admin/assets/styles/variables";
 @use "@gl-admin/assets/styles/mixins";
 
 .gl-filter-select {
-    color: #525759;
-    font-size: 1rem;
+    color: var(--text-secondary);
+    font-size: var(--text-size-body);
     font-style: normal;
     font-weight: 500;
     line-height: 145%;
@@ -10,51 +11,52 @@
     user-select: none;
 
     &__control {
-        display: flex;
         align-items: center;
-        gap: 0.5rem;
         cursor: pointer;
+        display: flex;
+        gap: 0.5rem;
     }
 
     &__options {
-        position: absolute;
-        right: 0;
-        height: fit-content;
-        z-index: 10;
-        background: #fff;
+        background: var(--background);
+        border: 1px solid var(--border-color);
         border-radius: 0 0 4px 4px;
-        box-shadow: 0 2px 8px #0000001f;
-        max-height: 200px;
-        overflow-y: auto;
+        box-shadow: var(--sidebar-popup-box-shadow);
+        height: fit-content;
         margin-top: 2px;
+        margin-top: .5rem;
+        max-height: 200px;
         max-width: 400%;
         min-width: 7rem;
-        margin-top: .5rem;
         overflow: hidden;
-        border: 1px solid #D2D2D2;
+        overflow-y: auto;
+        position: absolute;
+        right: 0;
+        z-index: 10;
     }
 
     &__option {
-        padding: 8px;
         cursor: pointer;
+        padding: 8px;
         transition: background 0.15s;
         white-space: nowrap;
 
         &:hover {
-            background: #f0f6ff;
+            background: var(--sidebar-background-hover);
         }
 
-        &--selected {
-            background: #e6f0ff;
+        &.selected {
+            background: var(--filter-select-option-selected-background);
+            color: var(--filter-select-option-selected-color);
             font-weight: 500;
-            color: #0050FE;
         }
     }
 
     &.skeleton {
         border-radius: 0.25rem;
-        width: 9rem;
         height: 1.6rem;
+        width: 9rem;
+
         @include mixins.skeleton-bg;
     }
 }

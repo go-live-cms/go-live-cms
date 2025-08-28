@@ -1,4 +1,24 @@
+@use "@gl-admin/assets/styles/variables";
+
 .gl-pagination {
+  &__navigation {
+    button {
+      color: var(--text-secondary);
+      font-size: 1rem;
+      font-style: normal;
+      font-weight: 500;
+      height: 2rem;
+      line-height: normal;
+      width: 2rem;
+
+      &[disabled] {
+        color: var(--text-selected);
+        cursor: not-allowed;
+        font-weight: 600;
+      }
+    }
+  }
+
   button {
     background: none;
     border: none;
@@ -21,7 +41,7 @@
     }
 
     &:hover {
-      background: #0000000a;
+      background: var(--background-hover);
     }
   }
 
@@ -34,23 +54,5 @@
     display: flex;
     gap: 8px;
     margin-top: 0.875rem;
-  }
-
-  &__navigation {
-    button {
-      color: #333536;
-      font-size: 1rem;
-      font-style: normal;
-      font-weight: 500;
-      height: 2rem;
-      line-height: normal;
-      width: 2rem;
-
-      &[disabled] {
-        color: #0050fe;
-        cursor: not-allowed;
-        font-weight: 600;
-      }
-    }
   }
 }

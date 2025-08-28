@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react"
+import { useDarkMode } from "@gl-admin/contexts/DarkModeContext"
 import Icon from "@gl-admin/components/ui/Icon"
 import Select from "@gl-admin/components/ui/Select"
 import "@gl-admin/assets/styles/components/ui/pagination.scss"
@@ -24,6 +25,9 @@ function Pagination<T, Q>({
   const [data, setData] = useState<T[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const isDark = useDarkMode()
+  const navIconColor = isDark ? "#FFFFFF" : "#46484A";
+  const navIconDisabledColor = isDark ? "#6B7175" : "#B8BCBF"
 
   const navigationIconSize = "1.2rem"
 
@@ -85,7 +89,7 @@ function Pagination<T, Q>({
             <Icon
               name="double-next"
               mirror_horizontally={true}
-              color={currentPage === 0 ? "#B8BCBF" : "#333536"}
+              color={currentPage === 0 ? navIconDisabledColor : navIconColor}
               width={navigationIconSize}
               height={navigationIconSize}
             />
@@ -96,7 +100,7 @@ function Pagination<T, Q>({
             <Icon
               name="next"
               mirror_horizontally={true}
-              color={currentPage === 0 ? "#B8BCBF" : "#333536"}
+              color={currentPage === 0 ? navIconDisabledColor : navIconColor}
               width={navigationIconSize}
               height={navigationIconSize}
             />
@@ -116,7 +120,7 @@ function Pagination<T, Q>({
           >
             <Icon
               name="next"
-              color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"}
+              color={currentPage >= totalPages - 1 || totalPages === 0 ? navIconDisabledColor : navIconColor}
               width={navigationIconSize}
               height={navigationIconSize}
             />
@@ -128,7 +132,7 @@ function Pagination<T, Q>({
           >
             <Icon
               name="double-next"
-              color={currentPage >= totalPages - 1 || totalPages === 0 ? "#B8BCBF" : "#333536"}
+              color={currentPage >= totalPages - 1 || totalPages === 0 ? navIconDisabledColor : navIconColor}
               width={navigationIconSize}
               height={navigationIconSize}
             />

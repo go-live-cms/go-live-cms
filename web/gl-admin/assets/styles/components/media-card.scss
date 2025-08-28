@@ -1,14 +1,16 @@
+@use "@gl-admin/assets/styles/variables";
 @use "@gl-admin/assets/styles/mixins";
 
 .gl-admin-media-card {
-  border: 1.2px solid #bdbdbc;
+  border: 1.2px solid var(--border-color);
   border-radius: 4.703px;
   overflow: hidden;
   position: relative;
+
   &__type-badge {
     background-blend-mode: hard-light, normal;
     border-radius: 4.7px;
-    box-shadow: 0 0 4.586px 0 rgba(0, 0, 0, 0.25) inset;
+    box-shadow: var(--media-card-badge-box-shadow);
     font-size: 14px;
     font-style: normal;
     font-weight: 600;
@@ -17,37 +19,44 @@
     padding: 4.7px 7px;
     position: absolute;
     top: 14px;
+
     &--image {
-      background: linear-gradient(138deg, rgba(0, 0, 0, 0) 5.49%, rgba(0, 0, 0, 0.15) 95.27%), #3f3;
-      color: #0f5e0f;
+      background: var(--media-card-badge-image-background);
+      color: var(--media-card-badge-image-color);
     }
+
     &--video {
-      background: linear-gradient(138deg, rgba(0, 0, 0, 0) 5.49%, rgba(0, 0, 0, 0.15) 95.27%), #33c2ff;
-      color: #054bce;
+      background: var(--media-card-badge-video-background);
+      color: var(--media-card-badge-video-color);
     }
   }
+
   &__image {
     height: 100%;
     object-fit: cover;
     width: 100%;
   }
+
   &__thumbnail {
     height: 220px;
 
     &.skeleton {
       @include mixins.skeleton-bg;
+
       border-radius: 8px;
       height: 200px;
     }
   }
+
   &__content {
     display: flex;
     flex-direction: column;
     gap: 7px;
     padding: 14px;
   }
+
   &__title {
-    color: #000;
+    color: var(--text-primary);
     font-family: inherit;
     font-size: 16px;
     font-style: normal;
@@ -56,44 +65,51 @@
 
     &.skeleton {
       @include mixins.skeleton-bg;
+
       border-radius: 4px;
       height: 1.2em;
       margin-bottom: 0.5rem;
       width: 80%;
     }
   }
+
   &__meta {
-    color: #6e7376;
+    color: var(--text-quaternary);
     display: flex;
     flex-direction: row;
     font-size: 14px;
     font-weight: 500;
     gap: 14px;
     line-height: 145%;
+
     &.skeleton {
       @include mixins.skeleton-bg;
+
       border-radius: 4px;
       height: 1em;
       width: 60%;
     }
   }
+
   &-wrapper {
     position: relative;
 
     &--selectable {
       cursor: pointer;
+
       &:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        box-shadow: var(--media-card-box-shadow-hover);
         transform: translateY(-2px);
       }
     }
 
     &--selected {
       .gl-admin-media-card {
-        border: 1.2px solid #0050fe;
+        border: 1.2px solid var(--selected-border-color);
       }
     }
   }
+
   &__checkbox {
     position: absolute;
     right: -8px;
@@ -101,7 +117,7 @@
     z-index: 10;
 
     input[type="checkbox"] {
-      accent-color: #0050fe;
+      accent-color: var(--selected-border-color);
       height: 20px;
       width: 20px;
     }

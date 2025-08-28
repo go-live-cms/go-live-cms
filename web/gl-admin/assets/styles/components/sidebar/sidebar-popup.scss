@@ -1,18 +1,19 @@
+@use "@gl-admin/assets/styles/variables";
+
 $width: 16rem;
 
 .sidebar-popup {
-    position: absolute;
-    bottom: .5rem;
-    right: calc(($width * -1) - .5rem);
-    background: white;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
-    width: $width;
+    background: var(--sidebar-popup-background);
+    border: 1px solid var(--border-color);
     border-radius: 0.3125rem;
-    border: 1px solid #D2D2D2;
+    bottom: .5rem;
+    box-shadow: var(--sidebar-popup-box-shadow);
     opacity: 0;
     pointer-events: none;
+    position: absolute;
+    right: calc(($width * -1) - .5rem);
     transform: translateX(-5%);
+    width: $width;
     z-index: 99;
 
     &.open {
@@ -26,13 +27,13 @@ $width: 16rem;
     }
 
     &__footer {
+        color: var(--text-quaternary);
         display: flex;
-        gap: 1rem;
-        padding: 1rem 1.5rem;
-        color: #838383;
-        font-size: 0.75rem;
+        font-size: var(--text-size-small);
         font-style: normal;
         font-weight: 400;
+        gap: 1rem;
         line-height: 145%;
+        padding: 1rem 1.5rem;
     }
 }
