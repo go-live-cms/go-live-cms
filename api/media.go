@@ -79,6 +79,11 @@ type PopularMediaResponse struct {
 	OriginalFilename string    `json:"original_filename"`
 }
 
+type PostWithMediaOrderResponse struct {
+	Post       PostResponse `json:"post"`
+	MediaOrder int32        `json:"media_order"`
+}
+
 func toMediaResponse(media db.Medium) MediaResponse {
 	var width, height, duration *int32
 	if media.Width != 0 {
@@ -1088,6 +1093,48 @@ func (server *Server) deleteMedia(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "media deleted successfully",
+	})
+}
+
+func (server *Server) getMediaPosts(c *gin.Context) {
+	mediaIDParam := c.Param("id")
+	mediaID, err := strconv.ParseInt(mediaIDParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid media ID"})
+		return
+	}
+
+	media, err := server.store.GetMedia(c.Request.Context(), mediaID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media"})
+		return
+	}
+
+	posts, err := server.store.GetPostsByMedia(c.Request.Context(), mediaID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media posts"})
+		return
+	}
+
+	postResponses := make([]PostWithMediaOrderResponse, len(posts))
+	for i, post := range posts {
+		postResponses[i] = PostWithMediaOrderResponse{
+			Post:       toPostResponse(post),
+			MediaOrder: post.MediaOrder,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"media": toMediaResponse(media),
+		"posts": postResponses,
+		"meta": gin.H{
+			"media_id": mediaID,
+			"count":    len(postResponses),
+		},
 	})
 }
 
