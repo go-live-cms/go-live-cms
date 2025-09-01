@@ -86,10 +86,17 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      const updatedMedia = await updateMedia(media.id, editedData)
-      if (onMediaUpdated) {
-        onMediaUpdated(updatedMedia.media)
-      }
+      const updated = await updateMedia(media.id, editedData)
+      const saved = updated.media as Media
+
+      setEditedData({
+        name: saved.name || "",
+        alt: saved.alt || "",
+        description: saved.description || "",
+      })
+
+      onMediaUpdated?.(saved)
+
       setIsEditing(false)
     } catch (error) {
       console.error("Failed to update media:", error)
@@ -207,7 +214,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
           <div className="media-edit-modal__preview">
             <div className="media-edit-modal__preview-container">
               {isImageFile ? (
-                <img src={mediaURL} alt={media.alt} className="media-edit-modal__preview-image" />
+                <img src={mediaURL} alt={editedData.alt || media.alt} className="media-edit-modal__preview-image" />
               ) : (
                 <div className="media-edit-modal__preview-file">
                   <span className="media-edit-modal__preview-filename">{media.name}</span>
@@ -258,7 +265,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                     onChange={(e) => handleInputChange("name", e.target.value)}
                   />
                 ) : (
-                  <span className="media-edit-modal__value">{media.name}</span>
+                  <span className="media-edit-modal__value">{editedData.name || media.name}</span>
                 )}
               </div>
             </div>
@@ -277,7 +284,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                     onChange={(e) => handleInputChange("alt", e.target.value)}
                   />
                 ) : (
-                  <span className="media-edit-modal__value">{media.alt || "No alt text"}</span>
+                  <span className="media-edit-modal__value">{editedData.alt || "No alt text"}</span>
                 )}
               </div>
             </div>
@@ -296,7 +303,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                     rows={3}
                   />
                 ) : (
-                  <span className="media-edit-modal__value">{media.description}</span>
+                  <span className="media-edit-modal__value">{editedData.description}</span>
                 )}
               </div>
             </div>

@@ -1,7 +1,7 @@
 import React from "react"
 import { getMediaURL } from "@gl-admin/lib/api"
 import type { Media } from "@gl-admin/lib/types"
-import "@gl-admin/assets/styles/components/media-card.scss"
+import "@gl-admin/assets/styles/components/media/media-card.scss"
 import MediaTypeBadge from "@gl-admin/components/media/MediaTypeBadge"
 
 interface Props {

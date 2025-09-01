@@ -558,8 +558,15 @@ const Media: React.FC = () => {
           isOpen={isEditModalOpen}
           onClose={handleCloseEditModal}
           media={selectedMediaForEdit}
-          onMediaUpdated={handleMediaUpdated}
-          onMediaDeleted={handleMediaDeleted}
+          onMediaUpdated={(updated) => {
+            setMediaItems((prevItems) => prevItems.map((item) => (item.id === updated.id ? updated : item)))
+            setSelectedMediaForEdit(updated)
+          }}
+          onMediaDeleted={(id) => {
+            setMediaItems((prev) => prev.filter((m) => m.id !== id))
+            setSelectedMediaForEdit(null)
+            setIsEditModalOpen(false)
+          }}
         />
       </div>
     </>
