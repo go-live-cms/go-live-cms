@@ -207,18 +207,23 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
 
       <div className="media-edit-modal__footer-right">
         {isEditing && (
-          <GLAdminButton variation="primary" onClick={handleSave} disabled={isSaving || isDeleting}>
+          <GLAdminButton color="white" variation="primary" onClick={handleSave} disabled={isSaving || isDeleting}>
             {isSaving ? "Saving..." : "Save Changes"}
           </GLAdminButton>
         )}
 
         {!isEditing && (
-          <GLAdminButton variation="primary" onClick={() => setIsEditing(true)} disabled={isSaving || isDeleting}>
+          <GLAdminButton
+            color="white"
+            variation="primary"
+            onClick={() => setIsEditing(true)}
+            disabled={isSaving || isDeleting}
+          >
             Edit
           </GLAdminButton>
         )}
         {isEditing && (
-          <GLAdminButton variation="flat" onClick={handleCancel} disabled={isSaving || isDeleting}>
+          <GLAdminButton color="white" variation="flat" onClick={handleCancel} disabled={isSaving || isDeleting}>
             {isEditing ? "Cancel Changes" : "Close"}
           </GLAdminButton>
         )}
@@ -351,7 +356,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                   <div className="media-edit-modal__url-actions">
                     {/* TODO : implement button sizes */}
                     <Button onClick={handleCopyUrl} title="Copy to clipboard">
-                      <Icon name="copy" width="16" height="16" color="white" /> {copyButtonText}
+                      <Icon name="copy" width="16" height="16" color="black" /> {copyButtonText}
                     </Button>
                     <div className="media-edit-modal__url-btn" onClick={handleOpenInNewTab} title="Open in new tab">
                       <Icon name="external-link" width="16" height="16" />

@@ -14,7 +14,7 @@
 
   &__preview-container {
     align-items: center;
-    background: #f8f9fa;
+    background: var(--background);
     border-radius: 8px;
     display: flex;
     flex: 1;
@@ -192,29 +192,6 @@
 
     &:hover {
       text-decoration: underline;
-    }
-  }
-
-  &__post-status {
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    padding: 0.25rem 0.5rem;
-    text-transform: uppercase;
-
-    &--published {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    &--draft {
-      background: #fff3cd;
-      color: #856404;
-    }
-
-    &--private {
-      background: #f8d7da;
-      color: #721c24;
     }
   }
 
