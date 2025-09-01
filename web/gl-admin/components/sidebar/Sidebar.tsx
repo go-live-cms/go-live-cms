@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useDarkMode } from "@gl-admin/contexts/DarkModeContext";
 import { Link, useLocation } from "react-router-dom";
 import { extractSvgPath, Icon } from "@gl-admin/components/ui/Icon";
 import SidebarItem from "@gl-admin/components/sidebar/SidebarItem";
@@ -43,7 +44,8 @@ const navigation: Navigation = [
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
-
+  const isDark = useDarkMode();
+  const navIconColor = isDark ? "#FFFFFF" : "#46484A";
   const initialWidth = parseInt(localStorage.getItem('sidebarWidth') || '') || ORIGINAL_WIDTH;
   const [sidebarWidth, setSidebarWidth] = useState(`${initialWidth}px`);
   const [isClosed, setIsClosed] = useState(localStorage.getItem('sidebarState') === 'true' || false);
@@ -133,7 +135,7 @@ const Sidebar: React.FC = () => {
         <SidebarUserProfile />
       </div>
       <div className="admin-sidebar__controller" onClick={() => setIsClosed(!isClosed)}>
-        <Icon name="next" color="#46484A" height="16px" mirror_horizontally={!isClosed} />
+        <Icon name="next" color={navIconColor} height="16px" mirror_horizontally={!isClosed} />
       </div>
       <div className="admin-sidebar__resize-handle" onMouseDown={handleResizeStart}></div>
     </nav>

@@ -1,5 +1,6 @@
 ---
 import App from "@gl-admin/app"
+import favicon from "@gl-admin/assets/favicon.ico"
 
 export async function getStaticPaths() {
   return [{ params: { slug: "" } }, { params: { slug: "*" } }]
@@ -11,6 +12,7 @@ export async function getStaticPaths() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoLive Admin</title>
+    <link rel="icon" href={favicon} sizes="any" />
   </head>
   <body>
     <App client:only="react" />

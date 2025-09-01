@@ -1,6 +1,7 @@
 import React from "react"
 import Icon from "@gl-admin/components/ui/Icon"
 import "@gl-admin/assets/styles/components/ui/select.scss"
+import { useDarkMode } from "@gl-admin/contexts/DarkModeContext"
 import { useSelect } from "@gl-admin/utils/select"
 
 export type SelectOption = {
@@ -26,6 +27,8 @@ export const Select: React.FC<SelectProps> = ({ options, value, onChange, label,
   } = useSelect(disabled)
 
   const selected = options.find((opt) => opt.value === value)
+  const isDark = useDarkMode()
+  const iconColor = isDark ? "#FFFFFF" : "#333536"
 
   return (
     <div className="gl-select" ref={ref} style={{ position: "relative" }}>
@@ -38,7 +41,7 @@ export const Select: React.FC<SelectProps> = ({ options, value, onChange, label,
         aria-disabled={disabled}
       >
         <span className="gl-select__placeholder">{selected ? selected.label : "Select..."}</span>
-        <Icon name="dropdown" mirror_vertically={open} color="#333536" width="7px" height="4.3px" />
+        <Icon name="dropdown" mirror_vertically={open} color={iconColor} width="7px" height="4.3px" />
       </div>
       {open && !disabled && (
         <div

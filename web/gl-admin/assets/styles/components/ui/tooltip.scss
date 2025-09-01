@@ -1,23 +1,25 @@
+@use "gl-admin/assets/styles/variables";
+
 .gl-tooltip-target {
     display: inline-block;
-    width: inherit;
     height: inherit;
     position: relative;
+    width: inherit;
 }
 
 .gl-tooltip {
-    position: absolute;
-    background: #222;
-    color: #fff;
-    padding: 6px 12px;
+    background: var(--tooltip-background);
     border-radius: 4px;
+    box-shadow: var(--tooltip-box-shadow);
+    color: var(--tooltip-color);
     font-size: 13px;
-    z-index: 9999;
-    pointer-events: none;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    white-space: nowrap;
-    transition: opacity 0.2s;
     opacity: 0;
+    padding: 6px 12px;
+    pointer-events: none;
+    position: absolute;
+    transition: opacity 0.2s;
+    white-space: nowrap;
+    z-index: 9999;
 
     &.visible {
         opacity: 1;

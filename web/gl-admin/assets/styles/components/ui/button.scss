@@ -1,22 +1,22 @@
+@use "@gl-admin/assets/styles/variables";
+
 .button {
   align-items: center;
-  background: linear-gradient(138deg, #181a1a 6.08%, #111313 88.85%);
+  background: var(--button-background-default);
   border: none;
-  border-radius: 0.3125rem;
-  box-shadow: 0 0 3.4px rgba(107, 107, 107, 0.5) inset,
-    0 0 4px rgba(0, 0, 0, 0.25);
-
-  color: #fff;
+  border-radius: var(--button-border-radius);
+  box-shadow: var(--button-box-shadow);
+  color: var(--button-color-default);
   cursor: pointer;
   display: flex;
   font-family: inherit;
-  font-size: 1rem;
+  font-size: var(--text-size-body);
   font-weight: 600;
   gap: 0.625rem;
   justify-content: center;
   padding: 0.5rem 1rem;
   text-decoration: none;
-  transition: all 0.2s ease;
+  transition: all var(--transition-duration) ease;
   white-space: nowrap;
 }
 
@@ -31,23 +31,20 @@
 }
 
 /* Variations */
-.default {
-  // already defined by base styles
-}
 
 .primary {
-  background: linear-gradient(138deg, #0050fe 6.08%, #0085fe 88.85%);
+  background: var(--button-background-primary);
 }
 
 .secondary {
-  background: linear-gradient(138deg, #6b7280 6.08%, #374151 88.85%);
+  background: var(--button-background-secondary);
 }
 
 .danger {
-  background: linear-gradient(138deg, #dc2626 6.08%, #991b1b 88.85%);
+  background: var(--button-background-danger);
 }
 
 .flat {
-  background: linear-gradient(138deg, #cdcdcd00 6.08%, #cdcdcd 88.85%), #c9c9c9;
-  color: #333536;
+  background: var(--button-background-flat);
+  color: var(--button-color-flat);
 }

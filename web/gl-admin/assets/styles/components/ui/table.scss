@@ -1,3 +1,4 @@
+@use "@gl-admin/assets/styles/variables";
 @use "@gl-admin/assets/styles/mixins";
 
 /* Remove default styles for table related tags */
@@ -42,16 +43,17 @@ caption {
 /* Actual g-table styles */
 
 .gl-table {
-  background: #fff;
+  background: var(--background);
   border-collapse: collapse;
   border-spacing: 0;
   width: 100%;
 
   .skeleton {
     @include mixins.skeleton-bg;
-    width: 100%;
-    height: 2rem;
+
     border-radius: .25rem;
+    height: 2rem;
+    width: 100%;
 
     &:hover {
       @include mixins.skeleton-bg;
@@ -68,7 +70,7 @@ caption {
   }
 
   thead {
-    border-bottom: 1px solid #b3b3b3;
+    border-bottom: 1px solid var(--border-color);
   }
 
   thead > tr,
@@ -91,7 +93,7 @@ caption {
   }
 
   th {
-    color: #333536;
+    color: var(--text-secondary);
     font-family: Inter, system-ui, sans-serif;
     font-size: 0.875rem;
     font-weight: 500;
@@ -99,15 +101,15 @@ caption {
   }
 
   tbody > tr + tr {
-    border-top: 1px solid #e6e6e6;
+    border-top: 1px solid var(--border-color);
   }
 
   tbody > tr:hover {
-    background: #f8f8f8;
+    background: var(--background-hover);
   }
 
   &__date {
-    color: #6e7376;
+    color: var(--text-quaternary);
     display: flex;
     flex-direction: column;
     font-size: 0.875rem;
@@ -117,9 +119,10 @@ caption {
 
     &.skeleton {
       @include mixins.skeleton-bg;
-      width: 25%;
-      height: 2.4rem;
+
       border-radius: .25rem;
+      height: 2.4rem;
+      width: 25%;
     }
   }
 
@@ -129,7 +132,7 @@ caption {
     gap: 0.5rem;
 
     &-title {
-      color: #333536;
+      color: var(--text-secondary);
       font-size: 1rem;
       font-style: normal;
       font-weight: 500;
@@ -137,15 +140,15 @@ caption {
 
       &.skeleton {
         @include mixins.skeleton-bg;
-        width: 60%;
-        height: 1.4rem;
+
         border-radius: .25rem;
+        height: 1.4rem;
+        width: 60%;
       }
     }
 
     &-description {
-      color: #6e7376;
-      font-family: Inter;
+      color: var(--text-quaternary);
       font-size: 0.875rem;
       font-style: normal;
       font-weight: 500;
@@ -153,9 +156,10 @@ caption {
 
       &.skeleton {
         @include mixins.skeleton-bg;
-        width: 70%;
-        height: 1rem;
+
         border-radius: .25rem;
+        height: 1rem;
+        width: 70%;
       }
     }
   }

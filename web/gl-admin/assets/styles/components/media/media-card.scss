@@ -1,37 +1,44 @@
+@use "@gl-admin/assets/styles/variables";
 @use "@gl-admin/assets/styles/mixins";
 
 .gl-admin-media-card {
-  border: 1.2px solid #bdbdbc;
+  border: 1.2px solid var(--border-color);
   border-radius: 4.703px;
   overflow: hidden;
   position: relative;
+
   &__type-badge {
     left: 14px;
     position: absolute;
     top: 14px;
   }
+
   &__image {
     height: 100%;
     object-fit: cover;
     width: 100%;
   }
+
   &__thumbnail {
     height: 220px;
 
     &.skeleton {
       @include mixins.skeleton-bg;
+
       border-radius: 8px;
       height: 200px;
     }
   }
+
   &__content {
     display: flex;
     flex-direction: column;
     gap: 7px;
     padding: 14px;
   }
+
   &__title {
-    color: #000;
+    color: var(--text-primary);
     font-family: inherit;
     font-size: 16px;
     font-style: normal;
@@ -40,44 +47,51 @@
 
     &.skeleton {
       @include mixins.skeleton-bg;
+
       border-radius: 4px;
       height: 1.2em;
       margin-bottom: 0.5rem;
       width: 80%;
     }
   }
+
   &__meta {
-    color: #6e7376;
+    color: var(--text-quaternary);
     display: flex;
     flex-direction: row;
     font-size: 14px;
     font-weight: 500;
     gap: 14px;
     line-height: 145%;
+
     &.skeleton {
       @include mixins.skeleton-bg;
+
       border-radius: 4px;
       height: 1em;
       width: 60%;
     }
   }
+
   &-wrapper {
     position: relative;
 
     &--selectable {
       cursor: pointer;
+
       &:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        box-shadow: var(--media-card-box-shadow-hover);
         transform: translateY(-2px);
       }
     }
 
     &--selected {
       .gl-admin-media-card {
-        border: 1.2px solid #0050fe;
+        border: 1.2px solid var(--selected-border-color);
       }
     }
   }
+
   &__checkbox {
     position: absolute;
     right: -8px;
@@ -85,7 +99,7 @@
     z-index: 10;
 
     input[type="checkbox"] {
-      accent-color: #0050fe;
+      accent-color: var(--selected-border-color);
       height: 20px;
       width: 20px;
     }
