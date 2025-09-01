@@ -65,7 +65,6 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
           getMediaPosts(media.id).then((response) => {
             setUsedInPosts(response.data)
             setLoadingPosts(false)
-            console.log("Fetched posts using media:", response.data)
           })
         }, 500)
       }
