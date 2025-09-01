@@ -944,6 +944,21 @@ func (mr *MockStoreMockRecorder) GetPostWithMeta(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostWithMeta", reflect.TypeOf((*MockStore)(nil).GetPostWithMeta), arg0, arg1)
 }
 
+// GetPostsByMedia mocks base method.
+func (m *MockStore) GetPostsByMedia(arg0 context.Context, arg1 int64) ([]db.GetPostsByMediaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostsByMedia", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetPostsByMediaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostsByMedia indicates an expected call of GetPostsByMedia.
+func (mr *MockStoreMockRecorder) GetPostsByMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostsByMedia", reflect.TypeOf((*MockStore)(nil).GetPostsByMedia), arg0, arg1)
+}
+
 // GetPostsByMultipleTaxonomyTerms mocks base method.
 func (m *MockStore) GetPostsByMultipleTaxonomyTerms(arg0 context.Context, arg1 db.GetPostsByMultipleTaxonomyTermsParams) ([]db.Post, error) {
 	m.ctrl.T.Helper()

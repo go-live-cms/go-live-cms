@@ -238,6 +238,21 @@ func toPopularMediaResponse(row db.GetPopularMediaRow) PopularMediaResponse {
 	}
 }
 
+func toPostResponseFromMediaRow(row db.GetPostsByMediaRow) PostResponse {
+
+	return PostResponse{
+		ID:          row.ID,
+		Title:       row.Title,
+		Description: row.Description,
+		Content:     row.Content,
+		UserID:      row.UserID,
+		Username:    row.Username,
+		Url:         row.Url,
+		CreatedAt:   row.CreatedAt,
+		ChangedAt:   row.ChangedAt,
+	}
+}
+
 func (server *Server) createMedia(c *gin.Context) {
 
 	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
@@ -1123,7 +1138,7 @@ func (server *Server) getMediaPosts(c *gin.Context) {
 	postResponses := make([]PostWithMediaOrderResponse, len(posts))
 	for i, post := range posts {
 		postResponses[i] = PostWithMediaOrderResponse{
-			Post:       toPostResponse(post),
+			Post:       toPostResponseFromMediaRow(post),
 			MediaOrder: post.MediaOrder,
 		}
 	}
