@@ -1,6 +1,7 @@
 import type { Media, MediaSortOption, PaginationParams, ApiResponse } from "./types"
 import { apiCall, authenticatedFetch } from "../api"
 import { buildUrl } from "./utils"
+import type { Post } from "./types"
 
 export interface MediaQueryParams extends PaginationParams {
   sort?: MediaSortOption
@@ -88,4 +89,12 @@ export async function deleteMedia(id: number, token?: string): Promise<any> {
     throw new Error(error.error || "Delete failed")
   }
   return response.json()
+}
+
+export async function getMediaPosts(mediaId: number): Promise<ApiResponse<Post>> {
+  const response = await apiCall(`/media/${mediaId}/posts`)
+  return {
+    data: response.posts || [],
+    meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
+  }
 }

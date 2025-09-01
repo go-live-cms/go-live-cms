@@ -326,6 +326,14 @@ const Media: React.FC = () => {
     setIsEditModalOpen(false)
     setSelectedMediaForEdit(null)
   }
+  const handleMediaUpdated = (updatedMedia: Media) => {
+    setMediaItems((prev) => prev.map((item) => (item.id === updatedMedia.id ? updatedMedia : item)))
+  }
+
+  const handleMediaDeleted = (mediaId: number) => {
+    setMediaItems((prev) => prev.filter((item) => item.id !== mediaId))
+    setTotal((prev) => prev - 1)
+  }
 
   return (
     <>
@@ -546,7 +554,13 @@ const Media: React.FC = () => {
 
         {toast && <div className={`toast toast--${toast.type}`}>{toast.message}</div>}
 
-        <MediaEditModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} media={selectedMediaForEdit} />
+        <MediaEditModal
+          isOpen={isEditModalOpen}
+          onClose={handleCloseEditModal}
+          media={selectedMediaForEdit}
+          onMediaUpdated={handleMediaUpdated}
+          onMediaDeleted={handleMediaDeleted}
+        />
       </div>
     </>
   )

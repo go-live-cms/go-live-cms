@@ -9,9 +9,20 @@ interface ModalProps {
   children: React.ReactNode
   size?: "small" | "medium" | "large" | "fullscreen"
   showCloseButton?: boolean
+  showHeader?: boolean
+  footer?: React.ReactNode
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = "medium", showCloseButton = true }) => {
+const Modal: React.FC<ModalProps> = ({
+  isOpen,
+  onClose,
+  title,
+  children,
+  size = "medium",
+  showCloseButton = true,
+  showHeader = true,
+  footer,
+}) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden"
@@ -39,8 +50,21 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
 
   return (
     <div className="gl-modal-overlay" onClick={onClose}>
-      <div className={`gl-modal gl-modal--${size}`} onClick={(e) => e.stopPropagation()}>
-        {(title || showCloseButton) && (
+      <div
+        className={`gl-modal gl-modal--${size}${!showHeader ? " gl-modal--no-header" : ""}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {!showHeader && showCloseButton && (
+          <button
+            className="gl-modal__close-btn gl-modal__close-btn--floating"
+            onClick={onClose}
+            aria-label="Close modal"
+          >
+            <Icon name="close" color="#333536" width="20px" height="20px" />
+          </button>
+        )}
+
+        {showHeader && (title || showCloseButton) && (
           <div className="gl-modal__header">
             {title && <h2 className="gl-modal__title">{title}</h2>}
             {showCloseButton && (
@@ -52,6 +76,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
         )}
 
         <div className="gl-modal__content">{children}</div>
+
+        {footer && <div className="gl-modal__footer">{footer}</div>}
       </div>
     </div>
   )
