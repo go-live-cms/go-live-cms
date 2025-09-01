@@ -361,8 +361,8 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                     <div className="media-edit-modal__posts-loading">Loading posts...</div>
                   ) : (
                     <ul className="media-edit-modal__posts">
-                      {usedInPosts.map((post) => (
-                        <li key={post.id} className="media-edit-modal__post-item">
+                      {usedInPosts.map(({ post, media_order }) => (
+                        <li key={`${post.id}-${media_order}`} className="media-edit-modal__post-item">
                           <a
                             href={`/admin/posts/${post.id}`}
                             className="media-edit-modal__post-link"
@@ -372,9 +372,12 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                             {post.title}
                           </a>
                           <span
-                            className={`media-edit-modal__post-status media-edit-modal__post-status--${post.status}`}
+                            className={`media-edit-modal__post-status media-edit-modal__post-status--${
+                              // TODO: add post status and post type to posts response
+                              (post as any).post_status ?? (post as any).status ?? "unknown"
+                            }`}
                           >
-                            {post.status}
+                            {(post as any).post_status ?? (post as any).status ?? "unknown"}
                           </span>
                         </li>
                       ))}
