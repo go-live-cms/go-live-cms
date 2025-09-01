@@ -7,6 +7,8 @@ import { updateMedia, deleteMedia, getMediaPosts } from "@gl-admin/lib/api/media
 import { getPosts } from "@gl-admin/lib/api/posts"
 import type { Media } from "@gl-admin/lib/types"
 import MediaTypeBadge from "./MediaTypeBadge"
+import "@gl-admin/assets/styles/components/media/media-edit-modal.scss"
+import Button from "@gl-admin/components/ui/Button"
 
 interface MediaEditModalProps {
   isOpen: boolean
@@ -45,6 +47,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
   })
   const [usedInPosts, setUsedInPosts] = useState<any[]>([])
   const [loadingPosts, setLoadingPosts] = useState(false)
+  const [copyButtonText, setCopyButtonText] = useState("Copy URL")
 
   const fileUrlRef = useRef<HTMLInputElement>(null)
 
@@ -68,6 +71,17 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
       }
     }
   }, [media, isOpen])
+
+  const makeAbsoluteUrl = (url: string) => {
+    if (!url) return ""
+    return new URL(url, window.location.origin).href
+  }
+
+  const absoluteMediaURL = React.useMemo(() => {
+    if (!media) return ""
+    const mediaURL = getMediaURL(media.media_path)
+    return makeAbsoluteUrl(mediaURL)
+  }, [media])
 
   if (!media) return null
 
@@ -121,20 +135,33 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
     }
   }
 
-  const handleCopyUrl = () => {
-    if (fileUrlRef.current) {
-      fileUrlRef.current.select()
-      document.execCommand("copy")
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(absoluteMediaURL)
+      setCopyButtonText("Copied!")
+      setTimeout(() => {
+        setCopyButtonText("Copy URL")
+      }, 2000)
+    } catch {
+      if (fileUrlRef.current) {
+        fileUrlRef.current.value = absoluteMediaURL
+        fileUrlRef.current.select()
+        document.execCommand("copy")
+        setCopyButtonText("Copied!")
+        setTimeout(() => {
+          setCopyButtonText("Copy URL")
+        }, 2000)
+      }
     }
   }
 
   const handleOpenInNewTab = () => {
-    window.open(mediaURL, "_blank")
+    window.open(mediaURL, "_blank", "noopener,noreferrer")
   }
 
   const handleDownload = () => {
     const link = document.createElement("a")
-    link.href = mediaURL
+    link.href = absoluteMediaURL
     link.download = media.name || "download"
     document.body.appendChild(link)
     link.click()
@@ -163,7 +190,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
             onClick={() => setShowDeleteConfirm(true)}
             disabled={isSaving || isDeleting}
           >
-            <Icon name="delete" color="white" width="14" height="14" />
+            <Icon name="trash" color="white" width="14" height="14" />
             Delete Permanently
           </GLAdminButton>
         ) : (
@@ -180,10 +207,6 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
       </div>
 
       <div className="media-edit-modal__footer-right">
-        <GLAdminButton variation="flat" onClick={handleCancel} disabled={isSaving || isDeleting}>
-          {isEditing ? "Cancel Changes" : "Close"}
-        </GLAdminButton>
-
         {isEditing && (
           <GLAdminButton variation="primary" onClick={handleSave} disabled={isSaving || isDeleting}>
             {isSaving ? "Saving..." : "Save Changes"}
@@ -192,8 +215,12 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
 
         {!isEditing && (
           <GLAdminButton variation="primary" onClick={() => setIsEditing(true)} disabled={isSaving || isDeleting}>
-            <Icon name="edit" color="white" width="14" height="14" />
             Edit
+          </GLAdminButton>
+        )}
+        {isEditing && (
+          <GLAdminButton variation="flat" onClick={handleCancel} disabled={isSaving || isDeleting}>
+            {isEditing ? "Cancel Changes" : "Close"}
           </GLAdminButton>
         )}
       </div>
@@ -313,25 +340,26 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                 <label className="media-edit-modal__label" htmlFor="media-url">
                   File URL:
                 </label>
+                <input
+                  id="media-url"
+                  ref={fileUrlRef}
+                  type="text"
+                  className="media-edit-modal__input media-edit-modal__input--readonly"
+                  value={absoluteMediaURL}
+                  readOnly
+                />
                 <div className="media-edit-modal__url-container">
-                  <input
-                    id="media-url"
-                    ref={fileUrlRef}
-                    type="text"
-                    className="media-edit-modal__input media-edit-modal__input--readonly"
-                    value={mediaURL}
-                    readOnly
-                  />
                   <div className="media-edit-modal__url-actions">
-                    <button className="media-edit-modal__url-btn" onClick={handleCopyUrl} title="Copy to clipboard">
-                      <Icon name="copy" width="16" height="16" />
-                    </button>
-                    <button className="media-edit-modal__url-btn" onClick={handleOpenInNewTab} title="Open in new tab">
+                    {/* TODO : implement button sizes */}
+                    <Button onClick={handleCopyUrl} title="Copy to clipboard">
+                      <Icon name="copy" width="16" height="16" color="white" /> {copyButtonText}
+                    </Button>
+                    <div className="media-edit-modal__url-btn" onClick={handleOpenInNewTab} title="Open in new tab">
                       <Icon name="external-link" width="16" height="16" />
-                    </button>
-                    <button className="media-edit-modal__url-btn" onClick={handleDownload} title="Download">
+                    </div>
+                    <div className="media-edit-modal__url-btn" onClick={handleDownload} title="Download">
                       <Icon name="download" width="16" height="16" />
-                    </button>
+                    </div>
                   </div>
                 </div>
               </div>
