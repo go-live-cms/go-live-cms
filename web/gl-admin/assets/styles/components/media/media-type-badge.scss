@@ -1,0 +1,20 @@
+.gl-admin-media-type-badge {
+  background-blend-mode: hard-light, normal;
+  border-radius: 4.7px;
+  box-shadow: 0 0 4.586px 0 rgba(0, 0, 0, 0.25) inset;
+  display: inline-flex;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 130%;
+  max-width: fit-content;
+  padding: 4.7px 7px;
+  &--image {
+    background: linear-gradient(138deg, rgba(0, 0, 0, 0) 5.49%, rgba(0, 0, 0, 0.15) 95.27%), #3f3;
+    color: #0f5e0f;
+  }
+  &--video {
+    background: linear-gradient(138deg, rgba(0, 0, 0, 0) 5.49%, rgba(0, 0, 0, 0.15) 95.27%), #33c2ff;
+    color: #054bce;
+  }
+}

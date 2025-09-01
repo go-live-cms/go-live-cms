@@ -2,30 +2,11 @@ import React from "react"
 import { getMediaURL } from "@gl-admin/lib/api"
 import type { Media } from "@gl-admin/lib/types"
 import "@gl-admin/assets/styles/components/media-card.scss"
+import MediaTypeBadge from "@gl-admin/components/media/MediaTypeBadge"
 
 interface Props {
   media: Media
   onClick?: (media: Media) => void
-}
-
-function getFileType(mediaPath: string): string {
-  const ext = mediaPath.split(".").pop()?.toLowerCase()
-  if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext || "")) return "image"
-  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext || "")) return "video"
-  if (["mp3", "wav", "ogg", "m4a"].includes(ext || "")) return "audio"
-  if (["pdf"].includes(ext || "")) return "pdf"
-  if (["doc", "docx"].includes(ext || "")) return "document"
-  return "file"
-}
-
-function getFileIcon(mediaPath: string): string {
-  const ext = mediaPath.split(".").pop()?.toLowerCase()
-  if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext || "")) return "🖼️"
-  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext || "")) return "🎥"
-  if (["mp3", "wav", "ogg", "m4a"].includes(ext || "")) return "🎵"
-  if (["pdf"].includes(ext || "")) return "📄"
-  if (["doc", "docx"].includes(ext || "")) return "📝"
-  return "📁"
 }
 
 function formatFileSize(bytes: number): string {
@@ -42,8 +23,6 @@ function isImage(mediaPath: string): boolean {
 }
 
 const MediaCard: React.FC<Props> = ({ media, onClick }) => {
-  const fileType = getFileType(media.media_path)
-  const fileIcon = getFileIcon(media.media_path)
   const mediaURL = getMediaURL(media.media_path)
   const fileName = media.name
   const fileSize = media.file_size ? formatFileSize(media.file_size) : "Unknown size"
@@ -63,17 +42,12 @@ const MediaCard: React.FC<Props> = ({ media, onClick }) => {
       style={{ cursor: onClick ? "pointer" : "default" }}
     >
       <div className="gl-admin-media-card__thumbnail">
-        <div
-          className={`gl-admin-media-card__type-badge gl-admin-media-card__type-badge--${fileType}`}
-          data-type={fileType}
-        >
-          {fileType}
-        </div>
+        <MediaTypeBadge mediaPath={media.media_path} className="gl-admin-media-card__type-badge" showIcon />
 
         {isImage(media.media_path) ? (
           <img src={mediaURL} alt={media.alt} loading="lazy" className="gl-admin-media-card__image" />
         ) : (
-          <div className="gl-admin-media-card__file-icon">{fileIcon}</div>
+          <div className="gl-admin-media-card__file-icon"></div>
         )}
       </div>
 

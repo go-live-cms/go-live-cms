@@ -6,6 +6,7 @@ import { getMediaURL } from "@gl-admin/lib/api"
 import { updateMedia, deleteMedia, getMediaPosts } from "@gl-admin/lib/api/media"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import type { Media } from "@gl-admin/lib/types"
+import MediaTypeBadge from "./MediaTypeBadge"
 
 interface MediaEditModalProps {
   isOpen: boolean
@@ -21,19 +22,6 @@ function formatFileSize(bytes: number): string {
   const sizes = ["B", "KB", "MB", "GB"]
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-}
-
-function getFileType(mediaPath: string): string {
-  const ext = mediaPath.split(".").pop()?.toLowerCase() || ""
-
-  if (["jpg", "jpeg", "png", "gif", "webp", "bmp"].includes(ext)) return "image"
-  if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "video"
-  if (["mp3", "wav", "ogg", "m4a"].includes(ext)) return "audio"
-  if (["pdf", "doc", "docx"].includes(ext)) return "document"
-  if (["svg"].includes(ext)) return "graphic"
-  if (["txt"].includes(ext)) return "text"
-
-  return "file"
 }
 
 function getFileExtension(mediaPath: string): string {
@@ -84,7 +72,6 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
   if (!media) return null
 
   const mediaURL = getMediaURL(media.media_path)
-  const fileType = getFileType(media.media_path)
   const fileExtension = getFileExtension(media.media_path)
   const fileSize = formatFileSize(media.file_size || 0)
   const isImageFile = isImage(media.media_path)
@@ -223,7 +210,6 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                 <img src={mediaURL} alt={media.alt} className="media-edit-modal__preview-image" />
               ) : (
                 <div className="media-edit-modal__preview-file">
-                  <Icon name={`file-${fileType}`} width="80" height="80" />
                   <span className="media-edit-modal__preview-filename">{media.name}</span>
                 </div>
               )}
@@ -254,10 +240,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
           <div className="media-edit-modal__details">
             <div className="media-edit-modal__field-group">
               <div className="media-edit-modal__field">
-                <label className="media-edit-modal__label">Type:</label>
-                <span className="media-edit-modal__value media-edit-modal__value--type">
-                  {fileType.charAt(0).toUpperCase() + fileType.slice(1)}
-                </span>
+                <MediaTypeBadge mediaPath={media.media_path} className="media-edit-modal__type-badge" />
               </div>
             </div>
 
