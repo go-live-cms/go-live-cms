@@ -67,6 +67,7 @@ type Querier interface {
 	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
 	GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error)
 	GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMetaRow, error)
+	GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPostsByMediaRow, error)
 	GetPostsByMultipleTaxonomyTerms(ctx context.Context, arg GetPostsByMultipleTaxonomyTermsParams) ([]Post, error)
 	GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxonomyTermParams) ([]Post, error)
 	GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error)

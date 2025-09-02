@@ -3,7 +3,7 @@ import "@gl-admin/assets/styles/components/ui/button.scss"
 
 type ButtonProps = {
   children: ReactNode
-  variation?: "default" | "active" | "inactive" | "primary" | "secondary" | "flat" // Add more if needed
+  variation?: "default" | "active" | "inactive" | "primary" | "secondary" | "flat" | "danger" // Add more if needed
   as?: "button" | "a"
   href?: string // Only used when `as === 'a'`
   className?: string

@@ -135,6 +135,7 @@ func (server *Server) setupRoutes() {
 	media.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteMedia)      // DELETE /api/v1/media/:id
 	media.GET("/user/:id", server.getMediaByUser)                                    // GET /api/v1/media/user/:id
 	media.GET("/post/:id", server.getMediaByPost)                                    // GET /api/v1/media/post/:id
+	media.GET("/:id/posts", server.getMediaPosts)                                    // GET /api/v1/media/:id/posts
 
 	router.Static("/uploads", "./uploads")
 

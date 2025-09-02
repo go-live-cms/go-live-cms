@@ -8,27 +8,9 @@
   position: relative;
 
   &__type-badge {
-    background-blend-mode: hard-light, normal;
-    border-radius: 4.7px;
-    box-shadow: var(--media-card-badge-box-shadow);
-    font-size: 14px;
-    font-style: normal;
-    font-weight: 600;
     left: 14px;
-    line-height: 130%;
-    padding: 4.7px 7px;
     position: absolute;
     top: 14px;
-
-    &--image {
-      background: var(--media-card-badge-image-background);
-      color: var(--media-card-badge-image-color);
-    }
-
-    &--video {
-      background: var(--media-card-badge-video-background);
-      color: var(--media-card-badge-video-color);
-    }
   }
 
   &__image {

@@ -6,6 +6,7 @@ import { getMediaURL } from "@gl-admin/lib/api"
 import type { Media, User, MediaSortOption } from "@gl-admin/lib/types"
 import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
+import MediaEditModal from "@gl-admin/components/media/MediaEditModal"
 
 //import { initializeMediaCardHandlers } from "@gl-admin/scripts/media-card-handlers"
 import "@gl-admin/assets/styles/pages/media.scss"
@@ -41,6 +42,8 @@ const Media: React.FC = () => {
   const [sortBy, setSortBy] = useState<MediaSortOption>("date_desc")
   const [users, setUsers] = useState<User[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [selectedMediaForEdit, setSelectedMediaForEdit] = useState<Media | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   useEffect(() => {
     refreshMediaData()
@@ -138,7 +141,8 @@ const Media: React.FC = () => {
     setTimeout(async () => {
       if (successCount > 0) {
         showToast(
-          `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${failCount > 0 ? `, ${failCount} failed` : ""
+          `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${
+            failCount > 0 ? `, ${failCount} failed` : ""
           }`,
           "success"
         )
@@ -175,8 +179,12 @@ const Media: React.FC = () => {
         setCurrentPage((prev) => prev + 1)
       }
 
-      setTotal(response.meta.total || 0)
-      setHasMore(response.data.length === itemsPerPage && offset + response.data.length < (response.meta.total || 0))
+      const totalItems = response.meta?.total ?? 0
+      const currentOffset = offset + response.data.length
+
+      setTotal(totalItems)
+      setHasMore(response.data.length === itemsPerPage && currentOffset < totalItems)
+
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to fetch media")
@@ -203,7 +211,11 @@ const Media: React.FC = () => {
 
       setMediaItems((prev) => [...prev, ...response.data])
       setCurrentPage((prev) => prev + 1)
-      setHasMore(response.data.length === itemsPerPage && offset + response.data.length < response.meta.total)
+
+      const totalItems = response.meta?.total ?? 0
+      const currentOffset = offset + response.data.length
+
+      setHasMore(response.data.length === itemsPerPage && currentOffset < totalItems)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load more media")
       console.error("Error loading more media:", e)
@@ -305,6 +317,24 @@ const Media: React.FC = () => {
     if (files.length > 0) handleFileUpload(files)
   }
 
+  const handleMediaCardClick = (media: Media) => {
+    setSelectedMediaForEdit(media)
+    setIsEditModalOpen(true)
+  }
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false)
+    setSelectedMediaForEdit(null)
+  }
+  const handleMediaUpdated = (updatedMedia: Media) => {
+    setMediaItems((prev) => prev.map((item) => (item.id === updatedMedia.id ? updatedMedia : item)))
+  }
+
+  const handleMediaDeleted = (mediaId: number) => {
+    setMediaItems((prev) => prev.filter((item) => item.id !== mediaId))
+    setTotal((prev) => prev - 1)
+  }
+
   return (
     <>
       <div className="gl-admin-media-library">
@@ -402,8 +432,9 @@ const Media: React.FC = () => {
 
         {showUploadArea && (
           <div
-            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${dragOver ? " gl-admin-media__upload-area--dragover" : ""
-              }`}
+            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${
+              dragOver ? " gl-admin-media__upload-area--dragover" : ""
+            }`}
             ref={uploadAreaRef}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -452,22 +483,24 @@ const Media: React.FC = () => {
                 </div>
                 <div className="gl-admin-media__progress-bar">
                   <div
-                    className={`gl-admin-media__progress-fill${item.error
-                      ? " gl-admin-media__progress-fill--error"
-                      : item.progress === 100
+                    className={`gl-admin-media__progress-fill${
+                      item.error
+                        ? " gl-admin-media__progress-fill--error"
+                        : item.progress === 100
                         ? " gl-admin-media__progress-fill--success"
                         : ""
-                      }`}
+                    }`}
                     style={{ width: `${item.progress}%` }}
                   ></div>
                 </div>
                 <span
-                  className={`gl-admin-media__progress-status${item.error
-                    ? " gl-admin-media__progress-status--error"
-                    : item.progress === 100
+                  className={`gl-admin-media__progress-status${
+                    item.error
+                      ? " gl-admin-media__progress-status--error"
+                      : item.progress === 100
                       ? " gl-admin-media__progress-status--success"
                       : ""
-                    }`}
+                  }`}
                 >
                   {item.status}
                 </span>
@@ -489,6 +522,7 @@ const Media: React.FC = () => {
           selectable={bulkSelectMode}
           selectedMedia={selectedMedia}
           onMediaSelect={handleMediaSelect}
+          onMediaClick={handleMediaCardClick}
           emptyState={{
             title: "No media files yet",
             description: 'Upload your first file by clicking "New Media" above',
@@ -519,6 +553,21 @@ const Media: React.FC = () => {
         )}
 
         {toast && <div className={`toast toast--${toast.type}`}>{toast.message}</div>}
+
+        <MediaEditModal
+          isOpen={isEditModalOpen}
+          onClose={handleCloseEditModal}
+          media={selectedMediaForEdit}
+          onMediaUpdated={(updated) => {
+            setMediaItems((prevItems) => prevItems.map((item) => (item.id === updated.id ? updated : item)))
+            setSelectedMediaForEdit(updated)
+          }}
+          onMediaDeleted={(id) => {
+            setMediaItems((prev) => prev.filter((m) => m.id !== id))
+            setSelectedMediaForEdit(null)
+            setIsEditModalOpen(false)
+          }}
+        />
       </div>
     </>
   )

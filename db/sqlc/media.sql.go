@@ -504,6 +504,71 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 	return i, err
 }
 
+const getPostsByMedia = `-- name: GetPostsByMedia :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    pm."order" as media_order
+FROM posts p
+JOIN post_media pm ON p.id = pm.post_id
+WHERE pm.media_id = $1
+ORDER BY pm."order", p.created_at DESC
+`
+
+type GetPostsByMediaRow struct {
+	ID          int64         `json:"id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	Content     string        `json:"content"`
+	UserID      int64         `json:"user_id"`
+	Username    string        `json:"username"`
+	Url         string        `json:"url"`
+	PostType    string        `json:"post_type"`
+	PostStatus  string        `json:"post_status"`
+	PostParent  sql.NullInt64 `json:"post_parent"`
+	MenuOrder   int32         `json:"menu_order"`
+	CreatedAt   time.Time     `json:"created_at"`
+	ChangedAt   time.Time     `json:"changed_at"`
+	MediaOrder  int32         `json:"media_order"`
+}
+
+func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPostsByMediaRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPostsByMedia, mediaID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPostsByMediaRow{}
+	for rows.Next() {
+		var i GetPostsByMediaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.MediaOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPostsByUserWithMedia = `-- name: GetPostsByUserWithMedia :many
 SELECT 
     p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,

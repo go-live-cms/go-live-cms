@@ -257,5 +257,15 @@ ORDER BY p.created_at DESC
 LIMIT $2
 OFFSET $3;
 
+-- name: GetPostsByMedia :many
+SELECT 
+    p.*,
+    pm."order" as media_order
+FROM posts p
+JOIN post_media pm ON p.id = pm.post_id
+WHERE pm.media_id = $1
+ORDER BY pm."order", p.created_at DESC;
+
+
 -- name: CountTotalMedia :one
 SELECT COUNT(*) AS total FROM media;

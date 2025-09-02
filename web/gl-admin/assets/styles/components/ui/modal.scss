@@ -1,0 +1,150 @@
+@use "@gl-admin/assets/styles/mixins";
+
+.gl-modal-overlay {
+  align-items: center;
+
+  animation: modal-fade-in 0.3s ease-out;
+  backdrop-filter: blur(2px);
+  background-color: rgba(0, 0, 0, 0.6);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 1rem;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 1000;
+
+  @keyframes modal-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+.gl-modal {
+  animation: modal-scale-in 0.3s ease-out;
+  background: var(--background);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow: hidden;
+
+  @keyframes modal-scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.9) translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  &--small {
+    max-width: 90vw;
+    width: 30rem;
+  }
+
+  &--medium {
+    max-width: 90vw;
+    width: 50rem;
+  }
+
+  &--large {
+    max-width: 95vw;
+    width: 70rem;
+  }
+
+  &--fullscreen {
+    height: 95vh;
+    width: 95vw;
+  }
+
+  &--no-header {
+    .gl-modal__content {
+      padding-top: 3rem;
+    }
+    position: relative;
+  }
+}
+
+.gl-modal__header {
+  align-items: center;
+  background: #fafafa;
+  border-bottom: 1px solid rgb(var(--gray-light));
+  display: flex;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+}
+
+.gl-modal__title {
+  color: var(--text-quatenary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.gl-modal__close-btn {
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 1.5rem;
+  height: 2rem;
+  justify-content: center;
+  padding: 0.25rem;
+  transition: all 0.2s ease;
+  width: 2rem;
+}
+
+.gl-modal__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+}
+
+@media (max-width: 768px) {
+  .gl-modal {
+    &--small,
+    &--medium,
+    &--large {
+      max-height: 85vh;
+      width: 95vw;
+    }
+  }
+
+  .gl-modal__header {
+    padding: 1rem 1.5rem;
+  }
+
+  .gl-modal__content {
+    padding: 1.5rem;
+  }
+}
+
+.gl-modal__close-btn--floating {
+  height: 2.5rem;
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  width: 2.5rem;
+  z-index: 10;
+}
+
+.gl-modal__footer {
+  align-items: center;
+  background: #232b31;
+  display: flex;
+  justify-content: space-between;
+  padding: 1.5rem 2rem;
+}
