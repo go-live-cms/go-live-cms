@@ -88,6 +88,10 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         setSelectedFilters({ user_id: "", status: "", type: "", sort: "" })
     }
 
+    const handleNewPost = () => {
+        window.location.href = "/gl-admin/content/posts/new"
+    }
+
     const filters = (
         <>
             {selectedFilters.user_id || selectedFilters.status || selectedFilters.type || selectedFilters.sort ? (
@@ -136,7 +140,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
                 onChange={value => setSelectedFilters({ ...selectedFilters, sort: value })}
                 prefix="Sort by:"
             />
-            <Button className="gl-admin-media__new-media-btn">
+            <Button onClick={handleNewPost} className="gl-admin-media__new-media-btn">
                 <Icon name="add" color={iconColor} width="14" height="14" /> {getAddButtonName()}
             </Button>
         </>
