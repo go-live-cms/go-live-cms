@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { createPost } from "@gl-admin/lib/api/posts"
+import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import Input from "@gl-admin/components/ui/Input"
 import "@gl-admin/assets/styles/pages/new-post.scss"
 import Button from "@gl-admin/components/ui/Button"
@@ -25,7 +26,6 @@ export default function NewPost() {
     post_status: "draft",
   })
 
-  // Auto-generate slug from title
   const generateSlug = (title: string) => {
     return title
       .toLowerCase()
@@ -54,29 +54,28 @@ export default function NewPost() {
     setMessage(null)
 
     try {
-      // Get current user from auth state
       const authState = authManager.getState()
       if (!authState.user) {
         throw new Error("User not authenticated")
       }
 
-      // Ensure description meets minimum length requirement
       const description = formData.excerpt.trim() || formData.title
       if (description.length < 10) {
         throw new Error("Description must be at least 10 characters long")
       }
 
-      // Convert slug to full URL format
       const baseUrl = window.location.origin
       const fullUrl = `${baseUrl}/posts/${formData.slug}`
 
-      const postData = {
+      const postData: CreatePostRequest = {
         title: formData.title,
         url: fullUrl,
         content: formData.content,
         description: description,
-        author_ids: [authState.user.id], // Use current user's ID
+        author_ids: [authState.user.id],
         post_status: formData.post_status,
+        post_type: "post",
+        menu_order: 0,
       }
 
       console.log("Sending post data:", postData) // Debug log
@@ -85,7 +84,6 @@ export default function NewPost() {
 
       setMessage({ type: "success", text: "Post created successfully!" })
 
-      // Reset form
       setFormData({
         title: "",
         slug: "",

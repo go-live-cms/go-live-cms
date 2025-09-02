@@ -16,6 +16,10 @@ type CreatePostRequest struct {
 	Content     string  `json:"content" binding:"required,min=10"`
 	Description string  `json:"description" binding:"required,min=10,max=500"`
 	Url         string  `json:"url" binding:"required,url"`
+	PostType    string  `json:"post_type" binding:"omitempty"`
+	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published archived"`
+	PostParent  *int64  `json:"post_parent" binding:"omitempty"`
+	MenuOrder   int32   `json:"menu_order" binding:"omitempty"`
 	AuthorIDs   []int64 `json:"author_ids" binding:"required,min=1"`
 	MediaIDs    []int64 `json:"media_ids" binding:"omitempty"`
 	TaxonomyIDs []int64 `json:"taxonomy_ids" binding:"omitempty"`
@@ -26,6 +30,10 @@ type UpdatePostRequest struct {
 	Content     string  `json:"content" binding:"omitempty,min=10"`
 	Description string  `json:"description" binding:"omitempty,min=10,max=500"`
 	Url         string  `json:"url" binding:"omitempty,url"`
+	PostType    string  `json:"post_type" binding:"omitempty"`
+	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published archived"`
+	PostParent  *int64  `json:"post_parent" binding:"omitempty"`
+	MenuOrder   int32   `json:"menu_order" binding:"omitempty"`
 	MediaIDs    []int64 `json:"media_ids" binding:"omitempty"`
 	TaxonomyIDs []int64 `json:"taxonomy_ids" binding:"omitempty"`
 }
@@ -38,11 +46,20 @@ type PostResponse struct {
 	UserID      int64     `json:"user_id"`
 	Username    string    `json:"username"`
 	Url         string    `json:"url"`
+	PostType    string    `json:"post_type"`
+	PostStatus  string    `json:"post_status"`
+	PostParent  *int64    `json:"post_parent"`
+	MenuOrder   int32     `json:"menu_order"`
 	CreatedAt   time.Time `json:"created_at"`
 	ChangedAt   time.Time `json:"changed_at"`
 }
 
 func toPostResponse(post db.Post) PostResponse {
+	var postParent *int64
+	if post.PostParent.Valid {
+		postParent = &post.PostParent.Int64
+	}
+
 	return PostResponse{
 		ID:          post.ID,
 		Title:       post.Title,
@@ -51,6 +68,10 @@ func toPostResponse(post db.Post) PostResponse {
 		UserID:      post.UserID,
 		Username:    post.Username,
 		Url:         post.Url,
+		PostType:    post.PostType,
+		PostStatus:  post.PostStatus,
+		PostParent:  postParent,
+		MenuOrder:   post.MenuOrder,
 		CreatedAt:   post.CreatedAt,
 		ChangedAt:   post.ChangedAt,
 	}
@@ -313,6 +334,25 @@ func (server *Server) createPost(c *gin.Context) {
 		UserID:      primaryAuthor.ID,
 		Username:    primaryAuthor.Username,
 		Url:         req.Url,
+		PostType:    req.PostType,
+		PostStatus:  req.PostStatus,
+		MenuOrder:   req.MenuOrder,
+	}
+
+	if req.PostParent != nil {
+		createParams.PostParent = sql.NullInt64{
+			Int64: *req.PostParent,
+			Valid: true,
+		}
+	} else {
+		createParams.PostParent = sql.NullInt64{Valid: false}
+	}
+
+	if createParams.PostType == "" {
+		createParams.PostType = "post"
+	}
+	if createParams.PostStatus == "" {
+		createParams.PostStatus = "draft"
 	}
 
 	if len(req.MediaIDs) > 0 && len(req.TaxonomyIDs) > 0 {
@@ -408,6 +448,10 @@ func (server *Server) updatePost(c *gin.Context) {
 		UserID:      existingPost.UserID,
 		Username:    existingPost.Username,
 		Url:         existingPost.Url,
+		PostType:    existingPost.PostType,
+		PostStatus:  existingPost.PostStatus,
+		PostParent:  existingPost.PostParent,
+		MenuOrder:   existingPost.MenuOrder,
 	}
 
 	if req.Title != "" {
@@ -421,6 +465,21 @@ func (server *Server) updatePost(c *gin.Context) {
 	}
 	if req.Url != "" {
 		updateParams.Url = req.Url
+	}
+	if req.PostType != "" {
+		updateParams.PostType = req.PostType
+	}
+	if req.PostStatus != "" {
+		updateParams.PostStatus = req.PostStatus
+	}
+	if req.PostParent != nil {
+		updateParams.PostParent = sql.NullInt64{
+			Int64: *req.PostParent,
+			Valid: true,
+		}
+	}
+	if req.MenuOrder != 0 {
+		updateParams.MenuOrder = req.MenuOrder
 	}
 
 	updatedPost, err := server.store.UpdatePost(c.Request.Context(), updateParams)
