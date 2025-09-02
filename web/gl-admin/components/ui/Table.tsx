@@ -18,10 +18,16 @@ export interface TableProps<T> {
   loading?: boolean
   data: T[]
   className?: string
+  onRowDoubleClick?: (row: T) => void
 }
 
-export default function Table<T extends Record<string, any>>({ columns, data, loading = false, className = "" }: TableProps<T>) {
-
+export default function Table<T extends Record<string, any>>({
+  columns,
+  data,
+  loading = false,
+  className = "",
+  onRowDoubleClick,
+}: TableProps<T>) {
   const dataSkeleton = (
     <tbody>
       {Array.from({ length: 8 }).map((_, rowIdx) => (
@@ -42,7 +48,11 @@ export default function Table<T extends Record<string, any>>({ columns, data, lo
   const dataRender = (
     <tbody>
       {data.map((row, rowIdx) => (
-        <tr key={rowIdx}>
+        <tr
+          key={rowIdx}
+          onDoubleClick={() => onRowDoubleClick?.(row)}
+          style={{ cursor: onRowDoubleClick ? "pointer" : "default" }}
+        >
           {columns.map((col) => (
             <td
               key={String(col.key)}

@@ -96,10 +96,12 @@ export interface Post {
   user_id: number
   username: string
   url: string
+  post_type: string
+  post_status: string
+  post_parent?: number | null
+  menu_order: number
   created_at: string
   changed_at: string
-  post_status?: string
-  post_type?: string
 }
 
 export interface User {
