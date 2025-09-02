@@ -5,7 +5,7 @@ import type { Post } from "@gl-admin/lib/api/types"
 import PostForm from "@gl-admin/components/forms/PostForm"
 import "@gl-admin/assets/styles/components/forms/post-form.scss"
 
-export default function EditPost() {
+export default function EditContent() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [post, setPost] = useState<Post | null>(null)
@@ -15,7 +15,7 @@ export default function EditPost() {
   useEffect(() => {
     const fetchPost = async () => {
       if (!id) {
-        setError("No post ID provided")
+        setError("No content ID provided")
         setLoading(false)
         return
       }
@@ -24,8 +24,8 @@ export default function EditPost() {
         const response = await getPostById(id)
         setPost(response.post)
       } catch (err) {
-        console.error("Error fetching post:", err)
-        setError("Failed to load post")
+        console.error("Error fetching content:", err)
+        setError("Failed to load content")
       } finally {
         setLoading(false)
       }
@@ -42,13 +42,35 @@ export default function EditPost() {
     setError(errorMessage)
   }
 
+  const getContentTypeName = (postType: string) => {
+    switch (postType) {
+      case "post":
+        return "Post"
+      case "page":
+        return "Page"
+      default:
+        return "Content"
+    }
+  }
+
+  const getBackUrl = (postType: string) => {
+    switch (postType) {
+      case "post":
+        return "/content/posts"
+      case "page":
+        return "/content/pages"
+      default:
+        return "/content"
+    }
+  }
+
   if (loading) {
     return (
       <div className="post-form-page">
         <div className="page-header">
-          <h1>Loading Post...</h1>
+          <h1>Loading Content...</h1>
         </div>
-        <div>Loading post data...</div>
+        <div>Loading content data...</div>
       </div>
     )
   }
@@ -60,8 +82,8 @@ export default function EditPost() {
           <h1>Error</h1>
         </div>
         <div className="message error">{error}</div>
-        <button onClick={() => navigate("/content/posts")} className="btn btn-secondary">
-          Back to Posts
+        <button onClick={() => navigate("/content")} className="btn btn-secondary">
+          Back to Content
         </button>
       </div>
     )
@@ -71,15 +93,23 @@ export default function EditPost() {
     return (
       <div className="post-form-page">
         <div className="page-header">
-          <h1>Post Not Found</h1>
+          <h1>Content Not Found</h1>
         </div>
-        <div className="message error">The requested post could not be found.</div>
-        <button onClick={() => navigate("/content/posts")} className="btn btn-secondary">
-          Back to Posts
+        <div className="message error">The requested content could not be found.</div>
+        <button onClick={() => navigate("/content")} className="btn btn-secondary">
+          Back to Content
         </button>
       </div>
     )
   }
 
-  return <PostForm mode="edit" initialData={post} onSuccess={handleSuccess} onError={handleError} />
+  return (
+    <PostForm
+      mode="edit"
+      initialData={post}
+      onSuccess={handleSuccess}
+      onError={handleError}
+      contentType={post.post_type}
+    />
+  )
 }

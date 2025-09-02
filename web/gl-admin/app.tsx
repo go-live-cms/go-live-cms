@@ -5,7 +5,8 @@ import AuthGuard from "@gl-admin/components/AuthGuard"
 import Sidebar from "@gl-admin/components/sidebar/Sidebar"
 import "@gl-admin/assets/styles/global.scss"
 import NewPost from "./pages/NewPost"
-import EditPost from "./pages/EditPost"
+import NewPage from "./pages/NewPage"
+import EditContent from "./pages/EditPost"
 
 const NotFound = lazy(() => import("@gl-admin/pages/NotFound"))
 const Dashboard = lazy(() => import("@gl-admin/pages/Dashboard"))
@@ -42,7 +43,8 @@ export default function App() {
                       element={<Content key="content-posts" query={{ type: "post" }} title="Posts" />}
                     />
                     <Route path="/content/posts/new" element={<NewPost />} />
-                    <Route path="/content/posts/edit/:id" element={<EditPost />} />
+                    <Route path="/content/pages/new" element={<NewPage />} />
+                    <Route path="/content/edit/:id" element={<EditContent />} />
                     <Route path="/media" element={<Media />} />
                   </Routes>
                 </div>

@@ -20,9 +20,10 @@ interface PostFormProps {
   initialData?: Post
   onSuccess?: (post: Post) => void
   onError?: (error: string) => void
+  contentType?: string
 }
 
-export default function PostForm({ mode, initialData, onSuccess, onError }: PostFormProps) {
+export default function PostForm({ mode, initialData, onSuccess, onError, contentType }: PostFormProps) {
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
@@ -35,7 +36,6 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
     post_status: "draft",
   })
 
-  // Initialize form data with existing post data if in edit mode
   useEffect(() => {
     if (mode === "edit" && initialData) {
       const urlParts = initialData.url.split("/")
@@ -51,6 +51,30 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
     }
   }, [mode, initialData])
 
+  const getContentTypeName = (type?: string) => {
+    const postType = type || contentType || initialData?.post_type || "post"
+    switch (postType) {
+      case "post":
+        return "Post"
+      case "page":
+        return "Page"
+      default:
+        return "Content"
+    }
+  }
+
+  const getBackUrl = (type?: string) => {
+    const postType = type || contentType || initialData?.post_type || "post"
+    switch (postType) {
+      case "post":
+        return "/content/posts"
+      case "page":
+        return "/content/pages"
+      default:
+        return "/content"
+    }
+  }
+
   const generateSlug = (title: string) => {
     return title
       .toLowerCase()
@@ -65,7 +89,6 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
     setFormData((prev) => ({
       ...prev,
       title,
-      // Only auto-generate slug for new posts or if slug hasn't been manually edited
       slug:
         mode === "create" && (prev.slug === "" || prev.slug === generateSlug(prev.title))
           ? generateSlug(title)
@@ -97,6 +120,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
       const fullUrl = `${baseUrl}/posts/${formData.slug}`
 
       if (mode === "create") {
+        const postType = contentType || "post"
         const postData: CreatePostRequest = {
           title: formData.title,
           url: fullUrl,
@@ -104,12 +128,13 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
           description: description,
           author_ids: [authState.user.id],
           post_status: formData.post_status,
-          post_type: "post",
+          post_type: postType,
           menu_order: 0,
         }
 
         const result = await createPost(postData)
-        setMessage({ type: "success", text: "Post created successfully!" })
+        const successMessage = `${getContentTypeName(postType)} created successfully!`
+        setMessage({ type: "success", text: successMessage })
 
         if (onSuccess) {
           onSuccess(result.post)
@@ -117,7 +142,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
 
         // Redirect to edit page after creation
         setTimeout(() => {
-          navigate(`/content/posts/edit/${result.post.id}`)
+          navigate(`/content/edit/${result.post.id}`)
         }, 1000)
       } else if (mode === "edit" && initialData) {
         const updateData = {
@@ -129,15 +154,18 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
         }
 
         const result = await updatePost(initialData.id, updateData)
-        setMessage({ type: "success", text: "Post updated successfully!" })
+        const successMessage = `${getContentTypeName()} updated successfully!`
+        setMessage({ type: "success", text: successMessage })
 
         if (onSuccess) {
           onSuccess(result.post)
         }
       }
     } catch (error) {
-      console.error(`Error ${mode === "create" ? "creating" : "updating"} post:`, error)
-      const errorMessage = error instanceof Error ? error.message : `Failed to ${mode} post. Please try again.`
+      console.error(`Error ${mode === "create" ? "creating" : "updating"} content:`, error)
+      const contentTypeName = getContentTypeName().toLowerCase()
+      const errorMessage =
+        error instanceof Error ? error.message : `Failed to ${mode} ${contentTypeName}. Please try again.`
       setMessage({ type: "error", text: errorMessage })
 
       if (onError) {
@@ -148,7 +176,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
     }
   }
 
-  const pageTitle = mode === "create" ? "Add New Post" : `Edit Post: ${initialData?.title || ""}`
+  const pageTitle =
+    mode === "create" ? `Add New ${getContentTypeName()}` : `Edit ${getContentTypeName()}: ${initialData?.title || ""}`
+
+  const contentTypeName = getContentTypeName()
 
   return (
     <div className="post-form-page">
@@ -207,7 +238,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
             value={formData.content}
             onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
             required
-            placeholder="Write your post content here... (minimum 10 characters)"
+            placeholder={`Write your ${contentTypeName.toLowerCase()} content here... (minimum 10 characters)`}
             rows={15}
           />
           <small>
@@ -236,12 +267,12 @@ export default function PostForm({ mode, initialData, onSuccess, onError }: Post
                 ? "Creating..."
                 : "Updating..."
               : mode === "create"
-              ? "Create Post"
-              : "Update Post"}
+              ? `Create ${contentTypeName}`
+              : `Update ${contentTypeName}`}
           </Button>
 
           {mode === "edit" && (
-            <Button type="button" onClick={() => navigate("/content/posts")} className="btn btn-secondary">
+            <Button type="button" onClick={() => navigate(getBackUrl())} className="btn btn-secondary">
               Cancel
             </Button>
           )}

@@ -104,15 +104,16 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   }
 
   const handleNewPost = () => {
-    navigate("/content/posts/new")
+    // TODO: make this dynamic later
+    if (queryProp?.type === "page") {
+      navigate("/content/pages/new")
+    } else {
+      navigate("/content/posts/new")
+    }
   }
 
   const handleRowDoubleClick = (post: Post) => {
-    if (post.post_type === "post") {
-      navigate(`/content/posts/edit/${post.id}`)
-    } else if (post.post_type === "page") {
-      navigate(`/content/pages/edit/${post.id}`)
-    }
+    navigate(`/content/edit/${post.id}`)
   }
 
   const filters = (
