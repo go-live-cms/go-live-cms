@@ -1,0 +1,117 @@
+.notion-editor {
+  position: relative;
+}
+.ProseMirror.pm-reset {
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  min-height: 320px;
+  outline: none;
+  padding: 14px;
+}
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.bubble,
+.floating {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  display: flex;
+  gap: 0.25rem;
+  padding: 6px;
+}
+.bubble button,
+.floating button {
+  background: #f8f9fb;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.bubble button.on {
+  background: #e9efff;
+  border-color: #cfd9ff;
+}
+.meta {
+  color: #6b7280;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.slash-menu {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  left: 16px;
+  padding: 6px;
+  position: absolute;
+  top: 48px;
+  z-index: 10;
+}
+.slash-menu button {
+  background: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  text-align: left;
+}
+.slash-menu button:hover {
+  background: #f3f4f6;
+}
+
+.notion-lite-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.tiptap-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.tiptap-toolbar .sep {
+  background: #e5e7eb;
+  height: 18px;
+  margin: 0 0.25rem;
+  width: 1px;
+}
+.pm-reset {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  min-height: 320px;
+  outline: none;
+  padding: 14px;
+}
+.pm-reset p.is-editor-empty:first-child::before {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.btn.btn-xs {
+  background: #f7f7f7;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.btn-active {
+  background: #e8eefc;
+  border-color: #cdd9ff;
+}
+.meta {
+  color: #6b7280;
+  font-size: 12px;
+}
