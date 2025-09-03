@@ -1,0 +1,96 @@
+---
+import BaseHead from '@/components/BaseHead.astro'
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import FormattedDate from '@/components/FormattedDate.astro'
+import TipTapContent from '@/components/TipTapContent.astro'
+import { SITE_TITLE, SITE_DESCRIPTION } from '../../consts'
+import { getPostsByType } from '../../lib/api'
+
+export async function getStaticPaths() {
+  const postTypes = ['post', 'page']
+  
+  const paths = []
+  
+  for (const postType of postTypes) {
+    try {
+      const { data: posts, meta } = await getPostsByType(postType, { 
+        status: 'published',
+        limit: 1 
+      })
+      
+      if (posts.length > 0) {
+        paths.push({
+          params: { 'post_type': postType },
+          props: { postType, totalPosts: meta.total }
+        })
+      }
+    } catch (error) {
+      console.warn(`No posts found for type: ${postType}`)
+    }
+  }
+  
+  return paths
+}
+
+const { 'post_type': postType } = Astro.params 
+const { totalPosts } = Astro.props
+
+const { data: posts, meta } = await getPostsByType(postType, { 
+  status: 'published',
+  sort: 'date_desc',
+  limit: 20 
+})
+
+const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
+const pluralType = postType === 'page' ? 'Pages' : `${displayType}s`
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <BaseHead 
+      title={`${pluralType} | ${SITE_TITLE}`} 
+      description={`Browse all ${pluralType.toLowerCase()} on ${SITE_TITLE}`} 
+    />
+  </head>
+  <body>
+    <Header />
+    <main>
+      <section>
+        <h1>{pluralType}</h1>
+        <p>Showing {posts.length} of {meta.total} {pluralType.toLowerCase()}</p>
+        
+        {posts.length === 0 ? (
+          <p>No {pluralType.toLowerCase()} found.</p>
+        ) : (
+          <ul>
+            {posts.map((post: any) => (
+              <li>
+                <a href={`/${postType}/${post.id}`}>
+                  {post.featured_image && (
+                    <img src={post.featured_image} alt={post.title} />
+                  )}
+                  <h4 class="title">{post.title}</h4>
+                  <p class="date">
+                    <FormattedDate date={new Date(post.created_at)} />
+                  </p>
+                  {post.description && (
+                    <TipTapContent content={post.description} class="excerpt" />
+                  )}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+        
+        {meta.total > posts.length && (
+          <div class="pagination">
+            <a href={`/${postType}/?page=2`}>Load More</a>
+          </div>
+        )}
+      </section>
+    </main>
+    <Footer />
+  </body>
+</html>

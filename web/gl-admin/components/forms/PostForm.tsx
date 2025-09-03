@@ -6,6 +6,8 @@ import type { Post } from "@gl-admin/lib/api/types"
 import Input from "@gl-admin/components/ui/Input"
 import Button from "@gl-admin/components/ui/Button"
 import { authManager } from "@gl-admin/lib/auth"
+import NotionEditor from "@gl-admin/components/editor/Editor"
+import PostType from "../ui/PostType"
 
 interface PostFormData {
   title: string
@@ -27,6 +29,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const navigate = useNavigate()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [contentTextLen, setContentTextLen] = useState(0)
 
   const [formData, setFormData] = useState<PostFormData>({
     title: "",
@@ -51,6 +54,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [mode, initialData])
 
+  // TODO: these are basically the same, fix it
   const getContentTypeName = (type?: string) => {
     const postType = type || contentType || initialData?.post_type || "post"
     switch (postType) {
@@ -175,6 +179,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       setIsSubmitting(false)
     }
   }
+  const tempFrontendUrl = (post: Post) => {
+    return `/${post.post_type}/${post.id}`
+  }
 
   const pageTitle =
     mode === "create" ? `Add New ${getContentTypeName()}` : `Edit ${getContentTypeName()}: ${initialData?.title || ""}`
@@ -196,8 +203,17 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
         <div className="form-group">
           <Input title="Slug *" name="slug" value={formData.slug} onChange={handleSlugChange} required />
+          {mode === "edit" && (
+            <small>
+              Current URL:
+              <a href={initialData && tempFrontendUrl(initialData)}>
+                {window.location.origin}
+                {initialData && tempFrontendUrl(initialData)}
+              </a>
+            </small>
+          )}
           <small>
-            Will be converted to: {window.location.origin}/posts/{formData.slug}
+            in the future Will be converted to: {window.location.origin}/{getContentTypeName()}/{formData.slug}
           </small>
         </div>
 
@@ -232,20 +248,19 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         </div>
 
         <div className="form-group">
-          <label htmlFor="content">Content *</label>
-          <textarea
-            id="content"
+          <label>Content *</label>
+          <NotionEditor
             value={formData.content}
-            onChange={(e) => setFormData((prev) => ({ ...prev, content: e.target.value }))}
-            required
-            placeholder={`Write your ${contentTypeName.toLowerCase()} content here... (minimum 10 characters)`}
-            rows={15}
+            minChars={10}
+            onChange={(html, text) => {
+              setFormData((prev) => ({ ...prev, content: html }))
+              setContentTextLen(text.trim().length)
+            }}
+            placeholder={`Type ‘/’ for commands… Write your ${contentTypeName.toLowerCase()} here.`}
           />
           <small>
-            {formData.content.length}/10 characters minimum
-            {formData.content.length < 10 && formData.content.length > 0 && (
-              <span style={{ color: "red" }}> - Too short</span>
-            )}
+            {contentTextLen}/10 characters minimum
+            {contentTextLen > 0 && contentTextLen < 10 && <span style={{ color: "red" }}> - Too short</span>}
           </small>
         </div>
 
@@ -256,8 +271,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               isSubmitting ||
               !formData.title ||
               !formData.slug ||
-              !formData.content ||
-              formData.content.length < 10 ||
+              contentTextLen < 10 ||
               (formData.excerpt.length > 0 && formData.excerpt.length < 10)
             }
             className="btn btn-primary"
