@@ -39,7 +39,7 @@ export default function NotionLiteEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
-        codeBlock: false, // use lowlight version below
+        codeBlock: false,
         history: true,
         dropcursor: { width: 2, color: "var(--editor-cursor,#94a3b8)" },
       }),

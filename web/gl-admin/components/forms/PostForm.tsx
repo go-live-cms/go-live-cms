@@ -7,6 +7,7 @@ import Input from "@gl-admin/components/ui/Input"
 import Button from "@gl-admin/components/ui/Button"
 import { authManager } from "@gl-admin/lib/auth"
 import NotionEditor from "@gl-admin/components/editor/Editor"
+import PostType from "../ui/PostType"
 
 interface PostFormData {
   title: string
@@ -53,6 +54,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [mode, initialData])
 
+  // TODO: these are basically the same, fix it
   const getContentTypeName = (type?: string) => {
     const postType = type || contentType || initialData?.post_type || "post"
     switch (postType) {
@@ -177,6 +179,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       setIsSubmitting(false)
     }
   }
+  const tempFrontendUrl = (post: Post) => {
+    return `/${post.post_type}/${post.id}`
+  }
 
   const pageTitle =
     mode === "create" ? `Add New ${getContentTypeName()}` : `Edit ${getContentTypeName()}: ${initialData?.title || ""}`
@@ -198,8 +203,17 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
         <div className="form-group">
           <Input title="Slug *" name="slug" value={formData.slug} onChange={handleSlugChange} required />
+          {mode === "edit" && (
+            <small>
+              Current URL:
+              <a href={initialData && tempFrontendUrl(initialData)}>
+                {window.location.origin}
+                {initialData && tempFrontendUrl(initialData)}
+              </a>
+            </small>
+          )}
           <small>
-            Will be converted to: {window.location.origin}/posts/{formData.slug}
+            in the future Will be converted to: {window.location.origin}/{getContentTypeName()}/{formData.slug}
           </small>
         </div>
 

@@ -1,0 +1,292 @@
+---
+import FormattedDate from '@/components/FormattedDate.astro'
+import BaseHead from '@/components/BaseHead.astro'
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import TipTapContent from '@/components/TipTapContent.astro'
+import { SITE_TITLE } from '../../consts'
+import { getPostsByType, getPostById } from '../../lib/api'
+
+export async function getStaticPaths() {
+  const postTypes = ['post', 'page']
+  
+  const paths = []
+  
+  for (const postType of postTypes) {
+    try {
+      const { data: posts } = await getPostsByType(postType, { 
+        status: 'published'
+      })
+      
+      posts.forEach((post: any) => {
+        paths.push({
+          params: { 
+            'post_type': postType,
+            id: post.id.toString()
+          },
+          props: { post, postType }
+        })
+      })
+    } catch (error) {
+      console.warn(`Error fetching posts for type: ${postType}`, error)
+    }
+  }
+  
+  return paths
+}
+
+const { 'post_type': postType, id } = Astro.params 
+const { post } = Astro.props
+
+console.log(`Rendering ${postType} with ID:`, id)
+
+if (!post) {
+  console.error(`Post not found in props for ${postType} ID:`, id)
+  
+  try {
+    console.log(`Attempting to fetch ${postType} directly for ID:`, id)
+    const postResponse = await getPostById(id)
+    if (postResponse && postResponse.post) {
+      console.log('Found post via direct fetch:', postResponse.post.title)
+      const fullPost = postResponse.post
+    } else {
+      console.error(`Post not found via direct fetch for ${postType} ID:`, id)
+      return new Response(null, {
+        status: 404,
+        statusText: 'Post Not Found'
+      })
+    }
+  } catch (error) {
+    console.error(`Error fetching ${postType} directly for ID:`, id, 'Error:', error)
+    return new Response(null, {
+      status: 404,
+      statusText: 'Post Not Found'
+    })
+  }
+}
+
+let fullPost = post
+if (post) {
+  try {
+    console.log(`Fetching fresh ${postType} data for ID:`, id)
+    const postResponse = await getPostById(id)
+    if (postResponse && postResponse.post) {
+      fullPost = postResponse.post
+      console.log(`Successfully fetched fresh ${postType} data:`, fullPost.title)
+    }
+  } catch (error) {
+    console.warn(`Could not fetch fresh ${postType} data for ID:`, id, 'Error:', error.message)
+    fullPost = post
+  }
+}
+
+if (!fullPost) {
+  try {
+    console.log(`Final attempt to fetch ${postType} for ID:`, id)
+    const postResponse = await getPostById(id)
+    fullPost = postResponse.post
+  } catch (error) {
+    console.error(`Final fetch attempt failed for ${postType} ID:`, id)
+    return new Response(null, {
+      status: 404,
+      statusText: 'Post Not Found'
+    })
+  }
+}
+
+if (!fullPost || !fullPost.title) {
+  console.error(`Full ${postType} data is invalid for ID:`, id)
+  return new Response(null, {
+    status: 404,
+    statusText: 'Post Content Not Found'
+  })
+}
+
+const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <BaseHead 
+      title={`${fullPost.title} | ${SITE_TITLE}`} 
+      description={fullPost.description} 
+    />
+    <style>
+      .prose {
+        max-width: none;
+        line-height: 1.7;
+        color: #374151;
+      }
+
+      .prose h1, .prose h2, .prose h3 {
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        font-weight: 600;
+        line-height: 1.3;
+      }
+
+      .prose h1 { font-size: 2.25rem; }
+      .prose h2 { font-size: 1.875rem; }
+      .prose h3 { font-size: 1.5rem; }
+
+      .prose p {
+        margin-bottom: 1rem;
+      }
+
+      .prose strong {
+        font-weight: 600;
+      }
+
+      .prose em {
+        font-style: italic;
+      }
+
+      .prose ul, .prose ol {
+        margin: 1rem 0;
+        padding-left: 2rem;
+      }
+
+      .prose li {
+        margin-bottom: 0.5rem;
+      }
+
+      .prose ul li {
+        list-style-type: disc;
+      }
+
+      .prose ol li {
+        list-style-type: decimal;
+      }
+
+      .prose blockquote {
+        border-left: 4px solid #e5e7eb;
+        padding-left: 1rem;
+        margin: 1.5rem 0;
+        font-style: italic;
+        color: #6b7280;
+        background-color: #f9fafb;
+        padding: 1rem;
+        border-radius: 0.25rem;
+      }
+
+      .prose code {
+        background-color: #f3f4f6;
+        padding: 0.125rem 0.25rem;
+        border-radius: 0.25rem;
+        font-size: 0.875rem;
+        font-family: 'Courier New', monospace;
+      }
+
+      .prose pre {
+        background-color: #1f2937;
+        color: #f9fafb;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        overflow-x: auto;
+        margin: 1.5rem 0;
+        font-family: 'Courier New', monospace;
+      }
+
+      .prose pre code {
+        background-color: transparent;
+        padding: 0;
+        color: inherit;
+      }
+
+      .prose a {
+        color: #3b82f6;
+        text-decoration: underline;
+        transition: color 0.2s;
+      }
+
+      .prose a:hover {
+        color: #1d4ed8;
+      }
+
+      .prose hr {
+        border: none;
+        border-top: 2px solid #e5e7eb;
+        margin: 2rem 0;
+      }
+
+      .prose img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 0.5rem;
+        margin: 1.5rem 0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+      }
+
+      .hero-image {
+        margin-bottom: 2rem;
+      }
+
+      .hero-image img {
+        width: 100%;
+        height: 300px;
+        object-fit: cover;
+        border-radius: 0.5rem;
+      }
+
+      .title {
+        margin-bottom: 2rem;
+      }
+
+      .date {
+        color: #6b7280;
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .content {
+        margin-top: 2rem;
+      }
+
+      .breadcrumb {
+        margin-bottom: 2rem;
+        font-size: 0.875rem;
+        color: #6b7280;
+      }
+
+      .breadcrumb a {
+        color: #3b82f6;
+        text-decoration: none;
+      }
+
+      .breadcrumb a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+
+  <body>
+    <Header />
+    <main>
+      <nav class="breadcrumb">
+        <a href="/">Home</a> › 
+        <a href={`/${postType}`}>{displayType}s</a> › 
+        <span>{fullPost.title}</span>
+      </nav>
+      
+      <article>
+        <div class="hero-image">
+          {fullPost.featured_image && (
+            <img src={fullPost.featured_image} alt={fullPost.title} />
+          )}
+        </div>
+        <div class="prose">
+          <div class="title">
+            <div class="date">
+              <FormattedDate date={new Date(fullPost.created_at)} />
+            </div>
+            <h1>{fullPost.title}</h1>
+            <hr />
+          </div>
+          <TipTapContent content={fullPost.content} class="content" />
+        </div>
+      </article>
+    </main>
+    <Footer />
+  </body>
+</html>

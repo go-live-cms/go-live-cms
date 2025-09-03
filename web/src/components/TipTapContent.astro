@@ -1,0 +1,14 @@
+---
+interface Props {
+  content: string
+  class?: string
+}
+
+const { content, class: className = '' } = Astro.props
+---
+
+<div class={`tiptap-content ${className}`} set:html={content} />
+
+<style>
+
+</style>
