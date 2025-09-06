@@ -2,12 +2,14 @@ import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { createPost, updatePost } from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
-import type { Post } from "@gl-admin/lib/api/types"
-import Input from "@gl-admin/components/ui/Input"
-import Button from "@gl-admin/components/ui/Button"
+import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
-import NotionEditor from "@gl-admin/components/editor/NotionEditor"
-import PostType from "../ui/PostType"
+import Editor from "@gl-admin/components/editor/Editor"
+import PublishBar from "@gl-admin/components/editor/PublishBarNew"
+import PostSidebar from "@gl-admin/components/editor/PostSidebar"
+import { ToastContainer, useToast } from "@gl-admin/components/Toast"
+import "@gl-admin/assets/styles/components/editor/post-editor.scss"
+import "@gl-admin/assets/styles/components/Toast.scss"
 
 interface PostFormData {
   title: string
@@ -27,8 +29,19 @@ interface PostFormProps {
 
 export default function PostForm({ mode, initialData, onSuccess, onError, contentType }: PostFormProps) {
   const navigate = useNavigate()
+  const { toasts, showSuccess, showError, removeToast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
+
+  const ORIGINAL_SIDEBAR_WIDTH = 20 * 16
+  const MIN_SIDEBAR_WIDTH = ORIGINAL_SIDEBAR_WIDTH * 0.8
+  const MAX_SIDEBAR_WIDTH = ORIGINAL_SIDEBAR_WIDTH * 1.5
+  const initialSidebarWidth = parseInt(localStorage.getItem("postSettingsSidebarWidth") || "") || ORIGINAL_SIDEBAR_WIDTH
+  const [sidebarWidth, setSidebarWidth] = useState(`${initialSidebarWidth}px`)
+  const [sidebarVisible, setSidebarVisible] = useState(
+    localStorage.getItem("postSettingsSidebarState") === "true" || false
+  )
   const [contentTextLen, setContentTextLen] = useState(0)
 
   const [formData, setFormData] = useState<PostFormData>({
@@ -38,6 +51,49 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     excerpt: "",
     post_status: "draft",
   })
+
+  let mockPostType: PostType
+
+  const currentPost: Post = {
+    id: initialData?.id || 0,
+    title: formData.title,
+    description: formData.excerpt,
+    content: formData.content,
+    user_id: initialData?.user_id || 0,
+    username: initialData?.username || "",
+    post_type: contentType || initialData?.post_type || "post",
+    post_status: formData.post_status,
+    url: formData.slug,
+    menu_order: initialData?.menu_order || 0,
+    created_at: initialData?.created_at || new Date().toISOString(),
+    changed_at: initialData?.changed_at || new Date().toISOString(),
+  }
+
+  const handlePostUpdate = (updates: Partial<Post>) => {
+    setFormData((prev) => ({
+      ...prev,
+      ...(updates.title !== undefined && { title: updates.title }),
+      ...(updates.description !== undefined && { excerpt: updates.description }),
+      ...(updates.content !== undefined && { content: updates.content }),
+      ...(updates.post_status !== undefined && { post_status: updates.post_status as "draft" | "published" }),
+      ...(updates.url !== undefined && { slug: updates.url }),
+    }))
+  }
+  const handleSlugChange = (newSlug: string) => {
+    setFormData((prev) => ({ ...prev, slug: newSlug }))
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [formData])
 
   useEffect(() => {
     if (mode === "edit" && initialData) {
@@ -53,6 +109,14 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       })
     }
   }, [mode, initialData])
+
+  useEffect(() => {
+    localStorage.setItem("postSettingsSidebarWidth", sidebarWidth)
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    localStorage.setItem("postSettingsSidebarState", sidebarVisible.toString())
+  }, [sidebarVisible])
 
   // TODO: these are basically the same, fix it
   const getContentTypeName = (type?: string) => {
@@ -79,6 +143,55 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }
 
+  mockPostType = {
+    id: 1,
+    name: contentType || "post",
+    label: getContentTypeName(contentType),
+    description: "",
+    hierarchical: false,
+    public: true,
+    show_ui: true,
+    show_in_menu: true,
+    created_at: new Date().toISOString(),
+  }
+
+  const handleSidebarResize = (e: React.MouseEvent) => {
+    const resizing = { current: true }
+    document.body.style.cursor = "ew-resize"
+
+    const startX = e.clientX
+    const startWidth = parseInt(sidebarWidth)
+
+    let animationFrameId: number | null = null
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!resizing.current) return
+
+      if (animationFrameId) return
+
+      animationFrameId = window.requestAnimationFrame(() => {
+        let newWidth = startWidth - (moveEvent.clientX - startX)
+        newWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(MAX_SIDEBAR_WIDTH, newWidth))
+        setSidebarWidth(`${newWidth}px`)
+        animationFrameId = null
+      })
+    }
+
+    const onMouseUp = () => {
+      resizing.current = false
+      document.body.style.cursor = ""
+      window.removeEventListener("mousemove", onMouseMove)
+      window.removeEventListener("mouseup", onMouseUp)
+      if (animationFrameId) {
+        window.cancelAnimationFrame(animationFrameId)
+        animationFrameId = null
+      }
+    }
+
+    window.addEventListener("mousemove", onMouseMove)
+    window.addEventListener("mouseup", onMouseUp)
+  }
+
   const generateSlug = (title: string) => {
     return title
       .toLowerCase()
@@ -100,14 +213,16 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }))
   }
 
-  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, slug: e.target.value }))
+  const handleSave = async () => {
+    await savePost(false)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setMessage(null)
+  const savePost = async (isPublish: boolean = false) => {
+    const setSavingState = isPublish ? setIsSubmitting : setIsSaving
+    const setSaveStatusState = isPublish ? () => {} : setSaveStatus
+
+    setSavingState(true)
+    setSaveStatusState("saving")
 
     try {
       const authState = authManager.getState()
@@ -131,35 +246,41 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           content: formData.content,
           description: description,
           author_ids: [authState.user.id],
-          post_status: formData.post_status,
+          post_status: isPublish ? "published" : formData.post_status,
           post_type: postType,
           menu_order: 0,
         }
 
         const result = await createPost(postData)
-        const successMessage = `${getContentTypeName(postType)} created successfully!`
-        setMessage({ type: "success", text: successMessage })
+        const successMessage = `${getContentTypeName(postType)} ${isPublish ? "published" : "saved"} successfully!`
+        showSuccess(successMessage)
+        setSaveStatusState("saved")
 
         if (onSuccess) {
           onSuccess(result.post)
         }
 
         // Redirect to edit page after creation
-        setTimeout(() => {
+        if (isPublish) {
+          setTimeout(() => {
+            navigate(`/content/edit/${result.post.id}`)
+          }, 1000)
+        } else {
           navigate(`/content/edit/${result.post.id}`)
-        }, 1000)
+        }
       } else if (mode === "edit" && initialData) {
         const updateData = {
           title: formData.title,
           url: fullUrl,
           content: formData.content,
           description: description,
-          post_status: formData.post_status,
+          post_status: isPublish ? "published" : formData.post_status,
         }
 
         const result = await updatePost(initialData.id, updateData)
-        const successMessage = `${getContentTypeName()} updated successfully!`
-        setMessage({ type: "success", text: successMessage })
+        const successMessage = `${getContentTypeName()} ${isPublish ? "published" : "saved"} successfully!`
+        showSuccess(successMessage)
+        setSaveStatusState("saved")
 
         if (onSuccess) {
           onSuccess(result.post)
@@ -170,128 +291,82 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       const contentTypeName = getContentTypeName().toLowerCase()
       const errorMessage =
         error instanceof Error ? error.message : `Failed to ${mode} ${contentTypeName}. Please try again.`
-      setMessage({ type: "error", text: errorMessage })
+      showError(errorMessage)
+      setSaveStatusState("error")
 
       if (onError) {
         onError(errorMessage)
       }
     } finally {
-      setIsSubmitting(false)
+      setSavingState(false)
+
+      if (!isPublish) {
+        setTimeout(() => {
+          setSaveStatus(null)
+        }, 3000)
+      }
     }
   }
-  const tempFrontendUrl = (post: Post) => {
-    return `/${post.post_type}/${post.id}`
-  }
-
-  const pageTitle =
-    mode === "create" ? `Add New ${getContentTypeName()}` : `Edit ${getContentTypeName()}: ${initialData?.title || ""}`
 
   const contentTypeName = getContentTypeName()
 
   return (
-    <div className="post-form-page">
-      <div className="page-header">
-        <h1>{pageTitle}</h1>
+    <div className="post-editor">
+      <PublishBar
+        post={currentPost}
+        onSave={handleSave}
+        onPublish={() => savePost(true)}
+        isSaving={isSaving}
+        isPublishing={isSubmitting}
+        saveStatus={saveStatus}
+        onSettingsToggle={() => setSidebarVisible(!sidebarVisible)}
+      />
+
+      <div
+        className={`post-editor__container ${sidebarVisible ? "post-editor__container--with-sidebar" : ""}`}
+        style={sidebarVisible ? ({ "--post-settings-width": sidebarWidth } as React.CSSProperties) : {}}
+      >
+        <div className="post-editor__main">
+          <div className="post-editor__title">
+            <input
+              type="text"
+              placeholder="Add title"
+              value={formData.title}
+              onChange={handleTitleChange}
+              className="post-editor__title-input"
+              id="post-title"
+              name="post-title"
+            />
+          </div>
+
+          <div className="post-editor__content">
+            <Editor
+              value={formData.content}
+              minChars={10}
+              onChange={(html, text) => {
+                setFormData((prev) => ({ ...prev, content: html }))
+                setContentTextLen(text.trim().length)
+              }}
+              placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
+            />
+          </div>
+        </div>
       </div>
 
-      {message && <div className={`message ${message.type}`}>{message.text}</div>}
+      <PostSidebar
+        post={currentPost}
+        postType={mockPostType}
+        onUpdate={handlePostUpdate}
+        isVisible={sidebarVisible}
+        onToggle={() => setSidebarVisible(!sidebarVisible)}
+        sidebarWidth={sidebarWidth}
+        onResize={handleSidebarResize}
+        slug={formData.slug}
+        mode={mode}
+        onSlugChange={handleSlugChange}
+      />
 
-      <form onSubmit={handleSubmit} className="post-form">
-        <div className="form-group">
-          <Input title="Title *" name="title" value={formData.title} onChange={handleTitleChange} required />
-        </div>
-
-        <div className="form-group">
-          <Input title="Slug *" name="slug" value={formData.slug} onChange={handleSlugChange} required />
-          {mode === "edit" && (
-            <small>
-              Current URL:
-              <a href={initialData && tempFrontendUrl(initialData)}>
-                {window.location.origin}
-                {initialData && tempFrontendUrl(initialData)}
-              </a>
-            </small>
-          )}
-          <small>
-            in the future Will be converted to: {window.location.origin}/{getContentTypeName()}/{formData.slug}
-          </small>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="status">Status</label>
-          <select
-            id="status"
-            value={formData.post_status}
-            onChange={(e) => setFormData((prev) => ({ ...prev, post_status: e.target.value as "draft" | "published" }))}
-          >
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="excerpt">Excerpt *</label>
-          <textarea
-            id="excerpt"
-            value={formData.excerpt}
-            onChange={(e) => setFormData((prev) => ({ ...prev, excerpt: e.target.value }))}
-            placeholder="Brief description (minimum 10 characters)"
-            rows={3}
-            required
-          />
-          <small>
-            {formData.excerpt.length}/10 characters minimum
-            {formData.excerpt.length < 10 && formData.excerpt.length > 0 && (
-              <span style={{ color: "red" }}> - Too short</span>
-            )}
-          </small>
-        </div>
-
-        <div className="form-group">
-          <label>Content *</label>
-          <NotionEditor
-            value={formData.content}
-            minChars={10}
-            onChange={(html, text) => {
-              setFormData((prev) => ({ ...prev, content: html }))
-              setContentTextLen(text.trim().length)
-            }}
-            placeholder={`Type ‘/’ for commands… Write your ${contentTypeName.toLowerCase()} here.`}
-          />
-          <small>
-            {contentTextLen}/10 characters minimum
-            {contentTextLen > 0 && contentTextLen < 10 && <span style={{ color: "red" }}> - Too short</span>}
-          </small>
-        </div>
-
-        <div className="form-actions">
-          <Button
-            type="submit"
-            disabled={
-              isSubmitting ||
-              !formData.title ||
-              !formData.slug ||
-              contentTextLen < 10 ||
-              (formData.excerpt.length > 0 && formData.excerpt.length < 10)
-            }
-            className="btn btn-primary"
-          >
-            {isSubmitting
-              ? mode === "create"
-                ? "Creating..."
-                : "Updating..."
-              : mode === "create"
-              ? `Create ${contentTypeName}`
-              : `Update ${contentTypeName}`}
-          </Button>
-
-          {mode === "edit" && (
-            <Button type="button" onClick={() => navigate(getBackUrl())} className="btn btn-secondary">
-              Cancel
-            </Button>
-          )}
-        </div>
-      </form>
+      <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
     </div>
   )
 }

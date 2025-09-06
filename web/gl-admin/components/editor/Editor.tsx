@@ -14,7 +14,7 @@ import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
-import "@gl-admin/assets/styles/components/editor/notion-editor.scss"
+import "@gl-admin/assets/styles/components/editor/editor.scss"
 
 type Props = {
   value: string
@@ -27,7 +27,7 @@ type Props = {
 
 const lowlight = createLowlight(common)
 
-export default function NotionEditor({
+export default function Editor({
   value,
   onChange,
   placeholder = "Type '/' for commands...",

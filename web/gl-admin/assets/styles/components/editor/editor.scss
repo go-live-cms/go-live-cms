@@ -159,7 +159,6 @@
   position: relative;
 
   .editor-wrapper {
-    padding: 16px;
   }
 
   .floating-menu {
@@ -309,8 +308,8 @@
   }
 
   .notion-editor {
-    background: #1f2937;
-    border-color: #374151;
+    background: transparent;
+    border-color: transparent;
 
     .editor-meta {
       background: #111827;
