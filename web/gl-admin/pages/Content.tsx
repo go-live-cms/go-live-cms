@@ -39,6 +39,33 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     return base
   })()
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>(initialFilters)
+  const getInitialColumns = () => {
+    const cols: TableColumnWithRender<Post>[] = [
+      { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
+      {
+        key: "post_status",
+        name: "Status",
+        width: "10rem",
+        render: (_, row) => <PostStatus status={row?.post_status || null} iconPath={row?.post_status || null} />,
+      },
+      {
+        key: "created_at",
+        name: "Created at",
+        width: "10.75rem",
+        render: (_, row) => <PostDateTime value={row?.created_at || null} />,
+      },
+    ]
+    if (!queryProp) {
+      cols.push({
+        key: "post_type",
+        name: "Type",
+        width: "10rem",
+        render: (_, row) => <PostType type={row?.post_type || null} iconPath={row?.post_type || null} />,
+      })
+    }
+    return cols
+  }
+  const columns: TableColumnWithRender<Post>[] = getInitialColumns()
   const iconColor = isDark ? "#000000" : "#FFFFFF"
 
   const getAuthorOptions = async () => {
@@ -50,22 +77,6 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
       })) || []
     return [{ label: "All authors", value: "" }, ...authorOptions]
   }
-
-  const columns: TableColumnWithRender<Post>[] = [
-    { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
-    {
-      key: "post_status",
-      name: "Status",
-      width: "10rem",
-      render: (_, row) => <PostStatus status={row?.post_status || null} iconPath={row?.post_status || null} />,
-    },
-    {
-      key: "created_at",
-      name: "Created at",
-      width: "10.75rem",
-      render: (_, row) => <PostDateTime value={row?.created_at || null} />,
-    },
-  ]
 
   const getAuthors = async () => {
     try {
@@ -111,23 +122,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     }, [selectedFilters])
 
   useEffect(() => {
-
     document.title = `${baseTitle} ${title || "Content"}`
-
-    if (queryProp) {
-
-      columns.push({
-        key: "post_type",
-        name: "Type",
-        width: "10rem",
-        render: (_, row) => <PostType type={row?.post_type || null} iconPath={row?.post_type || null} />,
-      })
-
-      const stringFilters = Object.fromEntries(
-        Object.entries(queryProp).map(([key, value]) => [key, value !== undefined ? String(value) : ""])
-      );
-      setSelectedFilters({ ...selectedFilters, ...stringFilters })
-    }
 
     const fetchAuthorOptions = async () => {
       const options = await getAuthorOptions()
