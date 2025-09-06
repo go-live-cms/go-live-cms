@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } f
 import { Extension } from "@tiptap/core"
 import { ReactRenderer } from "@tiptap/react"
 import { PluginKey } from "prosemirror-state"
-import Suggestion from "./Suggestion"
+import { Suggestion } from "./Suggestion" // Import the extension, not as default
 
 export interface SlashCommandItem {
   title: string
@@ -120,14 +120,15 @@ export const SlashCommandExtension = Extension.create({
         command: ({ editor, range, props }: any) => {
           props.command({ editor, range })
         },
+        items: ({ query }: { query: string }) => [],
+        render: () => ({}),
       },
     }
   },
 
-  addProseMirrorPlugins() {
+  addExtensions() {
     return [
-      Suggestion({
-        editor: this.editor,
+      Suggestion.configure({
         ...this.options.suggestion,
       }),
     ]

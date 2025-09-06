@@ -1,7 +1,6 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
 import { Decoration, DecorationSet } from "prosemirror-view"
-import { ReactRenderer } from "@tiptap/react"
 
 export interface SuggestionOptions {
   char: string
@@ -38,6 +37,64 @@ export interface SuggestionProps {
   clientRect?: () => DOMRect | null
 }
 
+// Helper function to find suggestion matches
+function findSuggestionMatch({
+  editor,
+  state,
+  from,
+  to,
+  char,
+  allow,
+}: {
+  editor: any
+  state: any
+  from: number
+  to: number
+  char: string
+  allow?: (props: { editor: any; state: any; range: Range }) => boolean
+}) {
+  const { doc } = state
+
+  // Only look for matches at the cursor position
+  if (from !== to) {
+    return null
+  }
+
+  const $pos = doc.resolve(from)
+  const textBefore = $pos.parent.textBetween(Math.max(0, $pos.parentOffset - 500), $pos.parentOffset, null, "\ufffc")
+
+  // Find the trigger character
+  const match = textBefore.match(new RegExp(`(^|\\s)(\\${char}([^\\s\\${char}]*))$`))
+
+  if (!match) {
+    return null
+  }
+
+  const matchStart = match.index || 0
+  const matchLength = match[2].length
+  const query = match[3] || ""
+  const text = match[2]
+
+  const from_pos = $pos.start() + matchStart + (match[1]?.length || 0)
+  const to_pos = from_pos + matchLength
+
+  const range = {
+    from: from_pos,
+    to: to_pos,
+  }
+
+  // Check if this match is allowed
+  if (allow && !allow({ editor, state, range })) {
+    return null
+  }
+
+  return {
+    range,
+    query,
+    text,
+  }
+}
+
 export const Suggestion = Extension.create<SuggestionOptions>({
   name: "suggestion",
 
@@ -58,17 +115,20 @@ export const Suggestion = Extension.create<SuggestionOptions>({
   },
 
   addProseMirrorPlugins() {
+    const options = this.options
+    const editor = this.editor
+
     return [
       new Plugin({
-        key: this.options.pluginKey,
+        key: options.pluginKey,
         view: () => {
-          let component: ReactRenderer | null = null
+          let component: any = null
           let popup: any = null
 
           return {
             update: (view, prevState) => {
               const { state, composing } = view
-              const { doc, selection } = state
+              const { selection } = state
               const { ranges } = selection
               const from = Math.min(...ranges.map((range) => range.$from.pos))
               const to = Math.max(...ranges.map((range) => range.$to.pos))
@@ -76,48 +136,50 @@ export const Suggestion = Extension.create<SuggestionOptions>({
               if (composing) return
 
               // Check if we should show suggestions
-              const suggestionMatch = this.findSuggestionMatch({
-                editor: this.editor,
+              const suggestionMatch = findSuggestionMatch({
+                editor,
                 state,
                 from,
                 to,
+                char: options.char,
+                allow: options.allow,
               })
 
               if (!suggestionMatch) {
                 if (component) {
-                  this.options.render().onExit?.({
-                    editor: this.editor,
+                  options.render().onExit?.({
+                    editor,
                     view,
                     state,
                   })
-                  component.destroy()
+                  component?.destroy?.()
                   component = null
                 }
                 return
               }
 
               const { range, query, text } = suggestionMatch
-              const items = this.options.items({
-                editor: this.editor,
+              const items = options.items({
+                editor,
                 query,
               })
 
               const props: SuggestionProps = {
-                editor: this.editor,
+                editor,
                 range,
                 query,
                 text,
                 items,
                 command: (item: any) => {
-                  this.options.command({
-                    editor: this.editor,
+                  options.command({
+                    editor,
                     range,
                     props: item,
                   })
                 },
                 decorationNode: null,
                 clientRect: () => {
-                  const { view } = this.editor
+                  const { view } = editor
                   const { from, to } = range
                   const start = view.coordsAtPos(from)
                   const end = view.coordsAtPos(to)
@@ -127,24 +189,18 @@ export const Suggestion = Extension.create<SuggestionOptions>({
               }
 
               if (!component) {
-                component = new ReactRenderer(this.options.render().component || (() => null), {
-                  props,
-                  editor: this.editor,
-                })
-
-                this.options.render().onStart?.(props)
+                options.render().onStart?.(props)
               } else {
-                component.updateProps(props)
-                this.options.render().onUpdate?.(props)
+                options.render().onUpdate?.(props)
               }
             },
 
             destroy: () => {
               if (component) {
-                this.options.render().onExit?.({
-                  editor: this.editor,
+                options.render().onExit?.({
+                  editor,
                 })
-                component.destroy()
+                component?.destroy?.()
               }
             },
           }
@@ -158,11 +214,13 @@ export const Suggestion = Extension.create<SuggestionOptions>({
             const from = Math.min(...ranges.map((range) => range.$from.pos))
             const to = Math.max(...ranges.map((range) => range.$to.pos))
 
-            const suggestionMatch = this.findSuggestionMatch({
-              editor: this.editor,
+            const suggestionMatch = findSuggestionMatch({
+              editor,
               state,
               from,
               to,
+              char: options.char,
+              allow: options.allow,
             })
 
             if (!suggestionMatch) {
@@ -170,7 +228,7 @@ export const Suggestion = Extension.create<SuggestionOptions>({
             }
 
             return (
-              this.options.render().onKeyDown?.({
+              options.render().onKeyDown?.({
                 view,
                 event,
                 range: suggestionMatch.range,
@@ -191,11 +249,13 @@ export const Suggestion = Extension.create<SuggestionOptions>({
             const from = Math.min(...ranges.map((range) => range.$from.pos))
             const to = Math.max(...ranges.map((range) => range.$to.pos))
 
-            const suggestionMatch = this.findSuggestionMatch({
-              editor: this.editor,
+            const suggestionMatch = findSuggestionMatch({
+              editor,
               state: newState,
               from,
               to,
+              char: options.char,
+              allow: options.allow,
             })
 
             if (!suggestionMatch) {
@@ -204,7 +264,7 @@ export const Suggestion = Extension.create<SuggestionOptions>({
 
             const { range } = suggestionMatch
             const decoration = Decoration.inline(range.from, range.to, {
-              class: this.options.decorationClass,
+              class: options.decorationClass,
             })
 
             return DecorationSet.create(doc, [decoration])
@@ -212,56 +272,6 @@ export const Suggestion = Extension.create<SuggestionOptions>({
         },
       }),
     ]
-  },
-
-  findSuggestionMatch({ editor, state, from, to }: { editor: any; state: any; from: number; to: number }) {
-    const { doc, selection } = state
-
-    // Only look for matches at the cursor position
-    if (from !== to) {
-      return null
-    }
-
-    const $pos = doc.resolve(from)
-    const textBefore = $pos.parent.textBetween(Math.max(0, $pos.parentOffset - 500), $pos.parentOffset, null, "\ufffc")
-
-    // Find the trigger character
-    const match = textBefore.match(new RegExp(`(^|\\s)(\\${this.options.char}([^\\s\\${this.options.char}]*))$`))
-
-    if (!match) {
-      return null
-    }
-
-    const matchStart = match.index || 0
-    const matchLength = match[2].length
-    const query = match[3] || ""
-    const text = match[2]
-
-    const from_pos = $pos.start() + matchStart + (match[1]?.length || 0)
-    const to_pos = from_pos + matchLength
-
-    const range = {
-      from: from_pos,
-      to: to_pos,
-    }
-
-    // Check if this match is allowed
-    if (
-      this.options.allow &&
-      !this.options.allow({
-        editor,
-        state,
-        range,
-      })
-    ) {
-      return null
-    }
-
-    return {
-      range,
-      query,
-      text,
-    }
   },
 })
 
