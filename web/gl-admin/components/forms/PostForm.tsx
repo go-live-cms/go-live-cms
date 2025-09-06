@@ -6,7 +6,7 @@ import type { Post } from "@gl-admin/lib/api/types"
 import Input from "@gl-admin/components/ui/Input"
 import Button from "@gl-admin/components/ui/Button"
 import { authManager } from "@gl-admin/lib/auth"
-import NotionEditor from "@gl-admin/components/editor/Editor"
+import NotionEditor from "@gl-admin/components/editor/NotionEditor"
 import PostType from "../ui/PostType"
 
 interface PostFormData {
