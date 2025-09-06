@@ -1,5 +1,5 @@
 import React from "react";
-import { useDarkMode } from "@gl-admin/contexts/DarkModeContext";
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext";
 import { useSelect } from "@gl-admin/utils/select";
 import Icon from "@gl-admin/components/ui/Icon";
 import "@gl-admin/assets/styles/components/ui/filter-select.scss";
@@ -33,7 +33,7 @@ const FilterSelect: React.FC<FilterSelectProps> = ({
         ref,
         handleSelectClick,
     } = useSelect(disabled);
-    const isDark = useDarkMode();
+    const { isDark } = useGoLive();
     const iconColor = isDark ? "#FFFFFF" : "#333536";
     const selectedOption = options.find(opt => opt.value === value);
 
