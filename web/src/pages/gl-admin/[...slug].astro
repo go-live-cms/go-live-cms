@@ -1,20 +1,12 @@
 ---
+import AdminLayout from "@/layouts/gl-admin/Layout.astro"
 import App from "@gl-admin/app"
-import favicon from "@gl-admin/assets/favicon.ico"
 
 export async function getStaticPaths() {
   return [{ params: { slug: "" } }, { params: { slug: "*" } }]
 }
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GoLive Admin</title>
-    <link rel="icon" href={favicon} sizes="any" />
-  </head>
-  <body>
-    <App client:only="react" />
-  </body>
-</html>
+<AdminLayout>
+  <App client:only="react" />
+</AdminLayout>

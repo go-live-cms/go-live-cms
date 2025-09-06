@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { useDarkMode } from "@gl-admin/contexts/DarkModeContext";
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext";
 import Icon from "@gl-admin/components/ui/Icon";
 import "@gl-admin/assets/styles/components/sidebar/sidebar-item.scss";
 
@@ -23,7 +23,7 @@ const SidebarItem: React.FC<Props> = ({
     type,
     onClick,
 }) => {
-    const isDark = useDarkMode();
+    const { isDark } = useGoLive();
     const navIconColor = isDark ? "#FFFFFF" : "#46484A";
 
     if (link) {

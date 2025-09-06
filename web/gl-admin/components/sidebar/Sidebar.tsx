@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useDarkMode } from "@gl-admin/contexts/DarkModeContext";
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext";
 import { Link, useLocation } from "react-router-dom";
 import { extractSvgPath, Icon } from "@gl-admin/components/ui/Icon";
 import SidebarItem from "@gl-admin/components/sidebar/SidebarItem";
@@ -44,7 +44,7 @@ const navigation: Navigation = [
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
-  const isDark = useDarkMode();
+  const { isDark } = useGoLive();
   const navIconColor = isDark ? "#FFFFFF" : "#46484A";
   const initialWidth = parseInt(localStorage.getItem('sidebarWidth') || '') || ORIGINAL_WIDTH;
   const [sidebarWidth, setSidebarWidth] = useState(`${initialWidth}px`);

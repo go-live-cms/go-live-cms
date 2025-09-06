@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { useDarkMode } from "@gl-admin/contexts/DarkModeContext"
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Listing from "@gl-admin/layouts/Listing"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import { getUsers } from "@gl-admin/lib/api/users"
@@ -23,6 +23,7 @@ type ContentProps = {
 
 const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   const navigate = useNavigate()
+  const { isDark, baseTitle } = useGoLive()
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([
     { label: "All authors", value: "" },
@@ -33,7 +34,6 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     type: "",
     sort: "",
   })
-  const isDark = useDarkMode()
   const iconColor = isDark ? "#000000" : "#FFFFFF"
 
   const getAuthorOptions = async () => {
@@ -47,6 +47,9 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   }
 
   useEffect(() => {
+
+    document.title = `${baseTitle} ${title || "Content"}`;
+
     const fetchAuthorOptions = async () => {
       const options = await getAuthorOptions()
       setAuthorOptions(options)
