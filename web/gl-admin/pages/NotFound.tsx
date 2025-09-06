@@ -1,11 +1,14 @@
 import React, { useEffect } from "react";
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext";
 import { Link } from "react-router-dom"
 import "@gl-admin/assets/styles/pages/not-found.scss";
 
 const NotFound: React.FC = () => {
+    const { baseTitle } = useGoLive();
+
     useEffect(() => {
-        document.title = "GoLive Admin | 404 Not Found";
-    }, []);
+        document.title = `${baseTitle} 404 Not Found`;
+    }, [baseTitle]);
 
     return (
         <div className="not-found">

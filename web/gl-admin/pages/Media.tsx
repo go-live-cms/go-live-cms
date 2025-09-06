@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import MediaGrid from "@gl-admin/components/media/MediaGrid"
 import { getMedia, createMedia } from "@gl-admin/lib/api/media"
 import { getUsers } from "@gl-admin/lib/api/users"
@@ -20,6 +21,7 @@ function formatFileSize(bytes: number): string {
 }
 
 const Media: React.FC = () => {
+  const { baseTitle } = useGoLive()
   const [mediaItems, setMediaItems] = useState<Media[]>([])
   const [error, setError] = useState<string | null>(null)
   const [total, setTotal] = useState<number>(0)
@@ -47,7 +49,7 @@ const Media: React.FC = () => {
 
   useEffect(() => {
 
-    document.title = "GoLive Admin | Media";
+    document.title = `${baseTitle} Media`;
 
     refreshMediaData()
     loadUsersWithMedia()
@@ -485,20 +487,20 @@ const Media: React.FC = () => {
                 <div className="gl-admin-media__progress-bar">
                   <div
                     className={`gl-admin-media__progress-fill${item.error
-                        ? " gl-admin-media__progress-fill--error"
-                        : item.progress === 100
-                          ? " gl-admin-media__progress-fill--success"
-                          : ""
+                      ? " gl-admin-media__progress-fill--error"
+                      : item.progress === 100
+                        ? " gl-admin-media__progress-fill--success"
+                        : ""
                       }`}
                     style={{ width: `${item.progress}%` }}
                   ></div>
                 </div>
                 <span
                   className={`gl-admin-media__progress-status${item.error
-                      ? " gl-admin-media__progress-status--error"
-                      : item.progress === 100
-                        ? " gl-admin-media__progress-status--success"
-                        : ""
+                    ? " gl-admin-media__progress-status--error"
+                    : item.progress === 100
+                      ? " gl-admin-media__progress-status--success"
+                      : ""
                     }`}
                 >
                   {item.status}

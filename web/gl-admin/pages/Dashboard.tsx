@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react"
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Button from "@gl-admin/components/ui/Button"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import { getUsers } from "@gl-admin/lib/api/users"
@@ -7,6 +8,7 @@ import { getMedia } from "@gl-admin/lib/api/media"
 import type { Post, User, TaxonomyType, Media } from "@gl-admin/lib/types"
 
 const Dashboard: React.FC = () => {
+  const { baseTitle } = useGoLive();
   const [totalPosts, setTotalPosts] = useState(0)
   const [totalUsers, setTotalUsers] = useState(0)
   const [totalTaxonomies, setTotalTaxonomies] = useState(0)
@@ -16,7 +18,7 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    document.title = "GoLive Admin | Dashboard";
+    document.title = `${baseTitle} Dashboard`;
 
     const fetchData = async () => {
       try {
