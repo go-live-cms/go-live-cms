@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { getPostById } from "@gl-admin/lib/api/posts"
 import type { Post } from "@gl-admin/lib/api/types"
 import PostForm from "@gl-admin/components/forms/PostForm"
-import "@gl-admin/assets/styles/components/forms/post-form.scss"
+import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 
 export default function EditContent() {
   const { id } = useParams<{ id: string }>()
