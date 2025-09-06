@@ -28,11 +28,17 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([
     { label: "All authors", value: "" },
   ])
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({
-    user_id: "",
-    type: "",
-    sort: "",
-  })
+  const initialFilters = (() => {
+    const base = { user_id: "", type: "", sort: "", status: "" }
+    if (queryProp) {
+      const stringFilters = Object.fromEntries(
+        Object.entries(queryProp).map(([key, value]) => [key, value !== undefined ? String(value) : ""])
+      )
+      return { ...base, ...stringFilters }
+    }
+    return base
+  })()
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>(initialFilters)
   const iconColor = isDark ? "#000000" : "#FFFFFF"
 
   const getAuthorOptions = async () => {
@@ -106,7 +112,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
 
   useEffect(() => {
 
-    document.title = `${baseTitle} ${title || "Content"}`;
+    document.title = `${baseTitle} ${title || "Content"}`
 
     if (queryProp) {
 
@@ -128,7 +134,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
       setAuthorOptions(options)
     }
     fetchAuthorOptions()
-  }, [queryProp])
+  }, [])
 
   const filters = (
     <>
