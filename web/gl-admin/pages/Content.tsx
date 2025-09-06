@@ -30,7 +30,6 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   ])
   const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({
     user_id: "",
-    status: "",
     type: "",
     sort: "",
   })
@@ -50,12 +49,19 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
 
     document.title = `${baseTitle} ${title || "Content"}`;
 
+    if (queryProp?.type) {
+      const stringFilters = Object.fromEntries(
+        Object.entries(queryProp).map(([key, value]) => [key, value !== undefined ? String(value) : ""])
+      );
+      setSelectedFilters({ ...selectedFilters, ...stringFilters })
+    }
+
     const fetchAuthorOptions = async () => {
       const options = await getAuthorOptions()
       setAuthorOptions(options)
     }
     fetchAuthorOptions()
-  }, [])
+  }, [queryProp])
 
   const columns: TableColumnWithRender<Post>[] = [
     { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
@@ -175,13 +181,6 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     </>
   )
 
-  const getQuery = () => {
-    return {
-      ...queryProp,
-      ...selectedFilters,
-    }
-  }
-
   const fetchData = async ({ limit, offset, ...query }: ApiMeta & PostQueryParams) => {
     const response = await getPosts({ limit, offset, with_meta: true, ...query })
     return { data: response.data, total: response.meta.total || 0 }
@@ -189,7 +188,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
 
   return (
     <Listing title={title || "Content"} actions={filters}>
-      <Pagination fetchData={fetchData} query={getQuery() || {}}>
+      <Pagination fetchData={fetchData} query={selectedFilters || {}}>
         {({ data, loading }) => (
           <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
         )}
