@@ -6,6 +6,9 @@ class SlashCommandManager {
   private popup: HTMLElement | null = null
   private isActive = false
   private currentEditor: any = null
+  private currentRange: any = null
+  private getCursorCoordsFunction: Function | null = null
+  private scrollHandler: (() => void) | null = null
 
   isActiveState() {
     return this.isActive
@@ -13,6 +16,12 @@ class SlashCommandManager {
 
   cleanup() {
     this.isActive = false
+
+    if (this.scrollHandler) {
+      window.removeEventListener("scroll", this.scrollHandler, true)
+      document.removeEventListener("scroll", this.scrollHandler, true)
+      this.scrollHandler = null
+    }
 
     if (this.popup && this.popup.parentNode) {
       this.popup.parentNode.removeChild(this.popup)
@@ -25,6 +34,8 @@ class SlashCommandManager {
     }
 
     this.currentEditor = null
+    this.currentRange = null
+    this.getCursorCoordsFunction = null
   }
 
   start(props: any, getCursorCoords: Function) {
@@ -35,9 +46,12 @@ class SlashCommandManager {
 
     this.isActive = true
     this.currentEditor = props.editor
+    this.currentRange = props.range
+    this.getCursorCoordsFunction = getCursorCoords
 
+    // Use setTimeout to avoid flushSync error
     setTimeout(() => {
-      if (!this.isActive) return
+      if (!this.isActive) return // Check if still needed
 
       this.component = new ReactRenderer(SlashCommandList, {
         props: {
@@ -54,6 +68,16 @@ class SlashCommandManager {
 
       const coords = getCursorCoords(props.editor, props.range)
       this.positionPopup(coords)
+
+      this.scrollHandler = () => {
+        if (this.isActive && this.currentEditor && this.currentRange && this.getCursorCoordsFunction) {
+          const newCoords = this.getCursorCoordsFunction(this.currentEditor, this.currentRange)
+          this.positionPopup(newCoords)
+        }
+      }
+
+      window.addEventListener("scroll", this.scrollHandler, true)
+      document.addEventListener("scroll", this.scrollHandler, true)
     }, 0)
   }
 
@@ -61,6 +85,9 @@ class SlashCommandManager {
     if (!this.isActive || !this.component) {
       return
     }
+
+    this.currentRange = props.range
+    this.getCursorCoordsFunction = getCursorCoords
 
     this.component.updateProps({
       ...props,
@@ -93,6 +120,14 @@ class SlashCommandManager {
 
     if (coords.x + popupRect.width > viewportWidth) {
       this.popup.style.left = `${viewportWidth - popupRect.width - 8}px`
+    }
+
+    if (coords.x < 0) {
+      this.popup.style.left = `8px`
+    }
+
+    if (coords.y < popupRect.height + 16) {
+      this.popup.style.top = `${coords.y + 24}px`
     }
   }
 

@@ -613,6 +613,8 @@
 
 // Slash Command Popup
 .slash-command-popup {
+  transform: translateZ(0);
+  will-change: transform;
   .slash-command-list {
     background: white;
     border: 1px solid #e1e5e9;
@@ -621,6 +623,7 @@
     max-height: 300px;
     min-width: 280px;
     overflow-y: auto;
+    scroll-behavior: smooth;
 
     .slash-command-item {
       align-items: center;
