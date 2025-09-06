@@ -37,7 +37,6 @@ export interface SuggestionProps {
   clientRect?: () => DOMRect | null
 }
 
-// Helper function to find suggestion matches
 function findSuggestionMatch({
   editor,
   state,
@@ -55,16 +54,14 @@ function findSuggestionMatch({
 }) {
   const { doc } = state
 
-  // Only look for matches at the cursor position
   if (from !== to) {
     return null
   }
 
   const $pos = doc.resolve(from)
-  const textBefore = $pos.parent.textBetween(Math.max(0, $pos.parentOffset - 500), $pos.parentOffset, null, "\ufffc")
+  const textBefore = $pos.parent.textBetween(Math.max(0, $pos.parentOffset - 100), $pos.parentOffset, null, "\ufffc")
 
-  // Find the trigger character
-  const match = textBefore.match(new RegExp(`(^|\\s)(\\${char}([^\\s\\${char}]*))$`))
+  const match = textBefore.match(new RegExp(`(^|\\s)(\\${char}([^\\s]*))$`))
 
   if (!match) {
     return null
@@ -75,6 +72,11 @@ function findSuggestionMatch({
   const query = match[3] || ""
   const text = match[2]
 
+  // Make sure we actually have the trigger character
+  if (!text.includes(char)) {
+    return null
+  }
+
   const from_pos = $pos.start() + matchStart + (match[1]?.length || 0)
   const to_pos = from_pos + matchLength
 
@@ -83,7 +85,6 @@ function findSuggestionMatch({
     to: to_pos,
   }
 
-  // Check if this match is allowed
   if (allow && !allow({ editor, state, range })) {
     return null
   }
@@ -121,91 +122,6 @@ export const Suggestion = Extension.create<SuggestionOptions>({
     return [
       new Plugin({
         key: options.pluginKey,
-        view: () => {
-          let component: any = null
-          let popup: any = null
-
-          return {
-            update: (view, prevState) => {
-              const { state, composing } = view
-              const { selection } = state
-              const { ranges } = selection
-              const from = Math.min(...ranges.map((range) => range.$from.pos))
-              const to = Math.max(...ranges.map((range) => range.$to.pos))
-
-              if (composing) return
-
-              // Check if we should show suggestions
-              const suggestionMatch = findSuggestionMatch({
-                editor,
-                state,
-                from,
-                to,
-                char: options.char,
-                allow: options.allow,
-              })
-
-              if (!suggestionMatch) {
-                if (component) {
-                  options.render().onExit?.({
-                    editor,
-                    view,
-                    state,
-                  })
-                  component?.destroy?.()
-                  component = null
-                }
-                return
-              }
-
-              const { range, query, text } = suggestionMatch
-              const items = options.items({
-                editor,
-                query,
-              })
-
-              const props: SuggestionProps = {
-                editor,
-                range,
-                query,
-                text,
-                items,
-                command: (item: any) => {
-                  options.command({
-                    editor,
-                    range,
-                    props: item,
-                  })
-                },
-                decorationNode: null,
-                clientRect: () => {
-                  const { view } = editor
-                  const { from, to } = range
-                  const start = view.coordsAtPos(from)
-                  const end = view.coordsAtPos(to)
-
-                  return new DOMRect(start.left, start.top, end.right - start.left, end.bottom - start.top)
-                },
-              }
-
-              if (!component) {
-                options.render().onStart?.(props)
-              } else {
-                options.render().onUpdate?.(props)
-              }
-            },
-
-            destroy: () => {
-              if (component) {
-                options.render().onExit?.({
-                  editor,
-                })
-                component?.destroy?.()
-              }
-            },
-          }
-        },
-
         props: {
           handleKeyDown: (view, event) => {
             const { state } = view
@@ -227,15 +143,103 @@ export const Suggestion = Extension.create<SuggestionOptions>({
               return false
             }
 
-            return (
-              options.render().onKeyDown?.({
-                view,
-                event,
-                range: suggestionMatch.range,
-                query: suggestionMatch.query,
-              }) || false
-            )
+            const handled = options.render().onKeyDown?.({
+              view,
+              event,
+              range: suggestionMatch.range,
+              query: suggestionMatch.query,
+            })
+
+            if (handled) {
+              return true
+            }
+
+            return false
           },
+        },
+        view: () => {
+          let currentRange: any = null
+          let hasStarted = false
+
+          const cleanup = () => {
+            if (hasStarted) {
+              options.render().onExit?.({ editor })
+              hasStarted = false
+            }
+            currentRange = null
+          }
+
+          return {
+            update: (view, prevState) => {
+              const { state, composing } = view
+              const { selection } = state
+              const { ranges } = selection
+              const from = Math.min(...ranges.map((range) => range.$from.pos))
+              const to = Math.max(...ranges.map((range) => range.$to.pos))
+
+              if (composing) return
+
+              const suggestionMatch = findSuggestionMatch({
+                editor,
+                state,
+                from,
+                to,
+                char: options.char,
+                allow: options.allow,
+              })
+
+              if (!suggestionMatch) {
+                if (hasStarted) {
+                  cleanup()
+                }
+                return
+              }
+
+              const { range, query, text } = suggestionMatch
+              const items = options.items({ editor, query })
+
+              const props: SuggestionProps = {
+                editor,
+                range,
+                query,
+                text,
+                items,
+                command: (item: any) => {
+                  options.command({ editor, range, props: item })
+                  cleanup()
+                },
+                decorationNode: null,
+                clientRect: () => {
+                  try {
+                    const start = view.coordsAtPos(range.from)
+                    return new DOMRect(start.left, start.top, 0, start.bottom - start.top)
+                  } catch {
+                    return null
+                  }
+                },
+              }
+
+              if (!hasStarted) {
+                hasStarted = true
+                currentRange = range
+                options.render().onStart?.(props)
+              } else if (
+                currentRange &&
+                Math.abs(currentRange.from - range.from) <= 2 &&
+                Math.abs(currentRange.to - range.to) <= 2
+              ) {
+                currentRange = range
+                options.render().onUpdate?.(props)
+              } else {
+                cleanup()
+                hasStarted = true
+                currentRange = range
+                options.render().onStart?.(props)
+              }
+            },
+
+            destroy: cleanup,
+          }
         },
 
         state: {

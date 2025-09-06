@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react"
 import { EditorContent, useEditor, ReactRenderer } from "@tiptap/react"
-import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus"
+import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
 import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
@@ -13,6 +13,7 @@ import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
 import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
+import { slashCommandManager } from "./SlashCommandManager"
 import "@gl-admin/assets/styles/components/editor/notion-editor.scss"
 
 type Props = {
@@ -34,7 +35,6 @@ export default function NotionEditor({
   minChars,
   maxChars,
 }: Props) {
-  // Slash command items
   const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => [
     {
       title: "Heading 1",
@@ -122,21 +122,18 @@ export default function NotionEditor({
     },
   ]
 
-  // Function to get cursor position
   const getCursorCoords = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
     const { view } = editor
     const { from } = range
 
     try {
-      // Get the DOM coordinates at the cursor position
       const coords = view.coordsAtPos(from)
 
-      // Get the editor container position to make coordinates relative to viewport
       const editorRect = view.dom.getBoundingClientRect()
 
       return {
         x: coords.left,
-        y: coords.bottom, // Position below the cursor line (like Notion)
+        y: coords.bottom,
         left: coords.left,
         right: coords.right,
         top: coords.top,
@@ -145,8 +142,6 @@ export default function NotionEditor({
         height: coords.bottom - coords.top,
       }
     } catch (error) {
-      console.warn("Could not get cursor coordinates:", error)
-      // Fallback coordinates
       const editorRect = view.dom.getBoundingClientRect()
       return {
         x: editorRect.left + 20,
@@ -170,6 +165,7 @@ export default function NotionEditor({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
         dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
+        link: false,
       }),
       CodeBlockLowlight.configure({
         lowlight,
@@ -212,95 +208,21 @@ export default function NotionEditor({
               .slice(0, 10)
           },
           render: () => {
-            let component: ReactRenderer | null = null
-            let popup: HTMLElement | null = null
-
             return {
               onStart: (props: any) => {
-                // Use setTimeout to avoid flushSync error
-                setTimeout(() => {
-                  component = new ReactRenderer(SlashCommandList, {
-                    props: {
-                      ...props,
-                      editor,
-                    },
-                    editor,
-                  })
-
-                  popup = document.createElement("div")
-                  popup.className = "slash-command-popup"
-                  popup.appendChild(component.element)
-                  document.body.appendChild(popup)
-
-                  // Position the popup using our improved coordinate function
-                  const coords = getCursorCoords(editor, props.range)
-
-                  popup.style.position = "fixed" // Use fixed instead of absolute
-                  popup.style.left = `${coords.x}px`
-                  popup.style.top = `${coords.y + 8}px` // 8px below cursor
-                  popup.style.zIndex = "9999"
-                  popup.style.maxHeight = "300px"
-                  popup.style.overflowY = "auto"
-
-                  // Add some basic positioning logic to keep it on screen
-                  const popupRect = popup.getBoundingClientRect()
-                  const viewportHeight = window.innerHeight
-                  const viewportWidth = window.innerWidth
-
-                  // If popup would go off the bottom, position it above the cursor
-                  if (coords.y + popupRect.height + 8 > viewportHeight) {
-                    popup.style.top = `${coords.y - popupRect.height - 8}px`
-                  }
-
-                  // If popup would go off the right, move it left
-                  if (coords.x + popupRect.width > viewportWidth) {
-                    popup.style.left = `${viewportWidth - popupRect.width - 8}px`
-                  }
-                }, 0)
+                slashCommandManager.start(props, getCursorCoords)
               },
+
               onUpdate: (props: any) => {
-                if (component) {
-                  component.updateProps({
-                    ...props,
-                    editor,
-                  })
-                }
-
-                // Update position
-                if (popup) {
-                  const coords = getCursorCoords(editor, props.range)
-                  popup.style.left = `${coords.x}px`
-                  popup.style.top = `${coords.y + 8}px`
-
-                  // Recheck viewport bounds
-                  const popupRect = popup.getBoundingClientRect()
-                  const viewportHeight = window.innerHeight
-                  const viewportWidth = window.innerWidth
-
-                  if (coords.y + popupRect.height + 8 > viewportHeight) {
-                    popup.style.top = `${coords.y - popupRect.height - 8}px`
-                  }
-
-                  if (coords.x + popupRect.width > viewportWidth) {
-                    popup.style.left = `${viewportWidth - popupRect.width - 8}px`
-                  }
-                }
+                slashCommandManager.update(props, getCursorCoords)
               },
+
               onKeyDown: (props: any) => {
-                if (props.event.key === "Escape") {
-                  return true
-                }
-                return component?.ref?.onKeyDown?.(props) || false
+                return slashCommandManager.handleKeyDown(props)
               },
+
               onExit: () => {
-                if (popup && popup.parentNode) {
-                  popup.parentNode.removeChild(popup)
-                }
-                if (component) {
-                  component.destroy()
-                }
-                component = null
-                popup = null
+                slashCommandManager.exit()
               },
             }
           },
@@ -330,59 +252,6 @@ export default function NotionEditor({
 
   return (
     <div className="notion-editor">
-      {/* Floating Menu - appears on empty lines */}
-      <FloatingMenu
-        editor={editor}
-        className="floating-menu"
-        shouldShow={({ editor, state }) => {
-          const { selection } = state
-          const { $head, empty } = selection
-
-          if (!empty) return false
-
-          const isRootDepth = $head.depth === 1
-          const isEmptyTextBlock = $head.parent.isTextblock && !$head.parent.type.spec.code && !$head.parent.textContent
-
-          return isRootDepth && isEmptyTextBlock
-        }}
-      >
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className="floating-menu-btn"
-          title="Heading 1"
-          type="button"
-        >
-          H1
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className="floating-menu-btn"
-          title="Heading 2"
-          type="button"
-        >
-          H2
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className="floating-menu-btn"
-          title="Bullet List"
-          type="button"
-        >
-          •
-        </button>
-        <button
-          onClick={() => {
-            const url = window.prompt("Image URL")
-            if (url) editor.chain().focus().setImage({ src: url }).run()
-          }}
-          className="floating-menu-btn"
-          title="Add Image"
-          type="button"
-        >
-          🖼️
-        </button>
-      </FloatingMenu>
-
       {/* Bubble Menu - appears when text is selected */}
       <BubbleMenu editor={editor} className="bubble-menu">
         <button

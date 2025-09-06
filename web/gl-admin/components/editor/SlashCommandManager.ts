@@ -1,0 +1,122 @@
+import { ReactRenderer } from "@tiptap/react"
+import { SlashCommandList } from "./SlashCommand"
+
+class SlashCommandManager {
+  private component: ReactRenderer | null = null
+  private popup: HTMLElement | null = null
+  private isActive = false
+  private currentEditor: any = null
+
+  isActiveState() {
+    return this.isActive
+  }
+
+  cleanup() {
+    this.isActive = false
+
+    if (this.popup && this.popup.parentNode) {
+      this.popup.parentNode.removeChild(this.popup)
+      this.popup = null
+    }
+
+    if (this.component) {
+      this.component.destroy()
+      this.component = null
+    }
+
+    this.currentEditor = null
+  }
+
+  start(props: any, getCursorCoords: Function) {
+    if (this.isActive) {
+      this.update(props, getCursorCoords)
+      return
+    }
+
+    this.isActive = true
+    this.currentEditor = props.editor
+
+    setTimeout(() => {
+      if (!this.isActive) return
+
+      this.component = new ReactRenderer(SlashCommandList, {
+        props: {
+          ...props,
+          editor: props.editor,
+        },
+        editor: props.editor,
+      })
+
+      this.popup = document.createElement("div")
+      this.popup.className = "slash-command-popup"
+      this.popup.appendChild(this.component.element)
+      document.body.appendChild(this.popup)
+
+      const coords = getCursorCoords(props.editor, props.range)
+      this.positionPopup(coords)
+    }, 0)
+  }
+
+  update(props: any, getCursorCoords: Function) {
+    if (!this.isActive || !this.component) {
+      return
+    }
+
+    this.component.updateProps({
+      ...props,
+      editor: props.editor,
+    })
+
+    if (this.popup) {
+      const coords = getCursorCoords(props.editor, props.range)
+      this.positionPopup(coords)
+    }
+  }
+
+  private positionPopup(coords: any) {
+    if (!this.popup) return
+
+    this.popup.style.position = "fixed"
+    this.popup.style.left = `${coords.x}px`
+    this.popup.style.top = `${coords.y + 8}px`
+    this.popup.style.zIndex = "9999"
+    this.popup.style.maxHeight = "300px"
+    this.popup.style.overflowY = "auto"
+
+    const popupRect = this.popup.getBoundingClientRect()
+    const viewportHeight = window.innerHeight
+    const viewportWidth = window.innerWidth
+
+    if (coords.y + popupRect.height + 8 > viewportHeight) {
+      this.popup.style.top = `${coords.y - popupRect.height - 8}px`
+    }
+
+    if (coords.x + popupRect.width > viewportWidth) {
+      this.popup.style.left = `${viewportWidth - popupRect.width - 8}px`
+    }
+  }
+
+  handleKeyDown(props: any) {
+    if (!this.isActive || !this.component) {
+      return false
+    }
+
+    if (props.event.key === "Escape") {
+      this.cleanup()
+      return true
+    }
+
+    if (this.component.ref && typeof this.component.ref.onKeyDown === "function") {
+      const handled = this.component.ref.onKeyDown(props)
+      return handled
+    } else {
+      return false
+    }
+  }
+
+  exit() {
+    this.cleanup()
+  }
+}
+
+export const slashCommandManager = new SlashCommandManager()

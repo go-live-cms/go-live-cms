@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } f
 import { Extension } from "@tiptap/core"
 import { ReactRenderer } from "@tiptap/react"
 import { PluginKey } from "prosemirror-state"
-import { Suggestion } from "./Suggestion" // Import the extension, not as default
+import { Suggestion } from "./Suggestion"
 
 export interface SlashCommandItem {
   title: string
@@ -31,22 +31,30 @@ export const SlashCommandList = forwardRef<
   }
 
   const upHandler = () => {
-    setSelectedIndex((selectedIndex + props.items.length - 1) % props.items.length)
+    setSelectedIndex((prev) => {
+      const newIndex = prev > 0 ? prev - 1 : props.items.length - 1
+      return newIndex
+    })
   }
 
   const downHandler = () => {
-    setSelectedIndex((selectedIndex + 1) % props.items.length)
+    setSelectedIndex((prev) => {
+      const newIndex = prev < props.items.length - 1 ? prev + 1 : 0
+      return newIndex
+    })
   }
 
   const enterHandler = () => {
     selectItem(selectedIndex)
   }
 
-  useEffect(() => setSelectedIndex(0), [props.items])
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [props.items])
 
   useEffect(() => {
     const element = commandListRef.current
-    if (element && selectedIndex >= 0) {
+    if (element && selectedIndex >= 0 && selectedIndex < element.children.length) {
       const selectedElement = element.children[selectedIndex] as HTMLElement
       if (selectedElement) {
         selectedElement.scrollIntoView({
@@ -60,15 +68,26 @@ export const SlashCommandList = forwardRef<
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }: { event: KeyboardEvent }) => {
       if (event.key === "ArrowUp") {
+        event.preventDefault()
+        event.stopPropagation()
         upHandler()
         return true
       }
       if (event.key === "ArrowDown") {
+        event.preventDefault()
+        event.stopPropagation()
         downHandler()
         return true
       }
       if (event.key === "Enter") {
+        event.preventDefault()
+        event.stopPropagation()
         enterHandler()
+        return true
+      }
+      if (event.key === "Escape") {
+        event.preventDefault()
+        event.stopPropagation()
         return true
       }
       return false
