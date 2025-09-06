@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Listing from "@gl-admin/layouts/Listing"
@@ -28,12 +28,44 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([
     { label: "All authors", value: "" },
   ])
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({
-    user_id: "",
-    status: "",
-    type: "",
-    sort: "",
-  })
+  const initialFilters = (() => {
+    const base = { user_id: "", type: "", sort: "", status: "" }
+    if (queryProp) {
+      const stringFilters = Object.fromEntries(
+        Object.entries(queryProp).map(([key, value]) => [key, value !== undefined ? String(value) : ""])
+      )
+      return { ...base, ...stringFilters }
+    }
+    return base
+  })()
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>(initialFilters)
+  const getInitialColumns = () => {
+    const cols: TableColumnWithRender<Post>[] = [
+      { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
+      {
+        key: "post_status",
+        name: "Status",
+        width: "10rem",
+        render: (_, row) => <PostStatus status={row?.post_status || null} iconPath={row?.post_status || null} />,
+      },
+      {
+        key: "created_at",
+        name: "Created at",
+        width: "10.75rem",
+        render: (_, row) => <PostDateTime value={row?.created_at || null} />,
+      },
+    ]
+    if (!queryProp) {
+      cols.push({
+        key: "post_type",
+        name: "Type",
+        width: "10rem",
+        render: (_, row) => <PostType type={row?.post_type || null} iconPath={row?.post_type || null} />,
+      })
+    }
+    return cols
+  }
+  const columns: TableColumnWithRender<Post>[] = getInitialColumns()
   const iconColor = isDark ? "#000000" : "#FFFFFF"
 
   const getAuthorOptions = async () => {
@@ -44,42 +76,6 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         value: String(author.id),
       })) || []
     return [{ label: "All authors", value: "" }, ...authorOptions]
-  }
-
-  useEffect(() => {
-
-    document.title = `${baseTitle} ${title || "Content"}`;
-
-    const fetchAuthorOptions = async () => {
-      const options = await getAuthorOptions()
-      setAuthorOptions(options)
-    }
-    fetchAuthorOptions()
-  }, [])
-
-  const columns: TableColumnWithRender<Post>[] = [
-    { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
-    {
-      key: "post_status",
-      name: "Status",
-      width: "10rem",
-      render: (_, row) => <PostStatus status={row?.post_status || null} iconPath={row?.post_status || null} />,
-    },
-    {
-      key: "created_at",
-      name: "Created at",
-      width: "10.75rem",
-      render: (_, row) => <PostDateTime value={row?.created_at || null} />,
-    },
-  ]
-
-  if (!queryProp?.type) {
-    columns.push({
-      key: "post_type",
-      name: "Type",
-      width: "10rem",
-      render: (_, row) => <PostType type={row?.post_type || null} iconPath={row?.post_type || null} />,
-    })
   }
 
   const getAuthors = async () => {
@@ -118,6 +114,22 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   const handleRowDoubleClick = (post: Post) => {
     navigate(`/content/edit/${post.id}`)
   }
+
+  const fetchData = useCallback(
+    async ({ limit, offset, ...query }: ApiMeta & PostQueryParams) => {
+      const response = await getPosts({ limit, offset, with_meta: true, ...query })
+      return { data: response.data, total: response.meta.total || 0 }
+    }, [selectedFilters])
+
+  useEffect(() => {
+    document.title = `${baseTitle} ${title || "Content"}`
+
+    const fetchAuthorOptions = async () => {
+      const options = await getAuthorOptions()
+      setAuthorOptions(options)
+    }
+    fetchAuthorOptions()
+  }, [])
 
   const filters = (
     <>
@@ -175,21 +187,9 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     </>
   )
 
-  const getQuery = () => {
-    return {
-      ...queryProp,
-      ...selectedFilters,
-    }
-  }
-
-  const fetchData = async ({ limit, offset, ...query }: ApiMeta & PostQueryParams) => {
-    const response = await getPosts({ limit, offset, with_meta: true, ...query })
-    return { data: response.data, total: response.meta.total || 0 }
-  }
-
   return (
     <Listing title={title || "Content"} actions={filters}>
-      <Pagination fetchData={fetchData} query={getQuery() || {}}>
+      <Pagination fetchData={fetchData} query={selectedFilters || {}}>
         {({ data, loading }) => (
           <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
         )}
