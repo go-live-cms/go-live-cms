@@ -16,6 +16,8 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    document.title = "GoLive Admin | Dashboard";
+
     const fetchData = async () => {
       try {
         const [postsResponse, usersResponse, taxonomiesResponse, mediaResponse] = await Promise.all([
@@ -25,10 +27,10 @@ const Dashboard: React.FC = () => {
           getMedia(),
         ])
 
-        setTotalPosts(postsResponse.meta.total)
-        setTotalUsers(usersResponse.meta.total)
-        setTotalTaxonomies(taxonomiesResponse.meta.total)
-        setTotalMedia(mediaResponse.meta.total)
+        setTotalPosts(postsResponse.meta.total || 0)
+        setTotalUsers(usersResponse.meta.total || 0)
+        setTotalTaxonomies(taxonomiesResponse.meta.total || 0)
+        setTotalMedia(mediaResponse.meta.total || 0)
 
         setRecentPosts(postsResponse.data.slice(0, 5))
         setRecentUsers(usersResponse.data.slice(0, 5))

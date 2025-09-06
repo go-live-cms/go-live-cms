@@ -47,6 +47,9 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   }
 
   useEffect(() => {
+
+    document.title = `GoLive Admin | ${title || "Content"}`;
+
     const fetchAuthorOptions = async () => {
       const options = await getAuthorOptions()
       setAuthorOptions(options)

@@ -46,6 +46,9 @@ const Media: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   useEffect(() => {
+
+    document.title = "GoLive Admin | Media";
+
     refreshMediaData()
     loadUsersWithMedia()
     //initializeMediaCardHandlers()
@@ -141,8 +144,7 @@ const Media: React.FC = () => {
     setTimeout(async () => {
       if (successCount > 0) {
         showToast(
-          `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${
-            failCount > 0 ? `, ${failCount} failed` : ""
+          `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${failCount > 0 ? `, ${failCount} failed` : ""
           }`,
           "success"
         )
@@ -432,9 +434,8 @@ const Media: React.FC = () => {
 
         {showUploadArea && (
           <div
-            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${
-              dragOver ? " gl-admin-media__upload-area--dragover" : ""
-            }`}
+            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${dragOver ? " gl-admin-media__upload-area--dragover" : ""
+              }`}
             ref={uploadAreaRef}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -483,24 +484,22 @@ const Media: React.FC = () => {
                 </div>
                 <div className="gl-admin-media__progress-bar">
                   <div
-                    className={`gl-admin-media__progress-fill${
-                      item.error
+                    className={`gl-admin-media__progress-fill${item.error
                         ? " gl-admin-media__progress-fill--error"
                         : item.progress === 100
-                        ? " gl-admin-media__progress-fill--success"
-                        : ""
-                    }`}
+                          ? " gl-admin-media__progress-fill--success"
+                          : ""
+                      }`}
                     style={{ width: `${item.progress}%` }}
                   ></div>
                 </div>
                 <span
-                  className={`gl-admin-media__progress-status${
-                    item.error
+                  className={`gl-admin-media__progress-status${item.error
                       ? " gl-admin-media__progress-status--error"
                       : item.progress === 100
-                      ? " gl-admin-media__progress-status--success"
-                      : ""
-                  }`}
+                        ? " gl-admin-media__progress-status--success"
+                        : ""
+                    }`}
                 >
                   {item.status}
                 </span>
