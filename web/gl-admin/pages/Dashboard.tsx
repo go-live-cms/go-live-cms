@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react"
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Button from "@gl-admin/components/ui/Button"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import { getUsers } from "@gl-admin/lib/api/users"
@@ -7,6 +8,7 @@ import { getMedia } from "@gl-admin/lib/api/media"
 import type { Post, User, TaxonomyType, Media } from "@gl-admin/lib/types"
 
 const Dashboard: React.FC = () => {
+  const { baseTitle } = useGoLive();
   const [totalPosts, setTotalPosts] = useState(0)
   const [totalUsers, setTotalUsers] = useState(0)
   const [totalTaxonomies, setTotalTaxonomies] = useState(0)
@@ -16,6 +18,8 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    document.title = `${baseTitle} Dashboard`;
+
     const fetchData = async () => {
       try {
         const [postsResponse, usersResponse, taxonomiesResponse, mediaResponse] = await Promise.all([
@@ -25,10 +29,10 @@ const Dashboard: React.FC = () => {
           getMedia(),
         ])
 
-        setTotalPosts(postsResponse.meta.total)
-        setTotalUsers(usersResponse.meta.total)
-        setTotalTaxonomies(taxonomiesResponse.meta.total)
-        setTotalMedia(mediaResponse.meta.total)
+        setTotalPosts(postsResponse.meta.total || 0)
+        setTotalUsers(usersResponse.meta.total || 0)
+        setTotalTaxonomies(taxonomiesResponse.meta.total || 0)
+        setTotalMedia(mediaResponse.meta.total || 0)
 
         setRecentPosts(postsResponse.data.slice(0, 5))
         setRecentUsers(usersResponse.data.slice(0, 5))

@@ -1,4 +1,4 @@
-import { useDarkMode } from "@gl-admin/contexts/DarkModeContext"
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { useSelect } from "@gl-admin/utils/select"
 import { logout } from "@gl-admin/lib/api/sessions"
 import { authManager } from "@gl-admin/lib/auth"
@@ -10,7 +10,7 @@ import SidebarItem from "./SidebarItem"
 export default function SidebarUserProfile() {
   const auth = authManager.getState()
   const { open, setOpen, ref, handleSelectClick } = useSelect()
-  const isDark = useDarkMode()
+  const isDark = useGoLive()
   const navIconColor = isDark ? "#FFFFFF" : "#46484A"
 
   const handleLogout = async () => {

@@ -1,6 +1,6 @@
 import { StrictMode, lazy, useEffect } from "react"
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
-import { DarkModeProvider } from "./contexts/DarkModeContext"
+import { GoLiveProvider } from "./contexts/GoLiveContext"
 import AuthGuard from "@gl-admin/components/AuthGuard"
 import Sidebar from "@gl-admin/components/sidebar/Sidebar"
 import "@gl-admin/assets/styles/global.scss"
@@ -57,9 +57,9 @@ export default function App() {
     <AuthGuard>
       <StrictMode>
         <BrowserRouter basename="/gl-admin">
-          <DarkModeProvider>
+          <GoLiveProvider>
             <AppLayout />
-          </DarkModeProvider>
+         </GoLiveProvider>
         </BrowserRouter>
       </StrictMode>
     </AuthGuard>

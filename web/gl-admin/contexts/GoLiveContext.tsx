@@ -1,14 +1,24 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-const DarkModeContext = createContext<boolean>(false);
+type GoLiveContextType = {
+    isDark: boolean;
+    baseTitle: string;
+};
 
-export const useDarkMode = () => useContext(DarkModeContext);
+const GoLiveContext = createContext<GoLiveContextType>({
+    isDark: false,
+    baseTitle: "GoLive Admin | ",
+});
 
-export const DarkModeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const useGoLive = () => useContext(GoLiveContext);
+
+export const GoLiveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const getIsDark = () =>
         document.documentElement.getAttribute("data-theme") === "dark";
+    const getBaseTitle = () => "GoLive Admin | ";
 
     const [isDark, setIsDark] = useState(getIsDark());
+    const [baseTitle] = useState(getBaseTitle());
 
     useEffect(() => {
         const observer = new MutationObserver(() => {
@@ -24,8 +34,8 @@ export const DarkModeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, []);
 
     return (
-        <DarkModeContext.Provider value={isDark}>
+        <GoLiveContext.Provider value={{ isDark, baseTitle }}>
             {children}
-        </DarkModeContext.Provider>
+        </GoLiveContext.Provider>
     );
 };

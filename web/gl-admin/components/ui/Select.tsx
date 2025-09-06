@@ -1,7 +1,7 @@
 import React from "react"
 import Icon from "@gl-admin/components/ui/Icon"
 import "@gl-admin/assets/styles/components/ui/select.scss"
-import { useDarkMode } from "@gl-admin/contexts/DarkModeContext"
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { useSelect } from "@gl-admin/utils/select"
 
 export type SelectOption = {
@@ -27,7 +27,7 @@ export const Select: React.FC<SelectProps> = ({ options, value, onChange, label,
   } = useSelect(disabled)
 
   const selected = options.find((opt) => opt.value === value)
-  const isDark = useDarkMode()
+  const { isDark } = useGoLive()
   const iconColor = isDark ? "#FFFFFF" : "#333536"
 
   return (

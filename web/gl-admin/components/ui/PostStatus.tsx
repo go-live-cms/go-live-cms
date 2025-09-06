@@ -1,11 +1,11 @@
 import Icon from "./Icon";
 import { capitalize } from "@gl-admin/utils/formatting";
-import { useDarkMode } from "@gl-admin/contexts/DarkModeContext";
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext";
 import "@gl-admin/assets/styles/components/ui/post-status.scss";
 
 export default function PostStatus({ status, iconPath }: { status: string | null, iconPath: string | null }) {
 
-    const isDark = useDarkMode();
+    const { isDark } = useGoLive();
 
     const getStatusColor = () => {
         if (isDark) {

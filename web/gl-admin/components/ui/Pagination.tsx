@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react"
-import { useDarkMode } from "@gl-admin/contexts/DarkModeContext"
+import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Icon from "@gl-admin/components/ui/Icon"
 import Select from "@gl-admin/components/ui/Select"
 import "@gl-admin/assets/styles/components/ui/pagination.scss"
@@ -25,7 +25,7 @@ function Pagination<T, Q>({
   const [data, setData] = useState<T[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
-  const isDark = useDarkMode()
+  const { isDark } = useGoLive()
   const navIconColor = isDark ? "#FFFFFF" : "#46484A";
   const navIconDisabledColor = isDark ? "#6B7175" : "#B8BCBF"
 
