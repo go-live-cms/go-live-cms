@@ -1,6 +1,10 @@
 import { ReactRenderer } from "@tiptap/react"
 import { SlashCommandList } from "./SlashCommand"
 
+interface SlashCommandListRef {
+  onKeyDown: (props: { event: KeyboardEvent; [key: string]: any }) => boolean
+}
+
 class SlashCommandManager {
   private component: ReactRenderer | null = null
   private popup: HTMLElement | null = null
@@ -141,8 +145,10 @@ class SlashCommandManager {
       return true
     }
 
-    if (this.component.ref && typeof this.component.ref.onKeyDown === "function") {
-      const handled = this.component.ref.onKeyDown(props)
+    const componentRef = this.component.ref as SlashCommandListRef | null
+
+    if (componentRef && typeof componentRef.onKeyDown === "function") {
+      const handled = componentRef.onKeyDown(props)
       return handled
     } else {
       return false
