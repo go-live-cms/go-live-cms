@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -437,6 +438,131 @@ func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams
 	return items, nil
 }
 
+const listPostsByTypeWithAllMeta = `-- name: ListPostsByTypeWithAllMeta :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    -- Post custom meta
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as post_meta,
+    -- Author information
+    jsonb_build_object(
+        'id', u.id,
+        'username', u.username,
+        'email', u.email,
+        'full_name', u.full_name,
+        'role', u.role,
+        'created_at', u.created_at
+    ) as author_meta,
+    -- Post type information
+    jsonb_build_object(
+        'name', pt.name,
+        'label', pt.label,
+        'description', pt.description,
+        'hierarchical', pt.hierarchical,
+        'public', pt.public,
+        'supports', pt.supports
+    ) as post_type_meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+LEFT JOIN users u ON p.user_id = u.id
+LEFT JOIN post_types pt ON p.post_type = pt.name
+WHERE p.post_type = $1
+    AND ($2 = '' OR p.post_status = $2)
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+         p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+         u.id, u.username, u.email, u.full_name, u.role, u.created_at,
+         pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
+ORDER BY
+    CASE WHEN $3 = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN $3 = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN $3 = 'title_asc' THEN p.title END ASC,
+    CASE WHEN $3 = 'title_desc' THEN p.title END DESC,
+    CASE WHEN $3 = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN $3 = 'menu_order_desc' THEN p.menu_order END DESC,
+    p.id DESC
+LIMIT $5
+OFFSET $4
+`
+
+type ListPostsByTypeWithAllMetaParams struct {
+	PostType    string      `json:"post_type"`
+	Column2     interface{} `json:"column_2"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
+}
+
+type ListPostsByTypeWithAllMetaRow struct {
+	ID           int64           `json:"id"`
+	Title        string          `json:"title"`
+	Description  string          `json:"description"`
+	Content      string          `json:"content"`
+	UserID       int64           `json:"user_id"`
+	Username     string          `json:"username"`
+	Url          string          `json:"url"`
+	PostType     string          `json:"post_type"`
+	PostStatus   string          `json:"post_status"`
+	PostParent   sql.NullInt64   `json:"post_parent"`
+	MenuOrder    int32           `json:"menu_order"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ChangedAt    time.Time       `json:"changed_at"`
+	PostMeta     interface{}     `json:"post_meta"`
+	AuthorMeta   json.RawMessage `json:"author_meta"`
+	PostTypeMeta json.RawMessage `json:"post_type_meta"`
+}
+
+func (q *Queries) ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsByTypeWithAllMetaParams) ([]ListPostsByTypeWithAllMetaRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsByTypeWithAllMeta,
+		arg.PostType,
+		arg.Column2,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsByTypeWithAllMetaRow{}
+	for rows.Next() {
+		var i ListPostsByTypeWithAllMetaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.PostMeta,
+			&i.AuthorMeta,
+			&i.PostTypeMeta,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostsByTypeWithMeta = `-- name: ListPostsByTypeWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
@@ -520,6 +646,134 @@ func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTy
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.Meta,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostsWithAllMeta = `-- name: ListPostsWithAllMeta :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    -- Post custom meta
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as post_meta,
+    -- Author information
+    jsonb_build_object(
+        'id', u.id,
+        'username', u.username,
+        'email', u.email,
+        'full_name', u.full_name,
+        'role', u.role,
+        'created_at', u.created_at
+    ) as author_meta,
+    -- Post type information
+    jsonb_build_object(
+        'name', pt.name,
+        'label', pt.label,
+        'description', pt.description,
+        'hierarchical', pt.hierarchical,
+        'public', pt.public,
+        'supports', pt.supports
+    ) as post_type_meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+LEFT JOIN users u ON p.user_id = u.id
+LEFT JOIN post_types pt ON p.post_type = pt.name
+WHERE 
+    ($1 = '' OR p.post_type = $1)
+    AND ($2 = '' OR p.post_status = $2)
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+         p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+         u.id, u.username, u.email, u.full_name, u.role, u.created_at,
+         pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
+ORDER BY
+    CASE WHEN $3 = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN $3 = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN $3 = 'title_asc' THEN p.title END ASC,
+    CASE WHEN $3 = 'title_desc' THEN p.title END DESC,
+    CASE WHEN $3 = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN $3 = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN $3 = 'id_asc' THEN p.id END ASC,
+    CASE WHEN $3 = 'id_desc' THEN p.id END DESC,
+    p.id DESC
+LIMIT $5
+OFFSET $4
+`
+
+type ListPostsWithAllMetaParams struct {
+	Column1     interface{} `json:"column_1"`
+	Column2     interface{} `json:"column_2"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
+}
+
+type ListPostsWithAllMetaRow struct {
+	ID           int64           `json:"id"`
+	Title        string          `json:"title"`
+	Description  string          `json:"description"`
+	Content      string          `json:"content"`
+	UserID       int64           `json:"user_id"`
+	Username     string          `json:"username"`
+	Url          string          `json:"url"`
+	PostType     string          `json:"post_type"`
+	PostStatus   string          `json:"post_status"`
+	PostParent   sql.NullInt64   `json:"post_parent"`
+	MenuOrder    int32           `json:"menu_order"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ChangedAt    time.Time       `json:"changed_at"`
+	PostMeta     interface{}     `json:"post_meta"`
+	AuthorMeta   json.RawMessage `json:"author_meta"`
+	PostTypeMeta json.RawMessage `json:"post_type_meta"`
+}
+
+func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsWithAllMeta,
+		arg.Column1,
+		arg.Column2,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsWithAllMetaRow{}
+	for rows.Next() {
+		var i ListPostsWithAllMetaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.PostMeta,
+			&i.AuthorMeta,
+			&i.PostTypeMeta,
 		); err != nil {
 			return nil, err
 		}
