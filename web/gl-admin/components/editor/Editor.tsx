@@ -236,7 +236,7 @@ export default function Editor({
     },
     editorProps: {
       attributes: {
-        class: "ProseMirror notion-editor-content",
+        class: "gl-content-editor notion-editor-content",
         "data-placeholder": placeholder,
       },
     },
