@@ -14,6 +14,10 @@ import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
+import FeaturedImageSelector from "./FeaturedImageSelector"
+import { getMediaURL } from "@gl-admin/lib/api"
+import { createPostMedia } from "@gl-admin/lib/api/posts"
+import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
 type Props = {
@@ -23,6 +27,7 @@ type Props = {
   readOnly?: boolean
   minChars?: number
   maxChars?: number
+  postId?: number 
 }
 
 const lowlight = createLowlight(common)
@@ -34,7 +39,23 @@ export default function Editor({
   readOnly = false,
   minChars,
   maxChars,
+  postId, 
 }: Props) {
+  const [showMediaSelector, setShowMediaSelector] = useState(false)
+  const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
+
+  const insertImagePlaceholder = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
+    const placeholderSrc = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'%3E%3Crect width='400' height='200' fill='%23f3f4f6' stroke='%23d1d5db' stroke-width='2' stroke-dasharray='5,5'/%3E%3Cg transform='translate(200,100)'%3E%3Ccircle cx='0' cy='-20' r='20' fill='%23a3a3a3'/%3E%3Cpath d='M-15,-10 L-5,-10 L0,-5 L5,-10 L15,-10 L15,10 L-15,10 Z' fill='%23a3a3a3'/%3E%3C/g%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' fill='%23666' font-family='system-ui' font-size='14'%3EClick to select image from library%3C/text%3E%3C/svg%3E"
+    
+    editor.chain()
+      .focus()
+      .deleteRange(range)
+      .setImage({ 
+        src: placeholderSrc
+      })
+      .run()
+  }, [])
+
   const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => [
     {
       title: "Heading 1",
@@ -110,13 +131,10 @@ export default function Editor({
     },
     {
       title: "Image",
-      description: "Add an image",
+      description: "Add an image from media library",
       icon: "🖼️",
       command: ({ editor, range }) => {
-        const url = window.prompt("Image URL")
-        if (url) {
-          editor.chain().focus().deleteRange(range).setImage({ src: url }).run()
-        }
+        insertImagePlaceholder(editor, range)
       },
       aliases: ["img", "image", "picture"],
     },
@@ -250,6 +268,89 @@ export default function Editor({
     }
   }, [value, editor])
 
+  const handleMediaSelect = useCallback(async (media: Media) => {
+    if (!editor || pendingImagePosition === null) return
+    
+    const imageUrl = getMediaURL(media.media_path)
+    
+    const { view } = editor
+    const { state } = view
+    const { doc } = state
+    
+    const resolvedPos = doc.resolve(pendingImagePosition)
+    const imageNode = resolvedPos.nodeAfter
+    
+    if (imageNode && imageNode.type.name === 'image') {
+      const transaction = state.tr.setNodeMarkup(
+        pendingImagePosition,
+        imageNode.type,
+        {
+          src: imageUrl,
+          alt: media.alt || media.description || '',
+          title: media.name || ''
+        }
+      )
+      view.dispatch(transaction)
+
+      if (postId) {
+        try {
+          await createPostMedia(postId, media.id, 1)
+          console.log(`Successfully linked media ${media.id} to post ${postId} as content image`)
+        } catch (error) {
+          console.error('Failed to link media to post:', error)
+        }
+      }
+    }
+    
+    setShowMediaSelector(false)
+    setPendingImagePosition(null)
+  }, [editor, pendingImagePosition, postId])
+
+  const handleMediaSelectorClose = useCallback(() => {
+    setShowMediaSelector(false)
+    setPendingImagePosition(null)
+  }, [])
+
+  useEffect(() => {
+    if (!editor) return
+
+    const handleImageClick = (event: MouseEvent) => {
+      const target = event.target as HTMLImageElement
+      if (target.tagName === 'IMG' && target.src.includes('data:image/svg+xml')) {
+        event.preventDefault()
+        event.stopPropagation()
+        
+        const { view } = editor
+        const { state } = view
+        const { doc } = state
+        
+        let imagePos = null
+        
+        doc.descendants((node, pos) => {
+          if (node.type.name === 'image' && node.attrs.src.includes('data:image/svg+xml')) {
+            const domPos = view.domAtPos(pos)
+            if (domPos.node.contains && domPos.node.contains(target)) {
+              imagePos = pos
+              return false 
+            }
+          }
+        })
+        
+        if (imagePos !== null) {
+          setPendingImagePosition(imagePos)
+          setShowMediaSelector(true)
+        }
+      }
+    }
+
+    const editorElement = editor.view.dom
+    editorElement.addEventListener('click', handleImageClick)
+
+    return () => {
+      editorElement.removeEventListener('click', handleImageClick)
+    }
+  }, [editor])
+
   if (!editor) return null
 
   return (
@@ -310,6 +411,15 @@ export default function Editor({
           </span>
         )}
       </div>
+
+      {showMediaSelector && (
+        <FeaturedImageSelector
+          isOpen={showMediaSelector}
+          onClose={handleMediaSelectorClose}
+          onSelect={handleMediaSelect}
+          currentFeaturedImage={null}
+        />
+      )}
     </div>
   )
 }

@@ -61,7 +61,11 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
         setMediaItems(response.data)
         setCurrentPage(0)
       } else {
-        setMediaItems(prev => [...prev, ...response.data])
+        setMediaItems(prev => {
+          const existingIds = new Set(prev.map(item => item.id))
+          const newItems = response.data.filter(item => !existingIds.has(item.id))
+          return [...prev, ...newItems]
+        })
       }
       
       setHasMore(response.data.length === itemsPerPage)
