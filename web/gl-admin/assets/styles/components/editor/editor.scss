@@ -10,7 +10,7 @@
     outline: none;
   }
 
-  &.gl-content-editor p.is-empty::before {
+  &.gl-content-editor .is-empty::before {
     color: #9ca3af;
     content: attr(data-placeholder);
     pointer-events: none;
