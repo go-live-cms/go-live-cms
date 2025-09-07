@@ -15,8 +15,10 @@ type Querier interface {
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
+	CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error)
 	// Counting functions
 	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
 	CountTotalMedia(ctx context.Context) (int64, error)

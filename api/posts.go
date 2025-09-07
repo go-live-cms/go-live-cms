@@ -183,8 +183,24 @@ func (server *Server) getPosts(c *gin.Context) {
 		return
 	}
 
-	if withMeta == "true" {
+	var total int64
+	if postType != "" {
+		total, err = server.store.CountPostsByTypeFiltered(c.Request.Context(), db.CountPostsByTypeFilteredParams{
+			PostType:   postType,
+			PostStatus: status,
+		})
+	} else {
+		total, err = server.store.CountFilteredPosts(c.Request.Context(), db.CountFilteredPostsParams{
+			PostType:   postType,
+			PostStatus: status,
+		})
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count filtered posts"})
+		return
+	}
 
+	if withMeta == "true" {
 		posts, err := server.store.ListPostsWithMeta(c.Request.Context(), db.ListPostsWithMetaParams{
 			Column1:     postType,
 			Column2:     status,
@@ -202,12 +218,6 @@ func (server *Server) getPosts(c *gin.Context) {
 			postResponses[i] = toPostWithMetaResponse(post)
 		}
 
-		total, err := server.store.CountTotalPosts(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total posts"})
-			return
-		}
-
 		c.JSON(http.StatusOK, gin.H{
 			"posts": postResponses,
 			"meta": gin.H{
@@ -222,7 +232,6 @@ func (server *Server) getPosts(c *gin.Context) {
 			},
 		})
 	} else {
-
 		posts, err := server.store.ListPosts(c.Request.Context(), db.ListPostsParams{
 			Column1:     postType,
 			Column2:     status,
@@ -238,12 +247,6 @@ func (server *Server) getPosts(c *gin.Context) {
 		postResponses := make([]PostResponse, len(posts))
 		for i, post := range posts {
 			postResponses[i] = toPostResponse(post)
-		}
-
-		total, err := server.store.CountTotalPosts(c.Request.Context())
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total posts"})
-			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{

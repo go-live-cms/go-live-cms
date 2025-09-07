@@ -167,3 +167,14 @@ ORDER BY
     p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
+
+-- name: CountFilteredPosts :one
+SELECT COUNT(*) AS total FROM posts
+WHERE 
+    (@post_type::text = '' OR post_type = @post_type)
+    AND (@post_status::text = '' OR post_status = @post_status);
+
+-- name: CountPostsByTypeFiltered :one
+SELECT COUNT(*) AS total FROM posts
+WHERE post_type = @post_type
+    AND (@post_status::text = '' OR post_status = @post_status);

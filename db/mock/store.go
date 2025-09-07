@@ -66,6 +66,21 @@ func (mr *MockStoreMockRecorder) BlockSession(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockSession", reflect.TypeOf((*MockStore)(nil).BlockSession), arg0, arg1)
 }
 
+// CountFilteredPosts mocks base method.
+func (m *MockStore) CountFilteredPosts(arg0 context.Context, arg1 db.CountFilteredPostsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountFilteredPosts", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountFilteredPosts indicates an expected call of CountFilteredPosts.
+func (mr *MockStoreMockRecorder) CountFilteredPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountFilteredPosts", reflect.TypeOf((*MockStore)(nil).CountFilteredPosts), arg0, arg1)
+}
+
 // CountPostsByTaxonomyTerm mocks base method.
 func (m *MockStore) CountPostsByTaxonomyTerm(arg0 context.Context, arg1 int64) (int64, error) {
 	m.ctrl.T.Helper()
@@ -94,6 +109,21 @@ func (m *MockStore) CountPostsByType(arg0 context.Context, arg1 string) (int64, 
 func (mr *MockStoreMockRecorder) CountPostsByType(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPostsByType", reflect.TypeOf((*MockStore)(nil).CountPostsByType), arg0, arg1)
+}
+
+// CountPostsByTypeFiltered mocks base method.
+func (m *MockStore) CountPostsByTypeFiltered(arg0 context.Context, arg1 db.CountPostsByTypeFilteredParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountPostsByTypeFiltered", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountPostsByTypeFiltered indicates an expected call of CountPostsByTypeFiltered.
+func (mr *MockStoreMockRecorder) CountPostsByTypeFiltered(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPostsByTypeFiltered", reflect.TypeOf((*MockStore)(nil).CountPostsByTypeFiltered), arg0, arg1)
 }
 
 // CountTaxonomyTerms mocks base method.

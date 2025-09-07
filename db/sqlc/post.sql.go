@@ -11,6 +11,25 @@ import (
 	"time"
 )
 
+const countFilteredPosts = `-- name: CountFilteredPosts :one
+SELECT COUNT(*) AS total FROM posts
+WHERE 
+    ($1::text = '' OR post_type = $1)
+    AND ($2::text = '' OR post_status = $2)
+`
+
+type CountFilteredPostsParams struct {
+	PostType   string `json:"post_type"`
+	PostStatus string `json:"post_status"`
+}
+
+func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFilteredPosts, arg.PostType, arg.PostStatus)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const countPostsByType = `-- name: CountPostsByType :one
 SELECT COUNT(*) AS total FROM posts
 WHERE post_type = $1
@@ -18,6 +37,24 @@ WHERE post_type = $1
 
 func (q *Queries) CountPostsByType(ctx context.Context, postType string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPostsByType, postType)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
+const countPostsByTypeFiltered = `-- name: CountPostsByTypeFiltered :one
+SELECT COUNT(*) AS total FROM posts
+WHERE post_type = $1
+    AND ($2::text = '' OR post_status = $2)
+`
+
+type CountPostsByTypeFilteredParams struct {
+	PostType   string `json:"post_type"`
+	PostStatus string `json:"post_status"`
+}
+
+func (q *Queries) CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPostsByTypeFiltered, arg.PostType, arg.PostStatus)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
