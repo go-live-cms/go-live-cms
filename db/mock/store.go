@@ -524,6 +524,20 @@ func (mr *MockStoreMockRecorder) DeletePostMedia(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostMedia", reflect.TypeOf((*MockStore)(nil).DeletePostMedia), arg0, arg1)
 }
 
+// DeletePostMediaByOrder mocks base method.
+func (m *MockStore) DeletePostMediaByOrder(arg0 context.Context, arg1 db.DeletePostMediaByOrderParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePostMediaByOrder", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePostMediaByOrder indicates an expected call of DeletePostMediaByOrder.
+func (mr *MockStoreMockRecorder) DeletePostMediaByOrder(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostMediaByOrder", reflect.TypeOf((*MockStore)(nil).DeletePostMediaByOrder), arg0, arg1)
+}
+
 // DeletePostMedias mocks base method.
 func (m *MockStore) DeletePostMedias(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -734,6 +748,21 @@ func (mr *MockStoreMockRecorder) ExecTx(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecTx", reflect.TypeOf((*MockStore)(nil).ExecTx), arg0, arg1)
 }
 
+// GetFeaturedImage mocks base method.
+func (m *MockStore) GetFeaturedImage(arg0 context.Context, arg1 int64) (db.GetFeaturedImageRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFeaturedImage", arg0, arg1)
+	ret0, _ := ret[0].(db.GetFeaturedImageRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetFeaturedImage indicates an expected call of GetFeaturedImage.
+func (mr *MockStoreMockRecorder) GetFeaturedImage(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeaturedImage", reflect.TypeOf((*MockStore)(nil).GetFeaturedImage), arg0, arg1)
+}
+
 // GetMedia mocks base method.
 func (m *MockStore) GetMedia(arg0 context.Context, arg1 int64) (db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -852,6 +881,21 @@ func (m *MockStore) GetPostChildren(arg0 context.Context, arg1 sql.NullInt64) ([
 func (mr *MockStoreMockRecorder) GetPostChildren(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostChildren", reflect.TypeOf((*MockStore)(nil).GetPostChildren), arg0, arg1)
+}
+
+// GetPostMedia mocks base method.
+func (m *MockStore) GetPostMedia(arg0 context.Context, arg1 int64) ([]db.GetPostMediaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostMedia", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetPostMediaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostMedia indicates an expected call of GetPostMedia.
+func (mr *MockStoreMockRecorder) GetPostMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostMedia", reflect.TypeOf((*MockStore)(nil).GetPostMedia), arg0, arg1)
 }
 
 // GetPostMediaCount mocks base method.

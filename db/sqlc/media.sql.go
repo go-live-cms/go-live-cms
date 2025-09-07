@@ -97,7 +97,10 @@ INSERT INTO post_media (
     "order"
 ) VALUES (
     $1, $2, $3
-) RETURNING post_id, media_id, "order"
+)
+ON CONFLICT (post_id, media_id)
+DO UPDATE SET "order" = EXCLUDED."order"
+RETURNING post_id, media_id, "order"
 `
 
 type CreatePostMediaParams struct {
@@ -158,6 +161,21 @@ func (q *Queries) DeletePostMedia(ctx context.Context, arg DeletePostMediaParams
 	return err
 }
 
+const deletePostMediaByOrder = `-- name: DeletePostMediaByOrder :exec
+DELETE FROM post_media 
+WHERE post_id = $1 AND "order" = $2
+`
+
+type DeletePostMediaByOrderParams struct {
+	PostID int64 `json:"post_id"`
+	Order  int32 `json:"order"`
+}
+
+func (q *Queries) DeletePostMediaByOrder(ctx context.Context, arg DeletePostMediaByOrderParams) error {
+	_, err := q.db.ExecContext(ctx, deletePostMediaByOrder, arg.PostID, arg.Order)
+	return err
+}
+
 const deletePostMedias = `-- name: DeletePostMedias :exec
 DELETE FROM post_media
 WHERE post_id = $1
@@ -166,6 +184,67 @@ WHERE post_id = $1
 func (q *Queries) DeletePostMedias(ctx context.Context, postID int64) error {
 	_, err := q.db.ExecContext(ctx, deletePostMedias, postID)
 	return err
+}
+
+const getFeaturedImage = `-- name: GetFeaturedImage :one
+SELECT 
+    pm.post_id,
+    pm.media_id,
+    pm."order",
+    m.name,
+    m.description,
+    m.alt,
+    m.media_path,
+    m.width,
+    m.height,
+    m.file_size,
+    m.mime_type,
+    m.original_filename,
+    m.created_at,
+    m.changed_at
+FROM post_media pm
+JOIN media m ON pm.media_id = m.id
+WHERE pm.post_id = $1 AND pm."order" = 0
+LIMIT 1
+`
+
+type GetFeaturedImageRow struct {
+	PostID           int64     `json:"post_id"`
+	MediaID          int64     `json:"media_id"`
+	Order            int32     `json:"order"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description"`
+	Alt              string    `json:"alt"`
+	MediaPath        string    `json:"media_path"`
+	Width            int32     `json:"width"`
+	Height           int32     `json:"height"`
+	FileSize         int64     `json:"file_size"`
+	MimeType         string    `json:"mime_type"`
+	OriginalFilename string    `json:"original_filename"`
+	CreatedAt        time.Time `json:"created_at"`
+	ChangedAt        time.Time `json:"changed_at"`
+}
+
+func (q *Queries) GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error) {
+	row := q.db.QueryRowContext(ctx, getFeaturedImage, postID)
+	var i GetFeaturedImageRow
+	err := row.Scan(
+		&i.PostID,
+		&i.MediaID,
+		&i.Order,
+		&i.Name,
+		&i.Description,
+		&i.Alt,
+		&i.MediaPath,
+		&i.Width,
+		&i.Height,
+		&i.FileSize,
+		&i.MimeType,
+		&i.OriginalFilename,
+		&i.CreatedAt,
+		&i.ChangedAt,
+	)
+	return i, err
 }
 
 const getMedia = `-- name: GetMedia :one
@@ -427,6 +506,86 @@ func (q *Queries) GetPopularMedia(ctx context.Context, limit int32) ([]GetPopula
 	return items, nil
 }
 
+const getPostMedia = `-- name: GetPostMedia :many
+SELECT 
+    pm.post_id,
+    pm.media_id,
+    pm."order",
+    m.name,
+    m.description,
+    m.alt,
+    m.media_path,
+    m.width,
+    m.height,
+    m.file_size,
+    m.mime_type,
+    m.original_filename,
+    m.user_id,
+    m.created_at,
+    m.changed_at
+FROM post_media pm
+JOIN media m ON pm.media_id = m.id
+WHERE pm.post_id = $1
+ORDER BY pm."order", pm.media_id
+`
+
+type GetPostMediaRow struct {
+	PostID           int64     `json:"post_id"`
+	MediaID          int64     `json:"media_id"`
+	Order            int32     `json:"order"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description"`
+	Alt              string    `json:"alt"`
+	MediaPath        string    `json:"media_path"`
+	Width            int32     `json:"width"`
+	Height           int32     `json:"height"`
+	FileSize         int64     `json:"file_size"`
+	MimeType         string    `json:"mime_type"`
+	OriginalFilename string    `json:"original_filename"`
+	UserID           int64     `json:"user_id"`
+	CreatedAt        time.Time `json:"created_at"`
+	ChangedAt        time.Time `json:"changed_at"`
+}
+
+func (q *Queries) GetPostMedia(ctx context.Context, postID int64) ([]GetPostMediaRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPostMedia, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPostMediaRow{}
+	for rows.Next() {
+		var i GetPostMediaRow
+		if err := rows.Scan(
+			&i.PostID,
+			&i.MediaID,
+			&i.Order,
+			&i.Name,
+			&i.Description,
+			&i.Alt,
+			&i.MediaPath,
+			&i.Width,
+			&i.Height,
+			&i.FileSize,
+			&i.MimeType,
+			&i.OriginalFilename,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.ChangedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPostMediaCount = `-- name: GetPostMediaCount :one
 SELECT COUNT(*) FROM post_media
 WHERE post_id = $1
@@ -506,29 +665,43 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 
 const getPostsByMedia = `-- name: GetPostsByMedia :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
-    pm."order" as media_order
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    COALESCE(pm."order", 0) as media_order,
+    CASE 
+        WHEN pm.media_id IS NOT NULL AND pm."order" = 0 THEN 'featured'
+        WHEN pm.media_id IS NOT NULL AND pm."order" > 0 THEN 'gallery'
+        WHEN meta.meta_value IS NOT NULL THEN 'featured'
+        ELSE 'unknown'
+    END as relationship_type
 FROM posts p
-JOIN post_media pm ON p.id = pm.post_id
-WHERE pm.media_id = $1
-ORDER BY pm."order", p.created_at DESC
+LEFT JOIN post_media pm ON p.id = pm.post_id AND pm.media_id = $1
+LEFT JOIN post_meta meta ON p.id = meta.post_id 
+    AND meta.meta_key = '_thumbnail_id' 
+    AND meta.meta_value = $1::text
+WHERE pm.media_id = $1 OR meta.meta_value = $1::text
+ORDER BY 
+    CASE WHEN pm."order" = 0 OR meta.meta_value IS NOT NULL THEN 0 ELSE 1 END,
+    pm."order" ASC,
+    p.created_at DESC
 `
 
 type GetPostsByMediaRow struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Content     string        `json:"content"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ChangedAt   time.Time     `json:"changed_at"`
-	MediaOrder  int32         `json:"media_order"`
+	ID               int64         `json:"id"`
+	Title            string        `json:"title"`
+	Description      string        `json:"description"`
+	Content          string        `json:"content"`
+	UserID           int64         `json:"user_id"`
+	Username         string        `json:"username"`
+	Url              string        `json:"url"`
+	PostType         string        `json:"post_type"`
+	PostStatus       string        `json:"post_status"`
+	PostParent       sql.NullInt64 `json:"post_parent"`
+	MenuOrder        int32         `json:"menu_order"`
+	CreatedAt        time.Time     `json:"created_at"`
+	ChangedAt        time.Time     `json:"changed_at"`
+	MediaOrder       int32         `json:"media_order"`
+	RelationshipType string        `json:"relationship_type"`
 }
 
 func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPostsByMediaRow, error) {
@@ -555,6 +728,7 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.MediaOrder,
+			&i.RelationshipType,
 		); err != nil {
 			return nil, err
 		}

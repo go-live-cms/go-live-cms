@@ -80,8 +80,9 @@ type PopularMediaResponse struct {
 }
 
 type PostWithMediaOrderResponse struct {
-	Post       PostResponse `json:"post"`
-	MediaOrder int32        `json:"media_order"`
+	Post             PostResponse `json:"post"`
+	MediaOrder       int32        `json:"media_order"`
+	RelationshipType string       `json:"relationship_type"`
 }
 
 func toMediaResponse(media db.Medium) MediaResponse {
@@ -238,18 +239,30 @@ func toPopularMediaResponse(row db.GetPopularMediaRow) PopularMediaResponse {
 	}
 }
 
-func toPostResponseFromMediaRow(row db.GetPostsByMediaRow) PostResponse {
+func toPostResponseFromMediaRow(row db.GetPostsByMediaRow) PostWithMediaOrderResponse {
+	var postParent *int64
+	if row.PostParent.Valid {
+		postParent = &row.PostParent.Int64
+	}
 
-	return PostResponse{
-		ID:          row.ID,
-		Title:       row.Title,
-		Description: row.Description,
-		Content:     row.Content,
-		UserID:      row.UserID,
-		Username:    row.Username,
-		Url:         row.Url,
-		CreatedAt:   row.CreatedAt,
-		ChangedAt:   row.ChangedAt,
+	return PostWithMediaOrderResponse{
+		Post: PostResponse{
+			ID:          row.ID,
+			Title:       row.Title,
+			Description: row.Description,
+			Content:     row.Content,
+			UserID:      row.UserID,
+			Username:    row.Username,
+			Url:         row.Url,
+			PostType:    row.PostType,
+			PostStatus:  row.PostStatus,
+			PostParent:  postParent,
+			MenuOrder:   row.MenuOrder,
+			CreatedAt:   row.CreatedAt,
+			ChangedAt:   row.ChangedAt,
+		},
+		MediaOrder:       row.MediaOrder,
+		RelationshipType: row.RelationshipType,
 	}
 }
 
@@ -1137,10 +1150,7 @@ func (server *Server) getMediaPosts(c *gin.Context) {
 
 	postResponses := make([]PostWithMediaOrderResponse, len(posts))
 	for i, post := range posts {
-		postResponses[i] = PostWithMediaOrderResponse{
-			Post:       toPostResponseFromMediaRow(post),
-			MediaOrder: post.MediaOrder,
-		}
+		postResponses[i] = toPostResponseFromMediaRow(post)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

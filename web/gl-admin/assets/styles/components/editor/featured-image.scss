@@ -1,0 +1,203 @@
+.gl-featured-image {
+  margin-bottom: 1.5rem;
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--gl-text-primary, #1a1a1a);
+  }
+
+  &__remove {
+    background: none;
+    border: none;
+    color: var(--gl-danger-color, #dc3545);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--gl-danger-bg-color, #f8d7da);
+      color: var(--gl-danger-hover-color, #c82333);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  &__content {
+    border: 1px solid var(--gl-border-color, #e0e0e0);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--gl-bg-secondary, #f8f9fa);
+  }
+
+  &__preview {
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+
+    &:hover {
+      .gl-featured-image__overlay {
+        opacity: 1;
+      }
+
+      .gl-featured-image__image {
+        transform: scale(1.02);
+      }
+    }
+  }
+
+  &__image {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.2s ease;
+  }
+
+  &__overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  &__overlay-text {
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  &__info {
+    padding: 0.75rem;
+    border-top: 1px solid var(--gl-border-color, #e0e0e0);
+  }
+
+  &__name {
+    margin: 0 0 0.25rem 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--gl-text-primary, #1a1a1a);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__dimensions {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--gl-text-secondary, #666);
+  }
+
+  &__placeholder {
+    padding: 2rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px dashed var(--gl-border-color, #e0e0e0);
+    margin: 1px;
+    border-radius: 7px;
+
+    &:hover:not(&--disabled) {
+      border-color: var(--gl-primary-color, #007cba);
+      background: var(--gl-primary-bg-color, #f0f8ff);
+    }
+
+    &--disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+
+  &__placeholder-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  &__placeholder-icon {
+    color: var(--gl-text-tertiary, #999);
+    opacity: 0.6;
+
+    .gl-featured-image__placeholder:hover:not(.gl-featured-image__placeholder--disabled) & {
+      color: var(--gl-primary-color, #007cba);
+      opacity: 1;
+    }
+  }
+
+  &__placeholder-text {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--gl-text-primary, #1a1a1a);
+  }
+
+  &__placeholder-hint {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--gl-text-secondary, #666);
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .gl-featured-image {
+    &__title {
+      color: var(--gl-text-primary, #fff);
+    }
+
+    &__content {
+      background: var(--gl-bg-primary, #2d3748);
+      border-color: var(--gl-border-color, #4a5568);
+    }
+
+    &__info {
+      border-color: var(--gl-border-color, #4a5568);
+    }
+
+    &__name {
+      color: var(--gl-text-primary, #fff);
+    }
+
+    &__dimensions {
+      color: var(--gl-text-secondary, #a0aec0);
+    }
+
+    &__placeholder {
+      border-color: var(--gl-border-color, #4a5568);
+
+      &:hover:not(&--disabled) {
+        background: var(--gl-bg-secondary, #1a202c);
+      }
+    }
+
+    &__placeholder-text {
+      color: var(--gl-text-primary, #fff);
+    }
+
+    &__placeholder-hint {
+      color: var(--gl-text-secondary, #a0aec0);
+    }
+  }
+}

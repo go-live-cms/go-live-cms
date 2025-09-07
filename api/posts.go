@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -951,5 +952,473 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				"with_meta": false,
 			},
 		})
+	}
+}
+
+type CreatePostMetaRequest struct {
+	MetaKey   string `json:"meta_key" binding:"required,min=1,max=255"`
+	MetaValue string `json:"meta_value" binding:"required"`
+}
+
+type PostMetaResponse struct {
+	ID        int64     `json:"id"`
+	PostID    int64     `json:"post_id"`
+	MetaKey   string    `json:"meta_key"`
+	MetaValue string    `json:"meta_value"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func toPostMetaResponse(meta db.PostMetum) PostMetaResponse {
+	metaValue := ""
+	if meta.MetaValue.Valid {
+		metaValue = meta.MetaValue.String
+	}
+
+	return PostMetaResponse{
+		ID:        meta.ID,
+		PostID:    meta.PostID,
+		MetaKey:   meta.MetaKey,
+		MetaValue: metaValue,
+		CreatedAt: meta.CreatedAt,
+	}
+}
+
+func (server *Server) getPostMeta(c *gin.Context) {
+	idParam := c.Param("id")
+	postID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	_, err = server.store.GetPost(c.Request.Context(), postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post"})
+		return
+	}
+
+	metaList, err := server.store.GetPostMeta(c.Request.Context(), postID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post meta"})
+		return
+	}
+
+	metaResponses := make([]PostMetaResponse, len(metaList))
+	for i, meta := range metaList {
+		metaResponses[i] = toPostMetaResponse(meta)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"meta": metaResponses,
+	})
+}
+
+func (server *Server) createOrUpdatePostMeta(c *gin.Context) {
+	idParam := c.Param("id")
+	postID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	var req CreatePostMetaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	_, err = server.store.GetPost(c.Request.Context(), postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post"})
+		return
+	}
+
+	meta, err := server.store.UpsertPostMeta(c.Request.Context(), db.UpsertPostMetaParams{
+		PostID:  postID,
+		MetaKey: req.MetaKey,
+		MetaValue: sql.NullString{
+			String: req.MetaValue,
+			Valid:  true,
+		},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save post meta"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"meta": toPostMetaResponse(meta),
+	})
+}
+
+func (server *Server) deletePostMetaByKey(c *gin.Context) {
+	idParam := c.Param("id")
+	postID, err := strconv.ParseInt(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	metaKey := c.Param("key")
+	if metaKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "meta key is required"})
+		return
+	}
+
+	_, err = server.store.GetPost(c.Request.Context(), postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post"})
+		return
+	}
+
+	_, err = server.store.GetPostMetaByKey(c.Request.Context(), db.GetPostMetaByKeyParams{
+		PostID:  postID,
+		MetaKey: metaKey,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "meta not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify meta"})
+		return
+	}
+
+	err = server.store.DeletePostMeta(c.Request.Context(), db.DeletePostMetaParams{
+		PostID:  postID,
+		MetaKey: metaKey,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete post meta"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "post meta deleted successfully",
+	})
+}
+
+type SetFeaturedImageRequest struct {
+	MediaID   int64  `json:"media_id" binding:"required"`
+	MediaPath string `json:"media_path"`
+}
+
+func (server *Server) setFeaturedImage(c *gin.Context) {
+	postIDStr := c.Param("id")
+	postID, err := strconv.ParseInt(postIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	var req SetFeaturedImageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	_, err = server.store.GetPost(c.Request.Context(), postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+
+	media, err := server.store.GetMedia(c.Request.Context(), req.MediaID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media"})
+		return
+	}
+
+	err = server.store.ExecTx(c.Request.Context(), func(q *db.Queries) error {
+
+		err := q.DeletePostMediaByOrder(c.Request.Context(), db.DeletePostMediaByOrderParams{
+			PostID: postID,
+			Order:  0,
+		})
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("failed to remove existing featured image: %w", err)
+		}
+
+		_, err = q.CreatePostMedia(c.Request.Context(), db.CreatePostMediaParams{
+			PostID:  postID,
+			MediaID: req.MediaID,
+			Order:   0,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create media association: %w", err)
+		}
+
+		_, err = q.UpsertPostMeta(c.Request.Context(), db.UpsertPostMetaParams{
+			PostID:    postID,
+			MetaKey:   "_thumbnail_id",
+			MetaValue: sql.NullString{String: strconv.FormatInt(req.MediaID, 10), Valid: true},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to store thumbnail ID meta: %w", err)
+		}
+
+		mediaPath := req.MediaPath
+		if mediaPath == "" {
+			mediaPath = media.MediaPath
+		}
+		_, err = q.UpsertPostMeta(c.Request.Context(), db.UpsertPostMetaParams{
+			PostID:    postID,
+			MetaKey:   "_thumbnail_url",
+			MetaValue: sql.NullString{String: mediaPath, Valid: true},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to store thumbnail URL meta: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "featured image set successfully",
+		"media":   toMediaResponse(media),
+	})
+}
+
+func (server *Server) getFeaturedImageQuick(c *gin.Context) {
+	postIDStr := c.Param("id")
+	postID, err := strconv.ParseInt(postIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	thumbnailMeta, err := server.store.GetPostMetaByKey(c.Request.Context(), db.GetPostMetaByKeyParams{
+		PostID:  postID,
+		MetaKey: "_thumbnail_url",
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusOK, gin.H{"featured_image": nil})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get featured image"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"featured_image": gin.H{
+			"url": thumbnailMeta.MetaValue.String,
+		},
+	})
+}
+
+func (server *Server) getFeaturedImageFull(c *gin.Context) {
+	postIDStr := c.Param("id")
+	postID, err := strconv.ParseInt(postIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	featuredImage, err := server.store.GetFeaturedImage(c.Request.Context(), postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusOK, gin.H{"featured_image": nil})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get featured image"})
+		return
+	}
+
+	response := gin.H{
+		"id":                featuredImage.MediaID,
+		"name":              featuredImage.Name,
+		"description":       featuredImage.Description,
+		"alt":               featuredImage.Alt,
+		"media_path":        featuredImage.MediaPath,
+		"file_size":         featuredImage.FileSize,
+		"mime_type":         featuredImage.MimeType,
+		"original_filename": featuredImage.OriginalFilename,
+		"created_at":        featuredImage.CreatedAt,
+		"changed_at":        featuredImage.ChangedAt,
+	}
+
+	if featuredImage.Width != 0 {
+		response["width"] = featuredImage.Width
+	}
+	if featuredImage.Height != 0 {
+		response["height"] = featuredImage.Height
+	}
+
+	c.JSON(http.StatusOK, gin.H{"featured_image": response})
+}
+
+func (server *Server) removeFeaturedImage(c *gin.Context) {
+	postIDStr := c.Param("id")
+	postID, err := strconv.ParseInt(postIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	_, err = server.store.GetPost(c.Request.Context(), postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+
+	err = server.store.ExecTx(c.Request.Context(), func(q *db.Queries) error {
+
+		err := q.DeletePostMediaByOrder(c.Request.Context(), db.DeletePostMediaByOrderParams{
+			PostID: postID,
+			Order:  0,
+		})
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("failed to remove featured image association: %w", err)
+		}
+
+		err = q.DeletePostMeta(c.Request.Context(), db.DeletePostMetaParams{
+			PostID:  postID,
+			MetaKey: "_thumbnail_id",
+		})
+		if err != nil && err != sql.ErrNoRows {
+
+		}
+
+		err = q.DeletePostMeta(c.Request.Context(), db.DeletePostMetaParams{
+			PostID:  postID,
+			MetaKey: "_thumbnail_url",
+		})
+		if err != nil && err != sql.ErrNoRows {
+
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "featured image removed successfully",
+	})
+}
+
+type PostMediaRequest struct {
+	MediaID int64 `json:"media_id" binding:"required"`
+	Order   int32 `json:"order"`
+}
+
+func (server *Server) createPostMedia(c *gin.Context) {
+	postIDStr := c.Param("id")
+	postID, err := strconv.ParseInt(postIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	var req PostMediaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	postMedia, err := server.store.CreatePostMedia(c.Request.Context(), db.CreatePostMediaParams{
+		PostID:  postID,
+		MediaID: req.MediaID,
+		Order:   req.Order,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post media association"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, postMedia)
+}
+
+func (server *Server) deletePostMedia(c *gin.Context) {
+	postIDStr := c.Param("id")
+	mediaIDStr := c.Param("media_id")
+
+	postID, err := strconv.ParseInt(postIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	mediaID, err := strconv.ParseInt(mediaIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid media ID"})
+		return
+	}
+
+	err = server.store.DeletePostMedia(c.Request.Context(), db.DeletePostMediaParams{
+		PostID:  postID,
+		MediaID: mediaID,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete post media association"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "post media association deleted"})
+}
+
+func (server *Server) getPostMedia(c *gin.Context) {
+	postIDStr := c.Param("id")
+	postID, err := strconv.ParseInt(postIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+
+	featured := c.Query("featured") == "true"
+
+	if featured {
+
+		featuredImage, err := server.store.GetFeaturedImage(c.Request.Context(), postID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusOK, gin.H{"data": nil})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get featured image"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": featuredImage})
+	} else {
+
+		postMedia, err := server.store.GetPostMedia(c.Request.Context(), postID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post media"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": postMedia})
 	}
 }

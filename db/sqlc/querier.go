@@ -43,6 +43,7 @@ type Querier interface {
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
 	DeletePost(ctx context.Context, id int64) error
 	DeletePostMedia(ctx context.Context, arg DeletePostMediaParams) error
+	DeletePostMediaByOrder(ctx context.Context, arg DeletePostMediaByOrderParams) error
 	DeletePostMedias(ctx context.Context, postID int64) error
 	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
 	DeletePostType(ctx context.Context, name string) error
@@ -53,6 +54,7 @@ type Querier interface {
 	DeleteUserPost(ctx context.Context, postID int64) error
 	DeleteUserPostsByUserID(ctx context.Context, userID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
+	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
 	GetMedia(ctx context.Context, id int64) (Medium, error)
 	GetMediaByPost(ctx context.Context, postID int64) ([]Medium, error)
 	GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error)
@@ -61,6 +63,7 @@ type Querier interface {
 	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
 	GetPost(ctx context.Context, id int64) (Post, error)
 	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
+	GetPostMedia(ctx context.Context, postID int64) ([]GetPostMediaRow, error)
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
 	GetPostMeta(ctx context.Context, postID int64) ([]PostMetum, error)
 	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
