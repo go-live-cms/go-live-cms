@@ -14,9 +14,9 @@ import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
+import { getAllBlocks } from "./blocks"
+import { MediaBlockManager } from "./blocks/mediaBlocks"
 import FeaturedImageSelector from "./FeaturedImageSelector"
-import { getMediaURL } from "@gl-admin/lib/api"
-import { createPostMedia } from "@gl-admin/lib/api/posts"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
@@ -43,102 +43,11 @@ export default function Editor({
 }: Props) {
   const [showMediaSelector, setShowMediaSelector] = useState(false)
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
+  const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
 
-  const insertImagePlaceholder = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
-    const placeholderSrc = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'%3E%3Crect width='400' height='200' fill='%23f3f4f6' stroke='%23d1d5db' stroke-width='2' stroke-dasharray='5,5'/%3E%3Cg transform='translate(200,100)'%3E%3Ccircle cx='0' cy='-20' r='20' fill='%23a3a3a3'/%3E%3Cpath d='M-15,-10 L-5,-10 L0,-5 L5,-10 L15,-10 L15,10 L-15,10 Z' fill='%23a3a3a3'/%3E%3C/g%3E%3Ctext x='50%25' y='70%25' dominant-baseline='middle' text-anchor='middle' fill='%23666' font-family='system-ui' font-size='14'%3EClick to select image from library%3C/text%3E%3C/svg%3E"
-    
-    editor.chain()
-      .focus()
-      .deleteRange(range)
-      .setImage({ 
-        src: placeholderSrc
-      })
-      .run()
-  }, [])
-
-  const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => [
-    {
-      title: "Heading 1",
-      description: "Large section heading",
-      icon: "📝",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run()
-      },
-      aliases: ["h1", "heading1"],
-    },
-    {
-      title: "Heading 2",
-      description: "Medium section heading",
-      icon: "📄",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run()
-      },
-      aliases: ["h2", "heading2"],
-    },
-    {
-      title: "Heading 3",
-      description: "Small section heading",
-      icon: "📃",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run()
-      },
-      aliases: ["h3", "heading3"],
-    },
-    {
-      title: "Bullet List",
-      description: "Create a simple bullet list",
-      icon: "•",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).toggleBulletList().run()
-      },
-      aliases: ["ul", "list"],
-    },
-    {
-      title: "Numbered List",
-      description: "Create a numbered list",
-      icon: "1.",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).toggleOrderedList().run()
-      },
-      aliases: ["ol", "ordered"],
-    },
-    {
-      title: "Quote",
-      description: "Add a blockquote",
-      icon: "💬",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setBlockquote().run()
-      },
-      aliases: ["quote", "blockquote"],
-    },
-    {
-      title: "Code Block",
-      description: "Add a code block with syntax highlighting",
-      icon: "💻",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setCodeBlock().run()
-      },
-      aliases: ["code", "codeblock"],
-    },
-    {
-      title: "Divider",
-      description: "Add a horizontal divider",
-      icon: "➖",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHorizontalRule().run()
-      },
-      aliases: ["hr", "divider", "separator"],
-    },
-    {
-      title: "Image",
-      description: "Add an image from media library",
-      icon: "🖼️",
-      command: ({ editor, range }) => {
-        insertImagePlaceholder(editor, range)
-      },
-      aliases: ["img", "image", "picture"],
-    },
-  ]
+  const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => {
+    return getAllBlocks()
+  }
 
   const getCursorCoords = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
     const { view } = editor
@@ -268,88 +177,38 @@ export default function Editor({
     }
   }, [value, editor])
 
-  const handleMediaSelect = useCallback(async (media: Media) => {
-    if (!editor || pendingImagePosition === null) return
-    
-    const imageUrl = getMediaURL(media.media_path)
-    
-    const { view } = editor
-    const { state } = view
-    const { doc } = state
-    
-    const resolvedPos = doc.resolve(pendingImagePosition)
-    const imageNode = resolvedPos.nodeAfter
-    
-    if (imageNode && imageNode.type.name === 'image') {
-      const transaction = state.tr.setNodeMarkup(
-        pendingImagePosition,
-        imageNode.type,
-        {
-          src: imageUrl,
-          alt: media.alt || media.description || '',
-          title: media.name || ''
+  
+  useEffect(() => {
+    if (editor) {
+      const manager = new MediaBlockManager(
+        editor,
+        postId,
+        (position: number) => {
+          setPendingImagePosition(position)
+          setShowMediaSelector(true)
         }
       )
-      view.dispatch(transaction)
+      setMediaBlockManager(manager)
 
-      if (postId) {
-        try {
-          await createPostMedia(postId, media.id, 1)
-          console.log(`Successfully linked media ${media.id} to post ${postId} as content image`)
-        } catch (error) {
-          console.error('Failed to link media to post:', error)
-        }
+      return () => {
+        manager.destroy()
       }
     }
+  }, [editor, postId])
+
+  const handleMediaSelect = useCallback(async (media: Media) => {
+    if (!mediaBlockManager || pendingImagePosition === null) return
+    
+    await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
     
     setShowMediaSelector(false)
     setPendingImagePosition(null)
-  }, [editor, pendingImagePosition, postId])
+  }, [mediaBlockManager, pendingImagePosition])
 
   const handleMediaSelectorClose = useCallback(() => {
     setShowMediaSelector(false)
     setPendingImagePosition(null)
   }, [])
-
-  useEffect(() => {
-    if (!editor) return
-
-    const handleImageClick = (event: MouseEvent) => {
-      const target = event.target as HTMLImageElement
-      if (target.tagName === 'IMG' && target.src.includes('data:image/svg+xml')) {
-        event.preventDefault()
-        event.stopPropagation()
-        
-        const { view } = editor
-        const { state } = view
-        const { doc } = state
-        
-        let imagePos = null
-        
-        doc.descendants((node, pos) => {
-          if (node.type.name === 'image' && node.attrs.src.includes('data:image/svg+xml')) {
-            const domPos = view.domAtPos(pos)
-            if (domPos.node.contains && domPos.node.contains(target)) {
-              imagePos = pos
-              return false 
-            }
-          }
-        })
-        
-        if (imagePos !== null) {
-          setPendingImagePosition(imagePos)
-          setShowMediaSelector(true)
-        }
-      }
-    }
-
-    const editorElement = editor.view.dom
-    editorElement.addEventListener('click', handleImageClick)
-
-    return () => {
-      editorElement.removeEventListener('click', handleImageClick)
-    }
-  }, [editor])
 
   if (!editor) return null
 
