@@ -43,10 +43,11 @@ WHERE p.id = $1
 GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at;
 
 -- name: ListPosts :many
-SELECT * FROM posts
+SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts
 WHERE 
-    ($1 = '' OR post_type = $1)
-    AND ($2 = '' OR post_status = $2)
+    (@post_type::text = '' OR post_type = @post_type)
+    AND (@post_status::text = '' OR post_status = @post_status)
+    AND (@user_id = 0 OR user_id = @user_id)  -- Add user filter
 ORDER BY
     CASE WHEN @sort_by = 'date_asc' THEN created_at END ASC,
     CASE WHEN @sort_by = 'date_desc' THEN created_at END DESC,
@@ -62,8 +63,9 @@ OFFSET @offset_count;
 
 -- name: ListPostsByType :many
 SELECT * FROM posts
-WHERE post_type = $1
-    AND ($2 = '' OR post_status = $2)
+WHERE post_type = @post_type
+    AND (@post_status::text = '' OR post_status = @post_status)
+    AND (@user_id = 0 OR user_id = @user_id)  -- Add user filter
 ORDER BY
     CASE WHEN @sort_by = 'date_asc' THEN created_at END ASC,
     CASE WHEN @sort_by = 'date_desc' THEN created_at END DESC,
@@ -125,8 +127,9 @@ SELECT
 FROM posts p
 LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE 
-    ($1 = '' OR p.post_type = $1)
-    AND ($2 = '' OR p.post_status = $2)
+    (@post_type::text = '' OR p.post_type = @post_type)
+    AND (@post_status::text = '' OR p.post_status = @post_status)
+    AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
 GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
     CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
@@ -154,8 +157,9 @@ SELECT
     ) as meta
 FROM posts p
 LEFT JOIN post_meta pm ON p.id = pm.post_id
-WHERE p.post_type = $1
-    AND ($2 = '' OR p.post_status = $2)
+WHERE p.post_type = @post_type
+    AND (@post_status::text = '' OR p.post_status = @post_status)
+    AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
 GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
     CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
@@ -172,7 +176,8 @@ OFFSET @offset_count;
 SELECT COUNT(*) AS total FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
-    AND (@post_status::text = '' OR post_status = @post_status);
+    AND (@post_status::text = '' OR post_status = @post_status)
+    AND (@user_id = 0 OR user_id = @user_id);
 
 -- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts
@@ -215,8 +220,9 @@ LEFT JOIN post_meta pm ON p.id = pm.post_id
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
-    ($1 = '' OR p.post_type = $1)
-    AND ($2 = '' OR p.post_status = $2)
+    (@post_type::text = '' OR p.post_type = @post_type)
+    AND (@post_status::text = '' OR p.post_status = @post_status)
+    AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
 GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
          p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
          u.id, u.username, u.email, u.full_name, u.role, u.created_at,
@@ -268,8 +274,9 @@ FROM posts p
 LEFT JOIN post_meta pm ON p.id = pm.post_id
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
-WHERE p.post_type = $1
-    AND ($2 = '' OR p.post_status = $2)
+WHERE p.post_type = @post_type
+    AND (@post_status::text = '' OR p.post_status = @post_status)
+    AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
 GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
          p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
          u.id, u.username, u.email, u.full_name, u.role, u.created_at,

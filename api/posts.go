@@ -222,6 +222,7 @@ func (server *Server) getPosts(c *gin.Context) {
 	sortBy := c.DefaultQuery("sort", "date_desc")
 	postType := c.Query("type")
 	status := c.Query("status")
+	userIDStr := c.Query("user_id")
 	withMeta := c.DefaultQuery("with_meta", "false")
 	metaLevel := c.DefaultQuery("meta_level", "basic")
 
@@ -245,6 +246,16 @@ func (server *Server) getPosts(c *gin.Context) {
 		return
 	}
 
+	var userID int64 = 0
+	if userIDStr != "" {
+		uid, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id parameter"})
+			return
+		}
+		userID = uid
+	}
+
 	var total int64
 	if postType != "" {
 		total, err = server.store.CountPostsByTypeFiltered(c.Request.Context(), db.CountPostsByTypeFilteredParams{
@@ -255,6 +266,7 @@ func (server *Server) getPosts(c *gin.Context) {
 		total, err = server.store.CountFilteredPosts(c.Request.Context(), db.CountFilteredPostsParams{
 			PostType:   postType,
 			PostStatus: status,
+			UserID:     userID,
 		})
 	}
 	if err != nil {
@@ -267,8 +279,9 @@ func (server *Server) getPosts(c *gin.Context) {
 		case "full", "all":
 
 			posts, err := server.store.ListPostsWithAllMeta(c.Request.Context(), db.ListPostsWithAllMetaParams{
-				Column1:     postType,
-				Column2:     status,
+				PostType:    postType,
+				PostStatus:  status,
+				UserID:      userID,
 				SortBy:      sortBy,
 				OffsetCount: int32(offset),
 				LimitCount:  int32(limit),
@@ -293,6 +306,7 @@ func (server *Server) getPosts(c *gin.Context) {
 					"sort":       sortBy,
 					"type":       postType,
 					"status":     status,
+					"user_id":    userID,
 					"with_meta":  true,
 					"meta_level": metaLevel,
 				},
@@ -301,8 +315,9 @@ func (server *Server) getPosts(c *gin.Context) {
 		default:
 
 			posts, err := server.store.ListPostsWithMeta(c.Request.Context(), db.ListPostsWithMetaParams{
-				Column1:     postType,
-				Column2:     status,
+				PostType:    postType,
+				PostStatus:  status,
+				UserID:      userID,
 				SortBy:      sortBy,
 				OffsetCount: int32(offset),
 				LimitCount:  int32(limit),
@@ -327,15 +342,18 @@ func (server *Server) getPosts(c *gin.Context) {
 					"sort":       sortBy,
 					"type":       postType,
 					"status":     status,
+					"user_id":    userID,
 					"with_meta":  true,
 					"meta_level": metaLevel,
 				},
 			})
 		}
 	} else {
+
 		posts, err := server.store.ListPosts(c.Request.Context(), db.ListPostsParams{
-			Column1:     postType,
-			Column2:     status,
+			PostType:    postType,
+			PostStatus:  status,
+			UserID:      userID,
 			SortBy:      sortBy,
 			OffsetCount: int32(offset),
 			LimitCount:  int32(limit),
@@ -360,6 +378,7 @@ func (server *Server) getPosts(c *gin.Context) {
 				"sort":      sortBy,
 				"type":      postType,
 				"status":    status,
+				"user_id":   userID,
 				"with_meta": false,
 			},
 		})
@@ -813,7 +832,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 
 			posts, err := server.store.ListPostsByTypeWithAllMeta(c.Request.Context(), db.ListPostsByTypeWithAllMetaParams{
 				PostType:    postType,
-				Column2:     status,
+				PostStatus:  status,
+				UserID:      int64(0),
 				SortBy:      sortBy,
 				OffsetCount: int32(offset),
 				LimitCount:  int32(limit),
@@ -856,7 +876,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 
 			posts, err := server.store.ListPostsByTypeWithMeta(c.Request.Context(), db.ListPostsByTypeWithMetaParams{
 				PostType:    postType,
-				Column2:     status,
+				PostStatus:  status,
+				UserID:      int64(0),
 				SortBy:      sortBy,
 				OffsetCount: int32(offset),
 				LimitCount:  int32(limit),
@@ -895,7 +916,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 
 		posts, err := server.store.ListPostsByType(c.Request.Context(), db.ListPostsByTypeParams{
 			PostType:    postType,
-			Column2:     status,
+			PostStatus:  status,
+			UserID:      int64(0),
 			SortBy:      sortBy,
 			OffsetCount: int32(offset),
 			LimitCount:  int32(limit),
