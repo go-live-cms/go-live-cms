@@ -20,7 +20,9 @@ export interface PostQueryParams extends PaginationParams {
   sort?: PostSortOption
   type?: string // post type name
   status?: string
+  user_id?: string | number
   with_meta?: boolean
+  meta_level?: string // 'basic' | 'full' | 'all'
 }
 
 export async function getPosts(params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
