@@ -66,6 +66,21 @@ func (mr *MockStoreMockRecorder) BlockSession(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockSession", reflect.TypeOf((*MockStore)(nil).BlockSession), arg0, arg1)
 }
 
+// CountFilteredPosts mocks base method.
+func (m *MockStore) CountFilteredPosts(arg0 context.Context, arg1 db.CountFilteredPostsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountFilteredPosts", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountFilteredPosts indicates an expected call of CountFilteredPosts.
+func (mr *MockStoreMockRecorder) CountFilteredPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountFilteredPosts", reflect.TypeOf((*MockStore)(nil).CountFilteredPosts), arg0, arg1)
+}
+
 // CountPostsByTaxonomyTerm mocks base method.
 func (m *MockStore) CountPostsByTaxonomyTerm(arg0 context.Context, arg1 int64) (int64, error) {
 	m.ctrl.T.Helper()
@@ -94,6 +109,21 @@ func (m *MockStore) CountPostsByType(arg0 context.Context, arg1 string) (int64, 
 func (mr *MockStoreMockRecorder) CountPostsByType(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPostsByType", reflect.TypeOf((*MockStore)(nil).CountPostsByType), arg0, arg1)
+}
+
+// CountPostsByTypeFiltered mocks base method.
+func (m *MockStore) CountPostsByTypeFiltered(arg0 context.Context, arg1 db.CountPostsByTypeFilteredParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountPostsByTypeFiltered", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountPostsByTypeFiltered indicates an expected call of CountPostsByTypeFiltered.
+func (mr *MockStoreMockRecorder) CountPostsByTypeFiltered(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPostsByTypeFiltered", reflect.TypeOf((*MockStore)(nil).CountPostsByTypeFiltered), arg0, arg1)
 }
 
 // CountTaxonomyTerms mocks base method.
@@ -494,6 +524,20 @@ func (mr *MockStoreMockRecorder) DeletePostMedia(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostMedia", reflect.TypeOf((*MockStore)(nil).DeletePostMedia), arg0, arg1)
 }
 
+// DeletePostMediaByOrder mocks base method.
+func (m *MockStore) DeletePostMediaByOrder(arg0 context.Context, arg1 db.DeletePostMediaByOrderParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePostMediaByOrder", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePostMediaByOrder indicates an expected call of DeletePostMediaByOrder.
+func (mr *MockStoreMockRecorder) DeletePostMediaByOrder(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostMediaByOrder", reflect.TypeOf((*MockStore)(nil).DeletePostMediaByOrder), arg0, arg1)
+}
+
 // DeletePostMedias mocks base method.
 func (m *MockStore) DeletePostMedias(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -704,6 +748,21 @@ func (mr *MockStoreMockRecorder) ExecTx(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecTx", reflect.TypeOf((*MockStore)(nil).ExecTx), arg0, arg1)
 }
 
+// GetFeaturedImage mocks base method.
+func (m *MockStore) GetFeaturedImage(arg0 context.Context, arg1 int64) (db.GetFeaturedImageRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFeaturedImage", arg0, arg1)
+	ret0, _ := ret[0].(db.GetFeaturedImageRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetFeaturedImage indicates an expected call of GetFeaturedImage.
+func (mr *MockStoreMockRecorder) GetFeaturedImage(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeaturedImage", reflect.TypeOf((*MockStore)(nil).GetFeaturedImage), arg0, arg1)
+}
+
 // GetMedia mocks base method.
 func (m *MockStore) GetMedia(arg0 context.Context, arg1 int64) (db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -822,6 +881,21 @@ func (m *MockStore) GetPostChildren(arg0 context.Context, arg1 sql.NullInt64) ([
 func (mr *MockStoreMockRecorder) GetPostChildren(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostChildren", reflect.TypeOf((*MockStore)(nil).GetPostChildren), arg0, arg1)
+}
+
+// GetPostMedia mocks base method.
+func (m *MockStore) GetPostMedia(arg0 context.Context, arg1 int64) ([]db.GetPostMediaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostMedia", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetPostMediaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostMedia indicates an expected call of GetPostMedia.
+func (mr *MockStoreMockRecorder) GetPostMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostMedia", reflect.TypeOf((*MockStore)(nil).GetPostMedia), arg0, arg1)
 }
 
 // GetPostMediaCount mocks base method.
@@ -1259,6 +1333,21 @@ func (mr *MockStoreMockRecorder) ListPostsByType(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByType", reflect.TypeOf((*MockStore)(nil).ListPostsByType), arg0, arg1)
 }
 
+// ListPostsByTypeWithAllMeta mocks base method.
+func (m *MockStore) ListPostsByTypeWithAllMeta(arg0 context.Context, arg1 db.ListPostsByTypeWithAllMetaParams) ([]db.ListPostsByTypeWithAllMetaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostsByTypeWithAllMeta", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostsByTypeWithAllMetaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostsByTypeWithAllMeta indicates an expected call of ListPostsByTypeWithAllMeta.
+func (mr *MockStoreMockRecorder) ListPostsByTypeWithAllMeta(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByTypeWithAllMeta", reflect.TypeOf((*MockStore)(nil).ListPostsByTypeWithAllMeta), arg0, arg1)
+}
+
 // ListPostsByTypeWithMeta mocks base method.
 func (m *MockStore) ListPostsByTypeWithMeta(arg0 context.Context, arg1 db.ListPostsByTypeWithMetaParams) ([]db.ListPostsByTypeWithMetaRow, error) {
 	m.ctrl.T.Helper()
@@ -1272,6 +1361,21 @@ func (m *MockStore) ListPostsByTypeWithMeta(arg0 context.Context, arg1 db.ListPo
 func (mr *MockStoreMockRecorder) ListPostsByTypeWithMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByTypeWithMeta", reflect.TypeOf((*MockStore)(nil).ListPostsByTypeWithMeta), arg0, arg1)
+}
+
+// ListPostsWithAllMeta mocks base method.
+func (m *MockStore) ListPostsWithAllMeta(arg0 context.Context, arg1 db.ListPostsWithAllMetaParams) ([]db.ListPostsWithAllMetaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostsWithAllMeta", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostsWithAllMetaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostsWithAllMeta indicates an expected call of ListPostsWithAllMeta.
+func (mr *MockStoreMockRecorder) ListPostsWithAllMeta(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsWithAllMeta", reflect.TypeOf((*MockStore)(nil).ListPostsWithAllMeta), arg0, arg1)
 }
 
 // ListPostsWithMedia mocks base method.

@@ -348,6 +348,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                 setContentTextLen(text.trim().length)
               }}
               placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
+              postId={initialData?.id} 
             />
           </div>
         </div>

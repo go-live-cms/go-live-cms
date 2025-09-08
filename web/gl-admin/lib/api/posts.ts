@@ -20,7 +20,9 @@ export interface PostQueryParams extends PaginationParams {
   sort?: PostSortOption
   type?: string // post type name
   status?: string
+  user_id?: string | number
   with_meta?: boolean
+  meta_level?: string // 'basic' | 'full' | 'all'
 }
 
 export async function getPosts(params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
@@ -106,6 +108,26 @@ export async function deletePost(id: string | number): Promise<any> {
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.error || "Delete post failed")
+  }
+
+  return response.json()
+}
+
+export async function createPostMedia(postId: number, mediaId: number, order: number = 1): Promise<any> {
+  const response = await authenticatedFetch(`/api/v1/posts/${postId}/media`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      media_id: mediaId,
+      order: order
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || "Failed to link media to post")
   }
 
   return response.json()

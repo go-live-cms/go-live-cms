@@ -60,7 +60,9 @@ export interface PostQueryParams extends PaginationParams {
   sort?: PostSortOption
   type?: string
   status?: string
+  user_id?: string | number 
   with_meta?: boolean
+  meta_level?: string 
 }
 
 export async function getPosts(params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
@@ -71,7 +73,9 @@ export async function getPosts(params: PostQueryParams = {}): Promise<ApiRespons
   if (params.sort) searchParams.set("sort", params.sort)
   if (params.type) searchParams.set("type", params.type)
   if (params.status) searchParams.set("status", params.status)
+  if (params.user_id) searchParams.set("user_id", params.user_id.toString())
   if (params.with_meta) searchParams.set("with_meta", params.with_meta.toString())
+  if (params.meta_level) searchParams.set("meta_level", params.meta_level)
 
   const queryString = searchParams.toString()
   const endpoint = `/posts${queryString ? `?${queryString}` : ""}`

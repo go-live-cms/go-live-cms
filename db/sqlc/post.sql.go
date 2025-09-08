@@ -8,8 +8,30 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 )
+
+const countFilteredPosts = `-- name: CountFilteredPosts :one
+SELECT COUNT(*) AS total FROM posts
+WHERE 
+    ($1::text = '' OR post_type = $1)
+    AND ($2::text = '' OR post_status = $2)
+    AND ($3 = 0 OR user_id = $3)
+`
+
+type CountFilteredPostsParams struct {
+	PostType   string      `json:"post_type"`
+	PostStatus string      `json:"post_status"`
+	UserID     interface{} `json:"user_id"`
+}
+
+func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countFilteredPosts, arg.PostType, arg.PostStatus, arg.UserID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
 
 const countPostsByType = `-- name: CountPostsByType :one
 SELECT COUNT(*) AS total FROM posts
@@ -18,6 +40,24 @@ WHERE post_type = $1
 
 func (q *Queries) CountPostsByType(ctx context.Context, postType string) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPostsByType, postType)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
+const countPostsByTypeFiltered = `-- name: CountPostsByTypeFiltered :one
+SELECT COUNT(*) AS total FROM posts
+WHERE post_type = $1
+    AND ($2::text = '' OR post_status = $2)
+`
+
+type CountPostsByTypeFilteredParams struct {
+	PostType   string `json:"post_type"`
+	PostStatus string `json:"post_status"`
+}
+
+func (q *Queries) CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPostsByTypeFiltered, arg.PostType, arg.PostStatus)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -266,25 +306,27 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 const listPosts = `-- name: ListPosts :many
 SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts
 WHERE 
-    ($1 = '' OR post_type = $1)
-    AND ($2 = '' OR post_status = $2)
+    ($1::text = '' OR post_type = $1)
+    AND ($2::text = '' OR post_status = $2)
+    AND ($3 = 0 OR user_id = $3)  -- Add user filter
 ORDER BY
-    CASE WHEN $3 = 'date_asc' THEN created_at END ASC,
-    CASE WHEN $3 = 'date_desc' THEN created_at END DESC,
-    CASE WHEN $3 = 'title_asc' THEN title END ASC,
-    CASE WHEN $3 = 'title_desc' THEN title END DESC,
-    CASE WHEN $3 = 'menu_order_asc' THEN menu_order END ASC,
-    CASE WHEN $3 = 'menu_order_desc' THEN menu_order END DESC,
-    CASE WHEN $3 = 'id_asc' THEN id END ASC,
-    CASE WHEN $3 = 'id_desc' THEN id END DESC,
+    CASE WHEN $4 = 'date_asc' THEN created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN created_at END DESC,
+    CASE WHEN $4 = 'title_asc' THEN title END ASC,
+    CASE WHEN $4 = 'title_desc' THEN title END DESC,
+    CASE WHEN $4 = 'menu_order_asc' THEN menu_order END ASC,
+    CASE WHEN $4 = 'menu_order_desc' THEN menu_order END DESC,
+    CASE WHEN $4 = 'id_asc' THEN id END ASC,
+    CASE WHEN $4 = 'id_desc' THEN id END DESC,
     id DESC
-LIMIT $5
-OFFSET $4
+LIMIT $6
+OFFSET $5
 `
 
 type ListPostsParams struct {
-	Column1     interface{} `json:"column_1"`
-	Column2     interface{} `json:"column_2"`
+	PostType    string      `json:"post_type"`
+	PostStatus  string      `json:"post_status"`
+	UserID      interface{} `json:"user_id"`
 	SortBy      interface{} `json:"sort_by"`
 	OffsetCount int32       `json:"offset_count"`
 	LimitCount  int32       `json:"limit_count"`
@@ -292,8 +334,9 @@ type ListPostsParams struct {
 
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error) {
 	rows, err := q.db.QueryContext(ctx, listPosts,
-		arg.Column1,
-		arg.Column2,
+		arg.PostType,
+		arg.PostStatus,
+		arg.UserID,
 		arg.SortBy,
 		arg.OffsetCount,
 		arg.LimitCount,
@@ -336,22 +379,24 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 const listPostsByType = `-- name: ListPostsByType :many
 SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts
 WHERE post_type = $1
-    AND ($2 = '' OR post_status = $2)
+    AND ($2::text = '' OR post_status = $2)
+    AND ($3 = 0 OR user_id = $3)  -- Add user filter
 ORDER BY
-    CASE WHEN $3 = 'date_asc' THEN created_at END ASC,
-    CASE WHEN $3 = 'date_desc' THEN created_at END DESC,
-    CASE WHEN $3 = 'title_asc' THEN title END ASC,
-    CASE WHEN $3 = 'title_desc' THEN title END DESC,
-    CASE WHEN $3 = 'menu_order_asc' THEN menu_order END ASC,
-    CASE WHEN $3 = 'menu_order_desc' THEN menu_order END DESC,
+    CASE WHEN $4 = 'date_asc' THEN created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN created_at END DESC,
+    CASE WHEN $4 = 'title_asc' THEN title END ASC,
+    CASE WHEN $4 = 'title_desc' THEN title END DESC,
+    CASE WHEN $4 = 'menu_order_asc' THEN menu_order END ASC,
+    CASE WHEN $4 = 'menu_order_desc' THEN menu_order END DESC,
     id DESC
-LIMIT $5
-OFFSET $4
+LIMIT $6
+OFFSET $5
 `
 
 type ListPostsByTypeParams struct {
 	PostType    string      `json:"post_type"`
-	Column2     interface{} `json:"column_2"`
+	PostStatus  string      `json:"post_status"`
+	UserID      interface{} `json:"user_id"`
 	SortBy      interface{} `json:"sort_by"`
 	OffsetCount int32       `json:"offset_count"`
 	LimitCount  int32       `json:"limit_count"`
@@ -360,7 +405,8 @@ type ListPostsByTypeParams struct {
 func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsByType,
 		arg.PostType,
-		arg.Column2,
+		arg.PostStatus,
+		arg.UserID,
 		arg.SortBy,
 		arg.OffsetCount,
 		arg.LimitCount,
@@ -400,6 +446,134 @@ func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams
 	return items, nil
 }
 
+const listPostsByTypeWithAllMeta = `-- name: ListPostsByTypeWithAllMeta :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    -- Post custom meta
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as post_meta,
+    -- Author information
+    jsonb_build_object(
+        'id', u.id,
+        'username', u.username,
+        'email', u.email,
+        'full_name', u.full_name,
+        'role', u.role,
+        'created_at', u.created_at
+    ) as author_meta,
+    -- Post type information
+    jsonb_build_object(
+        'name', pt.name,
+        'label', pt.label,
+        'description', pt.description,
+        'hierarchical', pt.hierarchical,
+        'public', pt.public,
+        'supports', pt.supports
+    ) as post_type_meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+LEFT JOIN users u ON p.user_id = u.id
+LEFT JOIN post_types pt ON p.post_type = pt.name
+WHERE p.post_type = $1
+    AND ($2::text = '' OR p.post_status = $2)
+    AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+         p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+         u.id, u.username, u.email, u.full_name, u.role, u.created_at,
+         pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
+ORDER BY
+    CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN $4 = 'title_asc' THEN p.title END ASC,
+    CASE WHEN $4 = 'title_desc' THEN p.title END DESC,
+    CASE WHEN $4 = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN $4 = 'menu_order_desc' THEN p.menu_order END DESC,
+    p.id DESC
+LIMIT $6
+OFFSET $5
+`
+
+type ListPostsByTypeWithAllMetaParams struct {
+	PostType    string      `json:"post_type"`
+	PostStatus  string      `json:"post_status"`
+	UserID      interface{} `json:"user_id"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
+}
+
+type ListPostsByTypeWithAllMetaRow struct {
+	ID           int64           `json:"id"`
+	Title        string          `json:"title"`
+	Description  string          `json:"description"`
+	Content      string          `json:"content"`
+	UserID       int64           `json:"user_id"`
+	Username     string          `json:"username"`
+	Url          string          `json:"url"`
+	PostType     string          `json:"post_type"`
+	PostStatus   string          `json:"post_status"`
+	PostParent   sql.NullInt64   `json:"post_parent"`
+	MenuOrder    int32           `json:"menu_order"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ChangedAt    time.Time       `json:"changed_at"`
+	PostMeta     interface{}     `json:"post_meta"`
+	AuthorMeta   json.RawMessage `json:"author_meta"`
+	PostTypeMeta json.RawMessage `json:"post_type_meta"`
+}
+
+func (q *Queries) ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsByTypeWithAllMetaParams) ([]ListPostsByTypeWithAllMetaRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsByTypeWithAllMeta,
+		arg.PostType,
+		arg.PostStatus,
+		arg.UserID,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsByTypeWithAllMetaRow{}
+	for rows.Next() {
+		var i ListPostsByTypeWithAllMetaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.PostMeta,
+			&i.AuthorMeta,
+			&i.PostTypeMeta,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostsByTypeWithMeta = `-- name: ListPostsByTypeWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
@@ -414,23 +588,25 @@ SELECT
 FROM posts p
 LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE p.post_type = $1
-    AND ($2 = '' OR p.post_status = $2)
+    AND ($2::text = '' OR p.post_status = $2)
+    AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
 GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
-    CASE WHEN $3 = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN $3 = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN $3 = 'title_asc' THEN p.title END ASC,
-    CASE WHEN $3 = 'title_desc' THEN p.title END DESC,
-    CASE WHEN $3 = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN $3 = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN $4 = 'title_asc' THEN p.title END ASC,
+    CASE WHEN $4 = 'title_desc' THEN p.title END DESC,
+    CASE WHEN $4 = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN $4 = 'menu_order_desc' THEN p.menu_order END DESC,
     p.id DESC
-LIMIT $5
-OFFSET $4
+LIMIT $6
+OFFSET $5
 `
 
 type ListPostsByTypeWithMetaParams struct {
 	PostType    string      `json:"post_type"`
-	Column2     interface{} `json:"column_2"`
+	PostStatus  string      `json:"post_status"`
+	UserID      interface{} `json:"user_id"`
 	SortBy      interface{} `json:"sort_by"`
 	OffsetCount int32       `json:"offset_count"`
 	LimitCount  int32       `json:"limit_count"`
@@ -456,7 +632,8 @@ type ListPostsByTypeWithMetaRow struct {
 func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsByTypeWithMeta,
 		arg.PostType,
-		arg.Column2,
+		arg.PostStatus,
+		arg.UserID,
 		arg.SortBy,
 		arg.OffsetCount,
 		arg.LimitCount,
@@ -497,6 +674,137 @@ func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTy
 	return items, nil
 }
 
+const listPostsWithAllMeta = `-- name: ListPostsWithAllMeta :many
+SELECT 
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    -- Post custom meta
+    COALESCE(
+        jsonb_object_agg(
+            pm.meta_key, 
+            pm.meta_value
+        ) FILTER (WHERE pm.meta_key IS NOT NULL),
+        '{}'::jsonb
+    ) as post_meta,
+    -- Author information
+    jsonb_build_object(
+        'id', u.id,
+        'username', u.username,
+        'email', u.email,
+        'full_name', u.full_name,
+        'role', u.role,
+        'created_at', u.created_at
+    ) as author_meta,
+    -- Post type information
+    jsonb_build_object(
+        'name', pt.name,
+        'label', pt.label,
+        'description', pt.description,
+        'hierarchical', pt.hierarchical,
+        'public', pt.public,
+        'supports', pt.supports
+    ) as post_type_meta
+FROM posts p
+LEFT JOIN post_meta pm ON p.id = pm.post_id
+LEFT JOIN users u ON p.user_id = u.id
+LEFT JOIN post_types pt ON p.post_type = pt.name
+WHERE 
+    ($1::text = '' OR p.post_type = $1)
+    AND ($2::text = '' OR p.post_status = $2)
+    AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
+GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+         p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+         u.id, u.username, u.email, u.full_name, u.role, u.created_at,
+         pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
+ORDER BY
+    CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN $4 = 'title_asc' THEN p.title END ASC,
+    CASE WHEN $4 = 'title_desc' THEN p.title END DESC,
+    CASE WHEN $4 = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN $4 = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN $4 = 'id_asc' THEN p.id END ASC,
+    CASE WHEN $4 = 'id_desc' THEN p.id END DESC,
+    p.id DESC
+LIMIT $6
+OFFSET $5
+`
+
+type ListPostsWithAllMetaParams struct {
+	PostType    string      `json:"post_type"`
+	PostStatus  string      `json:"post_status"`
+	UserID      interface{} `json:"user_id"`
+	SortBy      interface{} `json:"sort_by"`
+	OffsetCount int32       `json:"offset_count"`
+	LimitCount  int32       `json:"limit_count"`
+}
+
+type ListPostsWithAllMetaRow struct {
+	ID           int64           `json:"id"`
+	Title        string          `json:"title"`
+	Description  string          `json:"description"`
+	Content      string          `json:"content"`
+	UserID       int64           `json:"user_id"`
+	Username     string          `json:"username"`
+	Url          string          `json:"url"`
+	PostType     string          `json:"post_type"`
+	PostStatus   string          `json:"post_status"`
+	PostParent   sql.NullInt64   `json:"post_parent"`
+	MenuOrder    int32           `json:"menu_order"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ChangedAt    time.Time       `json:"changed_at"`
+	PostMeta     interface{}     `json:"post_meta"`
+	AuthorMeta   json.RawMessage `json:"author_meta"`
+	PostTypeMeta json.RawMessage `json:"post_type_meta"`
+}
+
+func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsWithAllMeta,
+		arg.PostType,
+		arg.PostStatus,
+		arg.UserID,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostsWithAllMetaRow{}
+	for rows.Next() {
+		var i ListPostsWithAllMetaRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.Content,
+			&i.UserID,
+			&i.Username,
+			&i.Url,
+			&i.PostType,
+			&i.PostStatus,
+			&i.PostParent,
+			&i.MenuOrder,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.PostMeta,
+			&i.AuthorMeta,
+			&i.PostTypeMeta,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostsWithMeta = `-- name: ListPostsWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
@@ -511,26 +819,28 @@ SELECT
 FROM posts p
 LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE 
-    ($1 = '' OR p.post_type = $1)
-    AND ($2 = '' OR p.post_status = $2)
+    ($1::text = '' OR p.post_type = $1)
+    AND ($2::text = '' OR p.post_status = $2)
+    AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
 GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
-    CASE WHEN $3 = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN $3 = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN $3 = 'title_asc' THEN p.title END ASC,
-    CASE WHEN $3 = 'title_desc' THEN p.title END DESC,
-    CASE WHEN $3 = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN $3 = 'menu_order_desc' THEN p.menu_order END DESC,
-    CASE WHEN $3 = 'id_asc' THEN p.id END ASC,
-    CASE WHEN $3 = 'id_desc' THEN p.id END DESC,
+    CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
+    CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
+    CASE WHEN $4 = 'title_asc' THEN p.title END ASC,
+    CASE WHEN $4 = 'title_desc' THEN p.title END DESC,
+    CASE WHEN $4 = 'menu_order_asc' THEN p.menu_order END ASC,
+    CASE WHEN $4 = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN $4 = 'id_asc' THEN p.id END ASC,
+    CASE WHEN $4 = 'id_desc' THEN p.id END DESC,
     p.id DESC
-LIMIT $5
-OFFSET $4
+LIMIT $6
+OFFSET $5
 `
 
 type ListPostsWithMetaParams struct {
-	Column1     interface{} `json:"column_1"`
-	Column2     interface{} `json:"column_2"`
+	PostType    string      `json:"post_type"`
+	PostStatus  string      `json:"post_status"`
+	UserID      interface{} `json:"user_id"`
 	SortBy      interface{} `json:"sort_by"`
 	OffsetCount int32       `json:"offset_count"`
 	LimitCount  int32       `json:"limit_count"`
@@ -555,8 +865,9 @@ type ListPostsWithMetaRow struct {
 
 func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsWithMeta,
-		arg.Column1,
-		arg.Column2,
+		arg.PostType,
+		arg.PostStatus,
+		arg.UserID,
 		arg.SortBy,
 		arg.OffsetCount,
 		arg.LimitCount,

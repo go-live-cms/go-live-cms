@@ -14,6 +14,10 @@ import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
+import { getAllBlocks } from "./blocks"
+import { MediaBlockManager } from "./blocks/mediaBlocks"
+import FeaturedImageSelector from "./FeaturedImageSelector"
+import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
 type Props = {
@@ -23,6 +27,7 @@ type Props = {
   readOnly?: boolean
   minChars?: number
   maxChars?: number
+  postId?: number 
 }
 
 const lowlight = createLowlight(common)
@@ -34,93 +39,15 @@ export default function Editor({
   readOnly = false,
   minChars,
   maxChars,
+  postId, 
 }: Props) {
-  const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => [
-    {
-      title: "Heading 1",
-      description: "Large section heading",
-      icon: "📝",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run()
-      },
-      aliases: ["h1", "heading1"],
-    },
-    {
-      title: "Heading 2",
-      description: "Medium section heading",
-      icon: "📄",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run()
-      },
-      aliases: ["h2", "heading2"],
-    },
-    {
-      title: "Heading 3",
-      description: "Small section heading",
-      icon: "📃",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run()
-      },
-      aliases: ["h3", "heading3"],
-    },
-    {
-      title: "Bullet List",
-      description: "Create a simple bullet list",
-      icon: "•",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).toggleBulletList().run()
-      },
-      aliases: ["ul", "list"],
-    },
-    {
-      title: "Numbered List",
-      description: "Create a numbered list",
-      icon: "1.",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).toggleOrderedList().run()
-      },
-      aliases: ["ol", "ordered"],
-    },
-    {
-      title: "Quote",
-      description: "Add a blockquote",
-      icon: "💬",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setBlockquote().run()
-      },
-      aliases: ["quote", "blockquote"],
-    },
-    {
-      title: "Code Block",
-      description: "Add a code block with syntax highlighting",
-      icon: "💻",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setCodeBlock().run()
-      },
-      aliases: ["code", "codeblock"],
-    },
-    {
-      title: "Divider",
-      description: "Add a horizontal divider",
-      icon: "➖",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHorizontalRule().run()
-      },
-      aliases: ["hr", "divider", "separator"],
-    },
-    {
-      title: "Image",
-      description: "Add an image",
-      icon: "🖼️",
-      command: ({ editor, range }) => {
-        const url = window.prompt("Image URL")
-        if (url) {
-          editor.chain().focus().deleteRange(range).setImage({ src: url }).run()
-        }
-      },
-      aliases: ["img", "image", "picture"],
-    },
-  ]
+  const [showMediaSelector, setShowMediaSelector] = useState(false)
+  const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
+  const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
+
+  const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => {
+    return getAllBlocks()
+  }
 
   const getCursorCoords = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
     const { view } = editor
@@ -250,6 +177,39 @@ export default function Editor({
     }
   }, [value, editor])
 
+  
+  useEffect(() => {
+    if (editor) {
+      const manager = new MediaBlockManager(
+        editor,
+        postId,
+        (position: number) => {
+          setPendingImagePosition(position)
+          setShowMediaSelector(true)
+        }
+      )
+      setMediaBlockManager(manager)
+
+      return () => {
+        manager.destroy()
+      }
+    }
+  }, [editor, postId])
+
+  const handleMediaSelect = useCallback(async (media: Media) => {
+    if (!mediaBlockManager || pendingImagePosition === null) return
+    
+    await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
+    
+    setShowMediaSelector(false)
+    setPendingImagePosition(null)
+  }, [mediaBlockManager, pendingImagePosition])
+
+  const handleMediaSelectorClose = useCallback(() => {
+    setShowMediaSelector(false)
+    setPendingImagePosition(null)
+  }, [])
+
   if (!editor) return null
 
   return (
@@ -310,6 +270,15 @@ export default function Editor({
           </span>
         )}
       </div>
+
+      {showMediaSelector && (
+        <FeaturedImageSelector
+          isOpen={showMediaSelector}
+          onClose={handleMediaSelectorClose}
+          onSelect={handleMediaSelect}
+          currentFeaturedImage={null}
+        />
+      )}
     </div>
   )
 }

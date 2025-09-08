@@ -135,11 +135,61 @@ INSERT INTO post_media (
     "order"
 ) VALUES (
     $1, $2, $3
-) RETURNING *;
+)
+ON CONFLICT (post_id, media_id)
+DO UPDATE SET "order" = EXCLUDED."order"
+RETURNING *;
 
 -- name: DeletePostMedia :exec
 DELETE FROM post_media
 WHERE post_id = $1 AND media_id = $2;
+
+-- name: DeletePostMediaByOrder :exec
+DELETE FROM post_media 
+WHERE post_id = $1 AND "order" = $2;
+
+-- name: GetFeaturedImage :one
+SELECT 
+    pm.post_id,
+    pm.media_id,
+    pm."order",
+    m.name,
+    m.description,
+    m.alt,
+    m.media_path,
+    m.width,
+    m.height,
+    m.file_size,
+    m.mime_type,
+    m.original_filename,
+    m.created_at,
+    m.changed_at
+FROM post_media pm
+JOIN media m ON pm.media_id = m.id
+WHERE pm.post_id = $1 AND pm."order" = 0
+LIMIT 1;
+
+-- name: GetPostMedia :many
+SELECT 
+    pm.post_id,
+    pm.media_id,
+    pm."order",
+    m.name,
+    m.description,
+    m.alt,
+    m.media_path,
+    m.width,
+    m.height,
+    m.file_size,
+    m.mime_type,
+    m.original_filename,
+    m.user_id,
+    m.created_at,
+    m.changed_at
+FROM post_media pm
+JOIN media m ON pm.media_id = m.id
+WHERE pm.post_id = $1
+ORDER BY pm."order", pm.media_id;
 
 -- name: DeletePostMedias :exec
 DELETE FROM post_media
@@ -259,12 +309,25 @@ OFFSET $3;
 
 -- name: GetPostsByMedia :many
 SELECT 
-    p.*,
-    pm."order" as media_order
+    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    COALESCE(pm."order", 0) as media_order,
+    CASE 
+        WHEN pm.media_id IS NOT NULL AND pm."order" = 0 THEN 'featured'
+        WHEN pm.media_id IS NOT NULL AND pm."order" > 0 THEN 'gallery'
+        WHEN meta.meta_value IS NOT NULL THEN 'featured'
+        ELSE 'unknown'
+    END as relationship_type
 FROM posts p
-JOIN post_media pm ON p.id = pm.post_id
-WHERE pm.media_id = $1
-ORDER BY pm."order", p.created_at DESC;
+LEFT JOIN post_media pm ON p.id = pm.post_id AND pm.media_id = $1
+LEFT JOIN post_meta meta ON p.id = meta.post_id 
+    AND meta.meta_key = '_thumbnail_id' 
+    AND meta.meta_value = $1::text
+WHERE pm.media_id = $1 OR meta.meta_value = $1::text
+ORDER BY 
+    CASE WHEN pm."order" = 0 OR meta.meta_value IS NOT NULL THEN 0 ELSE 1 END,
+    pm."order" ASC,
+    p.created_at DESC;
 
 
 -- name: CountTotalMedia :one
