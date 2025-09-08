@@ -1,7 +1,9 @@
-import React, { useEffect, useState, useCallback } from "react"
-import { EditorContent, useEditor, ReactRenderer } from "@tiptap/react"
+import React, { useEffect, useState, useCallback, useMemo } from "react"
+import { EditorContent, useEditor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
+import Collaboration from "@tiptap/extension-collaboration"
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor"
 import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
 import Image from "@tiptap/extension-image"
@@ -12,11 +14,12 @@ import Typography from "@tiptap/extension-typography"
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
 import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
+import { SlashCommandExtension } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
 import { getAllBlocks } from "./blocks"
 import { MediaBlockManager } from "./blocks/mediaBlocks"
 import FeaturedImageSelector from "./FeaturedImageSelector"
+import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
@@ -27,7 +30,8 @@ type Props = {
   readOnly?: boolean
   minChars?: number
   maxChars?: number
-  postId?: number 
+  postId?: number
+  enableCollaboration?: boolean // New prop to enable/disable collaboration
 }
 
 const lowlight = createLowlight(common)
@@ -39,15 +43,57 @@ export default function Editor({
   readOnly = false,
   minChars,
   maxChars,
-  postId, 
+  postId,
+  enableCollaboration = true, // Enable by default for edit mode
 }: Props) {
   const [showMediaSelector, setShowMediaSelector] = useState(false)
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
   const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
+  const [collaborationProvider, setCollaborationProvider] = useState<CollaborationProvider | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected')
+  const [connectedUsers, setConnectedUsers] = useState<any[]>([])
 
-  const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => {
+  // Create collaboration provider when postId is available and collaboration is enabled
+  const collabProvider = useMemo(() => {
+    if (postId && enableCollaboration && !readOnly) {
+      return new CollaborationProvider(postId)
+    }
+    return null
+  }, [postId, enableCollaboration, readOnly])
+
+  // Setup collaboration provider effects
+  useEffect(() => {
+    if (collabProvider) {
+      setCollaborationProvider(collabProvider)
+
+      // Listen for connection status changes
+      const updateStatus = () => {
+        setConnectionStatus(collabProvider.getConnectionStatus() === 'connected' ? 'connected' : 'connecting')
+      }
+
+      // Listen for user presence changes
+      const updateUsers = () => {
+        setConnectedUsers(collabProvider.getConnectedUsers())
+      }
+
+      collabProvider.provider.on('status', updateStatus)
+      collabProvider.provider.awareness.on('change', updateUsers)
+
+      // Initial status
+      updateStatus()
+      updateUsers()
+
+      return () => {
+        collabProvider.provider.off('status', updateStatus)
+        collabProvider.provider.awareness.off('change', updateUsers)
+        collabProvider.destroy()
+      }
+    }
+  }, [collabProvider])
+
+  const getSlashCommands = useCallback((editor: TiptapEditor) => {
     return getAllBlocks()
-  }
+  }, [])
 
   const getCursorCoords = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
     const { view } = editor
@@ -55,9 +101,6 @@ export default function Editor({
 
     try {
       const coords = view.coordsAtPos(from)
-
-      const editorRect = view.dom.getBoundingClientRect()
-
       return {
         x: coords.left,
         y: coords.bottom,
@@ -83,16 +126,16 @@ export default function Editor({
     }
   }, [])
 
-  const editor = useEditor({
-    editable: !readOnly,
-    content: value || "<p></p>",
-    autofocus: "end",
-    extensions: [
+  // Create editor extensions based on collaboration mode
+  const extensions = useMemo(() => {
+    const baseExtensions = [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
         dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
         link: false,
+        // Disable history when using collaboration (Yjs handles this)
+        history: !collabProvider,
       }),
       CodeBlockLowlight.configure({
         lowlight,
@@ -120,9 +163,7 @@ export default function Editor({
       SlashCommandExtension.configure({
         suggestion: {
           items: ({ query }: { query: string }) => {
-            if (!editor) return []
-
-            const commands = getSlashCommands(editor)
+            const commands = getSlashCommands(editor!)
             return commands
               .filter((item) => {
                 const searchTerm = query.toLowerCase()
@@ -134,28 +175,41 @@ export default function Editor({
               })
               .slice(0, 10)
           },
-          render: () => {
-            return {
-              onStart: (props: any) => {
-                slashCommandManager.start(props, getCursorCoords)
-              },
-
-              onUpdate: (props: any) => {
-                slashCommandManager.update(props, getCursorCoords)
-              },
-
-              onKeyDown: (props: any) => {
-                return slashCommandManager.handleKeyDown(props)
-              },
-
-              onExit: () => {
-                slashCommandManager.exit()
-              },
-            }
-          },
+          render: () => ({
+            onStart: (props: any) => slashCommandManager.start(props, getCursorCoords),
+            onUpdate: (props: any) => slashCommandManager.update(props, getCursorCoords),
+            onKeyDown: (props: any) => slashCommandManager.handleKeyDown(props),
+            onExit: () => slashCommandManager.exit(),
+          }),
         },
       }),
-    ],
+    ]
+
+    // Add collaboration extensions if provider is available
+    if (collabProvider) {
+      baseExtensions.push(
+        Collaboration.configure({
+          document: collabProvider.doc,
+        }),
+        CollaborationCursor.configure({
+          provider: collabProvider.provider,
+          user: {
+            name: connectedUsers.find(u => u.id === collabProvider.provider.awareness.clientID)?.name || 'You',
+            color: connectedUsers.find(u => u.id === collabProvider.provider.awareness.clientID)?.color || '#FF6B6B',
+          },
+        })
+      )
+    }
+
+    return baseExtensions
+  }, [collabProvider, connectedUsers, getSlashCommands, getCursorCoords, maxChars, placeholder])
+
+  const editor = useEditor({
+    editable: !readOnly,
+    extensions,
+    // Only set initial content if not using collaboration
+    content: !collabProvider ? (value || "<p></p>") : undefined,
+    autofocus: "end",
     onUpdate({ editor }) {
       const html = editor.getHTML()
       const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
@@ -167,17 +221,18 @@ export default function Editor({
         "data-placeholder": placeholder,
       },
     },
-  })
+  }, [collabProvider]) // Re-create editor when collaboration changes
 
+  // Handle content updates for non-collaborative mode
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
+    if (editor && !collabProvider && value !== editor.getHTML()) {
       editor.commands.setContent(value || "<p></p>", {
         emitUpdate: false,
       })
     }
-  }, [value, editor])
+  }, [value, editor, collabProvider])
 
-  
+  // Setup media block manager
   useEffect(() => {
     if (editor) {
       const manager = new MediaBlockManager(
@@ -214,6 +269,48 @@ export default function Editor({
 
   return (
     <div className="notion-editor">
+      {/* Collaboration Status Bar */}
+      {enableCollaboration && postId && (
+        <div className={`collaboration-status collaboration-status--${connectionStatus}`}>
+          <div className="collaboration-info">
+            <span className={`status-indicator status-indicator--${connectionStatus}`}></span>
+            <span className="status-text">
+              {connectionStatus === 'connected' ? 'Connected' : 
+               connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+            </span>
+            {connectedUsers.length > 1 && (
+              <span className="user-count">
+                {connectedUsers.length - 1} other{connectedUsers.length === 2 ? '' : 's'} editing
+              </span>
+            )}
+          </div>
+          
+          {connectedUsers.length > 1 && (
+            <div className="connected-users">
+              {connectedUsers
+                .filter(user => user.id !== collabProvider?.provider.awareness.clientID)
+                .slice(0, 3)
+                .map((user, index) => (
+                  <div 
+                    key={user.id} 
+                    className="user-avatar"
+                    style={{ backgroundColor: user.color }}
+                    title={user.name}
+                  >
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                ))
+              }
+              {connectedUsers.length > 4 && (
+                <div className="user-avatar user-avatar--more">
+                  +{connectedUsers.length - 4}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Bubble Menu - appears when text is selected */}
       <BubbleMenu editor={editor} className="bubble-menu">
         <button

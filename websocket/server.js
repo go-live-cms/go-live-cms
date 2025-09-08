@@ -1,5 +1,5 @@
-const { WebSocketServer } = require("ws");
-const { setupWSConnection } = require("y-websocket/bin/utils");
+import { WebSocketServer } from "ws";
+import { setupWSConnection } from "y-websocket/bin/utils";
 
 const HOST = process.env.HOST || "localhost";
 const PORT = process.env.PORT || 1234;
