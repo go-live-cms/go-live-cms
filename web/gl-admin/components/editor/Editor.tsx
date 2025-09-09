@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react"
 import { EditorContent, useEditor, ReactRenderer } from "@tiptap/react"
+import DragHandle from '@tiptap/extension-drag-handle-react'
 import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
 import Placeholder from "@tiptap/extension-placeholder"
@@ -38,7 +39,7 @@ export default function Editor({
   const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => [
     {
       title: "Heading 1",
-      description: "Large section heading",
+      description: "Section heading",
       icon: "📝",
       command: ({ editor, range }) => {
         editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run()
@@ -47,8 +48,9 @@ export default function Editor({
     },
     {
       title: "Heading 2",
-      description: "Medium section heading",
-      icon: "📄",
+      description: "Section heading",
+
+      icon: "📝",
       command: ({ editor, range }) => {
         editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run()
       },
@@ -56,8 +58,8 @@ export default function Editor({
     },
     {
       title: "Heading 3",
-      description: "Small section heading",
-      icon: "📃",
+      description: "Section heading",
+      icon: "📝",
       command: ({ editor, range }) => {
         editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run()
       },
@@ -121,6 +123,16 @@ export default function Editor({
       aliases: ["img", "image", "picture"],
     },
   ]
+
+  const [showDrag, setShowDrag] = useState(false)
+  const onDragHandleNodeChange = useCallback((data: { node: any; editor: TiptapEditor; pos: number }) => {
+    if (data.node && data.node.textContent && data.node.textContent.trim().length > 0) {
+      setShowDrag(true)
+    }
+    else {
+      setShowDrag(false)
+    }
+  }, [])
 
   const getCursorCoords = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
     const { view } = editor
@@ -287,7 +299,16 @@ export default function Editor({
         >
           🔗
         </button>
+        <div>
+          Turn Into!
+        </div>
       </BubbleMenu>
+      {/* Drag Handle */}
+      <DragHandle editor={editor} onNodeChange={onDragHandleNodeChange} className={`drag-handle-wrapper ${showDrag ? 'visible' : 'hidden'}`}>
+        <div className="drag-handle" title="Drag to move block">
+          ⋮⋮
+        </div>
+      </DragHandle>
 
       {/* Main Editor */}
       <div className="editor-wrapper">
@@ -310,6 +331,6 @@ export default function Editor({
           </span>
         )}
       </div>
-    </div>
+    </div >
   )
 }
