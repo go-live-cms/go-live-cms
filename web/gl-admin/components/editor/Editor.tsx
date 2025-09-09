@@ -3,7 +3,7 @@ import { EditorContent, useEditor } from "@tiptap/react"
 import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
 import Collaboration from "@tiptap/extension-collaboration"
-import CollaborationCursor from "@tiptap/extension-collaboration-cursor"
+import { CursorAwareness } from "./CursorAwareness"
 import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
 import Image from "@tiptap/extension-image"
@@ -218,24 +218,11 @@ export default function Editor({
         
         console.log('Added Collaboration extension successfully')
         
-        
-        /*
-        try {
-          const cursorExtension = CollaborationCursor.configure({
-            provider: collabProvider.provider,
-            user: userState?.user || {
-              name: 'Anonymous',
-              color: '#3b82f6',
-            },
-          })
-          baseExtensions.push(cursorExtension)
-          console.log('Added CollaborationCursor extension successfully')
-        } catch (error) {
-          console.error('Failed to add CollaborationCursor:', error)
-          
-          console.log('Proceeding without cursors')
-        }
-        */
+        const awareness = collabProvider.provider.awareness
+        baseExtensions.push(
+          CursorAwareness.configure({ awareness })
+        )
+        console.log('Added CursorAwareness extension successfully')
       } else {
         console.warn('CollaborationProvider not fully initialized, skipping collaboration extensions')
       }

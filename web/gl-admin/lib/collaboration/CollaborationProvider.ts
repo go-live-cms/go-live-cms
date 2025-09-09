@@ -152,8 +152,15 @@ export class CollaborationProvider {
   public getConnectedUsers() {
     const states = this.provider?.awareness?.getStates()
     if (!states) return []
-    return Array.from(states.values())
-      .map((state: any) => state.user)
-      .filter(Boolean)
+    
+    return Array.from(states.entries())
+      .map((entry) => {
+        const [clientId, s] = entry as [number, any]
+        return {
+          clientId,
+          ...(s?.user ?? {}),
+        }
+      })
+      .filter((u: any) => u.clientId !== this.provider?.awareness?.clientID)
   }
 }
