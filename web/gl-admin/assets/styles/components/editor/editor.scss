@@ -434,30 +434,64 @@
 
 // Collaboration cursor styles
 .collaboration-cursor__caret {
-  border-left: 1px solid var(--cursor-color, #0969da);
-  border-right: 1px solid var(--cursor-color, #0969da);
+  border-left: 2px solid var(--cursor-color, #0969da);
+  border-right: 2px solid var(--cursor-color, #0969da);
   margin-left: -1px;
   margin-right: -1px;
   pointer-events: none;
   position: relative;
   word-break: normal;
+  animation: blink 1s infinite;
+  z-index: 10;
 }
 
 .collaboration-cursor__label {
   background: var(--cursor-color, #0969da);
-  border-radius: 3px;
+  border-radius: 4px;
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
   font-weight: 600;
   left: -1px;
-  line-height: normal;
-  padding: 2px 6px;
+  line-height: 1.2;
+  padding: 3px 6px;
   pointer-events: none;
   position: absolute;
-  top: -1.4em;
+  top: -1.6em;
   user-select: none;
   white-space: nowrap;
+  z-index: 11;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 6px;
+    width: 0;
+    height: 0;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+    border-top: 3px solid var(--cursor-color, #0969da);
+  }
+}
+
+// Individual cursor color overrides (TipTap will add these automatically)
+.collaboration-cursor__caret[style*="--cursor-color"] {
+  border-color: var(--cursor-color) !important;
+}
+
+.collaboration-cursor__label[style*="--cursor-color"] {
+  background: var(--cursor-color) !important;
+  
+  &::after {
+    border-top-color: var(--cursor-color) !important;
+  }
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.3; }
 }
 
 @keyframes pulse {

@@ -7,7 +7,6 @@ import CollaborationCursor from "@tiptap/extension-collaboration-cursor"
 import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
 import Image from "@tiptap/extension-image"
-import Underline from "@tiptap/extension-underline"
 import TextAlign from "@tiptap/extension-text-align"
 import CharacterCount from "@tiptap/extension-character-count"
 import Typography from "@tiptap/extension-typography"
@@ -31,7 +30,7 @@ type Props = {
   minChars?: number
   maxChars?: number
   postId?: number
-  enableCollaboration?: boolean // New prop to enable/disable collaboration
+  enableCollaboration?: boolean 
 }
 
 const lowlight = createLowlight(common)
@@ -44,7 +43,7 @@ export default function Editor({
   minChars,
   maxChars,
   postId,
-  enableCollaboration = true, // Enable by default for edit mode
+  enableCollaboration = true, 
 }: Props) {
   const [showMediaSelector, setShowMediaSelector] = useState(false)
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
@@ -53,41 +52,62 @@ export default function Editor({
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected')
   const [connectedUsers, setConnectedUsers] = useState<any[]>([])
 
-  // Create collaboration provider when postId is available and collaboration is enabled
+  
   const collabProvider = useMemo(() => {
     if (postId && enableCollaboration && !readOnly) {
-      return new CollaborationProvider(postId)
+      return CollaborationProvider.getInstance(postId)
     }
     return null
   }, [postId, enableCollaboration, readOnly])
 
-  // Setup collaboration provider effects
+  
   useEffect(() => {
     if (collabProvider) {
       setCollaborationProvider(collabProvider)
+      setConnectionStatus('connecting')
 
-      // Listen for connection status changes
+      
       const updateStatus = () => {
-        setConnectionStatus(collabProvider.getConnectionStatus() === 'connected' ? 'connected' : 'connecting')
+        
+        setTimeout(() => {
+          const status = collabProvider.getConnectionStatus()
+          console.log('Connection status update:', status)
+          setConnectionStatus(status)
+        }, 0)
       }
 
-      // Listen for user presence changes
+      
       const updateUsers = () => {
-        setConnectedUsers(collabProvider.getConnectedUsers())
+        
+        setTimeout(() => {
+          const users = collabProvider.getConnectedUsers()
+          console.log('Connected users update:', users.length)
+          setConnectedUsers(users)
+        }, 0)
       }
 
+      
+      const statusTimer = setInterval(updateStatus, 1000) 
+      
       collabProvider.provider.on('status', updateStatus)
+      collabProvider.provider.on('connect', updateStatus)
+      collabProvider.provider.on('disconnect', updateStatus)
       collabProvider.provider.awareness.on('change', updateUsers)
 
-      // Initial status
+      
       updateStatus()
       updateUsers()
 
       return () => {
+        clearInterval(statusTimer)
         collabProvider.provider.off('status', updateStatus)
+        collabProvider.provider.off('connect', updateStatus)
+        collabProvider.provider.off('disconnect', updateStatus)
         collabProvider.provider.awareness.off('change', updateUsers)
-        collabProvider.destroy()
+        
       }
+    } else {
+      setConnectionStatus('disconnected')
     }
   }, [collabProvider])
 
@@ -126,7 +146,7 @@ export default function Editor({
     }
   }, [])
 
-  // Create editor extensions based on collaboration mode
+  
   const extensions = useMemo(() => {
     const baseExtensions = [
       StarterKit.configure({
@@ -134,15 +154,12 @@ export default function Editor({
         codeBlock: false,
         dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
         link: false,
-        // Disable history when using collaboration (Yjs handles this)
-        history: !collabProvider,
       }),
       CodeBlockLowlight.configure({
         lowlight,
         defaultLanguage: "javascript",
       }),
       Typography,
-      Underline,
       Link.configure({
         autolink: true,
         openOnClick: false,
@@ -163,8 +180,7 @@ export default function Editor({
       SlashCommandExtension.configure({
         suggestion: {
           items: ({ query }: { query: string }) => {
-            const commands = getSlashCommands(editor!)
-            return commands
+            return getAllBlocks()
               .filter((item) => {
                 const searchTerm = query.toLowerCase()
                 return (
@@ -185,29 +201,53 @@ export default function Editor({
       }),
     ]
 
-    // Add collaboration extensions if provider is available
+    
     if (collabProvider) {
-      baseExtensions.push(
-        Collaboration.configure({
-          document: collabProvider.doc,
-        }),
-        CollaborationCursor.configure({
-          provider: collabProvider.provider,
-          user: {
-            name: connectedUsers.find(u => u.id === collabProvider.provider.awareness.clientID)?.name || 'You',
-            color: connectedUsers.find(u => u.id === collabProvider.provider.awareness.clientID)?.color || '#FF6B6B',
-          },
-        })
-      )
+      const userState = collabProvider.provider.awareness.getLocalState()
+      console.log('Setting up collaboration for user:', userState?.user)
+      console.log('CollabProvider doc exists:', !!collabProvider.doc)
+      console.log('CollabProvider provider exists:', !!collabProvider.provider)
+      
+      
+      if (collabProvider.doc && collabProvider.provider && collabProvider.provider.awareness) {
+        baseExtensions.push(
+          Collaboration.configure({
+            document: collabProvider.doc,
+          })
+        )
+        
+        console.log('Added Collaboration extension successfully')
+        
+        
+        /*
+        try {
+          const cursorExtension = CollaborationCursor.configure({
+            provider: collabProvider.provider,
+            user: userState?.user || {
+              name: 'Anonymous',
+              color: '#3b82f6',
+            },
+          })
+          baseExtensions.push(cursorExtension)
+          console.log('Added CollaborationCursor extension successfully')
+        } catch (error) {
+          console.error('Failed to add CollaborationCursor:', error)
+          
+          console.log('Proceeding without cursors')
+        }
+        */
+      } else {
+        console.warn('CollaborationProvider not fully initialized, skipping collaboration extensions')
+      }
     }
 
     return baseExtensions
-  }, [collabProvider, connectedUsers, getSlashCommands, getCursorCoords, maxChars, placeholder])
+  }, [collabProvider, maxChars, placeholder])
+
 
   const editor = useEditor({
     editable: !readOnly,
     extensions,
-    // Only set initial content if not using collaboration
     content: !collabProvider ? (value || "<p></p>") : undefined,
     autofocus: "end",
     onUpdate({ editor }) {
@@ -221,9 +261,81 @@ export default function Editor({
         "data-placeholder": placeholder,
       },
     },
-  }, [collabProvider]) // Re-create editor when collaboration changes
+  })
 
-  // Handle content updates for non-collaborative mode
+  useEffect(() => {
+    if (collabProvider) {
+      setCollaborationProvider(collabProvider)
+      setConnectionStatus('connecting')
+
+      
+      const updateStatus = () => {
+        
+        setTimeout(() => {
+          const status = collabProvider.getConnectionStatus()
+          console.log('Connection status update:', status)
+          setConnectionStatus(status)
+        }, 0)
+      }
+
+      
+      const updateUsers = () => {
+        
+        setTimeout(() => {
+          const users = collabProvider.getConnectedUsers()
+          console.log('Connected users update:', users.length)
+          setConnectedUsers(users)
+        }, 0)
+      }
+
+      
+      const statusTimer = setInterval(updateStatus, 1000) 
+      
+      collabProvider.provider.on('status', updateStatus)
+      collabProvider.provider.on('connect', updateStatus)
+      collabProvider.provider.on('disconnect', updateStatus)
+      collabProvider.provider.awareness.on('change', updateUsers)
+
+      
+      updateStatus()
+      updateUsers()
+
+      return () => {
+        clearInterval(statusTimer)
+        
+        
+        collabProvider.provider.off('status', updateStatus)
+        collabProvider.provider.off('connect', updateStatus)
+        collabProvider.provider.off('disconnect', updateStatus)
+        collabProvider.provider.awareness.off('change', updateUsers)
+      }
+    } else {
+      setConnectionStatus('disconnected')
+      setConnectedUsers([])
+    }
+  }, [collabProvider])
+
+  
+  useEffect(() => {
+    if (editor && collabProvider && connectionStatus === 'connected' && value && value !== '<p></p>') {
+      
+      const timeout = setTimeout(() => {
+        const currentHTML = editor.getHTML()
+        const isEmpty = currentHTML === '<p></p>' || currentHTML === '' || !currentHTML.trim()
+        
+        console.log('Checking initial content:', { currentHTML, isEmpty, hasValue: !!value })
+        
+        if (isEmpty && value && value !== '<p></p>') {
+          console.log('Setting initial content for collaboration:', value.substring(0, 100))
+          editor.commands.setContent(value, { emitUpdate: false })
+        }
+      }, 2000) 
+
+      return () => clearTimeout(timeout)
+    }
+  }, [editor, collabProvider, connectionStatus, value])
+
+  
   useEffect(() => {
     if (editor && !collabProvider && value !== editor.getHTML()) {
       editor.commands.setContent(value || "<p></p>", {
@@ -232,11 +344,11 @@ export default function Editor({
     }
   }, [value, editor, collabProvider])
 
-  // Setup media block manager
+  
   useEffect(() => {
     if (editor) {
       const manager = new MediaBlockManager(
-        editor,
+        editor, 
         postId,
         (position: number) => {
           setPendingImagePosition(position)
@@ -244,10 +356,6 @@ export default function Editor({
         }
       )
       setMediaBlockManager(manager)
-
-      return () => {
-        manager.destroy()
-      }
     }
   }, [editor, postId])
 
@@ -269,7 +377,7 @@ export default function Editor({
 
   return (
     <div className="notion-editor">
-      {/* Collaboration Status Bar */}
+      {}
       {enableCollaboration && postId && (
         <div className={`collaboration-status collaboration-status--${connectionStatus}`}>
           <div className="collaboration-info">
@@ -285,14 +393,14 @@ export default function Editor({
             )}
           </div>
           
-          {connectedUsers.length > 1 && (
+         {connectedUsers.length > 1 && (
             <div className="connected-users">
               {connectedUsers
                 .filter(user => user.id !== collabProvider?.provider.awareness.clientID)
                 .slice(0, 3)
                 .map((user, index) => (
                   <div 
-                    key={user.id} 
+                    key={`user-${user.id}-${user.name}-${index}`}  
                     className="user-avatar"
                     style={{ backgroundColor: user.color }}
                     title={user.name}
@@ -302,7 +410,7 @@ export default function Editor({
                 ))
               }
               {connectedUsers.length > 4 && (
-                <div className="user-avatar user-avatar--more">
+                <div key="more-users" className="user-avatar user-avatar--more">
                   +{connectedUsers.length - 4}
                 </div>
               )}
