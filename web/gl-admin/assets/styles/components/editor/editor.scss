@@ -3,6 +3,7 @@
   font-size: 16px;
   line-height: 1.6;
   outline: none;
+  padding: 4rem;
   white-space: pre-wrap;
   word-wrap: break-word;
 
@@ -157,6 +158,38 @@
   border-radius: 8px;
   min-height: 200px;
   position: relative;
+
+  .drag-handle-wrapper {
+    left: 8px;
+    opacity: 0;
+    position: absolute;
+    top: 8px;
+    z-index: 10;
+
+    &.hidden {
+      pointer-events: none;
+    }
+
+    &.visible {
+      opacity: 1;
+      pointer-events: auto;
+      transition: opacity 0.2s ease-in-out;
+    }
+
+    .drag-handle {
+      align-items: center;
+      backdrop-filter: blur(6px);
+      background: #1e2b3b93;
+      border: 1px solid var(--border);
+      border-radius: 0.25rem;
+      color: white;
+      cursor: grab;
+      display: flex;
+      height: 1.5rem;
+      justify-content: center;
+      width: 1.5rem;
+    }
+  }
 
   .editor-wrapper {
   }
