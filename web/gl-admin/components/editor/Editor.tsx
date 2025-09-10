@@ -307,8 +307,16 @@ export default function Editor({
         />
       </BubbleMenu>
       {/* Drag Handle */}
-      <DragHandle editor={editor} onNodeChange={onDragHandleNodeChange} className={`drag-handle-wrapper ${showDrag ? 'visible' : 'hidden'}`}>
-        <div className="drag-handle" title="Drag to move block">
+      <DragHandle editor={editor} onNodeChange={onDragHandleNodeChange}>
+        <div
+          className="
+            flex items-center justify-center text-md text-white
+            mr-1.5 h-6 w-5 rounded-sm drag-handle cursor-grab
+            bg-gray-800 hover:bg-gray-700"
+          title="Drag to move block"
+          onMouseDown={(e) => (e.currentTarget.style.cursor = 'grabbing')}
+          onMouseUp={(e) => (e.currentTarget.style.cursor = 'grab')}
+        >
           ⋮⋮
         </div>
       </DragHandle>
