@@ -1,4 +1,4 @@
-import type { SlashCommandItem } from "../SlashCommand"
+import type { Block } from "./index"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { getMediaURL } from "@gl-admin/lib/api"
 import { createPostMedia } from "@gl-admin/lib/api/posts"
@@ -74,11 +74,9 @@ export class MediaBlockManager {
 
   async handleMediaSelect(media: Media, imagePosition: number): Promise<void> {
     const imageUrl = getMediaURL(media.media_path)
-
     const { view } = this.editor
     const { state } = view
     const { doc } = state
-
     const resolvedPos = doc.resolve(imagePosition)
     const imageNode = resolvedPos.nodeAfter
 
@@ -108,7 +106,7 @@ export class MediaBlockManager {
   }
 }
 
-export const createMediaBlocks = (): SlashCommandItem[] => [
+export const createMediaBlocks = (): Block[] => [
   {
     title: "Image",
     description: "Add an image from media library",

@@ -24,7 +24,6 @@ export function useSelect(disabled: boolean = false) {
         setOptionsStyle({
             top: showAbove ? undefined : "100%",
             bottom: showAbove ? "100%" : undefined,
-            borderRadius: showAbove ? "4px 4px 0 0" : "0 0 4px 4px",
         });
 
         setOpen((o) => !o);

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react"
-import { EditorContent, useEditor } from "@tiptap/react"
+import { EditorContent, useEditor, ReactRenderer } from "@tiptap/react"
+import DragHandle from "@tiptap/extension-drag-handle-react"
 import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
 import Collaboration from "@tiptap/extension-collaboration"
@@ -15,7 +16,10 @@ import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
-import { getAllBlocks } from "./blocks"
+import { getCursorCoords } from "./utils/cursorCoords"
+import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "./utils/TurnInto"
+import CommandSelect, { type CommandSelectOption } from "./ui/CommandSelect"
+import { getSlashCommandItems, getTurnIntoCommandOptions } from "./blocks"
 import { MediaBlockManager } from "./blocks/mediaBlocks"
 import FeaturedImageSelector from "./FeaturedImageSelector"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
@@ -49,6 +53,7 @@ export default function Editor({
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
   const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
 
+  // Collaboration provider (your feature)
   const collabProvider = useMemo(() => {
     if (postId && enableCollaboration && !readOnly) {
       return CollaborationProvider.getInstance(postId)
@@ -56,41 +61,30 @@ export default function Editor({
     return null
   }, [postId, enableCollaboration, readOnly])
 
-  const getSlashCommands = useCallback((editor: TiptapEditor) => {
-    return getAllBlocks()
-  }, [])
-
-  const getCursorCoords = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
-    const { view } = editor
-    const { from } = range
-
-    try {
-      const coords = view.coordsAtPos(from)
-      return {
-        x: coords.left,
-        y: coords.bottom,
-        left: coords.left,
-        right: coords.right,
-        top: coords.top,
-        bottom: coords.bottom,
-        width: coords.right - coords.left,
-        height: coords.bottom - coords.top,
-      }
-    } catch (error) {
-      const editorRect = view.dom.getBoundingClientRect()
-      return {
-        x: editorRect.left + 20,
-        y: editorRect.top + 40,
-        left: editorRect.left + 20,
-        right: editorRect.left + 40,
-        top: editorRect.top + 20,
-        bottom: editorRect.top + 40,
-        width: 20,
-        height: 20,
-      }
+  // Drag handle state (main branch feature)
+  const [showDrag, setShowDrag] = useState(false)
+  const onDragHandleNodeChange = useCallback((data: { node: any; editor: TiptapEditor; pos: number }) => {
+    if (data.node && data.node.textContent && data.node.textContent.trim().length > 0) {
+      setShowDrag(true)
+    } else {
+      setShowDrag(false)
     }
   }, [])
 
+  const headingLabel = (lvl?: number) => {
+    switch (lvl) {
+      case 1:
+        return "Heading 1…"
+      case 2:
+        return "Heading 2…"
+      case 3:
+        return "Heading 3…"
+      default:
+        return "Heading…"
+    }
+  }
+
+  // Extensions with both collaboration and drag handle
   const extensions = useMemo(() => {
     const baseExtensions = [
       StarterKit.configure({
@@ -119,12 +113,42 @@ export default function Editor({
         },
       }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Placeholder.configure({ placeholder }),
+      Placeholder.configure({
+        includeChildren: true,
+        showOnlyWhenEditable: true,
+        placeholder: ({ node, editor }) => {
+          switch (node.type.name) {
+            case "codeBlock":
+              return "Write code…"
+            case "blockquote":
+              return "Write a quote…"
+            case "horizontalRule":
+              return ""
+            case "image":
+              return ""
+            case "heading":
+              return headingLabel(node.attrs?.level)
+            case "listItem":
+              return editor.isActive("orderedList") ? "List item…" : "List item…"
+            case "paragraph":
+            default: {
+              if (editor.isActive("codeBlock")) return "Write code…"
+              if (editor.isActive("blockquote")) return "Write a quote…"
+              if (editor.isActive("orderedList")) return "List item…"
+              if (editor.isActive("bulletList")) return "List item…"
+              if (editor.isActive("heading", { level: 1 })) return headingLabel(1)
+              if (editor.isActive("heading", { level: 2 })) return headingLabel(2)
+              if (editor.isActive("heading", { level: 3 })) return headingLabel(3)
+              return placeholder || "Type '/' for commands…"
+            }
+          }
+        },
+      }),
       CharacterCount.configure({ limit: maxChars }),
       SlashCommandExtension.configure({
         suggestion: {
           items: ({ query }: { query: string }) => {
-            return getAllBlocks()
+            return getSlashCommandItems()
               .filter((item) => {
                 const searchTerm = query.toLowerCase()
                 return (
@@ -145,6 +169,7 @@ export default function Editor({
       }),
     ]
 
+    // Add collaboration extensions (your feature)
     if (collabProvider) {
       const userState = collabProvider.provider.awareness.getLocalState()
       console.log("Setting up collaboration for user:", userState?.user)
@@ -183,12 +208,38 @@ export default function Editor({
     },
     editorProps: {
       attributes: {
-        class: "ProseMirror notion-editor-content",
-        "data-placeholder": placeholder,
+        class: "gl-content-editor notion-editor-content",
       },
     },
   })
 
+  const [turnIntoOptions, setTurnIntoOptions] = useState<CommandSelectOption[]>([])
+  const [turnInto, setTurnInto] = useState<TurnIntoValue>("paragraph")
+
+  // Turn-into functionality (main branch)
+  useEffect(() => {
+    if (!editor) return
+    setTurnIntoOptions(getTurnIntoCommandOptions())
+    setTurnInto(computeTurnIntoFromSelection(editor))
+  }, [editor])
+
+  const updateTurnInto = useCallback(() => {
+    if (!editor) return
+    const v = computeTurnIntoFromSelection(editor)
+    setTurnInto(v)
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor) return
+    editor.on("selectionUpdate", updateTurnInto)
+    editor.on("transaction", updateTurnInto)
+    return () => {
+      editor.off("selectionUpdate", updateTurnInto)
+      editor.off("transaction", updateTurnInto)
+    }
+  }, [editor, updateTurnInto])
+
+  // Collaboration synced seeding (your feature)
   useEffect(() => {
     if (!editor || !collabProvider) return
     const onSynced = (isSynced: boolean) => {
@@ -205,14 +256,20 @@ export default function Editor({
     return () => collabProvider.provider.off("synced", onSynced)
   }, [editor, collabProvider, value])
 
+  // Content updates for non-collaboration mode
   useEffect(() => {
-    if (editor && !collabProvider && value !== editor.getHTML()) {
+    if (!editor) return
+    const current = editor.getHTML()
+
+    if (value !== current && !collabProvider) {
       editor.commands.setContent(value || "<p></p>", {
         emitUpdate: false,
       })
+      setTurnInto(computeTurnIntoFromSelection(editor))
     }
   }, [value, editor, collabProvider])
 
+  // Media block manager
   useEffect(() => {
     if (editor) {
       const manager = new MediaBlockManager(editor, postId, (position: number) => {
@@ -223,6 +280,7 @@ export default function Editor({
     }
   }, [editor, postId])
 
+  // Collaboration provider cleanup (your feature)
   useEffect(() => {
     if (!postId || !collabProvider) return
     return () => {
@@ -233,9 +291,7 @@ export default function Editor({
   const handleMediaSelect = useCallback(
     async (media: Media) => {
       if (!mediaBlockManager || pendingImagePosition === null) return
-
       await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
-
       setShowMediaSelector(false)
       setPendingImagePosition(null)
     },
@@ -284,7 +340,29 @@ export default function Editor({
         >
           🔗
         </button>
+        <CommandSelect
+          options={turnIntoOptions}
+          value={turnInto}
+          label="Turn into"
+          onChange={(option: CommandSelectOption) => {
+            if (!editor) return
+            const val = option.value as TurnIntoValue
+            setTurnInto(val)
+            applyTurnInto(editor, val, turnIntoOptions)
+          }}
+        />
       </BubbleMenu>
+
+      {/* Drag Handle - from main branch */}
+      <DragHandle
+        editor={editor}
+        onNodeChange={onDragHandleNodeChange}
+        className={`drag-handle-wrapper ${showDrag ? "visible" : "hidden"}`}
+      >
+        <div className="drag-handle" title="Drag to move block">
+          ⋮⋮
+        </div>
+      </DragHandle>
 
       {/* Main Editor */}
       <div className="editor-wrapper">

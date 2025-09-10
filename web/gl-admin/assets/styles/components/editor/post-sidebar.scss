@@ -1,9 +1,8 @@
-@import "../../variables";
+@use "../../variables";
 
 .post-settings {
   background: var(--sidebar-background);
   border-left: 1px solid var(--border);
-
   color: var(--text-primary);
   height: calc(100vh - 60px);
   overflow-y: auto;
@@ -121,7 +120,7 @@
       font-size: 14px;
       font-weight: 600;
       letter-spacing: 0.5px;
-      margin: 0 0 16px 0;
+      margin: 0 0 16px;
       text-transform: uppercase;
     }
   }
@@ -155,7 +154,7 @@
 
       &:focus {
         border-color: var(--primary);
-        box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.1);
+        box-shadow: 0 0 0 2px rgb(var(--primary-rgb), 0.1);
         outline: none;
       }
 
@@ -222,7 +221,7 @@
   }
 
   &__media-remove {
-    background: rgba(0, 0, 0, 0.7);
+    background: rgb(0 0 0 / 70%);
     border: none;
     border-radius: 4px;
     color: white;
@@ -234,12 +233,12 @@
     top: 8px;
 
     &:hover {
-      background: rgba(0, 0, 0, 0.8);
+      background: rgb(0 0 0 / 80%);
     }
   }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .post-settings {
     right: -100vw;
     width: 100vw;
@@ -257,7 +256,7 @@
 }
 }
 
-@media (max-width: 1200px) {
+@media (width <= 1200px) {
   .post-settings {
     right: -350px;
     width: 350px;
