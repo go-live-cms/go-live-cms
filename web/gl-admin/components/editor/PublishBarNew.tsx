@@ -1,5 +1,6 @@
 import React from "react"
 import type { Post } from "@gl-admin/lib/types"
+import type { CollabStatus, CollabUser } from "@gl-admin/components/editor/useCollabPresence"
 import "@gl-admin/assets/styles/components/editor/publish-bar.scss"
 
 interface PublishBarProps {
@@ -11,6 +12,8 @@ interface PublishBarProps {
   saveStatus: "saved" | "saving" | "error" | null
   onSettingsToggle: () => void
   onPreview?: () => void
+  collabStatus?: CollabStatus
+  collabUsers?: CollabUser[]
 }
 
 export default function PublishBar({
@@ -22,7 +25,12 @@ export default function PublishBar({
   saveStatus,
   onSettingsToggle,
   onPreview,
+  collabStatus = "disconnected",
+  collabUsers = [],
 }: PublishBarProps) {
+  const statusLabel =
+    collabStatus === "connected" ? "Connected" : collabStatus === "connecting" ? "Connecting…" : "Offline"
+
   const getSaveStatusText = () => {
     switch (saveStatus) {
       case "saving":
@@ -49,14 +57,42 @@ export default function PublishBar({
 
   return (
     <div className="publish-bar">
-      <div className="publish-bar__left">
-        <div className="publish-bar__left__title">{post.title || "Untitled"}</div>
-        <div className={`publish-bar__left__status publish-bar__left__status--${post.post_status}`}>
-          {post.post_status}
+      {/* left side: presence */}
+      <div className="publish-bar__presence" title={statusLabel}>
+        <span className={`presence-dot presence-dot--${collabStatus}`} />
+        {collabUsers.slice(0, 3).map((u) => (
+          <div
+            key={`presence-${u.clientId}`}
+            className="presence-avatar"
+            style={{ backgroundColor: u.color || "#999" }}
+            title={`${u.name ?? "Guest"} • ${statusLabel}`}
+          >
+            {(u.name ?? "G").charAt(0).toUpperCase()}
+          </div>
+        ))}
+        {collabUsers.length > 3 && (
+          <div className="presence-avatar presence-avatar--more" title={`${collabUsers.length - 3} more`}>
+            +{collabUsers.length - 3}
+          </div>
+        )}
+
+        {/* Hover card */}
+        <div className="presence-hover">
+          <div className="presence-hover__header">{statusLabel}</div>
+          {collabUsers.length === 0 && (
+            <div className="presence-hover__row presence-hover__row--muted">No other editors</div>
+          )}
+          {collabUsers.map((u) => (
+            <div key={`hover-${u.clientId}`} className="presence-hover__row">
+              <span className="presence-hover__swatch" style={{ backgroundColor: u.color || "#999" }} />
+              <span className="presence-hover__name">{u.name ?? "Guest"}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      <div className="publish-bar__right">
+      {/* right side: existing controls (save/publish/settings) */}
+      <div className="publish-bar__actions">
         {saveStatus && (
           <div className={`publish-bar__right__save-status publish-bar__right__save-status--${saveStatus}`}>
             {getSaveStatusText()}

@@ -119,13 +119,17 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
             render()
           }
 
+          const onBlur = () => awareness.setLocalStateField("selection", null)
+
           pushSelection()
           render()
 
+          window.addEventListener("blur", onBlur)
           awareness.on("change", onAwarenessChange)
 
           return {
             destroy() {
+              window.removeEventListener("blur", onBlur)
               awareness.off("change", onAwarenessChange)
               cancelAnimationFrame(raf)
               awareness.setLocalStateField("selection", null)

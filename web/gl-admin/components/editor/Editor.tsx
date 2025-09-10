@@ -48,9 +48,6 @@ export default function Editor({
   const [showMediaSelector, setShowMediaSelector] = useState(false)
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
   const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
-  const [collaborationProvider, setCollaborationProvider] = useState<CollaborationProvider | null>(null)
-  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected")
-  const [connectedUsers, setConnectedUsers] = useState<any[]>([])
 
   const collabProvider = useMemo(() => {
     if (postId && enableCollaboration && !readOnly) {
@@ -58,49 +55,6 @@ export default function Editor({
     }
     return null
   }, [postId, enableCollaboration, readOnly])
-
-  const otherUsers = useMemo(() => {
-    const me = collabProvider?.provider.awareness.clientID
-    return connectedUsers.filter((u) => u.clientId !== me)
-  }, [connectedUsers, collabProvider])
-
-  useEffect(() => {
-    if (collabProvider) {
-      setCollaborationProvider(collabProvider)
-      setConnectionStatus("connecting")
-
-      const updateStatus = (evt?: any) => {
-        const rawStatus = evt?.status ?? collabProvider.getConnectionStatus()
-        const statusMap = { connected: "connected", connecting: "connecting", disconnected: "disconnected" } as const
-        const mappedStatus = statusMap[rawStatus as keyof typeof statusMap] ?? "connecting"
-        console.log("Connection status update:", mappedStatus)
-        setConnectionStatus(mappedStatus)
-      }
-
-      const updateUsers = () => {
-        const users = collabProvider.getConnectedUsers()
-        console.log("Connected users update:", users.length)
-        setConnectedUsers(users)
-      }
-
-      collabProvider.provider.on("status", updateStatus)
-      collabProvider.provider.on("connect", updateStatus)
-      collabProvider.provider.on("disconnect", updateStatus)
-      collabProvider.provider.awareness.on("change", updateUsers)
-
-      updateStatus()
-      updateUsers()
-
-      return () => {
-        collabProvider.provider.off("status", updateStatus)
-        collabProvider.provider.off("connect", updateStatus)
-        collabProvider.provider.off("disconnect", updateStatus)
-        collabProvider.provider.awareness.off("change", updateUsers)
-      }
-    } else {
-      setConnectionStatus("disconnected")
-    }
-  }, [collabProvider])
 
   const getSlashCommands = useCallback((editor: TiptapEditor) => {
     return getAllBlocks()
@@ -297,47 +251,6 @@ export default function Editor({
 
   return (
     <div className="notion-editor">
-      {}
-      {enableCollaboration && postId && (
-        <div className={`collaboration-status collaboration-status--${connectionStatus}`}>
-          <div className="collaboration-info">
-            <span className={`status-indicator status-indicator--${connectionStatus}`}></span>
-            <span className="status-text">
-              {connectionStatus === "connected"
-                ? "Connected"
-                : connectionStatus === "connecting"
-                  ? "Connecting..."
-                  : "Offline"}
-            </span>
-            {otherUsers.length > 0 && (
-              <span className="user-count">
-                {otherUsers.length} other{otherUsers.length === 1 ? "" : "s"} editing
-              </span>
-            )}
-          </div>
-
-          {otherUsers.length > 0 && (
-            <div className="connected-users">
-              {otherUsers.slice(0, 3).map((user, index) => (
-                <div
-                  key={`user-${user.clientId}-${user.name}-${index}`}
-                  className="user-avatar"
-                  style={{ backgroundColor: user.color }}
-                  title={user.name}
-                >
-                  {user.name?.charAt(0).toUpperCase()}
-                </div>
-              ))}
-              {otherUsers.length > 3 && (
-                <div key="more-users" className="user-avatar user-avatar--more">
-                  +{otherUsers.length - 3}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Bubble Menu - appears when text is selected */}
       <BubbleMenu editor={editor} className="bubble-menu">
         <button

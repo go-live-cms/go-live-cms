@@ -8,6 +8,7 @@ import Editor from "@gl-admin/components/editor/Editor"
 import PublishBar from "@gl-admin/components/editor/PublishBarNew"
 import PostSidebar from "@gl-admin/components/editor/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
+import { useCollabPresence } from "@gl-admin/components/editor/useCollabPresence"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 import "@gl-admin/assets/styles/components/Toast.scss"
 
@@ -68,6 +69,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     created_at: initialData?.created_at || new Date().toISOString(),
     changed_at: initialData?.changed_at || new Date().toISOString(),
   }
+
+  const { status: collabStatus, users: collabUsers } = useCollabPresence(initialData?.id, mode === "edit")
 
   const handlePostUpdate = (updates: Partial<Post>) => {
     setFormData((prev) => ({
@@ -320,6 +323,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         isPublishing={isSubmitting}
         saveStatus={saveStatus}
         onSettingsToggle={() => setSidebarVisible(!sidebarVisible)}
+        collabStatus={collabStatus}
+        collabUsers={collabUsers}
       />
 
       <div
@@ -349,7 +354,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               }}
               placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
               postId={initialData?.id}
-              enableCollaboration={mode === 'edit'} // Only enable collaboration in edit mode
+              enableCollaboration={mode === "edit"} // Only enable collaboration in edit mode
             />
           </div>
         </div>
