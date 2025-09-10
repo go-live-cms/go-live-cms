@@ -2,6 +2,7 @@ import { WebsocketProvider } from "y-websocket"
 import { Doc as YDoc } from "yjs"
 import { IndexeddbPersistence } from "y-indexeddb"
 import { authManager } from "../auth"
+import { createWSTicket } from "../api/sessions"
 
 const activeProviders = new Map<number, CollaborationProvider>()
 const refCounts = new Map<number, number>()
@@ -14,7 +15,7 @@ export class CollaborationProvider {
   public persistence: IndexeddbPersistence
   private postId: number
 
-  static getInstance(postId: number): CollaborationProvider {
+  static async getInstance(postId: number): Promise<CollaborationProvider> {
     const t = releaseTimers.get(postId)
     if (t) {
       clearTimeout(t)
@@ -29,9 +30,15 @@ export class CollaborationProvider {
     }
 
     console.log(`Creating new provider for post ${postId}`)
-    const instance = new CollaborationProvider(postId)
+    const instance = await CollaborationProvider.create(postId)
     activeProviders.set(postId, instance)
     refCounts.set(postId, 1)
+    return instance
+  }
+
+  private static async create(postId: number): Promise<CollaborationProvider> {
+    const instance = new CollaborationProvider(postId)
+    await instance.initialize()
     return instance
   }
 
@@ -43,9 +50,10 @@ export class CollaborationProvider {
     }
 
     this.doc = new YDoc()
-
     this.persistence = new IndexeddbPersistence(`post-${postId}`, this.doc)
+  }
 
+  private async initialize() {
     const user = authManager.getState().user
     const userInfo = {
       name: user?.full_name || user?.username || "Anonymous",
@@ -56,13 +64,17 @@ export class CollaborationProvider {
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
     const wsHost = process.env.NODE_ENV === "development" ? "localhost:1234" : `${window.location.host}/collab`
 
-    const token = authManager.getAccessToken()
+    const ticket = await this.getWebSocketTicket(this.postId)
+    if (!ticket) {
+      throw new Error("Failed to get WebSocket ticket for collaboration")
+    }
+
     const baseUrl = `${wsProtocol}//${wsHost}/`
 
-    console.log("WebSocket URL:", baseUrl.replace(/token=[^&]+/, "token=***"))
+    console.log("WebSocket URL:", baseUrl + "post-" + this.postId + "?ticket=***")
 
-    this.provider = new WebsocketProvider(baseUrl, `post-${postId}`, this.doc, {
-      params: token ? { token } : {},
+    this.provider = new WebsocketProvider(baseUrl, `post-${this.postId}`, this.doc, {
+      params: { ticket },
       maxBackoffTime: 5000,
       resyncInterval: 2000,
       connect: true,
@@ -70,12 +82,23 @@ export class CollaborationProvider {
 
     this.provider.awareness.setLocalStateField("user", userInfo)
 
+    // Enhanced connection handling with security considerations
     this.provider.on("status", (event: any) => {
       console.log("Collaboration status event:", event)
     })
 
     this.provider.on("connection-close", (event: any) => {
-      console.log("Collaboration connection closed:", event)
+      const { code, reason } = event
+      console.log(`Collaboration connection closed: ${code} - ${reason}`)
+
+      // Handle authentication failures
+      if (code === 4401) {
+        console.error("❌ Authentication failed - token invalid or expired")
+        // Try to refresh token and reconnect
+        this.handleAuthFailure()
+      } else if (code === 4403) {
+        console.error("❌ Access forbidden - insufficient permissions")
+      }
     })
 
     this.provider.on("connection-error", (event: any) => {
@@ -83,14 +106,81 @@ export class CollaborationProvider {
     })
 
     this.provider.on("connect", () => {
-      console.log("WebSocket connected successfully")
+      console.log("✅ WebSocket connected successfully")
     })
 
     this.provider.on("disconnect", () => {
-      console.log("WebSocket disconnected")
+      console.log("🔌 WebSocket disconnected")
     })
 
-    this.provider.on("status", () => {})
+    // Setup page unload cleanup
+    this.setupCleanupHandlers()
+  }
+
+  private async getWebSocketTicket(postId: number): Promise<string | null> {
+    try {
+      const token = authManager.getAccessToken()
+      if (!token) {
+        throw new Error("No access token available")
+      }
+
+      const response = await createWSTicket(postId, token)
+      return response.ticket
+    } catch (error) {
+      console.error("Failed to get WebSocket ticket:", error)
+      return null
+    }
+  }
+
+  private async handleAuthFailure() {
+    try {
+      console.log("🔄 Attempting to refresh token and reconnect...")
+      const refreshed = await authManager.refreshAccessToken()
+
+      if (refreshed) {
+        // Get new token and attempt reconnect
+        const newToken = authManager.getAccessToken()
+        if (newToken && this.provider) {
+          // Update provider with new token
+          ;(this.provider as any).params = { token: newToken }
+          this.provider.connect()
+          console.log("✅ Token refreshed, attempting reconnection")
+        }
+      } else {
+        console.error("❌ Token refresh failed - user needs to log in again")
+        // Could emit an event here for the UI to handle
+      }
+    } catch (error) {
+      console.error("❌ Auth recovery failed:", error)
+    }
+  }
+
+  private setupCleanupHandlers() {
+    // Clear selections on window blur/focus loss
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Clear awareness state when tab becomes hidden
+        this.provider?.awareness?.setLocalStateField("cursor", null)
+        this.provider?.awareness?.setLocalStateField("selection", null)
+      }
+    }
+
+    // Clean disconnect on page unload
+    const handleBeforeUnload = () => {
+      if (this.provider) {
+        this.provider.disconnect()
+      }
+    }
+
+    // Add event listeners
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("beforeunload", handleBeforeUnload)
+
+    // Store cleanup function for later removal
+    ;(this as any)._cleanup = () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
   }
 
   private generateUserColor(userId: number): string {
@@ -99,6 +189,11 @@ export class CollaborationProvider {
   }
 
   public destroy() {
+    // Run cleanup handlers
+    if ((this as any)._cleanup) {
+      ;(this as any)._cleanup()
+    }
+
     activeProviders.delete(this.postId)
 
     this.provider?.disconnect()

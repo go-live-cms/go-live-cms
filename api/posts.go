@@ -6,10 +6,25 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-live-cms/go-live-cms/token"
+	"github.com/google/uuid"
+)
+
+// Simple in-memory ticket store (replace with Redis in production)
+type WSTicket struct {
+	UserID    int64
+	PostID    int64
+	ExpiresAt time.Time
+}
+
+var (
+	wsTicketStore = make(map[string]WSTicket)
+	wsTicketMutex = sync.RWMutex{}
 )
 
 type CreatePostRequest struct {
@@ -1421,4 +1436,114 @@ func (server *Server) getPostMedia(c *gin.Context) {
 		}
 		c.JSON(http.StatusOK, gin.H{"data": postMedia})
 	}
+}
+
+type CreateWSTicketRequest struct {
+	PostID int64 `json:"post_id" binding:"required"`
+}
+
+type CreateWSTicketResponse struct {
+	Ticket    string    `json:"ticket"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (server *Server) createWSTicket(c *gin.Context) {
+	var req CreateWSTicketRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get the authenticated user from the middleware
+	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	// Verify the post exists and the user has access to it
+	post, err := server.store.GetPost(c.Request.Context(), req.PostID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+
+	// Check if the user is an author of this post (basic access control)
+	// You can expand this logic based on your requirements
+	if post.UserID != authPayload.UserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied to this post"})
+		return
+	}
+
+	// Create a short-lived WebSocket ticket (2 minutes) - using UUID instead of PASETO
+	ticket := uuid.New().String()
+	ticketDuration := 2 * time.Minute
+	expiresAt := time.Now().Add(ticketDuration)
+
+	// Store ticket in memory store (replace with Redis in production)
+	wsTicketMutex.Lock()
+	wsTicketStore[ticket] = WSTicket{
+		UserID:    authPayload.UserID,
+		PostID:    req.PostID,
+		ExpiresAt: expiresAt,
+	}
+	wsTicketMutex.Unlock()
+
+	response := CreateWSTicketResponse{
+		Ticket:    ticket,
+		ExpiresAt: expiresAt,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+type VerifyWSTicketRequest struct {
+	Ticket string `json:"ticket" binding:"required"`
+	Room   string `json:"room" binding:"required"`
+}
+
+type VerifyWSTicketResponse struct {
+	UserID int64 `json:"user_id"`
+	PostID int64 `json:"post_id"`
+}
+
+func (server *Server) verifyWSTicket(c *gin.Context) {
+	var req VerifyWSTicketRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get and consume ticket atomically
+	wsTicketMutex.Lock()
+	ticket, exists := wsTicketStore[req.Ticket]
+	if exists {
+		delete(wsTicketStore, req.Ticket) // One-time use
+	}
+	wsTicketMutex.Unlock()
+
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired ticket"})
+		return
+	}
+
+	// Check expiration
+	if time.Now().After(ticket.ExpiresAt) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "ticket expired"})
+		return
+	}
+
+	// Verify room matches post
+	expectedRoom := fmt.Sprintf("post-%d", ticket.PostID)
+	if req.Room != expectedRoom {
+		c.JSON(http.StatusForbidden, gin.H{"error": "ticket not valid for this room"})
+		return
+	}
+
+	response := VerifyWSTicketResponse{
+		UserID: ticket.UserID,
+		PostID: ticket.PostID,
+	}
+
+	c.JSON(http.StatusOK, response)
 }

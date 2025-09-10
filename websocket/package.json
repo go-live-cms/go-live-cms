@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "y-websocket": "^2.0.4",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "paseto": "^3.1.4",
+    "dotenv": "^16.3.1"
   }
 }

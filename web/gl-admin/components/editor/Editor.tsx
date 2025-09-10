@@ -52,13 +52,14 @@ export default function Editor({
   const [showMediaSelector, setShowMediaSelector] = useState(false)
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
   const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
+  const [collabProvider, setCollabProvider] = useState<CollaborationProvider | null>(null)
 
-  // Collaboration provider (your feature)
-  const collabProvider = useMemo(() => {
+  useEffect(() => {
     if (postId && enableCollaboration && !readOnly) {
-      return CollaborationProvider.getInstance(postId)
+      CollaborationProvider.getInstance(postId).then(setCollabProvider).catch(console.error)
+    } else {
+      setCollabProvider(null)
     }
-    return null
   }, [postId, enableCollaboration, readOnly])
 
   // Drag handle state (main branch feature)

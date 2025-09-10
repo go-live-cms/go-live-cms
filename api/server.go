@@ -111,6 +111,11 @@ func (server *Server) setupRoutes() {
 
 	posts.GET("/type/:type", server.getPostsByType) // GET /api/v1/posts/type/product
 
+	// WebSocket collaboration ticket endpoint
+	ws := v1.Group("/ws")
+	ws.POST("/ticket", authMiddleware(server.tokenMaker), server.createWSTicket) // POST /api/v1/ws/ticket
+	ws.POST("/verify", server.verifyWSTicket)                                    // POST /api/v1/ws/verify (internal use)
+
 	postTypes := v1.Group("/post-types")
 	postTypes.GET("", server.getPostTypes)      // GET /api/v1/post-types
 	postTypes.GET("/:name", server.getPostType) // GET /api/v1/post-types/product

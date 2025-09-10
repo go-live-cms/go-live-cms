@@ -40,6 +40,24 @@ func (maker *PasetoMaker) CreateRefreshToken(userID int64, username string, dura
 	return maker.paseto.Encrypt(maker.symmetricKey, payload, nil)
 }
 
+func (maker *PasetoMaker) CreateWSTicket(userID int64, username string, postID int64, duration time.Duration) (string, error) {
+	payload, err := NewPayload(userID, username, duration, "ws_ticket")
+	if err != nil {
+		return "", err
+	}
+
+	// Add custom claims for the ticket
+	ticketPayload := struct {
+		*Payload
+		PostID int64 `json:"post_id"`
+	}{
+		Payload: payload,
+		PostID:  postID,
+	}
+
+	return maker.paseto.Encrypt(maker.symmetricKey, ticketPayload, nil)
+}
+
 func (maker *PasetoMaker) VerifyToken(token string) (*Payload, error) {
 	payload := &Payload{}
 

@@ -24,3 +24,7 @@ app.env
 
 /uploads/media/*
 /api/tmp
+
+# WebSocket server
+# add this back later? /websocket/.env
+/websocket/node_modules/

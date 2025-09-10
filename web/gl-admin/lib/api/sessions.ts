@@ -30,3 +30,12 @@ export async function blockSession(sessionId: string, token?: string): Promise<a
     token,
   })
 }
+
+// WebSocket collaboration functions
+export async function createWSTicket(postId: number, token?: string): Promise<{ ticket: string; expires_at: string }> {
+  return apiCall("/ws/ticket", {
+    method: "POST",
+    body: { post_id: postId },
+    token,
+  })
+}
