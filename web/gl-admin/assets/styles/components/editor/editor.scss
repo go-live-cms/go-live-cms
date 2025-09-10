@@ -12,10 +12,14 @@
   }
 
   &.gl-content-editor .is-empty::before {
-    color: #9ca3af;
-    content: attr(data-placeholder);
-    pointer-events: none;
-    position: absolute;
+      color: #9ca3af;
+      content: attr(data-placeholder);
+      font-size: 1rem;
+      font-weight: 500;
+      height: fit-content;
+      pointer-events: none;
+      position: absolute;
+      width: fit-content;
   }
 
   h1 {
@@ -189,9 +193,6 @@
       justify-content: center;
       width: 1.5rem;
     }
-  }
-
-  .editor-wrapper {
   }
 
   .floating-menu {
