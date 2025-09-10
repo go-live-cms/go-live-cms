@@ -49,6 +49,10 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
             const decos: Decoration[] = []
             const size = view.state.doc.content.size
 
+            if (size === 0) {
+              return DecorationSet.empty
+            }
+
             for (const [clientId, s] of states.entries()) {
               if (clientId === me) continue
               const user = s?.user || {}
@@ -124,6 +128,7 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
             destroy() {
               awareness.off("change", onAwarenessChange)
               cancelAnimationFrame(raf)
+              awareness.setLocalStateField("selection", null)
             },
             update() {
               cancelAnimationFrame(raf)

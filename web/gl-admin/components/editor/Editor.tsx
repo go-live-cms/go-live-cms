@@ -59,15 +59,22 @@ export default function Editor({
     return null
   }, [postId, enableCollaboration, readOnly])
 
+  const otherUsers = useMemo(() => {
+    const me = collabProvider?.provider.awareness.clientID
+    return connectedUsers.filter((u) => u.clientId !== me)
+  }, [connectedUsers, collabProvider])
+
   useEffect(() => {
     if (collabProvider) {
       setCollaborationProvider(collabProvider)
       setConnectionStatus("connecting")
 
       const updateStatus = (evt?: any) => {
-        const status = evt?.status ?? collabProvider.getConnectionStatus()
-        console.log("Connection status update:", status)
-        setConnectionStatus(status as any)
+        const rawStatus = evt?.status ?? collabProvider.getConnectionStatus()
+        const statusMap = { connected: "connected", connecting: "connecting", disconnected: "disconnected" } as const
+        const mappedStatus = statusMap[rawStatus as keyof typeof statusMap] ?? "connecting"
+        console.log("Connection status update:", mappedStatus)
+        setConnectionStatus(mappedStatus)
       }
 
       const updateUsers = () => {
@@ -233,8 +240,9 @@ export default function Editor({
     const onSynced = (isSynced: boolean) => {
       if (!isSynced) return
       const frag = collabProvider.doc.getXmlFragment("prosemirror")
-      const empty = frag.length === 0 && editor.isEmpty
-      if (empty && value && value !== "<p></p>") {
+      const emptyShared = frag.length === 0
+      const emptyLocal = editor.isEmpty
+      if (isSynced && emptyShared && emptyLocal && value && value !== "<p></p>") {
         editor.commands.setContent(value, { emitUpdate: false })
       }
       collabProvider.provider.off("synced", onSynced)
@@ -301,35 +309,28 @@ export default function Editor({
                   ? "Connecting..."
                   : "Offline"}
             </span>
-            {connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length > 0 && (
+            {otherUsers.length > 0 && (
               <span className="user-count">
-                {connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length} other
-                {connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length === 1
-                  ? ""
-                  : "s"}{" "}
-                editing
+                {otherUsers.length} other{otherUsers.length === 1 ? "" : "s"} editing
               </span>
             )}
           </div>
 
-          {connectedUsers.length > 0 && (
+          {otherUsers.length > 0 && (
             <div className="connected-users">
-              {connectedUsers
-                .filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID)
-                .slice(0, 3)
-                .map((user, index) => (
-                  <div
-                    key={`user-${user.clientId}-${user.name}-${index}`}
-                    className="user-avatar"
-                    style={{ backgroundColor: user.color }}
-                    title={user.name}
-                  >
-                    {user.name?.charAt(0).toUpperCase()}
-                  </div>
-                ))}
-              {connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length > 3 && (
+              {otherUsers.slice(0, 3).map((user, index) => (
+                <div
+                  key={`user-${user.clientId}-${user.name}-${index}`}
+                  className="user-avatar"
+                  style={{ backgroundColor: user.color }}
+                  title={user.name}
+                >
+                  {user.name?.charAt(0).toUpperCase()}
+                </div>
+              ))}
+              {otherUsers.length > 3 && (
                 <div key="more-users" className="user-avatar user-avatar--more">
-                  +{connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length - 3}
+                  +{otherUsers.length - 3}
                 </div>
               )}
             </div>

@@ -514,3 +514,15 @@
 .collab-caret-label {
   pointer-events: none !important;
 }
+
+// Stable cursor label positioning
+.collab-caret {
+  position: relative;
+}
+
+.collab-caret-label {
+  position: absolute;
+  left: 0;
+  transform: translate(-50%, -110%);
+  will-change: transform;
+}

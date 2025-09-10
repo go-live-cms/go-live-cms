@@ -38,6 +38,10 @@ export class CollaborationProvider {
   private constructor(postId: number) {
     this.postId = postId
 
+    if (typeof window === "undefined") {
+      throw new Error("Collaboration is client-only")
+    }
+
     this.doc = new YDoc()
 
     this.persistence = new IndexeddbPersistence(`post-${postId}`, this.doc)
@@ -54,7 +58,6 @@ export class CollaborationProvider {
 
     const token = authManager.getAccessToken()
     const baseUrl = `${wsProtocol}//${wsHost}/`
-    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : ""
 
     console.log("WebSocket URL:", baseUrl.replace(/token=[^&]+/, "token=***"))
 
