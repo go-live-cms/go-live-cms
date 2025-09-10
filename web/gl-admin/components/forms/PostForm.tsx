@@ -5,10 +5,10 @@ import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
 import Editor from "@gl-admin/components/editor/Editor"
-import PublishBar from "@gl-admin/components/editor/PublishBarNew"
-import PostSidebar from "@gl-admin/components/editor/PostSidebar"
+import PublishBar from "@gl-admin/components/editor/ui/PublishBarNew"
+import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
-import { useCollabPresence } from "@gl-admin/components/editor/useCollabPresence"
+import { useCollabPresence } from "@gl-admin/components/editor/utils/useCollabPresence"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 import "@gl-admin/assets/styles/components/Toast.scss"
 
@@ -222,7 +222,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
   const savePost = async (isPublish: boolean = false) => {
     const setSavingState = isPublish ? setIsSubmitting : setIsSaving
-    const setSaveStatusState = isPublish ? () => {} : setSaveStatus
+    const setSaveStatusState = isPublish ? () => { } : setSaveStatus
 
     setSavingState(true)
     setSaveStatusState("saving")
