@@ -297,7 +297,8 @@ export default function Editor({
         <CommandSelect
           options={turnIntoOptions}
           value={turnInto}
-          onChange={(option) => {
+          label="Turn into"
+          onChange={(option: CommandSelectOption) => {
             if (!editor) return
             const val = option.value as TurnIntoValue
             setTurnInto(val)

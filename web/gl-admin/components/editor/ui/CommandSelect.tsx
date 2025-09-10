@@ -39,7 +39,6 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
 
     return (
         <div className="text-white relative text-sm flex items-center cursor-pointer" ref={ref} style={{ position: "relative" }}>
-            {label && <label className="gl-command-select__label">{label}</label>}
             <div
                 className={`flex items-center gap-1 p-1 ${disabled ? "text-gray-300" : ""}`}
                 onClick={handleSelectClick}
@@ -57,7 +56,7 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
                     className="absolute p-1 py-2 bg-gray-800 rounded-sm text-sm"
                     style={optionsStyle}
                 >
-                    <label className="p-1 pb-2 text-gray-400 block">Turn into</label>
+                    <label className="p-1 pb-2 text-gray-400 block">{label}</label>
                     {options.map((opt) => (
                         <div
                             key={opt.value}
