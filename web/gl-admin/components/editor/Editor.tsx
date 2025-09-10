@@ -4,10 +4,8 @@ import { CollaborationProvider } from "@gl-admin/lib/collaboration/Collaboration
 import BubbleMenu from "./ui/BubbleMenu"
 import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
-import { MediaBlockManager } from "./blocks/mediaBlocks"
-import FeaturedImageSelector from "./FeaturedImageSelector"
+import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
-import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
 type Props = {
@@ -31,9 +29,6 @@ export default function Editor({
   postId,
   enableCollaboration = true,
 }: Props) {
-  const [showMediaSelector, setShowMediaSelector] = useState(false)
-  const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
-  const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
 
   // Collaboration provider
   const collabProvider = useMemo(() => {
@@ -42,23 +37,6 @@ export default function Editor({
     }
     return null
   }, [postId, enableCollaboration, readOnly])
-
-  // Handle media selection
-  const handleMediaSelect = useCallback(
-    async (media: Media) => {
-      if (!mediaBlockManager || pendingImagePosition === null) return
-      await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
-      setShowMediaSelector(false)
-      setPendingImagePosition(null)
-    },
-    [mediaBlockManager, pendingImagePosition]
-  )
-
-  // Close media selector
-  const handleMediaSelectorClose = useCallback(() => {
-    setShowMediaSelector(false)
-    setPendingImagePosition(null)
-  }, [])
 
   // Editor extensions
   const extensions = useMemo(
@@ -113,17 +91,6 @@ export default function Editor({
     }
   }, [value, editor, collabProvider])
 
-  // Media block manager
-  useEffect(() => {
-    if (editor) {
-      const manager = new MediaBlockManager(editor, postId, (position: number) => {
-        setPendingImagePosition(position)
-        setShowMediaSelector(true)
-      })
-      setMediaBlockManager(manager)
-    }
-  }, [editor, postId])
-
   // Cleanup collaboration provider on unmount
   useEffect(() => {
     if (!postId || !collabProvider) return
@@ -138,21 +105,13 @@ export default function Editor({
     <div className="notion-editor">
       <BubbleMenu editor={editor} />
       <DragHandle editor={editor} />
+      <MediaSelector editor={editor} postId={postId} />
 
       <div className="editor-wrapper">
         <EditorContent editor={editor} />
       </div>
 
       <CharacterCount editor={editor} minChars={minChars} maxChars={maxChars} />
-
-      {showMediaSelector && (
-        <FeaturedImageSelector
-          isOpen={showMediaSelector}
-          onClose={handleMediaSelectorClose}
-          onSelect={handleMediaSelect}
-          currentFeaturedImage={null}
-        />
-      )}
     </div>
   )
 }
