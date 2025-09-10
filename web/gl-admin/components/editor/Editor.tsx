@@ -34,17 +34,9 @@ export default function Editor({
   const [showMediaSelector, setShowMediaSelector] = useState(false)
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
   const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
-
-  // Collaboration provider (your feature)
-  const collabProvider = useMemo(() => {
-    if (postId && enableCollaboration && !readOnly) {
-      return CollaborationProvider.getInstance(postId)
-    }
-    return null
-  }, [postId, enableCollaboration, readOnly])
-
-  // Drag handle state (main branch feature)
   const [showDrag, setShowDrag] = useState(false)
+
+  // Show drag handle only for non-empty blocks
   const onDragHandleNodeChange = useCallback((data: { node: any; editor: TiptapEditor; pos: number }) => {
     if (data.node && data.node.textContent && data.node.textContent.trim().length > 0) {
       setShowDrag(true)
@@ -53,9 +45,38 @@ export default function Editor({
     }
   }, [])
 
-  // Extensions with both collaboration and drag handle
-  const extensions = useMemo(getExtensions({ collabProvider, maxChars, placeholder }), [collabProvider, maxChars, placeholder])
+  // Collaboration provider
+  const collabProvider = useMemo(() => {
+    if (postId && enableCollaboration && !readOnly) {
+      return CollaborationProvider.getInstance(postId)
+    }
+    return null
+  }, [postId, enableCollaboration, readOnly])
 
+  // Handle media selection
+  const handleMediaSelect = useCallback(
+    async (media: Media) => {
+      if (!mediaBlockManager || pendingImagePosition === null) return
+      await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
+      setShowMediaSelector(false)
+      setPendingImagePosition(null)
+    },
+    [mediaBlockManager, pendingImagePosition]
+  )
+
+  // Close media selector
+  const handleMediaSelectorClose = useCallback(() => {
+    setShowMediaSelector(false)
+    setPendingImagePosition(null)
+  }, [])
+
+  // Editor extensions
+  const extensions = useMemo(
+    getExtensions({ collabProvider, maxChars, placeholder }),
+    [collabProvider, maxChars, placeholder]
+  )
+
+  // Initialize Editor
   const editor = useEditor({
     editable: !readOnly,
     extensions,
@@ -73,7 +94,7 @@ export default function Editor({
     },
   })
 
-  // Collaboration synced seeding (your feature)
+  // Collaboration content sync
   useEffect(() => {
     if (!editor || !collabProvider) return
     const onSynced = (isSynced: boolean) => {
@@ -90,7 +111,7 @@ export default function Editor({
     return () => collabProvider.provider.off("synced", onSynced)
   }, [editor, collabProvider, value])
 
-  // Content updates for non-collaboration mode
+  // External content changes (e.g. loading existing post)
   useEffect(() => {
     if (!editor) return
     const current = editor.getHTML()
@@ -113,7 +134,7 @@ export default function Editor({
     }
   }, [editor, postId])
 
-  // Collaboration provider cleanup (your feature)
+  // Cleanup collaboration provider on unmount
   useEffect(() => {
     if (!postId || !collabProvider) return
     return () => {
@@ -121,28 +142,11 @@ export default function Editor({
     }
   }, [postId, collabProvider])
 
-  const handleMediaSelect = useCallback(
-    async (media: Media) => {
-      if (!mediaBlockManager || pendingImagePosition === null) return
-      await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
-      setShowMediaSelector(false)
-      setPendingImagePosition(null)
-    },
-    [mediaBlockManager, pendingImagePosition]
-  )
-
-  const handleMediaSelectorClose = useCallback(() => {
-    setShowMediaSelector(false)
-    setPendingImagePosition(null)
-  }, [])
-
   if (!editor) return null
 
   return (
     <div className="notion-editor">
-      {/* Bubble Menu - appears when text is selected */}
       <BubbleMenu editor={editor} />
-      {/* Drag Handle */}
       <DragHandle editor={editor} onNodeChange={onDragHandleNodeChange}>
         <div
           className={[
@@ -160,7 +164,6 @@ export default function Editor({
         </div>
       </DragHandle>
 
-      {/* Main Editor */}
       <div className="editor-wrapper">
         <EditorContent editor={editor} />
       </div>
