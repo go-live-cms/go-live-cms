@@ -308,24 +308,24 @@ export default function Editor({
   return (
     <div className="notion-editor">
       {/* Bubble Menu - appears when text is selected */}
-      <BubbleMenu editor={editor} className="bubble-menu">
+      <BubbleMenu editor={editor} className="bg-gray-800 shadow rounded-lg text-sm flex gap-2 py-2 px-4 border border-gray-600 text-white">
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className={`bubble-menu-btn ${editor.isActive("bold") ? "active" : ""}`}
+          className={`hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer ${editor.isActive("bold") ? "bg-gray-600" : "bg-transparent"}`}
           type="button"
         >
           <strong>B</strong>
         </button>
         <button
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={`bubble-menu-btn ${editor.isActive("italic") ? "active" : ""}`}
+          className={`hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer ${editor.isActive("italic") ? "bg-gray-600" : "bg-transparent"}`}
           type="button"
         >
           <em>I</em>
         </button>
         <button
           onClick={() => editor.chain().focus().toggleUnderline().run()}
-          className={`bubble-menu-btn ${editor.isActive("underline") ? "active" : ""}`}
+          className={`hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer ${editor.isActive("underline") ? "bg-gray-600" : "bg-transparent"}`}
           type="button"
         >
           <u>U</u>
@@ -335,7 +335,7 @@ export default function Editor({
             const url = window.prompt("URL")
             if (url) editor.chain().focus().setLink({ href: url }).run()
           }}
-          className={`bubble-menu-btn ${editor.isActive("link") ? "active" : ""}`}
+          className={`hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer ${editor.isActive("link") ? "bg-gray-600" : "bg-transparent"}`}
           type="button"
         >
           🔗
