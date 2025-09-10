@@ -64,23 +64,17 @@ export default function Editor({
       setCollaborationProvider(collabProvider)
       setConnectionStatus("connecting")
 
-      const updateStatus = () => {
-        setTimeout(() => {
-          const status = collabProvider.getConnectionStatus()
-          console.log("Connection status update:", status)
-          setConnectionStatus(status)
-        }, 0)
+      const updateStatus = (evt?: any) => {
+        const status = evt?.status ?? collabProvider.getConnectionStatus()
+        console.log("Connection status update:", status)
+        setConnectionStatus(status as any)
       }
 
       const updateUsers = () => {
-        setTimeout(() => {
-          const users = collabProvider.getConnectedUsers()
-          console.log("Connected users update:", users.length)
-          setConnectedUsers(users)
-        }, 0)
+        const users = collabProvider.getConnectedUsers()
+        console.log("Connected users update:", users.length)
+        setConnectedUsers(users)
       }
-
-      const statusTimer = setInterval(updateStatus, 1000)
 
       collabProvider.provider.on("status", updateStatus)
       collabProvider.provider.on("connect", updateStatus)
@@ -91,7 +85,6 @@ export default function Editor({
       updateUsers()
 
       return () => {
-        clearInterval(statusTimer)
         collabProvider.provider.off("status", updateStatus)
         collabProvider.provider.off("connect", updateStatus)
         collabProvider.provider.off("disconnect", updateStatus)
@@ -236,67 +229,19 @@ export default function Editor({
   })
 
   useEffect(() => {
-    if (collabProvider) {
-      setCollaborationProvider(collabProvider)
-      setConnectionStatus("connecting")
-
-      const updateStatus = () => {
-        setTimeout(() => {
-          const status = collabProvider.getConnectionStatus()
-          console.log("Connection status update:", status)
-          setConnectionStatus(status)
-        }, 0)
+    if (!editor || !collabProvider) return
+    const onSynced = (isSynced: boolean) => {
+      if (!isSynced) return
+      const frag = collabProvider.doc.getXmlFragment("prosemirror")
+      const empty = frag.length === 0 && editor.isEmpty
+      if (empty && value && value !== "<p></p>") {
+        editor.commands.setContent(value, { emitUpdate: false })
       }
-
-      const updateUsers = () => {
-        setTimeout(() => {
-          const users = collabProvider.getConnectedUsers()
-          console.log("Connected users update:", users.length)
-          setConnectedUsers(users)
-        }, 0)
-      }
-
-      const statusTimer = setInterval(updateStatus, 1000)
-
-      collabProvider.provider.on("status", updateStatus)
-      collabProvider.provider.on("connect", updateStatus)
-      collabProvider.provider.on("disconnect", updateStatus)
-      collabProvider.provider.awareness.on("change", updateUsers)
-
-      updateStatus()
-      updateUsers()
-
-      return () => {
-        clearInterval(statusTimer)
-
-        collabProvider.provider.off("status", updateStatus)
-        collabProvider.provider.off("connect", updateStatus)
-        collabProvider.provider.off("disconnect", updateStatus)
-        collabProvider.provider.awareness.off("change", updateUsers)
-      }
-    } else {
-      setConnectionStatus("disconnected")
-      setConnectedUsers([])
+      collabProvider.provider.off("synced", onSynced)
     }
-  }, [collabProvider])
-
-  useEffect(() => {
-    if (editor && collabProvider && connectionStatus === "connected" && value && value !== "<p></p>") {
-      const timeout = setTimeout(() => {
-        const currentHTML = editor.getHTML()
-        const isEmpty = currentHTML === "<p></p>" || currentHTML === "" || !currentHTML.trim()
-
-        console.log("Checking initial content:", { currentHTML, isEmpty, hasValue: !!value })
-
-        if (isEmpty && value && value !== "<p></p>") {
-          console.log("Setting initial content for collaboration:", value.substring(0, 100))
-          editor.commands.setContent(value, { emitUpdate: false })
-        }
-      }, 2000)
-
-      return () => clearTimeout(timeout)
-    }
-  }, [editor, collabProvider, connectionStatus, value])
+    collabProvider.provider.on("synced", onSynced)
+    return () => collabProvider.provider.off("synced", onSynced)
+  }, [editor, collabProvider, value])
 
   useEffect(() => {
     if (editor && !collabProvider && value !== editor.getHTML()) {
@@ -315,6 +260,13 @@ export default function Editor({
       setMediaBlockManager(manager)
     }
   }, [editor, postId])
+
+  useEffect(() => {
+    if (!postId || !collabProvider) return
+    return () => {
+      CollaborationProvider.release(postId)
+    }
+  }, [postId, collabProvider])
 
   const handleMediaSelect = useCallback(
     async (media: Media) => {
@@ -349,31 +301,35 @@ export default function Editor({
                   ? "Connecting..."
                   : "Offline"}
             </span>
-            {connectedUsers.length > 1 && (
+            {connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length > 0 && (
               <span className="user-count">
-                {connectedUsers.length - 1} other{connectedUsers.length === 2 ? "" : "s"} editing
+                {connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length} other
+                {connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length === 1
+                  ? ""
+                  : "s"}{" "}
+                editing
               </span>
             )}
           </div>
 
-          {connectedUsers.length > 1 && (
+          {connectedUsers.length > 0 && (
             <div className="connected-users">
               {connectedUsers
-                .filter((user) => user.id !== collabProvider?.provider.awareness.clientID)
+                .filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID)
                 .slice(0, 3)
                 .map((user, index) => (
                   <div
-                    key={`user-${user.id}-${user.name}-${index}`}
+                    key={`user-${user.clientId}-${user.name}-${index}`}
                     className="user-avatar"
                     style={{ backgroundColor: user.color }}
                     title={user.name}
                   >
-                    {user.name.charAt(0).toUpperCase()}
+                    {user.name?.charAt(0).toUpperCase()}
                   </div>
                 ))}
-              {connectedUsers.length > 4 && (
+              {connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length > 3 && (
                 <div key="more-users" className="user-avatar user-avatar--more">
-                  +{connectedUsers.length - 4}
+                  +{connectedUsers.filter((u) => u.clientId !== collabProvider?.provider.awareness.clientID).length - 3}
                 </div>
               )}
             </div>

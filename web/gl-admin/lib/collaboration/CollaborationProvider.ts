@@ -4,6 +4,9 @@ import { IndexeddbPersistence } from "y-indexeddb"
 import { authManager } from "../auth"
 
 const activeProviders = new Map<number, CollaborationProvider>()
+const refCounts = new Map<number, number>()
+const releaseTimers = new Map<number, number>()
+const DESTROY_DELAY_MS = 750
 
 export class CollaborationProvider {
   public doc: YDoc
@@ -12,24 +15,30 @@ export class CollaborationProvider {
   private postId: number
 
   static getInstance(postId: number): CollaborationProvider {
+    const t = releaseTimers.get(postId)
+    if (t) {
+      clearTimeout(t)
+      releaseTimers.delete(postId)
+    }
+
     const existing = activeProviders.get(postId)
     if (existing) {
-      console.log(`Reusing existing provider for post ${postId}`)
+      refCounts.set(postId, (refCounts.get(postId) ?? 0) + 1)
+      console.log(`Reusing existing provider for post ${postId} (refs=${refCounts.get(postId)})`)
       return existing
     }
 
     console.log(`Creating new provider for post ${postId}`)
     const instance = new CollaborationProvider(postId)
     activeProviders.set(postId, instance)
+    refCounts.set(postId, 1)
     return instance
   }
 
   private constructor(postId: number) {
     this.postId = postId
 
-    this.doc = new YDoc({
-      guid: `post-${postId}-${Date.now()}`,
-    })
+    this.doc = new YDoc()
 
     this.persistence = new IndexeddbPersistence(`post-${postId}`, this.doc)
 
@@ -93,6 +102,28 @@ export class CollaborationProvider {
     this.provider?.destroy()
     this.persistence?.destroy()
     this.doc?.destroy()
+  }
+
+  static release(postId: number) {
+    const current = refCounts.get(postId) ?? 0
+    if (current <= 1) {
+      refCounts.delete(postId)
+      const timer = window.setTimeout(() => {
+        const inst = activeProviders.get(postId)
+        if (!inst) return
+        inst.provider?.disconnect()
+        inst.provider?.destroy()
+        inst.persistence?.destroy()
+        inst.doc?.destroy()
+        activeProviders.delete(postId)
+        releaseTimers.delete(postId)
+        console.log(`Destroyed provider for post ${postId}`)
+      }, DESTROY_DELAY_MS)
+      releaseTimers.set(postId, timer)
+    } else {
+      refCounts.set(postId, current - 1)
+      console.log(`Decrement refs for post ${postId} -> ${refCounts.get(postId)}`)
+    }
   }
 
   public getConnectionStatus(): "connecting" | "connected" | "disconnected" {

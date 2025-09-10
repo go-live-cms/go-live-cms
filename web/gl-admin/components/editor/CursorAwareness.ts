@@ -40,10 +40,14 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
           },
         },
         view: (view) => {
-          const render = () => {
+          let raf = 0
+          let lastSel = { anchor: -1, head: -1 }
+
+          const buildDecos = () => {
             const states = awareness.getStates()
             const me = awareness.clientID
             const decos: Decoration[] = []
+            const size = view.state.doc.content.size
 
             for (const [clientId, s] of states.entries()) {
               if (clientId === me) continue
@@ -51,9 +55,8 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               const sel = s?.selection
               if (!sel) continue
 
-              const { anchor, head } = sel
-              const a = Math.max(1, Math.min(anchor ?? 1, view.state.doc.content.size))
-              const h = Math.max(1, Math.min(head ?? a, view.state.doc.content.size))
+              const a = Math.max(0, Math.min(sel.anchor ?? 0, size))
+              const h = Math.max(0, Math.min(sel.head ?? a, size))
               const from = Math.min(a, h)
               const to = Math.max(a, h)
               const color = buildColor(user)
@@ -71,7 +74,7 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               caret.className = "collab-caret"
               caret.style.cssText = `
                 display:inline-block;width:${caretWidth}px;height:1.2em;
-                background:${color}; transform: translateY(2px);
+                background:${color}; transform: translateY(2px); pointer-events:none;
               `
 
               const labelEl = document.createElement("span")
@@ -81,7 +84,7 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
                 position:absolute; transform: translate(-50%, -110%);
                 background:${color}; color:white; font-size:12px; line-height:1;
                 padding:2px 6px; border-radius:4px; white-space:nowrap;
-                box-shadow:0 1px 2px rgba(0,0,0,.15);
+                box-shadow:0 1px 2px rgba(0,0,0,.15); pointer-events:none;
               `
 
               const wrap = document.createElement("span")
@@ -92,35 +95,40 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               decos.push(Decoration.widget(h, wrap, { key: `caret-${clientId}` }))
             }
 
-            if (decos.length > 0) {
-              const decoSet = DecorationSet.create(view.state.doc, decos)
-              const tr = view.state.tr.setMeta(key, { decoSet })
-              view.dispatch(tr)
-            }
+            return DecorationSet.create(view.state.doc, decos)
           }
 
-          const onChange = () => {
-            const sel = view.state.selection
-            awareness.setLocalStateField("selection", {
-              anchor: sel.anchor,
-              head: sel.head,
-            })
+          const render = () => {
+            const decoSet = buildDecos()
+            const tr = view.state.tr.setMeta(key, { decoSet })
+            view.dispatch(tr)
+          }
 
+          const pushSelection = () => {
+            const { anchor, head } = view.state.selection
+            if (anchor === lastSel.anchor && head === lastSel.head) return
+            lastSel = { anchor, head }
+            awareness.setLocalStateField("selection", lastSel)
+          }
+
+          const onAwarenessChange = () => {
             render()
           }
 
-          onChange()
+          pushSelection()
+          render()
 
-          awareness.on("change", onChange)
+          awareness.on("change", onAwarenessChange)
+
           return {
             destroy() {
-              awareness.off("change", onChange)
+              awareness.off("change", onAwarenessChange)
+              cancelAnimationFrame(raf)
             },
             update() {
-              const sel = view.state.selection
-              awareness.setLocalStateField("selection", {
-                anchor: sel.anchor,
-                head: sel.head,
+              cancelAnimationFrame(raf)
+              raf = requestAnimationFrame(() => {
+                pushSelection()
               })
             },
           }
