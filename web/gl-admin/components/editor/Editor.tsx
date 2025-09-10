@@ -1,7 +1,6 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { EditorContent, useEditor, ReactRenderer } from "@tiptap/react"
 import DragHandle from "@tiptap/extension-drag-handle-react"
-import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
 import Collaboration from "@tiptap/extension-collaboration"
 import { CursorAwareness } from "./CursorAwareness"
@@ -17,8 +16,7 @@ import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
 import { getCursorCoords } from "./utils/cursorCoords"
-import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "./utils/TurnInto"
-import CommandSelect, { type CommandSelectOption } from "./ui/CommandSelect"
+import BubbleMenu from "./ui/BubbleMenu"
 import { getSlashCommandItems, getTurnIntoCommandOptions } from "./blocks"
 import { MediaBlockManager } from "./blocks/mediaBlocks"
 import FeaturedImageSelector from "./FeaturedImageSelector"
@@ -213,32 +211,6 @@ export default function Editor({
     },
   })
 
-  const [turnIntoOptions, setTurnIntoOptions] = useState<CommandSelectOption[]>([])
-  const [turnInto, setTurnInto] = useState<TurnIntoValue>("paragraph")
-
-  // Turn-into functionality (main branch)
-  useEffect(() => {
-    if (!editor) return
-    setTurnIntoOptions(getTurnIntoCommandOptions())
-    setTurnInto(computeTurnIntoFromSelection(editor))
-  }, [editor])
-
-  const updateTurnInto = useCallback(() => {
-    if (!editor) return
-    const v = computeTurnIntoFromSelection(editor)
-    setTurnInto(v)
-  }, [editor])
-
-  useEffect(() => {
-    if (!editor) return
-    editor.on("selectionUpdate", updateTurnInto)
-    editor.on("transaction", updateTurnInto)
-    return () => {
-      editor.off("selectionUpdate", updateTurnInto)
-      editor.off("transaction", updateTurnInto)
-    }
-  }, [editor, updateTurnInto])
-
   // Collaboration synced seeding (your feature)
   useEffect(() => {
     if (!editor || !collabProvider) return
@@ -265,7 +237,6 @@ export default function Editor({
       editor.commands.setContent(value || "<p></p>", {
         emitUpdate: false,
       })
-      setTurnInto(computeTurnIntoFromSelection(editor))
     }
   }, [value, editor, collabProvider])
 
@@ -308,50 +279,7 @@ export default function Editor({
   return (
     <div className="notion-editor">
       {/* Bubble Menu - appears when text is selected */}
-      <BubbleMenu editor={editor} className="bg-gray-800 shadow rounded-lg text-sm flex gap-2 py-2 px-4 border border-gray-600 text-white">
-        <button
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          className={`hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer ${editor.isActive("bold") ? "bg-gray-600" : "bg-transparent"}`}
-          type="button"
-        >
-          <strong>B</strong>
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={`hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer ${editor.isActive("italic") ? "bg-gray-600" : "bg-transparent"}`}
-          type="button"
-        >
-          <em>I</em>
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          className={`hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer ${editor.isActive("underline") ? "bg-gray-600" : "bg-transparent"}`}
-          type="button"
-        >
-          <u>U</u>
-        </button>
-        <button
-          onClick={() => {
-            const url = window.prompt("URL")
-            if (url) editor.chain().focus().setLink({ href: url }).run()
-          }}
-          className={`hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer ${editor.isActive("link") ? "bg-gray-600" : "bg-transparent"}`}
-          type="button"
-        >
-          🔗
-        </button>
-        <CommandSelect
-          options={turnIntoOptions}
-          value={turnInto}
-          label="Turn into"
-          onChange={(option: CommandSelectOption) => {
-            if (!editor) return
-            const val = option.value as TurnIntoValue
-            setTurnInto(val)
-            applyTurnInto(editor, val, turnIntoOptions)
-          }}
-        />
-      </BubbleMenu>
+      <BubbleMenu editor={editor} />
       {/* Drag Handle */}
       <DragHandle editor={editor} onNodeChange={onDragHandleNodeChange}>
         <div
