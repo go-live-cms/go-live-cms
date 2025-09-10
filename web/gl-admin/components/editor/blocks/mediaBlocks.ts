@@ -121,7 +121,5 @@ export const createMediaBlocks = (): Block[] => [
       createImagePlaceholder(editor, range)
     },
     aliases: ["img", "image", "picture"],
-    slash: true,
-    turnInto: false,
   },
 ]

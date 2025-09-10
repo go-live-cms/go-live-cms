@@ -10,9 +10,8 @@ export type Block = {
     icon: string,
     description: string,
     aliases: string[],
-    slash: boolean,
-    turnInto: boolean,
-    command: ({ editor }: any) => void
+    command: ({ editor, range }: any) => void
+    turnInto?: ({ editor }: any) => void,
 }
 
 export const getAllBlocks = (): Block[] => {
@@ -26,7 +25,7 @@ export const getAllBlocks = (): Block[] => {
 
 export const getSlashCommandItems = (): SlashCommandItem[] => {
   return getAllBlocks()
-    .filter(cmd => cmd.slash)
+    .filter(cmd => cmd.command)
     .map(cmd => ({
         title: cmd.title,
         icon: cmd.icon,
@@ -43,7 +42,7 @@ export const getTurnIntoCommandOptions = (): CommandSelectOption[] => {
         label: cmd.title,
         label_icon: cmd.icon,
         value: cmd.title.toLowerCase().replace(/\s+/g, '-'),
-        command: cmd.command
+        command: cmd.turnInto
     }))
 }
 

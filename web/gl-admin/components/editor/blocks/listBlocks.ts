@@ -5,22 +5,24 @@ export const listBlocks: Block[] = [
     title: "Bullet List",
     description: "Create a simple bullet list",
     icon: "•",
-    command: ({ editor }) => {
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleBulletList().run()
+    },
+    turnInto: ({ editor }) => {
       editor.chain().focus().toggleBulletList().run()
     },
     aliases: ["ul", "list"],
-    slash: true,
-    turnInto: true,
   },
   {
     title: "Numbered List",
     description: "Create a numbered list",
     icon: "1.",
-    command: ({ editor }) => {
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).toggleOrderedList().run()
+    },
+    turnInto: ({ editor }) => {
       editor.chain().focus().toggleOrderedList().run()
     },
     aliases: ["ol", "ordered"],
-    slash: true,
-    turnInto: true,
   },
 ]
