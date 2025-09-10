@@ -12,7 +12,7 @@ import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
 import { getSlashCommandItems } from "../blocks"
-import { SlashCommandExtension } from "../SlashCommand"
+import { SlashCommandExtension } from "../ui/SlashCommand"
 import { createLowlight, common } from "lowlight"
 
 const lowlight = createLowlight(common)

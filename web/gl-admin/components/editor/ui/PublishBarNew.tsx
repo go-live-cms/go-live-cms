@@ -1,6 +1,5 @@
-import React from "react"
 import type { Post } from "@gl-admin/lib/types"
-import type { CollabStatus, CollabUser } from "@gl-admin/components/editor/useCollabPresence"
+import type { CollabStatus, CollabUser } from "@gl-admin/components/editor/utils/useCollabPresence"
 import "@gl-admin/assets/styles/components/editor/publish-bar.scss"
 
 interface PublishBarProps {

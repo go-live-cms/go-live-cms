@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } f
 import { Extension } from "@tiptap/core"
 import { ReactRenderer } from "@tiptap/react"
 import { PluginKey } from "prosemirror-state"
-import { Suggestion } from "./Suggestion"
+import { Suggestion } from "../utils/suggestion"
 
 export interface SlashCommandItem {
   title: string
