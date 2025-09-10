@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from "prosemirror-state"
 import { Decoration, DecorationSet } from "prosemirror-view"
 
 type CursorAwarenessOpts = {
-  awareness: any 
+  awareness: any
   caretWidth?: number
   buildLabel?: (user: any) => string
   buildColor?: (user: any) => string
@@ -28,7 +28,6 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
         state: {
           init: () => DecorationSet.empty,
           apply(tr, old) {
-            
             if (tr.docChanged) return old.map(tr.mapping, tr.doc)
             return old
           },
@@ -53,7 +52,6 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               const color = buildColor(user)
               const label = buildLabel(user)
 
-              
               if (to > from) {
                 decos.push(
                   Decoration.inline(from, to, {
@@ -62,7 +60,6 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
                 )
               }
 
-              
               const caret = document.createElement("span")
               caret.className = "collab-caret"
               caret.style.cssText = `
@@ -94,18 +91,15 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
           }
 
           const onChange = () => {
-            
             const sel = view.state.selection
             awareness.setLocalStateField("selection", {
               anchor: sel.anchor,
               head: sel.head,
             })
 
-            
             render()
           }
 
-          
           onChange()
 
           awareness.on("change", onChange)
@@ -114,7 +108,6 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               awareness.off("change", onChange)
             },
             update() {
-              
               const sel = view.state.selection
               awareness.setLocalStateField("selection", {
                 anchor: sel.anchor,

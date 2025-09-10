@@ -1,8 +1,7 @@
-import { WebsocketProvider } from 'y-websocket'
-import { Doc as YDoc } from 'yjs'
-import { IndexeddbPersistence } from 'y-indexeddb'
-import { authManager } from '../auth'
-
+import { WebsocketProvider } from "y-websocket"
+import { Doc as YDoc } from "yjs"
+import { IndexeddbPersistence } from "y-indexeddb"
+import { authManager } from "../auth"
 
 const activeProviders = new Map<number, CollaborationProvider>()
 
@@ -13,7 +12,6 @@ export class CollaborationProvider {
   private postId: number
 
   static getInstance(postId: number): CollaborationProvider {
-    
     const existing = activeProviders.get(postId)
     if (existing) {
       console.log(`Reusing existing provider for post ${postId}`)
@@ -28,131 +26,104 @@ export class CollaborationProvider {
 
   private constructor(postId: number) {
     this.postId = postId
-    
-    
+
     this.doc = new YDoc({
-      guid: `post-${postId}-${Date.now()}` 
+      guid: `post-${postId}-${Date.now()}`,
     })
-    
-    
+
     this.persistence = new IndexeddbPersistence(`post-${postId}`, this.doc)
-    
-    
+
     const user = authManager.getState().user
     const userInfo = {
-      name: user?.full_name || user?.username || 'Anonymous',
+      name: user?.full_name || user?.username || "Anonymous",
       color: this.generateUserColor(user?.id || 0),
-      id: user?.id || 0
+      id: user?.id || 0,
     }
 
-    
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = process.env.NODE_ENV === 'development' 
-      ? 'localhost:1234' 
-      : `${window.location.host}/collab`
-    
-    
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+    const wsHost = process.env.NODE_ENV === "development" ? "localhost:1234" : `${window.location.host}/collab`
+
     const token = authManager.getAccessToken()
     const baseUrl = `${wsProtocol}//${wsHost}/`
-    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : ''
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : ""
 
-    console.log('WebSocket URL:', baseUrl.replace(/token=[^&]+/, 'token=***'))
+    console.log("WebSocket URL:", baseUrl.replace(/token=[^&]+/, "token=***"))
 
-    
-    this.provider = new WebsocketProvider(
-      baseUrl, 
-      `post-${postId}`, 
-      this.doc,
-      {
-        params: token ? { token } : {}, 
-        maxBackoffTime: 5000,
-        resyncInterval: 2000,
-        connect: true,
-      }
-    )
-
-    
-    this.provider.awareness.setLocalStateField('user', userInfo)
-
-    
-    this.provider.on('status', (event: any) => {
-      console.log('Collaboration status event:', event)
+    this.provider = new WebsocketProvider(baseUrl, `post-${postId}`, this.doc, {
+      params: token ? { token } : {},
+      maxBackoffTime: 5000,
+      resyncInterval: 2000,
+      connect: true,
     })
 
-    this.provider.on('connection-close', (event: any) => {
-      console.log('Collaboration connection closed:', event)
+    this.provider.awareness.setLocalStateField("user", userInfo)
+
+    this.provider.on("status", (event: any) => {
+      console.log("Collaboration status event:", event)
     })
 
-    this.provider.on('connection-error', (event: any) => {
-      console.log('Collaboration connection error:', event?.message || event)
+    this.provider.on("connection-close", (event: any) => {
+      console.log("Collaboration connection closed:", event)
     })
 
-    this.provider.on('connect', () => {
-      console.log('WebSocket connected successfully')
+    this.provider.on("connection-error", (event: any) => {
+      console.log("Collaboration connection error:", event?.message || event)
     })
 
-    this.provider.on('disconnect', () => {
-      console.log('WebSocket disconnected')
+    this.provider.on("connect", () => {
+      console.log("WebSocket connected successfully")
     })
 
-    
-    this.provider.on('status', () => {
-      
+    this.provider.on("disconnect", () => {
+      console.log("WebSocket disconnected")
     })
+
+    this.provider.on("status", () => {})
   }
 
   private generateUserColor(userId: number): string {
-    
-    const colors = [
-      '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
-      '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'
-    ]
+    const colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F"]
     return colors[userId % colors.length]
   }
 
   public destroy() {
-    
     activeProviders.delete(this.postId)
-    
-    
+
     this.provider?.disconnect()
     this.provider?.destroy()
     this.persistence?.destroy()
     this.doc?.destroy()
   }
 
-  public getConnectionStatus(): 'connecting' | 'connected' | 'disconnected' {
-    if (!this.provider) return 'disconnected'
-    
-    
+  public getConnectionStatus(): "connecting" | "connected" | "disconnected" {
+    if (!this.provider) return "disconnected"
+
     if (this.provider.wsconnected === true) {
-      return 'connected'
+      return "connected"
     }
-    
-    
+
     const ws = (this.provider as any).ws
     if (ws) {
       switch (ws.readyState) {
         case WebSocket.CONNECTING:
-          return 'connecting'
+          return "connecting"
         case WebSocket.OPEN:
-          return 'connected'
+          return "connected"
         case WebSocket.CLOSING:
         case WebSocket.CLOSED:
-          return 'disconnected'
+          return "disconnected"
         default:
-          return 'disconnected'
+          return "disconnected"
       }
     }
-    
-    
-    return 'connecting'
+
+    return "connecting"
   }
 
   public getConnectedUsers() {
     const states = this.provider?.awareness?.getStates()
     if (!states) return []
-    
+
     return Array.from(states.entries())
       .map((entry) => {
         const [clientId, s] = entry as [number, any]

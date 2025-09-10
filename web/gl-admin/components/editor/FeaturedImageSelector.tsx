@@ -46,30 +46,29 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
       setLoading(true)
       setError(null)
       const page = reset ? 0 : currentPage
-      
+
       const params = {
         limit: itemsPerPage,
         offset: page * itemsPerPage,
         sort: "date_desc" as const,
-        type: "image", 
+        type: "image",
         ...(searchQuery && { search: searchQuery }),
       }
 
       const response = await getMedia(params)
-      
+
       if (reset) {
         setMediaItems(response.data)
         setCurrentPage(0)
       } else {
-        setMediaItems(prev => {
-          const existingIds = new Set(prev.map(item => item.id))
-          const newItems = response.data.filter(item => !existingIds.has(item.id))
+        setMediaItems((prev) => {
+          const existingIds = new Set(prev.map((item) => item.id))
+          const newItems = response.data.filter((item) => !existingIds.has(item.id))
           return [...prev, ...newItems]
         })
       }
-      
+
       setHasMore(response.data.length === itemsPerPage)
-      
     } catch (err) {
       console.error("Error loading media:", err)
       setError(err instanceof Error ? err.message : "Failed to load media")
@@ -80,7 +79,7 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
 
   const loadMore = () => {
     if (!loading && hasMore) {
-      setCurrentPage(prev => prev + 1)
+      setCurrentPage((prev) => prev + 1)
       loadMedia()
     }
   }
@@ -91,12 +90,12 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
   }
 
   const handleRemove = () => {
-    onSelect(null as any) 
+    onSelect(null as any)
     onClose()
   }
 
   const isImageFile = (media: Media) => {
-    return media.mime_type?.startsWith('image/') || false
+    return media.mime_type?.startsWith("image/") || false
   }
 
   const getImageUrl = (media: Media) => {
@@ -104,12 +103,7 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
   }
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title="Select Featured Image"
-      size="large"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title="Select Featured Image" size="large">
       <div className="gl-featured-image-selector">
         {}
         <div className="gl-featured-image-selector__controls">
@@ -122,12 +116,9 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
               className="gl-featured-image-selector__search-input"
             />
           </div>
-          
+
           {currentFeaturedImage && (
-            <button
-              onClick={handleRemove}
-              className="gl-featured-image-selector__remove-btn"
-            >
+            <button onClick={handleRemove} className="gl-featured-image-selector__remove-btn">
               Remove Featured Image
             </button>
           )}
@@ -140,30 +131,24 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
         )}
 
         <div className="gl-featured-image-selector__grid">
-          {mediaItems
-            .filter(isImageFile)
-            .map((media) => (
+          {mediaItems.filter(isImageFile).map((media) => (
             <div
               key={media.id}
               className={`gl-featured-image-selector__item ${
-                currentFeaturedImage?.id === media.id ? 'gl-featured-image-selector__item--selected' : ''
+                currentFeaturedImage?.id === media.id ? "gl-featured-image-selector__item--selected" : ""
               }`}
               onClick={() => handleSelect(media)}
             >
               <div className="gl-featured-image-selector__thumbnail">
-                <img
-                  src={getImageUrl(media)}
-                  alt={media.alt || media.name}
-                  loading="lazy"
-                />
-                
+                <img src={getImageUrl(media)} alt={media.alt || media.name} loading="lazy" />
+
                 {currentFeaturedImage?.id === media.id && (
                   <div className="gl-featured-image-selector__selected-indicator">
                     <span>✓</span>
                   </div>
                 )}
               </div>
-              
+
               <div className="gl-featured-image-selector__info">
                 <p className="gl-featured-image-selector__name" title={media.name}>
                   {media.name}
@@ -177,7 +162,10 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
           <div className="gl-featured-image-selector__loading">
             <div className="gl-featured-image-selector__grid">
               {Array.from({ length: 12 }).map((_, index) => (
-                <div key={index} className="gl-featured-image-selector__item gl-featured-image-selector__item--skeleton">
+                <div
+                  key={index}
+                  className="gl-featured-image-selector__item gl-featured-image-selector__item--skeleton"
+                >
                   <div className="gl-featured-image-selector__thumbnail skeleton"></div>
                   <div className="gl-featured-image-selector__info">
                     <div className="gl-featured-image-selector__name skeleton"></div>

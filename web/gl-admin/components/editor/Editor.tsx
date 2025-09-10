@@ -30,7 +30,7 @@ type Props = {
   minChars?: number
   maxChars?: number
   postId?: number
-  enableCollaboration?: boolean 
+  enableCollaboration?: boolean
 }
 
 const lowlight = createLowlight(common)
@@ -43,16 +43,15 @@ export default function Editor({
   minChars,
   maxChars,
   postId,
-  enableCollaboration = true, 
+  enableCollaboration = true,
 }: Props) {
   const [showMediaSelector, setShowMediaSelector] = useState(false)
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
   const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
   const [collaborationProvider, setCollaborationProvider] = useState<CollaborationProvider | null>(null)
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('disconnected')
+  const [connectionStatus, setConnectionStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected")
   const [connectedUsers, setConnectedUsers] = useState<any[]>([])
 
-  
   const collabProvider = useMemo(() => {
     if (postId && enableCollaboration && !readOnly) {
       return CollaborationProvider.getInstance(postId)
@@ -60,54 +59,46 @@ export default function Editor({
     return null
   }, [postId, enableCollaboration, readOnly])
 
-  
   useEffect(() => {
     if (collabProvider) {
       setCollaborationProvider(collabProvider)
-      setConnectionStatus('connecting')
+      setConnectionStatus("connecting")
 
-      
       const updateStatus = () => {
-        
         setTimeout(() => {
           const status = collabProvider.getConnectionStatus()
-          console.log('Connection status update:', status)
+          console.log("Connection status update:", status)
           setConnectionStatus(status)
         }, 0)
       }
 
-      
       const updateUsers = () => {
-        
         setTimeout(() => {
           const users = collabProvider.getConnectedUsers()
-          console.log('Connected users update:', users.length)
+          console.log("Connected users update:", users.length)
           setConnectedUsers(users)
         }, 0)
       }
 
-      
-      const statusTimer = setInterval(updateStatus, 1000) 
-      
-      collabProvider.provider.on('status', updateStatus)
-      collabProvider.provider.on('connect', updateStatus)
-      collabProvider.provider.on('disconnect', updateStatus)
-      collabProvider.provider.awareness.on('change', updateUsers)
+      const statusTimer = setInterval(updateStatus, 1000)
 
-      
+      collabProvider.provider.on("status", updateStatus)
+      collabProvider.provider.on("connect", updateStatus)
+      collabProvider.provider.on("disconnect", updateStatus)
+      collabProvider.provider.awareness.on("change", updateUsers)
+
       updateStatus()
       updateUsers()
 
       return () => {
         clearInterval(statusTimer)
-        collabProvider.provider.off('status', updateStatus)
-        collabProvider.provider.off('connect', updateStatus)
-        collabProvider.provider.off('disconnect', updateStatus)
-        collabProvider.provider.awareness.off('change', updateUsers)
-        
+        collabProvider.provider.off("status", updateStatus)
+        collabProvider.provider.off("connect", updateStatus)
+        collabProvider.provider.off("disconnect", updateStatus)
+        collabProvider.provider.awareness.off("change", updateUsers)
       }
     } else {
-      setConnectionStatus('disconnected')
+      setConnectionStatus("disconnected")
     }
   }, [collabProvider])
 
@@ -146,7 +137,6 @@ export default function Editor({
     }
   }, [])
 
-  
   const extensions = useMemo(() => {
     const baseExtensions = [
       StarterKit.configure({
@@ -201,41 +191,36 @@ export default function Editor({
       }),
     ]
 
-    
     if (collabProvider) {
       const userState = collabProvider.provider.awareness.getLocalState()
-      console.log('Setting up collaboration for user:', userState?.user)
-      console.log('CollabProvider doc exists:', !!collabProvider.doc)
-      console.log('CollabProvider provider exists:', !!collabProvider.provider)
-      
-      
+      console.log("Setting up collaboration for user:", userState?.user)
+      console.log("CollabProvider doc exists:", !!collabProvider.doc)
+      console.log("CollabProvider provider exists:", !!collabProvider.provider)
+
       if (collabProvider.doc && collabProvider.provider && collabProvider.provider.awareness) {
         baseExtensions.push(
           Collaboration.configure({
             document: collabProvider.doc,
           })
         )
-        
-        console.log('Added Collaboration extension successfully')
-        
+
+        console.log("Added Collaboration extension successfully")
+
         const awareness = collabProvider.provider.awareness
-        baseExtensions.push(
-          CursorAwareness.configure({ awareness })
-        )
-        console.log('Added CursorAwareness extension successfully')
+        baseExtensions.push(CursorAwareness.configure({ awareness }))
+        console.log("Added CursorAwareness extension successfully")
       } else {
-        console.warn('CollaborationProvider not fully initialized, skipping collaboration extensions')
+        console.warn("CollaborationProvider not fully initialized, skipping collaboration extensions")
       }
     }
 
     return baseExtensions
   }, [collabProvider, maxChars, placeholder])
 
-
   const editor = useEditor({
     editable: !readOnly,
     extensions,
-    content: !collabProvider ? (value || "<p></p>") : undefined,
+    content: !collabProvider ? value || "<p></p>" : undefined,
     autofocus: "end",
     onUpdate({ editor }) {
       const html = editor.getHTML()
@@ -253,76 +238,66 @@ export default function Editor({
   useEffect(() => {
     if (collabProvider) {
       setCollaborationProvider(collabProvider)
-      setConnectionStatus('connecting')
+      setConnectionStatus("connecting")
 
-      
       const updateStatus = () => {
-        
         setTimeout(() => {
           const status = collabProvider.getConnectionStatus()
-          console.log('Connection status update:', status)
+          console.log("Connection status update:", status)
           setConnectionStatus(status)
         }, 0)
       }
 
-      
       const updateUsers = () => {
-        
         setTimeout(() => {
           const users = collabProvider.getConnectedUsers()
-          console.log('Connected users update:', users.length)
+          console.log("Connected users update:", users.length)
           setConnectedUsers(users)
         }, 0)
       }
 
-      
-      const statusTimer = setInterval(updateStatus, 1000) 
-      
-      collabProvider.provider.on('status', updateStatus)
-      collabProvider.provider.on('connect', updateStatus)
-      collabProvider.provider.on('disconnect', updateStatus)
-      collabProvider.provider.awareness.on('change', updateUsers)
+      const statusTimer = setInterval(updateStatus, 1000)
 
-      
+      collabProvider.provider.on("status", updateStatus)
+      collabProvider.provider.on("connect", updateStatus)
+      collabProvider.provider.on("disconnect", updateStatus)
+      collabProvider.provider.awareness.on("change", updateUsers)
+
       updateStatus()
       updateUsers()
 
       return () => {
         clearInterval(statusTimer)
-        
-        
-        collabProvider.provider.off('status', updateStatus)
-        collabProvider.provider.off('connect', updateStatus)
-        collabProvider.provider.off('disconnect', updateStatus)
-        collabProvider.provider.awareness.off('change', updateUsers)
+
+        collabProvider.provider.off("status", updateStatus)
+        collabProvider.provider.off("connect", updateStatus)
+        collabProvider.provider.off("disconnect", updateStatus)
+        collabProvider.provider.awareness.off("change", updateUsers)
       }
     } else {
-      setConnectionStatus('disconnected')
+      setConnectionStatus("disconnected")
       setConnectedUsers([])
     }
   }, [collabProvider])
 
-  
   useEffect(() => {
-    if (editor && collabProvider && connectionStatus === 'connected' && value && value !== '<p></p>') {
-      
+    if (editor && collabProvider && connectionStatus === "connected" && value && value !== "<p></p>") {
       const timeout = setTimeout(() => {
         const currentHTML = editor.getHTML()
-        const isEmpty = currentHTML === '<p></p>' || currentHTML === '' || !currentHTML.trim()
-        
-        console.log('Checking initial content:', { currentHTML, isEmpty, hasValue: !!value })
-        
-        if (isEmpty && value && value !== '<p></p>') {
-          console.log('Setting initial content for collaboration:', value.substring(0, 100))
+        const isEmpty = currentHTML === "<p></p>" || currentHTML === "" || !currentHTML.trim()
+
+        console.log("Checking initial content:", { currentHTML, isEmpty, hasValue: !!value })
+
+        if (isEmpty && value && value !== "<p></p>") {
+          console.log("Setting initial content for collaboration:", value.substring(0, 100))
           editor.commands.setContent(value, { emitUpdate: false })
         }
-      }, 2000) 
+      }, 2000)
 
       return () => clearTimeout(timeout)
     }
   }, [editor, collabProvider, connectionStatus, value])
 
-  
   useEffect(() => {
     if (editor && !collabProvider && value !== editor.getHTML()) {
       editor.commands.setContent(value || "<p></p>", {
@@ -331,29 +306,27 @@ export default function Editor({
     }
   }, [value, editor, collabProvider])
 
-  
   useEffect(() => {
     if (editor) {
-      const manager = new MediaBlockManager(
-        editor, 
-        postId,
-        (position: number) => {
-          setPendingImagePosition(position)
-          setShowMediaSelector(true)
-        }
-      )
+      const manager = new MediaBlockManager(editor, postId, (position: number) => {
+        setPendingImagePosition(position)
+        setShowMediaSelector(true)
+      })
       setMediaBlockManager(manager)
     }
   }, [editor, postId])
 
-  const handleMediaSelect = useCallback(async (media: Media) => {
-    if (!mediaBlockManager || pendingImagePosition === null) return
-    
-    await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
-    
-    setShowMediaSelector(false)
-    setPendingImagePosition(null)
-  }, [mediaBlockManager, pendingImagePosition])
+  const handleMediaSelect = useCallback(
+    async (media: Media) => {
+      if (!mediaBlockManager || pendingImagePosition === null) return
+
+      await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
+
+      setShowMediaSelector(false)
+      setPendingImagePosition(null)
+    },
+    [mediaBlockManager, pendingImagePosition]
+  )
 
   const handleMediaSelectorClose = useCallback(() => {
     setShowMediaSelector(false)
@@ -370,32 +343,34 @@ export default function Editor({
           <div className="collaboration-info">
             <span className={`status-indicator status-indicator--${connectionStatus}`}></span>
             <span className="status-text">
-              {connectionStatus === 'connected' ? 'Connected' : 
-               connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+              {connectionStatus === "connected"
+                ? "Connected"
+                : connectionStatus === "connecting"
+                  ? "Connecting..."
+                  : "Offline"}
             </span>
             {connectedUsers.length > 1 && (
               <span className="user-count">
-                {connectedUsers.length - 1} other{connectedUsers.length === 2 ? '' : 's'} editing
+                {connectedUsers.length - 1} other{connectedUsers.length === 2 ? "" : "s"} editing
               </span>
             )}
           </div>
-          
-         {connectedUsers.length > 1 && (
+
+          {connectedUsers.length > 1 && (
             <div className="connected-users">
               {connectedUsers
-                .filter(user => user.id !== collabProvider?.provider.awareness.clientID)
+                .filter((user) => user.id !== collabProvider?.provider.awareness.clientID)
                 .slice(0, 3)
                 .map((user, index) => (
-                  <div 
-                    key={`user-${user.id}-${user.name}-${index}`}  
+                  <div
+                    key={`user-${user.id}-${user.name}-${index}`}
                     className="user-avatar"
                     style={{ backgroundColor: user.color }}
                     title={user.name}
                   >
                     {user.name.charAt(0).toUpperCase()}
                   </div>
-                ))
-              }
+                ))}
               {connectedUsers.length > 4 && (
                 <div key="more-users" className="user-avatar user-avatar--more">
                   +{connectedUsers.length - 4}
