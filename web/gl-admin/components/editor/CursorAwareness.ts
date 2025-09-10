@@ -28,12 +28,11 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
         state: {
           init: () => ({ decoSet: DecorationSet.empty }),
           apply(tr, old) {
-            
             const meta = tr.getMeta(key)
             if (meta?.decoSet) {
               return { decoSet: meta.decoSet }
             }
-            
+
             if (tr.docChanged) {
               return { decoSet: old.decoSet.map(tr.mapping, tr.doc) }
             }
@@ -60,7 +59,6 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               const color = buildColor(user)
               const label = buildLabel(user)
 
-              
               if (to > from) {
                 decos.push(
                   Decoration.inline(from, to, {
@@ -69,7 +67,6 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
                 )
               }
 
-              
               const caret = document.createElement("span")
               caret.className = "collab-caret"
               caret.style.cssText = `
@@ -95,7 +92,6 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               decos.push(Decoration.widget(h, wrap, { key: `caret-${clientId}` }))
             }
 
-            
             if (decos.length > 0) {
               const decoSet = DecorationSet.create(view.state.doc, decos)
               const tr = view.state.tr.setMeta(key, { decoSet })
@@ -104,18 +100,15 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
           }
 
           const onChange = () => {
-            
             const sel = view.state.selection
             awareness.setLocalStateField("selection", {
               anchor: sel.anchor,
               head: sel.head,
             })
 
-            
             render()
           }
 
-          
           onChange()
 
           awareness.on("change", onChange)
@@ -124,7 +117,6 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               awareness.off("change", onChange)
             },
             update() {
-              
               const sel = view.state.selection
               awareness.setLocalStateField("selection", {
                 anchor: sel.anchor,
