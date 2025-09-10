@@ -100,7 +100,12 @@ export default function PublishBar({
         )}
 
         <div className="publish-bar__right__actions">
-          <button type="button" className="btn btn--secondary" onClick={onSettingsToggle} title="Toggle Sidebar">
+          <button
+            type="button"
+            className="btn btn--secondary flex items-center justify-center gap-1"
+            onClick={onSettingsToggle}
+            title="Toggle Sidebar"
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
               <line x1="15" y1="3" x2="15" y2="21" stroke="currentColor" strokeWidth="2" />
