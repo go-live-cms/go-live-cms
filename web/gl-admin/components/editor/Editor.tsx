@@ -3,6 +3,7 @@ import { EditorContent, useEditor } from "@tiptap/react"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
 import BubbleMenu from "./ui/BubbleMenu"
 import DragHandle from "./ui/DragHandle"
+import CharacterCount from "./ui/CharacterCount"
 import { MediaBlockManager } from "./blocks/mediaBlocks"
 import FeaturedImageSelector from "./FeaturedImageSelector"
 import { getExtensions } from "./utils/extensions"
@@ -142,22 +143,7 @@ export default function Editor({
         <EditorContent editor={editor} />
       </div>
 
-      {/* Character Count */}
-      <div className="editor-meta">
-        <span className="char-count">{editor.storage.characterCount.characters()} characters</span>
-        {typeof minChars === "number" && (
-          <span className="char-limit">
-            min {minChars}
-            {editor.storage.characterCount.characters() < minChars ? " • too short" : ""}
-          </span>
-        )}
-        {typeof maxChars === "number" && (
-          <span className="char-limit">
-            max {maxChars}
-            {editor.storage.characterCount.characters() > maxChars ? " • too long" : ""}
-          </span>
-        )}
-      </div>
+      <CharacterCount editor={editor} minChars={minChars} maxChars={maxChars} />
 
       {showMediaSelector && (
         <FeaturedImageSelector
