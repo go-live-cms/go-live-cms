@@ -15,11 +15,10 @@ import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
-import { getSlashCommands, getTurnIntoCommandOptions } from "./Commands"
 import { getCursorCoords } from "./utils/cursorCoords"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "./utils/TurnInto"
 import CommandSelect, { type CommandSelectOption } from "./ui/CommandSelect"
-import { getAllBlocks } from "./blocks"
+import { getSlashCommandItems, getTurnIntoCommandOptions } from "./blocks"
 import { MediaBlockManager } from "./blocks/mediaBlocks"
 import FeaturedImageSelector from "./FeaturedImageSelector"
 import type { Media } from "@gl-admin/lib/api/types"
@@ -51,7 +50,7 @@ export default function Editor({
   const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
 
   const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => {
-    return getAllBlocks()
+    return getSlashCommandItems()
   }
 
   const [showDrag, setShowDrag] = useState(false)
@@ -155,7 +154,7 @@ export default function Editor({
 
   useEffect(() => {
     if (!editor) return
-    setTurnIntoOptions(getTurnIntoCommandOptions(editor))
+    setTurnIntoOptions(getTurnIntoCommandOptions())
     setTurnInto(computeTurnIntoFromSelection(editor))
   }, [editor])
 

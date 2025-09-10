@@ -1,22 +1,26 @@
-import type { SlashCommandItem } from "../SlashCommand"
+import type { Block } from "./index"
 
-export const listBlocks = [
+export const listBlocks: Block[] = [
   {
     title: "Bullet List",
     description: "Create a simple bullet list",
     icon: "•",
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).toggleBulletList().run()
+    command: ({ editor }) => {
+      editor.chain().focus().toggleBulletList().run()
     },
     aliases: ["ul", "list"],
+    slash: true,
+    turnInto: true,
   },
   {
     title: "Numbered List",
     description: "Create a numbered list",
     icon: "1.",
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).toggleOrderedList().run()
+    command: ({ editor }) => {
+      editor.chain().focus().toggleOrderedList().run()
     },
     aliases: ["ol", "ordered"],
+    slash: true,
+    turnInto: true,
   },
-] as SlashCommandItem[]
+]

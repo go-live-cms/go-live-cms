@@ -6,7 +6,7 @@ import { useSelect } from "@gl-admin/utils/select"
 export type CommandSelectOption = {
     value: string
     label: string
-    labelIcon?: string
+    label_icon?: string
     command?: ({ editor, range }: any) => void
 }
 
@@ -70,7 +70,7 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
                             role="option"
                             aria-selected={opt.value === value}
                         >
-                            {opt.labelIcon && <span className="text-md w-4 flex items-center justify-center">{opt.labelIcon}</span>}
+                            {opt.label_icon && <span className="text-md w-4 flex items-center justify-center">{opt.label_icon}</span>}
                             {opt.label}
                             {opt.value === value && <span className="ml-auto text-gray-400">✔️</span>}
                         </div>
