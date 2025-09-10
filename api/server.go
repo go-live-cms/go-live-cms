@@ -89,15 +89,27 @@ func (server *Server) setupRoutes() {
 	users.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteUser)           // DELETE /api/v1/users/:id
 
 	posts := v1.Group("/posts")
-	posts.POST("", authMiddleware(server.tokenMaker), server.createPost)       // POST /api/v1/posts
-	posts.GET("", server.getPosts)                                             // GET /api/v1/posts
-	posts.GET("/:id", server.getPostByID)                                      // GET /api/v1/posts/:id
-	posts.PUT("/:id", authMiddleware(server.tokenMaker), server.updatePost)    // PUT /api/v1/posts/:id
-	posts.DELETE("/:id", authMiddleware(server.tokenMaker), server.deletePost) // DELETE /api/v1/posts/:id
-	posts.GET("/user/:id", server.getPostsByUser)                              // GET /api/v1/posts/user/:id
-	posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms)                  // GET /api/v1/posts/:id/taxonomies
-	posts.GET("/:id/meta", server.getPostWithMeta)                             // GET /api/v1/posts/1/meta
-	posts.GET("/type/:type", server.getPostsByType)                            // GET /api/v1/posts/type/product
+	posts.POST("", authMiddleware(server.tokenMaker), server.createPost)                          // POST /api/v1/posts
+	posts.GET("", server.getPosts)                                                                // GET /api/v1/posts
+	posts.GET("/:id", server.getPostByID)                                                         // GET /api/v1/posts/:id
+	posts.PUT("/:id", authMiddleware(server.tokenMaker), server.updatePost)                       // PUT /api/v1/posts/:id
+	posts.DELETE("/:id", authMiddleware(server.tokenMaker), server.deletePost)                    // DELETE /api/v1/posts/:id
+	posts.GET("/user/:id", server.getPostsByUser)                                                 // GET /api/v1/posts/user/:id
+	posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms)                                     // GET /api/v1/posts/:id/taxonomies
+	posts.GET("/:id/meta", server.getPostMeta)                                                    // GET /api/v1/posts/:id/meta
+	posts.POST("/:id/meta", authMiddleware(server.tokenMaker), server.createOrUpdatePostMeta)     // POST /api/v1/posts/:id/meta
+	posts.DELETE("/:id/meta/:key", authMiddleware(server.tokenMaker), server.deletePostMetaByKey) // DELETE /api/v1/posts/:id/meta/:key
+
+	posts.POST("/:id/featured-image", authMiddleware(server.tokenMaker), server.setFeaturedImage)      // POST /api/v1/posts/:id/featured-image
+	posts.GET("/:id/featured-image", server.getFeaturedImageQuick)                                     // GET /api/v1/posts/:id/featured-image (quick URL access)
+	posts.GET("/:id/featured-image/full", server.getFeaturedImageFull)                                 // GET /api/v1/posts/:id/featured-image/full (full media object)
+	posts.DELETE("/:id/featured-image", authMiddleware(server.tokenMaker), server.removeFeaturedImage) // DELETE /api/v1/posts/:id/featured-image
+
+	posts.POST("/:id/media", authMiddleware(server.tokenMaker), server.createPostMedia)             // POST /api/v1/posts/:id/media
+	posts.GET("/:id/media", server.getPostMedia)                                                    // GET /api/v1/posts/:id/media
+	posts.DELETE("/:id/media/:media_id", authMiddleware(server.tokenMaker), server.deletePostMedia) // DELETE /api/v1/posts/:id/media/:media_id
+
+	posts.GET("/type/:type", server.getPostsByType) // GET /api/v1/posts/type/product
 
 	postTypes := v1.Group("/post-types")
 	postTypes.GET("", server.getPostTypes)      // GET /api/v1/post-types

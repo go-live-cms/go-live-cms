@@ -246,7 +246,14 @@
     &--visible {
       right: 0;
     }
+  
+  &__field-error {
+    color: var(--gl-danger-color, #dc3545) !important;
+    display: block;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
   }
+}
 }
 
 @media (width <= 1200px) {

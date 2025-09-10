@@ -19,6 +19,10 @@ import { getSlashCommands, getTurnIntoCommandOptions } from "./Commands"
 import { getCursorCoords } from "./utils/cursorCoords"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "./utils/TurnInto"
 import CommandSelect, { type CommandSelectOption } from "./ui/CommandSelect"
+import { getAllBlocks } from "./blocks"
+import { MediaBlockManager } from "./blocks/mediaBlocks"
+import FeaturedImageSelector from "./FeaturedImageSelector"
+import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
 type Props = {
@@ -28,6 +32,7 @@ type Props = {
   readOnly?: boolean
   minChars?: number
   maxChars?: number
+  postId?: number
 }
 
 const lowlight = createLowlight(common)
@@ -39,7 +44,15 @@ export default function Editor({
   readOnly = false,
   minChars,
   maxChars,
+  postId,
 }: Props) {
+  const [showMediaSelector, setShowMediaSelector] = useState(false)
+  const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
+  const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
+
+  const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => {
+    return getAllBlocks()
+  }
 
   const [showDrag, setShowDrag] = useState(false)
   const onDragHandleNodeChange = useCallback((data: { node: any; editor: TiptapEditor; pos: number }) => {
@@ -174,6 +187,37 @@ export default function Editor({
     }
   }, [value, editor])
 
+
+  useEffect(() => {
+    if (editor) {
+      const manager = new MediaBlockManager(
+        editor,
+        postId,
+        (position: number) => {
+          setPendingImagePosition(position)
+          setShowMediaSelector(true)
+        }
+      )
+      setMediaBlockManager(manager)
+
+      return () => {
+        manager.destroy()
+      }
+    }
+  }, [editor, postId])
+
+  const handleMediaSelect = useCallback(async (media: Media) => {
+    if (!mediaBlockManager || pendingImagePosition === null) return
+    await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
+    setShowMediaSelector(false)
+    setPendingImagePosition(null)
+  }, [mediaBlockManager, pendingImagePosition])
+
+  const handleMediaSelectorClose = useCallback(() => {
+    setShowMediaSelector(false)
+    setPendingImagePosition(null)
+  }, [])
+
   if (!editor) return null
 
   return (
@@ -250,6 +294,15 @@ export default function Editor({
           </span>
         )}
       </div>
-    </div >
+
+      {showMediaSelector && (
+        <FeaturedImageSelector
+          isOpen={showMediaSelector}
+          onClose={handleMediaSelectorClose}
+          onSelect={handleMediaSelect}
+          currentFeaturedImage={null}
+        />
+      )}
+    </div>
   )
 }

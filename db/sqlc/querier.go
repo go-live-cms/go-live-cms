@@ -15,8 +15,10 @@ type Querier interface {
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
+	CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error)
 	// Counting functions
 	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
 	CountTotalMedia(ctx context.Context) (int64, error)
@@ -41,6 +43,7 @@ type Querier interface {
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
 	DeletePost(ctx context.Context, id int64) error
 	DeletePostMedia(ctx context.Context, arg DeletePostMediaParams) error
+	DeletePostMediaByOrder(ctx context.Context, arg DeletePostMediaByOrderParams) error
 	DeletePostMedias(ctx context.Context, postID int64) error
 	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
 	DeletePostType(ctx context.Context, name string) error
@@ -51,6 +54,7 @@ type Querier interface {
 	DeleteUserPost(ctx context.Context, postID int64) error
 	DeleteUserPostsByUserID(ctx context.Context, userID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
+	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
 	GetMedia(ctx context.Context, id int64) (Medium, error)
 	GetMediaByPost(ctx context.Context, postID int64) ([]Medium, error)
 	GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error)
@@ -59,6 +63,7 @@ type Querier interface {
 	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
 	GetPost(ctx context.Context, id int64) (Post, error)
 	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
+	GetPostMedia(ctx context.Context, postID int64) ([]GetPostMediaRow, error)
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
 	GetPostMeta(ctx context.Context, postID int64) ([]PostMetum, error)
 	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
@@ -89,7 +94,9 @@ type Querier interface {
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, error)
 	ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error)
+	ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsByTypeWithAllMetaParams) ([]ListPostsByTypeWithAllMetaRow, error)
 	ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error)
+	ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error)
 	ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error)
 	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)

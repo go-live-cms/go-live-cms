@@ -1,4 +1,6 @@
 import React, { useState } from "react"
+import FeaturedImage from "./FeaturedImage"
+import { useFeaturedImage } from "@gl-admin/lib/hooks/useFeaturedImage"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/post-sidebar.scss"
 
@@ -28,6 +30,13 @@ export default function PostSidebar({
   onSlugChange,
 }: PostSidebarProps) {
   const [activeTab, setActiveTab] = useState<"general" | "advanced">("general")
+  
+  const {
+    featuredImage,
+    loading: featuredImageLoading,
+    error: featuredImageError,
+    setImage: setFeaturedImage,
+  } = useFeaturedImage(post.id)
 
   const handleFieldUpdate = (field: keyof Post, value: any) => {
     onUpdate({ [field]: value })
@@ -204,22 +213,17 @@ export default function PostSidebar({
             </div>
 
             <div className="post-settings__section">
-              <h4>Featured Media</h4>
-              <div className="post-settings__field">
-                <label>Featured Image</label>
-                <div className="post-settings__media-upload">
-                  <button className="post-settings__media-placeholder">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2-2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5l3.5-4.5z"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                    Set Featured Image
-                  </button>
-                </div>
-              </div>
+              <FeaturedImage
+                value={featuredImage}
+                onChange={setFeaturedImage}
+                postId={post.id}
+                disabled={!post.id} 
+              />
+              {featuredImageError && (
+                <small className="post-settings__field-error">
+                  Error: {featuredImageError}
+                </small>
+              )}
             </div>
           </>
         )}
