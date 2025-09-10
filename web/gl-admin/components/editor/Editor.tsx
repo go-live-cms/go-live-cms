@@ -15,6 +15,10 @@ import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
+import { getSlashCommands, getTurnIntoCommandOptions } from "./Commands"
+import { getCursorCoords } from "./utils/cursorCoords"
+import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "./utils/TurnInto"
+import CommandSelect, { type CommandSelectOption } from "./ui/CommandSelect"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
 type Props = {
@@ -36,93 +40,6 @@ export default function Editor({
   minChars,
   maxChars,
 }: Props) {
-  const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => [
-    {
-      title: "Heading 1",
-      description: "Section heading",
-      icon: "📝",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run()
-      },
-      aliases: ["h1", "heading1"],
-    },
-    {
-      title: "Heading 2",
-      description: "Section heading",
-
-      icon: "📝",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run()
-      },
-      aliases: ["h2", "heading2"],
-    },
-    {
-      title: "Heading 3",
-      description: "Section heading",
-      icon: "📝",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run()
-      },
-      aliases: ["h3", "heading3"],
-    },
-    {
-      title: "Bullet List",
-      description: "Create a simple bullet list",
-      icon: "•",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).toggleBulletList().run()
-      },
-      aliases: ["ul", "list"],
-    },
-    {
-      title: "Numbered List",
-      description: "Create a numbered list",
-      icon: "1.",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).toggleOrderedList().run()
-      },
-      aliases: ["ol", "ordered"],
-    },
-    {
-      title: "Quote",
-      description: "Add a blockquote",
-      icon: "💬",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setBlockquote().run()
-      },
-      aliases: ["quote", "blockquote"],
-    },
-    {
-      title: "Code Block",
-      description: "Add a code block with syntax highlighting",
-      icon: "💻",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setCodeBlock().run()
-      },
-      aliases: ["code", "codeblock"],
-    },
-    {
-      title: "Divider",
-      description: "Add a horizontal divider",
-      icon: "➖",
-      command: ({ editor, range }) => {
-        editor.chain().focus().deleteRange(range).setHorizontalRule().run()
-      },
-      aliases: ["hr", "divider", "separator"],
-    },
-    {
-      title: "Image",
-      description: "Add an image",
-      icon: "🖼️",
-      command: ({ editor, range }) => {
-        const url = window.prompt("Image URL")
-        if (url) {
-          editor.chain().focus().deleteRange(range).setImage({ src: url }).run()
-        }
-      },
-      aliases: ["img", "image", "picture"],
-    },
-  ]
 
   const [showDrag, setShowDrag] = useState(false)
   const onDragHandleNodeChange = useCallback((data: { node: any; editor: TiptapEditor; pos: number }) => {
@@ -131,40 +48,6 @@ export default function Editor({
     }
     else {
       setShowDrag(false)
-    }
-  }, [])
-
-  const getCursorCoords = useCallback((editor: TiptapEditor, range: { from: number; to: number }) => {
-    const { view } = editor
-    const { from } = range
-
-    try {
-      const coords = view.coordsAtPos(from)
-
-      const editorRect = view.dom.getBoundingClientRect()
-
-      return {
-        x: coords.left,
-        y: coords.bottom,
-        left: coords.left,
-        right: coords.right,
-        top: coords.top,
-        bottom: coords.bottom,
-        width: coords.right - coords.left,
-        height: coords.bottom - coords.top,
-      }
-    } catch (error) {
-      const editorRect = view.dom.getBoundingClientRect()
-      return {
-        x: editorRect.left + 20,
-        y: editorRect.top + 40,
-        left: editorRect.left + 20,
-        right: editorRect.left + 40,
-        top: editorRect.top + 20,
-        bottom: editorRect.top + 40,
-        width: 20,
-        height: 20,
-      }
     }
   }, [])
 
@@ -254,11 +137,40 @@ export default function Editor({
     },
   })
 
+  const [turnIntoOptions, setTurnIntoOptions] = useState<CommandSelectOption[]>([])
+  const [turnInto, setTurnInto] = useState<TurnIntoValue>('paragraph')
+
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
+    if (!editor) return
+    setTurnIntoOptions(getTurnIntoCommandOptions(editor))
+    setTurnInto(computeTurnIntoFromSelection(editor))
+  }, [editor])
+
+  const updateTurnInto = useCallback(() => {
+    if (!editor) return
+    const v = computeTurnIntoFromSelection(editor)
+    setTurnInto(v)
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor) return
+    editor.on('selectionUpdate', updateTurnInto)
+    editor.on('transaction', updateTurnInto)
+    return () => {
+      editor.off('selectionUpdate', updateTurnInto)
+      editor.off('transaction', updateTurnInto)
+    }
+  }, [editor, updateTurnInto])
+
+  useEffect(() => {
+    if (!editor) return
+    const current = editor.getHTML()
+
+    if (value !== current) {
       editor.commands.setContent(value || "<p></p>", {
         emitUpdate: false,
       })
+      setTurnInto(computeTurnIntoFromSelection(editor))
     }
   }, [value, editor])
 
@@ -299,9 +211,16 @@ export default function Editor({
         >
           🔗
         </button>
-        <div>
-          Turn Into!
-        </div>
+        <CommandSelect
+          options={turnIntoOptions}
+          value={turnInto}
+          onChange={(option) => {
+            if (!editor) return
+            const val = option.value as TurnIntoValue
+            setTurnInto(val)
+            applyTurnInto(editor, val, turnIntoOptions)
+          }}
+        />
       </BubbleMenu>
       {/* Drag Handle */}
       <DragHandle editor={editor} onNodeChange={onDragHandleNodeChange} className={`drag-handle-wrapper ${showDrag ? 'visible' : 'hidden'}`}>
