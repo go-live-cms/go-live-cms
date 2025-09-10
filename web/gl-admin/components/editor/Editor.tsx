@@ -1,19 +1,20 @@
-import React, { useEffect, useState, useCallback } from "react"
+import React, { useEffect, useState, useCallback, useMemo } from "react"
 import { EditorContent, useEditor, ReactRenderer } from "@tiptap/react"
-import DragHandle from '@tiptap/extension-drag-handle-react'
+import DragHandle from "@tiptap/extension-drag-handle-react"
 import { BubbleMenu } from "@tiptap/react/menus"
 import StarterKit from "@tiptap/starter-kit"
+import Collaboration from "@tiptap/extension-collaboration"
+import { CursorAwareness } from "./CursorAwareness"
 import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
 import Image from "@tiptap/extension-image"
-import Underline from "@tiptap/extension-underline"
 import TextAlign from "@tiptap/extension-text-align"
 import CharacterCount from "@tiptap/extension-character-count"
 import Typography from "@tiptap/extension-typography"
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
 import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { SlashCommandExtension, SlashCommandList, type SlashCommandItem } from "./SlashCommand"
+import { SlashCommandExtension } from "./SlashCommand"
 import { slashCommandManager } from "./SlashCommandManager"
 import { getCursorCoords } from "./utils/cursorCoords"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "./utils/TurnInto"
@@ -21,6 +22,7 @@ import CommandSelect, { type CommandSelectOption } from "./ui/CommandSelect"
 import { getSlashCommandItems, getTurnIntoCommandOptions } from "./blocks"
 import { MediaBlockManager } from "./blocks/mediaBlocks"
 import FeaturedImageSelector from "./FeaturedImageSelector"
+import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
@@ -32,6 +34,7 @@ type Props = {
   minChars?: number
   maxChars?: number
   postId?: number
+  enableCollaboration?: boolean
 }
 
 const lowlight = createLowlight(common)
@@ -44,39 +47,46 @@ export default function Editor({
   minChars,
   maxChars,
   postId,
+  enableCollaboration = true,
 }: Props) {
   const [showMediaSelector, setShowMediaSelector] = useState(false)
   const [pendingImagePosition, setPendingImagePosition] = useState<number | null>(null)
   const [mediaBlockManager, setMediaBlockManager] = useState<MediaBlockManager | null>(null)
 
-  const getSlashCommands = (editor: TiptapEditor): SlashCommandItem[] => {
-    return getSlashCommandItems()
-  }
+  // Collaboration provider (your feature)
+  const collabProvider = useMemo(() => {
+    if (postId && enableCollaboration && !readOnly) {
+      return CollaborationProvider.getInstance(postId)
+    }
+    return null
+  }, [postId, enableCollaboration, readOnly])
 
+  // Drag handle state (main branch feature)
   const [showDrag, setShowDrag] = useState(false)
   const onDragHandleNodeChange = useCallback((data: { node: any; editor: TiptapEditor; pos: number }) => {
     if (data.node && data.node.textContent && data.node.textContent.trim().length > 0) {
       setShowDrag(true)
-    }
-    else {
+    } else {
       setShowDrag(false)
     }
   }, [])
 
   const headingLabel = (lvl?: number) => {
     switch (lvl) {
-      case 1: return "Heading 1…";
-      case 2: return "Heading 2…";
-      case 3: return "Heading 3…";
-      default: return "Heading…";
+      case 1:
+        return "Heading 1…"
+      case 2:
+        return "Heading 2…"
+      case 3:
+        return "Heading 3…"
+      default:
+        return "Heading…"
     }
-  };
+  }
 
-  const editor = useEditor({
-    editable: !readOnly,
-    content: value || "<p></p>",
-    autofocus: "end",
-    extensions: [
+  // Extensions with both collaboration and drag handle
+  const extensions = useMemo(() => {
+    const baseExtensions = [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         codeBlock: false,
@@ -88,7 +98,6 @@ export default function Editor({
         defaultLanguage: "javascript",
       }),
       Typography,
-      Underline,
       Link.configure({
         autolink: true,
         openOnClick: false,
@@ -110,29 +119,27 @@ export default function Editor({
         placeholder: ({ node, editor }) => {
           switch (node.type.name) {
             case "codeBlock":
-              return "Write code…";
+              return "Write code…"
             case "blockquote":
-              return "Write a quote…";
+              return "Write a quote…"
             case "horizontalRule":
-              return "";
+              return ""
             case "image":
-              return "";
+              return ""
             case "heading":
-              return headingLabel(node.attrs?.level);
+              return headingLabel(node.attrs?.level)
             case "listItem":
-              return editor.isActive("orderedList")
-                ? "List item…"
-                : "List item…";
+              return editor.isActive("orderedList") ? "List item…" : "List item…"
             case "paragraph":
             default: {
-              if (editor.isActive("codeBlock")) return "Write code…";
-              if (editor.isActive("blockquote")) return "Write a quote…";
-              if (editor.isActive("orderedList")) return "List item…";
-              if (editor.isActive("bulletList")) return "List item…";
-              if (editor.isActive("heading", { level: 1 })) return headingLabel(1);
-              if (editor.isActive("heading", { level: 2 })) return headingLabel(2);
-              if (editor.isActive("heading", { level: 3 })) return headingLabel(3);
-              return placeholder || "Type '/' for commands…";
+              if (editor.isActive("codeBlock")) return "Write code…"
+              if (editor.isActive("blockquote")) return "Write a quote…"
+              if (editor.isActive("orderedList")) return "List item…"
+              if (editor.isActive("bulletList")) return "List item…"
+              if (editor.isActive("heading", { level: 1 })) return headingLabel(1)
+              if (editor.isActive("heading", { level: 2 })) return headingLabel(2)
+              if (editor.isActive("heading", { level: 3 })) return headingLabel(3)
+              return placeholder || "Type '/' for commands…"
             }
           }
         },
@@ -141,10 +148,7 @@ export default function Editor({
       SlashCommandExtension.configure({
         suggestion: {
           items: ({ query }: { query: string }) => {
-            if (!editor) return []
-
-            const commands = getSlashCommands(editor)
-            return commands
+            return getSlashCommandItems()
               .filter((item) => {
                 const searchTerm = query.toLowerCase()
                 return (
@@ -155,28 +159,48 @@ export default function Editor({
               })
               .slice(0, 10)
           },
-          render: () => {
-            return {
-              onStart: (props: any) => {
-                slashCommandManager.start(props, getCursorCoords)
-              },
-
-              onUpdate: (props: any) => {
-                slashCommandManager.update(props, getCursorCoords)
-              },
-
-              onKeyDown: (props: any) => {
-                return slashCommandManager.handleKeyDown(props)
-              },
-
-              onExit: () => {
-                slashCommandManager.exit()
-              },
-            }
-          },
+          render: () => ({
+            onStart: (props: any) => slashCommandManager.start(props, getCursorCoords),
+            onUpdate: (props: any) => slashCommandManager.update(props, getCursorCoords),
+            onKeyDown: (props: any) => slashCommandManager.handleKeyDown(props),
+            onExit: () => slashCommandManager.exit(),
+          }),
         },
       }),
-    ],
+    ]
+
+    // Add collaboration extensions (your feature)
+    if (collabProvider) {
+      const userState = collabProvider.provider.awareness.getLocalState()
+      console.log("Setting up collaboration for user:", userState?.user)
+      console.log("CollabProvider doc exists:", !!collabProvider.doc)
+      console.log("CollabProvider provider exists:", !!collabProvider.provider)
+
+      if (collabProvider.doc && collabProvider.provider && collabProvider.provider.awareness) {
+        baseExtensions.push(
+          Collaboration.configure({
+            document: collabProvider.doc,
+          })
+        )
+
+        console.log("Added Collaboration extension successfully")
+
+        const awareness = collabProvider.provider.awareness
+        baseExtensions.push(CursorAwareness.configure({ awareness }))
+        console.log("Added CursorAwareness extension successfully")
+      } else {
+        console.warn("CollaborationProvider not fully initialized, skipping collaboration extensions")
+      }
+    }
+
+    return baseExtensions
+  }, [collabProvider, maxChars, placeholder])
+
+  const editor = useEditor({
+    editable: !readOnly,
+    extensions,
+    content: !collabProvider ? value || "<p></p>" : undefined,
+    autofocus: "end",
     onUpdate({ editor }) {
       const html = editor.getHTML()
       const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
@@ -190,8 +214,9 @@ export default function Editor({
   })
 
   const [turnIntoOptions, setTurnIntoOptions] = useState<CommandSelectOption[]>([])
-  const [turnInto, setTurnInto] = useState<TurnIntoValue>('paragraph')
+  const [turnInto, setTurnInto] = useState<TurnIntoValue>("paragraph")
 
+  // Turn-into functionality (main branch)
   useEffect(() => {
     if (!editor) return
     setTurnIntoOptions(getTurnIntoCommandOptions())
@@ -206,51 +231,72 @@ export default function Editor({
 
   useEffect(() => {
     if (!editor) return
-    editor.on('selectionUpdate', updateTurnInto)
-    editor.on('transaction', updateTurnInto)
+    editor.on("selectionUpdate", updateTurnInto)
+    editor.on("transaction", updateTurnInto)
     return () => {
-      editor.off('selectionUpdate', updateTurnInto)
-      editor.off('transaction', updateTurnInto)
+      editor.off("selectionUpdate", updateTurnInto)
+      editor.off("transaction", updateTurnInto)
     }
   }, [editor, updateTurnInto])
 
+  // Collaboration synced seeding (your feature)
+  useEffect(() => {
+    if (!editor || !collabProvider) return
+    const onSynced = (isSynced: boolean) => {
+      if (!isSynced) return
+      const frag = collabProvider.doc.getXmlFragment("prosemirror")
+      const emptyShared = frag.length === 0
+      const emptyLocal = editor.isEmpty
+      if (isSynced && emptyShared && emptyLocal && value && value !== "<p></p>") {
+        editor.commands.setContent(value, { emitUpdate: false })
+      }
+      collabProvider.provider.off("synced", onSynced)
+    }
+    collabProvider.provider.on("synced", onSynced)
+    return () => collabProvider.provider.off("synced", onSynced)
+  }, [editor, collabProvider, value])
+
+  // Content updates for non-collaboration mode
   useEffect(() => {
     if (!editor) return
     const current = editor.getHTML()
 
-    if (value !== current) {
+    if (value !== current && !collabProvider) {
       editor.commands.setContent(value || "<p></p>", {
         emitUpdate: false,
       })
       setTurnInto(computeTurnIntoFromSelection(editor))
     }
-  }, [value, editor])
+  }, [value, editor, collabProvider])
 
-
+  // Media block manager
   useEffect(() => {
     if (editor) {
-      const manager = new MediaBlockManager(
-        editor,
-        postId,
-        (position: number) => {
-          setPendingImagePosition(position)
-          setShowMediaSelector(true)
-        }
-      )
+      const manager = new MediaBlockManager(editor, postId, (position: number) => {
+        setPendingImagePosition(position)
+        setShowMediaSelector(true)
+      })
       setMediaBlockManager(manager)
-
-      return () => {
-        manager.destroy()
-      }
     }
   }, [editor, postId])
 
-  const handleMediaSelect = useCallback(async (media: Media) => {
-    if (!mediaBlockManager || pendingImagePosition === null) return
-    await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
-    setShowMediaSelector(false)
-    setPendingImagePosition(null)
-  }, [mediaBlockManager, pendingImagePosition])
+  // Collaboration provider cleanup (your feature)
+  useEffect(() => {
+    if (!postId || !collabProvider) return
+    return () => {
+      CollaborationProvider.release(postId)
+    }
+  }, [postId, collabProvider])
+
+  const handleMediaSelect = useCallback(
+    async (media: Media) => {
+      if (!mediaBlockManager || pendingImagePosition === null) return
+      await mediaBlockManager.handleMediaSelect(media, pendingImagePosition)
+      setShowMediaSelector(false)
+      setPendingImagePosition(null)
+    },
+    [mediaBlockManager, pendingImagePosition]
+  )
 
   const handleMediaSelectorClose = useCallback(() => {
     setShowMediaSelector(false)
