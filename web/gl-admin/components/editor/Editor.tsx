@@ -1,27 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { EditorContent, useEditor, ReactRenderer } from "@tiptap/react"
-import DragHandle from "@tiptap/extension-drag-handle-react"
-import StarterKit from "@tiptap/starter-kit"
-import Collaboration from "@tiptap/extension-collaboration"
-import { CursorAwareness } from "./CursorAwareness"
-import Placeholder from "@tiptap/extension-placeholder"
-import Link from "@tiptap/extension-link"
-import Image from "@tiptap/extension-image"
-import TextAlign from "@tiptap/extension-text-align"
-import CharacterCount from "@tiptap/extension-character-count"
-import Typography from "@tiptap/extension-typography"
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
-import { createLowlight, common } from "lowlight"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { SlashCommandExtension } from "./SlashCommand"
-import { slashCommandManager } from "./SlashCommandManager"
-import { getCursorCoords } from "./utils/cursorCoords"
+import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
+import DragHandle from "@tiptap/extension-drag-handle-react"
 import BubbleMenu from "./ui/BubbleMenu"
-import { getSlashCommandItems, getTurnIntoCommandOptions } from "./blocks"
 import { MediaBlockManager } from "./blocks/mediaBlocks"
 import FeaturedImageSelector from "./FeaturedImageSelector"
-import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
-import { editorPlaceholderConfig } from "./utils/editor"
+import { getExtensions } from "./utils/extensions"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
@@ -35,8 +20,6 @@ type Props = {
   postId?: number
   enableCollaboration?: boolean
 }
-
-const lowlight = createLowlight(common)
 
 export default function Editor({
   value,
@@ -71,86 +54,7 @@ export default function Editor({
   }, [])
 
   // Extensions with both collaboration and drag handle
-  const extensions = useMemo(() => {
-    const baseExtensions = [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        codeBlock: false,
-        dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
-        link: false,
-      }),
-      CodeBlockLowlight.configure({
-        lowlight,
-        defaultLanguage: "javascript",
-      }),
-      Typography,
-      Link.configure({
-        autolink: true,
-        openOnClick: false,
-        validate: (href) => /^https?:\/\//.test(href),
-        HTMLAttributes: {
-          class: "editor-link",
-        },
-      }),
-      Image.configure({
-        allowBase64: false,
-        HTMLAttributes: {
-          class: "editor-image",
-        },
-      }),
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Placeholder.configure(editorPlaceholderConfig),
-      CharacterCount.configure({ limit: maxChars }),
-      SlashCommandExtension.configure({
-        suggestion: {
-          items: ({ query }: { query: string }) => {
-            return getSlashCommandItems()
-              .filter((item) => {
-                const searchTerm = query.toLowerCase()
-                return (
-                  item.title.toLowerCase().includes(searchTerm) ||
-                  item.description.toLowerCase().includes(searchTerm) ||
-                  (item.aliases && item.aliases.some((alias) => alias.includes(searchTerm)))
-                )
-              })
-              .slice(0, 10)
-          },
-          render: () => ({
-            onStart: (props: any) => slashCommandManager.start(props, getCursorCoords),
-            onUpdate: (props: any) => slashCommandManager.update(props, getCursorCoords),
-            onKeyDown: (props: any) => slashCommandManager.handleKeyDown(props),
-            onExit: () => slashCommandManager.exit(),
-          }),
-        },
-      }),
-    ]
-
-    // Add collaboration extensions (your feature)
-    if (collabProvider) {
-      const userState = collabProvider.provider.awareness.getLocalState()
-      console.log("Setting up collaboration for user:", userState?.user)
-      console.log("CollabProvider doc exists:", !!collabProvider.doc)
-      console.log("CollabProvider provider exists:", !!collabProvider.provider)
-
-      if (collabProvider.doc && collabProvider.provider && collabProvider.provider.awareness) {
-        baseExtensions.push(
-          Collaboration.configure({
-            document: collabProvider.doc,
-          })
-        )
-
-        console.log("Added Collaboration extension successfully")
-
-        const awareness = collabProvider.provider.awareness
-        baseExtensions.push(CursorAwareness.configure({ awareness }))
-        console.log("Added CursorAwareness extension successfully")
-      } else {
-        console.warn("CollaborationProvider not fully initialized, skipping collaboration extensions")
-      }
-    }
-
-    return baseExtensions
-  }, [collabProvider, maxChars, placeholder])
+  const extensions = useMemo(getExtensions({ collabProvider, maxChars, placeholder }), [collabProvider, maxChars, placeholder])
 
   const editor = useEditor({
     editable: !readOnly,

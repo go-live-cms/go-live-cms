@@ -1,5 +1,5 @@
 import { ReactRenderer } from "@tiptap/react"
-import { SlashCommandList } from "./SlashCommand"
+import { SlashCommandList } from "../SlashCommand"
 
 interface SlashCommandListRef {
   onKeyDown: (props: { event: KeyboardEvent; [key: string]: any }) => boolean
