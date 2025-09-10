@@ -1,12 +1,27 @@
-import type { SlashCommandItem } from "../SlashCommand"
+import type { Block } from "./index"
 
-export const textBlocks = [
+export const textBlocks: Block[] = [
+  {
+    title: "Paragraph",
+    description: "Standard text block",
+    icon: "📃",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setParagraph().run()
+    },
+    turnInto: ({ editor }) => {
+      editor.chain().focus().setParagraph().run()
+    },
+    aliases: ["p", "paragraph", "text"],
+  },
   {
     title: "Quote",
     description: "Add a blockquote",
     icon: "💬",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setBlockquote().run()
+    },
+    turnInto: ({ editor }) => {
+      editor.chain().focus().setBlockquote().run()
     },
     aliases: ["quote", "blockquote"],
   },
@@ -16,6 +31,9 @@ export const textBlocks = [
     icon: "💻",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setCodeBlock().run()
+    },
+    turnInto: ({ editor }) => {
+      editor.chain().focus().setCodeBlock().run()
     },
     aliases: ["code", "codeblock"],
   },
@@ -28,4 +46,4 @@ export const textBlocks = [
     },
     aliases: ["hr", "divider", "separator"],
   },
-] as SlashCommandItem[]
+]
