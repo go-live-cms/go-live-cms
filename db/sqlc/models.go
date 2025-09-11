@@ -81,15 +81,20 @@ type PostType struct {
 }
 
 type Session struct {
-	ID           uuid.UUID `json:"id"`
-	UserID       int64     `json:"user_id"`
-	Username     string    `json:"username"`
-	RefreshToken string    `json:"refresh_token"`
-	UserAgent    string    `json:"user_agent"`
-	ClientIp     string    `json:"client_ip"`
-	IsBlocked    bool      `json:"is_blocked"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID               uuid.UUID      `json:"id"`
+	UserID           int64          `json:"user_id"`
+	Username         string         `json:"username"`
+	RefreshToken     string         `json:"refresh_token"`
+	UserAgent        string         `json:"user_agent"`
+	ClientIp         string         `json:"client_ip"`
+	IsBlocked        bool           `json:"is_blocked"`
+	ExpiresAt        time.Time      `json:"expires_at"`
+	CreatedAt        time.Time      `json:"created_at"`
+	RefreshTokenHash []byte         `json:"refresh_token_hash"`
+	RefreshKid       sql.NullString `json:"refresh_kid"`
+	Jti              uuid.NullUUID  `json:"jti"`
+	RotatedAt        sql.NullTime   `json:"rotated_at"`
+	ReplacedBy       uuid.NullUUID  `json:"replaced_by"`
 }
 
 type TaxonomyTerm struct {

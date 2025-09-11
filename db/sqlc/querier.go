@@ -77,6 +77,7 @@ type Querier interface {
 	GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxonomyTermParams) ([]Post, error)
 	GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
+	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetTaxonomyTerm(ctx context.Context, id int64) (TaxonomyTerm, error)
 	GetTaxonomyTermBySlug(ctx context.Context, slug string) (GetTaxonomyTermBySlugRow, error)
 	// Hierarchical term tree (for categories)
@@ -107,6 +108,7 @@ type Querier interface {
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
+	RotateSession(ctx context.Context, arg RotateSessionParams) error
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// Search and filtering
 	SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTermsParams) ([]SearchTaxonomyTermsRow, error)

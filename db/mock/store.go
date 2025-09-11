@@ -1093,6 +1093,21 @@ func (mr *MockStoreMockRecorder) GetSession(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSession", reflect.TypeOf((*MockStore)(nil).GetSession), arg0, arg1)
 }
 
+// GetSessionByRefreshTokenHash mocks base method.
+func (m *MockStore) GetSessionByRefreshTokenHash(arg0 context.Context, arg1 []byte) (db.Session, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSessionByRefreshTokenHash", arg0, arg1)
+	ret0, _ := ret[0].(db.Session)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSessionByRefreshTokenHash indicates an expected call of GetSessionByRefreshTokenHash.
+func (mr *MockStoreMockRecorder) GetSessionByRefreshTokenHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessionByRefreshTokenHash", reflect.TypeOf((*MockStore)(nil).GetSessionByRefreshTokenHash), arg0, arg1)
+}
+
 // GetTaxonomyTerm mocks base method.
 func (m *MockStore) GetTaxonomyTerm(arg0 context.Context, arg1 int64) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
@@ -1523,6 +1538,20 @@ func (m *MockStore) RemovePostFromTaxonomyTerm(arg0 context.Context, arg1 db.Rem
 func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostFromTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).RemovePostFromTaxonomyTerm), arg0, arg1)
+}
+
+// RotateSession mocks base method.
+func (m *MockStore) RotateSession(arg0 context.Context, arg1 db.RotateSessionParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RotateSession", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RotateSession indicates an expected call of RotateSession.
+func (mr *MockStoreMockRecorder) RotateSession(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateSession", reflect.TypeOf((*MockStore)(nil).RotateSession), arg0, arg1)
 }
 
 // SearchMediaByName mocks base method.
