@@ -112,7 +112,7 @@ export class AuthManager {
 
   async logout(): Promise<void> {
     try {
-      await logout(this.state.accessToken || undefined) // Pass access token for authentication
+      await logout(this.state.accessToken || undefined)
     } catch (error) {
       console.error("Logout error:", error)
     } finally {
