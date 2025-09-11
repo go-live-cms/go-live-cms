@@ -162,7 +162,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/api/v1/auth/refresh",
+		Path:     "/api/v1/auth", // Broader path to include refresh AND logout
 		Expires:  time.Now().Add(server.config.RefreshTokenDuration),
 		Domain:   server.config.CookieDomain,
 	})
@@ -339,7 +339,7 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/api/v1/auth/refresh",
+		Path:     "/api/v1/auth", // Broader path to include refresh AND logout
 		Expires:  time.Now().Add(server.config.RefreshTokenDuration),
 		Domain:   server.config.CookieDomain,
 	})
@@ -454,7 +454,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 			HttpOnly: true,
 			Secure:   true,
 			SameSite: http.SameSiteStrictMode,
-			Path:     "/api/v1/auth/refresh",
+			Path:     "/api/v1/auth", // Same path as when setting
 			MaxAge:   -1,
 			Domain:   server.config.CookieDomain,
 		})
@@ -474,7 +474,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteStrictMode,
-				Path:     "/api/v1/auth/refresh",
+				Path:     "/api/v1/auth", // Same path as when setting
 				MaxAge:   -1,
 				Domain:   server.config.CookieDomain,
 			})
@@ -497,7 +497,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		Path:     "/api/v1/auth/refresh",
+		Path:     "/api/v1/auth", // Same path as when setting
 		MaxAge:   -1,
 		Domain:   server.config.CookieDomain,
 	})
