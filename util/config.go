@@ -25,6 +25,8 @@ type Config struct {
 	PasetoAccessKID       string        `mapstructure:"PASETO_ACCESS_KID"`
 	PasetoRefreshKID      string        `mapstructure:"PASETO_REFRESH_KID"`
 	CookieDomain          string        `mapstructure:"COOKIE_DOMAIN"`
+	CookieSecure          bool          `mapstructure:"COOKIE_SECURE"`
+	IsDevelopment         bool          `mapstructure:"IS_DEVELOPMENT"`
 }
 
 func LoadConfig(path string) (config Config, err error) {
@@ -44,6 +46,8 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("PASETO_ACCESS_KID", "k4.pub.2025-09")
 	viper.SetDefault("PASETO_REFRESH_KID", "k4.loc.2025-09")
 	viper.SetDefault("COOKIE_DOMAIN", "localhost")
+	viper.SetDefault("COOKIE_SECURE", false)
+	viper.SetDefault("IS_DEVELOPMENT", true)
 
 	if err = viper.ReadInConfig(); err != nil {
 
