@@ -192,7 +192,6 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		ID:               sessionID,
 		UserID:           user.ID,
 		Username:         user.Username,
-		RefreshToken:     "",
 		RefreshTokenHash: refreshHash,
 		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
 		Jti:              uuid.NullUUID{UUID: jtiUUID, Valid: true},
@@ -266,7 +265,8 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 			if s2, err2 := server.store.GetAnySessionByRefreshTokenHash(ctx.Request.Context(), refreshHash); err2 == nil {
 
 				_ = server.store.BlockAllSessionsForUser(ctx.Request.Context(), s2.UserID)
-				fmt.Printf("🚨 Refresh token reuse detected for user %s (ID: %d) - all sessions blocked\n", s2.Username, s2.UserID)
+
+				fmt.Printf("🚨 Refresh token reuse detected for user ID: %d - all sessions blocked\n", s2.UserID)
 				ctx.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token reuse detected"})
 				return
 			}
@@ -314,16 +314,6 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		fmt.Printf("⚠️ IP address change detected for user %s: %s -> %s\n", username, session.ClientIp, currentIP)
 	}
 
-	accessToken, err := server.tokenMaker.CreateToken(
-		userID,
-		username,
-		server.config.AccessTokenDuration,
-	)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create access token"})
-		return
-	}
-
 	newRefreshToken, err := server.tokenMaker.CreateRefreshToken(
 		userID,
 		username,
@@ -367,7 +357,6 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 			ID:               newSessionID,
 			UserID:           userID,
 			Username:         username,
-			RefreshToken:     "",
 			RefreshTokenHash: newRefreshHash,
 			RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
 			Jti:              uuid.NullUUID{UUID: newJtiUUID, Valid: true},
@@ -396,6 +385,16 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate session atomically"})
+		return
+	}
+
+	accessToken, err := server.tokenMaker.CreateToken(
+		userID,
+		username,
+		server.config.AccessTokenDuration,
+	)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create access token"})
 		return
 	}
 

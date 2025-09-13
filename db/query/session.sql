@@ -3,7 +3,6 @@ INSERT INTO sessions (
     id,
     user_id,
     username,
-    refresh_token,
     refresh_token_hash,
     refresh_kid,
     jti,
@@ -12,7 +11,7 @@ INSERT INTO sessions (
     is_blocked,
     expires_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 ) RETURNING *;
 
 -- name: UpdateSession :one

@@ -2,7 +2,6 @@ package token
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strconv"
@@ -53,7 +52,7 @@ func (m *PasetoV4Maker) CreateToken(userID int64, username string, dur time.Dura
 	t := p.NewToken()
 	now := time.Now()
 	t.SetIssuedAt(now)
-	t.SetNotBefore(now)
+	t.SetNotBefore(now.Add(-15 * time.Second))
 	t.SetExpiration(now.Add(dur))
 	t.SetIssuer(m.keys.Issuer)
 	t.SetAudience(m.keys.Audience)
@@ -73,7 +72,7 @@ func (m *PasetoV4Maker) CreateRefreshToken(userID int64, username string, dur ti
 	t := p.NewToken()
 	now := time.Now()
 	t.SetIssuedAt(now)
-	t.SetNotBefore(now)
+	t.SetNotBefore(now.Add(-15 * time.Second))
 	t.SetExpiration(now.Add(dur))
 	t.SetIssuer(m.keys.Issuer)
 	t.SetAudience(m.keys.Audience)
@@ -143,19 +142,4 @@ func (m *PasetoV4Maker) ParseRefresh(tok string) (*p.Token, error) {
 func HashRefresh(token string) []byte {
 	h := sha256.Sum256([]byte(token))
 	return h[:]
-}
-
-func HashToHex(b []byte) string {
-	return hex.EncodeToString(b)
-}
-
-func EqualHash(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	var result byte
-	for i := 0; i < len(a); i++ {
-		result |= a[i] ^ b[i]
-	}
-	return result == 0
 }
