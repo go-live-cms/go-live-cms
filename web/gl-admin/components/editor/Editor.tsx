@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
+import { applyLink, openLinkModal } from "./utils/linkManager"
+import LinkModal from "./ui/LinkModal"
 import BubbleMenu from "./ui/BubbleMenu"
 import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
@@ -29,6 +31,9 @@ export default function Editor({
   postId,
   enableCollaboration = true,
 }: Props) {
+  // Link modal
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [url, setUrl] = useState('');
 
   // Collaboration provider
   const collabProvider = useMemo(() => {
@@ -40,8 +45,8 @@ export default function Editor({
 
   // Editor extensions
   const extensions = useMemo(
-    getExtensions({ collabProvider, maxChars, placeholder }),
-    [collabProvider, maxChars, placeholder]
+    getExtensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }),
+    [collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen]
   )
 
   // Initialize Editor
@@ -61,6 +66,18 @@ export default function Editor({
       },
     },
   })
+
+  // Apply link function
+  const applyLinkWithModal = useCallback(() => {
+    if (!editor) return;
+    applyLink(editor, url, setIsLinkModalOpen);
+  }, [editor, url]);
+
+  // Open link modal function
+  const openLinkModalWithEditor = useCallback(() => {
+    if (!editor) return;
+    openLinkModal(editor, setUrl, setIsLinkModalOpen);
+  }, [editor]);
 
   // Collaboration content sync
   useEffect(() => {
@@ -103,7 +120,7 @@ export default function Editor({
 
   return (
     <div className="notion-editor">
-      <BubbleMenu editor={editor} />
+      <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />
       <DragHandle editor={editor} />
       <MediaSelector editor={editor} postId={postId} />
 
@@ -111,6 +128,15 @@ export default function Editor({
         <EditorContent editor={editor} />
       </div>
 
+      {isLinkModalOpen && (
+        <LinkModal
+          editor={editor}
+          setIsLinkModalOpen={setIsLinkModalOpen}
+          applyLink={applyLinkWithModal}
+          url={url}
+          setUrl={setUrl}
+        />
+      )}
       <CharacterCount editor={editor} minChars={minChars} maxChars={maxChars} />
     </div>
   )
