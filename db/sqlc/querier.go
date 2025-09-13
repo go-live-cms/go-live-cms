@@ -14,6 +14,7 @@ import (
 type Querier interface {
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
+	BlockAllSessionsForUser(ctx context.Context, userID int64) error
 	BlockSession(ctx context.Context, id uuid.UUID) error
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
@@ -54,6 +55,7 @@ type Querier interface {
 	DeleteUserPost(ctx context.Context, postID int64) error
 	DeleteUserPostsByUserID(ctx context.Context, userID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
+	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
 	GetMedia(ctx context.Context, id int64) (Medium, error)
 	GetMediaByPost(ctx context.Context, postID int64) ([]Medium, error)
@@ -77,6 +79,8 @@ type Querier interface {
 	GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxonomyTermParams) ([]Post, error)
 	GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
+	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
+	GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error)
 	GetTaxonomyTerm(ctx context.Context, id int64) (TaxonomyTerm, error)
 	GetTaxonomyTermBySlug(ctx context.Context, slug string) (GetTaxonomyTermBySlugRow, error)
 	// Hierarchical term tree (for categories)
@@ -107,6 +111,7 @@ type Querier interface {
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
+	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// Search and filtering
 	SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTermsParams) ([]SearchTaxonomyTermsRow, error)

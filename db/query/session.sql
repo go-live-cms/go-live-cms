@@ -3,13 +3,15 @@ INSERT INTO sessions (
     id,
     user_id,
     username,
-    refresh_token,
+    refresh_token_hash,
+    refresh_kid,
+    jti,
     user_agent,
     client_ip,
     is_blocked,
     expires_at
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 ) RETURNING *;
 
 -- name: UpdateSession :one
@@ -41,6 +43,29 @@ RETURNING *;
 UPDATE sessions
 SET is_blocked = true
 WHERE id = $1;
+
+-- name: GetSessionByRefreshTokenHash :one
+SELECT * FROM sessions
+WHERE refresh_token_hash = $1 AND is_blocked = false LIMIT 1;
+
+-- name: GetSessionForUpdate :one
+SELECT * FROM sessions WHERE id = $1 FOR UPDATE;
+
+-- name: GetAnySessionByRefreshTokenHash :one
+SELECT * FROM sessions WHERE refresh_token_hash = $1 LIMIT 1;
+
+-- name: RotateToNewSession :execrows
+UPDATE sessions
+SET 
+    rotated_at = NOW(),
+    replaced_by = $2,
+    is_blocked = true
+WHERE id = $1 AND is_blocked = false;
+
+-- name: BlockAllSessionsForUser :exec
+UPDATE sessions
+SET is_blocked = true
+WHERE user_id = $1 AND is_blocked = false;
 
 -- name: CountTotalSessions :one
 SELECT COUNT(*) AS total FROM sessions;

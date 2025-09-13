@@ -4,7 +4,7 @@ export interface AuthState {
   isAuthenticated: boolean
   user: any | null
   accessToken: string | null
-  refreshToken: string | null
+  refreshToken: null
   tokenExpiry: number | null
 }
 
@@ -39,7 +39,6 @@ export class AuthManager {
     }
 
     const accessToken = localStorage.getItem("access_token")
-    const refreshToken = localStorage.getItem("refresh_token")
     const user = localStorage.getItem("user")
     const tokenExpiry = localStorage.getItem("token_expiry")
 
@@ -47,7 +46,7 @@ export class AuthManager {
       isAuthenticated: !!accessToken && this.isTokenValid(tokenExpiry),
       user: user ? JSON.parse(user) : null,
       accessToken,
-      refreshToken,
+      refreshToken: null,
       tokenExpiry: tokenExpiry ? parseInt(tokenExpiry) : null,
     }
   }
@@ -82,19 +81,22 @@ export class AuthManager {
     try {
       const response = await login({ username, password })
 
-      const tokenExpiry = response.expires_at ? response.expires_at * 1000 : Date.now() + 15 * 60 * 1000
+      const tokenExpiry = response.access_token_expires_at
+        ? new Date(response.access_token_expires_at).getTime()
+        : response.expires_at
+          ? response.expires_at * 1000
+          : Date.now() + 15 * 60 * 1000
 
       this.state = {
         isAuthenticated: true,
         user: response.user,
         accessToken: response.access_token,
-        refreshToken: response.refresh_token,
+        refreshToken: null,
         tokenExpiry,
       }
 
       if (typeof window !== "undefined") {
         localStorage.setItem("access_token", response.access_token)
-        localStorage.setItem("refresh_token", response.refresh_token)
         localStorage.setItem("user", JSON.stringify(response.user))
         localStorage.setItem("token_expiry", tokenExpiry.toString())
       }
@@ -110,9 +112,7 @@ export class AuthManager {
 
   async logout(): Promise<void> {
     try {
-      if (this.state.refreshToken) {
-        await logout({ refresh_token: this.state.refreshToken })
-      }
+      await logout(this.state.accessToken || undefined)
     } catch (error) {
       console.error("Logout error:", error)
     } finally {
@@ -134,7 +134,6 @@ export class AuthManager {
 
     if (typeof window !== "undefined") {
       localStorage.removeItem("access_token")
-      localStorage.removeItem("refresh_token")
       localStorage.removeItem("user")
       localStorage.removeItem("token_expiry")
     }
@@ -151,11 +150,6 @@ export class AuthManager {
       return true // Token is still valid
     }
 
-    if (!this.state.refreshToken) {
-      this.clearAuth()
-      return false
-    }
-
     this.lastRefreshAttempt = Date.now()
 
     this.refreshPromise = this.performRefresh()
@@ -169,11 +163,14 @@ export class AuthManager {
     try {
       console.log("refreshing access token...")
 
-      const response = await renewAccessToken({
-        refresh_token: this.state.refreshToken!,
-      })
+      const response = await renewAccessToken() // No parameters - uses HttpOnly cookie
 
-      const tokenExpiry = response.expires_at ? response.expires_at * 1000 : Date.now() + 15 * 60 * 1000
+      // Use access_token_expires_at or expires_at field from response
+      const tokenExpiry = response.access_token_expires_at
+        ? new Date(response.access_token_expires_at).getTime()
+        : response.expires_at
+          ? response.expires_at * 1000
+          : Date.now() + 15 * 60 * 1000
 
       this.state.accessToken = response.access_token
       this.state.tokenExpiry = tokenExpiry
