@@ -79,6 +79,23 @@ export default function Editor({
     openLinkModal(editor, setUrl, setIsLinkModalOpen);
   }, [editor]);
 
+  // Keyboard shortcut for opening link modal
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) return;
+      if (!editor) return;
+
+      const selection = editor.state.selection;
+      if (selection.empty || selection.from === selection.to) return;
+
+      e.preventDefault();
+      openLinkModalWithEditor();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [editor, openLinkModalWithEditor]);
+
   // Collaboration content sync
   useEffect(() => {
     if (!editor || !collabProvider) return
