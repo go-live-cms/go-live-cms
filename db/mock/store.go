@@ -762,6 +762,21 @@ func (mr *MockStoreMockRecorder) ExecTx(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecTx", reflect.TypeOf((*MockStore)(nil).ExecTx), arg0, arg1)
 }
 
+// GetAnySessionByRefreshTokenHash mocks base method.
+func (m *MockStore) GetAnySessionByRefreshTokenHash(arg0 context.Context, arg1 []byte) (db.Session, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAnySessionByRefreshTokenHash", arg0, arg1)
+	ret0, _ := ret[0].(db.Session)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAnySessionByRefreshTokenHash indicates an expected call of GetAnySessionByRefreshTokenHash.
+func (mr *MockStoreMockRecorder) GetAnySessionByRefreshTokenHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAnySessionByRefreshTokenHash", reflect.TypeOf((*MockStore)(nil).GetAnySessionByRefreshTokenHash), arg0, arg1)
+}
+
 // GetFeaturedImage mocks base method.
 func (m *MockStore) GetFeaturedImage(arg0 context.Context, arg1 int64) (db.GetFeaturedImageRow, error) {
 	m.ctrl.T.Helper()
@@ -1120,6 +1135,21 @@ func (m *MockStore) GetSessionByRefreshTokenHash(arg0 context.Context, arg1 []by
 func (mr *MockStoreMockRecorder) GetSessionByRefreshTokenHash(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessionByRefreshTokenHash", reflect.TypeOf((*MockStore)(nil).GetSessionByRefreshTokenHash), arg0, arg1)
+}
+
+// GetSessionForUpdate mocks base method.
+func (m *MockStore) GetSessionForUpdate(arg0 context.Context, arg1 uuid.UUID) (db.Session, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSessionForUpdate", arg0, arg1)
+	ret0, _ := ret[0].(db.Session)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSessionForUpdate indicates an expected call of GetSessionForUpdate.
+func (mr *MockStoreMockRecorder) GetSessionForUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessionForUpdate", reflect.TypeOf((*MockStore)(nil).GetSessionForUpdate), arg0, arg1)
 }
 
 // GetTaxonomyTerm mocks base method.
@@ -1555,11 +1585,12 @@ func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface
 }
 
 // RotateToNewSession mocks base method.
-func (m *MockStore) RotateToNewSession(arg0 context.Context, arg1 db.RotateToNewSessionParams) error {
+func (m *MockStore) RotateToNewSession(arg0 context.Context, arg1 db.RotateToNewSessionParams) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RotateToNewSession", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // RotateToNewSession indicates an expected call of RotateToNewSession.
