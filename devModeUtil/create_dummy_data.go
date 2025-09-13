@@ -1,3 +1,95 @@
+// Package devModeUtil provides development-only utilities to seed a demo site with
+// users, taxonomies, posts, pages, and media content.
+//
+// # WARNING: NOT FOR PRODUCTION USE
+//
+// This package is designed exclusively for development environments and creates
+// demo content with known weak credentials and sample data. Never enable these
+// utilities in production builds.
+//
+// # Core Functions
+//
+// The package provides two primary entry points:
+//   - CreateDefaultAdminUser: Creates a default admin user with known credentials
+//   - CreateDummyData: Seeds the database with comprehensive demo content
+//
+// # Prerequisites
+//
+// Both functions require:
+//   - A working db.Store connection to the database
+//   - A configured util.Config (especially UploadPath for media storage)
+//   - Database migrations completed and tables available
+//
+// # Idempotency and Safety
+//
+// Functions use simple guards to prevent duplicate data:
+//   - CreateDefaultAdminUser: Checks if "admin" username exists
+//   - CreateDummyData: Skips if CountTotalUsers > 1
+//
+// Re-running these functions is generally safe but may result in mixed content
+// states. For clean results, use a fresh database.
+//
+// # Side Effects
+//
+// These utilities perform several side effects:
+//   - Database writes (users, posts, taxonomies, media records)
+//   - Network requests to picsum.photos for sample images
+//   - File system writes to the configured UploadPath directory
+//   - Creates directory structure with 0755 permissions
+//
+// # Performance Characteristics
+//
+// All operations run synchronously with the following considerations:
+//   - External HTTP fetches have 30-second timeouts per image
+//   - Not designed for concurrent invocation
+//   - Best-effort error handling (logs errors and continues)
+//   - Operations are not transactional across entities
+//
+// # Determinism
+//
+// Content generation uses mixed seeding strategies:
+//   - Most creators use gofakeit.Seed(0) for reproducible results
+//   - generateDummyContent seeds with time.Now() for content variety
+//   - Image downloads depend on external service availability
+//
+// # Network Dependencies
+//
+// The package downloads sample images from picsum.photos, which requires:
+//   - Internet connectivity
+//   - Corporate proxies/firewalls may need configuration
+//   - Rate limits may apply from the external service
+//   - Images are provided under Creative Commons licensing
+//
+// For offline development, consider replacing sampleImages URLs with local assets.
+//
+// # Example Usage
+//
+//	// Typical initialization in a development server
+//	func initDevelopmentData() {
+//		store := db.NewStore(dbConn)
+//		config, err := util.LoadConfig(".")
+//		if err != nil {
+//			log.Fatal("cannot load config:", err)
+//		}
+//
+//		// Create default admin user first
+//		devModeUtil.CreateDefaultAdminUser(store)
+//
+//		// Then seed comprehensive demo data
+//		devModeUtil.CreateDummyData(store, config)
+//
+//		log.Println("Development environment ready!")
+//		log.Println("Login with admin:123456 (CHANGE IN PRODUCTION)")
+//	}
+//
+// # Configuration Notes
+//
+// Consider these configuration aspects:
+//   - Number of users/posts/pages is currently hardcoded
+//   - Image source list can be customized by modifying sampleImages
+//   - Timeout values are fixed at 30 seconds
+//   - Upload path must be writable by the application process
+//   - Media URLs assume standard /uploads public mapping
 package devModeUtil
 
 import (
@@ -21,6 +113,13 @@ import (
 	"github.com/go-live-cms/go-live-cms/util"
 )
 
+// sampleImages contains URLs for placeholder images downloaded during demo data creation.
+// These images are sourced from picsum.photos (Creative Commons) and require internet
+// connectivity. For offline development or custom branding, replace these URLs with
+// local asset paths or alternative image services.
+//
+// Images are downloaded with a 30-second timeout and saved to the configured UploadPath.
+// Corporate firewalls or rate limiting may affect availability.
 var sampleImages = []string{
 	"https://picsum.photos/800/600?random=1",
 	"https://picsum.photos/800/600?random=2",
@@ -36,10 +135,69 @@ var sampleImages = []string{
 	"https://picsum.photos/800/600?random=12",
 }
 
+// generateSlug creates simple URL-friendly slugs from names by converting to lowercase
+// and replacing spaces with hyphens. This is a basic ASCII-only implementation that
+// does not handle Unicode transliteration or special characters.
+//
+// For production use with international content, consider a more robust slugification
+// library that handles accented characters, special symbols, and character limits.
+//
+// Example:
+//
+//	generateSlug("My Great Post") // returns "my-great-post"
 func generateSlug(name string) string {
 	return strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 }
 
+// CreateDummyData orchestrates the creation of comprehensive demo content including
+// users, taxonomies, media files, posts, and pages. This function creates a realistic
+// content structure suitable for theme development and CMS demonstrations.
+//
+// # Order of Operations
+//
+// The function follows a specific sequence where later steps depend on earlier ones:
+//  1. Users (required for content ownership)
+//  2. Taxonomies (categories, tags, page categories)
+//  3. Media (downloads and stores sample images)
+//  4. Posts (blog content with taxonomy assignments)
+//  5. Pages (static pages with hierarchy)
+//  6. Media-Post linking (associates images with content)
+//
+// # Idempotency Guard
+//
+// Skips execution if CountTotalUsers > 1, assuming demo data already exists.
+// This simple guard prevents duplicate content but doesn't handle partial failures.
+// For clean results after partial runs, use a fresh database.
+//
+// # Error Handling
+//
+// Uses best-effort error handling - logs failures and continues with remaining
+// operations. Individual entity creation failures don't stop the overall process.
+// Operations are not transactional across different entity types.
+//
+// # Example Usage
+//
+//	store := db.NewStore(dbConnection)
+//	config, _ := util.LoadConfig(".")
+//
+//	// Creates full demo site
+//	devModeUtil.CreateDummyData(store, config)
+//
+//	// Typical output:
+//	// 🎭 Creating dummy data...
+//	// ✅ Created 4 dummy users
+//	// ✅ Created 3 taxonomy types and 45 taxonomy terms
+//	// ✅ Created 12 dummy media files
+//	// ✅ Created 10 dummy posts
+//	// ✅ Created 5 dummy pages
+//	// 🎉 Dummy data creation completed!
+//
+// # Requirements
+//
+//   - store: Active database connection with completed migrations
+//   - config: Must include valid UploadPath for media storage
+//   - config.UploadPath: Directory must be writable, created if doesn't exist
+//   - Network access: Required for downloading sample images from picsum.photos
 func CreateDummyData(store db.Store, config util.Config) {
 	log.Println("🎭 Creating dummy data...")
 
@@ -70,6 +228,38 @@ func CreateDummyData(store db.Store, config util.Config) {
 	log.Println("🎉 Dummy data creation completed!")
 }
 
+// createDummyUsers creates a set of demo users with different roles for testing
+// content management features and permissions. All users receive development-only
+// passwords that must be changed before any production use.
+//
+// # Users Created
+//
+//   - editor: Full editing permissions (password: password123)
+//   - author: Content creation permissions (password: password123)
+//   - contributor: Limited content permissions (password: password123)
+//   - moderator: Content moderation permissions (password: password123)
+//
+// # Security Note
+//
+// All users are created with the weak password "password123" for development
+// convenience. These are NOT suitable for production and should be disabled
+// or have passwords changed before any public deployment.
+//
+// # Email Pattern
+//
+// Emails follow the pattern <username>@golive-cms.local, which are fictional
+// addresses suitable for development. Real email addresses should be used
+// for production user accounts.
+//
+// # Deterministic Names
+//
+// Uses gofakeit.Seed(0) for reproducible full names across runs, making
+// testing and screenshots predictable. The usernames and roles are fixed.
+//
+// # Error Handling
+//
+// Continues creating remaining users if individual user creation fails.
+// Password hashing failures are logged but don't stop the process.
 func createDummyUsers(store db.Store) []db.User {
 	var users []db.User
 	gofakeit.Seed(0)
@@ -104,6 +294,47 @@ func createDummyUsers(store db.Store) []db.User {
 	return users
 }
 
+// createDummyTaxonomies creates a comprehensive taxonomy structure including
+// taxonomy types and their associated terms. This provides a realistic content
+// classification system for theme development and CMS demonstrations.
+//
+// # Taxonomy Types Created
+//
+//   - category: Hierarchical categories (Technology, Design, Lifestyle, Business)
+//   - post_tag: Flat tags for content labeling (tutorial, guide, tips, frameworks, etc.)
+//   - page_category: Page-specific categories (Company, Legal, Support, Marketing)
+//
+// # Category Structure (Hierarchical)
+//
+// Parent categories with child subcategories:
+//   - Technology → Programming, Web Development, Mobile Apps
+//   - Design → UI/UX, Graphic Design, Photography
+//   - Lifestyle → Travel, Health & Fitness, Food & Cooking
+//   - Business → Marketing, Entrepreneurship, Finance
+//
+// # Tags Created (Flat)
+//
+// Popular development and content tags including: tutorial, guide, tips,
+// best-practices, review, news, beginner, advanced, coding, design, productivity,
+// tools, framework, library, api, database, security, performance, and various
+// technology-specific tags (javascript, react, vue, angular, nodejs, python, golang, etc.)
+//
+// # Page Categories (Hierarchical)
+//
+// Organizational categories for static pages: Company, Legal, Support, Marketing
+//
+// # Slugging Strategy
+//
+// All terms receive URL-friendly slugs via generateSlug() which converts to
+// lowercase and replaces spaces with hyphens. Sort order is populated for
+// predictable listing in admin interfaces.
+//
+// # Deterministic Creation
+//
+// Uses gofakeit.Seed(0) for consistent results across runs, making the
+// taxonomy structure predictable for development and testing.
+//
+// Returns both the created taxonomy types and all terms for use in content creation.
 func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm) {
 	var taxonomyTypes []db.TaxonomyType
 	var taxonomyTerms []db.TaxonomyTerm
@@ -289,6 +520,58 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 	return taxonomyTypes, taxonomyTerms
 }
 
+// createDummyMedia downloads sample images from external sources and creates
+// corresponding media records in the database. This provides realistic media
+// assets for theme development and content demonstrations.
+//
+// # Image Sources
+//
+// Downloads approximately 12 placeholder images from picsum.photos with
+// 800x600 resolution. These are Creative Commons licensed images suitable
+// for development use.
+//
+// # Network Requirements
+//
+//   - Internet connectivity for image downloads
+//   - 30-second timeout per image request
+//   - Corporate firewalls/proxies may need configuration
+//   - Rate limiting may apply from external service
+//
+// # File System Operations
+//
+//   - Creates UploadPath directory with 0755 permissions if needed
+//   - Downloads images to config.UploadPath directory
+//   - Files named as sample-image-1.jpg through sample-image-12.jpg
+//   - Cleans up files if database record creation fails
+//
+// # Image Processing
+//
+//   - Reads image dimensions using image.DecodeConfig
+//   - Stores width/height in database record
+//   - MIME type hardcoded as image/jpeg (picsum returns JPEG format)
+//   - File size determined from downloaded file stats
+//
+// # User Assignment
+//
+// Media ownership assigned to users in round-robin fashion. Requires at least
+// one user to exist - logs error and terminates if no users available.
+//
+// # Media Path Structure
+//
+// Database records store paths as "uploads/filename" format, expecting themes
+// to map this to a publicly accessible URL pattern (e.g., /uploads/filename).
+//
+// # Error Handling
+//
+// Individual image download failures are logged and skipped. If database
+// record creation fails, the downloaded file is removed to prevent orphaned
+// files in the upload directory.
+//
+// # Dependencies
+//
+//   - users: Must have at least one user for ownership assignment
+//   - config.UploadPath: Must be a valid, writable directory path
+//   - External network access to image service
 func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.Medium {
 	var media []db.Medium
 	gofakeit.Seed(0)
@@ -356,6 +639,62 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 	return media
 }
 
+// createDummyPosts generates a collection of sample blog posts with realistic
+// titles, content, and metadata. These posts demonstrate various content management
+// features and provide material for theme development and CMS testing.
+//
+// # Posts Created
+//
+// Creates 10 blog posts with technology and development-focused titles:
+//   - Getting Started with Go Programming
+//   - The Future of Web Development
+//   - Mobile App Design Best Practices
+//   - Understanding Microservices Architecture
+//   - CSS Grid vs Flexbox: When to Use What
+//   - Building Scalable APIs with Go
+//   - The Art of Code Reviews
+//   - Database Optimization Techniques
+//   - Modern JavaScript Frameworks Comparison
+//   - DevOps Best Practices for Small Teams
+//
+// # Content Generation
+//
+// Each post receives:
+//   - Unique URL slug with timestamp suffix to prevent conflicts
+//   - Generated markdown content via generateDummyContent()
+//   - Realistic descriptions using gofakeit sentences
+//   - Round-robin user assignment for diverse authorship
+//   - Post status set to "published" and type set to "post"
+//
+// # Metadata Fields
+//
+// Each post includes comprehensive metadata suitable for theme demonstrations:
+//   - featured_image: Reference to sample media files
+//   - reading_time: Random 2-15 minute estimate
+//   - seo_title: Enhanced title for search optimization
+//   - seo_description: Generated SEO description
+//   - author_bio: Fake author biography
+//   - social_image: Social media preview image
+//   - enable_comments: Boolean flag for comment system
+//   - post_views: Random view count (100-5000)
+//   - difficulty_level: beginner/intermediate/advanced rotation
+//   - estimated_time: Reading time in minutes
+//
+// # Taxonomy Assignment
+//
+// Posts are linked to 1-3 random taxonomy terms when available, avoiding
+// duplicate term assignments per post. This demonstrates content classification
+// and filtering capabilities.
+//
+// # URL Generation
+//
+// URLs use generateSlug() with timestamp suffixes for uniqueness. Re-running
+// this function will create posts with different URLs rather than conflicting.
+//
+// # Dependencies
+//
+//   - users: Requires at least one user for authorship assignment
+//   - taxonomyTerms: Optional but recommended for realistic content classification
 func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.TaxonomyTerm) []db.Post {
 	var posts []db.Post
 	gofakeit.Seed(0)
@@ -457,6 +796,69 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 	return posts
 }
 
+// createDummyPages generates static pages with hierarchical structure and
+// comprehensive metadata. These pages demonstrate CMS page management features
+// and provide realistic content for theme development.
+//
+// # Parent Pages Created
+//
+//   - About Us: Company information with full-width layout
+//   - Services: Service offerings with sidebar layout
+//   - Contact: Contact information with form integration metadata
+//
+// # Child Pages (Under About Us)
+//
+//   - Our Team: Team member information and department structure
+//   - Company History: Timeline and milestone information
+//
+// # Page-Specific Metadata
+//
+// Each page includes specialized metadata fields:
+//
+// About Us:
+//   - page_template: Template identifier for theme rendering
+//   - header_image: Featured header image reference
+//   - show_in_navigation: Navigation visibility control
+//   - navigation_order: Menu ordering (1, 2, 3...)
+//   - page_layout: Layout type (full-width, sidebar-right, etc.)
+//   - custom_css: Page-specific styling
+//   - meta_description: SEO description
+//
+// Services:
+//   - service_categories: Comma-separated service types
+//   - All navigation and layout metadata
+//
+// Contact:
+//   - contact_form_id: Form integration reference
+//   - office_address: Physical address information
+//   - phone_number: Contact phone number
+//   - email_address: Contact email
+//   - business_hours: Operating hours information
+//
+// Child Pages:
+//   - team_size: Number of team members
+//   - departments: Comma-separated department list
+//   - founded_year: Company founding date
+//   - milestones: Timeline events
+//
+// # URL Structure
+//
+// URLs use simple slugs without timestamp suffixes (unlike posts). Re-running
+// may create URL conflicts unless the idempotency guard prevents re-execution.
+//
+// # Page Hierarchy
+//
+// Demonstrates parent-child relationships via PostParent field. Child pages
+// are created under "About Us" to show hierarchical page structure.
+//
+// # Content Format
+//
+// Page content uses markdown format with basic heading structure. Content
+// is minimal but structured to show proper page formatting.
+//
+// # Dependencies
+//
+//   - users: Requires at least one user for page ownership
 func createDummyPages(store db.Store, users []db.User) []db.Post {
 	var pages []db.Post
 	gofakeit.Seed(0)
@@ -617,6 +1019,53 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 	return pages
 }
 
+// linkMediaToPosts creates associations between media files and content (posts/pages)
+// to demonstrate gallery features, featured images, and media management capabilities.
+// This provides realistic content-media relationships for theme development.
+//
+// # Linking Strategy
+//
+// Each media item is randomly linked to 1-2 different posts or pages, creating
+// varied content associations without overwhelming any single piece of content.
+//
+// # Duplicate Prevention
+//
+// Uses a tracking map to prevent linking the same media item multiple times
+// to the same post within a single execution. However, media can be shared
+// across different posts.
+//
+// # Order Preservation
+//
+// Links include an order field (0, 1, 2...) to maintain consistent media
+// ordering within content. This supports gallery features and media sequencing.
+//
+// # Error Handling
+//
+// Individual link creation failures are logged and skipped, allowing the
+// process to continue with remaining associations.
+//
+// # Safety Checks
+//
+// Returns early if either posts or media collections are empty, preventing
+// unnecessary processing and potential errors.
+//
+// # Deterministic Selection
+//
+// Uses gofakeit.Seed(0) for reproducible media-post associations across runs,
+// making development and testing predictable.
+//
+// # Use Cases
+//
+// The created associations support:
+//   - Featured image displays
+//   - Content galleries
+//   - Media library demonstrations
+//   - Theme media integration testing
+//
+// # Dependencies
+//
+//   - posts: Collection of posts and/or pages to link media to
+//   - media: Collection of media items to associate with content
 func linkMediaToPosts(store db.Store, posts []db.Post, media []db.Medium) {
 	if len(posts) == 0 || len(media) == 0 {
 		log.Println("❌ No posts or media available for linking")
@@ -652,6 +1101,42 @@ func linkMediaToPosts(store db.Store, posts []db.Post, media []db.Medium) {
 	}
 }
 
+// downloadImage downloads a file from a URL and saves it to the local filesystem.
+// This function is used to fetch sample images from external sources during
+// demo data creation.
+//
+// # Network Behavior
+//
+//   - Uses HTTP GET with 30-second timeout to prevent hanging
+//   - Validates HTTP 200 status code before proceeding
+//   - Streams response body directly to file (memory efficient)
+//   - Follows redirects automatically via default http.Client behavior
+//
+// # File System Behavior
+//
+//   - Creates or truncates the destination file
+//   - File permissions inherit from process umask
+//   - Automatically closes resources via defer statements
+//   - Returns first encountered error (network or filesystem)
+//
+// # Error Conditions
+//
+//   - Network timeouts or connection failures
+//   - Non-200 HTTP response codes (redirects handled automatically)
+//   - File system errors (permissions, disk space, path issues)
+//   - I/O errors during streaming
+//
+// # Security Considerations
+//
+//   - No validation of file content or size limits
+//   - Suitable for trusted sources in development environments
+//   - For production use, add content-type validation and size limits
+//
+// # Usage Context
+//
+// This function is specifically designed for development-time asset downloading
+// and should not be used with untrusted URLs or in production environments
+// without additional security measures.
 func downloadImage(url, filepath string) error {
 	client := &http.Client{
 		Timeout: 30 * time.Second,
@@ -677,6 +1162,46 @@ func downloadImage(url, filepath string) error {
 	return err
 }
 
+// generateDummyContent creates structured markdown content for demo posts and pages.
+// This function generates realistic article-style content with proper markdown
+// formatting and logical structure.
+//
+// # Content Structure
+//
+// Generated content follows a consistent article format:
+//  1. H1 heading (5-word sentence)
+//  2. Opening paragraph (3-5 sentences, 8 words each)
+//  3. "Key Points" section with H2 heading
+//  4. Bulleted list (3 items, 8 words each)
+//  5. Body paragraph (4-6 sentences, 10 words each)
+//  6. "Conclusion" section with H2 heading
+//  7. Closing paragraph (2-4 sentences, 8 words each)
+//
+// # Randomness Strategy
+//
+// Uses time-based seeding (time.Now().UnixNano()) to create content variety
+// across multiple runs. This differs from other functions that use deterministic
+// seeding (gofakeit.Seed(0)) for reproducibility.
+//
+// # Content Quality
+//
+// Content is generated using gofakeit's linguistic patterns, providing:
+//   - Grammatically correct sentences
+//   - Varied sentence structure and length
+//   - Realistic paragraph flow
+//   - Proper markdown formatting
+//
+// # Use Cases
+//
+//   - Blog post content generation
+//   - Page content for static pages
+//   - Theme development content testing
+//   - Content layout demonstrations
+//
+// # Reproducibility Note
+//
+// Due to time-based seeding, content will vary between runs. For deterministic
+// content generation, consider using gofakeit.Seed(0) instead of time-based seeding.
 func generateDummyContent() string {
 	gofakeit.Seed(time.Now().UnixNano())
 
@@ -695,6 +1220,12 @@ func generateDummyContent() string {
 	return content
 }
 
+// min returns the smaller of two integers. This utility function is used
+// internally for bounds checking and preventing array access errors in
+// random selection operations.
+//
+// Standard library equivalent: math.Min() exists for float64, but this
+// provides type-safe integer comparison without conversion overhead.
 func min(a, b int) int {
 	if a < b {
 		return a
