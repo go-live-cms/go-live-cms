@@ -21,6 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    working_dir: /app
     ports:
       - "8080:8080"
     depends_on:
@@ -43,6 +44,7 @@ services:
       - go_modules:/go/pkg/mod
       - ./uploads:/app/uploads
     entrypoint: ["/app/wait-for.sh", "postgres:5432", "--", "/app/start-dev.sh"]
+    command: ["sh", "-lc", "./wait-for.sh && exec /go/bin/air -c .air.toml"]
 
   web:
     build:
