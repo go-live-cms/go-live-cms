@@ -52,6 +52,20 @@ func (mr *MockStoreMockRecorder) AddPostToTaxonomyTerm(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPostToTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).AddPostToTaxonomyTerm), arg0, arg1)
 }
 
+// BlockAllSessionsForUser mocks base method.
+func (m *MockStore) BlockAllSessionsForUser(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockAllSessionsForUser", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BlockAllSessionsForUser indicates an expected call of BlockAllSessionsForUser.
+func (mr *MockStoreMockRecorder) BlockAllSessionsForUser(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockAllSessionsForUser", reflect.TypeOf((*MockStore)(nil).BlockAllSessionsForUser), arg0, arg1)
+}
+
 // BlockSession mocks base method.
 func (m *MockStore) BlockSession(arg0 context.Context, arg1 uuid.UUID) error {
 	m.ctrl.T.Helper()
@@ -1540,18 +1554,18 @@ func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostFromTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).RemovePostFromTaxonomyTerm), arg0, arg1)
 }
 
-// RotateSession mocks base method.
-func (m *MockStore) RotateSession(arg0 context.Context, arg1 db.RotateSessionParams) error {
+// RotateToNewSession mocks base method.
+func (m *MockStore) RotateToNewSession(arg0 context.Context, arg1 db.RotateToNewSessionParams) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RotateSession", arg0, arg1)
+	ret := m.ctrl.Call(m, "RotateToNewSession", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// RotateSession indicates an expected call of RotateSession.
-func (mr *MockStoreMockRecorder) RotateSession(arg0, arg1 interface{}) *gomock.Call {
+// RotateToNewSession indicates an expected call of RotateToNewSession.
+func (mr *MockStoreMockRecorder) RotateToNewSession(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateSession", reflect.TypeOf((*MockStore)(nil).RotateSession), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateToNewSession", reflect.TypeOf((*MockStore)(nil).RotateToNewSession), arg0, arg1)
 }
 
 // SearchMediaByName mocks base method.

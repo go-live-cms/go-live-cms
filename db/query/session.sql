@@ -49,12 +49,18 @@ WHERE id = $1;
 SELECT * FROM sessions
 WHERE refresh_token_hash = $1 AND is_blocked = false LIMIT 1;
 
--- name: RotateSession :exec
+-- name: RotateToNewSession :exec
 UPDATE sessions
 SET 
     rotated_at = NOW(),
-    replaced_by = $2
+    replaced_by = $2,
+    is_blocked = true
 WHERE id = $1;
+
+-- name: BlockAllSessionsForUser :exec
+UPDATE sessions
+SET is_blocked = true
+WHERE user_id = $1 AND is_blocked = false;
 
 -- name: CountTotalSessions :one
 SELECT COUNT(*) AS total FROM sessions;

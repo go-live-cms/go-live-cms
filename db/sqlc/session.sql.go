@@ -13,6 +13,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const blockAllSessionsForUser = `-- name: BlockAllSessionsForUser :exec
+UPDATE sessions
+SET is_blocked = true
+WHERE user_id = $1 AND is_blocked = false
+`
+
+func (q *Queries) BlockAllSessionsForUser(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, blockAllSessionsForUser, userID)
+	return err
+}
+
 const blockSession = `-- name: BlockSession :exec
 UPDATE sessions
 SET is_blocked = true
@@ -241,21 +252,23 @@ func (q *Queries) ListSessionsByUsername(ctx context.Context, username string) (
 	return items, nil
 }
 
-const rotateSession = `-- name: RotateSession :exec
+const rotateToNewSession = `-- name: RotateToNewSession :exec
 UPDATE sessions
 SET 
     rotated_at = NOW(),
-    replaced_by = $2
+    replaced_by = $2,
+    is_blocked = true
 WHERE id = $1
 `
 
-type RotateSessionParams struct {
+type RotateToNewSessionParams struct {
 	ID         uuid.UUID     `json:"id"`
 	ReplacedBy uuid.NullUUID `json:"replaced_by"`
 }
 
-func (q *Queries) RotateSession(ctx context.Context, arg RotateSessionParams) error {
-	_, err := q.db.ExecContext(ctx, rotateSession, arg.ID, arg.ReplacedBy)
+// Atomically block old session and link to the new session by ID
+func (q *Queries) RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) error {
+	_, err := q.db.ExecContext(ctx, rotateToNewSession, arg.ID, arg.ReplacedBy)
 	return err
 }
 

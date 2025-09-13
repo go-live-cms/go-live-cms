@@ -14,6 +14,56 @@ import (
 	"github.com/google/uuid"
 )
 
+func (server *Server) setSecureCookie(ctx *gin.Context, name, value string, expiration time.Time) {
+	cookie := &http.Cookie{
+		Name:     name,
+		Value:    value,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/api/v1/auth",
+		Expires:  expiration,
+	}
+
+	if server.config.IsDevelopment {
+		cookie.Secure = server.config.CookieSecure
+		if server.config.CookieDomain != "localhost" && server.config.CookieDomain != "" {
+			cookie.Domain = server.config.CookieDomain
+		}
+	} else {
+		cookie.Secure = true
+		if server.config.CookieDomain != "" {
+			cookie.Domain = server.config.CookieDomain
+		}
+	}
+
+	http.SetCookie(ctx.Writer, cookie)
+}
+
+func (server *Server) clearSecureCookie(ctx *gin.Context, name string) {
+	cookie := &http.Cookie{
+		Name:     name,
+		Value:    "",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/api/v1/auth",
+		MaxAge:   -1,
+	}
+
+	if server.config.IsDevelopment {
+		cookie.Secure = server.config.CookieSecure
+		if server.config.CookieDomain != "localhost" && server.config.CookieDomain != "" {
+			cookie.Domain = server.config.CookieDomain
+		}
+	} else {
+		cookie.Secure = true
+		if server.config.CookieDomain != "" {
+			cookie.Domain = server.config.CookieDomain
+		}
+	}
+
+	http.SetCookie(ctx.Writer, cookie)
+}
+
 type LoginUserRequest struct {
 	Username string `json:"username" binding:"required,alphanum"`
 	Password string `json:"password" binding:"required,min=6"`
@@ -142,7 +192,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		ID:               sessionID,
 		UserID:           user.ID,
 		Username:         user.Username,
-		RefreshToken:     refreshToken, // Keep for backward compatibility during migration TODO: remove later
+		RefreshToken:     refreshToken,
 		RefreshTokenHash: refreshHash,
 		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
 		Jti:              uuid.NullUUID{UUID: jtiUUID, Valid: true},
@@ -156,16 +206,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
-	http.SetCookie(ctx.Writer, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    refreshToken,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Path:     "/api/v1/auth", // Broader path to include refresh AND logout
-		Expires:  time.Now().Add(server.config.RefreshTokenDuration),
-		Domain:   server.config.CookieDomain,
-	})
+	server.setSecureCookie(ctx, "refresh_token", refreshToken, time.Now().Add(server.config.RefreshTokenDuration))
 
 	accessExpiresAt := time.Now().Add(server.config.AccessTokenDuration)
 	rsp := LoginUserResponse{
@@ -181,25 +222,13 @@ func (server *Server) loginUser(ctx *gin.Context) {
 
 func (server *Server) renewAccessToken(ctx *gin.Context) {
 
-	var refreshToken string
-
 	cookie, err := ctx.Request.Cookie("refresh_token")
-	if err == nil && cookie.Value != "" {
-		refreshToken = cookie.Value
-	} else {
-		// Fallback to JSON body for backward compatibility TODO: deprecate this later
-		var req RenewAccessTokenRequest
-		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "refresh token required"})
-			return
-		}
-		refreshToken = req.RefreshToken
-	}
-
-	if refreshToken == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "refresh token required"})
+	if err != nil || cookie.Value == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "refresh token required in cookie"})
 		return
 	}
+
+	refreshToken := cookie.Value
 
 	v4Maker, ok := server.tokenMaker.(*token.PasetoV4Maker)
 	if !ok {
@@ -241,6 +270,17 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 
 	if session.IsBlocked {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "session is blocked"})
+		return
+	}
+
+	if session.ReplacedBy.Valid {
+
+		err := server.store.BlockAllSessionsForUser(ctx.Request.Context(), userID)
+		if err != nil {
+			fmt.Printf("⚠️ Failed to block sessions for user %d after reuse detection: %v\n", userID, err)
+		}
+		fmt.Printf("🚨 Token reuse detected for user %s (ID: %d) - all sessions blocked\n", username, userID)
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "token reuse detected - all sessions blocked"})
 		return
 	}
 
@@ -305,21 +345,12 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 
 	newRefreshHash := token.HashRefresh(newRefreshToken)
 
-	err = server.store.RotateSession(ctx.Request.Context(), db.RotateSessionParams{
-		ID:         session.ID,
-		ReplacedBy: uuid.NullUUID{UUID: newJtiUUID, Valid: true},
-	})
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate session"})
-		return
-	}
-
 	newSessionID := uuid.New()
 	_, err = server.store.CreateSession(ctx.Request.Context(), db.CreateSessionParams{
 		ID:               newSessionID,
 		UserID:           userID,
 		Username:         username,
-		RefreshToken:     newRefreshToken, // Keep for backward compatibility during migration TODO: remove later
+		RefreshToken:     newRefreshToken,
 		RefreshTokenHash: newRefreshHash,
 		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
 		Jti:              uuid.NullUUID{UUID: newJtiUUID, Valid: true},
@@ -333,16 +364,18 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
-	http.SetCookie(ctx.Writer, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    newRefreshToken,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Path:     "/api/v1/auth", // Broader path to include refresh AND logout
-		Expires:  time.Now().Add(server.config.RefreshTokenDuration),
-		Domain:   server.config.CookieDomain,
+	err = server.store.RotateToNewSession(ctx.Request.Context(), db.RotateToNewSessionParams{
+		ID:         session.ID,
+		ReplacedBy: uuid.NullUUID{UUID: newSessionID, Valid: true},
 	})
+	if err != nil {
+
+		server.store.BlockSession(ctx.Request.Context(), newSessionID)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate session"})
+		return
+	}
+
+	server.setSecureCookie(ctx, "refresh_token", newRefreshToken, time.Now().Add(server.config.RefreshTokenDuration))
 
 	accessExpiresAt := time.Now().Add(server.config.AccessTokenDuration)
 	rsp := RenewAccessTokenResponse{
@@ -448,16 +481,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 
 	if refreshToken == "" {
 
-		http.SetCookie(ctx.Writer, &http.Cookie{
-			Name:     "refresh_token",
-			Value:    "",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteStrictMode,
-			Path:     "/api/v1/auth", // Same path as when setting
-			MaxAge:   -1,
-			Domain:   server.config.CookieDomain,
-		})
+		server.clearSecureCookie(ctx, "refresh_token")
 		ctx.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 		return
 	}
@@ -468,16 +492,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 
-			http.SetCookie(ctx.Writer, &http.Cookie{
-				Name:     "refresh_token",
-				Value:    "",
-				HttpOnly: true,
-				Secure:   true,
-				SameSite: http.SameSiteStrictMode,
-				Path:     "/api/v1/auth", // Same path as when setting
-				MaxAge:   -1,
-				Domain:   server.config.CookieDomain,
-			})
+			server.clearSecureCookie(ctx, "refresh_token")
 			ctx.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 			return
 		}
@@ -491,16 +506,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 		return
 	}
 
-	http.SetCookie(ctx.Writer, &http.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
-		Path:     "/api/v1/auth", // Same path as when setting
-		MaxAge:   -1,
-		Domain:   server.config.CookieDomain,
-	})
+	server.clearSecureCookie(ctx, "refresh_token")
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "logged out successfully",
