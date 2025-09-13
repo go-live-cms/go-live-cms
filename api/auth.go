@@ -33,12 +33,13 @@ const (
 //   - Only access tokens are accepted (refresh tokens are rejected).
 //   - Error messages are intentionally generic to avoid leaking details.
 //   - Handlers can retrieve the payload with:
-//       payload, _ := ctx.Get("authorization_payload")
-//       claims := payload.(*token.Payload)
+//     payload, _ := ctx.Get("authorization_payload")
+//     claims := payload.(*token.Payload)
 //
 // Example (route protection):
-//   r := gin.Default()
-//   r.GET("/me", authMiddleware(maker), func(c *gin.Context) { /* ... */ })
+//
+//	r := gin.Default()
+//	r.GET("/me", authMiddleware(maker), func(c *gin.Context) { /* ... */ })
 func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		authorizationHeader := ctx.GetHeader(authorizationHeaderKey)
