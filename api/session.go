@@ -192,7 +192,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		ID:               sessionID,
 		UserID:           user.ID,
 		Username:         user.Username,
-		RefreshToken:     refreshToken,
+		RefreshToken:     "",
 		RefreshTokenHash: refreshHash,
 		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
 		Jti:              uuid.NullUUID{UUID: jtiUUID, Valid: true},
@@ -217,6 +217,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		User:                 toUserResponse(user),
 	}
 
+	ctx.Header("Cache-Control", "no-store")
 	ctx.JSON(http.StatusOK, rsp)
 }
 
@@ -261,6 +262,14 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	session, err := server.store.GetSessionByRefreshTokenHash(ctx.Request.Context(), refreshHash)
 	if err != nil {
 		if err == sql.ErrNoRows {
+
+			if s2, err2 := server.store.GetAnySessionByRefreshTokenHash(ctx.Request.Context(), refreshHash); err2 == nil {
+
+				_ = server.store.BlockAllSessionsForUser(ctx.Request.Context(), s2.UserID)
+				fmt.Printf("🚨 Refresh token reuse detected for user %s (ID: %d) - all sessions blocked\n", s2.Username, s2.UserID)
+				ctx.JSON(http.StatusUnauthorized, gin.H{"error": "refresh token reuse detected"})
+				return
+			}
 			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
 		} else {
 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get session"})
@@ -345,33 +354,48 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 
 	newRefreshHash := token.HashRefresh(newRefreshToken)
 
-	newSessionID := uuid.New()
-	_, err = server.store.CreateSession(ctx.Request.Context(), db.CreateSessionParams{
-		ID:               newSessionID,
-		UserID:           userID,
-		Username:         username,
-		RefreshToken:     newRefreshToken,
-		RefreshTokenHash: newRefreshHash,
-		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
-		Jti:              uuid.NullUUID{UUID: newJtiUUID, Valid: true},
-		UserAgent:        currentUserAgent,
-		ClientIp:         currentIP,
-		IsBlocked:        false,
-		ExpiresAt:        time.Now().Add(server.config.RefreshTokenDuration),
+	var newSessionID uuid.UUID
+	err = server.store.ExecTx(ctx.Request.Context(), func(q *db.Queries) error {
+
+		_, err := q.GetSessionForUpdate(ctx.Request.Context(), session.ID)
+		if err != nil {
+			return err
+		}
+
+		newSessionID = uuid.New()
+		_, err = q.CreateSession(ctx.Request.Context(), db.CreateSessionParams{
+			ID:               newSessionID,
+			UserID:           userID,
+			Username:         username,
+			RefreshToken:     "",
+			RefreshTokenHash: newRefreshHash,
+			RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
+			Jti:              uuid.NullUUID{UUID: newJtiUUID, Valid: true},
+			UserAgent:        currentUserAgent,
+			ClientIp:         currentIP,
+			IsBlocked:        false,
+			ExpiresAt:        time.Now().Add(server.config.RefreshTokenDuration),
+		})
+		if err != nil {
+			return err
+		}
+
+		rowsAffected, err := q.RotateToNewSession(ctx.Request.Context(), db.RotateToNewSessionParams{
+			ID:         session.ID,
+			ReplacedBy: uuid.NullUUID{UUID: newSessionID, Valid: true},
+		})
+		if err != nil {
+			return err
+		}
+
+		if rowsAffected == 0 {
+			return fmt.Errorf("concurrent session rotation detected")
+		}
+
+		return nil
 	})
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create new session"})
-		return
-	}
-
-	err = server.store.RotateToNewSession(ctx.Request.Context(), db.RotateToNewSessionParams{
-		ID:         session.ID,
-		ReplacedBy: uuid.NullUUID{UUID: newSessionID, Valid: true},
-	})
-	if err != nil {
-
-		server.store.BlockSession(ctx.Request.Context(), newSessionID)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate session"})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate session atomically"})
 		return
 	}
 
@@ -384,6 +408,7 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		ExpiresAt:            accessExpiresAt.Unix(),
 	}
 
+	ctx.Header("Cache-Control", "no-store")
 	ctx.JSON(http.StatusOK, rsp)
 }
 
@@ -446,45 +471,15 @@ func (server *Server) blockSession(ctx *gin.Context) {
 
 func (server *Server) logoutUser(ctx *gin.Context) {
 
-	var refreshToken string
-
 	cookie, err := ctx.Request.Cookie("refresh_token")
-	if err == nil && cookie.Value != "" {
-		refreshToken = cookie.Value
-	} else {
-
-		var req struct {
-			RefreshToken string `json:"refresh_token"`
-		}
-		if err := ctx.ShouldBindJSON(&req); err == nil && req.RefreshToken != "" {
-			refreshToken = req.RefreshToken
-		} else {
-
-			authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
-			sessions, err := server.store.ListSessionsByUser(ctx.Request.Context(), authPayload.UserID)
-			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get sessions"})
-				return
-			}
-
-			currentUserAgent := ctx.GetHeader("User-Agent")
-			currentClientIP := ctx.ClientIP()
-
-			for _, session := range sessions {
-				if session.UserAgent == currentUserAgent && session.ClientIp == currentClientIP && !session.IsBlocked {
-					refreshToken = session.RefreshToken
-					break
-				}
-			}
-		}
-	}
-
-	if refreshToken == "" {
+	if err != nil || cookie.Value == "" {
 
 		server.clearSecureCookie(ctx, "refresh_token")
 		ctx.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 		return
 	}
+
+	refreshToken := cookie.Value
 
 	refreshHash := token.HashRefresh(refreshToken)
 

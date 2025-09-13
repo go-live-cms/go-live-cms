@@ -110,6 +110,10 @@ func (m *PasetoV4Maker) VerifyToken(tok string) (*Payload, error) {
 	out.Username, _ = pt.GetString("username")
 	out.TokenType, _ = pt.GetString("token_type")
 
+	if out.TokenType != "access" {
+		return nil, ErrInvalidTokenV4
+	}
+
 	if jti, err := pt.GetJti(); err == nil {
 		if id, err := uuid.Parse(jti); err == nil {
 			out.ID = id

@@ -49,13 +49,19 @@ WHERE id = $1;
 SELECT * FROM sessions
 WHERE refresh_token_hash = $1 AND is_blocked = false LIMIT 1;
 
--- name: RotateToNewSession :exec
+-- name: GetSessionForUpdate :one
+SELECT * FROM sessions WHERE id = $1 FOR UPDATE;
+
+-- name: GetAnySessionByRefreshTokenHash :one
+SELECT * FROM sessions WHERE refresh_token_hash = $1 LIMIT 1;
+
+-- name: RotateToNewSession :execrows
 UPDATE sessions
 SET 
     rotated_at = NOW(),
     replaced_by = $2,
     is_blocked = true
-WHERE id = $1;
+WHERE id = $1 AND is_blocked = false;
 
 -- name: BlockAllSessionsForUser :exec
 UPDATE sessions

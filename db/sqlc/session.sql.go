@@ -112,6 +112,32 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 	return i, err
 }
 
+const getAnySessionByRefreshTokenHash = `-- name: GetAnySessionByRefreshTokenHash :one
+SELECT id, user_id, username, refresh_token, user_agent, client_ip, is_blocked, expires_at, created_at, refresh_token_hash, refresh_kid, jti, rotated_at, replaced_by FROM sessions WHERE refresh_token_hash = $1 LIMIT 1
+`
+
+func (q *Queries) GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error) {
+	row := q.db.QueryRowContext(ctx, getAnySessionByRefreshTokenHash, refreshTokenHash)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Username,
+		&i.RefreshToken,
+		&i.UserAgent,
+		&i.ClientIp,
+		&i.IsBlocked,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.RefreshTokenHash,
+		&i.RefreshKid,
+		&i.Jti,
+		&i.RotatedAt,
+		&i.ReplacedBy,
+	)
+	return i, err
+}
+
 const getSession = `-- name: GetSession :one
 SELECT id, user_id, username, refresh_token, user_agent, client_ip, is_blocked, expires_at, created_at, refresh_token_hash, refresh_kid, jti, rotated_at, replaced_by FROM sessions
 WHERE id = $1 LIMIT 1
@@ -146,6 +172,32 @@ WHERE refresh_token_hash = $1 AND is_blocked = false LIMIT 1
 
 func (q *Queries) GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error) {
 	row := q.db.QueryRowContext(ctx, getSessionByRefreshTokenHash, refreshTokenHash)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Username,
+		&i.RefreshToken,
+		&i.UserAgent,
+		&i.ClientIp,
+		&i.IsBlocked,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.RefreshTokenHash,
+		&i.RefreshKid,
+		&i.Jti,
+		&i.RotatedAt,
+		&i.ReplacedBy,
+	)
+	return i, err
+}
+
+const getSessionForUpdate = `-- name: GetSessionForUpdate :one
+SELECT id, user_id, username, refresh_token, user_agent, client_ip, is_blocked, expires_at, created_at, refresh_token_hash, refresh_kid, jti, rotated_at, replaced_by FROM sessions WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error) {
+	row := q.db.QueryRowContext(ctx, getSessionForUpdate, id)
 	var i Session
 	err := row.Scan(
 		&i.ID,
@@ -252,13 +304,13 @@ func (q *Queries) ListSessionsByUsername(ctx context.Context, username string) (
 	return items, nil
 }
 
-const rotateToNewSession = `-- name: RotateToNewSession :exec
+const rotateToNewSession = `-- name: RotateToNewSession :execrows
 UPDATE sessions
 SET 
     rotated_at = NOW(),
     replaced_by = $2,
     is_blocked = true
-WHERE id = $1
+WHERE id = $1 AND is_blocked = false
 `
 
 type RotateToNewSessionParams struct {
@@ -266,10 +318,12 @@ type RotateToNewSessionParams struct {
 	ReplacedBy uuid.NullUUID `json:"replaced_by"`
 }
 
-// Atomically block old session and link to the new session by ID
-func (q *Queries) RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) error {
-	_, err := q.db.ExecContext(ctx, rotateToNewSession, arg.ID, arg.ReplacedBy)
-	return err
+func (q *Queries) RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, rotateToNewSession, arg.ID, arg.ReplacedBy)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateSession = `-- name: UpdateSession :one
