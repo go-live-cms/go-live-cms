@@ -8,6 +8,7 @@ import TextAlign from "@tiptap/extension-text-align"
 import CharacterCount from "@tiptap/extension-character-count"
 import Typography from "@tiptap/extension-typography"
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
+import { OpenLinkModal } from "../extensions/OpenLinkModal"
 import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
@@ -30,7 +31,7 @@ const headingLabel = (lvl?: number) => {
     }
 }
 
-const extensions = ({ collabProvider, maxChars, placeholder }) => {
+const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }) => {
     return () => {
         const baseExtensions = [
             StarterKit.configure({
@@ -46,10 +47,19 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
             Typography,
             Link.configure({
                 autolink: true,
-                openOnClick: false,
+                linkOnPaste: true,
+                openOnClick: true,
                 validate: (href) => /^https?:\/\//.test(href),
                 HTMLAttributes: {
+                    target: "_blank",
+                    rel: "noopener noreferrer",
                     class: "editor-link",
+                },
+            }),
+            OpenLinkModal.configure({
+                onOpen: (initialHref) => {
+                    setUrl(initialHref || "");
+                    setIsLinkModalOpen(true);
                 },
             }),
             Image.configure({
@@ -142,6 +152,6 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
     }
 }
 
-export const getExtensions = ({ collabProvider, maxChars, placeholder }: { collabProvider: any; maxChars?: number; placeholder?: string }) => {
-    return extensions({ collabProvider, maxChars, placeholder })
+export const getExtensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }: { collabProvider: any; maxChars?: number; placeholder?: string; setUrl: (url: string) => void; setIsLinkModalOpen: (isOpen: boolean) => void }) => {
+    return extensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen })
 }

@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import { getTurnIntoCommandOptions } from "../blocks"
-import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/TurnInto"
+import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
 import CommandSelect, { type CommandSelectOption } from "../ui/CommandSelect"
 
-const BubbleMenu = ({ editor, className, ...props }: any) => {
+const BubbleMenu = ({ editor, className, openLinkModal, ...props }: any) => {
     const [turnIntoOptions, setTurnIntoOptions] = useState<CommandSelectOption[]>([])
     const [turnInto, setTurnInto] = useState<TurnIntoValue>("paragraph")
     const bubbleMenuItemClasses = "hover:bg-gray-700/80 w-7 h-7 flex items-center justify-center rounded-sm py-1 px-2 cursor-pointer";
@@ -82,10 +82,7 @@ const BubbleMenu = ({ editor, className, ...props }: any) => {
                 <span className="font-mono text-xs">{'</>'}</span>
             </button>
             <button
-                onClick={() => {
-                    const url = window.prompt("URL")
-                    if (url) editor.chain().focus().setLink({ href: url }).run()
-                }}
+                onClick={openLinkModal}
                 className={`${bubbleMenuItemClasses} ${editor.isActive("link") ? "text-blue-500 font-semibold" : "text-gray-200"}`}
                 type="button"
             >
