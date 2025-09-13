@@ -1,3 +1,5 @@
+// Package api wires HTTP routes, middleware, and server lifecycle for Go Live CMS.
+// This file assembles the Gin engine, CORS, versioned API groups, and health checks.
 package api
 
 import (
@@ -12,6 +14,8 @@ import (
 	"github.com/go-live-cms/go-live-cms/util"
 )
 
+// Server bundles dependencies (db store, config, token maker) and the Gin router.
+// Safe for concurrent requests once constructed.
 type Server struct {
 	store      db.Store
 	router     *gin.Engine
@@ -19,6 +23,15 @@ type Server struct {
 	tokenMaker token.Maker
 }
 
+// NewServer constructs the Server, initializes a PASETO v4 maker from config,
+// registers routes/middleware, and (in Gin debug mode, unless test mode) seeds
+// dev data via devModeUtil.
+//
+// Returns an initialized server ready to Start.
+//
+// Notes:
+//   - Dev seeding runs only when gin.Mode()==gin.DebugMode && !config.IsTestMode.
+//   - Token maker uses config PASETO keys (issuer/audience/KIDs) from util.Config.
 func NewServer(config util.Config, store db.Store) (*Server, error) {
 	tokenMaker, err := token.NewPasetoV4Maker(
 		config.PasetoV4PrivateKeyHex,
@@ -48,10 +61,31 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	return server, nil
 }
 
+// setupRoutes configures the Gin engine:
+//
+//   - CORS:
+//   - Debug: allows localhost origins on :4321 and credentials
+//   - Release: allowlist example domain (adjust in production)
+//   - /health (public): liveness endpoint
+//   - /api/v1/auth: register, login, refresh, logout (logout requires auth)
+//   - /api/v1/sessions: list/block (auth required)
+//   - /api/v1/users: CRUD; some endpoints require auth (see handlers)
+//   - /api/v1/posts: CRUD, meta, media links, featured image helpers
+//   - /api/v1/post-types: read-only lookup
+//   - /api/v1/taxonomy-types: CRUD/lookup
+//   - /api/v1/taxonomy-terms: CRUD, lookup, popular, search, posts
+//   - /api/v1/taxonomies: legacy aliases for terms (back-compat)
+//   - /api/v1/media: upload/batch, search, popular, CRUD, relations
+//   - Static /uploads → ./uploads (serve uploaded files)
+//
+// Auth:
+//   - Endpoints wrapped with authMiddleware require a valid *access* token
+//     (Bearer scheme). Payload is available under context key "authorization_payload".
 func (server *Server) setupRoutes() {
 	router := gin.Default()
 
 	if gin.Mode() == gin.DebugMode {
+		// Development CORS allowlist — adjust for your local frontend ports
 		router.Use(cors.New(cors.Config{
 			AllowOrigins: []string{
 				"http://localhost:4321",
@@ -64,6 +98,7 @@ func (server *Server) setupRoutes() {
 			AllowCredentials: true,
 		}))
 	} else {
+		// Production CORS — replace with your domain(s)
 		router.Use(cors.New(cors.Config{
 			AllowOrigins:     []string{"https://yourdomain.com"},
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -164,6 +199,8 @@ func (server *Server) setupRoutes() {
 	server.router = router
 }
 
+// healthCheck returns basic liveness info and API version.
+// Intended for load balancers and uptime checks.
 func (server *Server) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
@@ -186,6 +223,8 @@ func (server *Server) register(c *gin.Context) {
 	})
 }
 
+// Start begins serving HTTP on the given address (e.g., ":8080").
+// Blocks until the server is shut down.
 func (server *Server) Start(address string) error {
 	return server.router.Run(address)
 }
