@@ -28,6 +28,13 @@ test:
 mock:
 	mockgen -package mockdb -destination db/mock/store.go github.com/go-live-cms/go-live-cms/db/sqlc Store
 
+# Documentation commands
+docs: ## Start godoc documentation server
+	./scripts/start-docs.sh
+
+install-godoc: ## Install godoc tool
+	go install golang.org/x/tools/cmd/godoc@latest
+
 # Development commands
 devbuild:
 	docker compose -f compose.dev.yaml up --build
@@ -60,4 +67,4 @@ proddown:
 prodlogs:
 	docker compose -f compose.yaml logs -f
 
-.PHONY: createdb dropdb postgres migrateup migratedown sqlc test mock dev devdown devlogs devlogs-api devlogs-web devrebuild prod proddown prodlogs
+.PHONY: createdb dropdb postgres migrateup migratedown sqlc test mock dev devdown devlogs devlogs-api devlogs-web devrebuild prod proddown prodlogs docs install-godoc

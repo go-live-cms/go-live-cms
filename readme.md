@@ -86,6 +86,18 @@ make test          # Run all tests
 make server        # Run API server locally (without Docker)
 ```
 
+### Documentation
+
+```bash
+make install-godoc # Install godoc tool
+make docs          # Start documentation server on http://localhost:6060
+```
+
+The documentation will be available at:
+
+- **Package Documentation**: http://localhost:6060/pkg/github.com/go-live-cms/go-live-cms/
+- **Util Package**: http://localhost:6060/pkg/github.com/go-live-cms/go-live-cms/util/
+
 ## 📁 Project Structure
 
 ```
