@@ -20,7 +20,15 @@ type Server struct {
 }
 
 func NewServer(config util.Config, store db.Store) (*Server, error) {
-	tokenMaker, err := token.NewPasetoMaker(config.TokenSymmetricKey)
+	tokenMaker, err := token.NewPasetoV4Maker(
+		config.PasetoV4PrivateKeyHex,
+		config.PasetoV4PublicKeyHex,
+		config.PasetoV4LocalKeyHex,
+		config.PasetoIssuer,
+		config.PasetoAudience,
+		config.PasetoAccessKID,
+		config.PasetoRefreshKID,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token maker: %w", err)
 	}

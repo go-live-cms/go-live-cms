@@ -52,6 +52,20 @@ func (mr *MockStoreMockRecorder) AddPostToTaxonomyTerm(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPostToTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).AddPostToTaxonomyTerm), arg0, arg1)
 }
 
+// BlockAllSessionsForUser mocks base method.
+func (m *MockStore) BlockAllSessionsForUser(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockAllSessionsForUser", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// BlockAllSessionsForUser indicates an expected call of BlockAllSessionsForUser.
+func (mr *MockStoreMockRecorder) BlockAllSessionsForUser(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockAllSessionsForUser", reflect.TypeOf((*MockStore)(nil).BlockAllSessionsForUser), arg0, arg1)
+}
+
 // BlockSession mocks base method.
 func (m *MockStore) BlockSession(arg0 context.Context, arg1 uuid.UUID) error {
 	m.ctrl.T.Helper()
@@ -1093,6 +1107,21 @@ func (mr *MockStoreMockRecorder) GetSession(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSession", reflect.TypeOf((*MockStore)(nil).GetSession), arg0, arg1)
 }
 
+// GetSessionByRefreshTokenHash mocks base method.
+func (m *MockStore) GetSessionByRefreshTokenHash(arg0 context.Context, arg1 []byte) (db.Session, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSessionByRefreshTokenHash", arg0, arg1)
+	ret0, _ := ret[0].(db.Session)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSessionByRefreshTokenHash indicates an expected call of GetSessionByRefreshTokenHash.
+func (mr *MockStoreMockRecorder) GetSessionByRefreshTokenHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessionByRefreshTokenHash", reflect.TypeOf((*MockStore)(nil).GetSessionByRefreshTokenHash), arg0, arg1)
+}
+
 // GetTaxonomyTerm mocks base method.
 func (m *MockStore) GetTaxonomyTerm(arg0 context.Context, arg1 int64) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
@@ -1523,6 +1552,20 @@ func (m *MockStore) RemovePostFromTaxonomyTerm(arg0 context.Context, arg1 db.Rem
 func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostFromTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).RemovePostFromTaxonomyTerm), arg0, arg1)
+}
+
+// RotateToNewSession mocks base method.
+func (m *MockStore) RotateToNewSession(arg0 context.Context, arg1 db.RotateToNewSessionParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RotateToNewSession", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RotateToNewSession indicates an expected call of RotateToNewSession.
+func (mr *MockStoreMockRecorder) RotateToNewSession(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RotateToNewSession", reflect.TypeOf((*MockStore)(nil).RotateToNewSession), arg0, arg1)
 }
 
 // SearchMediaByName mocks base method.
