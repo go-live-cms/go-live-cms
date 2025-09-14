@@ -21,7 +21,7 @@
 // - Passwords are never included in response structures
 // - Refresh tokens are cookie-only, not in JSON responses
 // - Session responses exclude sensitive internal fields
-// - User data is presented via embedded UserResponse structures
+// - User data is presented via embedded PrivateUserResponse structures
 package api
 
 import (
@@ -40,11 +40,11 @@ type LoginUserRequest struct {
 // LoginUserResponse returns authentication tokens and user data upon successful login.
 // The refresh token is set as an httpOnly cookie, not included in JSON.
 type LoginUserResponse struct {
-	SessionID            uuid.UUID    `json:"session_id"`
-	AccessToken          string       `json:"access_token"`
-	AccessTokenExpiresAt time.Time    `json:"access_token_expires_at"`
-	ExpiresAt            int64        `json:"expires_at"`
-	User                 UserResponse `json:"user"`
+	SessionID            uuid.UUID           `json:"session_id"`
+	AccessToken          string              `json:"access_token"`
+	AccessTokenExpiresAt time.Time           `json:"access_token_expires_at"`
+	ExpiresAt            int64               `json:"expires_at"`
+	User                 PrivateUserResponse `json:"user"`
 }
 
 // RenewAccessTokenRequest accepts refresh token for access token renewal.

@@ -184,7 +184,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		AccessToken:          accessToken,
 		AccessTokenExpiresAt: accessExpiresAt,
 		ExpiresAt:            accessExpiresAt.Unix(),
-		User:                 toUserResponse(user),
+		User:                 toPrivateUser(user),
 	}
 
 	ctx.Header("Cache-Control", "no-store")
