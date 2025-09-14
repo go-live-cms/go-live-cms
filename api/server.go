@@ -111,16 +111,8 @@ func (server *Server) setupRoutes() {
 
 	router.GET("/health", server.healthCheck)
 
-	auth := v1.Group("/auth")
-	auth.POST("/register", server.register)
-	auth.POST("/login", server.loginUser)
-	auth.POST("/refresh", server.renewAccessToken)
-	auth.POST("/logout", authMiddleware(server.tokenMaker), server.logoutUser)
-
-	sessions := v1.Group("/sessions")
-	sessions.Use(authMiddleware(server.tokenMaker))
-	sessions.GET("", server.getUserSessions)    // GET /api/v1/sessions
-	sessions.PUT("/block", server.blockSession) // PUT /api/v1/sessions/block
+	// Session and authentication module routes (see sessions_routes.go for complete definitions)
+	server.RegisterSessionRoutes(v1)
 
 	users := v1.Group("/users")
 	users.POST("", authMiddleware(server.tokenMaker), server.createUser)                 // POST /api/v1/users
@@ -190,12 +182,6 @@ func (server *Server) healthCheck(c *gin.Context) {
 		"timestamp": time.Now().Format(time.RFC3339),
 	})
 } */
-
-func (server *Server) register(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Register endpoint - coming soon",
-	})
-}
 
 // Start begins serving HTTP on the given address (e.g., ":8080").
 // Blocks until the server is shut down.
