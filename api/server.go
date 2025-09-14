@@ -114,17 +114,15 @@ func (server *Server) setupRoutes() {
 	// Session and authentication module routes (see sessions_routes.go for complete definitions)
 	server.RegisterSessionRoutes(v1)
 
-	users := v1.Group("/users")
-	users.POST("", authMiddleware(server.tokenMaker), server.createUser)                 // POST /api/v1/users
-	users.GET("", server.getUsers)                                                       // implement content limiter // GET /api/v1/users
-	users.GET("/:id", server.getUserByID)                                                // GET /api/v1/users/:id
-	users.GET("/username/:username", server.getUserByUsername)                           // GET /api/v1/users/username/:username
-	users.GET("/email/:email", authMiddleware(server.tokenMaker), server.getUserByEmail) // GET /api/v1/users/email/:email
-	users.PUT("/:id", authMiddleware(server.tokenMaker), server.updateUser)              // PUT /api/v1/users/:id
-	users.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteUser)           // DELETE /api/v1/users/:id
+	// User management module routes (see users_routes.go for complete definitions)
+	server.RegisterUserRoutes(v1)
 
 	// Posts module routes (see posts_routes.go for complete definitions)
 	server.RegisterPostRoutes(v1)
+
+	// Legacy taxonomy association route (moved from posts section)
+	posts := v1.Group("/posts")
+	posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
 
 	postTypes := v1.Group("/post-types")
 	postTypes.GET("", server.getPostTypes)      // GET /api/v1/post-types
