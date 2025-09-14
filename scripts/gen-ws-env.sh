@@ -19,7 +19,8 @@ if ! go run cmd/export-pubkey/main.go > "$TMP" 2>/dev/null; then
 fi
 
 # 2) Extract PEM to file (avoid multiline env values)
-sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' "$TMP" > "$PUBFILE"
+# First get just the PEM lines, then clean up any quotes
+grep -A 2 "BEGIN PUBLIC KEY" "$TMP" | grep -E "(BEGIN|END) PUBLIC KEY|^[A-Za-z0-9+/=]+$" | sed 's/^"//' | sed 's/"$//' > "$PUBFILE"
 
 # 3) Extract issuer/audience from exporter output (with fallbacks)
 ISS=$(grep -oE '^PASETO_ISSUER=.*' "$TMP" | cut -d= -f2 || true)
