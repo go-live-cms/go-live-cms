@@ -359,20 +359,3 @@ func isUniqueViolation(err error) bool {
 	return containsString(err.Error(), "duplicate key value") ||
 		containsString(err.Error(), "unique constraint")
 }
-
-func containsString(str, substr string) bool {
-	return len(str) >= len(substr) &&
-		(str == substr ||
-			str[:len(substr)] == substr ||
-			str[len(str)-len(substr):] == substr ||
-			strContains(str, substr))
-}
-
-func strContains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
