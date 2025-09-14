@@ -64,12 +64,16 @@ services:
   websocket:
     build:
       context: ./websocket
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
       - "1234:1234"
     environment:
       - HOST=0.0.0.0
       - PORT=1234
+      - NODE_ENV=development
+    volumes:
+      - ./websocket:/app
+      - /app/node_modules
     depends_on:
       - api
 
