@@ -9,7 +9,8 @@
 // # Auth Matrix
 //
 //	POST   /media         → Auth Required (file upload)
-//	POST   /media/batch   → Auth Required (batch upload)
+//	POST   /media/batch   → Auth Required (batch upload - original path)
+//	POST   /media/bulk    → Auth Required (batch upload - alias for compatibility)
 //	GET    /media         → Public (listing/search)
 //	GET    /media/popular → Public (popular media)
 //	GET    /media/search  → Public (search by query)
@@ -32,16 +33,21 @@ import "github.com/gin-gonic/gin"
 // Separates protected write operations from public read operations for clear
 // security boundaries and easier route management.
 //
+// **Backward Compatibility**: Both /batch and /bulk paths are registered for
+// the bulk upload endpoint to maintain compatibility with existing clients
+// while providing a cleaner path structure.
+//
 // This function should be called from server.setupRoutes() after creating
 // the v1 router group to maintain consistent API versioning.
 func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	media := v1.Group("/media")
 
 	// Write operations - require Bearer authentication
-	media.POST("", authMiddleware(server.tokenMaker), server.createMedia)          // Single upload
-	media.POST("/bulk", authMiddleware(server.tokenMaker), server.createMediaBulk) // Batch upload (max 20)
-	media.PUT("/:id", authMiddleware(server.tokenMaker), server.updateMedia)       // Update metadata
-	media.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteMedia)    // Delete (ownership check)
+	media.POST("", authMiddleware(server.tokenMaker), server.createMedia)           // Single upload
+	media.POST("/batch", authMiddleware(server.tokenMaker), server.createMediaBulk) // Batch upload (original path)
+	media.POST("/bulk", authMiddleware(server.tokenMaker), server.createMediaBulk)  // Batch upload (alias for compatibility)
+	media.PUT("/:id", authMiddleware(server.tokenMaker), server.updateMedia)        // Update metadata
+	media.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteMedia)     // Delete (ownership check)
 
 	// Read operations - public access for content consumption
 	media.GET("", server.getMedia)                // List/paginate/filter

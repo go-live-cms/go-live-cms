@@ -12,7 +12,7 @@
 // # Upload Features
 //
 // Single upload: POST /media with multipart form, optional post linking.
-// Bulk upload: POST /media/bulk with multiple files, batch processing with error collection.
+// Bulk upload: POST /media/batch (original) or POST /media/bulk (alias) with multiple files, batch processing with error collection.
 // File validation: Extension checking, MIME type verification, size limits.
 //
 // # Update Operations

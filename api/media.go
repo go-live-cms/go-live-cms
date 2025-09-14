@@ -18,7 +18,8 @@
 //
 // # Endpoints (index)
 // - POST   /api/v1/media           (create single)
-// - POST   /api/v1/media/bulk      (create batch)
+// - POST   /api/v1/media/batch     (create batch - original path)
+// - POST   /api/v1/media/bulk      (create batch - alias for compatibility)
 // - GET    /api/v1/media           (list/filter/sort/paginate)
 // - GET    /api/v1/media/:id       (get by id)
 // - GET    /api/v1/media/popular   (usage-ranked)
