@@ -20,6 +20,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       containerClassName,
       onFocus,
       onBlur,
+      onKeyDown,
       onChange,
       id,
       ...rest
@@ -91,6 +92,26 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       [onChange, value]
     )
 
+    const handleKeyDown = useCallback<NonNullable<typeof onKeyDown>>(
+      (e) => {
+        if (!onKeyDown) return
+        const sanitizedValue = sanitizeInput((e.currentTarget as HTMLInputElement).value)
+        const event = {
+          ...e,
+          currentTarget: {
+            ...e.currentTarget,
+            value: sanitizedValue,
+          },
+          target: {
+            ...(e.target as any),
+            value: sanitizedValue,
+          },
+        }
+        onKeyDown(event as any)
+      },
+      [onKeyDown]
+    )
+
     const inputId = id ?? `input-${name || type}`
 
     return (
@@ -118,6 +139,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             defaultValue={defaultValue}
             onFocus={handleFocus}
             onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
             onChange={handleChange}
             onAccept={(value: string) => {
               if (onChange) {

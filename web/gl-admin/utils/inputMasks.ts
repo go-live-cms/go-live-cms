@@ -2,6 +2,7 @@ export type InputMaskType =
     | "number"
     | "text"
     | "email"
+    | "url"
     | "password";
 
 export type InputMasks = {
@@ -21,6 +22,10 @@ export type InputMasks = {
         mask: RegExp;
         lazy: boolean;
     };
+    url: {
+        mask: RegExp;
+        lazy: boolean;
+    }
 };
 
 export const getInputMask = (type: InputMaskType) => {
@@ -45,13 +50,18 @@ export const inputMasks: InputMasks = {
         mask: /^[\S]{0,32}$/,
         lazy: false,
     },
+    url: {
+        mask: /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]*$/,
+        lazy: false,
+    }
 };
 
 export const validationPatterns = {
     email: /^\S+@\S+\.\S+$/,
     password: /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/,
     text: /^[\w\sÀ-ÿ.,'-]*$/,
-    number: /^[0-9]*$/
+    number: /^[0-9]*$/,
+    url: /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]*$/,
 };
 
 export const getValidationPattern = (type: InputMaskType) => {

@@ -38,9 +38,9 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
     const iconColor = isDark ? "#FFFFFF" : "#333536"
 
     return (
-        <div className="text-white relative text-sm flex items-center cursor-pointer" ref={ref} style={{ position: "relative" }}>
+        <div className="text-white relative hover:bg-gray-700/60 rounded-md select-none text-sm flex items-center cursor-pointer" ref={ref} style={{ position: "relative" }}>
             <div
-                className={`flex items-center gap-1.5 p-1 ${disabled ? "text-gray-300" : ""}`}
+                className={`flex items-center gap-1.5 py-1 px-2 ${disabled ? "text-gray-300" : ""}`}
                 onClick={handleSelectClick}
                 tabIndex={0}
                 role="button"
@@ -49,11 +49,11 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
                 <span className="text-gray-200">
                     {selected ? selected.label : "Select..."}
                 </span>
-                <Icon name="dropdown" mirror_vertically={open} color={iconColor} width="12px" height="6.3px" />
+                <Icon className="mt-[1px]" name="dropdown" mirror_vertically={open} color={iconColor} width="12px" height="6.3px" />
             </div>
             {open && !disabled && (
                 <div
-                    className="absolute p-2 py-2 bg-gray-800 border border-gray-600 shadow rounded-sm text-sm"
+                    className="absolute p-2 py-2 mt-1 bg-gray-800 select-none border border-gray-700 shadow rounded-sm text-sm"
                     style={optionsStyle}
                 >
                     <label className="p-1 pb-2 text-gray-400 block">{label}</label>

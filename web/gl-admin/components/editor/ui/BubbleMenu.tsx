@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import { getTurnIntoCommandOptions } from "../blocks"
-import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/TurnInto"
+import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
 import CommandSelect, { type CommandSelectOption } from "../ui/CommandSelect"
 
-const BubbleMenu = ({ editor, className, ...props }: any) => {
+const BubbleMenu = ({ editor, className, openLinkModal, ...props }: any) => {
     const [turnIntoOptions, setTurnIntoOptions] = useState<CommandSelectOption[]>([])
     const [turnInto, setTurnInto] = useState<TurnIntoValue>("paragraph")
-    const bubbleMenuItemClasses = "hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md py-1 px-2 cursor-pointer";
+    const bubbleMenuItemClasses = "hover:bg-gray-700/80 w-7 h-7 flex items-center justify-center rounded-sm py-1 px-2 cursor-pointer";
 
     useEffect(() => {
         if (!editor) return
@@ -34,38 +34,7 @@ const BubbleMenu = ({ editor, className, ...props }: any) => {
     if (!editor) return null
 
     return (
-        <TipTapBubbleMenu editor={editor} className={`bg-gray-800 shadow rounded-lg text-sm flex gap-2 py-2 px-4 border border-gray-600 text-white ${className}`} {...props}>
-            <button
-                onClick={() => editor.chain().focus().toggleBold().run()}
-                className={`${bubbleMenuItemClasses} ${editor.isActive("bold") ? "bg-gray-600" : "bg-transparent"}`}
-                type="button"
-            >
-                <strong>B</strong>
-            </button>
-            <button
-                onClick={() => editor.chain().focus().toggleItalic().run()}
-                className={`${bubbleMenuItemClasses} ${editor.isActive("italic") ? "bg-gray-600" : "bg-transparent"}`}
-                type="button"
-            >
-                <em>I</em>
-            </button>
-            <button
-                onClick={() => editor.chain().focus().toggleUnderline().run()}
-                className={`${bubbleMenuItemClasses} ${editor.isActive("underline") ? "bg-gray-600" : "bg-transparent"}`}
-                type="button"
-            >
-                <u>U</u>
-            </button>
-            <button
-                onClick={() => {
-                    const url = window.prompt("URL")
-                    if (url) editor.chain().focus().setLink({ href: url }).run()
-                }}
-                className={`${bubbleMenuItemClasses} ${editor.isActive("link") ? "bg-gray-600" : "bg-transparent"}`}
-                type="button"
-            >
-                🔗
-            </button>
+        <TipTapBubbleMenu editor={editor} className={`bg-gray-800/80 backdrop-blur-xs select-none shadow rounded-lg text-sm flex gap-2 py-1 px-2 border mb-2 border-gray-700 ${className}`} {...props}>
             <CommandSelect
                 options={turnIntoOptions}
                 value={turnInto}
@@ -77,6 +46,48 @@ const BubbleMenu = ({ editor, className, ...props }: any) => {
                     applyTurnInto(editor, val, turnIntoOptions)
                 }}
             />
+            <button
+                onClick={() => editor.chain().focus().toggleBold().run()}
+                className={`${bubbleMenuItemClasses} ${editor.isActive("bold") ? "text-blue-500 font-semibold" : "text-gray-200"}`}
+                type="button"
+            >
+                <strong>B</strong>
+            </button>
+            <button
+                onClick={() => editor.chain().focus().toggleItalic().run()}
+                className={`${bubbleMenuItemClasses} ${editor.isActive("italic") ? "text-blue-500 font-semibold" : "text-gray-200"}`}
+                type="button"
+            >
+                <em>I</em>
+            </button>
+            <button
+                onClick={() => editor.chain().focus().toggleUnderline().run()}
+                className={`${bubbleMenuItemClasses} ${editor.isActive("underline") ? "text-blue-500 font-semibold" : "text-gray-200"}`}
+                type="button"
+            >
+                <u>U</u>
+            </button>
+            <button
+                onClick={() => editor.chain().focus().toggleStrike().run()}
+                className={`${bubbleMenuItemClasses} ${editor.isActive("strike") ? "text-blue-500 font-semibold" : "text-gray-200"}`}
+                type="button"
+            >
+                <s>S</s>
+            </button>
+            <button
+                onClick={() => editor.chain().focus().toggleCode().run()}
+                className={`${bubbleMenuItemClasses} ${editor.isActive("code") ? "text-blue-500 font-semibold" : "text-gray-200"}`}
+                type="button"
+            >
+                <span className="font-mono text-xs">{'</>'}</span>
+            </button>
+            <button
+                onClick={openLinkModal}
+                className={`${bubbleMenuItemClasses} ${editor.isActive("link") ? "text-blue-500 font-semibold" : "text-gray-200"}`}
+                type="button"
+            >
+                🔗
+            </button>
         </TipTapBubbleMenu>
     )
 }
