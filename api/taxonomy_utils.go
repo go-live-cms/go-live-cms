@@ -40,23 +40,31 @@ package api
 import "strings"
 
 // generateSlug creates SEO-friendly URL slugs from taxonomy term names.
-// Applies consistent transformation rules for URL compatibility and readability.
 //
-// Transformation rules:
-//   - Convert to lowercase
-//   - Replace spaces with hyphens
-//   - Replace underscores with hyphens
-//   - Preserve other characters (including international characters)
+// Applies consistent transformation rules for URL compatibility and readability:
+//   - Trim whitespace and convert to lowercase
+//   - Collapse any whitespace to single hyphen
+//   - Replace underscores with hyphens for consistency
+//   - Collapse multiple consecutive hyphens to single hyphen
+//   - Preserve international characters for global content support
 //
 // Examples:
 //   - "Technology News" → "technology-news"
-//   - "Go_Programming" → "go-programming"
-//   - "São Paulo" → "são-paulo" (preserves international characters)
+//   - "Go_Programming  Guide" → "go-programming-guide"
+//   - "  Multiple   Spaces  " → "multiple-spaces"
+//   - "São Paulo--Brazil" → "são-paulo-brazil"
 func generateSlug(name string) string {
-	slug := strings.ToLower(name)
-	slug = strings.ReplaceAll(slug, " ", "-")
-	slug = strings.ReplaceAll(slug, "_", "-")
-	return slug
+	s := strings.TrimSpace(name)
+	s = strings.ToLower(s)
+	// collapse any whitespace to single hyphen
+	s = strings.Join(strings.Fields(s), "-")
+	// replace underscores with hyphens
+	s = strings.ReplaceAll(s, "_", "-")
+	// collapse multiple hyphens
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	return s
 }
 
 // isValidTaxonomySortOption validates sort query parameter values for taxonomy endpoints.

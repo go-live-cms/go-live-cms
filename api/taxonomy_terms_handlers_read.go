@@ -26,6 +26,34 @@
 // **getTaxonomyTermsByType**:
 //   - Filtered listing by taxonomy type (categories, tags, etc.)
 //   - Comprehensive pagination with offset/limit controls
+//   - Multiple sort options (name, id, custom order)
+//   - Total count metadata for client pagination UIs
+//
+// **Sort Options Supported**:
+//   - name_asc/name_desc: Alphabetical ordering
+//   - id_asc/id_desc: Database primary key ordering
+//   - order_asc/order_desc: Custom sort_order field
+//
+// # Search Capabilities
+//   - **Relationship Exploration**: Post associations and cross-references
+//
+// # Individual Term Access
+//
+// **getTaxonomyTermByID**:
+//   - Direct database lookup by primary key
+//   - Complete term data including metadata and relationships
+//   - Used for administrative interfaces and API integrations
+//
+// **getTaxonomyTermBySlug**:
+//   - SEO-friendly URL endpoint for public content
+//   - Slug-based routing for clean URL structures
+//   - Enhanced response formatting for display contexts
+//
+// # Bulk Access Patterns
+//
+// **getTaxonomyTermsByType**:
+//   - Filtered listing by taxonomy type (categories, tags, etc.)
+//   - Comprehensive pagination with offset/limit controls
 //   - Multiple sort options (name, date, usage count)
 //   - Total count metadata for client pagination UIs
 //
@@ -224,8 +252,8 @@ func (server *Server) getTaxonomyTermBySlug(c *gin.Context) {
 //
 // Sort options available:
 //   - name_asc, name_desc: Alphabetical ordering
-//   - date_asc, date_desc: Creation timestamp ordering
-//   - usage_asc, usage_desc: Post association count
+//   - id_asc, id_desc: Database primary key ordering
+//   - order_asc, order_desc: Custom sort_order field
 //
 // Response metadata:
 //   - Pagination information for client UI
@@ -535,7 +563,7 @@ func (server *Server) searchTaxonomyTerms(c *gin.Context) {
 // Query parameters:
 //   - limit: Post limit per page (default: 10, max: 100)
 //   - offset: Pagination offset (default: 0)
-//   - sort: Post sorting option (default: date_desc)
+//   - sort: Post sorting option (default: name_asc)
 //   - status: Filter by post status (optional)
 //
 // Response includes:
@@ -560,7 +588,7 @@ func (server *Server) getTaxonomyTermPosts(c *gin.Context) {
 	// Parse query parameters with defaults
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
-	sortBy := c.DefaultQuery("sort", "date_desc")
+	sortBy := c.DefaultQuery("sort", "name_asc")
 	status := c.DefaultQuery("status", "")
 
 	// Validate and parse pagination

@@ -74,9 +74,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
-	"github.com/jackc/pgerrcode"
-	"github.com/jackc/pgx/v5/pgconn"
-	pqtype "github.com/tabbed/pq-type"
+	"github.com/sqlc-dev/pqtype"
 )
 
 // createTaxonomyTerm creates a new taxonomy term with the provided configuration.
@@ -359,22 +357,4 @@ func (server *Server) deleteTaxonomyTerm(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "taxonomy term deleted successfully",
 	})
-}
-
-// isUniqueViolation checks if the error represents a database unique constraint violation.
-//
-// Detects PostgreSQL unique constraint errors for proper HTTP status code mapping.
-// Used across taxonomy operations to provide consistent conflict response handling.
-//
-// Parameters:
-//   - err: Database error to examine for constraint violation patterns
-//
-// Returns:
-//   - true: Error represents unique constraint violation
-//   - false: Error is not a uniqueness conflict
-func isUniqueViolation(err error) bool {
-	if pgErr, ok := err.(*pgconn.PgError); ok {
-		return pgErr.Code == pgerrcode.UniqueViolation
-	}
-	return false
 }
