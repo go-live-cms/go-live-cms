@@ -60,7 +60,7 @@ echo "Note: This test requires manual verification - watch WebSocket server logs
 # Create a test WebSocket connection with token
 # Note: wscat doesn't support custom subprotocols easily, so we'll use query parameter as fallback
 echo "Testing with token as query parameter (fallback method)..."
-timeout 3 wscat -c "$WS_URL/?token=$ACCESS_TOKEN" -w 1 2>/dev/null && echo "✅ Token-based connection test completed" || echo "⚠️  Connection test completed (check server logs)"
+timeout 3 wscat -c "$WS_URL/?ticket=$ACCESS_TOKEN" -w 1 2>/dev/null && echo "✅ Ticket-based connection test completed" || echo "⚠️  Connection test completed (check server logs)"
 echo ""
 
 # Test 4: Check server logs for authentication messages

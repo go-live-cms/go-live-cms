@@ -97,7 +97,9 @@ server.on("upgrade", async (req, socket, head) => {
       return;
     }
     console.log("🔑 Verifying PASETO v4.public credential...");
-    console.log("🔍 Token preview:", credential.substring(0, 50) + "...");
+    if (process.env.NODE_ENV !== "production") {
+      console.log("🔍 Token preview:", credential.substring(0, 50) + "...");
+    }
     console.log("🎯 Trying audiences:", ALLOWED_AUDIENCES.join(", "));
 
     let tokenValid = false;

@@ -67,13 +67,18 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "1234:1234"
+    env_file:
+      - ./websocket/.env
     environment:
-      - HOST=0.0.0.0
-      - PORT=1234
+      # Override for Docker reliability
       - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=300
     volumes:
       - ./websocket:/app
       - /app/node_modules
+      # Optional: for file-based PEM (uncomment if using PASETO_V4_PUBLIC_PEM_FILE)
+      # - ./websocket/public.pem:/run/secrets/public.pem:ro
     depends_on:
       - api
 
