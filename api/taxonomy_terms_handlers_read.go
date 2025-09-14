@@ -267,7 +267,7 @@ func (server *Server) getTaxonomyTermBySlug(c *gin.Context) {
 //   - 404 Not Found: Taxonomy type does not exist
 //   - 500 Internal Server Error: Database query failure
 func (server *Server) getTaxonomyTermsByType(c *gin.Context) {
-	typeName := c.Param("type")
+	typeName := c.Param("name")
 	if typeName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "taxonomy type name is required"})
 		return

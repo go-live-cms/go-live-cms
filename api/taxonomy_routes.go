@@ -70,12 +70,14 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	// Protected: create new taxonomy type definitions
 	types := tg.Group("/types")
 	types.GET("", server.getTaxonomyTypes)                                       // GET /api/v1/taxonomy/types
-	types.GET("/:name", server.getTaxonomyType)                                  // GET /api/v1/taxonomy/types/:name
 	types.POST("", authMiddleware(server.tokenMaker), server.createTaxonomyType) // POST /api/v1/taxonomy/types
 
-	// Type-Specific Term Browsing
+	// Type-Specific Term Browsing (must come before generic type lookup to avoid conflicts)
 	// Public: list terms within specific taxonomy types
-	types.GET("/:type/terms", server.getTaxonomyTermsByType) // GET /api/v1/taxonomy/types/:type/terms
+	types.GET("/:name/terms", server.getTaxonomyTermsByType) // GET /api/v1/taxonomy/types/:name/terms
+
+	// Generic type lookup (must come after specific sub-routes)
+	types.GET("/:name", server.getTaxonomyType) // GET /api/v1/taxonomy/types/:name
 
 	// Taxonomy Terms Management
 	// CRITICAL: Static routes MUST come before parameterized routes
