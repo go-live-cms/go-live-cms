@@ -7,21 +7,28 @@ set -euo pipefail
 echo "🔑 Generating WebSocket .env from Go API keys..."
 
 OUT="websocket/.env"
-TEMP_KEY=$(mktemp)
+PUBFILE="websocket/public.pem"
+TMP="$(mktemp)"
 
-# Export the public key from Go API
-if ! go run cmd/export-pubkey/main.go > "$TEMP_KEY" 2>/dev/null; then
+# 1) Run exporter
+if ! go run cmd/export-pubkey/main.go > "$TMP" 2>/dev/null; then
     echo "❌ Failed to export public key. Make sure Go dependencies are installed."
     echo "   Try: go mod download"
-    rm -f "$TEMP_KEY"
+    rm -f "$TMP"
     exit 1
 fi
 
-# Extract just the PEM from the output (skip comments)
-PEM_CONTENT=$(grep -A 10 "BEGIN PUBLIC KEY" "$TEMP_KEY" | grep -E "(BEGIN|END) PUBLIC KEY|^[A-Za-z0-9+/=]+$")
+# 2) Extract PEM to file (avoid multiline env values)
+sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' "$TMP" > "$PUBFILE"
 
-# Create the .env file
-cat > "$OUT" << EOF
+# 3) Extract issuer/audience from exporter output (with fallbacks)
+ISS=$(grep -oE '^PASETO_ISSUER=.*' "$TMP" | cut -d= -f2 || true)
+AUD=$(grep -oE '^PASETO_AUDIENCE=.*' "$TMP" | cut -d= -f2 || true)
+ISS=${ISS:-golive.auth}
+AUD=${AUD:-golive.admin-ws}
+
+# 4) Write .env (no multiline values)
+cat > "$OUT" <<EOF
 # WebSocket Server Configuration
 HOST=0.0.0.0
 PORT=1234
@@ -29,27 +36,28 @@ NODE_ENV=development
 
 # PASETO v4.public Authentication Configuration  
 # Auto-generated from Go API keys
-PASETO_ISSUER=golive.auth
-PASETO_AUDIENCE=golive.admin-ws
+PASETO_ISSUER=$ISS
+# Primary audience (kept for reference)
+PASETO_AUDIENCE=$AUD
+# Allow a small set during migration (adjust as you converge)
+PASETO_ALLOWED_AUDIENCES=$AUD,golive.admin,golive.auth
 
-# Support multiple audiences (comma-separated)
-# Keep golive.admin while migrating, remove later when using WS-specific tokens
-PASETO_ALLOWED_AUDIENCES=golive.admin-ws,golive.auth,golive.admin
-
-# PASETO v4.public Ed25519 public key
-PASETO_V4_PUBLIC_PEM="$PEM_CONTENT"
+# Use file-based PEM to avoid multiline issues in env files
+PASETO_V4_PUBLIC_PEM_FILE=/run/secrets/public.pem
 
 # Alternative methods (commented out):
+# PASETO_V4_PUBLIC_PEM="single_line_pem_here"
 # PASETO_V4_PUBLIC_PEM_B64="base64_encoded_pem_here"
-# PASETO_V4_PUBLIC_PEM_FILE="/run/secrets/public.pem"
 EOF
 
 # Clean up
-rm -f "$TEMP_KEY"
+rm -f "$TMP"
 
-echo "✅ Created $OUT with current Go API public key"
+echo "✅ Created $OUT with current Go API configuration"
+echo "✅ Created $PUBFILE with public key"
 echo ""
 echo "🚀 Ready to run:"
 echo "   docker compose -f compose.dev.yaml up --build"
 echo ""
-echo "🔄 If keys change, re-run this script to update the WebSocket .env"
+echo "ℹ️  The PEM file will be mounted in Docker at /run/secrets/public.pem"
+echo "🔄 If keys change, re-run this script to update both files"

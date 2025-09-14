@@ -77,8 +77,13 @@ services:
     volumes:
       - ./websocket:/app
       - /app/node_modules
-      # Optional: for file-based PEM (uncomment if using PASETO_V4_PUBLIC_PEM_FILE)
-      # - ./websocket/public.pem:/run/secrets/public.pem:ro
+      # File-based PEM for reliable Docker env loading
+      - ./websocket/public.pem:/run/secrets/public.pem:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:1234/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     depends_on:
       - api
 

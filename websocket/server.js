@@ -71,9 +71,25 @@ const server = http.createServer((_req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 wss.on("connection", (ws, req) => {
   console.log(
-    " WebSocket connection established for user:",
+    "✅ WebSocket connection established for user:",
     req.auth?.username || "unknown"
   );
+
+  // Keep connection alive to prevent idle disconnects behind proxies
+  const keepAliveInterval = setInterval(() => {
+    try {
+      if (ws.readyState === ws.OPEN) {
+        ws.ping();
+      }
+    } catch (error) {
+      // Ignore ping errors
+    }
+  }, 25000); // 25 seconds
+
+  ws.on("close", () => {
+    clearInterval(keepAliveInterval);
+  });
+
   setupWSConnection(ws, req);
 });
 
