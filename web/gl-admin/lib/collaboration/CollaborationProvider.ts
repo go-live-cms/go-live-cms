@@ -59,10 +59,11 @@ export class CollaborationProvider {
     const token = authManager.getAccessToken()
     const baseUrl = `${wsProtocol}//${wsHost}/`
 
-    console.log("WebSocket URL:", baseUrl.replace(/token=[^&]+/, "token=***"))
+    console.log("WebSocket URL:", baseUrl)
+    console.log("Using PASETO v4.public authentication")
 
     this.provider = new WebsocketProvider(baseUrl, `post-${postId}`, this.doc, {
-      params: token ? { token } : {},
+      params: token ? { ticket: token } : undefined,
       maxBackoffTime: 5000,
       resyncInterval: 2000,
       connect: true,
