@@ -134,26 +134,8 @@ func (server *Server) setupRoutes() {
 	postTypes.GET("", server.getPostTypes)      // GET /api/v1/post-types
 	postTypes.GET("/:name", server.getPostType) // GET /api/v1/post-types/product
 
-	taxonomyTypes := v1.Group("/taxonomy-types")
-	taxonomyTypes.POST("", authMiddleware(server.tokenMaker), server.createTaxonomyType) // POST /api/v1/taxonomy-types
-	taxonomyTypes.GET("", server.getTaxonomyTypes)                                       // GET /api/v1/taxonomy-types
-	taxonomyTypes.GET("/:name", server.getTaxonomyType)                                  // GET /api/v1/taxonomy-types/category
-
-	taxonomyTerms := v1.Group("/taxonomy-terms")
-	taxonomyTerms.POST("", authMiddleware(server.tokenMaker), server.createTaxonomyTerm)       // POST /api/v1/taxonomy-terms
-	taxonomyTerms.GET("/type/:type", server.getTaxonomyTermsByType)                            // GET /api/v1/taxonomy-terms/type/category
-	taxonomyTerms.GET("/popular", server.getPopularTaxonomyTerms)                              // GET /api/v1/taxonomy-terms/popular?type=category
-	taxonomyTerms.GET("/search", server.searchTaxonomyTerms)                                   // GET /api/v1/taxonomy-terms/search?type=category&q=tech
-	taxonomyTerms.GET("/:id", server.getTaxonomyTermByID)                                      // GET /api/v1/taxonomy-terms/:id
-	taxonomyTerms.GET("/slug/:slug", server.getTaxonomyTermBySlug)                             // GET /api/v1/taxonomy-terms/slug/technology
-	taxonomyTerms.PUT("/:id", authMiddleware(server.tokenMaker), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy-terms/:id
-	taxonomyTerms.DELETE("/:id", authMiddleware(server.tokenMaker), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy-terms/:id
-	taxonomyTerms.GET("/:id/posts", server.getTaxonomyTermPosts)                               // GET /api/v1/taxonomy-terms/:id/posts
-
-	// Legacy taxonomy endpoints (for backward compatibility - can be deprecated later)
-	taxonomies := v1.Group("/taxonomies")
-	taxonomies.GET("/:id/posts", server.getTaxonomyTermPosts) // GET /api/v1/taxonomies/:id/posts (redirect to taxonomy-terms)
-	taxonomies.GET("", server.getTaxonomyTermsByType)         // GET /api/v1/taxonomies?type=category
+	// Taxonomy module routes (see taxonomy_routes.go for complete definitions)
+	server.RegisterTaxonomyRoutes(v1)
 
 	// Media module routes (see media_routes.go for complete definitions)
 	server.registerMediaRoutes(v1)
