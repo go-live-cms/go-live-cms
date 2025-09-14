@@ -126,10 +126,6 @@ func (server *Server) setupRoutes() {
 	// Posts module routes (see posts_routes.go for complete definitions)
 	server.RegisterPostRoutes(v1)
 
-	// Legacy taxonomy association route (moved from posts section)
-	posts := v1.Group("/posts")
-	posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
-
 	postTypes := v1.Group("/post-types")
 	postTypes.GET("", server.getPostTypes)      // GET /api/v1/post-types
 	postTypes.GET("/:name", server.getPostType) // GET /api/v1/post-types/product
