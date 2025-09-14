@@ -48,7 +48,5 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.POST("/:id/media", authMiddleware(server.tokenMaker), server.createPostMedia)
 		posts.DELETE("/:id/media/:media_id", authMiddleware(server.tokenMaker), server.deletePostMedia)
 
-		// Post-Taxonomy term associations (legacy route)
-		posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
 	}
 }

@@ -34,7 +34,7 @@
 //   - date_asc/date_desc: Creation date chronology
 //   - usage_asc/usage_desc: Post association count
 //
-# Search Capabilities
+// # Search Capabilities
 //
 // **searchTaxonomyTerms**:
 //   - Full-text search across term names and descriptions

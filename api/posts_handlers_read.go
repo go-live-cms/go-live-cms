@@ -12,7 +12,6 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -448,68 +447,4 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			},
 		})
 	}
-}
-
-func (server *Server) getPostTaxonomyTerms(c *gin.Context) {
-	idParam := c.Param("id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
-		return
-	}
-
-	post, err := server.store.GetPost(c.Request.Context(), id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
-		return
-	}
-
-	taxonomyTerms, err := server.store.GetPostTaxonomyTerms(c.Request.Context(), id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post taxonomy terms"})
-		return
-	}
-
-	termResponses := make([]TaxonomyTermResponse, len(taxonomyTerms))
-	for i, term := range taxonomyTerms {
-		response := TaxonomyTermResponse{
-			ID:               term.ID,
-			Name:             term.Name,
-			Slug:             term.Slug,
-			Description:      term.Description.String,
-			TaxonomyTypeID:   term.TaxonomyTypeID,
-			TaxonomyTypeName: term.TaxonomyTypeName,
-			CreatedAt:        term.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		}
-
-		if term.ParentID.Valid {
-			response.ParentID = &term.ParentID.Int64
-		}
-
-		if term.SortOrder.Valid {
-			response.SortOrder = &term.SortOrder.Int32
-		}
-
-		if term.Meta.Valid {
-			var meta map[string]interface{}
-			if err := json.Unmarshal(term.Meta.RawMessage, &meta); err == nil {
-				response.Meta = meta
-			}
-		}
-
-		termResponses[i] = response
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"post":           toPostResponse(post),
-		"taxonomy_terms": termResponses,
-		"meta": gin.H{
-			"post_id": id,
-			"count":   len(termResponses),
-		},
-	})
 }
