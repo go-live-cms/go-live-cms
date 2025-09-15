@@ -647,7 +647,7 @@ func TestDeleteUserAPI(t *testing.T) {
 
 func requireBodyMatchUser(t *testing.T, body string, user db.User) {
 	var response struct {
-		User UserResponse `json:"user"`
+		User PrivateUserResponse `json:"user"`
 	}
 	err := json.Unmarshal([]byte(body), &response)
 	require.NoError(t, err)
@@ -662,7 +662,7 @@ func requireBodyMatchUser(t *testing.T, body string, user db.User) {
 
 func requireBodyMatchUsers(t *testing.T, body string, users []db.User, expectedTotal int64) {
 	var response struct {
-		Users []UserResponse `json:"users"`
+		Users []PrivateUserResponse `json:"users"`
 		Meta  struct {
 			Total  int64 `json:"total"`
 			Limit  int   `json:"limit"`

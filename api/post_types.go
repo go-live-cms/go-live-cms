@@ -1,3 +1,60 @@
+// Package api – Post Types module.
+//
+// # What this module does
+// Exposes read-only endpoints for registered post types and a helper to fetch a post with its meta.
+// Shapes DB rows into a clean PostTypeResponse.
+//
+// # Endpoints (v1)
+// - GET /api/v1/post-types        (list all post types)
+// - GET /api/v1/post-types/:name  (fetch single post type by machine name)
+// - GET /api/v1/posts/:id/with-meta (fetch post plus meta blob helper)
+//
+// # Auth
+// All endpoints are public (no Bearer required). Protect upstream if your deployment requires it.
+//
+// # Request params
+// Path:
+//   - :name — string; post type key (e.g., post, page, product)
+//   - :id — int64; post ID for with-meta
+//
+// Query: none.
+//
+// # Responses
+// PostTypeResponse:
+//   - id (int64) — internal ID
+//   - name (string) — machine name
+//   - label (string) — display label
+//   - description (string) — optional (empty if NULL)
+//   - public (bool)
+//   - hierarchical (bool)
+//   - has_archive (bool)
+//   - menu_position (int32) — optional in DB; zero if NULL
+//   - supports ([]string) — currently empty; reserved for future capabilities
+//   - created_at (RFC3339)
+//
+// Get Post with Meta: { "post": <DB-projected post+meta> } (shape comes from store.GetPostWithMeta).
+//
+// # Status codes
+// 200 OK — success | 400 Bad Request — invalid id | 404 Not Found — unknown post type/post | 500 Internal Server Error — datastore failures
+//
+// Error body: { "error": "message" }
+//
+// # Notes / Behavior
+// - description and menu_position are normalized: empty string / zero when DB NULLs
+// - supports is emitted for forward-compat; clients should not assume contents
+// - with-meta endpoint is read-through to a store method; its exact JSON may evolve with the DB projection
+//
+// # Examples
+// List: curl https://example.com/api/v1/post-types
+// Single: curl https://example.com/api/v1/post-types/product
+// Post with meta: curl https://example.com/api/v1/posts/123/with-meta
+//
+// # Cross-refs
+// - DB: ListPostTypes, GetPostType, GetPostWithMeta
+// - Related: posts.go for core post CRUD; taxonomy_* for organization
+//
+// # Future
+// Populate supports from DB/feature flags (e.g., title, editor, thumbnail, excerpt).
 package api
 
 import (
