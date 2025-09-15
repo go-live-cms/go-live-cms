@@ -4,6 +4,13 @@ A full-stack CMS built with Go (Gin), PostgreSQL, and Astro.
 
 ## 🚀 Quick Start
 
+```bash
+git clone <repo>
+cd go-live-cms
+./scripts/gen-ws-env.sh          # ⚠️  REQUIRED: Generates auth keys
+make devbuild
+```
+
 ### Prerequisites
 
 - Docker & Docker Compose
