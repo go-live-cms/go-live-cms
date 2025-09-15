@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
+import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
+import { pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
+import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
 import BubbleMenu from "./ui/BubbleMenu"
 import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
@@ -29,7 +32,6 @@ export default function Editor({
   postId,
   enableCollaboration = true,
 }: Props) {
-
   // Collaboration provider
   const collabProvider = useMemo(() => {
     if (postId && enableCollaboration && !readOnly) {
@@ -38,11 +40,22 @@ export default function Editor({
     return null
   }, [postId, enableCollaboration, readOnly])
 
+  // Block document manager
+  const blockDocManager = useMemo(() => {
+    if (collabProvider?.doc) {
+      const manager = new BlockDocManager(collabProvider.doc)
+      manager.initializeDoc()
+      return manager
+    }
+    return null
+  }, [collabProvider])
+
   // Editor extensions
-  const extensions = useMemo(
-    getExtensions({ collabProvider, maxChars, placeholder }),
-    [collabProvider, maxChars, placeholder]
-  )
+  const extensions = useMemo(getExtensions({ collabProvider, maxChars, placeholder }), [
+    collabProvider,
+    maxChars,
+    placeholder,
+  ])
 
   // Initialize Editor
   const editor = useEditor({
@@ -50,10 +63,23 @@ export default function Editor({
     extensions,
     content: !collabProvider ? value || "<p></p>" : undefined,
     autofocus: "end",
-    onUpdate({ editor }) {
+    onUpdate({ editor, transaction }) {
       const html = editor.getHTML()
       const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
       onChange(html, text)
+
+      if (blockDocManager && transaction.docChanged) {
+        try {
+          const blockDoc = pmToBlockDoc(editor.state.doc)
+          blockDocManager.setBlockDocV1(blockDoc)
+
+          if (import.meta.env.DEV) {
+            console.log("Mirrored to BlockDoc:", blockDoc)
+          }
+        } catch (error) {
+          console.error("Failed to mirror to BlockDoc:", error)
+        }
+      }
     },
     editorProps: {
       attributes: {
@@ -100,6 +126,11 @@ export default function Editor({
   }, [postId, collabProvider])
 
   if (!editor) return null
+
+  if (import.meta.env.DEV && blockDocManager) {
+    ;(window as any).blockDocManager = blockDocManager
+    createTestScript()
+  }
 
   return (
     <div className="notion-editor">

@@ -12,6 +12,7 @@ import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
 import { getSlashCommandItems } from "../blocks"
 import { SlashCommandExtension } from "../ui/SlashCommand"
+import { BlockIdExtension } from "../extensions/BlockIdExtension"
 import { createLowlight, common } from "lowlight"
 
 const lowlight = createLowlight(common)
@@ -58,6 +59,7 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
         },
       }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
+      BlockIdExtension,
       Placeholder.configure({
         includeChildren: true,
         showOnlyWhenEditable: true,
