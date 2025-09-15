@@ -6,8 +6,9 @@ import "@gl-admin/assets/styles/components/ui/pagination.scss"
 import type { ApiMeta } from "@gl-admin/lib/api/types"
 
 type PaginationProps<T, Q> = {
-  fetchData: ({ limit, offset, ...query }: ApiMeta & Q) => Promise<{ data: T[]; total: number }>
+  fetchData: ({ limit, offset, ...query }: ApiMeta & Q, token?: string) => Promise<{ data: T[]; total: number }>
   query: Q
+  token?: string
   limitOptions?: number[]
   pageWindow?: number
   children: (args: { data: T[], total: number, loading: boolean }) => React.ReactNode
@@ -16,6 +17,7 @@ type PaginationProps<T, Q> = {
 function Pagination<T, Q>({
   fetchData,
   query,
+  token = "",
   limitOptions = [8, 16, 24, 48, 64],
   pageWindow = 5,
   children,
@@ -38,7 +40,7 @@ function Pagination<T, Q>({
   useEffect(() => {
     let isMounted = true
     setLoading(true)
-    fetchData({ limit, offset, ...query })
+    fetchData({ limit, offset, ...query }, token)
       .then((res) => {
         if (isMounted) {
           setData(res.data)
