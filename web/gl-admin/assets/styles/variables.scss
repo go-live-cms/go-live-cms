@@ -141,6 +141,13 @@
     --post-status-background-published: linear-gradient(94deg, rgb(51 255 51 / 30%) 0.41%, rgb(31 153 31 / 30%) 95.62%);
     --post-status-background-draft: linear-gradient(180deg, rgb(239 147 0 / 30%) 0%, rgb(255 204 0 / 30%) 100%);
 
+    // Input
+    --input-focused-border-color: hsl(207deg, 6%, 37%);
+    --input-focused-box-shadow: 0 0 8px 0 #00000011 inset;
+    --input-label-color: hsl(197deg, 3%, 9%);
+    --input-color: hsl(200deg, 3%, 85%);
+    --input-active-color: hsl(200deg, 3%, 79%);
+
     .admin-sidebar {
         border-right: 1px solid var(--border-color)!important;
         box-shadow: none!important;

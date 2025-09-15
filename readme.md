@@ -27,14 +27,17 @@ make devbuild
    cd go-live-cms
    ```
 
-2. **Environment configuration:**
+2. **Important**
+   Make sure the startdev.sh, wait-for.sh and start.sh are in the LF format instead of CRLF
+
+3. **Environment configuration:**
 
    ```bash
    cp example.app.env app.env
    # Edit app.env with your configuration if needed
    ```
 
-3. **Start development environment:**
+4. **Start development environment:**
 
    ```bash
    make dev
@@ -46,7 +49,7 @@ make devbuild
    - Go API server on http://localhost:8080
    - Astro frontend on http://localhost:4321
 
-4. **Check logs (optional):**
+5. **Check logs (optional):**
    ```bash
    make devlogs        # All services
    make devlogs-api    # API only
