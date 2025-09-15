@@ -40,6 +40,10 @@ const navigation: Navigation = [
     { icon: "media" as IconPath, name: "Media", link: "/media/" },
     { icon: "plugins" as IconPath, name: "Plugins", link: "/plugins/" },
   ],
+  [
+    { icon: "user" as IconPath, name: "Users", link: "/users/" },
+    { icon: "gear" as IconPath, name: "System Settings", link: "/settings/" }
+  ]
 ];
 
 const Sidebar: React.FC = () => {
