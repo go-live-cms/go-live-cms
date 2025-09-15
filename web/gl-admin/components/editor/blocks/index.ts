@@ -1,4 +1,4 @@
-import type { SlashCommandItem } from "../SlashCommand"
+import type { SlashCommandItem } from "../ui/SlashCommand"
 import type { CommandSelectOption } from "@gl-admin/components/editor/ui/CommandSelect"
 import { headingBlocks } from "./headingBlocks"
 import { listBlocks } from "./listBlocks"
