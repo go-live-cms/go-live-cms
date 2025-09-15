@@ -13,6 +13,7 @@ const NotFound = lazy(() => import("@gl-admin/pages/NotFound"))
 const Dashboard = lazy(() => import("@gl-admin/pages/Dashboard"))
 const Content = lazy(() => import("@gl-admin/pages/Content"))
 const Media = lazy(() => import("@gl-admin/pages/Media"))
+const Users = lazy(() => import("@gl-admin/pages/Users"))
 
 function AppLayout() {
   const routeClasses = useRouteClasses()
@@ -39,6 +40,7 @@ function AppLayout() {
             <Route path="/content/pages/new" element={<NewPage />} />
             <Route path="/content/edit/:id" element={<EditContent />} />
             <Route path="/media" element={<Media />} />
+            <Route path="/users" element={<Users />} />
           </Routes>
         </div>
       </section>
