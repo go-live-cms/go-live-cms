@@ -22,16 +22,19 @@ export const BlockIdExtension = Extension.create({
           let tr = newState.tr
           let hasChanges = false
 
-          newState.doc.content.forEach((node, offset, index) => {
-            const pos = offset
+          let pos = 0
+          newState.doc.content.forEach((node) => {
             const currentId = node.attrs["data-block-id"]
 
             if (!currentId || typeof currentId !== "string" || currentId.length < 10) {
               const newId = ensureBlockId(node)
+              const attrs = { ...node.attrs, "data-block-id": newId }
 
-              tr = tr.setNodeAttribute(pos, "data-block-id", newId)
+              tr = tr.setNodeMarkup(pos, node.type, attrs, node.marks)
               hasChanges = true
             }
+
+            pos += node.nodeSize
           })
 
           return hasChanges ? tr : null

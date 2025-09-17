@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
 import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
@@ -43,12 +43,12 @@ export default function Editor({
   // Block document manager
   const blockDocManager = useMemo(() => {
     if (collabProvider?.doc) {
-      const manager = new BlockDocManager(collabProvider.doc)
-      manager.initializeDoc()
-      return manager
+      return new BlockDocManager(collabProvider.doc)
     }
     return null
   }, [collabProvider])
+
+  const mirrorTimer = useRef<number | null>(null)
 
   // Editor extensions
   const extensions = useMemo(getExtensions({ collabProvider, maxChars, placeholder }), [
@@ -69,16 +69,28 @@ export default function Editor({
       onChange(html, text)
 
       if (blockDocManager && transaction.docChanged) {
-        try {
-          const blockDoc = pmToBlockDoc(editor.state.doc)
-          blockDocManager.setBlockDocV1(blockDoc)
-
-          if (import.meta.env.DEV) {
-            console.log("Mirrored to BlockDoc:", blockDoc)
-          }
-        } catch (error) {
-          console.error("Failed to mirror to BlockDoc:", error)
+        if (mirrorTimer.current) {
+          window.clearTimeout(mirrorTimer.current)
         }
+
+        mirrorTimer.current = window.setTimeout(() => {
+          if (!blockDocManager) {
+            return
+          }
+
+          try {
+            const blockDoc = pmToBlockDoc(editor.state.doc)
+            blockDocManager.setBlockDocV1(blockDoc)
+
+            if (import.meta.env.DEV) {
+              console.log("Mirrored to BlockDoc:", blockDoc)
+            }
+          } catch (error) {
+            console.error("Failed to mirror to BlockDoc:", error)
+          } finally {
+            mirrorTimer.current = null
+          }
+        }, 200)
       }
     },
     editorProps: {
@@ -88,22 +100,49 @@ export default function Editor({
     },
   })
 
+  useEffect(() => {
+    return () => {
+      if (mirrorTimer.current) {
+        window.clearTimeout(mirrorTimer.current)
+      }
+    }
+  }, [])
+
   // Collaboration content sync
   useEffect(() => {
     if (!editor || !collabProvider) return
     const onSynced = (isSynced: boolean) => {
       if (!isSynced) return
+
       const frag = collabProvider.doc.getXmlFragment("prosemirror")
       const emptyShared = frag.length === 0
       const emptyLocal = editor.isEmpty
+
       if (isSynced && emptyShared && emptyLocal && value && value !== "<p></p>") {
         editor.commands.setContent(value, { emitUpdate: false })
       }
+
+      if (blockDocManager) {
+        const blockDoc = blockDocManager.getBlockDocV1()
+        const hasBlockDoc =
+          blockDoc.blocks_order.length > 0 || Object.keys(blockDoc.blocks).length > 0
+
+        if (!hasBlockDoc) {
+          if (!editor.isEmpty) {
+            const snapshot = pmToBlockDoc(editor.state.doc)
+            blockDocManager.setBlockDocV1(snapshot)
+          } else {
+            blockDocManager.initializeDoc()
+          }
+        }
+      }
+
       collabProvider.provider.off("synced", onSynced)
     }
+
     collabProvider.provider.on("synced", onSynced)
     return () => collabProvider.provider.off("synced", onSynced)
-  }, [editor, collabProvider, value])
+  }, [editor, collabProvider, value, blockDocManager])
 
   // External content changes (e.g. loading existing post)
   useEffect(() => {

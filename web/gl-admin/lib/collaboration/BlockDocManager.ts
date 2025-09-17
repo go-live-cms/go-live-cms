@@ -29,7 +29,7 @@ export class BlockDocManager {
    * Initialize document with empty paragraph if empty
    */
   initializeDoc(): void {
-    if (this.blocksOrder.length === 0) {
+    if (this.blocksOrder.length === 0 && this.blocks.size === 0) {
       const initialBlockId = generateId()
       const initialBlock: Block = {
         id: initialBlockId,
