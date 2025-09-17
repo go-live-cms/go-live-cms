@@ -6,6 +6,7 @@ import Sidebar from "@gl-admin/components/sidebar/Sidebar"
 import "@gl-admin/assets/styles/global.scss"
 import NewPost from "./pages/NewPost"
 import NewPage from "./pages/NewPage"
+import NewUser from "./pages/NewUser"
 import EditContent from "./pages/EditPost"
 import { useRouteClasses } from "./utils/useRouteClasses"
 
@@ -41,6 +42,7 @@ function AppLayout() {
             <Route path="/content/edit/:id" element={<EditContent />} />
             <Route path="/media" element={<Media />} />
             <Route path="/users" element={<Users />} />
+            <Route path="/users/new" element={<NewUser />} />
           </Routes>
         </div>
       </section>
