@@ -64,12 +64,26 @@ services:
   websocket:
     build:
       context: ./websocket
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
       - "1234:1234"
+    env_file:
+      - ./websocket/.env
     environment:
-      - HOST=0.0.0.0
-      - PORT=1234
+      # Override for Docker reliability
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=300
+    volumes:
+      - ./websocket:/app
+      - /app/node_modules
+      # File-based PEM for reliable Docker env loading
+      - ./websocket/public.pem:/run/secrets/public.pem:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:1234/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     depends_on:
       - api
 

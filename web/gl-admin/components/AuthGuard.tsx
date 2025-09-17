@@ -32,9 +32,8 @@ export default function AuthGuard({
           return
         }
 
-        // If not valid, try to refresh only if we have a refresh token
-        const currentState = authManager.getState()
-        if (currentState.refreshToken && !hasRedirected) {
+        // If not valid, try to refresh (we use cookie-based refresh)
+        if (!hasRedirected) {
           console.log("🔍 Attempting token refresh in AuthGuard...")
           const refreshed = await authManager.refreshAccessToken()
 
