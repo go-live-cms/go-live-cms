@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
 import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
+import { BlockPersistenceManager } from "@gl-admin/lib/collaboration/BlockPersistenceManager"
 import { pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
+import { authManager } from "@gl-admin/lib/auth"
 import BubbleMenu from "./ui/BubbleMenu"
 import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
@@ -20,18 +22,45 @@ type Props = {
   maxChars?: number
   postId?: number
   enableCollaboration?: boolean
+  // Block Spec v1 persistence callbacks
+  onSaveStart?: () => void
+  onSaveSuccess?: (revision: number) => void
+  onSaveError?: (error: Error) => void
+  onPublishStart?: () => void
+  onPublishSuccess?: (result: { versionId: number; versionNo: number }) => void
+  onPublishError?: (error: Error) => void
 }
 
-export default function Editor({
-  value,
-  onChange,
-  placeholder = "Type '/' for commands...",
-  readOnly = false,
-  minChars,
-  maxChars,
-  postId,
-  enableCollaboration = true,
-}: Props) {
+export interface EditorRef {
+  forceSave: () => Promise<void>
+  publish: () => Promise<{ versionId: number; versionNo: number } | undefined>
+  getSaveStatus: () => { isSaving: boolean; isPublishing: boolean; saveStatus: "saved" | "saving" | "error" | null }
+}
+
+export default forwardRef<EditorRef, Props>(function Editor(
+  {
+    value,
+    onChange,
+    placeholder = "Type '/' for commands...",
+    readOnly = false,
+    minChars,
+    maxChars,
+    postId,
+    enableCollaboration = true,
+    onSaveStart,
+    onSaveSuccess,
+    onSaveError,
+    onPublishStart,
+    onPublishSuccess,
+    onPublishError,
+  },
+  ref
+) {
+  const [isSaving, setIsSaving] = useState(false)
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
+  const persistenceRef = useRef<BlockPersistenceManager | null>(null)
+
   // Collaboration provider
   const collabProvider = useMemo(() => {
     if (postId && enableCollaboration && !readOnly) {
@@ -47,6 +76,82 @@ export default function Editor({
     }
     return null
   }, [collabProvider])
+
+  // Block persistence manager
+  const persistenceManager = useMemo(() => {
+    if (blockDocManager && postId && !readOnly) {
+      if (!persistenceRef.current) {
+        const token = authManager.getAccessToken() || undefined
+        const manager = new BlockPersistenceManager(postId, blockDocManager, token)
+
+        const handleSaveStart = () => {
+          setIsSaving(true)
+          setSaveStatus("saving")
+          onSaveStart?.()
+        }
+
+        const handleSaveSuccess = (revision: number) => {
+          setIsSaving(false)
+          setSaveStatus("saved")
+          setTimeout(() => setSaveStatus(null), 3000)
+          onSaveSuccess?.(revision)
+        }
+
+        const handleSaveError = (error: Error) => {
+          setIsSaving(false)
+          setSaveStatus("error")
+          console.error("Save failed:", error)
+          setTimeout(() => setSaveStatus(null), 5000)
+          onSaveError?.(error)
+        }
+
+        manager.setCallbacks({
+          onSaveStart: handleSaveStart,
+          onSaveSuccess: handleSaveSuccess,
+          onSaveError: handleSaveError,
+        })
+
+        persistenceRef.current = manager
+      }
+      return persistenceRef.current
+    }
+    return null
+  }, [blockDocManager, postId, readOnly, onSaveStart, onSaveSuccess, onSaveError])
+
+  // Force save function
+  const handleForceSave = async () => {
+    if (!persistenceManager || isSaving) return
+    await persistenceManager.forceSave()
+  }
+
+  // Expose functions via ref
+  useImperativeHandle(
+    ref,
+    () => ({
+      forceSave: handleForceSave,
+      publish: async () => {
+        if (!persistenceManager || !postId || isPublishing) return undefined
+
+        setIsPublishing(true)
+        onPublishStart?.()
+
+        try {
+          const result = await persistenceManager.publish()
+          console.log("Block published successfully as version", result.versionNo)
+          onPublishSuccess?.(result)
+          return result
+        } catch (error) {
+          console.error("Publish failed:", error)
+          onPublishError?.(error as Error)
+          throw error
+        } finally {
+          setIsPublishing(false)
+        }
+      },
+      getSaveStatus: () => ({ isSaving, isPublishing, saveStatus }),
+    }),
+    [persistenceManager, postId, isSaving, isPublishing, saveStatus, onPublishStart, onPublishSuccess, onPublishError]
+  )
 
   const mirrorTimer = useRef<number | null>(null)
 
@@ -124,8 +229,7 @@ export default function Editor({
 
       if (blockDocManager) {
         const blockDoc = blockDocManager.getBlockDocV1()
-        const hasBlockDoc =
-          blockDoc.blocks_order.length > 0 || Object.keys(blockDoc.blocks).length > 0
+        const hasBlockDoc = blockDoc.blocks_order.length > 0 || Object.keys(blockDoc.blocks).length > 0
 
         if (!hasBlockDoc) {
           if (!editor.isEmpty) {
@@ -137,12 +241,17 @@ export default function Editor({
         }
       }
 
+      // Initialize persistence manager if available
+      if (persistenceManager) {
+        persistenceManager.initialize()
+      }
+
       collabProvider.provider.off("synced", onSynced)
     }
 
     collabProvider.provider.on("synced", onSynced)
     return () => collabProvider.provider.off("synced", onSynced)
-  }, [editor, collabProvider, value, blockDocManager])
+  }, [editor, collabProvider, value, blockDocManager, persistenceManager])
 
   // External content changes (e.g. loading existing post)
   useEffect(() => {
@@ -164,11 +273,41 @@ export default function Editor({
     }
   }, [postId, collabProvider])
 
+  // Cleanup persistence manager on unmount
+  useEffect(() => {
+    return () => {
+      if (persistenceRef.current) {
+        persistenceRef.current.destroy()
+        persistenceRef.current = null
+      }
+    }
+  }, [])
+
+  // Subscribe to auth changes and update persistence manager token
+  useEffect(() => {
+    if (!persistenceRef.current) return
+
+    const unsubscribe = authManager?.subscribe?.((state: any) => {
+      const newToken = state?.accessToken ?? null
+      persistenceRef.current?.setAuthToken(newToken)
+    })
+
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe()
+      }
+    }
+  }, [])
+
   if (!editor) return null
 
   if (import.meta.env.DEV && blockDocManager) {
     ;(window as any).blockDocManager = blockDocManager
-    createTestScript()
+    const w = window as any
+    if (!w.__blockSpecTestLoaded) {
+      w.__blockSpecTestLoaded = true
+      createTestScript()
+    }
   }
 
   return (
@@ -184,4 +323,4 @@ export default function Editor({
       <CharacterCount editor={editor} minChars={minChars} maxChars={maxChars} />
     </div>
   )
-}
+})
