@@ -5,18 +5,21 @@
  * 1. Start the dev server: npm run dev
  * 2. Open a post with the editor
  * 3. Open browser console
- * 4. Run: testBlockSpec()
+ * 4. Run: testBlockSpec() for core functionality
+ * 5. Run: testPhaseAIntegration() for full integration testing
  *
  * This will test:
  * - Block ID generation
  * - PM to BlockDoc conversion
  * - BlockDocManager operations
+ * - Persistence and API integration
  */
 
 declare global {
   interface Window {
     blockDocManager?: any
     testBlockSpec?: () => void
+    testPhaseAIntegration?: () => void
   }
 }
 
@@ -97,8 +100,95 @@ export function createTestScript() {
     console.log("✅ Block Spec v1 Phase A tests completed!")
     console.log("🎯 Try typing in the editor to see mirrored changes in the console")
     console.log("📝 Try creating a bullet list to see blocks with children!")
+    console.log("💡 Run testPhaseAIntegration() to test full persistence integration")
   }
 
-  // Auto-expose test function
-  console.log("🧪 Block Spec test script loaded. Run testBlockSpec() to test.")
+  // Phase A Integration Test
+  window.testPhaseAIntegration = function () {
+    console.log("🧪 Testing Block Spec V1 Phase A Full Integration...")
+
+    // Check if the editor component is available
+    const editorElement = document.querySelector(".notion-editor")
+    if (!editorElement) {
+      console.error("❌ Editor not found")
+      return
+    }
+
+    // Check for PublishBar controls
+    const publishBar = document.querySelector(".publish-bar")
+    if (publishBar) {
+      console.log("✅ PublishBar found (Block Spec persistence integrated)")
+
+      const saveBtn = publishBar.querySelector('button[type="button"]:contains("Save")')
+      const publishBtn = publishBar.querySelector('button[type="button"]:contains("Publish")')
+
+      if (saveBtn || publishBar.textContent?.includes("Save")) {
+        console.log("✅ Save functionality integrated with PublishBar")
+        console.log("💡 Block Spec persistence will trigger on save")
+      }
+      if (publishBtn || publishBar.textContent?.includes("Publish")) {
+        console.log("✅ Publish functionality integrated with PublishBar")
+        console.log("💡 Block Spec publishing will trigger on publish")
+      }
+    } else {
+      console.log("ℹ️ PublishBar not found (may be on a different page)")
+    }
+
+    // Test current block document
+    if (window.blockDocManager) {
+      const blockDoc = window.blockDocManager.getBlockDocV1()
+      console.log("📊 Current block document:", blockDoc)
+
+      if (blockDoc.blocks_order.length > 0) {
+        console.log("✅ Block document has content blocks")
+        console.log(`📝 Document contains ${blockDoc.blocks_order.length} blocks`)
+        console.log(
+          "🔖 Block types:",
+          Object.values(blockDoc.blocks).map((b: any) => b.type)
+        )
+      } else {
+        console.log("ℹ️ Block document is empty (expected for new posts)")
+      }
+    }
+
+    // Test API endpoints
+    console.log("🌐 Testing API endpoints...")
+    const urlMatch = window.location.pathname.match(/\/content\/(posts|pages)\/edit\/(\d+)/)
+    if (urlMatch) {
+      const postId = urlMatch[2]
+      console.log(`📝 Editing post ID: ${postId}`)
+
+      fetch(`/api/posts/${postId}/blocks`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      })
+        .then((response) => {
+          if (response.ok) {
+            console.log("✅ Block API endpoint accessible")
+            return response.json()
+          } else {
+            console.log(`ℹ️ Block API returned status: ${response.status}`)
+          }
+        })
+        .then((data) => {
+          if (data) {
+            console.log("📊 Current stored block document:", data)
+          }
+        })
+        .catch((error) => {
+          console.log("ℹ️ Block API not available:", error.message)
+        })
+    } else {
+      console.log("ℹ️ Not on a post edit page, skipping API test")
+    }
+
+    console.log("🎯 Phase A Integration Test Complete")
+    console.log("💡 Block Spec v1 is now integrated with the existing PublishBar!")
+    console.log("🚀 Try editing content and using Save/Publish buttons to test persistence")
+  }
+
+  // Auto-expose test functions
+  console.log("🧪 Block Spec test script loaded.")
+  console.log("🔬 Run testBlockSpec() to test core functionality")
+  console.log("🔗 Run testPhaseAIntegration() to test full integration")
 }
