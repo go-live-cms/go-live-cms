@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { createPost, updatePost } from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
-import Editor from "@gl-admin/components/editor/Editor"
+import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import PublishBar from "@gl-admin/components/editor/ui/PublishBarNew"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
@@ -34,6 +34,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
+  const editorRef = useRef<EditorRef>(null)
 
   const ORIGINAL_SIDEBAR_WIDTH = 20 * 16
   const MIN_SIDEBAR_WIDTH = ORIGINAL_SIDEBAR_WIDTH * 0.8
@@ -217,12 +218,42 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   }
 
   const handleSave = async () => {
-    await savePost(false)
+    // Use Block Spec v1 persistence for edit mode, fallback to traditional save for create mode
+    if (mode === "edit" && editorRef.current && initialData?.id) {
+      try {
+        await editorRef.current.forceSave()
+        showSuccess("Changes saved successfully")
+      } catch (error) {
+        showError("Failed to save changes")
+        console.error("Block save failed:", error)
+      }
+    } else {
+      await savePost(false)
+    }
+  }
+
+  const handlePublish = async () => {
+    // Use Block Spec v1 publishing for edit mode, fallback to traditional publish for create mode
+    if (mode === "edit" && editorRef.current && initialData?.id) {
+      try {
+        const result = await editorRef.current.publish()
+        if (result) {
+          showSuccess(`Published as version ${result.versionNo}`)
+          // Update the post status in the form data
+          setFormData((prev) => ({ ...prev, post_status: "published" }))
+        }
+      } catch (error) {
+        showError("Failed to publish")
+        console.error("Block publish failed:", error)
+      }
+    } else {
+      await savePost(true)
+    }
   }
 
   const savePost = async (isPublish: boolean = false) => {
     const setSavingState = isPublish ? setIsSubmitting : setIsSaving
-    const setSaveStatusState = isPublish ? () => { } : setSaveStatus
+    const setSaveStatusState = isPublish ? () => {} : setSaveStatus
 
     setSavingState(true)
     setSaveStatusState("saving")
@@ -318,7 +349,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       <PublishBar
         post={currentPost}
         onSave={handleSave}
-        onPublish={() => savePost(true)}
+        onPublish={handlePublish}
         isSaving={isSaving}
         isPublishing={isSubmitting}
         saveStatus={saveStatus}
@@ -346,6 +377,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
           <div className="post-editor__content">
             <Editor
+              ref={editorRef}
               value={formData.content}
               minChars={10}
               onChange={(html, text) => {
@@ -355,6 +387,31 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
               postId={initialData?.id}
               enableCollaboration={mode === "edit"} // Only enable collaboration in edit mode
+              // Block Spec v1 persistence callbacks
+              onSaveStart={() => {
+                setIsSaving(true)
+                setSaveStatus("saving")
+              }}
+              onSaveSuccess={(revision) => {
+                setIsSaving(false)
+                setSaveStatus("saved")
+              }}
+              onSaveError={(error) => {
+                setIsSaving(false)
+                setSaveStatus("error")
+                showError("Auto-save failed")
+              }}
+              onPublishStart={() => {
+                setIsSubmitting(true)
+              }}
+              onPublishSuccess={(result) => {
+                setIsSubmitting(false)
+                setFormData((prev) => ({ ...prev, post_status: "published" }))
+              }}
+              onPublishError={(error) => {
+                setIsSubmitting(false)
+                showError("Publish failed")
+              }}
             />
           </div>
         </div>
