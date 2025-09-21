@@ -105,6 +105,30 @@ func toPostResponse(post db.Post) PostResponse {
 	}
 }
 
+// toPostResponseFromListRow converts a ListPostsRow to API response format
+func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
+	var postParent *int64
+	if post.PostParent.Valid {
+		postParent = &post.PostParent.Int64
+	}
+
+	return PostResponse{
+		ID:          post.ID,
+		Title:       post.Title,
+		Content:     post.Content,
+		Description: post.Description,
+		UserID:      post.UserID,
+		Username:    post.Username,
+		Url:         post.Url,
+		PostType:    post.PostType,
+		PostStatus:  post.PostStatus,
+		PostParent:  postParent,
+		MenuOrder:   post.MenuOrder,
+		CreatedAt:   post.CreatedAt,
+		ChangedAt:   post.ChangedAt,
+	}
+}
+
 // toPostWithMetaResponse converts ListPostsWithMetaRow to API response with basic meta
 func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 	var postParent *int64

@@ -166,7 +166,7 @@ func (server *Server) getPosts(c *gin.Context) {
 
 		postResponses := make([]PostResponse, len(posts))
 		for i, post := range posts {
-			postResponses[i] = toPostResponse(post)
+			postResponses[i] = toPostResponseFromListRow(post)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
