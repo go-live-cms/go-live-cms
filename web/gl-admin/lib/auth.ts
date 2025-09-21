@@ -164,7 +164,7 @@ export class AuthManager {
       localStorage.removeItem("user")
       localStorage.removeItem("token_expiry")
     }
-    
+
     this.notifyListeners()
   }
 
@@ -272,11 +272,11 @@ export class AuthManager {
   }
 
   private notifyListeners() {
-    this.listeners.forEach(listener => {
+    this.listeners.forEach((listener) => {
       try {
         listener({ ...this.state })
       } catch (error) {
-        console.error('Error in auth state listener:', error)
+        console.error("Error in auth state listener:", error)
       }
     })
   }
