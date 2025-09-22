@@ -142,11 +142,11 @@
     --post-status-background-draft: linear-gradient(180deg, rgb(239 147 0 / 30%) 0%, rgb(255 204 0 / 30%) 100%);
 
     // Input
-    --input-focused-border-color: hsl(207deg, 6%, 37%);
+    --input-focused-border-color: #595f64;
     --input-focused-box-shadow: 0 0 8px 0 #00000011 inset;
-    --input-label-color: hsl(197deg, 3%, 9%);
-    --input-color: hsl(200deg, 3%, 85%);
-    --input-active-color: hsl(200deg, 3%, 79%);
+    --input-label-color: #d8d9da;
+    --input-color: #d8d9da;
+    --input-active-color: #c8cacb;
 
     .admin-sidebar {
         border-right: 1px solid var(--border-color)!important;
