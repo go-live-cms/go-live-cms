@@ -59,8 +59,14 @@ export class BlockAPIClient {
   async updatePostBlocks(
     postId: number,
     doc: BlockDocV1,
-    revision: number
+    revision: number,
+    title?: string
   ): Promise<{ doc: BlockDocV1; revision: number }> {
+    const body: any = { doc }
+    if (title) {
+      body.title = title
+    }
+
     const response = await fetch(
       `${this.baseURL}/posts/${postId}/blocks`,
       this.buildInit({
@@ -69,7 +75,7 @@ export class BlockAPIClient {
           ...this.getHeaders(),
           "If-Match": revision.toString(),
         },
-        body: JSON.stringify({ doc }),
+        body: JSON.stringify(body),
       })
     )
 
