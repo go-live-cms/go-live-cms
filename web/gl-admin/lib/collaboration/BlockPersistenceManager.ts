@@ -9,6 +9,7 @@ import type { BlockDocManager } from "./BlockDocManager"
 export class BlockPersistenceManager {
   private postId: number
   private blockDocManager: BlockDocManager
+  private title?: string
   private saveTimer: NodeJS.Timeout | null = null
   private currentRevision: number = 1
   private isSaving: boolean = false
@@ -28,9 +29,10 @@ export class BlockPersistenceManager {
   private onSaveError?: (error: Error) => void
   private onConflictResolved?: (latestDoc: BlockDocV1) => void
 
-  constructor(postId: number, blockDocManager: BlockDocManager, authToken?: string) {
+  constructor(postId: number, blockDocManager: BlockDocManager, authToken?: string, title?: string) {
     this.postId = postId
     this.blockDocManager = blockDocManager
+    this.title = title
 
     if (authToken) {
       blockAPIClient.setAuthToken(authToken)
@@ -65,6 +67,13 @@ export class BlockPersistenceManager {
         this.resume() // try to recover immediately on next change
       }
     }
+  }
+
+  /**
+   * Update the title to be saved with next block save
+   */
+  setTitle(title: string) {
+    this.title = title
   }
 
   /**
@@ -133,7 +142,12 @@ export class BlockPersistenceManager {
     try {
       const currentDoc = this.blockDocManager.getBlockDocV1()
 
-      const { doc, revision } = await blockAPIClient.updatePostBlocks(this.postId, currentDoc, this.currentRevision)
+      const { doc, revision } = await blockAPIClient.updatePostBlocks(
+        this.postId,
+        currentDoc,
+        this.currentRevision,
+        this.title
+      )
 
       // Success
       this.currentRevision = revision
