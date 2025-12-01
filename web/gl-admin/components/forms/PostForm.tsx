@@ -379,6 +379,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             <Editor
               ref={editorRef}
               value={formData.content}
+              title={formData.title}
               minChars={10}
               onChange={(html, text) => {
                 setFormData((prev) => ({ ...prev, content: html }))
