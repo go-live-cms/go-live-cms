@@ -1,3 +1,5 @@
+import type { BlockDocV1 } from '../blocks-spec'
+
 // Shared types for API modules
 
 // Sort options for each resource
@@ -92,7 +94,8 @@ export interface Post {
   id: number
   title: string
   description: string
-  content: string
+  published_blocks?: BlockDocV1
+  featured_image?: string
   user_id: number
   username: string
   url: string
