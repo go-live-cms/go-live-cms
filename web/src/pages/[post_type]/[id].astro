@@ -3,14 +3,18 @@ import FormattedDate from '@/components/FormattedDate.astro'
 import BaseHead from '@/components/BaseHead.astro'
 import Header from '@/layouts/Header.astro'
 import Footer from '@/layouts/Footer.astro'
-import TipTapContent from '@/components/TipTapContent.astro'
+import BlockRenderer from '@/components/BlockRenderer'
 import { SITE_TITLE } from '../../consts'
 import { getPostsByType, getPostById } from '../../lib/api'
+import type { Post } from '@gl-admin/lib/api/types'
 
 export async function getStaticPaths() {
   const postTypes = ['post', 'page']
   
-  const paths = []
+  const paths: Array<{
+    params: { 'post_type': string; id: string }
+    props: { post: Post; postType: string }
+  }> = []
   
   for (const postType of postTypes) {
     try {
@@ -18,7 +22,7 @@ export async function getStaticPaths() {
         status: 'published'
       })
       
-      posts.forEach((post: any) => {
+      posts.forEach((post: Post) => {
         paths.push({
           params: { 
             'post_type': postType,
@@ -35,10 +39,12 @@ export async function getStaticPaths() {
   return paths
 }
 
-const { 'post_type': postType, id } = Astro.params 
-const { post } = Astro.props
+const { 'post_type': postType, id } = Astro.params as { 'post_type': string; id: string }
+const { post } = Astro.props as { post?: Post }
 
 console.log(`Rendering ${postType} with ID:`, id)
+
+let fullPost: Post | undefined = post
 
 if (!post) {
   console.error(`Post not found in props for ${postType} ID:`, id)
@@ -48,7 +54,7 @@ if (!post) {
     const postResponse = await getPostById(id)
     if (postResponse && postResponse.post) {
       console.log('Found post via direct fetch:', postResponse.post.title)
-      const fullPost = postResponse.post
+      fullPost = postResponse.post
     } else {
       console.error(`Post not found via direct fetch for ${postType} ID:`, id)
       return new Response(null, {
@@ -65,7 +71,6 @@ if (!post) {
   }
 }
 
-let fullPost = post
 if (post) {
   try {
     console.log(`Fetching fresh ${postType} data for ID:`, id)
@@ -283,7 +288,13 @@ const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
             <h1>{fullPost.title}</h1>
             <hr />
           </div>
-          <TipTapContent content={fullPost.content} class="content" />
+          {fullPost.published_blocks ? (
+            <BlockRenderer doc={fullPost.published_blocks} client:load />
+          ) : (
+            <div class="content">
+              <p>No published content available.</p>
+            </div>
+          )}
         </div>
       </article>
     </main>
