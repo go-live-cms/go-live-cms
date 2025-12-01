@@ -1,4 +1,4 @@
-import type { BlockDocV1 } from '../blocks-spec'
+import type { BlockDocV1 } from "../blocks-spec"
 
 // Shared types for API modules
 
