@@ -24,14 +24,14 @@ type BlockDocV1 struct {
 func (doc *BlockDocV1) deduplicateBlocksOrder() {
 	seen := make(map[string]bool)
 	unique := make([]string, 0, len(doc.BlocksOrder))
-	
+
 	for _, id := range doc.BlocksOrder {
 		if !seen[id] {
 			seen[id] = true
 			unique = append(unique, id)
 		}
 	}
-	
+
 	doc.BlocksOrder = unique
 }
 
