@@ -35,7 +35,6 @@ type Post struct {
 	ID                 int64                 `json:"id"`
 	Title              string                `json:"title"`
 	Description        string                `json:"description"`
-	Content            string                `json:"content"`
 	UserID             int64                 `json:"user_id"`
 	Username           string                `json:"username"`
 	Url                string                `json:"url"`

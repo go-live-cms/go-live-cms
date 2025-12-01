@@ -82,15 +82,14 @@ INSERT INTO posts (
     description,
     user_id,
     username,
-    content,
     url,
     post_type,
     post_status,
     post_parent,
     menu_order
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-) RETURNING id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
+) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc
 `
 
 type CreatePostsParams struct {
@@ -98,7 +97,6 @@ type CreatePostsParams struct {
 	Description string        `json:"description"`
 	UserID      int64         `json:"user_id"`
 	Username    string        `json:"username"`
-	Content     string        `json:"content"`
 	Url         string        `json:"url"`
 	PostType    string        `json:"post_type"`
 	PostStatus  string        `json:"post_status"`
@@ -112,7 +110,6 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		arg.Description,
 		arg.UserID,
 		arg.Username,
-		arg.Content,
 		arg.Url,
 		arg.PostType,
 		arg.PostStatus,
@@ -124,7 +121,6 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		&i.ID,
 		&i.Title,
 		&i.Description,
-		&i.Content,
 		&i.UserID,
 		&i.Username,
 		&i.Url,
@@ -186,7 +182,7 @@ func (q *Queries) DeleteUserPost(ctx context.Context, postID int64) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc FROM posts 
 WHERE id = $1 LIMIT 1
 `
 
@@ -197,7 +193,6 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.ID,
 		&i.Title,
 		&i.Description,
-		&i.Content,
 		&i.UserID,
 		&i.Username,
 		&i.Url,
@@ -216,7 +211,7 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 }
 
 const getPostChildren = `-- name: GetPostChildren :many
-SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc FROM posts
 WHERE post_parent = $1
 ORDER BY menu_order ASC, title ASC
 `
@@ -234,7 +229,6 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -264,7 +258,7 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 
 const getPostWithMeta = `-- name: GetPostWithMeta :one
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -275,14 +269,13 @@ SELECT
 FROM posts p
 LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE p.id = $1
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 `
 
 type GetPostWithMetaRow struct {
 	ID                 int64                 `json:"id"`
 	Title              string                `json:"title"`
 	Description        string                `json:"description"`
-	Content            string                `json:"content"`
 	UserID             int64                 `json:"user_id"`
 	Username           string                `json:"username"`
 	Url                string                `json:"url"`
@@ -306,7 +299,6 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 		&i.ID,
 		&i.Title,
 		&i.Description,
-		&i.Content,
 		&i.UserID,
 		&i.Username,
 		&i.Url,
@@ -326,7 +318,7 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc FROM posts
 WHERE 
     ($1::text = '' OR post_type = $1)
     AND ($2::text = '' OR post_status = $2)
@@ -355,19 +347,19 @@ type ListPostsParams struct {
 }
 
 type ListPostsRow struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Content     string        `json:"content"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ChangedAt   time.Time     `json:"changed_at"`
+	ID                int64                 `json:"id"`
+	Title             string                `json:"title"`
+	Description       string                `json:"description"`
+	UserID            int64                 `json:"user_id"`
+	Username          string                `json:"username"`
+	Url               string                `json:"url"`
+	PostType          string                `json:"post_type"`
+	PostStatus        string                `json:"post_status"`
+	PostParent        sql.NullInt64         `json:"post_parent"`
+	MenuOrder         int32                 `json:"menu_order"`
+	CreatedAt         time.Time             `json:"created_at"`
+	ChangedAt         time.Time             `json:"changed_at"`
+	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
 }
 
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
@@ -390,7 +382,6 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -400,6 +391,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.PublishedBlockDoc,
 		); err != nil {
 			return nil, err
 		}
@@ -415,7 +407,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 }
 
 const listPostsByType = `-- name: ListPostsByType :many
-SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc FROM posts
 WHERE post_type = $1
     AND ($2::text = '' OR post_status = $2)
     AND ($3 = 0 OR user_id = $3)  -- Add user filter
@@ -460,7 +452,6 @@ func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -490,8 +481,8 @@ func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams
 
 const listPostsByTypeWithAllMeta = `-- name: ListPostsByTypeWithAllMeta :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     -- Post custom meta
     COALESCE(
         jsonb_object_agg(
@@ -525,7 +516,7 @@ LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE p.post_type = $1
     AND ($2::text = '' OR p.post_status = $2)
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, 
          p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
          u.id, u.username, u.email, u.full_name, u.role, u.created_at,
          pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
@@ -551,22 +542,22 @@ type ListPostsByTypeWithAllMetaParams struct {
 }
 
 type ListPostsByTypeWithAllMetaRow struct {
-	ID           int64           `json:"id"`
-	Title        string          `json:"title"`
-	Description  string          `json:"description"`
-	Content      string          `json:"content"`
-	UserID       int64           `json:"user_id"`
-	Username     string          `json:"username"`
-	Url          string          `json:"url"`
-	PostType     string          `json:"post_type"`
-	PostStatus   string          `json:"post_status"`
-	PostParent   sql.NullInt64   `json:"post_parent"`
-	MenuOrder    int32           `json:"menu_order"`
-	CreatedAt    time.Time       `json:"created_at"`
-	ChangedAt    time.Time       `json:"changed_at"`
-	PostMeta     interface{}     `json:"post_meta"`
-	AuthorMeta   json.RawMessage `json:"author_meta"`
-	PostTypeMeta json.RawMessage `json:"post_type_meta"`
+	ID                int64                 `json:"id"`
+	Title             string                `json:"title"`
+	Description       string                `json:"description"`
+	UserID            int64                 `json:"user_id"`
+	Username          string                `json:"username"`
+	Url               string                `json:"url"`
+	PostType          string                `json:"post_type"`
+	PostStatus        string                `json:"post_status"`
+	PostParent        sql.NullInt64         `json:"post_parent"`
+	MenuOrder         int32                 `json:"menu_order"`
+	CreatedAt         time.Time             `json:"created_at"`
+	ChangedAt         time.Time             `json:"changed_at"`
+	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
+	PostMeta          interface{}           `json:"post_meta"`
+	AuthorMeta        json.RawMessage       `json:"author_meta"`
+	PostTypeMeta      json.RawMessage       `json:"post_type_meta"`
 }
 
 func (q *Queries) ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsByTypeWithAllMetaParams) ([]ListPostsByTypeWithAllMetaRow, error) {
@@ -589,7 +580,6 @@ func (q *Queries) ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsB
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -599,6 +589,7 @@ func (q *Queries) ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsB
 			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.PublishedBlockDoc,
 			&i.PostMeta,
 			&i.AuthorMeta,
 			&i.PostTypeMeta,
@@ -618,8 +609,8 @@ func (q *Queries) ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsB
 
 const listPostsByTypeWithMeta = `-- name: ListPostsByTypeWithMeta :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -632,7 +623,7 @@ LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE p.post_type = $1
     AND ($2::text = '' OR p.post_status = $2)
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
     CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
@@ -655,20 +646,20 @@ type ListPostsByTypeWithMetaParams struct {
 }
 
 type ListPostsByTypeWithMetaRow struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Content     string        `json:"content"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ChangedAt   time.Time     `json:"changed_at"`
-	Meta        interface{}   `json:"meta"`
+	ID                int64                 `json:"id"`
+	Title             string                `json:"title"`
+	Description       string                `json:"description"`
+	UserID            int64                 `json:"user_id"`
+	Username          string                `json:"username"`
+	Url               string                `json:"url"`
+	PostType          string                `json:"post_type"`
+	PostStatus        string                `json:"post_status"`
+	PostParent        sql.NullInt64         `json:"post_parent"`
+	MenuOrder         int32                 `json:"menu_order"`
+	CreatedAt         time.Time             `json:"created_at"`
+	ChangedAt         time.Time             `json:"changed_at"`
+	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
+	Meta              interface{}           `json:"meta"`
 }
 
 func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error) {
@@ -691,7 +682,6 @@ func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTy
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -701,6 +691,7 @@ func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTy
 			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.PublishedBlockDoc,
 			&i.Meta,
 		); err != nil {
 			return nil, err
@@ -718,8 +709,8 @@ func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTy
 
 const listPostsWithAllMeta = `-- name: ListPostsWithAllMeta :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     -- Post custom meta
     COALESCE(
         jsonb_object_agg(
@@ -754,7 +745,7 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = $2)
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, 
          p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
          u.id, u.username, u.email, u.full_name, u.role, u.created_at,
          pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
@@ -782,22 +773,22 @@ type ListPostsWithAllMetaParams struct {
 }
 
 type ListPostsWithAllMetaRow struct {
-	ID           int64           `json:"id"`
-	Title        string          `json:"title"`
-	Description  string          `json:"description"`
-	Content      string          `json:"content"`
-	UserID       int64           `json:"user_id"`
-	Username     string          `json:"username"`
-	Url          string          `json:"url"`
-	PostType     string          `json:"post_type"`
-	PostStatus   string          `json:"post_status"`
-	PostParent   sql.NullInt64   `json:"post_parent"`
-	MenuOrder    int32           `json:"menu_order"`
-	CreatedAt    time.Time       `json:"created_at"`
-	ChangedAt    time.Time       `json:"changed_at"`
-	PostMeta     interface{}     `json:"post_meta"`
-	AuthorMeta   json.RawMessage `json:"author_meta"`
-	PostTypeMeta json.RawMessage `json:"post_type_meta"`
+	ID                int64                 `json:"id"`
+	Title             string                `json:"title"`
+	Description       string                `json:"description"`
+	UserID            int64                 `json:"user_id"`
+	Username          string                `json:"username"`
+	Url               string                `json:"url"`
+	PostType          string                `json:"post_type"`
+	PostStatus        string                `json:"post_status"`
+	PostParent        sql.NullInt64         `json:"post_parent"`
+	MenuOrder         int32                 `json:"menu_order"`
+	CreatedAt         time.Time             `json:"created_at"`
+	ChangedAt         time.Time             `json:"changed_at"`
+	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
+	PostMeta          interface{}           `json:"post_meta"`
+	AuthorMeta        json.RawMessage       `json:"author_meta"`
+	PostTypeMeta      json.RawMessage       `json:"post_type_meta"`
 }
 
 func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error) {
@@ -820,7 +811,6 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -830,6 +820,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.PublishedBlockDoc,
 			&i.PostMeta,
 			&i.AuthorMeta,
 			&i.PostTypeMeta,
@@ -849,8 +840,8 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 
 const listPostsWithMeta = `-- name: ListPostsWithMeta :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -864,7 +855,7 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = $2)
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
     CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
@@ -889,20 +880,20 @@ type ListPostsWithMetaParams struct {
 }
 
 type ListPostsWithMetaRow struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Content     string        `json:"content"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ChangedAt   time.Time     `json:"changed_at"`
-	Meta        interface{}   `json:"meta"`
+	ID                int64                 `json:"id"`
+	Title             string                `json:"title"`
+	Description       string                `json:"description"`
+	UserID            int64                 `json:"user_id"`
+	Username          string                `json:"username"`
+	Url               string                `json:"url"`
+	PostType          string                `json:"post_type"`
+	PostStatus        string                `json:"post_status"`
+	PostParent        sql.NullInt64         `json:"post_parent"`
+	MenuOrder         int32                 `json:"menu_order"`
+	CreatedAt         time.Time             `json:"created_at"`
+	ChangedAt         time.Time             `json:"changed_at"`
+	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
+	Meta              interface{}           `json:"meta"`
 }
 
 func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error) {
@@ -925,7 +916,6 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -935,6 +925,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.PublishedBlockDoc,
 			&i.Meta,
 		); err != nil {
 			return nil, err
@@ -956,15 +947,14 @@ SET title = COALESCE($1, title),
     description = COALESCE($2, description),
     user_id = COALESCE($3, user_id),
     username = COALESCE($4, username),
-    content = COALESCE($5, content),
-    url = COALESCE($6, url),
-    post_type = COALESCE($7, post_type),
-    post_status = COALESCE($8, post_status),
-    post_parent = COALESCE($9, post_parent),
-    menu_order = COALESCE($10, menu_order),
+    url = COALESCE($5, url),
+    post_type = COALESCE($6, post_type),
+    post_status = COALESCE($7, post_status),
+    post_parent = COALESCE($8, post_parent),
+    menu_order = COALESCE($9, menu_order),
     changed_at = now()
-WHERE id = $11
-RETURNING id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc
+WHERE id = $10
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc
 `
 
 type UpdatePostParams struct {
@@ -972,7 +962,6 @@ type UpdatePostParams struct {
 	Description string        `json:"description"`
 	UserID      int64         `json:"user_id"`
 	Username    string        `json:"username"`
-	Content     string        `json:"content"`
 	Url         string        `json:"url"`
 	PostType    string        `json:"post_type"`
 	PostStatus  string        `json:"post_status"`
@@ -987,7 +976,6 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		arg.Description,
 		arg.UserID,
 		arg.Username,
-		arg.Content,
 		arg.Url,
 		arg.PostType,
 		arg.PostStatus,
@@ -1000,7 +988,6 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.ID,
 		&i.Title,
 		&i.Description,
-		&i.Content,
 		&i.UserID,
 		&i.Username,
 		&i.Url,

@@ -725,7 +725,6 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 		postParams := db.CreatePostsParams{
 			Title:       title,
 			Description: gofakeit.Sentence(15),
-			Content:     generateDummyContent(),
 			Url:         uniqueURL,
 			UserID:      users[userIndex].ID,
 			Username:    users[userIndex].Username,
@@ -921,7 +920,6 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 		pageParams := db.CreatePostsParams{
 			Title:       pageData.title,
 			Description: fmt.Sprintf("Learn more about %s", pageData.title),
-			Content:     pageData.content,
 			Url:         url,
 			UserID:      users[userIndex].ID,
 			Username:    users[userIndex].Username,
@@ -984,7 +982,6 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 				childParams := db.CreatePostsParams{
 					Title:       childData.title,
 					Description: fmt.Sprintf("Learn more about %s", childData.title),
-					Content:     childData.content,
 					Url:         childURL,
 					UserID:      users[userIndex].ID,
 					Username:    users[userIndex].Username,
