@@ -20,9 +20,25 @@ type BlockDocV1 struct {
 	Blocks      map[string]interface{} `json:"blocks" binding:"required"`
 }
 
+// deduplicateBlocksOrder removes duplicate block IDs while preserving order
+func (doc *BlockDocV1) deduplicateBlocksOrder() {
+	seen := make(map[string]bool)
+	unique := make([]string, 0, len(doc.BlocksOrder))
+	
+	for _, id := range doc.BlocksOrder {
+		if !seen[id] {
+			seen[id] = true
+			unique = append(unique, id)
+		}
+	}
+	
+	doc.BlocksOrder = unique
+}
+
 // BlockDocResponse wraps the block document for API responses
 type BlockDocResponse struct {
-	Doc BlockDocV1 `json:"doc"`
+	Doc   BlockDocV1 `json:"doc"`
+	Title *string    `json:"title,omitempty"` // Optional title to update alongside blocks
 }
 
 // PublishRequest represents the request to publish a version
@@ -111,6 +127,9 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 		return
 	}
 
+	// Deduplicate blocks_order to prevent duplicate rendering
+	req.Doc.deduplicateBlocksOrder()
+
 	// Validate Block Spec v1
 	if req.Doc.DocVersion != 1 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unsupported doc_version: %d", req.Doc.DocVersion)})
@@ -147,6 +166,30 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post blocks"})
 		return
+	}
+
+	// Update title if provided
+	if req.Title != nil && *req.Title != "" {
+		// Get current post to preserve other fields
+		post, err := server.store.GetPost(c, postID)
+		if err == nil {
+			_, err = server.store.UpdatePost(c, db.UpdatePostParams{
+				ID:          postID,
+				Title:       *req.Title,
+				Description: post.Description,
+				UserID:      post.UserID,
+				Username:    post.Username,
+				Url:         post.Url,
+				PostType:    post.PostType,
+				PostStatus:  post.PostStatus,
+				PostParent:  post.PostParent,
+				MenuOrder:   post.MenuOrder,
+			})
+			if err != nil {
+				// Log error but don't fail the request - blocks were already saved
+				fmt.Printf("Warning: failed to update title: %v\n", err)
+			}
+		}
 	}
 
 	// Parse updated content for response
