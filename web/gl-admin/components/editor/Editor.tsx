@@ -21,6 +21,7 @@ type Props = {
   minChars?: number
   maxChars?: number
   postId?: number
+  title?: string
   enableCollaboration?: boolean
   // Block Spec v1 persistence callbacks
   onSaveStart?: () => void
@@ -46,6 +47,7 @@ export default forwardRef<EditorRef, Props>(function Editor(
     minChars,
     maxChars,
     postId,
+    title,
     enableCollaboration = true,
     onSaveStart,
     onSaveSuccess,
@@ -60,6 +62,7 @@ export default forwardRef<EditorRef, Props>(function Editor(
   const [isPublishing, setIsPublishing] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
   const persistenceRef = useRef<BlockPersistenceManager | null>(null)
+  const titleRef = useRef<string | undefined>(title)
 
   // Collaboration provider
   const collabProvider = useMemo(() => {
@@ -82,7 +85,7 @@ export default forwardRef<EditorRef, Props>(function Editor(
     if (blockDocManager && postId && !readOnly) {
       if (!persistenceRef.current) {
         const token = authManager.getAccessToken() || undefined
-        const manager = new BlockPersistenceManager(postId, blockDocManager, token)
+        const manager = new BlockPersistenceManager(postId, blockDocManager, token, title)
 
         const handleSaveStart = () => {
           setIsSaving(true)
@@ -118,9 +121,18 @@ export default forwardRef<EditorRef, Props>(function Editor(
     return null
   }, [blockDocManager, postId, readOnly, onSaveStart, onSaveSuccess, onSaveError])
 
+  // Update titleRef when title changes (no autosave)
+  useEffect(() => {
+    titleRef.current = title
+  }, [title])
+
   // Force save function
   const handleForceSave = async () => {
     if (!persistenceManager || isSaving) return
+    // Update title just before saving
+    if (titleRef.current) {
+      persistenceManager.setTitle(titleRef.current)
+    }
     await persistenceManager.forceSave()
   }
 
