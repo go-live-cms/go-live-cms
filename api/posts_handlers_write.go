@@ -44,7 +44,6 @@ func (server *Server) createPost(c *gin.Context) {
 
 	createParams := db.CreatePostsParams{
 		Title:       req.Title,
-		Content:     req.Content,
 		Description: req.Description,
 		UserID:      primaryAuthor.ID,
 		Username:    primaryAuthor.Username,
@@ -155,7 +154,6 @@ func (server *Server) updatePost(c *gin.Context) {
 	updateParams := db.UpdatePostParams{
 		ID:          id,
 		Title:       existingPost.Title,
-		Content:     existingPost.Content,
 		Description: existingPost.Description,
 		UserID:      existingPost.UserID,
 		Username:    existingPost.Username,
@@ -168,9 +166,6 @@ func (server *Server) updatePost(c *gin.Context) {
 
 	if req.Title != "" {
 		updateParams.Title = req.Title
-	}
-	if req.Content != "" {
-		updateParams.Content = req.Content
 	}
 	if req.Description != "" {
 		updateParams.Description = req.Description
