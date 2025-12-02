@@ -20,6 +20,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/sqlc-dev/pqtype"
 )
 
 // isDuplicateURLError checks if the error is a duplicate URL constraint violation
@@ -34,11 +35,11 @@ func (server *Server) generateUniqueURL(ctx context.Context, baseURL string) (st
 	if err != nil {
 		return "", err
 	}
-	
+
 	if !exists {
 		return baseURL, nil
 	}
-	
+
 	// URL exists, start appending numbers
 	counter := 2
 	for counter < 100 { // Safety limit to prevent infinite loop
@@ -47,14 +48,14 @@ func (server *Server) generateUniqueURL(ctx context.Context, baseURL string) (st
 		if err != nil {
 			return "", err
 		}
-		
+
 		if !exists {
 			return candidateURL, nil
 		}
-		
+
 		counter++
 	}
-	
+
 	// If we hit the limit, return error
 	return "", fmt.Errorf("unable to generate unique URL after %d attempts", counter)
 }
@@ -117,6 +118,8 @@ func (server *Server) createPost(c *gin.Context) {
 	}
 	createParams.Url = uniqueURL
 
+	// Create the post
+	var createdPost db.Post
 	if len(req.MediaIDs) > 0 && len(req.TaxonomyIDs) > 0 {
 		result, err := server.store.CreatePostTx(c.Request.Context(), db.CreatePostTxParams{
 			CreatePostsParams: createParams,
@@ -126,10 +129,7 @@ func (server *Server) createPost(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post"})
 			return
 		}
-
-		c.JSON(http.StatusCreated, gin.H{
-			"post": toPostResponse(result.Post),
-		})
+		createdPost = result.Post
 	} else if len(req.MediaIDs) > 0 {
 		result, err := server.store.CreatePostWithMediaTx(c.Request.Context(), db.CreatePostWithMediaTxParams{
 			CreatePostsParams: createParams,
@@ -140,10 +140,7 @@ func (server *Server) createPost(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post with media"})
 			return
 		}
-
-		c.JSON(http.StatusCreated, gin.H{
-			"post": toPostResponse(result.Post),
-		})
+		createdPost = result.Post
 	} else if len(req.TaxonomyIDs) > 0 {
 		result, err := server.store.CreatePostWithTaxonomyTermsTx(c.Request.Context(), db.CreatePostWithTaxonomyTermsTxParams{
 			CreatePostsParams: createParams,
@@ -154,10 +151,7 @@ func (server *Server) createPost(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post with taxonomy terms"})
 			return
 		}
-
-		c.JSON(http.StatusCreated, gin.H{
-			"post": toPostResponse(result.Post),
-		})
+		createdPost = result.Post
 	} else {
 		result, err := server.store.CreatePostTx(c.Request.Context(), db.CreatePostTxParams{
 			CreatePostsParams: createParams,
@@ -167,11 +161,28 @@ func (server *Server) createPost(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post"})
 			return
 		}
-
-		c.JSON(http.StatusCreated, gin.H{
-			"post": toPostResponse(result.Post),
-		})
+		createdPost = result.Post
 	}
+
+	// If post was created as published, initialize published_block_doc with empty block document
+	if createParams.PostStatus == "published" {
+		emptyBlockDoc := []byte(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
+		err = server.store.SetPublishedVersionOnPost(c.Request.Context(), db.SetPublishedVersionOnPostParams{
+			ID:                 createdPost.ID,
+			PublishedVersionID: sql.NullInt64{Valid: false},
+			PublishedBlockDoc:  pqtype.NullRawMessage{RawMessage: emptyBlockDoc, Valid: true},
+		})
+		if err != nil {
+			// Log error but don't fail - post was already created
+			fmt.Printf("Warning: failed to initialize published_block_doc for new post %d: %v\n", createdPost.ID, err)
+		}
+		// Update local copy for response
+		createdPost.PublishedBlockDoc = pqtype.NullRawMessage{RawMessage: emptyBlockDoc, Valid: true}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"post": toPostResponse(createdPost),
+	})
 }
 
 // updatePost handles PUT /posts/:id with selective field updates and media/taxonomy management

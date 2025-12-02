@@ -4,6 +4,8 @@ import { createPost, updatePost } from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
+import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
+import { htmlToBlockDoc } from "@gl-admin/lib/utils/htmlToBlocks"
 import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import PublishBar from "@gl-admin/components/editor/ui/PublishBarNew"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
@@ -60,7 +62,6 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     id: initialData?.id || 0,
     title: formData.title,
     description: formData.excerpt,
-    content: formData.content,
     user_id: initialData?.user_id || 0,
     username: initialData?.username || "",
     post_type: contentType || initialData?.post_type || "post",
@@ -78,7 +79,6 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       ...prev,
       ...(updates.title !== undefined && { title: updates.title }),
       ...(updates.description !== undefined && { excerpt: updates.description }),
-      ...(updates.content !== undefined && { content: updates.content }),
       ...(updates.post_status !== undefined && { post_status: updates.post_status as "draft" | "published" }),
       ...(updates.url !== undefined && { slug: updates.url }),
     }))
@@ -107,7 +107,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       setFormData({
         title: initialData.title,
         slug: slug,
-        content: initialData.content,
+        content: "",
         excerpt: initialData.description,
         post_status: initialData.post_status as "draft" | "published",
       })
@@ -289,6 +289,50 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         const successMessage = `${getContentTypeName(postType)} ${isPublish ? "published" : "saved"} successfully!`
         showSuccess(successMessage)
         setSaveStatusState("saved")
+
+        console.log("📝 Post created successfully:", {
+          postId: result.post.id,
+          title: result.post.title,
+          hasContent: !!formData.content,
+          contentLength: formData.content?.length || 0,
+          contentPreview: formData.content?.substring(0, 100)
+        })
+
+        // Convert HTML content to blocks and save immediately
+        if (formData.content) {
+          try {
+            console.log("🔄 Converting HTML to blocks...")
+            const blockDoc = htmlToBlockDoc(formData.content)
+            console.log("✅ Blocks generated:", {
+              blocksCount: Object.keys(blockDoc.blocks).length,
+              blocksOrder: blockDoc.blocks_order.length,
+              blockDoc
+            })
+
+            const token = authManager.getAccessToken()
+            if (token) {
+              blockAPIClient.setAuthToken(token)
+              console.log("💾 Saving blocks to post", result.post.id)
+              const saveResult = await blockAPIClient.updatePostBlocks(result.post.id, blockDoc, 1)
+              console.log("✅ Blocks saved successfully to block_doc:", saveResult)
+              
+              // If published, also publish the blocks (copies block_doc → published_block_doc)
+              if (isPublish) {
+                console.log("📤 Publishing blocks (copying to published_block_doc)...")
+                const publishResult = await blockAPIClient.publishPost(result.post.id)
+                console.log("✅ Blocks published:", publishResult)
+              }
+            } else {
+              console.error("❌ No auth token available for saving blocks")
+            }
+          } catch (error) {
+            console.error("❌ Failed to save initial blocks:", error)
+            showError("Warning: Content may not have been saved properly")
+            // Don't fail the entire operation if block save fails
+          }
+        } else {
+          console.warn("⚠️ No content to save - formData.content is empty")
+        }
 
         if (onSuccess) {
           onSuccess(result.post)

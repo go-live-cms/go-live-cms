@@ -13,6 +13,7 @@ export class BlockPersistenceManager {
   private saveTimer: NodeJS.Timeout | null = null
   private currentRevision: number = 1
   private isSaving: boolean = false
+  private isInitializing: boolean = true
   private hasUnsavedChanges: boolean = false
   private suspended: boolean = false
   private suspendReason: "unauthorized" | null = null
@@ -81,15 +82,32 @@ export class BlockPersistenceManager {
    */
   async initialize(): Promise<void> {
     try {
+      console.log(`🔄 Loading blocks for post ${this.postId}...`)
       const { doc, revision } = await blockAPIClient.getPostBlocks(this.postId)
       this.currentRevision = revision
 
+      console.log(`📥 Received blocks for post ${this.postId}:`, {
+        revision,
+        blocksCount: Object.keys(doc.blocks).length,
+        blocksOrder: doc.blocks_order.length,
+        isEmpty: doc.blocks_order.length === 0 && Object.keys(doc.blocks).length === 0,
+        doc
+      })
+
       // Only set if the document is not empty (has actual content)
       if (doc.blocks_order.length > 0 || Object.keys(doc.blocks).length > 0) {
+        console.log(`✅ Loading blocks into editor for post ${this.postId}`)
         this.blockDocManager.setBlockDocV1(doc)
+        console.log(`✅ Initial blocks loaded for post ${this.postId}`)
+      } else {
+        console.warn(`⚠️ Post ${this.postId} has empty block_doc, editor will start with empty state`)
       }
-
-      console.log(`📥 Loaded post ${this.postId} blocks, revision ${revision}`)
+      
+      // Wait 50ms for Y.js sync and editor stabilization before enabling autosave
+      setTimeout(() => {
+        this.isInitializing = false
+        console.log(`✅ Autosave enabled for post ${this.postId}`)
+      }, 50)
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         this.suspended = true
@@ -97,7 +115,7 @@ export class BlockPersistenceManager {
         this.onSaveError?.(error)
         return
       }
-      console.error("Failed to load initial document:", error)
+      console.error(`❌ Failed to load initial document for post ${this.postId}:`, error)
       this.onSaveError?.(error as Error)
     }
   }
@@ -106,13 +124,27 @@ export class BlockPersistenceManager {
    * Handle document changes from the block manager
    */
   private handleDocumentChange(doc: BlockDocV1): void {
+    console.log(`📝 handleDocumentChange called for post ${this.postId}:`, {
+      isSaving: this.isSaving,
+      isInitializing: this.isInitializing,
+      suspended: this.suspended,
+      suppressNextChange: this.suppressNextChange,
+      blocksCount: Object.keys(doc.blocks).length
+    })
+    
+    if (this.isInitializing) {
+      console.log(`🚫 Ignoring change during initialization for post ${this.postId}`)
+      return // Ignore ALL changes during initial load
+    }
     if (this.isSaving) return // Don't trigger saves during API updates
     if (this.suspended) return // Don't queue saves while suspended
     if (this.suppressNextChange) {
+      console.log(`🚫 Suppressing change event for post ${this.postId}`)
       this.suppressNextChange = false
       return
     }
 
+    console.log(`💾 Change detected for post ${this.postId}, queuing save...`)
     this.hasUnsavedChanges = true
     this.debouncedSave()
   }
