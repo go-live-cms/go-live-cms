@@ -14,6 +14,17 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+const checkURLExists = `-- name: CheckURLExists :one
+SELECT EXISTS(SELECT 1 FROM posts WHERE url = $1) as exists
+`
+
+func (q *Queries) CheckURLExists(ctx context.Context, url string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkURLExists, url)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const countFilteredPosts = `-- name: CountFilteredPosts :one
 SELECT COUNT(*) AS total FROM posts
 WHERE 

@@ -11,13 +11,53 @@
 package api
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
+
+// isDuplicateURLError checks if the error is a duplicate URL constraint violation
+func isDuplicateURLError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "posts_url_key")
+}
+
+// generateUniqueURL generates a unique URL by appending -2, -3, etc. like WordPress
+func (server *Server) generateUniqueURL(ctx context.Context, baseURL string) (string, error) {
+	// Check if base URL exists
+	exists, err := server.store.CheckURLExists(ctx, baseURL)
+	if err != nil {
+		return "", err
+	}
+	
+	if !exists {
+		return baseURL, nil
+	}
+	
+	// URL exists, start appending numbers
+	counter := 2
+	for counter < 100 { // Safety limit to prevent infinite loop
+		candidateURL := fmt.Sprintf("%s-%d", baseURL, counter)
+		exists, err := server.store.CheckURLExists(ctx, candidateURL)
+		if err != nil {
+			return "", err
+		}
+		
+		if !exists {
+			return candidateURL, nil
+		}
+		
+		counter++
+	}
+	
+	// If we hit the limit, return error
+	return "", fmt.Errorf("unable to generate unique URL after %d attempts", counter)
+}
 
 // createPost handles POST /posts with author validation and conditional transactions
 func (server *Server) createPost(c *gin.Context) {
@@ -69,6 +109,14 @@ func (server *Server) createPost(c *gin.Context) {
 		createParams.PostStatus = "draft"
 	}
 
+	// Generate unique URL if there's a conflict
+	uniqueURL, err := server.generateUniqueURL(c.Request.Context(), createParams.Url)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate unique URL"})
+		return
+	}
+	createParams.Url = uniqueURL
+
 	if len(req.MediaIDs) > 0 && len(req.TaxonomyIDs) > 0 {
 		result, err := server.store.CreatePostTx(c.Request.Context(), db.CreatePostTxParams{
 			CreatePostsParams: createParams,
@@ -103,7 +151,7 @@ func (server *Server) createPost(c *gin.Context) {
 			TaxonomyTermIDs:   req.TaxonomyIDs,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post with taxonomies"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post with taxonomy terms"})
 			return
 		}
 

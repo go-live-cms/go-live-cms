@@ -17,6 +17,7 @@ type Querier interface {
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockAllSessionsForUser(ctx context.Context, userID int64) error
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	CheckURLExists(ctx context.Context, url string) (bool, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
