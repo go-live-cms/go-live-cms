@@ -20,6 +20,7 @@ declare global {
     blockDocManager?: any
     testBlockSpec?: () => void
     testPhaseAIntegration?: () => void
+    getBlockDoc?: () => any
   }
 }
 
@@ -187,8 +188,34 @@ export function createTestScript() {
     console.log("🚀 Try editing content and using Save/Publish buttons to test persistence")
   }
 
+  // Debug function to check current editor state
+  window.getBlockDoc = function () {
+    if (!window.blockDocManager) {
+      console.error("❌ BlockDocManager not available")
+      return
+    }
+
+    const doc = window.blockDocManager.getBlockDocV1()
+    console.log("📋 Current BlockDoc:", doc)
+    console.log(
+      "📝 Blocks:",
+      Object.entries(doc.blocks).map(([id, block]: [string, any]) => ({
+        id: id.slice(0, 20) + "...",
+        type: block.type,
+        text: block.attrs.text || block.attrs.code || "(no text)",
+      }))
+    )
+    console.log(
+      "📑 Blocks order:",
+      doc.blocks_order.map((id: string) => id.slice(0, 20) + "...")
+    )
+
+    return doc
+  }
+
   // Auto-expose test functions
   console.log("🧪 Block Spec test script loaded.")
   console.log("🔬 Run testBlockSpec() to test core functionality")
   console.log("🔗 Run testPhaseAIntegration() to test full integration")
+  console.log("🔍 Run getBlockDoc() to see current block document")
 }

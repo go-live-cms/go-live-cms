@@ -295,7 +295,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           title: result.post.title,
           hasContent: !!formData.content,
           contentLength: formData.content?.length || 0,
-          contentPreview: formData.content?.substring(0, 100)
+          contentPreview: formData.content?.substring(0, 100),
         })
 
         // Convert HTML content to blocks and save immediately
@@ -306,7 +306,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             console.log("✅ Blocks generated:", {
               blocksCount: Object.keys(blockDoc.blocks).length,
               blocksOrder: blockDoc.blocks_order.length,
-              blockDoc
+              blockDoc,
             })
 
             const token = authManager.getAccessToken()
@@ -315,7 +315,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               console.log("💾 Saving blocks to post", result.post.id)
               const saveResult = await blockAPIClient.updatePostBlocks(result.post.id, blockDoc, 1)
               console.log("✅ Blocks saved successfully to block_doc:", saveResult)
-              
+
               // If published, also publish the blocks (copies block_doc → published_block_doc)
               if (isPublish) {
                 console.log("📤 Publishing blocks (copying to published_block_doc)...")

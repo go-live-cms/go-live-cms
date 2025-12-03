@@ -128,7 +128,41 @@ export default forwardRef<EditorRef, Props>(function Editor(
 
   // Force save function
   const handleForceSave = async () => {
-    if (!persistenceManager || isSaving) return
+    if (!persistenceManager || isSaving || !editor || !blockDocManager) return
+
+    // Log what the editor actually contains
+    console.log("🔍 Editor state before save:", {
+      childCount: editor.state.doc.content.childCount,
+      textContent: editor.state.doc.textContent,
+      isEmpty: editor.isEmpty,
+    })
+
+    // Log each child node
+    console.log("📋 Editor children:")
+    editor.state.doc.content.forEach((node, offset, index) => {
+      console.log(
+        `  [${index}] ${node.type.name} (${node.attrs["data-block-id"]?.slice(0, 20) || "NO ID"}):`,
+        node.textContent
+      )
+    })
+
+    // Mirror current editor state to BlockDoc before saving
+    try {
+      const blockDoc = pmToBlockDoc(editor.state.doc)
+      console.log("🔄 Converted PM to BlockDoc:", {
+        blocksCount: Object.keys(blockDoc.blocks).length,
+        blocksOrderLength: blockDoc.blocks_order.length,
+        blockDoc,
+      })
+      blockDocManager.setBlockDocV1(blockDoc)
+      console.log("📸 Captured editor state for save:", {
+        blocksCount: Object.keys(blockDoc.blocks).length,
+        textContent: editor.state.doc.textContent,
+      })
+    } catch (error) {
+      console.error("Failed to mirror before save:", error)
+    }
+
     // Update title just before saving
     if (titleRef.current) {
       persistenceManager.setTitle(titleRef.current)
@@ -185,30 +219,41 @@ export default forwardRef<EditorRef, Props>(function Editor(
       const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
       onChange(html, text)
 
-      if (blockDocManager && transaction.docChanged) {
-        if (mirrorTimer.current) {
-          window.clearTimeout(mirrorTimer.current)
-        }
+      // DISABLED: Automatic mirroring during editing causes sync issues
+      // We now only mirror when explicitly saving via forceSave()
+      // This prevents Y.js Collaboration and BlockDoc from competing
 
-        mirrorTimer.current = window.setTimeout(() => {
-          if (!blockDocManager) {
-            return
-          }
+      // if (blockDocManager && transaction.docChanged) {
+      //   // Skip mirroring if persistence manager is still initializing
+      //   if (persistenceRef.current?.isCurrentlyInitializing()) {
+      //     console.log("⏭️ Skipping mirror - still initializing")
+      //     return
+      //   }
 
-          try {
-            const blockDoc = pmToBlockDoc(editor.state.doc)
-            blockDocManager.setBlockDocV1(blockDoc)
+      //   if (mirrorTimer.current) {
+      //     window.clearTimeout(mirrorTimer.current)
+      //   }
 
-            if (import.meta.env.DEV) {
-              console.log("Mirrored to BlockDoc:", blockDoc)
-            }
-          } catch (error) {
-            console.error("Failed to mirror to BlockDoc:", error)
-          } finally {
-            mirrorTimer.current = null
-          }
-        }, 200)
-      }
+      //   mirrorTimer.current = window.setTimeout(() => {
+      //     if (!blockDocManager) {
+      //       return
+      //     }
+
+      //     try {
+      //       const blockDoc = pmToBlockDoc(editor.state.doc)
+      //       blockDocManager.setBlockDocV1(blockDoc)
+
+      //       if (import.meta.env.DEV) {
+      //         console.log("Mirrored to BlockDoc:", blockDoc)
+      //         console.log("TipTap text content:", editor.state.doc.textContent)
+      //       }
+      //     } catch (error) {
+      //       console.error("Failed to mirror to BlockDoc:", error)
+      //     } finally {
+      //       mirrorTimer.current = null
+      //     }
+      //   }, 200)
+      // }
     },
     editorProps: {
       attributes: {
@@ -253,8 +298,9 @@ export default forwardRef<EditorRef, Props>(function Editor(
         }
       }
 
-      // Initialize persistence manager if available
+      // Set editor instance and initialize persistence manager if available
       if (persistenceManager) {
+        persistenceManager.setEditor(editor)
         persistenceManager.initialize()
       }
 

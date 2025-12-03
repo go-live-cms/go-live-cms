@@ -2,11 +2,18 @@ import { Node as PMNode, Schema } from "prosemirror-model"
 import type { BlockDocV1, Block, BlockID } from "../blocks-spec"
 
 // Simple ID generator - matches BlockDocManager
+let idCounter = 0
 function generateId(): string {
+  // Add counter to ensure uniqueness even if called multiple times in same millisecond
+  idCounter++
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).substring(2, 9)
+
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID()
   }
-  return Math.random().toString(36).substring(2) + Date.now().toString(36)
+
+  return `${random}-${timestamp}-${idCounter}`
 }
 
 /**
@@ -28,14 +35,16 @@ export function ensureBlockId(node: PMNode): BlockID {
 export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
   const blocks: Record<BlockID, Block> = {}
   const blocksOrder: BlockID[] = []
+  const seenIds = new Set<BlockID>() // Track IDs to detect duplicates
 
   // Iterate through top-level nodes
   for (let i = 0; i < pmDoc.content.childCount; i++) {
     const node = pmDoc.content.child(i)
-    const block = pmNodeToBlock(node, blocks)
+    const block = pmNodeToBlock(node, blocks, seenIds)
     if (block) {
       blocks[block.id] = block
       blocksOrder.push(block.id)
+      seenIds.add(block.id)
 
       // Handle list children
       if ((block.type === "bullet_list" || block.type === "ordered_list") && node.content && node.content.size > 0) {
@@ -44,10 +53,11 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
         // Iterate through list items
         for (let j = 0; j < node.content.childCount; j++) {
           const listItemNode = node.content.child(j)
-          const listItemBlock = pmNodeToBlock(listItemNode, blocks)
+          const listItemBlock = pmNodeToBlock(listItemNode, blocks, seenIds)
           if (listItemBlock) {
             blocks[listItemBlock.id] = listItemBlock
             children.push(listItemBlock.id)
+            seenIds.add(listItemBlock.id)
           }
         }
 
@@ -69,8 +79,13 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
 /**
  * Convert individual ProseMirror node to Block
  */
-function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>): Block | null {
-  const id = ensureBlockId(node)
+function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds: Set<BlockID>): Block | null {
+  // Get existing ID, but generate new one if duplicate
+  let id = node.attrs["data-block-id"]
+  if (!id || typeof id !== "string" || id.length < 10 || seenIds.has(id)) {
+    // No ID, invalid ID, or duplicate ID - generate new one
+    id = generateId()
+  }
 
   switch (node.type.name) {
     case "paragraph":

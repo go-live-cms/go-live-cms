@@ -1,8 +1,21 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
-import { ensureBlockId } from "@gl-admin/lib/collaboration/blockBridge"
 
 const blockIdPluginKey = new PluginKey("blockId")
+
+// Generate unique block IDs
+let idCounter = 0
+function generateBlockId(): string {
+  idCounter++
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).substring(2, 9)
+
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+
+  return `${random}-${timestamp}-${idCounter}`
+}
 
 /**
  * TipTap extension that ensures all top-level nodes have stable block IDs
@@ -23,11 +36,13 @@ export const BlockIdExtension = Extension.create({
           let hasChanges = false
 
           let pos = 0
-          newState.doc.content.forEach((node) => {
+          newState.doc.content.forEach((node, offset, index) => {
             const currentId = node.attrs["data-block-id"]
 
+            // Only assign ID if node doesn't have a valid one
             if (!currentId || typeof currentId !== "string" || currentId.length < 10) {
-              const newId = ensureBlockId(node)
+              // Generate a truly unique ID for new nodes
+              const newId = generateBlockId()
               const attrs = { ...node.attrs, "data-block-id": newId }
 
               tr = tr.setNodeMarkup(pos, node.type, attrs, node.marks)
