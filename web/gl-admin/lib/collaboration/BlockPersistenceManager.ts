@@ -12,6 +12,7 @@ export class BlockPersistenceManager {
   private postId: number
   private blockDocManager: BlockDocManager
   private editor: Editor | null
+  private syncFromEditor: (() => void) | null = null
   private title?: string
   private saveTimer: NodeJS.Timeout | null = null
   private currentRevision: number = 1
@@ -65,8 +66,15 @@ export class BlockPersistenceManager {
   /**
    * Set the editor instance (called after editor is created)
    */
-  setEditor(editor: Editor | null) {
+  setEditor(editor: Editor) {
     this.editor = editor
+  }
+
+  /**
+   * Set callback to sync editor state to BlockDoc before save/publish
+   */
+  setSyncCallback(callback: () => void) {
+    this.syncFromEditor = callback
   }
 
   /**
@@ -289,6 +297,12 @@ export class BlockPersistenceManager {
    * Publish current working copy
    */
   async publish(label?: string, message?: string): Promise<{ versionId: number; versionNo: number }> {
+    // Sync editor state to BlockDoc first (includes unsaved changes)
+    if (this.syncFromEditor) {
+      console.log(`🔄 Syncing editor state to BlockDoc before publish...`)
+      this.syncFromEditor()
+    }
+
     // Log current BlockDoc state before saving
     const currentDoc = this.blockDocManager.getBlockDocV1()
     console.log(`📋 About to publish - Current BlockDoc state:`, {

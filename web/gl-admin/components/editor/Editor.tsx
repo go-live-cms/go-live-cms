@@ -301,6 +301,18 @@ export default forwardRef<EditorRef, Props>(function Editor(
       // Set editor instance and initialize persistence manager if available
       if (persistenceManager) {
         persistenceManager.setEditor(editor)
+
+        // Provide sync callback so persistence manager can sync editor state before save/publish
+        persistenceManager.setSyncCallback(() => {
+          if (!blockDocManager) return
+          try {
+            const blockDoc = pmToBlockDoc(editor.state.doc)
+            blockDocManager.setBlockDocV1(blockDoc)
+          } catch (error) {
+            console.error("Failed to sync editor to BlockDoc:", error)
+          }
+        })
+
         persistenceManager.initialize()
       }
 
