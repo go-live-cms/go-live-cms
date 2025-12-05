@@ -108,22 +108,11 @@ export class BlockPersistenceManager {
    */
   async initialize(): Promise<void> {
     try {
-      console.log(`🔄 Loading blocks for post ${this.postId}...`)
       const { doc, revision } = await blockAPIClient.getPostBlocks(this.postId)
       this.currentRevision = revision
 
-      console.log(`📥 Received blocks for post ${this.postId}:`, {
-        revision,
-        blocksCount: Object.keys(doc.blocks).length,
-        blocksOrder: doc.blocks_order.length,
-        isEmpty: doc.blocks_order.length === 0 && Object.keys(doc.blocks).length === 0,
-        doc,
-      })
-
       // Only set if the document is not empty (has actual content)
       if (doc.blocks_order.length > 0 || Object.keys(doc.blocks).length > 0) {
-        console.log(`✅ Loading blocks into Y.js for post ${this.postId}`)
-
         // Update Y.js BlockDoc
         this.blockDocManager.setBlockDocV1(doc)
 
@@ -132,28 +121,19 @@ export class BlockPersistenceManager {
         if (this.editor && !this.editor.isDestroyed) {
           try {
             const pmDoc = blockDocToPM(doc, this.editor.schema)
-            console.log(`🔄 Applying loaded blocks to editor (${doc.blocks_order.length} blocks)...`)
-
             // Replace entire document content WITHOUT emitting update
             this.editor.commands.setContent(pmDoc.toJSON(), { emitUpdate: false })
-
-            console.log(`✅ Editor content updated from loaded blocks`)
           } catch (error) {
-            console.error(`❌ Failed to convert/apply blocks to editor:`, error)
+            console.error("Failed to convert/apply blocks to editor:", error)
           }
         }
-
-        console.log(`✅ Initial blocks loaded for post ${this.postId}`)
-      } else {
-        console.warn(`⚠️ Post ${this.postId} has empty block_doc, editor will start with empty state`)
       }
+      // Empty block_doc is fine - editor will start with empty state
 
-      // Wait longer for editor and Y.js to fully stabilize before enabling autosave
-      // This prevents race conditions where partially-loaded content gets saved
+      // Wait for editor and Y.js to fully stabilize before enabling autosave
       setTimeout(() => {
         this.isInitializing = false
-        console.log(`✅ Autosave enabled for post ${this.postId}`)
-      }, 500) // Increased to 500ms to ensure full stabilization
+      }, 500)
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         this.suspended = true
@@ -161,7 +141,7 @@ export class BlockPersistenceManager {
         this.onSaveError?.(error)
         return
       }
-      console.error(`❌ Failed to load initial document for post ${this.postId}:`, error)
+      console.error("Failed to load initial document:", error)
       this.onSaveError?.(error as Error)
     }
   }
@@ -170,27 +150,14 @@ export class BlockPersistenceManager {
    * Handle document changes from the block manager
    */
   private handleDocumentChange(doc: BlockDocV1): void {
-    console.log(`📝 handleDocumentChange called for post ${this.postId}:`, {
-      isSaving: this.isSaving,
-      isInitializing: this.isInitializing,
-      suspended: this.suspended,
-      suppressNextChange: this.suppressNextChange,
-      blocksCount: Object.keys(doc.blocks).length,
-    })
-
-    if (this.isInitializing) {
-      console.log(`🚫 Ignoring change during initialization for post ${this.postId}`)
-      return // Ignore ALL changes during initial load
-    }
+    if (this.isInitializing) return // Ignore ALL changes during initial load
     if (this.isSaving) return // Don't trigger saves during API updates
     if (this.suspended) return // Don't queue saves while suspended
     if (this.suppressNextChange) {
-      console.log(`🚫 Suppressing change event for post ${this.postId}`)
       this.suppressNextChange = false
       return
     }
 
-    console.log(`💾 Change detected for post ${this.postId}, queuing save...`)
     this.hasUnsavedChanges = true
     this.debouncedSave()
   }
@@ -231,8 +198,6 @@ export class BlockPersistenceManager {
       this.currentRevision = revision
       this.hasUnsavedChanges = false
       this.onSaveSuccess?.(revision)
-
-      console.log(`💾 Saved post ${this.postId} blocks, revision ${revision}`)
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         // Suspend until token is present; surface error once.
@@ -243,7 +208,6 @@ export class BlockPersistenceManager {
       }
 
       if (error instanceof ConflictError && retryCount < this.MAX_RETRY_ATTEMPTS) {
-        console.warn(`🔄 Conflict detected, attempting to resolve (attempt ${retryCount + 1})`)
         await this.resolveConflict()
 
         // Retry save after conflict resolution
@@ -274,7 +238,6 @@ export class BlockPersistenceManager {
       this.hasUnsavedChanges = false
 
       this.onConflictResolved?.(latestDoc)
-      console.log(`🔄 Conflict resolved with server version, revision ${revision}`)
     } catch (error) {
       console.error("Failed to resolve conflict:", error)
       throw error
@@ -299,28 +262,14 @@ export class BlockPersistenceManager {
   async publish(label?: string, message?: string): Promise<{ versionId: number; versionNo: number }> {
     // Sync editor state to BlockDoc first (includes unsaved changes)
     if (this.syncFromEditor) {
-      console.log(`🔄 Syncing editor state to BlockDoc before publish...`)
       this.syncFromEditor()
     }
-
-    // Log current BlockDoc state before saving
-    const currentDoc = this.blockDocManager.getBlockDocV1()
-    console.log(`📋 About to publish - Current BlockDoc state:`, {
-      blocksCount: Object.keys(currentDoc.blocks).length,
-      blocksOrder: currentDoc.blocks_order,
-      blocks: Object.entries(currentDoc.blocks).map(([id, block]) => ({
-        id,
-        type: block.type,
-        text: (block.attrs as any).text || "(no text)",
-      })),
-    })
 
     // Force save first to ensure latest changes are persisted
     await this.forceSave()
 
     try {
       const result = await blockAPIClient.publishPost(this.postId, label, message)
-      console.log(`📡 Published post ${this.postId} as version ${result.versionNo}`)
       return result
     } catch (error) {
       console.error("Publish failed:", error)

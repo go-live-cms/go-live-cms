@@ -115,13 +115,8 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
         },
       }),
     ]
-    // Add collaboration extensions (your feature)
+    // Add collaboration extensions
     if (collabProvider) {
-      const userState = collabProvider.provider.awareness.getLocalState()
-      console.log("Setting up collaboration for user:", userState?.user)
-      console.log("CollabProvider doc exists:", !!collabProvider.doc)
-      console.log("CollabProvider provider exists:", !!collabProvider.provider)
-
       if (collabProvider.doc && collabProvider.provider && collabProvider.provider.awareness) {
         baseExtensions.push(
           Collaboration.configure({
@@ -129,11 +124,8 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
           })
         )
 
-        console.log("Added Collaboration extension successfully")
-
         const awareness = collabProvider.provider.awareness
         baseExtensions.push(CursorAwareness.configure({ awareness }))
-        console.log("Added CursorAwareness extension successfully")
       } else {
         console.warn("CollaborationProvider not fully initialized, skipping collaboration extensions")
       }

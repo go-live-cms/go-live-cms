@@ -130,35 +130,10 @@ export default forwardRef<EditorRef, Props>(function Editor(
   const handleForceSave = async () => {
     if (!persistenceManager || isSaving || !editor || !blockDocManager) return
 
-    // Log what the editor actually contains
-    console.log("🔍 Editor state before save:", {
-      childCount: editor.state.doc.content.childCount,
-      textContent: editor.state.doc.textContent,
-      isEmpty: editor.isEmpty,
-    })
-
-    // Log each child node
-    console.log("📋 Editor children:")
-    editor.state.doc.content.forEach((node, offset, index) => {
-      console.log(
-        `  [${index}] ${node.type.name} (${node.attrs["data-block-id"]?.slice(0, 20) || "NO ID"}):`,
-        node.textContent
-      )
-    })
-
     // Mirror current editor state to BlockDoc before saving
     try {
       const blockDoc = pmToBlockDoc(editor.state.doc)
-      console.log("🔄 Converted PM to BlockDoc:", {
-        blocksCount: Object.keys(blockDoc.blocks).length,
-        blocksOrderLength: blockDoc.blocks_order.length,
-        blockDoc,
-      })
       blockDocManager.setBlockDocV1(blockDoc)
-      console.log("📸 Captured editor state for save:", {
-        blocksCount: Object.keys(blockDoc.blocks).length,
-        textContent: editor.state.doc.textContent,
-      })
     } catch (error) {
       console.error("Failed to mirror before save:", error)
     }
@@ -183,7 +158,6 @@ export default forwardRef<EditorRef, Props>(function Editor(
 
         try {
           const result = await persistenceManager.publish()
-          console.log("Block published successfully as version", result.versionNo)
           onPublishSuccess?.(result)
           return result
         } catch (error) {
