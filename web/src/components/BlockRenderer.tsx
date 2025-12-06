@@ -5,18 +5,102 @@ interface BlockRendererProps {
   doc: BlockDocV1
 }
 
+// ProseMirror content node type
+interface PMNode {
+  type: string
+  text?: string
+  marks?: Array<{ type: string; attrs?: Record<string, any> }>
+  content?: PMNode[]
+  attrs?: Record<string, any>
+}
+
 export default function BlockRenderer({ doc }: BlockRendererProps) {
-  // Extract text from ProseMirror content structure
-  const extractText = (block: Block): string => {
-    const attrs = block.attrs as any
-    if (attrs.text) return attrs.text
-    if (attrs.pm?.content) {
-      return attrs.pm.content
-        .filter((node: any) => node.type === "text")
-        .map((node: any) => node.text)
-        .join("")
+  // Render a single text node with its marks (bold, italic, link, code, etc.)
+  const renderTextNode = (node: PMNode, index: number): React.ReactNode => {
+    if (node.type !== "text" || !node.text) return null
+
+    let content: React.ReactNode = node.text
+
+    // Apply marks in reverse order (innermost first)
+    if (node.marks && node.marks.length > 0) {
+      for (const mark of node.marks) {
+        switch (mark.type) {
+          case "bold":
+            content = <strong key={`bold-${index}`}>{content}</strong>
+            break
+          case "italic":
+            content = <em key={`italic-${index}`}>{content}</em>
+            break
+          case "code":
+            content = <code key={`code-${index}`}>{content}</code>
+            break
+          case "strike":
+            content = <s key={`strike-${index}`}>{content}</s>
+            break
+          case "underline":
+            content = <u key={`underline-${index}`}>{content}</u>
+            break
+          case "link":
+            content = (
+              <a
+                key={`link-${index}`}
+                href={mark.attrs?.href || "#"}
+                target={mark.attrs?.target || undefined}
+                rel={mark.attrs?.target === "_blank" ? "noopener noreferrer" : undefined}
+              >
+                {content}
+              </a>
+            )
+            break
+          case "highlight":
+            content = (
+              <mark key={`highlight-${index}`} style={{ backgroundColor: mark.attrs?.color }}>
+                {content}
+              </mark>
+            )
+            break
+          // Add more mark types as needed
+        }
+      }
     }
-    return ""
+
+    return <React.Fragment key={index}>{content}</React.Fragment>
+  }
+
+  // Render ProseMirror content array (handles nested content like paragraphs inside blockquotes)
+  const renderContent = (content: PMNode[] | undefined): React.ReactNode => {
+    if (!content || content.length === 0) return null
+
+    return content.map((node, index) => {
+      if (node.type === "text") {
+        return renderTextNode(node, index)
+      }
+
+      // Handle nested paragraph (e.g., inside blockquote or list item)
+      if (node.type === "paragraph" && node.content) {
+        return <React.Fragment key={index}>{renderContent(node.content)}</React.Fragment>
+      }
+
+      // Handle hard break
+      if (node.type === "hardBreak") {
+        return <br key={index} />
+      }
+
+      return null
+    })
+  }
+
+  // Get renderable content from a block's ProseMirror data
+  const getBlockContent = (block: Block): React.ReactNode => {
+    const attrs = block.attrs as any
+    if (attrs.pm?.content) {
+      return renderContent(attrs.pm.content)
+    }
+    // Fallback to plain text if no PM content
+    if (attrs.text) {
+      return attrs.text
+    }
+    return null
   }
 
   const renderBlock = (blockId: string): React.ReactElement | null => {
@@ -25,25 +109,27 @@ export default function BlockRenderer({ doc }: BlockRendererProps) {
 
     switch (block.type) {
       case "paragraph": {
-        const text = extractText(block)
-        return text ? <p key={block.id}>{text}</p> : null
+        const content = getBlockContent(block)
+        return content ? <p key={block.id}>{content}</p> : null
       }
 
       case "heading": {
         const attrs = block.attrs as any
         const level = attrs.level || 1
-        const text = extractText(block)
+        const content = getBlockContent(block)
 
         // Dynamically render heading based on level
-        if (level === 1) return <h1 key={block.id}>{text}</h1>
-        if (level === 2) return <h2 key={block.id}>{text}</h2>
-        if (level === 3) return <h3 key={block.id}>{text}</h3>
-        return <h1 key={block.id}>{text}</h1>
+        if (level === 1) return <h1 key={block.id}>{content}</h1>
+        if (level === 2) return <h2 key={block.id}>{content}</h2>
+        if (level === 3) return <h3 key={block.id}>{content}</h3>
+        return <h1 key={block.id}>{content}</h1>
       }
 
       case "blockquote": {
-        const text = extractText(block)
-        return <blockquote key={block.id}>{text}</blockquote>
+        const attrs = block.attrs as any
+        // Blockquote may have nested paragraph content
+        const content = attrs.pm?.content ? renderContent(attrs.pm.content) : getBlockContent(block)
+        return <blockquote key={block.id}>{content}</blockquote>
       }
 
       case "code_block": {
@@ -69,8 +155,8 @@ export default function BlockRenderer({ doc }: BlockRendererProps) {
             {block.children?.map((childId) => {
               const child = doc.blocks[childId] as Block
               if (!child) return null
-              const text = extractText(child)
-              return <li key={childId}>{text}</li>
+              const content = getBlockContent(child)
+              return <li key={childId}>{content}</li>
             })}
           </ul>
         )
@@ -81,8 +167,8 @@ export default function BlockRenderer({ doc }: BlockRendererProps) {
             {block.children?.map((childId) => {
               const child = doc.blocks[childId] as Block
               if (!child) return null
-              const text = extractText(child)
-              return <li key={childId}>{text}</li>
+              const content = getBlockContent(child)
+              return <li key={childId}>{content}</li>
             })}
           </ol>
         )
