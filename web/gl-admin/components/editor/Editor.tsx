@@ -173,8 +173,6 @@ export default forwardRef<EditorRef, Props>(function Editor(
     [persistenceManager, postId, isSaving, isPublishing, saveStatus, onPublishStart, onPublishSuccess, onPublishError]
   )
 
-  const mirrorTimer = useRef<number | null>(null)
-
   // Editor extensions
   const extensions = useMemo(getExtensions({ collabProvider, maxChars, placeholder }), [
     collabProvider,
@@ -188,46 +186,10 @@ export default forwardRef<EditorRef, Props>(function Editor(
     extensions,
     content: !collabProvider ? value || "<p></p>" : undefined,
     autofocus: "end",
-    onUpdate({ editor, transaction }) {
+    onUpdate({ editor }) {
       const html = editor.getHTML()
       const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
       onChange(html, text)
-
-      // DISABLED: Automatic mirroring during editing causes sync issues
-      // We now only mirror when explicitly saving via forceSave()
-      // This prevents Y.js Collaboration and BlockDoc from competing
-
-      // if (blockDocManager && transaction.docChanged) {
-      //   // Skip mirroring if persistence manager is still initializing
-      //   if (persistenceRef.current?.isCurrentlyInitializing()) {
-      //     console.log("⏭️ Skipping mirror - still initializing")
-      //     return
-      //   }
-
-      //   if (mirrorTimer.current) {
-      //     window.clearTimeout(mirrorTimer.current)
-      //   }
-
-      //   mirrorTimer.current = window.setTimeout(() => {
-      //     if (!blockDocManager) {
-      //       return
-      //     }
-
-      //     try {
-      //       const blockDoc = pmToBlockDoc(editor.state.doc)
-      //       blockDocManager.setBlockDocV1(blockDoc)
-
-      //       if (import.meta.env.DEV) {
-      //         console.log("Mirrored to BlockDoc:", blockDoc)
-      //         console.log("TipTap text content:", editor.state.doc.textContent)
-      //       }
-      //     } catch (error) {
-      //       console.error("Failed to mirror to BlockDoc:", error)
-      //     } finally {
-      //       mirrorTimer.current = null
-      //     }
-      //   }, 200)
-      // }
     },
     editorProps: {
       attributes: {
@@ -235,14 +197,6 @@ export default forwardRef<EditorRef, Props>(function Editor(
       },
     },
   })
-
-  useEffect(() => {
-    return () => {
-      if (mirrorTimer.current) {
-        window.clearTimeout(mirrorTimer.current)
-      }
-    }
-  }, [])
 
   // Collaboration content sync
   useEffect(() => {
