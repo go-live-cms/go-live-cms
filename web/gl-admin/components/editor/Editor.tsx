@@ -7,6 +7,7 @@ import { pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
 import { authManager } from "@gl-admin/lib/auth"
 import BubbleMenu from "./ui/BubbleMenu"
+import BlockTypeToolbar from "./ui/BlockTypeToolbar"
 import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
@@ -311,6 +312,7 @@ export default forwardRef<EditorRef, Props>(function Editor(
   return (
     <div className="notion-editor">
       <BubbleMenu editor={editor} />
+      <BlockTypeToolbar editor={editor} />
       <DragHandle editor={editor} />
       <MediaSelector editor={editor} postId={postId} />
 

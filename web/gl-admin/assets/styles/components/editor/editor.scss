@@ -12,11 +12,11 @@
   }
 
   &.gl-content-editor .is-empty::before {
-      color: #9ca3af;
-      content: attr(data-placeholder);
-      pointer-events: none;
-      position: absolute;
-      width: fit-content;
+    color: #9ca3af;
+    content: attr(data-placeholder);
+    pointer-events: none;
+    position: absolute;
+    width: fit-content;
   }
 
   h1 {
@@ -524,4 +524,31 @@
   left: 0;
   transform: translate(-50%, -110%);
   will-change: transform;
+}
+
+// Block Type Toolbar (WordPress-style)
+.block-type-toolbar {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 20%);
+  padding: 4px;
+  z-index: 50;
+
+  // Compact dropdown styling
+  .text-white {
+    min-width: 100px;
+  }
+
+  // Override CommandSelect for smaller appearance
+  [role="button"] {
+    padding: 4px 8px;
+    font-size: 13px;
+    gap: 4px;
+  }
+
+  // Dropdown options
+  .absolute {
+    min-width: 120px;
+  }
 }
