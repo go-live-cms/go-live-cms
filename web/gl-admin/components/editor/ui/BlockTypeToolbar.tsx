@@ -6,13 +6,16 @@ import CommandSelect, { type CommandSelectOption } from "./CommandSelect"
 
 /**
  * Block type options for WordPress-style dropdown
- * Shows Paragraph and H1-H3 (can be expanded later)
+ * Shows Paragraph and H1-H6
  */
 const blockTypeOptions: CommandSelectOption[] = [
   { value: "paragraph", label: "Paragraph", label_icon: "¶" },
   { value: "heading-1", label: "Heading 1", label_icon: "H1" },
   { value: "heading-2", label: "Heading 2", label_icon: "H2" },
   { value: "heading-3", label: "Heading 3", label_icon: "H3" },
+  { value: "heading-4", label: "Heading 4", label_icon: "H4" },
+  { value: "heading-5", label: "Heading 5", label_icon: "H5" },
+  { value: "heading-6", label: "Heading 6", label_icon: "H6" },
 ]
 
 interface BlockTypeToolbarProps {

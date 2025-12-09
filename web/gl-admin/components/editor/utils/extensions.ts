@@ -34,7 +34,7 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
   return () => {
     const baseExtensions = [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
         codeBlock: false,
         dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
         link: false,
