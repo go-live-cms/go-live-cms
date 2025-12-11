@@ -7,6 +7,7 @@ import TextAlign from "@tiptap/extension-text-align"
 import CharacterCount from "@tiptap/extension-character-count"
 import Typography from "@tiptap/extension-typography"
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
+import { OpenLinkModal } from "../extensions/OpenLinkModal"
 import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
@@ -30,7 +31,7 @@ const headingLabel = (lvl?: number) => {
   }
 }
 
-const extensions = ({ collabProvider, maxChars, placeholder }) => {
+const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }) => {
   return () => {
     const baseExtensions = [
       StarterKit.configure({
@@ -52,6 +53,16 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
           class: "editor-link",
         },
       }),
+      ...(setUrl && setIsLinkModalOpen
+        ? [
+            OpenLinkModal.configure({
+              onOpen: (url: string) => {
+                setUrl(url)
+                setIsLinkModalOpen(true)
+              },
+            }),
+          ]
+        : []),
       Image.configure({
         allowBase64: false,
         HTMLAttributes: {
@@ -139,10 +150,14 @@ export const getExtensions = ({
   collabProvider,
   maxChars,
   placeholder,
+  setUrl,
+  setIsLinkModalOpen,
 }: {
   collabProvider: any
   maxChars?: number
   placeholder?: string
+  setUrl?: (url: string) => void
+  setIsLinkModalOpen?: (open: boolean) => void
 }) => {
-  return extensions({ collabProvider, maxChars, placeholder })
+  return extensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen })
 }

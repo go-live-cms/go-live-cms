@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from "react"
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
 import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
@@ -6,6 +6,8 @@ import { BlockPersistenceManager } from "@gl-admin/lib/collaboration/BlockPersis
 import { pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
 import { authManager } from "@gl-admin/lib/auth"
+import { applyLink, openLinkModal } from "./utils/linkManager"
+import LinkModal from "./ui/LinkModal"
 import BubbleMenu from "./ui/BubbleMenu"
 import BlockTypeToolbar from "./ui/BlockTypeToolbar"
 import DragHandle from "./ui/DragHandle"
@@ -64,6 +66,10 @@ export default forwardRef<EditorRef, Props>(function Editor(
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
   const persistenceRef = useRef<BlockPersistenceManager | null>(null)
   const titleRef = useRef<string | undefined>(title)
+
+  // Link modal state (from main)
+  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
+  const [url, setUrl] = useState("")
 
   // Collaboration provider
   const collabProvider = useMemo(() => {
@@ -127,6 +133,30 @@ export default forwardRef<EditorRef, Props>(function Editor(
     titleRef.current = title
   }, [title])
 
+  // Editor extensions - include link modal setters for Ctrl+K support
+  const extensions = useMemo(
+    () => getExtensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen })(),
+    [collabProvider, maxChars, placeholder]
+  )
+
+  // Initialize Editor
+  const editor = useEditor({
+    editable: !readOnly,
+    extensions,
+    content: !collabProvider ? value || "<p></p>" : undefined,
+    autofocus: "end",
+    onUpdate({ editor }) {
+      const html = editor.getHTML()
+      const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
+      onChange(html, text)
+    },
+    editorProps: {
+      attributes: {
+        class: "gl-content-editor notion-editor-content",
+      },
+    },
+  })
+
   // Force save function
   const handleForceSave = async () => {
     if (!persistenceManager || isSaving || !editor || !blockDocManager) return
@@ -174,30 +204,34 @@ export default forwardRef<EditorRef, Props>(function Editor(
     [persistenceManager, postId, isSaving, isPublishing, saveStatus, onPublishStart, onPublishSuccess, onPublishError]
   )
 
-  // Editor extensions
-  const extensions = useMemo(getExtensions({ collabProvider, maxChars, placeholder }), [
-    collabProvider,
-    maxChars,
-    placeholder,
-  ])
+  // Apply link function (from main)
+  const applyLinkWithModal = useCallback(() => {
+    if (!editor) return
+    applyLink(editor, url, setIsLinkModalOpen)
+  }, [editor, url])
 
-  // Initialize Editor
-  const editor = useEditor({
-    editable: !readOnly,
-    extensions,
-    content: !collabProvider ? value || "<p></p>" : undefined,
-    autofocus: "end",
-    onUpdate({ editor }) {
-      const html = editor.getHTML()
-      const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
-      onChange(html, text)
-    },
-    editorProps: {
-      attributes: {
-        class: "gl-content-editor notion-editor-content",
-      },
-    },
-  })
+  // Open link modal function (from main)
+  const openLinkModalWithEditor = useCallback(() => {
+    if (!editor) return
+    openLinkModal(editor, setUrl, setIsLinkModalOpen)
+  }, [editor])
+
+  // Keyboard shortcut for opening link modal (from main)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) return
+      if (!editor) return
+
+      const selection = editor.state.selection
+      if (selection.empty || selection.from === selection.to) return
+
+      e.preventDefault()
+      openLinkModalWithEditor()
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [editor, openLinkModalWithEditor])
 
   // Collaboration content sync
   useEffect(() => {
@@ -311,7 +345,7 @@ export default forwardRef<EditorRef, Props>(function Editor(
 
   return (
     <div className="notion-editor">
-      <BubbleMenu editor={editor} />
+      <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />
       <BlockTypeToolbar editor={editor} />
       <DragHandle editor={editor} />
       <MediaSelector editor={editor} postId={postId} />
@@ -320,6 +354,15 @@ export default forwardRef<EditorRef, Props>(function Editor(
         <EditorContent editor={editor} />
       </div>
 
+      {isLinkModalOpen && (
+        <LinkModal
+          editor={editor}
+          setIsLinkModalOpen={setIsLinkModalOpen}
+          applyLink={applyLinkWithModal}
+          url={url}
+          setUrl={setUrl}
+        />
+      )}
       <CharacterCount editor={editor} minChars={minChars} maxChars={maxChars} />
     </div>
   )
