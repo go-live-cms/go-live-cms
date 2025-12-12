@@ -27,3 +27,5 @@ websocket/public.pem
 
 /uploads/media/*
 /api/tmp
+
+.DS_Store
