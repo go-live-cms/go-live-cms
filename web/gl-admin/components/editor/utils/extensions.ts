@@ -13,6 +13,7 @@ import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
 import { getSlashCommandItems } from "../blocks"
 import { SlashCommandExtension } from "../ui/SlashCommand"
+import { BlockIdExtension } from "../extensions/BlockIdExtension"
 import { createLowlight, common } from "lowlight"
 
 const lowlight = createLowlight(common)
@@ -30,11 +31,11 @@ const headingLabel = (lvl?: number) => {
   }
 }
 
-const extensions = ({ collabProvider, maxChars, placeholder }) => {
+const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }) => {
   return () => {
     const baseExtensions = [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
         codeBlock: false,
         dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
         link: false,
@@ -52,6 +53,16 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
           class: "editor-link",
         },
       }),
+      ...(setUrl && setIsLinkModalOpen
+        ? [
+            OpenLinkModal.configure({
+              onOpen: (url: string) => {
+                setUrl(url)
+                setIsLinkModalOpen(true)
+              },
+            }),
+          ]
+        : []),
       Image.configure({
         allowBase64: false,
         HTMLAttributes: {
@@ -59,6 +70,7 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
         },
       }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
+      BlockIdExtension,
       Placeholder.configure({
         includeChildren: true,
         showOnlyWhenEditable: true,
@@ -114,13 +126,8 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
         },
       }),
     ]
-    // Add collaboration extensions (your feature)
+    // Add collaboration extensions
     if (collabProvider) {
-      const userState = collabProvider.provider.awareness.getLocalState()
-      console.log("Setting up collaboration for user:", userState?.user)
-      console.log("CollabProvider doc exists:", !!collabProvider.doc)
-      console.log("CollabProvider provider exists:", !!collabProvider.provider)
-
       if (collabProvider.doc && collabProvider.provider && collabProvider.provider.awareness) {
         baseExtensions.push(
           Collaboration.configure({
@@ -128,11 +135,8 @@ const extensions = ({ collabProvider, maxChars, placeholder }) => {
           })
         )
 
-        console.log("Added Collaboration extension successfully")
-
         const awareness = collabProvider.provider.awareness
         baseExtensions.push(CursorAwareness.configure({ awareness }))
-        console.log("Added CursorAwareness extension successfully")
       } else {
         console.warn("CollaborationProvider not fully initialized, skipping collaboration extensions")
       }
@@ -146,10 +150,14 @@ export const getExtensions = ({
   collabProvider,
   maxChars,
   placeholder,
+  setUrl,
+  setIsLinkModalOpen,
 }: {
   collabProvider: any
   maxChars?: number
   placeholder?: string
+  setUrl?: (url: string) => void
+  setIsLinkModalOpen?: (open: boolean) => void
 }) => {
-  return extensions({ collabProvider, maxChars, placeholder })
+  return extensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen })
 }

@@ -166,7 +166,7 @@ func (server *Server) getPosts(c *gin.Context) {
 
 		postResponses := make([]PostResponse, len(posts))
 		for i, post := range posts {
-			postResponses[i] = toPostResponse(post)
+			postResponses[i] = toPostResponseFromListRow(post)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
@@ -259,17 +259,7 @@ func (server *Server) getPostsByUser(c *gin.Context) {
 
 	postResponses := make([]PostResponse, len(posts))
 	for i, post := range posts {
-		postResponses[i] = PostResponse{
-			ID:          post.ID,
-			Title:       post.Title,
-			Content:     post.Content,
-			Description: post.Description,
-			UserID:      post.UserID,
-			Username:    post.Username,
-			Url:         post.Url,
-			CreatedAt:   post.CreatedAt,
-			ChangedAt:   post.ChangedAt,
-		}
+		postResponses[i] = toPostResponseFromUserMediaRow(post)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -4,14 +4,13 @@ INSERT INTO posts (
     description,
     user_id,
     username,
-    content,
     url,
     post_type,
     post_status,
     post_parent,
     menu_order
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 ) RETURNING *;
 
 -- name: CreateUserPost :one
@@ -27,6 +26,9 @@ INSERT INTO user_posts (
 SELECT * FROM posts 
 WHERE id = $1 LIMIT 1;
 
+-- name: CheckURLExists :one
+SELECT EXISTS(SELECT 1 FROM posts WHERE url = $1) as exists;
+
 -- name: GetPostWithMeta :one
 SELECT 
     p.*,
@@ -40,10 +42,10 @@ SELECT
 FROM posts p
 LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE p.id = $1
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at;
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at;
 
 -- name: ListPosts :many
-SELECT id, title, description, content, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
     AND (@post_status::text = '' OR post_status = @post_status)
@@ -88,14 +90,13 @@ SET title = COALESCE($1, title),
     description = COALESCE($2, description),
     user_id = COALESCE($3, user_id),
     username = COALESCE($4, username),
-    content = COALESCE($5, content),
-    url = COALESCE($6, url),
-    post_type = COALESCE($7, post_type),
-    post_status = COALESCE($8, post_status),
-    post_parent = COALESCE($9, post_parent),
-    menu_order = COALESCE($10, menu_order),
+    url = COALESCE($5, url),
+    post_type = COALESCE($6, post_type),
+    post_status = COALESCE($7, post_status),
+    post_parent = COALESCE($8, post_parent),
+    menu_order = COALESCE($9, menu_order),
     changed_at = now()
-WHERE id = $11
+WHERE id = $10
 RETURNING *;
 
 -- name: DeletePost :exec
@@ -115,8 +116,8 @@ WHERE post_type = $1;
 
 -- name: ListPostsWithMeta :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -130,7 +131,7 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = @post_status)
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
     CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
     CASE WHEN @sort_by = 'date_desc' THEN p.created_at END DESC,
@@ -146,8 +147,8 @@ OFFSET @offset_count;
 
 -- name: ListPostsByTypeWithMeta :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -160,7 +161,7 @@ LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE p.post_type = @post_type
     AND (@post_status::text = '' OR p.post_status = @post_status)
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
     CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
     CASE WHEN @sort_by = 'date_desc' THEN p.created_at END DESC,
@@ -187,8 +188,8 @@ WHERE post_type = @post_type
 
 -- name: ListPostsWithAllMeta :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     -- Post custom meta
     COALESCE(
         jsonb_object_agg(
@@ -223,7 +224,7 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = @post_status)
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, 
          p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
          u.id, u.username, u.email, u.full_name, u.role, u.created_at,
          pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
@@ -242,8 +243,8 @@ OFFSET @offset_count;
 
 -- name: ListPostsByTypeWithAllMeta :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     -- Post custom meta
     COALESCE(
         jsonb_object_agg(
@@ -277,7 +278,7 @@ LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE p.post_type = @post_type
     AND (@post_status::text = '' OR p.post_status = @post_status)
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, 
          p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
          u.id, u.username, u.email, u.full_name, u.role, u.created_at,
          pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports

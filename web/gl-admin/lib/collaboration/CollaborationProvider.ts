@@ -24,11 +24,9 @@ export class CollaborationProvider {
     const existing = activeProviders.get(postId)
     if (existing) {
       refCounts.set(postId, (refCounts.get(postId) ?? 0) + 1)
-      console.log(`Reusing existing provider for post ${postId} (refs=${refCounts.get(postId)})`)
       return existing
     }
 
-    console.log(`Creating new provider for post ${postId}`)
     const instance = new CollaborationProvider(postId)
     activeProviders.set(postId, instance)
     refCounts.set(postId, 1)
@@ -59,9 +57,6 @@ export class CollaborationProvider {
     const token = authManager.getAccessToken()
     const baseUrl = `${wsProtocol}//${wsHost}/`
 
-    console.log("WebSocket URL:", baseUrl)
-    console.log("Using PASETO v4.public authentication")
-
     this.provider = new WebsocketProvider(baseUrl, `post-${postId}`, this.doc, {
       params: token ? { ticket: token } : undefined,
       maxBackoffTime: 5000,
@@ -71,24 +66,8 @@ export class CollaborationProvider {
 
     this.provider.awareness.setLocalStateField("user", userInfo)
 
-    this.provider.on("status", (event: any) => {
-      console.log("Collaboration status event:", event)
-    })
-
-    this.provider.on("connection-close", (event: any) => {
-      console.log("Collaboration connection closed:", event)
-    })
-
     this.provider.on("connection-error", (event: any) => {
-      console.log("Collaboration connection error:", event?.message || event)
-    })
-
-    this.provider.on("connect", () => {
-      console.log("WebSocket connected successfully")
-    })
-
-    this.provider.on("disconnect", () => {
-      console.log("WebSocket disconnected")
+      console.error("Collaboration connection error:", event?.message || event)
     })
 
     this.provider.on("status", () => {})
@@ -121,12 +100,10 @@ export class CollaborationProvider {
         inst.doc?.destroy()
         activeProviders.delete(postId)
         releaseTimers.delete(postId)
-        console.log(`Destroyed provider for post ${postId}`)
       }, DESTROY_DELAY_MS)
       releaseTimers.set(postId, timer)
     } else {
       refCounts.set(postId, current - 1)
-      console.log(`Decrement refs for post ${postId} -> ${refCounts.get(postId)}`)
     }
   }
 

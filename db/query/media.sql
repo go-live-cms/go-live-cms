@@ -250,7 +250,7 @@ FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
 WHERE p.id = $1
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at;
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at;
 
 -- name: ListPostsWithMedia :many
 SELECT 
@@ -274,7 +274,7 @@ SELECT
 FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at
 ORDER BY p.created_at DESC
 LIMIT $1
 OFFSET $2;
@@ -302,14 +302,14 @@ FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
 WHERE p.user_id = $1
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at
 ORDER BY p.created_at DESC
 LIMIT $2
 OFFSET $3;
 
 -- name: GetPostsByMedia :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
     COALESCE(pm."order", 0) as media_order,
     CASE 

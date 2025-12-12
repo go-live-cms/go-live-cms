@@ -48,5 +48,10 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.POST("/:id/media", authMiddleware(server.tokenMaker), server.createPostMedia)
 		posts.DELETE("/:id/media/:media_id", authMiddleware(server.tokenMaker), server.deletePostMedia)
 
+		// Block Spec v1 operations
+		posts.GET("/:id/blocks", authMiddleware(server.tokenMaker), server.getPostBlocks)
+		posts.PUT("/:id/blocks", authMiddleware(server.tokenMaker), server.updatePostBlocks)
+		posts.POST("/:id/publish", authMiddleware(server.tokenMaker), server.publishPost)
+
 	}
 }

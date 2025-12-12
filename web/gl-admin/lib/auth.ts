@@ -16,6 +16,7 @@ export class AuthManager {
   private refreshTimer: NodeJS.Timeout | null = null
   private readonly REFRESH_COOLDOWN = 5000
   private readonly TOKEN_BUFFER = 60000
+  private listeners: ((state: AuthState) => void)[] = []
 
   private constructor() {
     this.state = this.getStoredAuth()
@@ -120,6 +121,7 @@ export class AuthManager {
       }
 
       this.scheduleTokenRefresh()
+      this.notifyListeners()
 
       return { success: true }
     } catch (error) {
@@ -162,6 +164,8 @@ export class AuthManager {
       localStorage.removeItem("user")
       localStorage.removeItem("token_expiry")
     }
+
+    this.notifyListeners()
   }
 
   async refreshAccessToken(): Promise<boolean> {
@@ -207,6 +211,7 @@ export class AuthManager {
       }
 
       this.scheduleTokenRefresh()
+      this.notifyListeners()
 
       console.log("Token refreshed successfully")
       return true
@@ -254,6 +259,26 @@ export class AuthManager {
 
   getAccessToken(): string | null {
     return this.state.accessToken
+  }
+
+  subscribe(listener: (state: AuthState) => void): () => void {
+    this.listeners.push(listener)
+    return () => {
+      const index = this.listeners.indexOf(listener)
+      if (index > -1) {
+        this.listeners.splice(index, 1)
+      }
+    }
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach((listener) => {
+      try {
+        listener({ ...this.state })
+      } catch (error) {
+        console.error("Error in auth state listener:", error)
+      }
+    })
   }
 }
 

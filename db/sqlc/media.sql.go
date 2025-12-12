@@ -10,6 +10,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 const countTotalMedia = `-- name: CountTotalMedia :one
@@ -600,7 +602,7 @@ func (q *Queries) GetPostMediaCount(ctx context.Context, postID int64) (int64, e
 
 const getPostWithMedia = `-- name: GetPostWithMedia :one
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc,
     COALESCE(
         json_agg(
             json_build_object(
@@ -621,24 +623,27 @@ FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
 WHERE p.id = $1
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at
 `
 
 type GetPostWithMediaRow struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Content     string        `json:"content"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ChangedAt   time.Time     `json:"changed_at"`
-	Media       interface{}   `json:"media"`
+	ID                 int64                 `json:"id"`
+	Title              string                `json:"title"`
+	Description        string                `json:"description"`
+	UserID             int64                 `json:"user_id"`
+	Username           string                `json:"username"`
+	Url                string                `json:"url"`
+	PostType           string                `json:"post_type"`
+	PostStatus         string                `json:"post_status"`
+	PostParent         sql.NullInt64         `json:"post_parent"`
+	MenuOrder          int32                 `json:"menu_order"`
+	CreatedAt          time.Time             `json:"created_at"`
+	ChangedAt          time.Time             `json:"changed_at"`
+	BlockDoc           json.RawMessage       `json:"block_doc"`
+	BlockRevision      int64                 `json:"block_revision"`
+	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
+	Media              interface{}           `json:"media"`
 }
 
 func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error) {
@@ -648,7 +653,6 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.ID,
 		&i.Title,
 		&i.Description,
-		&i.Content,
 		&i.UserID,
 		&i.Username,
 		&i.Url,
@@ -658,6 +662,10 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.MenuOrder,
 		&i.CreatedAt,
 		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
 		&i.Media,
 	)
 	return i, err
@@ -665,7 +673,7 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 
 const getPostsByMedia = `-- name: GetPostsByMedia :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, 
+    p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
     COALESCE(pm."order", 0) as media_order,
     CASE 
@@ -690,7 +698,6 @@ type GetPostsByMediaRow struct {
 	ID               int64         `json:"id"`
 	Title            string        `json:"title"`
 	Description      string        `json:"description"`
-	Content          string        `json:"content"`
 	UserID           int64         `json:"user_id"`
 	Username         string        `json:"username"`
 	Url              string        `json:"url"`
@@ -717,7 +724,6 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -745,7 +751,7 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 
 const getPostsByUserWithMedia = `-- name: GetPostsByUserWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc,
     COALESCE(
         json_agg(
             json_build_object(
@@ -766,7 +772,7 @@ FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
 WHERE p.user_id = $1
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at
 ORDER BY p.created_at DESC
 LIMIT $2
 OFFSET $3
@@ -779,20 +785,23 @@ type GetPostsByUserWithMediaParams struct {
 }
 
 type GetPostsByUserWithMediaRow struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Content     string        `json:"content"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ChangedAt   time.Time     `json:"changed_at"`
-	Media       interface{}   `json:"media"`
+	ID                 int64                 `json:"id"`
+	Title              string                `json:"title"`
+	Description        string                `json:"description"`
+	UserID             int64                 `json:"user_id"`
+	Username           string                `json:"username"`
+	Url                string                `json:"url"`
+	PostType           string                `json:"post_type"`
+	PostStatus         string                `json:"post_status"`
+	PostParent         sql.NullInt64         `json:"post_parent"`
+	MenuOrder          int32                 `json:"menu_order"`
+	CreatedAt          time.Time             `json:"created_at"`
+	ChangedAt          time.Time             `json:"changed_at"`
+	BlockDoc           json.RawMessage       `json:"block_doc"`
+	BlockRevision      int64                 `json:"block_revision"`
+	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
+	Media              interface{}           `json:"media"`
 }
 
 func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error) {
@@ -808,7 +817,6 @@ func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUse
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -818,6 +826,10 @@ func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUse
 			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.BlockDoc,
+			&i.BlockRevision,
+			&i.PublishedVersionID,
+			&i.PublishedBlockDoc,
 			&i.Media,
 		); err != nil {
 			return nil, err
@@ -949,7 +961,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMed
 
 const listPostsWithMedia = `-- name: ListPostsWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc,
     COALESCE(
         json_agg(
             json_build_object(
@@ -969,7 +981,7 @@ SELECT
 FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
-GROUP BY p.id, p.title, p.description, p.content, p.user_id, p.username, p.url, p.created_at, p.changed_at
+GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at
 ORDER BY p.created_at DESC
 LIMIT $1
 OFFSET $2
@@ -981,20 +993,23 @@ type ListPostsWithMediaParams struct {
 }
 
 type ListPostsWithMediaRow struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Content     string        `json:"content"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ChangedAt   time.Time     `json:"changed_at"`
-	Media       interface{}   `json:"media"`
+	ID                 int64                 `json:"id"`
+	Title              string                `json:"title"`
+	Description        string                `json:"description"`
+	UserID             int64                 `json:"user_id"`
+	Username           string                `json:"username"`
+	Url                string                `json:"url"`
+	PostType           string                `json:"post_type"`
+	PostStatus         string                `json:"post_status"`
+	PostParent         sql.NullInt64         `json:"post_parent"`
+	MenuOrder          int32                 `json:"menu_order"`
+	CreatedAt          time.Time             `json:"created_at"`
+	ChangedAt          time.Time             `json:"changed_at"`
+	BlockDoc           json.RawMessage       `json:"block_doc"`
+	BlockRevision      int64                 `json:"block_revision"`
+	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
+	Media              interface{}           `json:"media"`
 }
 
 func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error) {
@@ -1010,7 +1025,6 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.Content,
 			&i.UserID,
 			&i.Username,
 			&i.Url,
@@ -1020,6 +1034,10 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 			&i.MenuOrder,
 			&i.CreatedAt,
 			&i.ChangedAt,
+			&i.BlockDoc,
+			&i.BlockRevision,
+			&i.PublishedVersionID,
+			&i.PublishedBlockDoc,
 			&i.Media,
 		); err != nil {
 			return nil, err

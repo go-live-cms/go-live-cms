@@ -19,57 +19,57 @@ import (
 
 // PostResponse provides the standard post data structure for API responses
 type PostResponse struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	Content     string    `json:"content"`
-	Description string    `json:"description"`
-	UserID      int64     `json:"user_id"`
-	Username    string    `json:"username"`
-	Url         string    `json:"url"`
-	PostType    string    `json:"post_type"`
-	PostStatus  string    `json:"post_status"`
-	PostParent  *int64    `json:"post_parent"`
-	MenuOrder   int32     `json:"menu_order"`
-	CreatedAt   time.Time `json:"created_at"`
-	ChangedAt   time.Time `json:"changed_at"`
+	ID              int64                  `json:"id"`
+	Title           string                 `json:"title"`
+	Description     string                 `json:"description"`
+	UserID          int64                  `json:"user_id"`
+	Username        string                 `json:"username"`
+	Url             string                 `json:"url"`
+	PostType        string                 `json:"post_type"`
+	PostStatus      string                 `json:"post_status"`
+	PostParent      *int64                 `json:"post_parent"`
+	MenuOrder       int32                  `json:"menu_order"`
+	CreatedAt       time.Time              `json:"created_at"`
+	ChangedAt       time.Time              `json:"changed_at"`
+	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
 }
 
 // PostWithMetaResponse includes post-specific meta data
 type PostWithMetaResponse struct {
-	ID          int64                  `json:"id"`
-	Title       string                 `json:"title"`
-	Content     string                 `json:"content"`
-	Description string                 `json:"description"`
-	UserID      int64                  `json:"user_id"`
-	Username    string                 `json:"username"`
-	Url         string                 `json:"url"`
-	PostType    string                 `json:"post_type"`
-	PostStatus  string                 `json:"post_status"`
-	PostParent  *int64                 `json:"post_parent"`
-	MenuOrder   int32                  `json:"menu_order"`
-	CreatedAt   time.Time              `json:"created_at"`
-	ChangedAt   time.Time              `json:"changed_at"`
-	Meta        map[string]interface{} `json:"meta,omitempty"`
+	ID              int64                  `json:"id"`
+	Title           string                 `json:"title"`
+	Description     string                 `json:"description"`
+	UserID          int64                  `json:"user_id"`
+	Username        string                 `json:"username"`
+	Url             string                 `json:"url"`
+	PostType        string                 `json:"post_type"`
+	PostStatus      string                 `json:"post_status"`
+	PostParent      *int64                 `json:"post_parent"`
+	MenuOrder       int32                  `json:"menu_order"`
+	CreatedAt       time.Time              `json:"created_at"`
+	ChangedAt       time.Time              `json:"changed_at"`
+	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
+	Meta            map[string]interface{} `json:"meta,omitempty"`
 }
 
 // PostWithAllMetaResponse includes post, author, and post-type meta
 type PostWithAllMetaResponse struct {
-	ID           int64                  `json:"id"`
-	Title        string                 `json:"title"`
-	Content      string                 `json:"content"`
-	Description  string                 `json:"description"`
-	UserID       int64                  `json:"user_id"`
-	Username     string                 `json:"username"`
-	Url          string                 `json:"url"`
-	PostType     string                 `json:"post_type"`
-	PostStatus   string                 `json:"post_status"`
-	PostParent   *int64                 `json:"post_parent"`
-	MenuOrder    int32                  `json:"menu_order"`
-	CreatedAt    time.Time              `json:"created_at"`
-	ChangedAt    time.Time              `json:"changed_at"`
-	PostMeta     map[string]interface{} `json:"post_meta,omitempty"`
-	AuthorMeta   map[string]interface{} `json:"author_meta,omitempty"`
-	PostTypeMeta map[string]interface{} `json:"post_type_meta,omitempty"`
+	ID              int64                  `json:"id"`
+	Title           string                 `json:"title"`
+	Description     string                 `json:"description"`
+	UserID          int64                  `json:"user_id"`
+	Username        string                 `json:"username"`
+	Url             string                 `json:"url"`
+	PostType        string                 `json:"post_type"`
+	PostStatus      string                 `json:"post_status"`
+	PostParent      *int64                 `json:"post_parent"`
+	MenuOrder       int32                  `json:"menu_order"`
+	CreatedAt       time.Time              `json:"created_at"`
+	ChangedAt       time.Time              `json:"changed_at"`
+	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
+	PostMeta        map[string]interface{} `json:"post_meta,omitempty"`
+	AuthorMeta      map[string]interface{} `json:"author_meta,omitempty"`
+	PostTypeMeta    map[string]interface{} `json:"post_type_meta,omitempty"`
 }
 
 // PostMetaResponse represents individual meta key-value pair responses
@@ -88,20 +88,54 @@ func toPostResponse(post db.Post) PostResponse {
 		postParent = &post.PostParent.Int64
 	}
 
+	var publishedBlocks map[string]interface{}
+	if post.PublishedBlockDoc.Valid {
+		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+	}
+
 	return PostResponse{
-		ID:          post.ID,
-		Title:       post.Title,
-		Content:     post.Content,
-		Description: post.Description,
-		UserID:      post.UserID,
-		Username:    post.Username,
-		Url:         post.Url,
-		PostType:    post.PostType,
-		PostStatus:  post.PostStatus,
-		PostParent:  postParent,
-		MenuOrder:   post.MenuOrder,
-		CreatedAt:   post.CreatedAt,
-		ChangedAt:   post.ChangedAt,
+		ID:              post.ID,
+		Title:           post.Title,
+		Description:     post.Description,
+		UserID:          post.UserID,
+		Username:        post.Username,
+		Url:             post.Url,
+		PostType:        post.PostType,
+		PostStatus:      post.PostStatus,
+		PostParent:      postParent,
+		MenuOrder:       post.MenuOrder,
+		CreatedAt:       post.CreatedAt,
+		ChangedAt:       post.ChangedAt,
+		PublishedBlocks: publishedBlocks,
+	}
+}
+
+// toPostResponseFromListRow converts a ListPostsRow to API response format
+func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
+	var postParent *int64
+	if post.PostParent.Valid {
+		postParent = &post.PostParent.Int64
+	}
+
+	var publishedBlocks map[string]interface{}
+	if post.PublishedBlockDoc.Valid {
+		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+	}
+
+	return PostResponse{
+		ID:              post.ID,
+		Title:           post.Title,
+		Description:     post.Description,
+		UserID:          post.UserID,
+		Username:        post.Username,
+		Url:             post.Url,
+		PostType:        post.PostType,
+		PostStatus:      post.PostStatus,
+		PostParent:      postParent,
+		MenuOrder:       post.MenuOrder,
+		CreatedAt:       post.CreatedAt,
+		ChangedAt:       post.ChangedAt,
+		PublishedBlocks: publishedBlocks,
 	}
 }
 
@@ -119,21 +153,26 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 		}
 	}
 
+	var publishedBlocks map[string]interface{}
+	if post.PublishedBlockDoc.Valid {
+		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+	}
+
 	return PostWithMetaResponse{
-		ID:          post.ID,
-		Title:       post.Title,
-		Content:     post.Content,
-		Description: post.Description,
-		UserID:      post.UserID,
-		Username:    post.Username,
-		Url:         post.Url,
-		PostType:    post.PostType,
-		PostStatus:  post.PostStatus,
-		PostParent:  postParent,
-		MenuOrder:   post.MenuOrder,
-		CreatedAt:   post.CreatedAt,
-		ChangedAt:   post.ChangedAt,
-		Meta:        metaMap,
+		ID:              post.ID,
+		Title:           post.Title,
+		Description:     post.Description,
+		UserID:          post.UserID,
+		Username:        post.Username,
+		Url:             post.Url,
+		PostType:        post.PostType,
+		PostStatus:      post.PostStatus,
+		PostParent:      postParent,
+		MenuOrder:       post.MenuOrder,
+		CreatedAt:       post.CreatedAt,
+		ChangedAt:       post.ChangedAt,
+		PublishedBlocks: publishedBlocks,
+		Meta:            metaMap,
 	}
 }
 
@@ -161,23 +200,28 @@ func toPostWithAllMetaResponse(post db.ListPostsWithAllMetaRow) PostWithAllMetaR
 		json.Unmarshal(post.PostTypeMeta, &postTypeMetaMap)
 	}
 
+	var publishedBlocks map[string]interface{}
+	if post.PublishedBlockDoc.Valid {
+		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+	}
+
 	return PostWithAllMetaResponse{
-		ID:           post.ID,
-		Title:        post.Title,
-		Content:      post.Content,
-		Description:  post.Description,
-		UserID:       post.UserID,
-		Username:     post.Username,
-		Url:          post.Url,
-		PostType:     post.PostType,
-		PostStatus:   post.PostStatus,
-		PostParent:   postParent,
-		MenuOrder:    post.MenuOrder,
-		CreatedAt:    post.CreatedAt,
-		ChangedAt:    post.ChangedAt,
-		PostMeta:     postMetaMap,
-		AuthorMeta:   authorMetaMap,
-		PostTypeMeta: postTypeMetaMap,
+		ID:              post.ID,
+		Title:           post.Title,
+		Description:     post.Description,
+		UserID:          post.UserID,
+		Username:        post.Username,
+		Url:             post.Url,
+		PostType:        post.PostType,
+		PostStatus:      post.PostStatus,
+		PostParent:      postParent,
+		MenuOrder:       post.MenuOrder,
+		CreatedAt:       post.CreatedAt,
+		ChangedAt:       post.ChangedAt,
+		PublishedBlocks: publishedBlocks,
+		PostMeta:        postMetaMap,
+		AuthorMeta:      authorMetaMap,
+		PostTypeMeta:    postTypeMetaMap,
 	}
 }
 
@@ -195,21 +239,26 @@ func toPostWithMetaResponseFromTypeQuery(post db.ListPostsByTypeWithMetaRow) Pos
 		}
 	}
 
+	var publishedBlocks map[string]interface{}
+	if post.PublishedBlockDoc.Valid {
+		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+	}
+
 	return PostWithMetaResponse{
-		ID:          post.ID,
-		Title:       post.Title,
-		Content:     post.Content,
-		Description: post.Description,
-		UserID:      post.UserID,
-		Username:    post.Username,
-		Url:         post.Url,
-		PostType:    post.PostType,
-		PostStatus:  post.PostStatus,
-		PostParent:  postParent,
-		MenuOrder:   post.MenuOrder,
-		CreatedAt:   post.CreatedAt,
-		ChangedAt:   post.ChangedAt,
-		Meta:        metaMap,
+		ID:              post.ID,
+		Title:           post.Title,
+		Description:     post.Description,
+		UserID:          post.UserID,
+		Username:        post.Username,
+		Url:             post.Url,
+		PostType:        post.PostType,
+		PostStatus:      post.PostStatus,
+		PostParent:      postParent,
+		MenuOrder:       post.MenuOrder,
+		CreatedAt:       post.CreatedAt,
+		ChangedAt:       post.ChangedAt,
+		PublishedBlocks: publishedBlocks,
+		Meta:            metaMap,
 	}
 }
 
@@ -237,23 +286,28 @@ func toPostWithAllMetaResponseFromTypeQuery(post db.ListPostsByTypeWithAllMetaRo
 		json.Unmarshal(post.PostTypeMeta, &postTypeMetaMap)
 	}
 
+	var publishedBlocks map[string]interface{}
+	if post.PublishedBlockDoc.Valid {
+		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+	}
+
 	return PostWithAllMetaResponse{
-		ID:           post.ID,
-		Title:        post.Title,
-		Content:      post.Content,
-		Description:  post.Description,
-		UserID:       post.UserID,
-		Username:     post.Username,
-		Url:          post.Url,
-		PostType:     post.PostType,
-		PostStatus:   post.PostStatus,
-		PostParent:   postParent,
-		MenuOrder:    post.MenuOrder,
-		CreatedAt:    post.CreatedAt,
-		ChangedAt:    post.ChangedAt,
-		PostMeta:     postMetaMap,
-		AuthorMeta:   authorMetaMap,
-		PostTypeMeta: postTypeMetaMap,
+		ID:              post.ID,
+		Title:           post.Title,
+		Description:     post.Description,
+		UserID:          post.UserID,
+		Username:        post.Username,
+		Url:             post.Url,
+		PostType:        post.PostType,
+		PostStatus:      post.PostStatus,
+		PostParent:      postParent,
+		MenuOrder:       post.MenuOrder,
+		CreatedAt:       post.CreatedAt,
+		ChangedAt:       post.ChangedAt,
+		PublishedBlocks: publishedBlocks,
+		PostMeta:        postMetaMap,
+		AuthorMeta:      authorMetaMap,
+		PostTypeMeta:    postTypeMetaMap,
 	}
 }
 
