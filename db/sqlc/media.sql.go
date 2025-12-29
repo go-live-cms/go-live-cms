@@ -323,6 +323,75 @@ func (q *Queries) GetMediaByPost(ctx context.Context, postID int64) ([]Medium, e
 	return items, nil
 }
 
+const getMediaByPostWithOrder = `-- name: GetMediaByPostWithOrder :many
+SELECT 
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata,
+    pm."order" as media_order
+FROM media m
+JOIN post_media pm ON m.id = pm.media_id
+WHERE pm.post_id = $1
+ORDER BY pm."order", m.created_at
+`
+
+type GetMediaByPostWithOrderRow struct {
+	ID               int64           `json:"id"`
+	Name             string          `json:"name"`
+	Description      string          `json:"description"`
+	Alt              string          `json:"alt"`
+	MediaPath        string          `json:"media_path"`
+	UserID           int64           `json:"user_id"`
+	CreatedAt        time.Time       `json:"created_at"`
+	ChangedAt        time.Time       `json:"changed_at"`
+	FileSize         int64           `json:"file_size"`
+	MimeType         string          `json:"mime_type"`
+	Width            int32           `json:"width"`
+	Height           int32           `json:"height"`
+	Duration         int32           `json:"duration"`
+	OriginalFilename string          `json:"original_filename"`
+	Metadata         json.RawMessage `json:"metadata"`
+	MediaOrder       int32           `json:"media_order"`
+}
+
+func (q *Queries) GetMediaByPostWithOrder(ctx context.Context, postID int64) ([]GetMediaByPostWithOrderRow, error) {
+	rows, err := q.db.QueryContext(ctx, getMediaByPostWithOrder, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMediaByPostWithOrderRow{}
+	for rows.Next() {
+		var i GetMediaByPostWithOrderRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Alt,
+			&i.MediaPath,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.ChangedAt,
+			&i.FileSize,
+			&i.MimeType,
+			&i.Width,
+			&i.Height,
+			&i.Duration,
+			&i.OriginalFilename,
+			&i.Metadata,
+			&i.MediaOrder,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getMediaByUser = `-- name: GetMediaByUser :many
 SELECT 
     m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata,

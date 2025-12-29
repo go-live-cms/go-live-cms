@@ -62,6 +62,7 @@ type Querier interface {
 	GetLatestPublishedVersion(ctx context.Context, postID int64) (GetLatestPublishedVersionRow, error)
 	GetMedia(ctx context.Context, id int64) (Medium, error)
 	GetMediaByPost(ctx context.Context, postID int64) ([]Medium, error)
+	GetMediaByPostWithOrder(ctx context.Context, postID int64) ([]GetMediaByPostWithOrderRow, error)
 	GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error)
 	GetMediaPostCount(ctx context.Context, mediaID int64) (int64, error)
 	GetNextVersionNoForPost(ctx context.Context, postID int64) (int32, error)
