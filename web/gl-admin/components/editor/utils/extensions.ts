@@ -2,12 +2,12 @@ import StarterKit from "@tiptap/starter-kit"
 import Collaboration from "@tiptap/extension-collaboration"
 import Placeholder from "@tiptap/extension-placeholder"
 import Link from "@tiptap/extension-link"
-import Image from "@tiptap/extension-image"
 import TextAlign from "@tiptap/extension-text-align"
 import CharacterCount from "@tiptap/extension-character-count"
 import Typography from "@tiptap/extension-typography"
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
 import { OpenLinkModal } from "../extensions/OpenLinkModal"
+import { ImageWithMediaId } from "../extensions/ImageWithMediaId"
 import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
@@ -63,7 +63,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             }),
           ]
         : []),
-      Image.configure({
+      ImageWithMediaId.configure({
         allowBase64: false,
         HTMLAttributes: {
           class: "editor-image",
