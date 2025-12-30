@@ -128,6 +128,15 @@ JOIN post_media pm ON m.id = pm.media_id
 WHERE pm.post_id = $1
 ORDER BY pm."order", m.created_at;
 
+-- name: GetMediaByPostWithOrder :many
+SELECT 
+    m.*,
+    pm."order" as media_order
+FROM media m
+JOIN post_media pm ON m.id = pm.media_id
+WHERE pm.post_id = $1
+ORDER BY pm."order", m.created_at;
+
 -- name: CreatePostMedia :one
 INSERT INTO post_media (
     post_id,
