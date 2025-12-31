@@ -1,5 +1,5 @@
 import React from "react"
-import type { BlockComponentProps, BlockConfig } from "../types"
+import type { BlockComponentProps } from "../types"
 
 const ParagraphBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent }) => {
   const content = getBlockContent(block)
@@ -14,14 +14,6 @@ const ParagraphBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent 
       {content}
     </p>
   ) : null
-}
-
-export const paragraphConfig: BlockConfig = {
-  type: "paragraph",
-  name: "Paragraph",
-  description: "A standard text paragraph with inline formatting support",
-  component: ParagraphBlock,
-  hasChildren: false,
 }
 
 export default ParagraphBlock

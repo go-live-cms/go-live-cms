@@ -1,6 +1,6 @@
 import React from "react"
 import type { Block } from "@gl-admin/lib/blocks-spec"
-import type { BlockComponentProps, BlockConfig } from "../types"
+import type { BlockComponentProps } from "../types"
 
 const OrderedListBlock: React.FC<BlockComponentProps> = ({ block, doc, getBlockContent }) => {
   return (
@@ -13,14 +13,6 @@ const OrderedListBlock: React.FC<BlockComponentProps> = ({ block, doc, getBlockC
       })}
     </ol>
   )
-}
-
-export const orderedListConfig: BlockConfig = {
-  type: "ordered_list",
-  name: "Ordered List",
-  description: "A numbered list with sequential items",
-  component: OrderedListBlock,
-  hasChildren: true,
 }
 
 export default OrderedListBlock

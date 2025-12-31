@@ -1,6 +1,6 @@
 import React from "react"
 import type { Block } from "@gl-admin/lib/blocks-spec"
-import type { BlockComponentProps, BlockConfig } from "../types"
+import type { BlockComponentProps } from "../types"
 
 const BulletListBlock: React.FC<BlockComponentProps> = ({ block, doc, getBlockContent }) => {
   return (
@@ -13,14 +13,6 @@ const BulletListBlock: React.FC<BlockComponentProps> = ({ block, doc, getBlockCo
       })}
     </ul>
   )
-}
-
-export const bulletListConfig: BlockConfig = {
-  type: "bullet_list",
-  name: "Bullet List",
-  description: "An unordered list with bullet points",
-  component: BulletListBlock,
-  hasChildren: true,
 }
 
 export default BulletListBlock

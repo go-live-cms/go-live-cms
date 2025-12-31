@@ -1,19 +1,9 @@
 import type { BlockConfig, BlockComponent } from "./types"
-import {
-  paragraphConfig,
-  headingConfig,
-  blockquoteConfig,
-  codeBlockConfig,
-  dividerConfig,
-  imageConfig,
-  bulletListConfig,
-  orderedListConfig,
-} from "./components"
 
 /**
  * Block Registry
  * Central registry for all block types and their configurations
- * WordPress-style architecture for easy extensibility
+ * WordPress-style architecture with auto-discovery
  */
 class BlockRegistry {
   private blocks: Map<string, BlockConfig> = new Map()
@@ -74,14 +64,13 @@ class BlockRegistry {
 // Create singleton instance
 export const blockRegistry = new BlockRegistry()
 
-// Register all built-in block types
-blockRegistry.register(paragraphConfig)
-blockRegistry.register(headingConfig)
-blockRegistry.register(blockquoteConfig)
-blockRegistry.register(codeBlockConfig)
-blockRegistry.register(dividerConfig)
-blockRegistry.register(imageConfig)
-blockRegistry.register(bulletListConfig)
-blockRegistry.register(orderedListConfig)
+// Auto-register all blocks using Vite glob imports
+const blockModules = import.meta.glob<{ default: BlockConfig }>("./*/index.ts", {
+  eager: true,
+})
+
+Object.values(blockModules).forEach((module) => {
+  blockRegistry.register(module.default)
+})
 
 export default blockRegistry

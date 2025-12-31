@@ -1,5 +1,5 @@
 import React from "react"
-import type { BlockComponentProps, BlockConfig } from "../types"
+import type { BlockComponentProps } from "../types"
 
 const HeadingBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent }) => {
   const attrs = block.attrs as Record<string, unknown>
@@ -55,14 +55,6 @@ const HeadingBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent })
         </h1>
       )
   }
-}
-
-export const headingConfig: BlockConfig = {
-  type: "heading",
-  name: "Heading",
-  description: "A heading element (h1-h6) with configurable level",
-  component: HeadingBlock,
-  hasChildren: false,
 }
 
 export default HeadingBlock
