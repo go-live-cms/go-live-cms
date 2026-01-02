@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useState } from "react"
 import Input from "@gl-admin/components/ui/Input"
 import Select, { type SelectOption } from "@gl-admin/components/ui/Select"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
@@ -14,6 +14,7 @@ type UserFormData = {
     full_name?: string
     role?: string
     password?: string
+    confirm_password?: string
 }
 
 type UserFormProps = {
@@ -63,6 +64,7 @@ export default function UserForm({
         full_name: "",
         role: roleOptions?.[0]?.value,
         password: "",
+        confirm_password: "",
     })
 
     useEffect(() => {
@@ -75,6 +77,7 @@ export default function UserForm({
                     (initialData as any).role ||
                     ((Array.isArray((initialData as any).roles) && (initialData as any).roles[0]) || roleOptions?.[0]?.value),
                 password: "",
+                confirm_password: "",
             })
         }
     }, [mode, initialData])
@@ -114,10 +117,25 @@ export default function UserForm({
             if (!username) {
                 throw new Error("Username is required.")
             }
+
+            const pwd = (formData.password || "").trim()
+            const cpwd = (formData.confirm_password || "").trim()
+
             if (mode === "create") {
-                const pwd = (formData.password || "").trim()
                 if (!pwd || pwd.length < 8) {
                     throw new Error("Password must be at least 8 characters.")
+                }
+                if (pwd !== cpwd) {
+                    throw new Error("Passwords do not match.")
+                }
+            } else {
+                if (pwd || cpwd) {
+                    if (pwd.length < 8) {
+                        throw new Error("Password must be at least 8 characters.")
+                    }
+                    if (pwd !== cpwd) {
+                        throw new Error("Passwords do not match.")
+                    }
                 }
             }
 
@@ -127,7 +145,6 @@ export default function UserForm({
                 full_name: formData.full_name?.trim() || undefined,
                 role: formData.role,
             }
-            const pwd = (formData.password || "").trim()
             if (pwd) {
                 payload.password = pwd
             }
@@ -209,6 +226,13 @@ export default function UserForm({
                     name="password"
                     value={formData.password || ""}
                     onChange={(e: any) => handleChange("password", e.currentTarget?.value ?? e.target?.value ?? "")}
+                />
+                <Input
+                    title="Confirm password"
+                    type="password"
+                    name="confirm_password"
+                    value={formData.confirm_password || ""}
+                    onChange={(e: any) => handleChange("confirm_password", e.currentTarget?.value ?? e.target?.value ?? "")}
                 />
 
                 <div className="flex gap-4 md:col-span-2">
