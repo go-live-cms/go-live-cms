@@ -223,6 +223,36 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 	return i, err
 }
 
+const getPostBySlug = `-- name: GetPostBySlug :one
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug FROM posts 
+WHERE slug = $1 LIMIT 1
+`
+
+func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) {
+	row := q.db.QueryRowContext(ctx, getPostBySlug, slug)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
+		&i.Slug,
+	)
+	return i, err
+}
+
 const getPostChildren = `-- name: GetPostChildren :many
 SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug FROM posts
 WHERE post_parent = $1

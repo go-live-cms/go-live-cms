@@ -26,6 +26,10 @@ INSERT INTO user_posts (
 SELECT * FROM posts 
 WHERE id = $1 LIMIT 1;
 
+-- name: GetPostBySlug :one
+SELECT * FROM posts 
+WHERE slug = $1 LIMIT 1;
+
 -- name: CheckURLExists :one
 SELECT EXISTS(SELECT 1 FROM posts WHERE url = $1) as exists;
 

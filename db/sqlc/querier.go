@@ -73,6 +73,7 @@ type Querier interface {
 	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
 	GetPost(ctx context.Context, id int64) (Post, error)
 	GetPostBlocks(ctx context.Context, id int64) (GetPostBlocksRow, error)
+	GetPostBySlug(ctx context.Context, slug string) (Post, error)
 	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
 	GetPostMedia(ctx context.Context, postID int64) ([]GetPostMediaRow, error)
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
