@@ -13,6 +13,15 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+type ExtensionSetting struct {
+	Key           string          `json:"key"`
+	Value         json.RawMessage `json:"value"`
+	ExtensionType string          `json:"extension_type"`
+	ExtensionID   string          `json:"extension_id"`
+	CreatedAt     time.Time       `json:"created_at"`
+	ChangedAt     time.Time       `json:"changed_at"`
+}
+
 type Medium struct {
 	ID               int64           `json:"id"`
 	Name             string          `json:"name"`
@@ -48,6 +57,7 @@ type Post struct {
 	BlockRevision      int64                 `json:"block_revision"`
 	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug               string                `json:"slug"`
 }
 
 type PostMedium struct {
@@ -109,6 +119,15 @@ type Session struct {
 	Jti              uuid.NullUUID  `json:"jti"`
 	RotatedAt        sql.NullTime   `json:"rotated_at"`
 	ReplacedBy       uuid.NullUUID  `json:"replaced_by"`
+}
+
+type Setting struct {
+	ID               int32          `json:"id"`
+	PostUrlStructure string         `json:"post_url_structure"`
+	SiteTitle        sql.NullString `json:"site_title"`
+	PostsPerPage     sql.NullInt32  `json:"posts_per_page"`
+	CreatedAt        time.Time      `json:"created_at"`
+	ChangedAt        time.Time      `json:"changed_at"`
 }
 
 type TaxonomyTerm struct {

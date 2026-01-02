@@ -41,6 +41,8 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserPost(ctx context.Context, arg CreateUserPostParams) (UserPost, error)
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
+	DeleteExtensionSetting(ctx context.Context, key string) error
+	DeleteExtensionSettingsByExtension(ctx context.Context, arg DeleteExtensionSettingsByExtensionParams) error
 	DeleteMedia(ctx context.Context, id int64) error
 	DeleteMediaByUserID(ctx context.Context, userID int64) error
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
@@ -58,6 +60,7 @@ type Querier interface {
 	DeleteUserPostsByUserID(ctx context.Context, userID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
 	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
+	GetExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error)
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
 	GetLatestPublishedVersion(ctx context.Context, postID int64) (GetLatestPublishedVersionRow, error)
 	GetMedia(ctx context.Context, id int64) (Medium, error)
@@ -70,6 +73,7 @@ type Querier interface {
 	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
 	GetPost(ctx context.Context, id int64) (Post, error)
 	GetPostBlocks(ctx context.Context, id int64) (GetPostBlocksRow, error)
+	GetPostBySlug(ctx context.Context, slug string) (Post, error)
 	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
 	GetPostMedia(ctx context.Context, postID int64) ([]GetPostMediaRow, error)
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
@@ -89,6 +93,7 @@ type Querier interface {
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error)
+	GetSettings(ctx context.Context) (Setting, error)
 	GetTaxonomyTerm(ctx context.Context, id int64) (TaxonomyTerm, error)
 	GetTaxonomyTermBySlug(ctx context.Context, slug string) (GetTaxonomyTermBySlugRow, error)
 	// Hierarchical term tree (for categories)
@@ -103,6 +108,8 @@ type Querier interface {
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
 	InsertPostVersion(ctx context.Context, arg InsertPostVersionParams) (InsertPostVersionRow, error)
+	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
+	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
@@ -135,10 +142,12 @@ type Querier interface {
 	UpdatePostsUsername(ctx context.Context, arg UpdatePostsUsernameParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
 	UpdateSessionsUsername(ctx context.Context, arg UpdateSessionsUsernameParams) ([]Session, error)
+	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error)
 	UpdateTaxonomyTerm(ctx context.Context, arg UpdateTaxonomyTermParams) (TaxonomyTerm, error)
 	UpdateTaxonomyType(ctx context.Context, arg UpdateTaxonomyTypeParams) (TaxonomyType, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserPostsOwnership(ctx context.Context, arg UpdateUserPostsOwnershipParams) error
+	UpsertExtensionSetting(ctx context.Context, arg UpsertExtensionSettingParams) (ExtensionSetting, error)
 	UpsertPostMeta(ctx context.Context, arg UpsertPostMetaParams) (PostMetum, error)
 }
 

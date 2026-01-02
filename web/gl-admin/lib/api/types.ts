@@ -99,6 +99,7 @@ export interface Post {
   user_id: number
   username: string
   url: string
+  slug?: string
   post_type: string
   post_status: string
   post_parent?: number | null

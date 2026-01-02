@@ -60,9 +60,9 @@ export interface PostQueryParams extends PaginationParams {
   sort?: PostSortOption
   type?: string
   status?: string
-  user_id?: string | number 
+  user_id?: string | number
   with_meta?: boolean
-  meta_level?: string 
+  meta_level?: string
 }
 
 export async function getPosts(params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
@@ -89,6 +89,14 @@ export async function getPosts(params: PostQueryParams = {}): Promise<ApiRespons
 
 export async function getPostById(id: string | number): Promise<{ post: Post }> {
   return apiCall(`/posts/${id}`)
+}
+
+export async function getPostBySlug(slug: string): Promise<{ post: Post }> {
+  return apiCall(`/posts/slug/${slug}`)
+}
+
+export async function getSettings(): Promise<any> {
+  return apiCall("/settings")
 }
 
 export async function getPostsByType(type: string, params: PostQueryParams = {}): Promise<ApiResponse<Post>> {

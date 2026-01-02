@@ -135,6 +135,9 @@ func (server *Server) setupRoutes() {
 	// Media module routes (see media_routes.go for complete definitions)
 	server.registerMediaRoutes(v1)
 
+	// Settings module routes (see settings_routes.go for complete definitions)
+	server.RegisterSettingsRoutes(v1)
+
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 

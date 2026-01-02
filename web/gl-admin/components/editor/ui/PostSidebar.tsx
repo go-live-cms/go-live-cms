@@ -1,7 +1,8 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import FeaturedImage from "./FeaturedImage"
 import { useFeaturedImage } from "@gl-admin/lib/hooks/useFeaturedImage"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
+import { getSettings, type Settings } from "@gl-admin/lib/api/settings"
 import "@gl-admin/assets/styles/components/editor/post-sidebar.scss"
 
 interface PostSidebarProps {
@@ -30,13 +31,29 @@ export default function PostSidebar({
   onSlugChange,
 }: PostSidebarProps) {
   const [activeTab, setActiveTab] = useState<"general" | "advanced">("general")
-  
+  const [urlStructure, setUrlStructure] = useState<"id" | "slug">("id")
+
   const {
     featuredImage,
     loading: featuredImageLoading,
     error: featuredImageError,
     setImage: setFeaturedImage,
   } = useFeaturedImage(post.id)
+
+  // Fetch settings to determine URL structure
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settings = await getSettings()
+        setUrlStructure(settings.post_url_structure)
+      } catch (error) {
+        console.error("Failed to fetch settings:", error)
+        // Default to 'id' if settings can't be fetched
+        setUrlStructure("id")
+      }
+    }
+    fetchSettings()
+  }, [])
 
   const handleFieldUpdate = (field: keyof Post, value: any) => {
     onUpdate({ [field]: value })
@@ -62,6 +79,10 @@ export default function PostSidebar({
 
   const getCurrentLiveUrl = () => {
     if (mode === "edit" && post.id) {
+      // Use the configured URL structure
+      if (urlStructure === "slug" && post.url) {
+        return getFrontendUrl(post.url)
+      }
       return getFrontendUrl(post.id)
     }
     return null
@@ -69,7 +90,11 @@ export default function PostSidebar({
 
   const getFutureUrl = () => {
     const urlSlug = slug || post.url || "untitled"
-    return getFrontendUrl(urlSlug)
+    if (urlStructure === "slug") {
+      return getFrontendUrl(urlSlug)
+    }
+    // If structure is ID-based, show what it will be (still uses ID)
+    return getFrontendUrl(post.id || "new")
   }
 
   const statusOptions = [
@@ -167,33 +192,50 @@ export default function PostSidebar({
                       {getCurrentLiveUrl()}
                     </a>
                   </div>
-                  <small className="post-settings__field-description">Current live URL (uses ID: {post.id})</small>
+                  <small className="post-settings__field-description">
+                    Current live URL (uses {urlStructure === "id" ? `ID: ${post.id}` : `slug: ${post.url}`})
+                  </small>
                 </div>
               )}
 
               <div className="post-settings__field">
-                <label>{mode === "create" ? "Future URL" : "New URL (after save)"}</label>
+                <label>{mode === "create" ? "Future URL" : "URL Preview"}</label>
                 <div className="post-settings__url-preview">
                   <span className="post-settings__url-preview-text">{getFutureUrl()}</span>
                 </div>
                 <small className="post-settings__field-description">
                   {mode === "create"
-                    ? "This will be the URL after publishing"
-                    : "This will become the new URL after saving (replaces ID-based URL)"}
+                    ? `This will be the URL after publishing (using ${urlStructure === "id" ? "ID" : "slug"})`
+                    : urlStructure === "slug"
+                      ? "This will become the new URL after saving"
+                      : "URL will continue using ID-based structure"}
                 </small>
               </div>
 
               <div className="post-settings__field">
                 <small className="post-settings__field-description" style={{ fontStyle: "italic", marginTop: "8px" }}>
-                  <strong>URL Structure:</strong>
-                  <br />• Live posts use ID:{" "}
-                  <code>
-                    /{getContentTypeName()}/{post.id || "123"}
-                  </code>
-                  <br />• After updating slug:{" "}
-                  <code>
-                    /{getContentTypeName()}/{slug || post.url || "your-slug"}
-                  </code>
+                  <strong>Active URL Structure:</strong> {urlStructure === "id" ? "ID-based" : "Slug-based"}
+                  <br />
+                  {urlStructure === "id" ? (
+                    <>
+                      • Current format:{" "}
+                      <code>
+                        /{getContentTypeName()}/{post.id || "123"}
+                      </code>
+                      <br />• Change to slug-based in{" "}
+                      <a href="/settings" target="_blank" style={{ color: "inherit", textDecoration: "underline" }}>
+                        Settings
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      • Current format:{" "}
+                      <code>
+                        /{getContentTypeName()}/{slug || post.url || "your-slug"}
+                      </code>
+                      <br />• ID-based URLs (/{getContentTypeName()}/{post.id}) still work for compatibility
+                    </>
+                  )}
                 </small>
               </div>
 
@@ -213,17 +255,8 @@ export default function PostSidebar({
             </div>
 
             <div className="post-settings__section">
-              <FeaturedImage
-                value={featuredImage}
-                onChange={setFeaturedImage}
-                postId={post.id}
-                disabled={!post.id} 
-              />
-              {featuredImageError && (
-                <small className="post-settings__field-error">
-                  Error: {featuredImageError}
-                </small>
-              )}
+              <FeaturedImage value={featuredImage} onChange={setFeaturedImage} postId={post.id} disabled={!post.id} />
+              {featuredImageError && <small className="post-settings__field-error">Error: {featuredImageError}</small>}
             </div>
           </>
         )}
