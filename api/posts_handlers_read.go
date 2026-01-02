@@ -210,6 +210,29 @@ func (server *Server) getPostByID(c *gin.Context) {
 	})
 }
 
+// getPostBySlug handles GET /posts/slug/:slug
+func (server *Server) getPostBySlug(c *gin.Context) {
+	slug := c.Param("slug")
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "slug is required"})
+		return
+	}
+
+	post, err := server.store.GetPostBySlug(c.Request.Context(), slug)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"post": toPostResponse(post),
+	})
+}
+
 // getPostsByUser handles GET /posts/user/:id
 func (server *Server) getPostsByUser(c *gin.Context) {
 	userIDParam := c.Param("id")
