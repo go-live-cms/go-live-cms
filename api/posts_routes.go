@@ -25,6 +25,7 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("", server.getPosts)
 		posts.GET("/type/:type", server.getPostsByType)
 		posts.GET("/user/:id", server.getPostsByUser)
+		posts.GET("/slug/:slug", server.getPostBySlug)
 		posts.GET("/:id", server.getPostByID)
 
 		// Protected writes (require auth)
