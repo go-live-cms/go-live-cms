@@ -12,6 +12,7 @@ import (
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	gomock "github.com/golang/mock/gomock"
 	uuid "github.com/google/uuid"
+	pqtype "github.com/sqlc-dev/pqtype"
 )
 
 // MockStore is a mock of Store interface.
@@ -792,6 +793,21 @@ func (mr *MockStoreMockRecorder) GetFeaturedImage(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeaturedImage", reflect.TypeOf((*MockStore)(nil).GetFeaturedImage), arg0, arg1)
 }
 
+// GetLatestPublishedVersion mocks base method.
+func (m *MockStore) GetLatestPublishedVersion(arg0 context.Context, arg1 int64) (db.GetLatestPublishedVersionRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestPublishedVersion", arg0, arg1)
+	ret0, _ := ret[0].(db.GetLatestPublishedVersionRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLatestPublishedVersion indicates an expected call of GetLatestPublishedVersion.
+func (mr *MockStoreMockRecorder) GetLatestPublishedVersion(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestPublishedVersion", reflect.TypeOf((*MockStore)(nil).GetLatestPublishedVersion), arg0, arg1)
+}
+
 // GetMedia mocks base method.
 func (m *MockStore) GetMedia(arg0 context.Context, arg1 int64) (db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -852,6 +868,21 @@ func (mr *MockStoreMockRecorder) GetMediaPostCount(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMediaPostCount", reflect.TypeOf((*MockStore)(nil).GetMediaPostCount), arg0, arg1)
 }
 
+// GetNextVersionNoForPost mocks base method.
+func (m *MockStore) GetNextVersionNoForPost(arg0 context.Context, arg1 int64) (int32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNextVersionNoForPost", arg0, arg1)
+	ret0, _ := ret[0].(int32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNextVersionNoForPost indicates an expected call of GetNextVersionNoForPost.
+func (mr *MockStoreMockRecorder) GetNextVersionNoForPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNextVersionNoForPost", reflect.TypeOf((*MockStore)(nil).GetNextVersionNoForPost), arg0, arg1)
+}
+
 // GetPopularMedia mocks base method.
 func (m *MockStore) GetPopularMedia(arg0 context.Context, arg1 int32) ([]db.GetPopularMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -895,6 +926,21 @@ func (m *MockStore) GetPost(arg0 context.Context, arg1 int64) (db.Post, error) {
 func (mr *MockStoreMockRecorder) GetPost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPost", reflect.TypeOf((*MockStore)(nil).GetPost), arg0, arg1)
+}
+
+// GetPostBlocks mocks base method.
+func (m *MockStore) GetPostBlocks(arg0 context.Context, arg1 int64) (db.GetPostBlocksRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostBlocks", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPostBlocksRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostBlocks indicates an expected call of GetPostBlocks.
+func (mr *MockStoreMockRecorder) GetPostBlocks(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostBlocks", reflect.TypeOf((*MockStore)(nil).GetPostBlocks), arg0, arg1)
 }
 
 // GetPostChildren mocks base method.
@@ -1017,6 +1063,21 @@ func (mr *MockStoreMockRecorder) GetPostTypeByID(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostTypeByID", reflect.TypeOf((*MockStore)(nil).GetPostTypeByID), arg0, arg1)
 }
 
+// GetPostVersions mocks base method.
+func (m *MockStore) GetPostVersions(arg0 context.Context, arg1 int64) ([]db.GetPostVersionsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostVersions", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetPostVersionsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostVersions indicates an expected call of GetPostVersions.
+func (mr *MockStoreMockRecorder) GetPostVersions(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostVersions", reflect.TypeOf((*MockStore)(nil).GetPostVersions), arg0, arg1)
+}
+
 // GetPostWithMedia mocks base method.
 func (m *MockStore) GetPostWithMedia(arg0 context.Context, arg1 int64) (db.GetPostWithMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -1105,6 +1166,21 @@ func (m *MockStore) GetPostsByUserWithMedia(arg0 context.Context, arg1 db.GetPos
 func (mr *MockStoreMockRecorder) GetPostsByUserWithMedia(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostsByUserWithMedia", reflect.TypeOf((*MockStore)(nil).GetPostsByUserWithMedia), arg0, arg1)
+}
+
+// GetPublishedPostBlocks mocks base method.
+func (m *MockStore) GetPublishedPostBlocks(arg0 context.Context, arg1 int64) (pqtype.NullRawMessage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPublishedPostBlocks", arg0, arg1)
+	ret0, _ := ret[0].(pqtype.NullRawMessage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPublishedPostBlocks indicates an expected call of GetPublishedPostBlocks.
+func (mr *MockStoreMockRecorder) GetPublishedPostBlocks(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublishedPostBlocks", reflect.TypeOf((*MockStore)(nil).GetPublishedPostBlocks), arg0, arg1)
 }
 
 // GetSession mocks base method.
@@ -1332,6 +1408,21 @@ func (mr *MockStoreMockRecorder) GetUserMediaCount(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMediaCount", reflect.TypeOf((*MockStore)(nil).GetUserMediaCount), arg0, arg1)
 }
 
+// InsertPostVersion mocks base method.
+func (m *MockStore) InsertPostVersion(arg0 context.Context, arg1 db.InsertPostVersionParams) (db.InsertPostVersionRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertPostVersion", arg0, arg1)
+	ret0, _ := ret[0].(db.InsertPostVersionRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InsertPostVersion indicates an expected call of InsertPostVersion.
+func (mr *MockStoreMockRecorder) InsertPostVersion(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPostVersion", reflect.TypeOf((*MockStore)(nil).InsertPostVersion), arg0, arg1)
+}
+
 // ListMedia mocks base method.
 func (m *MockStore) ListMedia(arg0 context.Context, arg1 db.ListMediaParams) ([]db.ListMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -1363,10 +1454,10 @@ func (mr *MockStoreMockRecorder) ListPostTypes(arg0 interface{}) *gomock.Call {
 }
 
 // ListPosts mocks base method.
-func (m *MockStore) ListPosts(arg0 context.Context, arg1 db.ListPostsParams) ([]db.Post, error) {
+func (m *MockStore) ListPosts(arg0 context.Context, arg1 db.ListPostsParams) ([]db.ListPostsRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListPosts", arg0, arg1)
-	ret0, _ := ret[0].([]db.Post)
+	ret0, _ := ret[0].([]db.ListPostsRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -1629,6 +1720,20 @@ func (mr *MockStoreMockRecorder) SearchTaxonomyTerms(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).SearchTaxonomyTerms), arg0, arg1)
 }
 
+// SetPublishedVersionOnPost mocks base method.
+func (m *MockStore) SetPublishedVersionOnPost(arg0 context.Context, arg1 db.SetPublishedVersionOnPostParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPublishedVersionOnPost", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetPublishedVersionOnPost indicates an expected call of SetPublishedVersionOnPost.
+func (mr *MockStoreMockRecorder) SetPublishedVersionOnPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPublishedVersionOnPost", reflect.TypeOf((*MockStore)(nil).SetPublishedVersionOnPost), arg0, arg1)
+}
+
 // TransferMediaToUser mocks base method.
 func (m *MockStore) TransferMediaToUser(arg0 context.Context, arg1 db.TransferMediaToUserParams) error {
 	m.ctrl.T.Helper()
@@ -1685,6 +1790,21 @@ func (m *MockStore) UpdatePost(arg0 context.Context, arg1 db.UpdatePostParams) (
 func (mr *MockStoreMockRecorder) UpdatePost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePost", reflect.TypeOf((*MockStore)(nil).UpdatePost), arg0, arg1)
+}
+
+// UpdatePostBlocksIfRevisionMatches mocks base method.
+func (m *MockStore) UpdatePostBlocksIfRevisionMatches(arg0 context.Context, arg1 db.UpdatePostBlocksIfRevisionMatchesParams) (db.UpdatePostBlocksIfRevisionMatchesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostBlocksIfRevisionMatches", arg0, arg1)
+	ret0, _ := ret[0].(db.UpdatePostBlocksIfRevisionMatchesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostBlocksIfRevisionMatches indicates an expected call of UpdatePostBlocksIfRevisionMatches.
+func (mr *MockStoreMockRecorder) UpdatePostBlocksIfRevisionMatches(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostBlocksIfRevisionMatches", reflect.TypeOf((*MockStore)(nil).UpdatePostBlocksIfRevisionMatches), arg0, arg1)
 }
 
 // UpdatePostMediaTx mocks base method.

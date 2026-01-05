@@ -85,6 +85,7 @@ export class MediaBlockManager {
         src: imageUrl,
         alt: media.alt || media.description || "",
         title: media.name || "",
+        mediaId: media.id,
       })
       view.dispatch(transaction)
 

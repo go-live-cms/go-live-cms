@@ -2,9 +2,11 @@ package token
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	p "aidanwoods.dev/go-paseto"
@@ -419,4 +421,57 @@ func ExamplePasetoV4Maker_ParseRefresh() {
 	// Extract claims from raw token
 	userID, _ := token.GetString("user_id")
 	_ = userID
+}
+
+// GetPublicKeyPEM returns the Ed25519 public key in PEM format for use by other services.
+//
+// This method exports the public key in standard PEM encoding that can be used
+// by external services (like the WebSocket server) to verify PASETO v4.public tokens.
+//
+// Example usage:
+//
+//	maker := /* initialize PasetoV4Maker */
+//	pemKey, err := maker.GetPublicKeyPEM()
+//	if err != nil {
+//	    log.Fatal("Failed to export public key:", err)
+//	}
+//	fmt.Println("Public key for WebSocket server:")
+//	fmt.Println(pemKey)
+//
+// The returned PEM can be used in Node.js with:
+//
+//	const publicKey = createPublicKey(pemString);
+func (m *PasetoV4Maker) GetPublicKeyPEM() (string, error) {
+	// Get the raw Ed25519 public key bytes (32 bytes)
+	keyBytes := m.keys.PublicKey.ExportBytes()
+
+	// Ed25519 public key in SubjectPublicKeyInfo DER format
+	// This creates a proper ASN.1 DER structure for Ed25519 keys
+	derHeader := []byte{
+		0x30, 0x2a, // SEQUENCE (42 bytes)
+		0x30, 0x05, // SEQUENCE (5 bytes) - Algorithm
+		0x06, 0x03, 0x2b, 0x65, 0x70, // OID for Ed25519: 1.3.101.112
+		0x03, 0x21, 0x00, // BIT STRING (33 bytes), no unused bits
+	}
+
+	derKey := append(derHeader, keyBytes...)
+
+	// Convert to PEM format
+	pemData := base64.StdEncoding.EncodeToString(derKey)
+
+	// Format as PEM with proper line breaks (64 chars per line)
+	var pemLines []string
+	for i := 0; i < len(pemData); i += 64 {
+		end := i + 64
+		if end > len(pemData) {
+			end = len(pemData)
+		}
+		pemLines = append(pemLines, pemData[i:end])
+	}
+
+	pem := "-----BEGIN PUBLIC KEY-----\n" +
+		strings.Join(pemLines, "\n") +
+		"\n-----END PUBLIC KEY-----"
+
+	return pem, nil
 }

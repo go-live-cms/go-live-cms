@@ -166,7 +166,7 @@ func (server *Server) getPosts(c *gin.Context) {
 
 		postResponses := make([]PostResponse, len(posts))
 		for i, post := range posts {
-			postResponses[i] = toPostResponse(post)
+			postResponses[i] = toPostResponseFromListRow(post)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
@@ -196,6 +196,29 @@ func (server *Server) getPostByID(c *gin.Context) {
 	}
 
 	post, err := server.store.GetPost(c.Request.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"post": toPostResponse(post),
+	})
+}
+
+// getPostBySlug handles GET /posts/slug/:slug
+func (server *Server) getPostBySlug(c *gin.Context) {
+	slug := c.Param("slug")
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "slug is required"})
+		return
+	}
+
+	post, err := server.store.GetPostBySlug(c.Request.Context(), slug)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
@@ -259,17 +282,7 @@ func (server *Server) getPostsByUser(c *gin.Context) {
 
 	postResponses := make([]PostResponse, len(posts))
 	for i, post := range posts {
-		postResponses[i] = PostResponse{
-			ID:          post.ID,
-			Title:       post.Title,
-			Content:     post.Content,
-			Description: post.Description,
-			UserID:      post.UserID,
-			Username:    post.Username,
-			Url:         post.Url,
-			CreatedAt:   post.CreatedAt,
-			ChangedAt:   post.ChangedAt,
-		}
+		postResponses[i] = toPostResponseFromUserMediaRow(post)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

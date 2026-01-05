@@ -13,11 +13,16 @@ export class AuthManager {
   private state: AuthState
   private refreshPromise: Promise<boolean> | null = null // prevent multiple simultaneous refreshes
   private lastRefreshAttempt: number = 0
+  private refreshTimer: NodeJS.Timeout | null = null
   private readonly REFRESH_COOLDOWN = 5000
   private readonly TOKEN_BUFFER = 60000
+  private listeners: ((state: AuthState) => void)[] = []
 
   private constructor() {
     this.state = this.getStoredAuth()
+    if (this.state.isAuthenticated && this.state.tokenExpiry) {
+      this.scheduleTokenRefresh()
+    }
   }
 
   static getInstance(): AuthManager {
@@ -54,12 +59,25 @@ export class AuthManager {
   private isTokenValid(expiryString: string | null): boolean {
     if (!expiryString) return false
     const expiry = parseInt(expiryString)
-    return Date.now() < expiry - this.TOKEN_BUFFER
+    const isValid = Date.now() < expiry - this.TOKEN_BUFFER
+
+    if (!isValid && typeof console !== "undefined") {
+      const timeUntilExpiry = expiry - Date.now()
+      console.log(`🔒 Token expires in ${Math.round(timeUntilExpiry / 1000)}s (buffer: ${this.TOKEN_BUFFER / 1000}s)`)
+    }
+
+    return isValid
   }
 
   private isTokenExpired(): boolean {
     if (!this.state.tokenExpiry) return true
-    return Date.now() >= this.state.tokenExpiry - this.TOKEN_BUFFER
+    const expired = Date.now() >= this.state.tokenExpiry - this.TOKEN_BUFFER
+
+    if (expired && typeof console !== "undefined") {
+      console.log("🔒 Access token expired or expiring soon")
+    }
+
+    return expired
   }
 
   private shouldRefresh(): boolean {
@@ -74,6 +92,7 @@ export class AuthManager {
     }
 
     // Only refresh if token is expired or close to expiry
+
     return this.isTokenExpired()
   }
 
@@ -101,6 +120,9 @@ export class AuthManager {
         localStorage.setItem("token_expiry", tokenExpiry.toString())
       }
 
+      this.scheduleTokenRefresh()
+      this.notifyListeners()
+
       return { success: true }
     } catch (error) {
       return {
@@ -121,6 +143,11 @@ export class AuthManager {
   }
 
   private clearAuth(): void {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer)
+      this.refreshTimer = null
+    }
+
     this.state = {
       isAuthenticated: false,
       user: null,
@@ -137,6 +164,8 @@ export class AuthManager {
       localStorage.removeItem("user")
       localStorage.removeItem("token_expiry")
     }
+
+    this.notifyListeners()
   }
 
   async refreshAccessToken(): Promise<boolean> {
@@ -181,6 +210,9 @@ export class AuthManager {
         localStorage.setItem("token_expiry", tokenExpiry.toString())
       }
 
+      this.scheduleTokenRefresh()
+      this.notifyListeners()
+
       console.log("Token refreshed successfully")
       return true
     } catch (error) {
@@ -188,6 +220,24 @@ export class AuthManager {
       this.clearAuth()
       return false
     }
+  }
+
+  private scheduleTokenRefresh(): void {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer)
+    }
+
+    if (!this.state.tokenExpiry || typeof window === "undefined") return
+
+    const timeUntilExpiry = this.state.tokenExpiry - Date.now()
+    const refreshTime = Math.max(30000, timeUntilExpiry - 2 * 60 * 1000)
+
+    console.log(`⏰ Token refresh scheduled in ${Math.round(refreshTime / 1000)}s`)
+
+    this.refreshTimer = setTimeout(async () => {
+      console.log("🔄 Auto-refreshing token...")
+      await this.refreshAccessToken()
+    }, refreshTime)
   }
 
   // check if authentication is valid without forcing refresh
@@ -209,6 +259,26 @@ export class AuthManager {
 
   getAccessToken(): string | null {
     return this.state.accessToken
+  }
+
+  subscribe(listener: (state: AuthState) => void): () => void {
+    this.listeners.push(listener)
+    return () => {
+      const index = this.listeners.indexOf(listener)
+      if (index > -1) {
+        this.listeners.splice(index, 1)
+      }
+    }
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach((listener) => {
+      try {
+        listener({ ...this.state })
+      } catch (error) {
+        console.error("Error in auth state listener:", error)
+      }
+    })
   }
 }
 

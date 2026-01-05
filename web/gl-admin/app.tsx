@@ -15,6 +15,8 @@ const Dashboard = lazy(() => import("@gl-admin/pages/Dashboard"))
 const Content = lazy(() => import("@gl-admin/pages/Content"))
 const Media = lazy(() => import("@gl-admin/pages/Media"))
 const Users = lazy(() => import("@gl-admin/pages/Users"))
+const BackfillBlocks = lazy(() => import("@gl-admin/pages/BackfillBlocks"))
+const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 
 function AppLayout() {
   const routeClasses = useRouteClasses()
@@ -43,6 +45,8 @@ function AppLayout() {
             <Route path="/media" element={<Media />} />
             <Route path="/users" element={<Users />} />
             <Route path="/users/new" element={<NewUser />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/tools/backfill-blocks" element={<BackfillBlocks />} />
           </Routes>
         </div>
       </section>

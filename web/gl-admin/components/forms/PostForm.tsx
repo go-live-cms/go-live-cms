@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { createPost, updatePost } from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
-import Editor from "@gl-admin/components/editor/Editor"
+import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
+import { htmlToBlockDoc } from "@gl-admin/lib/utils/htmlToBlocks"
+import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import PublishBar from "@gl-admin/components/editor/ui/PublishBarNew"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
@@ -34,6 +36,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
+  const editorRef = useRef<EditorRef>(null)
 
   const ORIGINAL_SIDEBAR_WIDTH = 20 * 16
   const MIN_SIDEBAR_WIDTH = ORIGINAL_SIDEBAR_WIDTH * 0.8
@@ -59,7 +62,6 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     id: initialData?.id || 0,
     title: formData.title,
     description: formData.excerpt,
-    content: formData.content,
     user_id: initialData?.user_id || 0,
     username: initialData?.username || "",
     post_type: contentType || initialData?.post_type || "post",
@@ -77,7 +79,6 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       ...prev,
       ...(updates.title !== undefined && { title: updates.title }),
       ...(updates.description !== undefined && { excerpt: updates.description }),
-      ...(updates.content !== undefined && { content: updates.content }),
       ...(updates.post_status !== undefined && { post_status: updates.post_status as "draft" | "published" }),
       ...(updates.url !== undefined && { slug: updates.url }),
     }))
@@ -106,7 +107,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       setFormData({
         title: initialData.title,
         slug: slug,
-        content: initialData.content,
+        content: "",
         excerpt: initialData.description,
         post_status: initialData.post_status as "draft" | "published",
       })
@@ -217,12 +218,42 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   }
 
   const handleSave = async () => {
-    await savePost(false)
+    // Use Block Spec v1 persistence for edit mode, fallback to traditional save for create mode
+    if (mode === "edit" && editorRef.current && initialData?.id) {
+      try {
+        await editorRef.current.forceSave()
+        showSuccess("Changes saved successfully")
+      } catch (error) {
+        showError("Failed to save changes")
+        console.error("Block save failed:", error)
+      }
+    } else {
+      await savePost(false)
+    }
+  }
+
+  const handlePublish = async () => {
+    // Use Block Spec v1 publishing for edit mode, fallback to traditional publish for create mode
+    if (mode === "edit" && editorRef.current && initialData?.id) {
+      try {
+        const result = await editorRef.current.publish()
+        if (result) {
+          showSuccess(`Published as version ${result.versionNo}`)
+          // Update the post status in the form data
+          setFormData((prev) => ({ ...prev, post_status: "published" }))
+        }
+      } catch (error) {
+        showError("Failed to publish")
+        console.error("Block publish failed:", error)
+      }
+    } else {
+      await savePost(true)
+    }
   }
 
   const savePost = async (isPublish: boolean = false) => {
     const setSavingState = isPublish ? setIsSubmitting : setIsSaving
-    const setSaveStatusState = isPublish ? () => { } : setSaveStatus
+    const setSaveStatusState = isPublish ? () => {} : setSaveStatus
 
     setSavingState(true)
     setSaveStatusState("saving")
@@ -258,6 +289,50 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         const successMessage = `${getContentTypeName(postType)} ${isPublish ? "published" : "saved"} successfully!`
         showSuccess(successMessage)
         setSaveStatusState("saved")
+
+        console.log("📝 Post created successfully:", {
+          postId: result.post.id,
+          title: result.post.title,
+          hasContent: !!formData.content,
+          contentLength: formData.content?.length || 0,
+          contentPreview: formData.content?.substring(0, 100),
+        })
+
+        // Convert HTML content to blocks and save immediately
+        if (formData.content) {
+          try {
+            console.log("🔄 Converting HTML to blocks...")
+            const blockDoc = htmlToBlockDoc(formData.content)
+            console.log("✅ Blocks generated:", {
+              blocksCount: Object.keys(blockDoc.blocks).length,
+              blocksOrder: blockDoc.blocks_order.length,
+              blockDoc,
+            })
+
+            const token = authManager.getAccessToken()
+            if (token) {
+              blockAPIClient.setAuthToken(token)
+              console.log("💾 Saving blocks to post", result.post.id)
+              const saveResult = await blockAPIClient.updatePostBlocks(result.post.id, blockDoc, 1)
+              console.log("✅ Blocks saved successfully to block_doc:", saveResult)
+
+              // If published, also publish the blocks (copies block_doc → published_block_doc)
+              if (isPublish) {
+                console.log("📤 Publishing blocks (copying to published_block_doc)...")
+                const publishResult = await blockAPIClient.publishPost(result.post.id)
+                console.log("✅ Blocks published:", publishResult)
+              }
+            } else {
+              console.error("❌ No auth token available for saving blocks")
+            }
+          } catch (error) {
+            console.error("❌ Failed to save initial blocks:", error)
+            showError("Warning: Content may not have been saved properly")
+            // Don't fail the entire operation if block save fails
+          }
+        } else {
+          console.warn("⚠️ No content to save - formData.content is empty")
+        }
 
         if (onSuccess) {
           onSuccess(result.post)
@@ -318,7 +393,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       <PublishBar
         post={currentPost}
         onSave={handleSave}
-        onPublish={() => savePost(true)}
+        onPublish={handlePublish}
         isSaving={isSaving}
         isPublishing={isSubmitting}
         saveStatus={saveStatus}
@@ -346,7 +421,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
           <div className="post-editor__content">
             <Editor
+              ref={editorRef}
               value={formData.content}
+              title={formData.title}
               minChars={10}
               onChange={(html, text) => {
                 setFormData((prev) => ({ ...prev, content: html }))
@@ -355,6 +432,31 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
               postId={initialData?.id}
               enableCollaboration={mode === "edit"} // Only enable collaboration in edit mode
+              // Block Spec v1 persistence callbacks
+              onSaveStart={() => {
+                setIsSaving(true)
+                setSaveStatus("saving")
+              }}
+              onSaveSuccess={(revision) => {
+                setIsSaving(false)
+                setSaveStatus("saved")
+              }}
+              onSaveError={(error) => {
+                setIsSaving(false)
+                setSaveStatus("error")
+                showError("Auto-save failed")
+              }}
+              onPublishStart={() => {
+                setIsSubmitting(true)
+              }}
+              onPublishSuccess={(result) => {
+                setIsSubmitting(false)
+                setFormData((prev) => ({ ...prev, post_status: "published" }))
+              }}
+              onPublishError={(error) => {
+                setIsSubmitting(false)
+                showError("Publish failed")
+              }}
             />
           </div>
         </div>

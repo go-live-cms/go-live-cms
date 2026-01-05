@@ -38,11 +38,19 @@ export function getMediaURL(mediaPath: string): string {
 export async function apiCall(endpoint: string, options: ApiOptions = {}) {
   const { token, method = "GET", body } = options
 
+  // Import authManager dynamically to avoid circular dependency
+  const { authManager } = await import("./auth")
+  const auth = authManager.getState()
+
+  // Use provided token or get from auth manager
+  const authToken = token || auth.accessToken
+
   const config: RequestInit = {
     method,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(authToken && { Authorization: `Bearer ${authToken}` }),
     },
   }
 
@@ -52,6 +60,16 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}) {
 
   const url = `${API_BASE}${endpoint}`
   const response = await fetch(url, config)
+
+  if (response.status === 401) {
+    // Give authManager a chance to refresh or prompt login
+    try {
+      if (authManager && typeof authManager.refreshAccessToken === "function") {
+        await authManager.refreshAccessToken()
+      }
+    } catch {}
+    throw new Error(`HTTP 401: ${await response.text()}`)
+  }
 
   if (!response.ok) {
     const error = await response.text()

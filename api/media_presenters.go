@@ -40,6 +40,7 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -276,7 +277,6 @@ func toPostResponseFromMediaRow(row db.GetPostsByMediaRow) PostWithMediaOrderRes
 			ID:          row.ID,
 			Title:       row.Title,
 			Description: row.Description,
-			Content:     row.Content,
 			UserID:      row.UserID,
 			Username:    row.Username,
 			Url:         row.Url,
@@ -289,5 +289,34 @@ func toPostResponseFromMediaRow(row db.GetPostsByMediaRow) PostWithMediaOrderRes
 		},
 		MediaOrder:       row.MediaOrder,
 		RelationshipType: row.RelationshipType,
+	}
+}
+
+// toPostResponseFromUserMediaRow converts GetPostsByUserWithMediaRow to PostResponse
+func toPostResponseFromUserMediaRow(row db.GetPostsByUserWithMediaRow) PostResponse {
+	var postParent *int64
+	if row.PostParent.Valid {
+		postParent = &row.PostParent.Int64
+	}
+
+	var publishedBlocks map[string]interface{}
+	if row.PublishedBlockDoc.Valid {
+		json.Unmarshal(row.PublishedBlockDoc.RawMessage, &publishedBlocks)
+	}
+
+	return PostResponse{
+		ID:              row.ID,
+		Title:           row.Title,
+		Description:     row.Description,
+		PublishedBlocks: publishedBlocks,
+		UserID:          row.UserID,
+		Username:        row.Username,
+		Url:             row.Url,
+		PostType:        row.PostType,
+		PostStatus:      row.PostStatus,
+		PostParent:      postParent,
+		MenuOrder:       row.MenuOrder,
+		CreatedAt:       row.CreatedAt,
+		ChangedAt:       row.ChangedAt,
 	}
 }

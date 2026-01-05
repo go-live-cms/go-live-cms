@@ -3,14 +3,28 @@ import FormattedDate from '@/components/FormattedDate.astro'
 import BaseHead from '@/components/BaseHead.astro'
 import Header from '@/layouts/Header.astro'
 import Footer from '@/layouts/Footer.astro'
-import TipTapContent from '@/components/TipTapContent.astro'
+import BlockRenderer from '@/components/BlockRenderer'
 import { SITE_TITLE } from '../../consts'
-import { getPostsByType, getPostById } from '../../lib/api'
+import { getPostsByType, getPostById, getPostBySlug, getSettings } from '../../lib/api'
+import type { Post } from '@gl-admin/lib/api/types'
 
 export async function getStaticPaths() {
   const postTypes = ['post', 'page']
   
-  const paths = []
+  // Fetch settings to determine URL structure
+  let urlStructure = 'id' // default
+  try {
+    const settings = await getSettings()
+    urlStructure = settings.post_url_structure || 'id'
+    console.log('Using URL structure:', urlStructure)
+  } catch (error) {
+    console.warn('Could not fetch settings, using ID-based URLs:', error)
+  }
+  
+  const paths: Array<{
+    params: { 'post_type': string; id: string }
+    props: { post: Post; postType: string }
+  }> = []
   
   for (const postType of postTypes) {
     try {
@@ -18,11 +32,14 @@ export async function getStaticPaths() {
         status: 'published'
       })
       
-      posts.forEach((post: any) => {
+      posts.forEach((post: Post) => {
+        // Generate path based on URL structure setting
+        const pathId = urlStructure === 'slug' && post.slug ? post.slug : post.id.toString()
+        
         paths.push({
           params: { 
             'post_type': postType,
-            id: post.id.toString()
+            id: pathId
           },
           props: { post, postType }
         })
@@ -32,32 +49,44 @@ export async function getStaticPaths() {
     }
   }
   
+  console.log(`Generated ${paths.length} paths with structure: ${urlStructure}`)
   return paths
 }
 
-const { 'post_type': postType, id } = Astro.params 
-const { post } = Astro.props
+const { 'post_type': postType, id } = Astro.params as { 'post_type': string; id: string }
+const { post } = Astro.props as { post?: Post }
 
-console.log(`Rendering ${postType} with ID:`, id)
+console.log(`Rendering ${postType} with ID/slug:`, id)
+
+let fullPost: Post | undefined = post
+
+// Determine if ID is numeric (ID-based) or not (slug-based)
+const isNumeric = /^\d+$/.test(id)
 
 if (!post) {
-  console.error(`Post not found in props for ${postType} ID:`, id)
+  console.error(`Post not found in props for ${postType} ID/slug:`, id)
   
   try {
-    console.log(`Attempting to fetch ${postType} directly for ID:`, id)
-    const postResponse = await getPostById(id)
+    console.log(`Attempting to fetch ${postType} directly for ID/slug:`, id)
+    let postResponse
+    if (isNumeric) {
+      postResponse = await getPostById(id)
+    } else {
+      postResponse = await getPostBySlug(id)
+    }
+    
     if (postResponse && postResponse.post) {
       console.log('Found post via direct fetch:', postResponse.post.title)
-      const fullPost = postResponse.post
+      fullPost = postResponse.post
     } else {
-      console.error(`Post not found via direct fetch for ${postType} ID:`, id)
+      console.error(`Post not found via direct fetch for ${postType} ID/slug:`, id)
       return new Response(null, {
         status: 404,
         statusText: 'Post Not Found'
       })
     }
   } catch (error) {
-    console.error(`Error fetching ${postType} directly for ID:`, id, 'Error:', error)
+    console.error(`Error fetching ${postType} directly for ID/slug:`, id, 'Error:', error)
     return new Response(null, {
       status: 404,
       statusText: 'Post Not Found'
@@ -65,28 +94,38 @@ if (!post) {
   }
 }
 
-let fullPost = post
 if (post) {
   try {
-    console.log(`Fetching fresh ${postType} data for ID:`, id)
-    const postResponse = await getPostById(id)
+    console.log(`Fetching fresh ${postType} data for ID/slug:`, id)
+    let postResponse
+    if (isNumeric) {
+      postResponse = await getPostById(id)
+    } else {
+      postResponse = await getPostBySlug(id)
+    }
+    
     if (postResponse && postResponse.post) {
       fullPost = postResponse.post
       console.log(`Successfully fetched fresh ${postType} data:`, fullPost.title)
     }
   } catch (error) {
-    console.warn(`Could not fetch fresh ${postType} data for ID:`, id, 'Error:', error.message)
+    console.warn(`Could not fetch fresh ${postType} data for ID/slug:`, id, 'Error:', error.message)
     fullPost = post
   }
 }
 
 if (!fullPost) {
   try {
-    console.log(`Final attempt to fetch ${postType} for ID:`, id)
-    const postResponse = await getPostById(id)
+    console.log(`Final attempt to fetch ${postType} for ID/slug:`, id)
+    let postResponse
+    if (isNumeric) {
+      postResponse = await getPostById(id)
+    } else {
+      postResponse = await getPostBySlug(id)
+    }
     fullPost = postResponse.post
   } catch (error) {
-    console.error(`Final fetch attempt failed for ${postType} ID:`, id)
+    console.error(`Final fetch attempt failed for ${postType} ID/slug:`, id)
     return new Response(null, {
       status: 404,
       statusText: 'Post Not Found'
@@ -283,7 +322,13 @@ const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
             <h1>{fullPost.title}</h1>
             <hr />
           </div>
-          <TipTapContent content={fullPost.content} class="content" />
+          {fullPost.published_blocks ? (
+            <BlockRenderer doc={fullPost.published_blocks} client:load />
+          ) : (
+            <div class="content">
+              <p>No published content available.</p>
+            </div>
+          )}
         </div>
       </article>
     </main>

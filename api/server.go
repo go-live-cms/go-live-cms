@@ -94,7 +94,7 @@ func (server *Server) setupRoutes() {
 				"http://web:4321",
 			},
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "If-Match", "ETag", "X-Revision"},
 			AllowCredentials: true,
 		}))
 	} else {
@@ -102,12 +102,13 @@ func (server *Server) setupRoutes() {
 		router.Use(cors.New(cors.Config{
 			AllowOrigins:     []string{"https://yourdomain.com"},
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "If-Match", "ETag", "X-Revision"},
 			AllowCredentials: true,
 		}))
 	}
 
 	v1 := router.Group("/api/v1")
+	public := router.Group("/public") // Public API group for SSR/public content
 
 	router.GET("/health", server.healthCheck)
 
@@ -133,6 +134,12 @@ func (server *Server) setupRoutes() {
 
 	// Media module routes (see media_routes.go for complete definitions)
 	server.registerMediaRoutes(v1)
+
+	// Settings module routes (see settings_routes.go for complete definitions)
+	server.RegisterSettingsRoutes(v1)
+
+	// Public API routes for SSR/public content
+	server.registerPublicRoutes(public)
 
 	router.Static("/uploads", "./uploads")
 

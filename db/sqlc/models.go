@@ -13,6 +13,15 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+type ExtensionSetting struct {
+	Key           string          `json:"key"`
+	Value         json.RawMessage `json:"value"`
+	ExtensionType string          `json:"extension_type"`
+	ExtensionID   string          `json:"extension_id"`
+	CreatedAt     time.Time       `json:"created_at"`
+	ChangedAt     time.Time       `json:"changed_at"`
+}
+
 type Medium struct {
 	ID               int64           `json:"id"`
 	Name             string          `json:"name"`
@@ -32,19 +41,23 @@ type Medium struct {
 }
 
 type Post struct {
-	ID          int64         `json:"id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	Content     string        `json:"content"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
-	CreatedAt   time.Time     `json:"created_at"`
-	ChangedAt   time.Time     `json:"changed_at"`
+	ID                 int64                 `json:"id"`
+	Title              string                `json:"title"`
+	Description        string                `json:"description"`
+	UserID             int64                 `json:"user_id"`
+	Username           string                `json:"username"`
+	Url                string                `json:"url"`
+	PostType           string                `json:"post_type"`
+	PostStatus         string                `json:"post_status"`
+	PostParent         sql.NullInt64         `json:"post_parent"`
+	MenuOrder          int32                 `json:"menu_order"`
+	CreatedAt          time.Time             `json:"created_at"`
+	ChangedAt          time.Time             `json:"changed_at"`
+	BlockDoc           json.RawMessage       `json:"block_doc"`
+	BlockRevision      int64                 `json:"block_revision"`
+	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug               string                `json:"slug"`
 }
 
 type PostMedium struct {
@@ -80,6 +93,18 @@ type PostType struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
+type PostVersion struct {
+	ID        int64           `json:"id"`
+	PostID    int64           `json:"post_id"`
+	VersionNo int32           `json:"version_no"`
+	Status    string          `json:"status"`
+	Label     sql.NullString  `json:"label"`
+	Message   sql.NullString  `json:"message"`
+	BlockDoc  json.RawMessage `json:"block_doc"`
+	CreatedBy sql.NullInt64   `json:"created_by"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
 type Session struct {
 	ID               uuid.UUID      `json:"id"`
 	UserID           int64          `json:"user_id"`
@@ -94,6 +119,15 @@ type Session struct {
 	Jti              uuid.NullUUID  `json:"jti"`
 	RotatedAt        sql.NullTime   `json:"rotated_at"`
 	ReplacedBy       uuid.NullUUID  `json:"replaced_by"`
+}
+
+type Setting struct {
+	ID               int32          `json:"id"`
+	PostUrlStructure string         `json:"post_url_structure"`
+	SiteTitle        sql.NullString `json:"site_title"`
+	PostsPerPage     sql.NullInt32  `json:"posts_per_page"`
+	CreatedAt        time.Time      `json:"created_at"`
+	ChangedAt        time.Time      `json:"changed_at"`
 }
 
 type TaxonomyTerm struct {

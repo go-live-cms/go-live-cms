@@ -1,0 +1,16 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+# Copy package files first for better caching
+COPY package*.json ./
+RUN npm install
+
+# Copy source (compose will also mount a volume for live code)
+COPY . .
+
+ENV NODE_ENV=development
+ENV HOST=0.0.0.0
+EXPOSE 1234
+
+CMD ["npm","run","dev"]

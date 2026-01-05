@@ -23,7 +23,6 @@ export interface Post {
   id: number
   title: string
   description: string
-  content: string
   user_id: number
   username: string
   post_type: string

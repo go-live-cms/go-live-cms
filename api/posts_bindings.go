@@ -15,7 +15,6 @@ package api
 // CreatePostRequest defines the JSON structure for POST /posts
 type CreatePostRequest struct {
 	Title       string  `json:"title" binding:"required,min=3,max=255"`
-	Content     string  `json:"content" binding:"required,min=10"`
 	Description string  `json:"description" binding:"required,min=10,max=500"`
 	Url         string  `json:"url" binding:"required,url"`
 	PostType    string  `json:"post_type" binding:"omitempty"`
@@ -30,7 +29,6 @@ type CreatePostRequest struct {
 // UpdatePostRequest defines the JSON structure for PUT /posts/:id
 type UpdatePostRequest struct {
 	Title       string  `json:"title" binding:"omitempty,min=3,max=255"`
-	Content     string  `json:"content" binding:"omitempty,min=10"`
 	Description string  `json:"description" binding:"omitempty,min=10,max=500"`
 	Url         string  `json:"url" binding:"omitempty,url"`
 	PostType    string  `json:"post_type" binding:"omitempty"`

@@ -2,13 +2,19 @@
   "name": "yjs-websocket-server",
   "version": "1.0.0",
   "type": "module",
-  "description": "Yjs WebSocket collaboration server",
+  "description": "Yjs WebSocket collaboration server with PASETO v4.public authentication",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon --signal SIGTERM --watch . server.js"
   },
   "dependencies": {
     "y-websocket": "^2.0.4",
-    "ws": "^8.16.0"
+    "ws": "^8.16.0",
+    "paseto": "^3.1.2",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
   }
 }
