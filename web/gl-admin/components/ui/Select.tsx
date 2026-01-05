@@ -15,9 +15,10 @@ export type SelectProps = {
   onChange: (value: string) => void
   label?: string
   disabled?: boolean
+  bordered?: boolean
 }
 
-export const Select: React.FC<SelectProps> = ({ options, value, onChange, label, disabled = false }) => {
+export const Select: React.FC<SelectProps> = ({ options, value, onChange, label, disabled = false, bordered = false }) => {
   const {
     open,
     setOpen,
@@ -30,8 +31,15 @@ export const Select: React.FC<SelectProps> = ({ options, value, onChange, label,
   const { isDark } = useGoLive()
   const iconColor = isDark ? "#FFFFFF" : "#333536"
 
+  const selectClasses = [
+    "gl-select",
+    bordered ? "gl-select--bordered" : "",
+    open && bordered ? "is-focused" : "",
+    (selected || value) && bordered ? "is-filled" : ""
+  ].filter(Boolean).join(" ")
+
   return (
-    <div className="gl-select" ref={ref} style={{ position: "relative" }}>
+    <div className={selectClasses} ref={ref} style={{ position: "relative" }}>
       {label && <label className="gl-select__label">{label}</label>}
       <div
         className={`gl-select__selected${disabled ? " gl-select__selected--disabled" : ""}`}

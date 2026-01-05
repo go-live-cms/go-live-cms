@@ -42,16 +42,7 @@
       color: var(--select-disabled-color);
       cursor: not-allowed;
     }
-  }
 
-  &__arrow {
-    color: var(--text-secondary);
-    font-size: 0.8em;
-    pointer-events: none;
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
   }
 
   &__options {
@@ -84,5 +75,81 @@
           color: var(--select-option-selected-color);
           font-weight: 500;
         }
+  }
+
+  &--bordered {
+    --height: 3.4rem;
+    --radius: 0.25rem;
+    --pad-x: 0.875rem;
+    --pad-y: 0.625rem;
+
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    height: var(--height);
+    transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+
+    &.is-focused {
+      border-color: var(--input-focused-border-color);
+      box-shadow: var(--input-focused-box-shadow);
     }
+
+    .gl-select__label {
+      color: var(--input-label-color);
+      display: block;
+      font-size: 1rem;
+      left: var(--pad-x);
+      margin-bottom: 0;
+      pointer-events: none;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      transition:
+        transform 140ms ease,
+        top 140ms ease,
+        font-size 140ms ease,
+        color 140ms ease;
+      white-space: nowrap;
+    }
+
+    &.is-focused .gl-select__label,
+    &.is-filled .gl-select__label {
+      color: var(--input-active-color);
+      font-size: 0.8rem;
+      top: 0.25rem;
+      transform: none;
+    }
+
+    .gl-select__selected {
+      background: transparent;
+      border-radius: 0;
+      height: 100%;
+      justify-content: flex-start;
+      padding: var(--pad-y) var(--pad-x);
+      padding-right: 2rem;
+      padding-top: calc(var(--pad-y) + 0.625rem);
+
+      &:hover {
+        background: transparent;
+      }
+
+      & > :last-child {
+        position: absolute;
+        right: var(--pad-x);
+        top: 50%;
+        transform: translateY(-50%);
+      }
+    }
+
+    .gl-select__placeholder {
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-align: left;
+    }
+
+    .gl-select__options {
+      border-radius: 0 0 var(--radius) var(--radius);
+      margin-top: 0;
+      top: 100%;
+    }
+  }
 }
