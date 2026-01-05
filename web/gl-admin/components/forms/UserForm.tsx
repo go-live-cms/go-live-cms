@@ -234,18 +234,13 @@ export default function UserForm({
                     value={formData.confirm_password || ""}
                     onChange={(e: any) => handleChange("confirm_password", e.currentTarget?.value ?? e.target?.value ?? "")}
                 />
-
-                <div className="flex gap-4 md:col-span-2">
-                    <div className="flex-1">
-                        <Select
-                            label="Role"
-                            options={roleOptions}
-                            value={formData.role || ""}
-                            onChange={(val) => handleChange("role", val)}
-                            bordered
-                        />
-                    </div>
-                </div>
+                <Select
+                    label="Role"
+                    options={roleOptions}
+                    value={formData.role || ""}
+                    onChange={(val) => handleChange("role", val)}
+                    bordered
+                />
             </div>
 
             <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
