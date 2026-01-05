@@ -182,9 +182,6 @@ export default function UserForm({
                 <h1 className="font-semibold">
                     {mode === "create" ? "Create User" : "Edit User"}
                 </h1>
-                <div className={saveStatus === "error" ? "text-red-600" : "text-gray-500"}>
-                    {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Error" : ""}
-                </div>
                 <div className="ml-auto flex gap-2">
                     <Button
                         type="button"
