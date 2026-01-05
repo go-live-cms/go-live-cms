@@ -5,6 +5,7 @@ import Listing from "@gl-admin/layouts/Listing"
 import Pagination from "@gl-admin/components/ui/Pagination"
 import Username from "@gl-admin/components/ui/Username"
 import DateTime from "@gl-admin/components/ui/DateTime"
+import UserRole from "@gl-admin/components/ui/UserRole"
 import Button from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
@@ -35,6 +36,7 @@ const Users: React.FC = () => {
             key: "role",
             name: "Role",
             width: "15rem",
+            render: (_, row) => <UserRole role={row?.role || null} />,
         },
         {
             key: "created_at",
