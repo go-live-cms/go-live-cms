@@ -28,7 +28,7 @@ type UserFormProps = {
 
 const DEFAULT_ROLE_OPTIONS: SelectOption[] = [
     { value: "viewer", label: "Viewer" },
-    { value: "editor", label: "Editor" },
+    { value: "moderator", label: "Moderator" },
     { value: "author", label: "Author" },
     { value: "admin", label: "Administrator" },
 ]
@@ -57,6 +57,7 @@ export default function UserForm({
     const { toasts, showSuccess, showError, removeToast } = useToast()
     const [isSaving, setIsSaving] = useState(false)
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
+    const [showPasswordFields, setShowPasswordFields] = useState(mode === "create")
     const accessToken = AuthManager.getInstance().getAccessToken() || ""
 
     const [formData, setFormData] = useState<UserFormData>({
@@ -221,20 +222,24 @@ export default function UserForm({
                     value={formData.email}
                     onChange={(e: any) => handleChange("email", e.currentTarget?.value ?? e.target?.value ?? "")}
                 />
-                <Input
-                    title="Password"
-                    type="password"
-                    name="password"
-                    value={formData.password || ""}
-                    onChange={(e: any) => handleChange("password", e.currentTarget?.value ?? e.target?.value ?? "")}
-                />
-                <Input
-                    title="Confirm password"
-                    type="password"
-                    name="confirm_password"
-                    value={formData.confirm_password || ""}
-                    onChange={(e: any) => handleChange("confirm_password", e.currentTarget?.value ?? e.target?.value ?? "")}
-                />
+                {mode === "create" && (
+                    <>
+                        <Input
+                            title="Password"
+                            type="password"
+                            name="password"
+                            value={formData.password || ""}
+                            onChange={(e: any) => handleChange("password", e.currentTarget?.value ?? e.target?.value ?? "")}
+                        />
+                        <Input
+                            title="Confirm password"
+                            type="password"
+                            name="confirm_password"
+                            value={formData.confirm_password || ""}
+                            onChange={(e: any) => handleChange("confirm_password", e.currentTarget?.value ?? e.target?.value ?? "")}
+                        />
+                    </>
+                )}
                 <Select
                     label="Role"
                     options={roleOptions}
@@ -243,6 +248,51 @@ export default function UserForm({
                     bordered
                 />
             </div>
+
+            {/* Change Password Section (Edit Mode Only) */}
+            {mode === "edit" && (
+                <div className="user-form__password-section mt-6 border-t pt-6">
+                    {!showPasswordFields ? (
+                        <Button
+                            type="button"
+                            onClick={() => setShowPasswordFields(true)}
+                        >
+                            Change Password
+                        </Button>
+                    ) : (
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-medium">Change Password</h3>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <Input
+                                    title="New Password"
+                                    type="password"
+                                    name="password"
+                                    value={formData.password || ""}
+                                    onChange={(e: any) => handleChange("password", e.currentTarget?.value ?? e.target?.value ?? "")}
+                                />
+                                <Input
+                                    title="Confirm New Password"
+                                    type="password"
+                                    name="confirm_password"
+                                    value={formData.confirm_password || ""}
+                                    onChange={(e: any) => handleChange("confirm_password", e.currentTarget?.value ?? e.target?.value ?? "")}
+                                />
+                            </div>
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    setShowPasswordFields(false)
+                                    handleChange("password", "")
+                                    handleChange("confirm_password", "")
+                                }}
+                                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50"
+                            >
+                                Cancel Password Change
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )}
 
             <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
         </div>

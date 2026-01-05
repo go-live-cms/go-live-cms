@@ -14,8 +14,8 @@ export async function getUsers(
   }
 }
 
-export async function getUserById(id: string | number): Promise<{ user: User }> {
-  return apiCall(`/users/${id}`)
+export async function getUserById(id: string | number, token?: string): Promise<{ user: User }> {
+  return apiCall(`/users/id/${id}`, { token })
 }
 
 export async function getUserByUsername(username: string): Promise<{ user: User }> {

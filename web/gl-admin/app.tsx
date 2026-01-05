@@ -7,6 +7,7 @@ import "@gl-admin/assets/styles/global.scss"
 import NewPost from "./pages/NewPost"
 import NewPage from "./pages/NewPage"
 import NewUser from "./pages/NewUser"
+import EditUser from "./pages/EditUser"
 import EditContent from "./pages/EditPost"
 import { useRouteClasses } from "./utils/useRouteClasses"
 
@@ -45,6 +46,7 @@ function AppLayout() {
             <Route path="/media" element={<Media />} />
             <Route path="/users" element={<Users />} />
             <Route path="/users/new" element={<NewUser />} />
+            <Route path="/users/edit/:id" element={<EditUser />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/tools/backfill-blocks" element={<BackfillBlocks />} />
           </Routes>

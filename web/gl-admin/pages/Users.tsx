@@ -49,7 +49,7 @@ const Users: React.FC = () => {
     }
 
     const handleRowDoubleClick = (user: User) => {
-        navigate(`/user/edit/${user.id}`)
+        navigate(`/users/edit/${user.id}`)
     }
 
     const fetchData = useCallback(
