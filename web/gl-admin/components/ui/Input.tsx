@@ -132,7 +132,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           <IMaskInput
             id={inputId}
             ref={ref}
-            type="text"
+            type={type === "password" ? "password" : "text"}
             className="gl-input__field"
             placeholder=" "
             value={value as any}
