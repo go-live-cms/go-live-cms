@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react"
 import Input from "@gl-admin/components/ui/Input"
+import Button from "@gl-admin/components/ui/Button"
 import Select, { type SelectOption } from "@gl-admin/components/ui/Select"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { createUser, updateUser } from "@gl-admin/lib/api/users"
@@ -26,10 +27,10 @@ type UserFormProps = {
 }
 
 const DEFAULT_ROLE_OPTIONS: SelectOption[] = [
-    { value: "admin", label: "Administrator" },
+    { value: "viewer", label: "Viewer" },
     { value: "editor", label: "Editor" },
     { value: "author", label: "Author" },
-    { value: "viewer", label: "Viewer" },
+    { value: "admin", label: "Administrator" },
 ]
 
 function toUsername(seed?: string) {
@@ -176,15 +177,15 @@ export default function UserForm({
 
     return (
         <div className="user-form">
-            <div className="user-form__bar mb-4 flex items-center gap-3">
-                <div className="font-semibold">
+            <div className="admin-topbar">
+                <h1 className="font-semibold">
                     {mode === "create" ? "Create User" : "Edit User"}
-                </div>
+                </h1>
                 <div className={saveStatus === "error" ? "text-red-600" : "text-gray-500"}>
                     {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Error" : ""}
                 </div>
                 <div className="ml-auto flex gap-2">
-                    <button
+                    <Button
                         type="button"
                         onClick={handleSave}
                         disabled={isSaving}
@@ -193,19 +194,12 @@ export default function UserForm({
                         title="Save (Ctrl/Cmd+S)"
                     >
                         {isSaving ? "Saving…" : "Save"}
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             {/* Main form fields */}
             <div className="user-form__fields grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Input
-                    title="Email"
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={(e: any) => handleChange("email", e.currentTarget?.value ?? e.target?.value ?? "")}
-                />
                 <Input
                     title="Username"
                     type="text"
@@ -219,6 +213,13 @@ export default function UserForm({
                     name="full_name"
                     value={formData.full_name || ""}
                     onChange={(e: any) => handleChange("full_name", e.currentTarget?.value ?? e.target?.value ?? "")}
+                />
+                <Input
+                    title="Email"
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={(e: any) => handleChange("email", e.currentTarget?.value ?? e.target?.value ?? "")}
                 />
                 <Input
                     title="Password"
