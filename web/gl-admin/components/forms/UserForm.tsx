@@ -242,6 +242,7 @@ export default function UserForm({
                             options={roleOptions}
                             value={formData.role || ""}
                             onChange={(val) => handleChange("role", val)}
+                            bordered
                         />
                     </div>
                 </div>
