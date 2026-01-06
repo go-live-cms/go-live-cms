@@ -1,0 +1,125 @@
+---
+/**
+ * Base Layout - Shared HTML structure
+ * All theme layouts should extend this
+ */
+import themeConfig from '../theme.config'
+import '@/assets/styles/global.css'
+
+interface Props {
+  title: string
+  description: string
+  theme?: 'light' | 'dark' | 'system'
+}
+
+const { title, description, theme = 'system' } = Astro.props
+
+// Get colors from theme config for CSS variables
+const { colors, typography, layout } = themeConfig
+---
+
+<!doctype html>
+<html lang="en" data-theme={theme}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    
+    <style define:vars={{
+      // Light mode colors (RGB values for use with rgb())
+      'color-primary-light': colors.light.primary,
+      'color-secondary-light': colors.light.secondary,
+      'color-background-light': colors.light.background,
+      'color-surface-light': colors.light.surface,
+      'color-text-light': colors.light.text,
+      'color-text-muted-light': colors.light.textMuted,
+      'color-border-light': colors.light.border,
+      'color-accent-light': colors.light.accent,
+      
+      // Dark mode colors
+      'color-primary-dark': colors.dark.primary,
+      'color-secondary-dark': colors.dark.secondary,
+      'color-background-dark': colors.dark.background,
+      'color-surface-dark': colors.dark.surface,
+      'color-text-dark': colors.dark.text,
+      'color-text-muted-dark': colors.dark.textMuted,
+      'color-border-dark': colors.dark.border,
+      'color-accent-dark': colors.dark.accent,
+      
+      // Typography
+      'font-base': typography.fontFamily.base,
+      'font-heading': typography.fontFamily.heading,
+      'font-mono': typography.fontFamily.mono,
+      
+      // Layout
+      'container-width': layout.container,
+      'gutter': layout.gutter,
+    }}>
+      :root {
+        /* Colors - Light mode (default) */
+        --color-primary: var(--color-primary-light);
+        --color-secondary: var(--color-secondary-light);
+        --color-background: var(--color-background-light);
+        --color-surface: var(--color-surface-light);
+        --color-text: var(--color-text-light);
+        --color-text-muted: var(--color-text-muted-light);
+        --color-border: var(--color-border-light);
+        --color-accent: var(--color-accent-light);
+        
+        /* Typography */
+        --font-base: var(--font-base);
+        --font-heading: var(--font-heading);
+        --font-mono: var(--font-mono);
+        
+        /* Layout */
+        --container-width: var(--container-width);
+        --gutter: var(--gutter);
+      }
+      
+      [data-theme="dark"] {
+        /* Colors - Dark mode */
+        --color-primary: var(--color-primary-dark);
+        --color-secondary: var(--color-secondary-dark);
+        --color-background: var(--color-background-dark);
+        --color-surface: var(--color-surface-dark);
+        --color-text: var(--color-text-dark);
+        --color-text-muted: var(--color-text-muted-dark);
+        --color-border: var(--color-border-dark);
+        --color-accent: var(--color-accent-dark);
+      }
+      
+      body {
+        font-family: var(--font-base);
+        background-color: rgb(var(--color-background));
+        color: rgb(var(--color-text));
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+    
+    <!-- Theme preference handler (prevents FOUC) -->
+    <script is:inline>
+      // Immediately apply theme preference before render
+      (function() {
+        const storageKey = 'gl-theme-preference'
+        const stored = localStorage.getItem(storageKey) || 'system'
+        
+        let theme = stored
+        if (stored === 'system') {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        
+        document.documentElement.setAttribute('data-theme', theme)
+      })()
+    </script>
+    
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+    <slot name="footer-scripts" />
+  </body>
+</html>

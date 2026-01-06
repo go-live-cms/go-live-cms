@@ -2,15 +2,15 @@
 import Page from "@/layouts/Page.astro"
 import FormattedDate from "@/components/FormattedDate.astro"
 import { SITE_TITLE } from "@/consts"
-import { api } from "@gl-admin/lib/api"
-import type { User } from "@gl-admin/lib/types"
+import { getUsers } from "@gl-admin/lib/api/users"
+import type { User } from "@gl-admin/lib/api/types"
 
 let users: User[] = []
 let error: string | null = null
 
 try {
-  const response = await api.getUsers()
-  users = response.data
+  const response = await getUsers()
+  users = response.data || []
 } catch (e) {
   error = e instanceof Error ? e.message : "Failed to fetch users"
   console.error("Error fetching users:", e)
