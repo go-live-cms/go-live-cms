@@ -1,0 +1,124 @@
+---
+/**
+ * Wide Post Layout
+ * Full-width content layout for immersive reading
+ */
+import BaseLayout from '../base.astro'
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import FormattedDate from '@/components/FormattedDate.astro'
+import BlockRenderer from '@/components/BlockRenderer'
+import type { Post } from '@gl-admin/lib/api/types'
+
+interface Props {
+  post: Post
+  title: string
+  description: string
+}
+
+const { post, title, description } = Astro.props
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  
+  <main class="post-layout-wide">
+    <article class="post-container-wide">
+      <header class="post-header">
+        {post.featured_image && (
+          <img 
+            src={post.featured_image} 
+            alt={post.title}
+            class="featured-image"
+          />
+        )}
+        <div class="header-content">
+          <h1 class="post-title">{post.title}</h1>
+          
+          <div class="post-meta">
+            <FormattedDate date={new Date(post.created_at)} />
+            <span class="author">by {post.username}</span>
+          </div>
+        </div>
+      </header>
+      
+      <div class="post-content">
+        {post.published_blocks && (
+          <BlockRenderer doc={post.published_blocks} client:load />
+        )}
+      </div>
+    </article>
+  </main>
+  
+  <Footer />
+</BaseLayout>
+
+<style>
+  .post-layout-wide {
+    min-height: 80vh;
+  }
+  
+  .post-container-wide {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  
+  .post-header {
+    margin-bottom: 3rem;
+  }
+  
+  .featured-image {
+    width: 100%;
+    height: 500px;
+    object-fit: cover;
+    margin-bottom: 0;
+  }
+  
+  .header-content {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 3rem var(--gutter) 0;
+  }
+  
+  .post-title {
+    font-family: var(--font-heading);
+    font-size: 3rem;
+    line-height: 1.2;
+    margin: 0 0 1rem 0;
+    color: rgb(var(--color-text));
+  }
+  
+  .post-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    color: rgb(var(--color-text-muted));
+    font-size: 0.875rem;
+  }
+  
+  .post-content {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 var(--gutter) var(--gutter);
+    font-size: 1.125rem;
+    line-height: 1.7;
+  }
+  
+  @media (max-width: 768px) {
+    .featured-image {
+      height: 300px;
+    }
+    
+    .header-content {
+      padding: 2rem 1rem 0;
+    }
+    
+    .post-title {
+      font-size: 2rem;
+    }
+    
+    .post-content {
+      padding: 0 1rem 2rem;
+    }
+  }
+</style>
