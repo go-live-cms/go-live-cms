@@ -1,0 +1,111 @@
+---
+/**
+ * Default Post Layout
+ * Clean, centered layout for blog posts
+ */
+import BaseLayout from '../base.astro'
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import FormattedDate from '@/components/FormattedDate.astro'
+import BlockRenderer from '@/components/BlockRenderer'
+import type { Post } from '@gl-admin/lib/api/types'
+
+interface Props {
+  post: Post
+  title: string
+  description: string
+}
+
+const { post, title, description } = Astro.props
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  
+  <main class="post-layout-default">
+    <article class="post-container">
+      <header class="post-header">
+        {post.featured_image && (
+          <img 
+            src={post.featured_image} 
+            alt={post.title}
+            class="featured-image"
+          />
+        )}
+        <h1 class="post-title">{post.title}</h1>
+        
+        <div class="post-meta">
+          <FormattedDate date={new Date(post.created_at)} />
+          <span class="author">by {post.username}</span>
+        </div>
+      </header>
+      
+      <div class="post-content">
+        {post.published_blocks && (
+          <BlockRenderer doc={post.published_blocks} client:load />
+        )}
+      </div>
+    </article>
+  </main>
+  
+  <Footer />
+</BaseLayout>
+
+<style>
+  .post-layout-default {
+    min-height: 80vh;
+  }
+  
+  .post-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: var(--gutter);
+  }
+  
+  .post-header {
+    margin-bottom: 3rem;
+  }
+  
+  .featured-image {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+  }
+  
+  .post-title {
+    font-family: var(--font-heading);
+    font-size: 2.5rem;
+    line-height: 1.2;
+    margin: 0 0 1rem 0;
+    color: rgb(var(--color-text));
+  }
+  
+  .post-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    color: rgb(var(--color-text-muted));
+    font-size: 0.875rem;
+  }
+  
+  .author {
+    display: flex;
+    align-items: center;
+  }
+  
+  .post-content {
+    font-size: 1.125rem;
+    line-height: 1.7;
+  }
+  
+  @media (max-width: 768px) {
+    .post-container {
+      padding: 1rem;
+    }
+    
+    .post-title {
+      font-size: 2rem;
+    }
+  }
+</style>

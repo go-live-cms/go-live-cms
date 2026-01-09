@@ -1,0 +1,159 @@
+---
+/**
+ * Post Layout with Sidebar
+ * Two-column layout with sidebar for additional content
+ */
+import BaseLayout from '../base.astro'
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import FormattedDate from '@/components/FormattedDate.astro'
+import BlockRenderer from '@/components/BlockRenderer'
+import type { Post } from '@gl-admin/lib/api/types'
+
+interface Props {
+  post: Post
+  title: string
+  description: string
+}
+
+const { post, title, description } = Astro.props
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  
+  <main class="post-layout-sidebar">
+    <div class="layout-container">
+      <article class="post-main">
+        <header class="post-header">
+          {post.featured_image && (
+            <img 
+              src={post.featured_image} 
+              alt={post.title}
+              class="featured-image"
+            />
+          )}
+          <h1 class="post-title">{post.title}</h1>
+          
+          <div class="post-meta">
+            <FormattedDate date={new Date(post.created_at)} />
+            <span class="author">by {post.username}</span>
+          </div>
+        </header>
+        
+        <div class="post-content">
+          {post.published_blocks && (
+            <BlockRenderer doc={post.published_blocks} client:load />
+          )}
+        </div>
+      </article>
+      
+      <aside class="post-sidebar">
+        <div class="sidebar-widget">
+          <h3>About</h3>
+          <p>Sidebar content goes here. This could include author info, related posts, categories, etc.</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+  
+  <Footer />
+</BaseLayout>
+
+<style>
+  .post-layout-sidebar {
+    min-height: 80vh;
+  }
+  
+  .layout-container {
+    max-width: var(--container-width);
+    margin: 0 auto;
+    padding: var(--gutter);
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 3rem;
+  }
+  
+  .post-main {
+    min-width: 0; /* Prevent grid blowout */
+  }
+  
+  .post-header {
+    margin-bottom: 3rem;
+  }
+  
+  .featured-image {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+  }
+  
+  .post-title {
+    font-family: var(--font-heading);
+    font-size: 2.5rem;
+    line-height: 1.2;
+    margin: 0 0 1rem 0;
+    color: rgb(var(--color-text));
+  }
+  
+  .post-meta {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    color: rgb(var(--color-text-muted));
+    font-size: 0.875rem;
+  }
+  
+  .post-content {
+    font-size: 1.125rem;
+    line-height: 1.7;
+  }
+  
+  .post-sidebar {
+    position: sticky;
+    top: 2rem;
+    height: fit-content;
+  }
+  
+  .sidebar-widget {
+    background: rgb(var(--color-surface));
+    border: 1px solid rgb(var(--color-border));
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .sidebar-widget h3 {
+    margin-top: 0;
+    font-size: 1.25rem;
+    color: rgb(var(--color-text));
+  }
+  
+  .sidebar-widget p {
+    color: rgb(var(--color-text-muted));
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+  
+  @media (max-width: 1024px) {
+    .layout-container {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+    
+    .post-sidebar {
+      position: static;
+    }
+  }
+  
+  @media (max-width: 768px) {
+    .layout-container {
+      padding: 1rem;
+    }
+    
+    .post-title {
+      font-size: 2rem;
+    }
+  }
+</style>
