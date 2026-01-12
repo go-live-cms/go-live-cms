@@ -100,21 +100,6 @@ try {
     }
 
     {
-      popularTaxonomies.length > 0 && (
-        <section class="popular-section">
-          <h2>Popular Tags</h2>
-          <div class="popular-tags">
-            {popularTaxonomies.map((taxonomy) => (
-              <a href={`/taxonomies/${taxonomy.id}`} class="popular-tag">
-                {taxonomy.name}
-              </a>
-            ))}
-          </div>
-        </section>
-      )
-    }
-
-    {
       taxonomies.length > 0 && (
         <div class="taxonomies-grid">
           {taxonomies.map((taxonomy) => (
