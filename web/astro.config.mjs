@@ -44,3 +44,4 @@ export default defineConfig({
   },
   output: "server",
 })
+// TODO: for production we need to change the output and adaptor.
