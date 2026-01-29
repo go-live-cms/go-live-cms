@@ -5,7 +5,6 @@ import { getMedia, createMedia } from "@gl-admin/lib/api/media"
 import { getUsers } from "@gl-admin/lib/api/users"
 import { getMediaURL } from "@gl-admin/lib/api"
 import type { Media, User, MediaSortOption } from "@gl-admin/lib/types"
-import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import MediaEditModal from "@gl-admin/components/media/MediaEditModal"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
@@ -510,14 +509,14 @@ const Media: React.FC = () => {
             </div>
 
             {hasMore && (
-              <GLAdminButton
+              <Button
                 className="gl-admin-media__load-more-btn"
                 variation="primary"
                 onClick={loadMoreMedia}
                 disabled={loadingMore}
               >
                 {loadingMore ? <>Loading more...</> : <>Load More</>}
-              </GLAdminButton>
+              </Button>
             )}
 
             {!hasMore && mediaItems.length < total && (
