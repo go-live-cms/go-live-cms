@@ -1,0 +1,83 @@
+---
+import { loadThemeConfig, getActiveThemeId } from '@/lib/theme-loader'
+
+const themeId = await getActiveThemeId()
+const config = await loadThemeConfig(themeId)
+---
+
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Theme Test</title>
+  <style>
+    body {
+      font-family: system-ui;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    pre {
+      background: #f5f5f5;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Theme System Test</h1>
+  
+  <p class="success">✅ Theme system is working!</p>
+  
+  <h2>Active Theme: {themeId}</h2>
+  
+  <h3>Theme Configuration:</h3>
+  <pre>{JSON.stringify(config, null, 2)}</pre>
+  
+  <h3>Available Layouts:</h3>
+  <ul>
+    {Object.entries(config.layouts).map(([postType, variants]) => (
+      <li>
+        <strong>{postType}:</strong>
+        <ul>
+          {Object.entries(variants).map(([variant, layoutConfig]) => (
+            <li>{variant} - {layoutConfig.label}</li>
+          ))}
+        </ul>
+      </li>
+    ))}
+  </ul>
+  
+  <h3>Color Schemes:</h3>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div>
+      <h4>Light Mode</h4>
+      <div style="padding: 10px; background: rgb({config.colors.light.background}); color: rgb({config.colors.light.text});">
+        <p style="color: rgb({config.colors.light.primary});">Primary: {config.colors.light.primary}</p>
+        <p>Text: {config.colors.light.text}</p>
+        <p>Background: {config.colors.light.background}</p>
+      </div>
+    </div>
+    <div>
+      <h4>Dark Mode</h4>
+      <div style="padding: 10px; background: rgb({config.colors.dark.background}); color: rgb({config.colors.dark.text});">
+        <p style="color: rgb({config.colors.dark.primary});">Primary: {config.colors.dark.primary}</p>
+        <p>Text: {config.colors.dark.text}</p>
+        <p>Background: {config.colors.dark.background}</p>
+      </div>
+    </div>
+  </div>
+  
+  <h3>Next Steps:</h3>
+  <ul>
+    <li>Visit <a href="/post/1">/post/1</a> to see the default post layout</li>
+    <li>Check <code>web/themes/default/</code> for theme files</li>
+    <li>Modify <code>theme.config.ts</code> to customize colors</li>
+  </ul>
+</body>
+</html>
+<!-- Test comment, delete later -->
