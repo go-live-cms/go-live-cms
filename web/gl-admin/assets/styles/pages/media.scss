@@ -3,110 +3,10 @@
 
 .gl-admin {
   &-media {
-    &-header {
-      display: flex;
-      justify-content: space-between;
-
-      &-right {
-        display: flex;
-        gap: 1rem;
-      }
-
-      &-left {
-        align-items: center;
-        display: flex;
-        gap: 2rem;
-      }
-
-      &__filters {
-        align-items: center;
-        display: flex;
-        gap: 2rem;
-      }
-
-      &__search {
-        align-items: center;
-        display: flex;
-        gap: 0;
-
-        &-input {
-          border: 1px solid var(--border-color);
-          border-radius: 4px 0 0 4px;
-          border-right: none;
-          font-size: 0.9rem;
-          min-width: 200px;
-          padding: 0.5rem 1rem;
-          transition: border-color 0.2s ease;
-
-          &:focus {
-            border-color: var(--selected-border-color);
-            outline: none;
-          }
-
-          &::placeholder {
-            color: var(--text-quinary);
-          }
-        }
-
-        &-btn {
-          align-items: center;
-          background: #0073aa;
-          border: 1px solid #0073aa;
-          border-radius: 0 4px 4px 0;
-          color: white;
-          cursor: pointer;
-          display: flex;
-          justify-content: center;
-          padding: 0.5rem 1rem;
-          transition: background-color 0.2s ease;
-
-          &:hover:not(:disabled) {
-            background: #005a87;
-          }
-
-          &:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-          }
-        }
-      }
-
-      &__button-wrapper {
-        align-items: center;
-        display: flex;
-        gap: 1rem;
-      }
-
-      &__filter,
-      &__sort {
-        background: none;
-        border: none;
-        color: inherit;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: inherit;
-        font-weight: inherit;
-        line-height: inherit;
-
-        &-label {
-          margin-right: 0.5rem;
-        }
-
-        &-wrapper {
-          color: var(--text-secondary);
-          font-family: inherit;
-          font-size: 1rem;
-          font-style: normal;
-          font-weight: 500;
-          line-height: 145%;
-        }
-      }
-    }
-
     &__upload-area {
-      background: #ebeae7;
+      background: var(--upload-area-dragover-background);
       border-radius: 8px;
-      box-shadow: var(--box-shadow) inset;
+      box-shadow: 0 0 22.8px 0 var(--box-shadow) inset;
       height: 0;
       margin: 2.5rem 0;
       opacity: 0;
@@ -139,7 +39,7 @@
 
       &-header {
         h3 {
-          color: #1d2327;
+          color: var(--text-secondary);
           font-size: 1.5rem;
           font-weight: 600;
           margin: 0 0 1rem;

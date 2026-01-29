@@ -8,6 +8,8 @@ import type { Media, User, MediaSortOption } from "@gl-admin/lib/types"
 import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import MediaEditModal from "@gl-admin/components/media/MediaEditModal"
+import FilterSelect from "@gl-admin/components/ui/FilterSelect"
+import Button from "@gl-admin/components/ui/Button"
 
 //import { initializeMediaCardHandlers } from "@gl-admin/scripts/media-card-handlers"
 import "@gl-admin/assets/styles/pages/media.scss"
@@ -21,7 +23,7 @@ function formatFileSize(bytes: number): string {
 }
 
 const Media: React.FC = () => {
-  const { baseTitle } = useGoLive()
+  const { baseTitle, isDark } = useGoLive()
   const [mediaItems, setMediaItems] = useState<Media[]>([])
   const [error, setError] = useState<string | null>(null)
   const [total, setTotal] = useState<number>(0)
@@ -39,67 +41,62 @@ const Media: React.FC = () => {
   const [itemsPerPage] = useState(12)
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedType, setSelectedType] = useState("")
-  const [selectedUser, setSelectedUser] = useState("")
-  const [sortBy, setSortBy] = useState<MediaSortOption>("date_desc")
-  const [users, setUsers] = useState<User[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [selectedMediaForEdit, setSelectedMediaForEdit] = useState<Media | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({ user_id: "", type: "", sort: "" })
+  const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([
+    { label: "All authors", value: "" },
+  ])
+  const iconColor = isDark ? "#000000" : "#FFFFFF"
 
   useEffect(() => {
 
     document.title = `${baseTitle} Media`;
-
     refreshMediaData()
-    loadUsersWithMedia()
+    getAuthorOptions().then(setAuthorOptions)
     //initializeMediaCardHandlers()
   }, [])
 
+  const getAuthorOptions = async () => {
+    const authors = await getAuthors();
+    const authorOptions =
+      authors?.map((author) => ({
+        label: author.full_name || author.username,
+        value: String(author.id),
+      })) || []
+    return [{ label: "All authors", value: "" }, ...authorOptions]
+  }
+
+  const getAuthors = async () => {
+    try {
+      setLoadingUsers(true)
+      const response = await getUsers()
+      return response.data
+    } catch (e) {
+      console.error("Error loading users:", e)
+    } finally {
+      setLoadingUsers(false)
+    }
+    return []
+  }
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
-  }
-
-  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedType(e.target.value)
-  }
-
-  const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedUser(e.target.value)
-  }
-
-  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSortBy(e.target.value as MediaSortOption)
   }
 
   const handleFilterSearch = () => {
     refreshMediaData(true)
   }
 
-  // deprecated for now, TODO: add a clear filters button
-  const handleClearFilters = () => {
-    setSearchQuery("")
-    setSelectedType("")
-    setSelectedUser("")
-    setSortBy("date_desc")
-    refreshMediaData(true)
-  }
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      refreshMediaData(true)
-    }, 500)
-    return () => clearTimeout(timeoutId)
-  }, [selectedType, selectedUser, sortBy])
-
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (searchQuery !== "") {
         refreshMediaData(true)
       }
-    }, 800)
+    }, 600)
     return () => clearTimeout(timeoutId)
-  }, [searchQuery])
+  }, [searchQuery, selectedFilters])
 
   const handleBulkSelectToggle = () => {
     setBulkSelectMode(!bulkSelectMode)
@@ -111,19 +108,6 @@ const Media: React.FC = () => {
       setSelectedMedia(selectedMedia.filter((selected) => selected.id !== media.id))
     } else {
       setSelectedMedia([...selectedMedia, media])
-    }
-  }
-
-  const loadUsersWithMedia = async () => {
-    try {
-      setLoadingUsers(true)
-      const response = await getUsers()
-      // TODO: This could be optimized with a backend endpoint that only returns users with media
-      setUsers(response.data)
-    } catch (e) {
-      console.error("Error loading users:", e)
-    } finally {
-      setLoadingUsers(false)
     }
   }
 
@@ -170,9 +154,9 @@ const Media: React.FC = () => {
         limit: itemsPerPage,
         offset: offset,
         search: searchQuery || undefined,
-        type: selectedType || undefined,
-        user_id: selectedUser ? parseInt(selectedUser) : undefined,
-        sort: sortBy,
+        type: selectedFilters.type || undefined,
+        user_id: selectedFilters.user_id ? parseInt(selectedFilters.user_id) : undefined,
+        sort: selectedFilters.sort as MediaSortOption || undefined,
       })
 
       if (reset) {
@@ -208,9 +192,9 @@ const Media: React.FC = () => {
         limit: itemsPerPage,
         offset: offset,
         search: searchQuery || undefined,
-        type: selectedType || undefined,
-        user_id: selectedUser ? parseInt(selectedUser) : undefined,
-        sort: sortBy,
+        type: selectedFilters.type || undefined,
+        user_id: selectedFilters.user_id ? parseInt(selectedFilters.user_id) : undefined,
+        sort: selectedFilters.sort as MediaSortOption || undefined,
       })
 
       setMediaItems((prev) => [...prev, ...response.data])
@@ -339,100 +323,89 @@ const Media: React.FC = () => {
     setTotal((prev) => prev - 1)
   }
 
+  const clearFilters = () => {
+    setSelectedFilters({ user_id: "", type: "", sort: "" })
+  }
+
+  const filters = (
+    <>
+      {selectedFilters.user_id ? (
+        <div className="gl-clear-filters" onClick={clearFilters}>
+          Clear filters
+        </div>
+      ) : null}
+      <FilterSelect
+        options={authorOptions}
+        prefix="Author:"
+        value={selectedFilters.user_id}
+        loading={loadingUsers}
+        onChange={(value) => setSelectedFilters({ ...selectedFilters, user_id: value })}
+      />
+      <FilterSelect
+        options={[
+          { label: "All types", value: "" },
+          { label: "Image", value: "image" },
+          { label: "Video", value: "video" },
+          { label: "Audio", value: "audio" },
+          { label: "Document", value: "document" },
+        ]}
+        prefix="View:"
+        value={selectedFilters.type}
+        onChange={(value) => setSelectedFilters({ ...selectedFilters, type: value })}
+      />
+      <FilterSelect
+        options={[
+          { label: "Default", value: "" },
+          { label: "Newest First", value: "date_desc" },
+          { label: "Oldest First", value: "date_asc" },
+          { label: "Name A-Z", value: "title_asc" },
+          { label: "Name Z-A", value: "title_desc" },
+          { label: "Type A-Z", value: "type_asc" },
+          { label: "Type Z-A", value: "type_desc" },
+          { label: "Smallest First", value: "size_asc" },
+          { label: "Largest First", value: "size_desc" },
+        ]}
+        value={selectedFilters.sort}
+        onChange={(value) => setSelectedFilters({ ...selectedFilters, sort: value })}
+        prefix="Sort by:"
+      />
+      <Button
+        className="gl-admin-media__bulk-select"
+        variation={bulkSelectMode ? "primary" : "flat"}
+        onClick={handleBulkSelectToggle}
+      >
+        <Icon name="bulkSelectIcon" color={bulkSelectMode ? "white" : "#333536"} width="14" height="14" />
+        {bulkSelectMode ? "Exit Select" : "Bulk Select"}
+      </Button>
+      <Button onClick={handleNewMediaClick} className="gl-admin-media__new-media-btn">
+        <Icon name="add" color={iconColor} width="14" height="14" /> New Media
+      </Button>
+    </>
+  )
+
   return (
     <>
       <div className="gl-admin-media-library">
-        <div className="gl-admin-media-header">
-          <div className="gl-admin-media-header-left">
-            <h1 className="gl-admin-media-header__title">Media Library</h1>
-
-            {bulkSelectMode && selectedMedia.length > 0 && (
-              <p className="gl-admin-media-header__count">{selectedMedia.length} selected</p>
-            )}
-            {/* <p className="gl-admin-media-header__count">{total} {total === 1 ? 'item' : 'items'}</p> */}
-          </div>
-          <div className="gl-admin-media-header-right">
-            {/* TODO: add this later, its working
-             <div className="gl-admin-media-header__search">
-              <input
-                type="text"
-                placeholder="Search media..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="gl-admin-media-header__search-input"
-              />
-              <button onClick={handleFilterSearch} className="gl-admin-media-header__search-btn" disabled={loading}>
-                <Icon name="search" color="white" width="16" height="16" />
-              </button>
-            </div> */}
-            <div className="gl-admin-media-header__filters">
-              <div className="gl-admin-media-header__filter-wrapper">
-                <select
-                  className="gl-admin-media-header__filter"
-                  id="media-filter-author"
-                  value={selectedUser}
-                  onChange={handleUserChange}
-                  disabled={loadingUsers}
-                >
-                  <option value="">All Users</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name || user.username}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="gl-admin-media-header__filter-wrapper">
-                <select
-                  className="gl-admin-media-header__filter"
-                  id="media-filter-type"
-                  value={selectedType}
-                  onChange={handleTypeChange}
-                >
-                  <option value="">All Types</option>
-                  <option value="image">Images</option>
-                  <option value="video">Videos</option>
-                  <option value="audio">Audio</option>
-                  <option value="document">Documents</option>
-                </select>
-              </div>
-              <div className="gl-admin-media-header__sort-wrapper">
-                <label htmlFor="media-sort" className="gl-admin-media-header__sort-label">
-                  Sort by:
-                </label>
-                <select
-                  className="gl-admin-media-header__sort"
-                  id="media-sort"
-                  value={sortBy}
-                  onChange={handleSortChange}
-                >
-                  <option value="date_desc"> Newest First</option>
-                  <option value="date_asc"> Oldest First</option>
-                  <option value="name_asc"> Name A-Z</option>
-                  <option value="name_desc"> Name Z-A</option>
-                  <option value="size_asc"> Smallest First</option>
-                  <option value="size_desc"> Largest First</option>
-                  <option value="type_asc"> Type A-Z</option>
-                  <option value="type_desc"> Type Z-A</option>
-                  {/* TODO: add least used and most used */}
-                </select>
-              </div>
-            </div>
-            <div className="gl-admin-media-header__button-wrapper">
-              <GLAdminButton
-                className="gl-admin-media__bulk-select"
-                variation={bulkSelectMode ? "primary" : "flat"}
-                onClick={handleBulkSelectToggle}
-              >
-                <Icon name="bulkSelectIcon" color={bulkSelectMode ? "white" : "#333536"} width="14" height="14" />
-                {bulkSelectMode ? "Exit Select" : "Bulk Select"}
-              </GLAdminButton>
-              <GLAdminButton className="gl-admin-media__new-media-btn" onClick={handleNewMediaClick}>
-                <Icon name="add" color="white" width="14" height="14" /> New Media
-              </GLAdminButton>
-            </div>
+        <div className="admin-topbar">
+          <h1>Media Library</h1>
+          <div className="admin-topbar__actions">
+            {filters}
           </div>
         </div>
+
+        {/* TODO: add this later, its working
+        <div className="gl-admin-media-header__search">
+          <input
+            type="text"
+            placeholder="Search media..."
+            value={searchQuery}
+            onChange={handleSearchChange}
+            className="gl-admin-media-header__search-input"
+          />
+          <button onClick={handleFilterSearch} className="gl-admin-media-header__search-btn" disabled={loading}>
+            <Icon name="search" color="white" width="16" height="16" />
+          </button>
+        </div> */}
 
         {showUploadArea && (
           <div
@@ -448,16 +421,16 @@ const Media: React.FC = () => {
               <div>
                 <span>or</span>
                 <div className="gl-admin-media__upload-area-button-wrapper">
-                  <GLAdminButton className="gl-admin-media__upload-btn" onClick={handleUploadBtnClick}>
-                    <Icon name="uploadIcon" color="white" width="14" height="14" /> Upload Files
-                  </GLAdminButton>
-                  <GLAdminButton
+                  <Button className="gl-admin-media__upload-btn" onClick={handleUploadBtnClick}>
+                    <Icon name="uploadIcon" color={iconColor} width="14" height="14" /> Upload Files
+                  </Button>
+                  <Button
                     className="gl-admin-media__cancel-upload-btn"
                     variation="flat"
                     onClick={handleCancelUploadClick}
                   >
                     Cancel
-                  </GLAdminButton>
+                  </Button>
                 </div>
               </div>
               <small>
@@ -569,7 +542,7 @@ const Media: React.FC = () => {
             setIsEditModalOpen(false)
           }}
         />
-      </div>
+      </div >
     </>
   )
 }

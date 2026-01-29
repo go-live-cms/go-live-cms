@@ -6,7 +6,7 @@
   border: none;
   border-radius: var(--button-border-radius);
   box-shadow: var(--button-box-shadow);
-  color: var(--button-color-default);
+  color: var(--button-color-flat);
   cursor: pointer;
   display: flex;
   font-family: inherit;
@@ -34,17 +34,19 @@
 
 .primary {
   background: var(--button-background-primary);
+  color: var(--button-color-default);
 }
 
 .secondary {
   background: var(--button-background-secondary);
+  color: var(--button-color-default);
 }
 
 .danger {
   background: var(--button-background-danger);
+  color: var(--button-color-default);
 }
 
 .flat {
   background: var(--button-background-flat);
-  color: var(--button-color-flat);
 }

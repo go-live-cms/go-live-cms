@@ -27,7 +27,7 @@
     // Button
     --button-border-radius: 0.3125rem;
     --button-color-default: #ffffff;
-    --button-color-flat: #333536;
+    --button-color-flat: #141414;
     --button-box-shadow: 0 0 3.4px #00000027 inset, 0 0 4px #0000001a;
     --button-background-default: linear-gradient(138deg, #181a1a 6.08%, #111313 88.85%);
     --button-background-primary: linear-gradient(138deg, #0050fe 6.08%, #0085fe 88.85%);
@@ -80,7 +80,7 @@
     --media-card-box-shadow-hover: 0 4px 12px rgb(0 0 0 / 15%);
 
     // Upload area
-    --upload-area-dragover-background: #e1e0dd;
+    --upload-area-dragover-background: #EBEAE7;
     --upload-area-dragover-border-color: #0073aa;
 
     // Skeleton
@@ -125,7 +125,8 @@
     --text-selected: #008cfe;
 
     // Button
-    --button-color-default: #141414;
+    --button-color-default: #ffffff;
+    --button-color-flat: #141414;
     --button-background-default: linear-gradient(138deg, #f7fafa 6.08%, #faffff 88.85%);
 
     // Select
@@ -141,6 +142,10 @@
     // User profile
     --user-profile-background: linear-gradient(0deg, #001F87 0%, #042BAC 100%);
     --user-profile-color: #00a2ff;
+
+    // Upload area
+    --upload-area-dragover-background: #171c20;
+    --upload-area-dragover-border-color: #0073aa;
 
     // Skeleton
     --skeleton-background: linear-gradient(90deg, #1d2327 25%, #272e33 50%, #1d2327 75%);
