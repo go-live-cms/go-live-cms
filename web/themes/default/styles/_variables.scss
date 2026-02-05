@@ -1,0 +1,73 @@
+// Theme Variables - Auto-generated from theme.config.ts
+// TODO: Phase 2 - Generate this from theme customizations
+
+// Color Palette - RGB values for Tailwind compatibility
+$color-primary-light: 59 130 246; // blue-500
+$color-secondary-light: 100 116 139; // slate-500
+$color-background-light: 255 255 255; // white
+$color-text-light: 15 23 42; // slate-900
+$color-surface-light: 248 250 252; // slate-50
+
+$color-primary-dark: 96 165 250; // blue-400
+$color-secondary-dark: 148 163 184; // slate-400
+$color-background-dark: 15 23 42; // slate-900
+$color-text-dark: 241 245 249; // slate-100
+$color-surface-dark: 30 41 59; // slate-800
+
+// Typography
+$font-sans:
+  system-ui,
+  -apple-system,
+  BlinkMacSystemFont,
+  "Segoe UI",
+  Roboto,
+  sans-serif;
+$font-serif: Georgia, Cambria, "Times New Roman", Times, serif;
+$font-mono: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+
+$font-size-sm: 0.875rem; // 14px
+$font-size-base: 1rem; // 16px
+$font-size-lg: 1.125rem; // 18px
+$font-size-xl: 1.25rem; // 20px
+$font-size-2xl: 1.5rem; // 24px
+$font-size-3xl: 1.875rem; // 30px
+$font-size-4xl: 2.25rem; // 36px
+
+// Spacing
+$spacing-xs: 0.25rem; // 4px
+$spacing-sm: 0.5rem; // 8px
+$spacing-md: 1rem; // 16px
+$spacing-lg: 1.5rem; // 24px
+$spacing-xl: 2rem; // 32px
+$spacing-2xl: 3rem; // 48px
+$spacing-3xl: 4rem; // 64px
+
+// Layout
+$container-max-width: 1200px;
+$content-max-width: 720px;
+$content-wide-width: 960px;
+
+// Breakpoints
+$breakpoint-sm: 640px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 1024px;
+$breakpoint-xl: 1280px;
+
+// Border Radius
+$radius-sm: 0.25rem; // 4px
+$radius-md: 0.5rem; // 8px
+$radius-lg: 1rem; // 16px
+
+// Shadows
+$shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+$shadow-md:
+  0 4px 6px -1px rgb(0 0 0 / 0.1),
+  0 2px 4px -2px rgb(0 0 0 / 0.1);
+$shadow-lg:
+  0 10px 15px -3px rgb(0 0 0 / 0.1),
+  0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+// Transitions
+$transition-fast: 150ms ease;
+$transition-base: 200ms ease;
+$transition-slow: 300ms ease;
