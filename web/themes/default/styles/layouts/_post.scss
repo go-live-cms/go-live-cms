@@ -3,7 +3,7 @@
 // Post Layout: Default (Centered)
 .post-layout-default {
   width: 100%;
-  padding: $spacing-2xl $spacing-lg;
+  padding: $spacing-3xl $spacing-lg;
 
   .post-container {
     max-width: $content-max-width;
@@ -11,22 +11,22 @@
   }
 
   .post-header {
-    margin-bottom: $spacing-2xl;
+    margin-bottom: $spacing-3xl;
 
     .featured-image {
       width: 100%;
       height: auto;
       border-radius: $radius-lg;
-      margin-bottom: $spacing-xl;
+      margin-bottom: $spacing-2xl;
       object-fit: cover;
-      max-height: 400px;
+      max-height: 500px;
     }
 
     .post-title {
       font-size: $font-size-4xl;
       font-weight: 700;
-      margin-bottom: $spacing-md;
-      line-height: 1.1;
+      margin-bottom: $spacing-lg;
+      line-height: 1.2;
     }
 
     .post-meta {
@@ -44,11 +44,25 @@
 
   .post-content {
     font-size: $font-size-lg;
-    line-height: 1.7;
+    line-height: 1.8;
 
     // Block content styles
     > * {
+      margin-bottom: $spacing-xl;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin-top: $spacing-3xl;
       margin-bottom: $spacing-lg;
+    }
+
+    h4,
+    h5,
+    h6 {
+      margin-top: $spacing-2xl;
+      margin-bottom: $spacing-md;
     }
   }
 
