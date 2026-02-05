@@ -1,0 +1,104 @@
+@use 'variables' as *;
+
+// Base CSS custom properties for theming
+:root {
+  // Light mode (default)
+  --color-primary: #{$color-primary-light};
+  --color-secondary: #{$color-secondary-light};
+  --color-background: #{$color-background-light};
+  --color-text: #{$color-text-light};
+  --color-surface: #{$color-surface-light};
+  
+  // Typography
+  --font-sans: #{$font-sans};
+  --font-serif: #{$font-serif};
+  --font-mono: #{$font-mono};
+}
+
+// Dark mode
+[data-theme="dark"] {
+  --color-primary: #{$color-primary-dark};
+  --color-secondary: #{$color-secondary-dark};
+  --color-background: #{$color-background-dark};
+  --color-text: #{$color-text-dark};
+  --color-surface: #{$color-surface-dark};
+}
+
+// Base resets and defaults
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: rgb(var(--color-background));
+  color: rgb(var(--color-text));
+  min-height: 100vh;
+}
+
+// Typography defaults
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: $spacing-md;
+}
+
+h1 { font-size: $font-size-4xl; }
+h2 { font-size: $font-size-3xl; }
+h3 { font-size: $font-size-2xl; }
+h4 { font-size: $font-size-xl; }
+h5 { font-size: $font-size-lg; }
+h6 { font-size: $font-size-base; }
+
+p {
+  margin-bottom: $spacing-md;
+}
+
+a {
+  color: rgb(var(--color-primary));
+  text-decoration: none;
+  transition: opacity $transition-fast;
+  
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: rgb(var(--color-surface));
+  padding: 2px 6px;
+  border-radius: $radius-sm;
+}
+
+pre {
+  font-family: var(--font-mono);
+  background: rgb(var(--color-surface));
+  padding: $spacing-lg;
+  border-radius: $radius-md;
+  overflow-x: auto;
+  margin-bottom: $spacing-md;
+  
+  code {
+    background: none;
+    padding: 0;
+  }
+}
