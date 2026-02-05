@@ -1,9 +1,9 @@
 // Default Theme Main Stylesheet
 // Import order: variables → base → layouts → components
 
-@use 'variables' as *;
-@use 'base';
-@use 'layouts/post';
-@use 'layouts/page';
+@use "variables" as *;
+@use "base";
+@use "layouts/post";
+@use "layouts/page";
 
 // Additional theme-specific styles can go here
