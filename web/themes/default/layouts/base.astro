@@ -13,7 +13,7 @@ interface Props {
   theme?: 'light' | 'dark' | 'system'
 }
 
-const { title, description, theme = 'system' } = Astro.props
+const { title, description, theme = 'light' } = Astro.props
 ---
 
 <!doctype html>
@@ -31,7 +31,7 @@ const { title, description, theme = 'system' } = Astro.props
       // Immediately apply theme preference before render
       (function() {
         const storageKey = 'gl-theme-preference'
-        const stored = localStorage.getItem(storageKey) || 'system'
+        const stored = localStorage.getItem(storageKey) || 'light'
         
         let theme = stored
         if (stored === 'system') {
