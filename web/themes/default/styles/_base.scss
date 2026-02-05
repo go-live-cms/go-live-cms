@@ -121,8 +121,28 @@ h6 {
 }
 
 p {
-  margin-bottom: $spacing-md;
-  line-height: 1.6;
+  margin-bottom: $spacing-lg;
+  line-height: 1.7;
+}
+
+ul,
+ol {
+  margin-bottom: $spacing-lg;
+  padding-left: $spacing-xl;
+
+  li {
+    margin-bottom: $spacing-sm;
+    line-height: 1.7;
+  }
+}
+
+blockquote {
+  margin: $spacing-xl 0;
+  padding: $spacing-md $spacing-lg;
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-surface);
+  font-style: italic;
+  border-radius: $radius-sm;
 }
 
 a {
