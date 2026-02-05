@@ -1,30 +1,66 @@
 @use "variables" as *;
 
-// Base CSS custom properties for theming
+// ============================================
+// CSS Custom Properties for Theming
+// ============================================
 :root {
   // Light mode (default)
-  --color-primary: #{$color-primary-light};
-  --color-secondary: #{$color-secondary-light};
-  --color-background: #{$color-background-light};
-  --color-text: #{$color-text-light};
-  --color-surface: #{$color-surface-light};
+  --color-primary: rgb(#{$color-primary-light});
+  --color-accent: rgb(#{$color-accent-light});
+  --color-background: rgb(#{$color-background-light});
+  --color-surface: rgb(#{$color-surface-light});
+  --color-border: rgb(#{$color-border-light});
+
+  // Text colors (keeping as rgb() for opacity usage)
+  --text-primary: rgb(#{$color-text-primary-light});
+  --text-secondary: rgb(#{$color-text-secondary-light});
+  --text-tertiary: rgb(#{$color-text-tertiary-light});
+  --text-quaternary: rgb(#{$color-text-quaternary-light});
+  --text-quinary: rgb(#{$color-text-quinary-light});
+
+  // Semantic colors
+  --color-success: rgb(#{$color-success-light});
+  --color-warning: rgb(#{$color-warning-light});
+  --color-danger: rgb(#{$color-danger-light});
+  --color-info: rgb(#{$color-info-light});
 
   // Typography
   --font-sans: #{$font-sans};
   --font-serif: #{$font-serif};
   --font-mono: #{$font-mono};
+
+  // Shadows
+  --shadow-sm: #{$shadow-sm};
+  --shadow-md: #{$shadow-md};
+  --shadow-lg: #{$shadow-lg};
+
+  // Transitions
+  --transition: #{$transition-base};
 }
 
 // Dark mode
 [data-theme="dark"] {
-  --color-primary: #{$color-primary-dark};
-  --color-secondary: #{$color-secondary-dark};
-  --color-background: #{$color-background-dark};
-  --color-text: #{$color-text-dark};
-  --color-surface: #{$color-surface-dark};
+  --color-primary: rgb(#{$color-primary-dark});
+  --color-accent: rgb(#{$color-accent-dark});
+  --color-background: rgb(#{$color-background-dark});
+  --color-surface: rgb(#{$color-surface-dark});
+  --color-border: rgb(#{$color-border-dark});
+
+  --text-primary: rgb(#{$color-text-primary-dark});
+  --text-secondary: rgb(#{$color-text-secondary-dark});
+  --text-tertiary: rgb(#{$color-text-tertiary-dark});
+  --text-quaternary: rgb(#{$color-text-quaternary-dark});
+  --text-quinary: rgb(#{$color-text-quinary-dark});
+
+  --color-success: rgb(#{$color-success-dark});
+  --color-warning: rgb(#{$color-warning-dark});
+  --color-danger: rgb(#{$color-danger-dark});
+  --color-info: rgb(#{$color-info-dark});
 }
 
-// Base resets and defaults
+// ============================================
+// Base Resets and Defaults
+// ============================================
 *,
 *::before,
 *::after {
@@ -42,12 +78,17 @@ html {
 }
 
 body {
-  background: rgb(var(--color-background));
-  color: rgb(var(--color-text));
+  background: var(--color-background);
+  color: var(--text-primary);
   min-height: 100vh;
+  transition:
+    background-color var(--transition),
+    color var(--transition);
 }
 
-// Typography defaults
+// ============================================
+// Typography Defaults
+// ============================================
 h1,
 h2,
 h3,
@@ -57,6 +98,7 @@ h6 {
   font-weight: 600;
   line-height: 1.2;
   margin-bottom: $spacing-md;
+  color: var(--text-primary);
 }
 
 h1 {
@@ -80,15 +122,18 @@ h6 {
 
 p {
   margin-bottom: $spacing-md;
+  line-height: 1.6;
 }
 
 a {
-  color: rgb(var(--color-primary));
+  color: var(--color-primary);
   text-decoration: none;
-  transition: opacity $transition-fast;
+  transition:
+    color var(--transition),
+    opacity var(--transition);
 
   &:hover {
-    opacity: 0.8;
+    color: var(--color-accent);
   }
 }
 
@@ -101,14 +146,15 @@ img {
 code {
   font-family: var(--font-mono);
   font-size: 0.9em;
-  background: rgb(var(--color-surface));
+  background: var(--color-surface);
+  color: var(--text-secondary);
   padding: 2px 6px;
   border-radius: $radius-sm;
 }
 
 pre {
   font-family: var(--font-mono);
-  background: rgb(var(--color-surface));
+  background: var(--color-surface);
   padding: $spacing-lg;
   border-radius: $radius-md;
   overflow-x: auto;
@@ -118,4 +164,23 @@ pre {
     background: none;
     padding: 0;
   }
+}
+
+// ============================================
+// Utility Classes
+// ============================================
+.container {
+  max-width: $container-max-width;
+  margin: 0 auto;
+  padding: 0 $spacing-lg;
+}
+
+.content {
+  max-width: $content-max-width;
+  margin: 0 auto;
+}
+
+.content-wide {
+  max-width: $content-wide-width;
+  margin: 0 auto;
 }
