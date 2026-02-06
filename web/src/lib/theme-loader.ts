@@ -5,6 +5,7 @@
  */
 
 import type { ThemeConfig } from "../../themes/default/theme.config"
+import { getActiveTheme } from "./api"
 
 export interface ThemeInfo {
   id: string
@@ -15,13 +16,16 @@ export interface ThemeInfo {
 }
 
 /**
- * Get the active theme ID
- * For now, hardcoded to 'default'. In Phase 2, this will query the database.
+ * Get the active theme ID from database
  */
 export async function getActiveThemeId(): Promise<string> {
-  // TODO: Phase 2 - Query database for active theme
-  // For now, always return 'default'
-  return "default"
+  try {
+    const theme = await getActiveTheme()
+    return theme.slug
+  } catch (error) {
+    console.error("Failed to get active theme, falling back to default:", error)
+    return "default"
+  }
 }
 
 /**
@@ -95,14 +99,22 @@ export async function resolveLayoutPath(postType: "post" | "page", variant: stri
 }
 
 /**
- * Get layout variant for a specific post
- * In Phase 1, this returns 'default'
- * In Phase 2, this will check post meta or theme customizations
+ * Get layout variant for a specific post from database settings
  */
 export async function getPostLayoutVariant(post: any, postType: "post" | "page"): Promise<string> {
-  // TODO: Phase 2 - Query database for post-specific layout preference
-  // For now, return default
-  return "default"
+  try {
+    const theme = await getActiveTheme()
+    const layoutVariants = theme.settings?.layout_variants
+
+    if (layoutVariants && layoutVariants[postType]) {
+      return layoutVariants[postType]
+    }
+
+    return "default"
+  } catch (error) {
+    console.error("Failed to get layout variant from database, using default:", error)
+    return "default"
+  }
 }
 
 /**
