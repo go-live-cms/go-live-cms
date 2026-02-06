@@ -39,6 +39,7 @@ const navigation: Navigation = [
   [
     { icon: "media" as IconPath, name: "Media", link: "/media/" },
     { icon: "plugins" as IconPath, name: "Plugins", link: "/plugins/" },
+    { icon: "paintbrush" as IconPath, name: "Themes", link: "/themes/" },
   ],
   [{ icon: "settings" as IconPath, name: "Settings", link: "/settings/" }],
 ]
