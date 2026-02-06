@@ -97,22 +97,26 @@ INSERT INTO posts (
     post_type,
     post_status,
     post_parent,
-    menu_order
+    menu_order,
+    slug,
+    block_doc
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 ) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug
 `
 
 type CreatePostsParams struct {
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	UserID      int64         `json:"user_id"`
-	Username    string        `json:"username"`
-	Url         string        `json:"url"`
-	PostType    string        `json:"post_type"`
-	PostStatus  string        `json:"post_status"`
-	PostParent  sql.NullInt64 `json:"post_parent"`
-	MenuOrder   int32         `json:"menu_order"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	UserID      int64           `json:"user_id"`
+	Username    string          `json:"username"`
+	Url         string          `json:"url"`
+	PostType    string          `json:"post_type"`
+	PostStatus  string          `json:"post_status"`
+	PostParent  sql.NullInt64   `json:"post_parent"`
+	MenuOrder   int32           `json:"menu_order"`
+	Slug        string          `json:"slug"`
+	BlockDoc    json.RawMessage `json:"block_doc"`
 }
 
 func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error) {
@@ -126,6 +130,8 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		arg.PostStatus,
 		arg.PostParent,
 		arg.MenuOrder,
+		arg.Slug,
+		arg.BlockDoc,
 	)
 	var i Post
 	err := row.Scan(
