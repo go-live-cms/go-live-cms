@@ -138,6 +138,9 @@ func (server *Server) setupRoutes() {
 	// Settings module routes (see settings_routes.go for complete definitions)
 	server.RegisterSettingsRoutes(v1)
 
+	// Theme module routes (see themes_routes.go for complete definitions)
+	server.registerThemeRoutes(v1)
+
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 
