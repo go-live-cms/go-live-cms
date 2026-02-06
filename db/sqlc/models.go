@@ -154,6 +154,28 @@ type TaxonomyType struct {
 	CreatedAt    time.Time      `json:"created_at"`
 }
 
+type Theme struct {
+	ID          int64           `json:"id"`
+	Name        string          `json:"name"`
+	Slug        string          `json:"slug"`
+	Description sql.NullString  `json:"description"`
+	Version     string          `json:"version"`
+	Author      sql.NullString  `json:"author"`
+	Config      json.RawMessage `json:"config"`
+	Active      bool            `json:"active"`
+	CreatedAt   time.Time       `json:"created_at"`
+	ChangedAt   time.Time       `json:"changed_at"`
+}
+
+type ThemeSetting struct {
+	ID           int64           `json:"id"`
+	ThemeID      int64           `json:"theme_id"`
+	SettingKey   string          `json:"setting_key"`
+	SettingValue json.RawMessage `json:"setting_value"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ChangedAt    time.Time       `json:"changed_at"`
+}
+
 type User struct {
 	ID                int64     `json:"id"`
 	Username          string    `json:"username"`
