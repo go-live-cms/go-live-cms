@@ -3,8 +3,10 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"path/filepath"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -21,6 +23,7 @@ type Server struct {
 	router     *gin.Engine
 	config     util.Config
 	tokenMaker token.Maker
+	ctx        context.Context
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -49,9 +52,23 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		store:      store,
 		config:     config,
 		tokenMaker: tokenMaker,
+		ctx:        context.Background(),
 	}
 
 	server.setupRoutes()
+
+	// Sync themes from filesystem on startup
+	fmt.Println("🎨 Scanning themes directory...")
+	themesPath := filepath.Join("web", "themes")
+	discoveredThemes, err := ScanThemesDirectory(themesPath)
+	if err != nil {
+		fmt.Printf("Warning: Failed to scan themes directory: %v\n", err)
+	} else {
+		fmt.Printf("Found %d theme(s)\n", len(discoveredThemes))
+		if err := server.SyncThemesToDatabase(discoveredThemes); err != nil {
+			fmt.Printf("Warning: Failed to sync themes: %v\n", err)
+		}
+	}
 
 	if gin.Mode() == gin.DebugMode && !config.IsTestMode {
 		devModeUtil.CreateDefaultAdminUser(server.store)
