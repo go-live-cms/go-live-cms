@@ -74,6 +74,14 @@ func (server *Server) activateTheme(c *gin.Context) {
 		return
 	}
 
+	// First deactivate all themes
+	err = server.store.DeactivateAllThemes(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to deactivate themes"})
+		return
+	}
+
+	// Then activate the requested theme
 	theme, err := server.store.ActivateTheme(c, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
