@@ -24,16 +24,21 @@ SELECT * FROM themes WHERE active = true LIMIT 1;
 SELECT * FROM themes
 ORDER BY active DESC, name ASC;
 
--- name: ActivateTheme :one
--- Deactivate all themes first, then activate the specified one
-WITH deactivated AS (
-  UPDATE themes SET active = false, changed_at = now()
-  WHERE active = true
-  RETURNING id
-)
+-- name: DeactivateAllThemes :exec
+-- First deactivate all themes
 UPDATE themes
-SET active = true, changed_at = now()
-WHERE themes.id = $1
+SET 
+  active = false,
+  changed_at = now()
+WHERE active = true;
+
+-- name: ActivateTheme :one
+-- Then activate the specified theme
+UPDATE themes
+SET 
+  active = true,
+  changed_at = now()
+WHERE id = $1
 RETURNING *;
 
 -- name: UpdateTheme :one

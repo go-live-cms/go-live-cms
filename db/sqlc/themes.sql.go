@@ -15,18 +15,15 @@ import (
 )
 
 const activateTheme = `-- name: ActivateTheme :one
-WITH deactivated AS (
-  UPDATE themes SET active = false, changed_at = now()
-  WHERE active = true
-  RETURNING id
-)
 UPDATE themes
-SET active = true, changed_at = now()
-WHERE themes.id = $1
+SET 
+  active = true,
+  changed_at = now()
+WHERE id = $1
 RETURNING id, name, slug, description, version, author, config, active, created_at, changed_at
 `
 
-// Deactivate all themes first, then activate the specified one
+// Then activate the specified theme
 func (q *Queries) ActivateTheme(ctx context.Context, id int64) (Theme, error) {
 	row := q.db.QueryRowContext(ctx, activateTheme, id)
 	var i Theme
@@ -93,6 +90,20 @@ func (q *Queries) CreateTheme(ctx context.Context, arg CreateThemeParams) (Theme
 		&i.ChangedAt,
 	)
 	return i, err
+}
+
+const deactivateAllThemes = `-- name: DeactivateAllThemes :exec
+UPDATE themes
+SET 
+  active = false,
+  changed_at = now()
+WHERE active = true
+`
+
+// First deactivate all themes
+func (q *Queries) DeactivateAllThemes(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deactivateAllThemes)
+	return err
 }
 
 const deleteAllThemeSettings = `-- name: DeleteAllThemeSettings :exec

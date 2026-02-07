@@ -13,7 +13,7 @@ import (
 )
 
 type Querier interface {
-	// Deactivate all themes first, then activate the specified one
+	// Then activate the specified theme
 	ActivateTheme(ctx context.Context, id int64) (Theme, error)
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
@@ -43,6 +43,8 @@ type Querier interface {
 	CreateTheme(ctx context.Context, arg CreateThemeParams) (Theme, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserPost(ctx context.Context, arg CreateUserPostParams) (UserPost, error)
+	// First deactivate all themes
+	DeactivateAllThemes(ctx context.Context) error
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
 	DeleteAllThemeSettings(ctx context.Context, themeID int64) error
 	DeleteExtensionSetting(ctx context.Context, key string) error
