@@ -7,10 +7,13 @@
 // ============================================
 $color-primary-light: 0 80 254; // #0050FE
 $color-accent-light: 0 145 255; // #0091FF
-$color-background-light: 255 255 255; // white
-$color-surface-light: 244 244 243; // #f4f4f3
+$color-background-light: 255 240 240; // light red background for testing
+$color-surface-light: 255 230 230; // light red surface
 $color-border-light: 210 210 210; // #D2D2D2
 
+body {
+  --color-background: rgb(#{$color-background-light});
+}
 // Text colors
 $color-text-primary-light: 32 34 34; // #202222
 $color-text-secondary-light: 51 53 54; // #333536

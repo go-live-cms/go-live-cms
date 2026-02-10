@@ -5,7 +5,6 @@
  */
 import themeConfig from '../theme.config'
 import '@/assets/styles/global.css'
-import '../styles/theme.scss'
 
 interface Props {
   title: string
@@ -14,6 +13,9 @@ interface Props {
 }
 
 const { title, description, theme = 'light' } = Astro.props
+
+// Get theme CSS path injected by middleware (WordPress-style dynamic loading)
+const themeCssPath = Astro.locals.themeCssPath || '/themes/default/styles/theme.css'
 ---
 
 <!doctype html>
@@ -25,6 +27,9 @@ const { title, description, theme = 'light' } = Astro.props
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
+    
+    <!-- WordPress-style: Dynamically load active theme CSS -->
+    <link rel="stylesheet" href={themeCssPath} />
     
     <!-- Theme preference handler (prevents FOUC) -->
     <script is:inline>
@@ -45,6 +50,11 @@ const { title, description, theme = 'light' } = Astro.props
     <slot name="head" />
   </head>
   <body>
+    <!-- Debug: Theme indicator -->
+    <div style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: #2563eb; color: white; padding: 8px 16px; border-radius: 6px; font-family: monospace; font-size: 12px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+      🎨 {themeConfig.name} v{themeConfig.version}
+    </div>
+    
     <slot />
     <slot name="footer-scripts" />
   </body>
