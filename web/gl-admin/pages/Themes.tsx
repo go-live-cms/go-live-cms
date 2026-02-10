@@ -129,7 +129,9 @@ const ThemesPage: React.FC = () => {
   const getThemeThumbnail = (theme: Theme) => `/themes/${theme.slug}/thumbnail.jpg`
 
   const handleThemeImageError = (event: React.SyntheticEvent<HTMLImageElement>, theme: Theme) => {
-    event.currentTarget.src = getThemePreview(theme)
+    const img = event.currentTarget
+    // If thumbnail.jpg fails, use generated preview
+    img.src = getThemePreview(theme)
   }
 
   if (loading) {
