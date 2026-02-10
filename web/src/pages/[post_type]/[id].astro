@@ -1,14 +1,14 @@
 ---
-import { getPostsByType, getPostById, getPostBySlug, getSettings } from '../../lib/api'
+import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import type { Post } from '@gl-admin/lib/api/types'
 
-// Import theme layouts dynamically based on post type
-import PostDefault from '../../../themes/default/layouts/post/default.astro'
-import PostSidebar from '../../../themes/default/layouts/post/sidebar.astro'
-import PostWide from '../../../themes/default/layouts/post/wide.astro'
-import PageDefault from '../../../themes/default/layouts/page/default.astro'
-import PageFullwidth from '../../../themes/default/layouts/page/fullwidth.astro'
+// WordPress-style: Auto-discover all theme layouts using glob imports
+// This allows dropping in new themes without modifying code
+const allLayouts = import.meta.glob('../../../themes/*/layouts/**/*.astro')
+
+// Disable static pre-rendering to allow dynamic theme loading
+export const prerender = false
 
 export async function getStaticPaths() {
   const postTypes = ['post', 'page']
@@ -143,31 +143,40 @@ if (!fullPost || !fullPost.title) {
   })
 }
 
-// Get layout variant for this post (Phase 1: always 'default')
+// Get layout variant for this post
 const layoutVariant = await getPostLayoutVariant(fullPost, postType as 'post' | 'page')
 
-// Map to layout components
-const layoutMap = {
-  post: {
-    default: PostDefault,
-    sidebar: PostSidebar,
-    wide: PostWide,
-  },
-  page: {
-    default: PageDefault,
-    fullwidth: PageFullwidth,
+// Get active theme for dynamic layout loading
+const activeTheme = await getActiveTheme()
+const themeSlug = activeTheme.slug
+console.log(`🎨 Active theme: ${activeTheme.name} (${themeSlug}), layout variant: ${layoutVariant}`)
+
+// WordPress-style: Dynamically load layout from active theme
+const layoutPath = `../../../themes/${themeSlug}/layouts/${postType}/${layoutVariant}.astro`
+console.log(`Loading layout from: ${layoutPath}`)
+
+let LayoutComponent
+try {
+  // Try loading from active theme
+  const layoutModule = await allLayouts[layoutPath]()
+  LayoutComponent = layoutModule.default
+  console.log(`✓ Loaded ${themeSlug}/${postType}/${layoutVariant} layout`)
+} catch (error) {
+  console.error(`Failed to load layout from ${themeSlug}, falling back to default:`, error)
+  
+  // Fallback to default theme
+  try {
+    const fallbackPath = `../../../themes/default/layouts/${postType}/${layoutVariant}.astro`
+    const layoutModule = await allLayouts[fallbackPath]()
+    LayoutComponent = layoutModule.default
+    console.log(`✓ Loaded fallback default/${postType}/${layoutVariant} layout`)
+  } catch (fallbackError) {
+    console.error(`Failed to load default layout:`, fallbackError)
+    return new Response(null, {
+      status: 500,
+      statusText: 'Layout Not Found'
+    })
   }
-}
-
-const LayoutComponent = layoutMap[postType as 'post' | 'page']?.[layoutVariant] 
-  || layoutMap[postType as 'post' | 'page']?.default
-
-if (!LayoutComponent) {
-  console.error(`No layout component found for ${postType}/${layoutVariant}`)
-  return new Response(null, {
-    status: 500,
-    statusText: 'Layout Not Found'
-  })
 }
 
 const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
