@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "astro dev",
     "dev:docker": "astro dev --host 0.0.0.0 --port 4321",
-    "build": "astro build",
+    "build": "npm run themes:build && astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "themes:build": "sass themes/:themes/ --no-source-map --style=compressed",
+    "themes:watch": "sass themes/:themes/ --watch --no-source-map"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.3",
