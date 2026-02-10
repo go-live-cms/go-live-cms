@@ -14,6 +14,7 @@ import tailwindcss from "@tailwindcss/vite"
 export default defineConfig({
   site: "https://example.com",
   integrations: [mdx(), sitemap(), react()],
+  publicDir: "public",
   vite: {
     plugins: [tailwindcss()],
     resolve: {
@@ -39,6 +40,10 @@ export default defineConfig({
       },
       watch: {
         usePolling: true,
+      },
+      fs: {
+        // Allow serving files from themes directory
+        allow: [".", "../themes"],
       },
     },
   },
