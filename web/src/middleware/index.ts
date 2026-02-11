@@ -6,12 +6,31 @@ import { getActiveTheme } from "../lib/api"
 export const onRequest = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url)
 
-  // Inject active theme metadata into locals for use in layouts
+  // Inject active theme metadata and assets into locals
   if (!context.locals.activeTheme) {
     try {
       const theme = await getActiveTheme()
       context.locals.activeTheme = theme.slug
-      context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
+
+      // WordPress-style: Load theme config to get registered assets
+      try {
+        const configPath = path.join(process.cwd(), "themes", theme.slug, "theme.config.ts")
+        // Dynamic import of theme config
+        const configModule = await import(`../../themes/${theme.slug}/theme.config.ts`)
+        const themeConfig = configModule.themeConfig || configModule.default
+
+        // Inject theme assets (styles and scripts)
+        context.locals.themeAssets = themeConfig.assets || {}
+
+        // Backward compatibility: fallback CSS path if no assets registered
+        if (!themeConfig.assets?.styles?.length) {
+          context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
+        }
+      } catch (error) {
+        console.error(`Failed to load theme config for ${theme.slug}:`, error)
+        // Fallback to default CSS path
+        context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
+      }
     } catch (error) {
       console.error("Failed to get active theme, using default:", error)
       context.locals.activeTheme = "default"
