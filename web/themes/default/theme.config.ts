@@ -45,6 +45,19 @@ export interface LayoutVariant {
   preview?: string
 }
 
+export interface ThemeAsset {
+  src: string
+  media?: string
+  defer?: boolean
+  async?: boolean
+  type?: string
+}
+
+export interface ThemeAssets {
+  styles?: ThemeAsset[]
+  scripts?: ThemeAsset[]
+}
+
 export interface ThemeConfig {
   name: string
   description: string
@@ -52,6 +65,9 @@ export interface ThemeConfig {
   author: string
   license: string
   parent?: string
+
+  // WordPress-style asset registration (wp_enqueue_style/script equivalent)
+  assets?: ThemeAssets
 
   supports: {
     postTypes: string[]
@@ -88,6 +104,17 @@ export const themeConfig: ThemeConfig = {
   version: "1.0.0",
   author: "Go Live CMS",
   license: "MIT",
+
+  // Asset registration - theme developer controls how CSS/JS is built
+  // Could be SASS, Tailwind, Webpack, Vite, or plain CSS/JS
+  assets: {
+    styles: [
+      {
+        src: "/themes/default/styles/theme.css",
+        media: "all",
+      },
+    ],
+  },
 
   supports: {
     postTypes: ["post", "page"],
