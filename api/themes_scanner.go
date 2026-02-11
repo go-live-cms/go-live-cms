@@ -55,6 +55,26 @@ func ScanThemesDirectory(themesPath string) ([]DiscoveredTheme, error) {
 
 		// Check if theme.config.ts exists
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			fmt.Printf("Warning: Skipping '%s' - missing theme.config.ts\n", entry.Name())
+			continue
+		}
+
+		// Validate required layout files exist
+		requiredLayouts := []string{
+			filepath.Join(themePath, "layouts", "post", "default.astro"),
+			filepath.Join(themePath, "layouts", "page", "default.astro"),
+		}
+
+		missingLayouts := false
+		for _, layoutPath := range requiredLayouts {
+			if _, err := os.Stat(layoutPath); os.IsNotExist(err) {
+				fmt.Printf("Warning: Skipping '%s' - missing required layout: %s\n", entry.Name(), layoutPath)
+				missingLayouts = true
+				break
+			}
+		}
+
+		if missingLayouts {
 			continue
 		}
 
