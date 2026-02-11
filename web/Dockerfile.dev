@@ -10,10 +10,6 @@ ENV SERVER_API_URL=$SERVER_API_URL
 COPY package*.json ./
 RUN npm install
 
-# Copy startup script
-COPY start-dev-with-themes.sh ./
-RUN chmod +x start-dev-with-themes.sh
-
 EXPOSE 4321
 
-CMD ["./start-dev-with-themes.sh"]
+CMD ["npm", "run", "dev:docker"]
