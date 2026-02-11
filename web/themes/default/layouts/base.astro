@@ -14,8 +14,10 @@ interface Props {
 
 const { title, description, theme = 'light' } = Astro.props
 
-// Get theme CSS path injected by middleware (WordPress-style dynamic loading)
-const themeCssPath = Astro.locals.themeCssPath || '/themes/default/styles/theme.css'
+// WordPress-style: Get theme assets registered in theme.config.ts
+const themeAssets = Astro.locals.themeAssets || {}
+// Backward compatibility fallback
+const legacyCssPath = Astro.locals.themeCssPath
 ---
 
 <!doctype html>
@@ -28,8 +30,15 @@ const themeCssPath = Astro.locals.themeCssPath || '/themes/default/styles/theme.
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
     
-    <!-- WordPress-style: Dynamically load active theme CSS -->
-    <link rel="stylesheet" href={themeCssPath} />
+    <!-- WordPress-style: Render theme-registered stylesheets (wp_enqueue_style equivalent) -->
+    {themeAssets.styles?.map((style: any) => (
+      <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
+    ))}
+    
+    <!-- Backward compatibility: legacy CSS path -->
+    {!themeAssets.styles?.length && legacyCssPath && (
+      <link rel="stylesheet" href={legacyCssPath} />
+    )}
     
     <!-- Theme preference handler (prevents FOUC) -->
     <script is:inline>
@@ -57,5 +66,15 @@ const themeCssPath = Astro.locals.themeCssPath || '/themes/default/styles/theme.
     
     <slot />
     <slot name="footer-scripts" />
+    
+    <!-- WordPress-style: Render theme-registered scripts (wp_enqueue_script equivalent) -->
+    {themeAssets.scripts?.map((script: any) => (
+      <script 
+        src={script.src} 
+        defer={script.defer} 
+        async={script.async}
+        type={script.type}
+      ></script>
+    ))}
   </body>
 </html>
