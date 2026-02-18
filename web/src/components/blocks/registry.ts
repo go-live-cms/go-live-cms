@@ -66,12 +66,15 @@ export const blockRegistry = new BlockRegistry()
 
 // Auto-register all blocks using Vite glob imports
 // Includes both system blocks and theme blocks
-const blockModules = import.meta.glob<{ default: BlockConfig }>([
-  "./*/index.ts",  // System blocks from web/src/components/blocks/
-  "../../../themes/*/blocks/*/index.ts"  // Theme blocks from web/themes/*/blocks/
-], {
-  eager: true,
-})
+const blockModules = import.meta.glob<{ default: BlockConfig }>(
+  [
+    "./*/index.ts", // System blocks from web/src/components/blocks/
+    "../../../themes/*/blocks/*/index.ts", // Theme blocks from web/themes/*/blocks/
+  ],
+  {
+    eager: true,
+  }
+)
 
 Object.values(blockModules).forEach((module) => {
   blockRegistry.register(module.default)
