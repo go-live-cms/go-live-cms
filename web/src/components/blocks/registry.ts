@@ -65,7 +65,11 @@ class BlockRegistry {
 export const blockRegistry = new BlockRegistry()
 
 // Auto-register all blocks using Vite glob imports
-const blockModules = import.meta.glob<{ default: BlockConfig }>("./*/index.ts", {
+// Includes both system blocks and theme blocks
+const blockModules = import.meta.glob<{ default: BlockConfig }>([
+  "./*/index.ts",  // System blocks from web/src/components/blocks/
+  "../../../themes/*/blocks/*/index.ts"  // Theme blocks from web/themes/*/blocks/
+], {
   eager: true,
 })
 
