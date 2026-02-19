@@ -32,7 +32,7 @@ class EditorBlockRegistry {
 
   register(block: Block) {
     // Check for duplicates
-    if (this.blocks.some(b => b.title === block.title)) {
+    if (this.blocks.some((b) => b.title === block.title)) {
       return
     }
     this.blocks.push(block)
