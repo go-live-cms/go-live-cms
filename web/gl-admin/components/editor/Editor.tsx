@@ -7,6 +7,7 @@ import { pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
 import { authManager } from "@gl-admin/lib/auth"
 import { applyLink, openLinkModal } from "./utils/linkManager"
+import { useTheme } from "@gl-admin/contexts/ThemeContext"
 import LinkModal from "./ui/LinkModal"
 import BubbleMenu from "./ui/BubbleMenu"
 import BlockTypeToolbar from "./ui/BlockTypeToolbar"
@@ -61,6 +62,7 @@ export default forwardRef<EditorRef, Props>(function Editor(
   },
   ref
 ) {
+  const { isThemeLoaded } = useTheme()
   const [isSaving, setIsSaving] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
@@ -71,13 +73,14 @@ export default forwardRef<EditorRef, Props>(function Editor(
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
   const [url, setUrl] = useState("")
 
-  // Collaboration provider
+  // Collaboration provider - wait for theme to load
   const collabProvider = useMemo(() => {
+    if (!isThemeLoaded) return null
     if (postId && enableCollaboration && !readOnly) {
       return CollaborationProvider.getInstance(postId)
     }
     return null
-  }, [postId, enableCollaboration, readOnly])
+  }, [postId, enableCollaboration, readOnly, isThemeLoaded])
 
   // Block document manager
   const blockDocManager = useMemo(() => {
@@ -134,28 +137,33 @@ export default forwardRef<EditorRef, Props>(function Editor(
   }, [title])
 
   // Editor extensions - include link modal setters for Ctrl+K support
-  const extensions = useMemo(
-    () => getExtensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen })(),
-    [collabProvider, maxChars, placeholder]
-  )
+  // Re-compute extensions after theme loads to include theme extensions
+  const extensions = useMemo(() => {
+    const exts = getExtensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen })()
+    console.log(`[Editor] Computing extensions (theme loaded: ${isThemeLoaded}), count: ${exts.length}`)
+    return exts
+  }, [collabProvider, maxChars, placeholder, isThemeLoaded])
 
-  // Initialize Editor
-  const editor = useEditor({
-    editable: !readOnly,
-    extensions,
-    content: !collabProvider ? value || "<p></p>" : undefined,
-    autofocus: "end",
-    onUpdate({ editor }) {
-      const html = editor.getHTML()
-      const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
-      onChange(html, text)
-    },
-    editorProps: {
-      attributes: {
-        class: "gl-content-editor notion-editor-content",
+  // Initialize Editor - only after theme loads to prevent schema errors
+  const editor = useEditor(
+    {
+      editable: !readOnly,
+      extensions,
+      content: !collabProvider ? value || "<p></p>" : undefined,
+      autofocus: "end",
+      onUpdate({ editor }) {
+        const html = editor.getHTML()
+        const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
+        onChange(html, text)
+      },
+      editorProps: {
+        attributes: {
+          class: "gl-content-editor notion-editor-content",
+        },
       },
     },
-  })
+    [extensions, value, readOnly, collabProvider]
+  )
 
   // Force save function
   const handleForceSave = async () => {
@@ -341,6 +349,20 @@ export default forwardRef<EditorRef, Props>(function Editor(
       w.__blockSpecTestLoaded = true
       createTestScript()
     }
+  }
+
+  // Show loading state while theme is loading or editor is initializing
+  if (!isThemeLoaded || !editor) {
+    return (
+      <div className="notion-editor">
+        <div
+          className="editor-wrapper"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "200px" }}
+        >
+          <p style={{ color: "#999" }}>{!isThemeLoaded ? "Loading theme..." : "Initializing editor..."}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
