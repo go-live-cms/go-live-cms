@@ -150,11 +150,15 @@ export default forwardRef<EditorRef, Props>(function Editor(
       editable: !readOnly,
       extensions,
       content: !collabProvider ? value || "<p></p>" : undefined,
-      autofocus: "end",
+      // autofocus disabled to prevent race condition with BubbleMenu during mount
+      // (docView is null when focus fires, causing coordsAtPos crash)
+      // We focus manually via useEffect below
+      autofocus: false,
       onUpdate({ editor }) {
         const html = editor.getHTML()
         const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
-        onChange(html, text)
+        // Defer to avoid "Cannot update component while rendering another" warning
+        queueMicrotask(() => onChange(html, text))
       },
       editorProps: {
         attributes: {
@@ -162,8 +166,25 @@ export default forwardRef<EditorRef, Props>(function Editor(
         },
       },
     },
-    [extensions, value, readOnly, collabProvider]
+    // Do NOT include `value` here — it changes on every keystroke via onUpdate→onChange,
+    // which would destroy and recreate the editor on every keypress.
+    // External value changes are handled by the setContent effect below.
+    [extensions, readOnly, collabProvider]
   )
+
+  // Focus editor after mount (deferred to avoid BubbleMenu coordsAtPos crash)
+  useEffect(() => {
+    if (!editor || readOnly) return
+    // Wait for next frame to ensure the view's docView is initialized
+    const raf = requestAnimationFrame(() => {
+      try {
+        editor.commands.focus("end")
+      } catch {
+        // Silently ignore if editor was destroyed before focus
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [editor, readOnly])
 
   // Force save function
   const handleForceSave = async () => {
