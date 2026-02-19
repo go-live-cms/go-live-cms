@@ -53,7 +53,8 @@ class BlockRegistry {
   async registerFromModule(modulePath: string): Promise<void> {
     try {
       const module = await import(/* @vite-ignore */ modulePath)
-      const config = module.default || module.alertConfig
+      // Look for: default export, or named export matching <type>Config pattern
+      const config = module.default || Object.values(module).find((exp: any) => exp?.type && exp?.component)
       if (config) {
         this.register(config)
         console.log(`[Block Registry] Dynamically registered: ${config.type}`)
@@ -124,7 +125,11 @@ export async function registerThemeBlocks(themeSlug: string, blocks?: Array<{ ty
     if (editorBlockRegistry) {
       try {
         const module = await import(/* @vite-ignore */ block.modulePath)
-        const editorConfig = module.alertEditorConfig || module.editorConfig
+        // Look for: named export matching <type>EditorConfig, or generic 'editorConfig'
+        const editorConfig =
+          module[`${block.type}EditorConfig`] ||
+          module.editorConfig ||
+          Object.values(module).find((exp: any) => exp?.title && exp?.command)
         if (editorConfig) {
           editorBlockRegistry.register(editorConfig)
           console.log(`[Editor Block Registry] Registered: ${editorConfig.title}`)
