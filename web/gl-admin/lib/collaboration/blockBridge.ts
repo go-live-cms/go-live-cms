@@ -184,8 +184,18 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
       }
 
     default:
-      console.warn(`Unknown PM node type: ${node.type.name}`)
-      return null
+      // Custom/theme block - preserve full PM data for round-trip fidelity
+      return {
+        id,
+        type: node.type.name,
+        version: 1,
+        attrs: {
+          pm: node.toJSON(),
+          text: node.textContent || undefined,
+          // Preserve custom attributes (variant, message, etc.)
+          ...Object.fromEntries(Object.entries(node.attrs).filter(([key]) => key !== "data-block-id")),
+        },
+      }
   }
 }
 
@@ -349,7 +359,15 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>): any {
       }
 
     default:
-      console.warn(`Unknown block type: ${(block as any).type}`)
+      // Custom/theme block - reconstruct from stored PM JSON
+      const customAttrs = block.attrs as Record<string, any>
+      if (customAttrs.pm) {
+        return {
+          ...customAttrs.pm,
+          attrs: { ...customAttrs.pm.attrs, ...baseAttrs },
+        }
+      }
+      console.warn(`Unknown block type without PM data: ${(block as any).type}`)
       return null
   }
 }
