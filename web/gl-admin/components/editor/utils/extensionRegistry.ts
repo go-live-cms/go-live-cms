@@ -50,7 +50,14 @@ export async function registerThemeExtensions(themeSlug: string, blocks?: Array<
   for (const block of blocks) {
     try {
       const module = await import(/* @vite-ignore */ block.modulePath)
-      const extension = module.alertExtension || module.extension
+      // Look for exported extension: named export matching <type>Extension, or generic 'extension'
+      const extension =
+        module[`${block.type}Extension`] || // e.g. alertExtension
+        module.extension ||
+        // Fallback: find any export that looks like a Tiptap extension
+        Object.values(module).find(
+          (exp: any) => exp?.type === "node" || exp?.type === "extension" || exp?.name === block.type
+        )
       if (extension) {
         tiptapExtensionRegistry.register(extension)
       }
