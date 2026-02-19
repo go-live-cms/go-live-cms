@@ -143,6 +143,23 @@ if (!fullPost || !fullPost.title) {
   })
 }
 
+// Phase 2: Apply theme content filter if available
+if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
+  try {
+    const filtered = await Astro.locals.themeFunctions.filterContent(
+      (fullPost as any).content,
+      fullPost,
+      Astro.locals.themeContext!
+    )
+    if (filtered && typeof filtered === 'string') {
+      (fullPost as any).content = filtered
+    }
+  } catch (error) {
+    console.error('[Theme] Error in filterContent:', error)
+    // Continue with unfiltered content
+  }
+}
+
 // Get layout variant for this post
 const layoutVariant = await getPostLayoutVariant(fullPost, postType as 'post' | 'page')
 
@@ -158,7 +175,7 @@ console.log(`Loading layout from: ${layoutPath}`)
 let LayoutComponent
 try {
   // Try loading from active theme
-  const layoutModule = await allLayouts[layoutPath]()
+  const layoutModule = await allLayouts[layoutPath]() as any
   LayoutComponent = layoutModule.default
   console.log(`✓ Loaded ${themeSlug}/${postType}/${layoutVariant} layout`)
 } catch (error) {
@@ -167,7 +184,7 @@ try {
   // Fallback to default theme
   try {
     const fallbackPath = `../../../themes/default/layouts/${postType}/${layoutVariant}.astro`
-    const layoutModule = await allLayouts[fallbackPath]()
+    const layoutModule = await allLayouts[fallbackPath]() as any
     LayoutComponent = layoutModule.default
     console.log(`✓ Loaded fallback default/${postType}/${layoutVariant} layout`)
   } catch (fallbackError) {
