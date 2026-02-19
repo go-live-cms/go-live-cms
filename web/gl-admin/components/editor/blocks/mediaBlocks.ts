@@ -22,20 +22,50 @@ export const isImagePlaceholder = (src: string): boolean => {
   return src.includes("data:image/svg+xml") && src.includes("Click to select image from library")
 }
 
+/** Safely check if editor view is available (TipTap v3 throws on .view access when not mounted) */
+function isEditorViewReady(editor: TiptapEditor): boolean {
+  try {
+    return !!editor.view?.dom
+  } catch {
+    return false
+  }
+}
+
 export class MediaBlockManager {
   private editor: TiptapEditor
   private postId?: number
   private onShowMediaSelector: (position: number) => void
   private cleanupImageClick?: () => void
+  private retryTimer?: ReturnType<typeof setInterval>
+  private retryTimeout?: ReturnType<typeof setTimeout>
 
   constructor(editor: TiptapEditor, postId?: number, onShowMediaSelector?: (position: number) => void) {
     this.editor = editor
     this.postId = postId
     this.onShowMediaSelector = onShowMediaSelector || (() => {})
-    this.setupImageClickHandling()
+    // Defer setup until editor view is ready
+    if (isEditorViewReady(editor)) {
+      this.setupImageClickHandling()
+    } else {
+      // Wait for editor to be ready
+      this.retryTimer = setInterval(() => {
+        if (isEditorViewReady(editor)) {
+          clearInterval(this.retryTimer!)
+          this.setupImageClickHandling()
+        }
+      }, 50)
+      // Give up after 2 seconds
+      this.retryTimeout = setTimeout(() => clearInterval(this.retryTimer!), 2000)
+    }
   }
 
   private setupImageClickHandling() {
+    // Double check view is available
+    if (!isEditorViewReady(this.editor)) {
+      console.warn("[MediaBlockManager] Editor view not ready, skipping image click setup")
+      return
+    }
+
     const handleImageClick = (event: MouseEvent) => {
       const target = event.target as HTMLImageElement
       if (target.tagName === "IMG" && isImagePlaceholder(target.src)) {
@@ -68,7 +98,9 @@ export class MediaBlockManager {
     editorElement.addEventListener("click", handleImageClick)
 
     this.cleanupImageClick = () => {
-      editorElement.removeEventListener("click", handleImageClick)
+      if (isEditorViewReady(this.editor)) {
+        editorElement.removeEventListener("click", handleImageClick)
+      }
     }
   }
 
@@ -101,8 +133,14 @@ export class MediaBlockManager {
   }
 
   destroy() {
-    if (this.cleanupImageClick) {
-      this.cleanupImageClick()
+    if (this.retryTimer) clearInterval(this.retryTimer)
+    if (this.retryTimeout) clearTimeout(this.retryTimeout)
+    try {
+      if (this.cleanupImageClick) {
+        this.cleanupImageClick()
+      }
+    } catch {
+      // Editor view already destroyed, nothing to clean up
     }
   }
 }
