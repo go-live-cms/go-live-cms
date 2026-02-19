@@ -21,6 +21,7 @@ export default defineConfig({
       alias: {
         "@": path.resolve("./src"),
         "@gl-admin": path.resolve("./gl-admin"),
+        "@themes": path.resolve("./themes"),
       },
     },
     server: {
