@@ -15,6 +15,7 @@ import { getSlashCommandItems } from "../blocks"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { BlockIdExtension } from "../extensions/BlockIdExtension"
 import { createLowlight, common } from "lowlight"
+import { tiptapExtensionRegistry } from "./extensionRegistry"
 
 const lowlight = createLowlight(common)
 
@@ -140,6 +141,13 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       } else {
         console.warn("CollaborationProvider not fully initialized, skipping collaboration extensions")
       }
+    }
+
+    // Add dynamically registered theme extensions
+    const themeExtensions = tiptapExtensionRegistry.getAll()
+    if (themeExtensions.length > 0) {
+      console.log(`[Editor] Adding ${themeExtensions.length} theme extensions to editor`)
+      baseExtensions.push(...themeExtensions)
     }
 
     return baseExtensions
