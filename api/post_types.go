@@ -1,23 +1,26 @@
 // Package api – Post Types module.
 //
 // # What this module does
-// Exposes read-only endpoints for registered post types and a helper to fetch a post with its meta.
+// Exposes endpoints for managing post types (CRUD) and a helper to fetch a post with its meta.
 // Shapes DB rows into a clean PostTypeResponse.
 //
 // # Endpoints (v1)
-// - GET /api/v1/post-types        (list all post types)
-// - GET /api/v1/post-types/:name  (fetch single post type by machine name)
-// - GET /api/v1/posts/:id/with-meta (fetch post plus meta blob helper)
+// - GET    /api/v1/post-types            (list active post types; ?all=true for all)
+// - GET    /api/v1/post-types/:name      (fetch single post type by machine name)
+// - POST   /api/v1/post-types            (create or upsert a post type — auth required)
+// - PUT    /api/v1/post-types/:name      (update a post type — auth required)
+// - GET    /api/v1/posts/:id/with-meta   (fetch post plus meta blob helper)
 //
 // # Auth
-// All endpoints are public (no Bearer required). Protect upstream if your deployment requires it.
+// GET endpoints are public. POST/PUT require a valid access token.
 //
 // # Request params
 // Path:
 //   - :name — string; post type key (e.g., post, page, product)
 //   - :id — int64; post ID for with-meta
 //
-// Query: none.
+// Query:
+//   - all=true (on list) — include inactive post types
 //
 // # Responses
 // PostTypeResponse:
@@ -29,36 +32,22 @@
 //   - hierarchical (bool)
 //   - has_archive (bool)
 //   - menu_position (int32) — optional in DB; zero if NULL
-//   - supports ([]string) — currently empty; reserved for future capabilities
+//   - supports ([]string) — post type capabilities
+//   - is_active (bool) — whether the post type is currently active
+//   - registered_by (string) — origin: "system", "theme:<slug>", etc.
 //   - created_at (RFC3339)
 //
-// Get Post with Meta: { "post": <DB-projected post+meta> } (shape comes from store.GetPostWithMeta).
-//
 // # Status codes
-// 200 OK — success | 400 Bad Request — invalid id | 404 Not Found — unknown post type/post | 500 Internal Server Error — datastore failures
+// 200 OK — success | 201 Created — post type created | 400 Bad Request — invalid input
+// 404 Not Found — unknown post type/post | 409 Conflict — name already taken
+// 500 Internal Server Error — datastore failures
 //
 // Error body: { "error": "message" }
-//
-// # Notes / Behavior
-// - description and menu_position are normalized: empty string / zero when DB NULLs
-// - supports is emitted for forward-compat; clients should not assume contents
-// - with-meta endpoint is read-through to a store method; its exact JSON may evolve with the DB projection
-//
-// # Examples
-// List: curl https://example.com/api/v1/post-types
-// Single: curl https://example.com/api/v1/post-types/product
-// Post with meta: curl https://example.com/api/v1/posts/123/with-meta
-//
-// # Cross-refs
-// - DB: ListPostTypes, GetPostType, GetPostWithMeta
-// - Related: posts.go for core post CRUD; taxonomy_* for organization
-//
-// # Future
-// Populate supports from DB/feature flags (e.g., title, editor, thumbnail, excerpt).
 package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -77,10 +66,22 @@ type PostTypeResponse struct {
 	HasArchive   bool      `json:"has_archive"`
 	MenuPosition int32     `json:"menu_position"`
 	Supports     []string  `json:"supports"`
+	IsActive     bool      `json:"is_active"`
+	RegisteredBy string    `json:"registered_by"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
 func toPostTypeResponse(postType db.PostType) PostTypeResponse {
+	// Parse supports from JSON
+	var supports []string
+	if postType.Supports != nil {
+		if err := json.Unmarshal(postType.Supports, &supports); err != nil {
+			supports = []string{}
+		}
+	} else {
+		supports = []string{}
+	}
+
 	return PostTypeResponse{
 		ID:           postType.ID,
 		Name:         postType.Name,
@@ -90,13 +91,24 @@ func toPostTypeResponse(postType db.PostType) PostTypeResponse {
 		Hierarchical: postType.Hierarchical,
 		HasArchive:   postType.HasArchive,
 		MenuPosition: postType.MenuPosition.Int32,
-		Supports:     []string{},
+		Supports:     supports,
+		IsActive:     postType.IsActive,
+		RegisteredBy: postType.RegisteredBy,
 		CreatedAt:    postType.CreatedAt,
 	}
 }
 
+// getPostTypes lists post types. By default returns only active ones.
+// Use ?all=true to include inactive post types.
 func (server *Server) getPostTypes(c *gin.Context) {
-	postTypes, err := server.store.ListPostTypes(c.Request.Context())
+	var postTypes []db.PostType
+	var err error
+
+	if c.Query("all") == "true" {
+		postTypes, err = server.store.ListPostTypes(c.Request.Context())
+	} else {
+		postTypes, err = server.store.ListActivePostTypes(c.Request.Context())
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list post types"})
 		return
@@ -109,6 +121,172 @@ func (server *Server) getPostTypes(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"post_types": responses,
+	})
+}
+
+type createPostTypeRequest struct {
+	Name         string   `json:"name" binding:"required,min=2,max=50"`
+	Label        string   `json:"label" binding:"required,min=2,max=100"`
+	Slug         string   `json:"slug"` // Alias for name (theme API compat)
+	Description  string   `json:"description"`
+	Public       *bool    `json:"public"`
+	Hierarchical *bool    `json:"hierarchical"`
+	HasArchive   *bool    `json:"has_archive"`
+	MenuPosition *int32   `json:"menu_position"`
+	Supports     []string `json:"supports"`
+	Icon         string   `json:"icon"`          // Stored in supports or ignored for now
+	RegisteredBy string   `json:"registered_by"` // e.g. "theme:example"
+}
+
+// createPostType creates or upserts a post type.
+// If a post type with the same name already exists, it updates it (upsert).
+func (server *Server) createPostType(c *gin.Context) {
+	var req createPostTypeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Support "slug" as alias for "name" (theme API sends slug)
+	name := req.Name
+	if name == "" && req.Slug != "" {
+		name = req.Slug
+	}
+
+	// Prevent overwriting system types
+	if name == "post" || name == "page" {
+		c.JSON(http.StatusConflict, gin.H{"error": "cannot modify system post types"})
+		return
+	}
+
+	isPublic := true
+	if req.Public != nil {
+		isPublic = *req.Public
+	}
+
+	isHierarchical := false
+	if req.Hierarchical != nil {
+		isHierarchical = *req.Hierarchical
+	}
+
+	hasArchive := true
+	if req.HasArchive != nil {
+		hasArchive = *req.HasArchive
+	}
+
+	var menuPosition sql.NullInt32
+	if req.MenuPosition != nil {
+		menuPosition = sql.NullInt32{Int32: *req.MenuPosition, Valid: true}
+	}
+
+	supports := req.Supports
+	if supports == nil {
+		supports = []string{"title", "content", "description"}
+	}
+	supportsJSON, err := json.Marshal(supports)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal supports"})
+		return
+	}
+
+	registeredBy := req.RegisteredBy
+	if registeredBy == "" {
+		registeredBy = "user"
+	}
+
+	arg := db.UpsertPostTypeParams{
+		Name:         name,
+		Label:        req.Label,
+		Description:  sql.NullString{String: req.Description, Valid: req.Description != ""},
+		Public:       isPublic,
+		Hierarchical: isHierarchical,
+		HasArchive:   hasArchive,
+		MenuPosition: menuPosition,
+		Supports:     supportsJSON,
+		IsActive:     true,
+		RegisteredBy: registeredBy,
+	}
+
+	postType, err := server.store.UpsertPostType(c.Request.Context(), arg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post type"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"post_type": toPostTypeResponse(postType),
+	})
+}
+
+type updatePostTypeRequest struct {
+	Label        string   `json:"label"`
+	Description  string   `json:"description"`
+	Public       *bool    `json:"public"`
+	Hierarchical *bool    `json:"hierarchical"`
+	HasArchive   *bool    `json:"has_archive"`
+	MenuPosition *int32   `json:"menu_position"`
+	Supports     []string `json:"supports"`
+}
+
+// updatePostType updates an existing post type by name.
+func (server *Server) updatePostType(c *gin.Context) {
+	name := c.Param("name")
+
+	// Prevent modifying system types
+	if name == "post" || name == "page" {
+		c.JSON(http.StatusConflict, gin.H{"error": "cannot modify system post types"})
+		return
+	}
+
+	// Check the post type exists
+	_, err := server.store.GetPostType(c.Request.Context(), name)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post type"})
+		return
+	}
+
+	var req updatePostTypeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var supportsJSON json.RawMessage
+	if req.Supports != nil {
+		supportsJSON, err = json.Marshal(req.Supports)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal supports"})
+			return
+		}
+	}
+
+	arg := db.UpdatePostTypeParams{
+		Name:         name,
+		Label:        req.Label,
+		Description:  sql.NullString{String: req.Description, Valid: req.Description != ""},
+		Public:       req.Public != nil && *req.Public,
+		Hierarchical: req.Hierarchical != nil && *req.Hierarchical,
+		HasArchive:   req.HasArchive != nil && *req.HasArchive,
+		MenuPosition: sql.NullInt32{},
+		Supports:     supportsJSON,
+	}
+
+	if req.MenuPosition != nil {
+		arg.MenuPosition = sql.NullInt32{Int32: *req.MenuPosition, Valid: true}
+	}
+
+	postType, err := server.store.UpdatePostType(c.Request.Context(), arg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post type"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"post_type": toPostTypeResponse(postType),
 	})
 }
 
