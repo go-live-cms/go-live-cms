@@ -91,6 +91,8 @@ type PostType struct {
 	MenuPosition sql.NullInt32   `json:"menu_position"`
 	Supports     json.RawMessage `json:"supports"`
 	CreatedAt    time.Time       `json:"created_at"`
+	IsActive     bool            `json:"is_active"`
+	RegisteredBy string          `json:"registered_by"`
 }
 
 type PostVersion struct {
