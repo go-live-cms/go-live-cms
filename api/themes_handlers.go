@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -74,11 +75,22 @@ func (server *Server) activateTheme(c *gin.Context) {
 		return
 	}
 
+	// Get the previously active theme (if any) to deactivate its post types
+	oldTheme, oldErr := server.store.GetActiveTheme(c)
+
 	// First deactivate all themes
 	err = server.store.DeactivateAllThemes(c)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to deactivate themes"})
 		return
+	}
+
+	// Deactivate old theme's post types
+	if oldErr == nil {
+		_ = server.store.SetPostTypeActiveByRegisteredBy(c, db.SetPostTypeActiveByRegisteredByParams{
+			IsActive:     false,
+			RegisteredBy: fmt.Sprintf("theme:%s", oldTheme.Slug),
+		})
 	}
 
 	// Then activate the requested theme
@@ -91,6 +103,12 @@ func (server *Server) activateTheme(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to activate theme"})
 		return
 	}
+
+	// Activate new theme's post types
+	_ = server.store.SetPostTypeActiveByRegisteredBy(c, db.SetPostTypeActiveByRegisteredByParams{
+		IsActive:     true,
+		RegisteredBy: fmt.Sprintf("theme:%s", theme.Slug),
+	})
 
 	response := toThemeResponse(theme)
 	c.JSON(http.StatusOK, response)
