@@ -49,10 +49,12 @@ INSERT INTO post_types (
     hierarchical,
     has_archive,
     menu_position,
-    supports
+    supports,
+    is_active,
+    registered_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
-) RETURNING id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+) RETURNING id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at, is_active, registered_by
 `
 
 type CreatePostTypeParams struct {
@@ -64,6 +66,8 @@ type CreatePostTypeParams struct {
 	HasArchive   bool            `json:"has_archive"`
 	MenuPosition sql.NullInt32   `json:"menu_position"`
 	Supports     json.RawMessage `json:"supports"`
+	IsActive     bool            `json:"is_active"`
+	RegisteredBy string          `json:"registered_by"`
 }
 
 func (q *Queries) CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error) {
@@ -76,6 +80,8 @@ func (q *Queries) CreatePostType(ctx context.Context, arg CreatePostTypeParams) 
 		arg.HasArchive,
 		arg.MenuPosition,
 		arg.Supports,
+		arg.IsActive,
+		arg.RegisteredBy,
 	)
 	var i PostType
 	err := row.Scan(
@@ -89,6 +95,8 @@ func (q *Queries) CreatePostType(ctx context.Context, arg CreatePostTypeParams) 
 		&i.MenuPosition,
 		&i.Supports,
 		&i.CreatedAt,
+		&i.IsActive,
+		&i.RegisteredBy,
 	)
 	return i, err
 }
@@ -187,7 +195,7 @@ func (q *Queries) GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyPara
 }
 
 const getPostType = `-- name: GetPostType :one
-SELECT id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at FROM post_types 
+SELECT id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at, is_active, registered_by FROM post_types 
 WHERE name = $1 LIMIT 1
 `
 
@@ -205,12 +213,14 @@ func (q *Queries) GetPostType(ctx context.Context, name string) (PostType, error
 		&i.MenuPosition,
 		&i.Supports,
 		&i.CreatedAt,
+		&i.IsActive,
+		&i.RegisteredBy,
 	)
 	return i, err
 }
 
 const getPostTypeByID = `-- name: GetPostTypeByID :one
-SELECT id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at FROM post_types 
+SELECT id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at, is_active, registered_by FROM post_types 
 WHERE id = $1 LIMIT 1
 `
 
@@ -228,12 +238,56 @@ func (q *Queries) GetPostTypeByID(ctx context.Context, id int64) (PostType, erro
 		&i.MenuPosition,
 		&i.Supports,
 		&i.CreatedAt,
+		&i.IsActive,
+		&i.RegisteredBy,
 	)
 	return i, err
 }
 
+const listActivePostTypes = `-- name: ListActivePostTypes :many
+SELECT id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at, is_active, registered_by FROM post_types
+WHERE is_active = true
+ORDER BY menu_position ASC, name ASC
+`
+
+func (q *Queries) ListActivePostTypes(ctx context.Context) ([]PostType, error) {
+	rows, err := q.db.QueryContext(ctx, listActivePostTypes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PostType{}
+	for rows.Next() {
+		var i PostType
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Label,
+			&i.Description,
+			&i.Public,
+			&i.Hierarchical,
+			&i.HasArchive,
+			&i.MenuPosition,
+			&i.Supports,
+			&i.CreatedAt,
+			&i.IsActive,
+			&i.RegisteredBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostTypes = `-- name: ListPostTypes :many
-SELECT id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at FROM post_types
+SELECT id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at, is_active, registered_by FROM post_types
 ORDER BY menu_position ASC, name ASC
 `
 
@@ -257,6 +311,8 @@ func (q *Queries) ListPostTypes(ctx context.Context) ([]PostType, error) {
 			&i.MenuPosition,
 			&i.Supports,
 			&i.CreatedAt,
+			&i.IsActive,
+			&i.RegisteredBy,
 		); err != nil {
 			return nil, err
 		}
@@ -269,6 +325,38 @@ func (q *Queries) ListPostTypes(ctx context.Context) ([]PostType, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setPostTypeActive = `-- name: SetPostTypeActive :exec
+UPDATE post_types
+SET is_active = $1
+WHERE name = $2
+`
+
+type SetPostTypeActiveParams struct {
+	IsActive bool   `json:"is_active"`
+	Name     string `json:"name"`
+}
+
+func (q *Queries) SetPostTypeActive(ctx context.Context, arg SetPostTypeActiveParams) error {
+	_, err := q.db.ExecContext(ctx, setPostTypeActive, arg.IsActive, arg.Name)
+	return err
+}
+
+const setPostTypeActiveByRegisteredBy = `-- name: SetPostTypeActiveByRegisteredBy :exec
+UPDATE post_types
+SET is_active = $1
+WHERE registered_by = $2
+`
+
+type SetPostTypeActiveByRegisteredByParams struct {
+	IsActive     bool   `json:"is_active"`
+	RegisteredBy string `json:"registered_by"`
+}
+
+func (q *Queries) SetPostTypeActiveByRegisteredBy(ctx context.Context, arg SetPostTypeActiveByRegisteredByParams) error {
+	_, err := q.db.ExecContext(ctx, setPostTypeActiveByRegisteredBy, arg.IsActive, arg.RegisteredBy)
+	return err
 }
 
 const updatePostMeta = `-- name: UpdatePostMeta :one
@@ -307,7 +395,7 @@ SET label = COALESCE($1, label),
     menu_position = COALESCE($6, menu_position),
     supports = COALESCE($7, supports)
 WHERE name = $8
-RETURNING id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at
+RETURNING id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at, is_active, registered_by
 `
 
 type UpdatePostTypeParams struct {
@@ -344,6 +432,8 @@ func (q *Queries) UpdatePostType(ctx context.Context, arg UpdatePostTypeParams) 
 		&i.MenuPosition,
 		&i.Supports,
 		&i.CreatedAt,
+		&i.IsActive,
+		&i.RegisteredBy,
 	)
 	return i, err
 }
@@ -371,6 +461,77 @@ func (q *Queries) UpsertPostMeta(ctx context.Context, arg UpsertPostMetaParams) 
 		&i.MetaKey,
 		&i.MetaValue,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const upsertPostType = `-- name: UpsertPostType :one
+INSERT INTO post_types (
+    name,
+    label,
+    description,
+    public,
+    hierarchical,
+    has_archive,
+    menu_position,
+    supports,
+    is_active,
+    registered_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+) ON CONFLICT (name) DO UPDATE SET
+    label = EXCLUDED.label,
+    description = EXCLUDED.description,
+    public = EXCLUDED.public,
+    hierarchical = EXCLUDED.hierarchical,
+    has_archive = EXCLUDED.has_archive,
+    menu_position = EXCLUDED.menu_position,
+    supports = EXCLUDED.supports,
+    is_active = EXCLUDED.is_active,
+    registered_by = EXCLUDED.registered_by
+RETURNING id, name, label, description, public, hierarchical, has_archive, menu_position, supports, created_at, is_active, registered_by
+`
+
+type UpsertPostTypeParams struct {
+	Name         string          `json:"name"`
+	Label        string          `json:"label"`
+	Description  sql.NullString  `json:"description"`
+	Public       bool            `json:"public"`
+	Hierarchical bool            `json:"hierarchical"`
+	HasArchive   bool            `json:"has_archive"`
+	MenuPosition sql.NullInt32   `json:"menu_position"`
+	Supports     json.RawMessage `json:"supports"`
+	IsActive     bool            `json:"is_active"`
+	RegisteredBy string          `json:"registered_by"`
+}
+
+func (q *Queries) UpsertPostType(ctx context.Context, arg UpsertPostTypeParams) (PostType, error) {
+	row := q.db.QueryRowContext(ctx, upsertPostType,
+		arg.Name,
+		arg.Label,
+		arg.Description,
+		arg.Public,
+		arg.Hierarchical,
+		arg.HasArchive,
+		arg.MenuPosition,
+		arg.Supports,
+		arg.IsActive,
+		arg.RegisteredBy,
+	)
+	var i PostType
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Label,
+		&i.Description,
+		&i.Public,
+		&i.Hierarchical,
+		&i.HasArchive,
+		&i.MenuPosition,
+		&i.Supports,
+		&i.CreatedAt,
+		&i.IsActive,
+		&i.RegisteredBy,
 	)
 	return i, err
 }
