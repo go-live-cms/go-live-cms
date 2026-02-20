@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -22,6 +23,19 @@ type DiscoveredTheme struct {
 	Author      string
 	Config      map[string]interface{}
 	Path        string
+	PostTypes   []DiscoveredPostType
+}
+
+// DiscoveredPostType represents a post type declared in a theme's config
+type DiscoveredPostType struct {
+	Name         string   `json:"name"`
+	Label        string   `json:"label"`
+	Description  string   `json:"description"`
+	Hierarchical bool     `json:"hierarchical"`
+	HasArchive   bool     `json:"has_archive"`
+	MenuPosition int32    `json:"menu_position"`
+	Supports     []string `json:"supports"`
+	Icon         string   `json:"icon"`
 }
 
 // ScanThemesDirectory scans the web/themes directory and returns discovered themes
@@ -148,7 +162,99 @@ func parseThemeConfig(slug, configPath, themePath string) (DiscoveredTheme, erro
 		}
 	}
 
+	// Extract postTypes declarations
+	theme.PostTypes = parsePostTypes(configStr)
+
 	return theme, nil
+}
+
+// parsePostTypes extracts post type declarations from theme.config.ts content.
+// Looks for a postTypes array with objects containing name, label, description, etc.
+func parsePostTypes(configStr string) []DiscoveredPostType {
+	var postTypes []DiscoveredPostType
+
+	// Match the postTypes array block
+	postTypesRegex := regexp.MustCompile(`postTypes:\s*\[([\s\S]*?)\]`)
+	match := postTypesRegex.FindStringSubmatch(configStr)
+	if len(match) < 2 {
+		return postTypes
+	}
+
+	arrayContent := match[1]
+
+	// Match each object in the array
+	objectRegex := regexp.MustCompile(`\{([^}]+)\}`)
+	objects := objectRegex.FindAllStringSubmatch(arrayContent, -1)
+
+	for _, obj := range objects {
+		if len(obj) < 2 {
+			continue
+		}
+		objStr := obj[1]
+
+		pt := DiscoveredPostType{
+			HasArchive: true, // default
+		}
+
+		// Extract name
+		if m := regexp.MustCompile(`name:\s*["']([^"']+)["']`).FindStringSubmatch(objStr); len(m) > 1 {
+			pt.Name = m[1]
+		}
+
+		// Extract label
+		if m := regexp.MustCompile(`label:\s*["']([^"']+)["']`).FindStringSubmatch(objStr); len(m) > 1 {
+			pt.Label = m[1]
+		}
+
+		// Extract description
+		if m := regexp.MustCompile(`description:\s*["']([^"']+)["']`).FindStringSubmatch(objStr); len(m) > 1 {
+			pt.Description = m[1]
+		}
+
+		// Extract icon
+		if m := regexp.MustCompile(`icon:\s*["']([^"']+)["']`).FindStringSubmatch(objStr); len(m) > 1 {
+			pt.Icon = m[1]
+		}
+
+		// Extract hierarchical
+		if m := regexp.MustCompile(`hierarchical:\s*(true|false)`).FindStringSubmatch(objStr); len(m) > 1 {
+			pt.Hierarchical = m[1] == "true"
+		}
+
+		// Extract hasArchive
+		if m := regexp.MustCompile(`hasArchive:\s*(true|false)`).FindStringSubmatch(objStr); len(m) > 1 {
+			pt.HasArchive = m[1] == "true"
+		}
+
+		// Extract menuPosition
+		if m := regexp.MustCompile(`menuPosition:\s*(\d+)`).FindStringSubmatch(objStr); len(m) > 1 {
+			pos, _ := strconv.Atoi(m[1])
+			pt.MenuPosition = int32(pos)
+		}
+
+		// Extract supports array
+		if m := regexp.MustCompile(`supports:\s*\[(.*?)\]`).FindStringSubmatch(objStr); len(m) > 1 {
+			supportItems := regexp.MustCompile(`["']([^"']+)["']`).FindAllStringSubmatch(m[1], -1)
+			for _, item := range supportItems {
+				if len(item) > 1 {
+					pt.Supports = append(pt.Supports, item[1])
+				}
+			}
+		}
+
+		// Only add if name is present and not a system type
+		if pt.Name != "" && pt.Name != "post" && pt.Name != "page" {
+			if pt.Label == "" {
+				pt.Label = strings.Title(pt.Name) //nolint:staticcheck
+			}
+			if pt.Supports == nil {
+				pt.Supports = []string{"title", "content", "description"}
+			}
+			postTypes = append(postTypes, pt)
+		}
+	}
+
+	return postTypes
 }
 
 // SyncThemesToDatabase syncs discovered themes with the database
@@ -252,6 +358,46 @@ func (server *Server) SyncThemesToDatabase(themes []DiscoveredTheme) error {
 
 			if err != nil {
 				fmt.Printf("Warning: Failed to update theme %s: %v\n", theme.Slug, err)
+			}
+		}
+	}
+
+	// Sync theme-declared post types
+	for _, theme := range themes {
+		registeredBy := fmt.Sprintf("theme:%s", theme.Slug)
+
+		// Check if this theme is active
+		existingTheme, err := server.store.GetThemeBySlug(server.ctx, theme.Slug)
+		if err != nil {
+			continue
+		}
+		isActive := existingTheme.Active
+
+		for _, pt := range theme.PostTypes {
+			supportsJSON, _ := json.Marshal(pt.Supports)
+
+			_, err := server.store.UpsertPostType(server.ctx, db.UpsertPostTypeParams{
+				Name:  pt.Name,
+				Label: pt.Label,
+				Description: sql.NullString{
+					String: pt.Description,
+					Valid:  pt.Description != "",
+				},
+				Public:       true,
+				Hierarchical: pt.Hierarchical,
+				HasArchive:   pt.HasArchive,
+				MenuPosition: sql.NullInt32{
+					Int32: pt.MenuPosition,
+					Valid: pt.MenuPosition > 0,
+				},
+				Supports:     supportsJSON,
+				IsActive:     isActive,
+				RegisteredBy: registeredBy,
+			})
+			if err != nil {
+				fmt.Printf("Warning: Failed to upsert post type '%s' for theme '%s': %v\n", pt.Name, theme.Slug, err)
+			} else if isActive {
+				fmt.Printf("✓ Registered post type: %s (from theme %s)\n", pt.Name, theme.Slug)
 			}
 		}
 	}
