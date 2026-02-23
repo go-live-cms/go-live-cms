@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Listing from "@gl-admin/layouts/Listing"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import { getUsers } from "@gl-admin/lib/api/users"
+import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import Pagination from "@gl-admin/components/ui/Pagination"
 import PostTitle from "@gl-admin/components/ui/PostTitle"
@@ -13,7 +14,7 @@ import PostType from "@gl-admin/components/ui/PostType"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
 import Button from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
-import type { Post, ApiMeta } from "@gl-admin/lib/api/types"
+import type { Post, ApiMeta, PostType as PostTypeInfo } from "@gl-admin/lib/api/types"
 import type { PostQueryParams } from "@gl-admin/lib/api/posts"
 
 type ContentProps = {
@@ -23,13 +24,15 @@ type ContentProps = {
 
 const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   const navigate = useNavigate()
+  const { typeName } = useParams<{ typeName?: string }>()
   const { isDark, baseTitle } = useGoLive()
+  const [postTypesList, setPostTypesList] = useState<PostTypeInfo[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([
     { label: "All authors", value: "" },
   ])
   const initialFilters = (() => {
-    const base = { user_id: "", type: "", sort: "", status: "" }
+    const base = { user_id: "", type: typeName || "", sort: "", status: "" }
     if (queryProp) {
       const stringFilters = Object.fromEntries(
         Object.entries(queryProp).map(([key, value]) => [key, value !== undefined ? String(value) : ""])
@@ -55,7 +58,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         render: (_, row) => <PostDateTime value={row?.created_at || null} />,
       },
     ]
-    if (!queryProp) {
+    if (!queryProp && !typeName) {
       cols.push({
         key: "post_type",
         name: "Type",
@@ -92,10 +95,13 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   }
 
   const getAddButtonName = () => {
-    if (queryProp?.type === "post") {
-      return "New Post"
+    const type = typeName || queryProp?.type
+    if (type) {
+      const pt = postTypesList.find((p) => p.name === type)
+      if (pt) return `New ${pt.label.replace(/s$/, "")}`
+      return `New ${type.charAt(0).toUpperCase() + type.slice(1)}`
     }
-    return "New Page"
+    return "New Post"
   }
 
   const clearFilters = () => {
@@ -103,12 +109,8 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   }
 
   const handleNewPost = () => {
-    // TODO: make this dynamic later
-    if (queryProp?.type === "page") {
-      navigate("/content/pages/new")
-    } else {
-      navigate("/content/posts/new")
-    }
+    const type = typeName || queryProp?.type || "post"
+    navigate(`/content/${type}/new`)
   }
 
   const handleRowDoubleClick = (post: Post) => {
@@ -117,34 +119,46 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
 
   const fetchData = useCallback(
     async ({ limit, offset, ...query }: ApiMeta & PostQueryParams) => {
-      const mergedParams = { 
-        limit, 
-        offset, 
-        with_meta: true, 
-        meta_level: "basic", 
-        ...query, 
-        ...selectedFilters 
+      const mergedParams = {
+        limit,
+        offset,
+        with_meta: true,
+        meta_level: "basic",
+        ...query,
+        ...selectedFilters,
       }
-      
+
       const filteredParams = Object.fromEntries(
         Object.entries(mergedParams).filter(([_, value]) => value !== "" && value !== undefined)
       )
-      
+
       const response = await getPosts(filteredParams)
       return { data: response.data, total: response.meta.total || 0 }
-    }, 
+    },
     [selectedFilters]
   )
 
   useEffect(() => {
-    document.title = `${baseTitle} ${title || "Content"}`
+    // Derive page title from route param or prop
+    const pageTitle = typeName
+      ? postTypesList.find((p) => p.name === typeName)?.label ||
+        typeName.charAt(0).toUpperCase() + typeName.slice(1) + "s"
+      : title || "Content"
+    document.title = `${baseTitle} ${pageTitle}`
 
     const fetchAuthorOptions = async () => {
       const options = await getAuthorOptions()
       setAuthorOptions(options)
     }
     fetchAuthorOptions()
-  }, [])
+
+    // Fetch post types for filter dropdown
+    getPostTypes()
+      .then(({ data }) => {
+        if (data && data.length > 0) setPostTypesList(data)
+      })
+      .catch(() => {})
+  }, [typeName])
 
   const filters = (
     <>
@@ -170,12 +184,11 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         value={selectedFilters.status}
         onChange={(value) => setSelectedFilters({ ...selectedFilters, status: value })}
       />
-      {!queryProp?.type && (
+      {!queryProp?.type && !typeName && (
         <FilterSelect
           options={[
             { label: "All types", value: "" },
-            { label: "Posts", value: "post" },
-            { label: "Pages", value: "page" },
+            ...postTypesList.map((pt) => ({ label: pt.label, value: pt.name })),
           ]}
           prefix="View:"
           value={selectedFilters.type}
@@ -202,8 +215,13 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     </>
   )
 
+  const displayTitle = typeName
+    ? postTypesList.find((p) => p.name === typeName)?.label ||
+      typeName.charAt(0).toUpperCase() + typeName.slice(1) + "s"
+    : title || "Content"
+
   return (
-    <Listing title={title || "Content"} actions={filters}>
+    <Listing title={displayTitle} actions={filters}>
       <Pagination fetchData={fetchData} query={selectedFilters || {}}>
         {({ data, loading }) => (
           <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
