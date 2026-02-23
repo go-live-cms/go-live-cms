@@ -173,14 +173,37 @@ func parseThemeConfig(slug, configPath, themePath string) (DiscoveredTheme, erro
 func parsePostTypes(configStr string) []DiscoveredPostType {
 	var postTypes []DiscoveredPostType
 
-	// Match the postTypes array block
-	postTypesRegex := regexp.MustCompile(`postTypes:\s*\[([\s\S]*?)\]`)
-	match := postTypesRegex.FindStringSubmatch(configStr)
-	if len(match) < 2 {
+	// Find the postTypes key and its opening bracket
+	ptIdx := strings.Index(configStr, "postTypes:")
+	if ptIdx == -1 {
 		return postTypes
 	}
 
-	arrayContent := match[1]
+	rest := configStr[ptIdx:]
+	bracketStart := strings.Index(rest, "[")
+	if bracketStart == -1 {
+		return postTypes
+	}
+
+	// Use bracket counting to find the matching closing ]
+	// This correctly handles nested arrays like supports: [...]
+	depth := 0
+	var arrayContent string
+	for i := bracketStart; i < len(rest); i++ {
+		if rest[i] == '[' {
+			depth++
+		} else if rest[i] == ']' {
+			depth--
+			if depth == 0 {
+				arrayContent = rest[bracketStart+1 : i]
+				break
+			}
+		}
+	}
+
+	if arrayContent == "" {
+		return postTypes
+	}
 
 	// Match each object in the array
 	objectRegex := regexp.MustCompile(`\{([^}]+)\}`)
