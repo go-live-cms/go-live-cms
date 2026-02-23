@@ -39,11 +39,14 @@ func randomPost(user db.User) db.Post {
 	return db.Post{
 		ID:          gofakeit.Int64(),
 		Title:       gofakeit.Sentence(3),
-		Content:     gofakeit.Paragraph(3, 5, 10, " "),
+		BlockDoc:    json.RawMessage(`{"blocks":[]}`),
 		Description: gofakeit.Sentence(10),
 		UserID:      user.ID,
 		Username:    user.Username,
 		Url:         fmt.Sprintf("https://example.com/posts/%s", gofakeit.UUID()),
+		PostType:    "post",
+		PostStatus:  "draft",
+		Slug:        gofakeit.UUID(),
 		CreatedAt:   time.Now(),
 		ChangedAt:   time.Now(),
 	}
@@ -64,7 +67,6 @@ func TestCreatePostAPI(t *testing.T) {
 			name: "OK",
 			body: gin.H{
 				"title":       post.Title,
-				"content":     post.Content,
 				"description": post.Description,
 				"url":         post.Url,
 				"author_ids":  []int64{user.ID},
@@ -98,7 +100,6 @@ func TestCreatePostAPI(t *testing.T) {
 			name: "AuthorNotFound",
 			body: gin.H{
 				"title":       post.Title,
-				"content":     post.Content,
 				"description": post.Description,
 				"url":         post.Url,
 				"author_ids":  []int64{999},
@@ -120,7 +121,6 @@ func TestCreatePostAPI(t *testing.T) {
 			name: "NoAuthorization",
 			body: gin.H{
 				"title":       post.Title,
-				"content":     post.Content,
 				"description": post.Description,
 				"url":         post.Url,
 				"author_ids":  []int64{user.ID},
@@ -143,7 +143,6 @@ func TestCreatePostAPI(t *testing.T) {
 			name: "InvalidURL",
 			body: gin.H{
 				"title":       post.Title,
-				"content":     post.Content,
 				"description": post.Description,
 				"url":         "invalid-url",
 				"author_ids":  []int64{user.ID},
@@ -164,7 +163,6 @@ func TestCreatePostAPI(t *testing.T) {
 			name: "NoAuthors",
 			body: gin.H{
 				"title":       post.Title,
-				"content":     post.Content,
 				"description": post.Description,
 				"url":         post.Url,
 				"author_ids":  []int64{},
@@ -185,7 +183,6 @@ func TestCreatePostAPI(t *testing.T) {
 			name: "WithMedia",
 			body: gin.H{
 				"title":       post.Title,
-				"content":     post.Content,
 				"description": post.Description,
 				"url":         post.Url,
 				"author_ids":  []int64{user.ID},
@@ -345,10 +342,22 @@ func TestGetPostAPI(t *testing.T) {
 func TestListPostsAPI(t *testing.T) {
 	user := randomUserForPosts()
 	n := 5
-	posts := make([]db.Post, n)
+	listRows := make([]db.ListPostsRow, n)
 	for i := 0; i < n; i++ {
-		posts[i] = randomPost(user)
-		posts[i].ID = int64(i + 1)
+		p := randomPost(user)
+		p.ID = int64(i + 1)
+		listRows[i] = db.ListPostsRow{
+			ID:          p.ID,
+			Title:       p.Title,
+			Description: p.Description,
+			UserID:      p.UserID,
+			Username:    p.Username,
+			Url:         p.Url,
+			PostType:    p.PostType,
+			PostStatus:  p.PostStatus,
+			CreatedAt:   p.CreatedAt,
+			ChangedAt:   p.ChangedAt,
+		}
 	}
 
 	testCases := []struct {
@@ -363,22 +372,23 @@ func TestListPostsAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListPosts(gomock.Any(), db.ListPostsParams{
-						Column1:     "",
-						Column2:     "",
+						PostType:    "",
+						PostStatus:  "",
+						UserID:      int64(0),
 						SortBy:      "date_desc",
 						OffsetCount: 0,
 						LimitCount:  5,
 					}).
 					Times(1).
-					Return(posts, nil)
+					Return(listRows, nil)
 				store.EXPECT().
-					CountTotalPosts(gomock.Any()).
+					CountFilteredPosts(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(int64(100), nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
-				requireBodyMatchPosts(t, recorder.Body.String(), posts, int64(100))
+				requireBodyMatchListRows(t, recorder.Body.String(), listRows, int64(100))
 			},
 		},
 		{
@@ -386,9 +396,13 @@ func TestListPostsAPI(t *testing.T) {
 			query: "?limit=5&offset=0",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
+					CountFilteredPosts(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(int64(0), nil)
+				store.EXPECT().
 					ListPosts(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return([]db.Post{}, sql.ErrConnDone)
+					Return([]db.ListPostsRow{}, sql.ErrConnDone)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -435,7 +449,6 @@ func TestUpdatePostAPI(t *testing.T) {
 	user := randomUserForPosts()
 	post := randomPost(user)
 	newTitle := gofakeit.Sentence(3)
-	newContent := gofakeit.Paragraph(3, 5, 10, " ")
 
 	testCases := []struct {
 		name          string
@@ -449,8 +462,7 @@ func TestUpdatePostAPI(t *testing.T) {
 			name:   "OK",
 			postID: post.ID,
 			body: gin.H{
-				"title":   newTitle,
-				"content": newContent,
+				"title": newTitle,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
@@ -464,7 +476,6 @@ func TestUpdatePostAPI(t *testing.T) {
 
 				updatedPost := post
 				updatedPost.Title = newTitle
-				updatedPost.Content = newContent
 
 				store.EXPECT().
 					UpdatePost(gomock.Any(), gomock.Any()).
@@ -479,8 +490,7 @@ func TestUpdatePostAPI(t *testing.T) {
 			name:   "NoAuthorization",
 			postID: post.ID,
 			body: gin.H{
-				"title":   newTitle,
-				"content": newContent,
+				"title": newTitle,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 			},
@@ -691,11 +701,14 @@ func TestGetPostsByUserAPI(t *testing.T) {
 		posts[i] = db.GetPostsByUserWithMediaRow{
 			ID:          post.ID,
 			Title:       post.Title,
-			Content:     post.Content,
+			BlockDoc:    post.BlockDoc,
 			Description: post.Description,
 			UserID:      post.UserID,
 			Username:    post.Username,
 			Url:         post.Url,
+			PostType:    post.PostType,
+			PostStatus:  post.PostStatus,
+			Slug:        post.Slug,
 			CreatedAt:   post.CreatedAt,
 			ChangedAt:   post.ChangedAt,
 			Media:       []byte(`[]`),
@@ -780,14 +793,13 @@ func requireBodyMatchPost(t *testing.T, body string, post db.Post) {
 
 	require.Equal(t, post.ID, response.Post.ID)
 	require.Equal(t, post.Title, response.Post.Title)
-	require.Equal(t, post.Content, response.Post.Content)
 	require.Equal(t, post.Description, response.Post.Description)
 	require.Equal(t, post.UserID, response.Post.UserID)
 	require.Equal(t, post.Username, response.Post.Username)
 	require.Equal(t, post.Url, response.Post.Url)
 }
 
-func requireBodyMatchPosts(t *testing.T, body string, posts []db.Post, expectedTotal int64) {
+func requireBodyMatchListRows(t *testing.T, body string, rows []db.ListPostsRow, expectedTotal int64) {
 	var response struct {
 		Posts []PostResponse `json:"posts"`
 		Meta  struct {
@@ -800,15 +812,10 @@ func requireBodyMatchPosts(t *testing.T, body string, posts []db.Post, expectedT
 	err := json.Unmarshal([]byte(body), &response)
 	require.NoError(t, err)
 
-	require.Equal(t, len(posts), len(response.Posts))
+	require.Equal(t, len(rows), len(response.Posts))
 	require.Equal(t, expectedTotal, response.Meta.Total)
-	for i, post := range posts {
-		require.Equal(t, post.ID, response.Posts[i].ID)
-		require.Equal(t, post.Title, response.Posts[i].Title)
-		require.Equal(t, post.Content, response.Posts[i].Content)
-		require.Equal(t, post.Description, response.Posts[i].Description)
-		require.Equal(t, post.UserID, response.Posts[i].UserID)
-		require.Equal(t, post.Username, response.Posts[i].Username)
-		require.Equal(t, post.Url, response.Posts[i].Url)
+	for i, row := range rows {
+		require.Equal(t, row.ID, response.Posts[i].ID)
+		require.Equal(t, row.Title, response.Posts[i].Title)
 	}
 }
