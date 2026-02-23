@@ -5,8 +5,7 @@ import { ThemeProvider } from "./contexts/ThemeContext"
 import AuthGuard from "@gl-admin/components/AuthGuard"
 import Sidebar from "@gl-admin/components/sidebar/Sidebar"
 import "@gl-admin/assets/styles/global.scss"
-import NewPost from "./pages/NewPost"
-import NewPage from "./pages/NewPage"
+import NewContent from "./pages/NewContent"
 import EditContent from "./pages/EditPost"
 import { useRouteClasses } from "./utils/useRouteClasses"
 
@@ -31,16 +30,8 @@ function AppLayout() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/404" element={<NotFound />} />
             <Route path="/content" element={<Content key="content" />} />
-            <Route
-              path="/content/pages"
-              element={<Content key="content-pages" query={{ type: "page" }} title="Pages" />}
-            />
-            <Route
-              path="/content/posts"
-              element={<Content key="content-posts" query={{ type: "post" }} title="Posts" />}
-            />
-            <Route path="/content/posts/new" element={<NewPost />} />
-            <Route path="/content/pages/new" element={<NewPage />} />
+            <Route path="/content/:typeName" element={<Content key="content-type" />} />
+            <Route path="/content/:typeName/new" element={<NewContent />} />
             <Route path="/content/edit/:id" element={<EditContent />} />
             <Route path="/media" element={<Media />} />
             <Route path="/themes" element={<Themes />} />
