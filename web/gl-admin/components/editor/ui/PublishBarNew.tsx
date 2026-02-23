@@ -44,14 +44,9 @@ export default function PublishBar({
   }
 
   const getContentTypeName = () => {
-    switch (post.post_type) {
-      case "post":
-        return "Post"
-      case "page":
-        return "Page"
-      default:
-        return "Content"
-    }
+    const type = post.post_type
+    if (!type) return "Content"
+    return type.charAt(0).toUpperCase() + type.slice(1)
   }
 
   return (
