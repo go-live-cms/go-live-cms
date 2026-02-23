@@ -67,6 +67,11 @@ export interface PostType {
   description: string
   hierarchical: boolean
   public: boolean
+  has_archive: boolean
+  menu_position: number | null
+  supports: string[]
+  is_active: boolean
+  registered_by: string
   show_ui: boolean
   show_in_menu: boolean
   created_at: string
