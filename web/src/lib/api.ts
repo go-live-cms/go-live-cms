@@ -136,6 +136,24 @@ export async function updateActiveThemeSettings(settings: Record<string, any>): 
   })
 }
 
+export interface PostTypeInfo {
+  id: number
+  name: string
+  label: string
+  description: string
+  public: boolean
+  hierarchical: boolean
+  has_archive: boolean
+  menu_position: number | null
+  supports: string[]
+  is_active: boolean
+  registered_by: string
+}
+
+export async function getPostTypes(): Promise<PostTypeInfo[]> {
+  return apiCall("/post-types")
+}
+
 export async function getPostsByType(type: string, params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
   return getPosts({ ...params, type })
 }
