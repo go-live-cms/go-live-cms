@@ -79,7 +79,7 @@ export async function resolveThemeFile(path: string, themeId: string): Promise<s
  * @param variant - Layout variant (e.g., 'default', 'sidebar', 'wide')
  * @returns Layout component path
  */
-export async function resolveLayoutPath(postType: "post" | "page", variant: string = "default"): Promise<string> {
+export async function resolveLayoutPath(postType: string, variant: string = "default"): Promise<string> {
   const themeId = await getActiveThemeId()
   const config = await loadThemeConfig(themeId)
 
@@ -101,7 +101,7 @@ export async function resolveLayoutPath(postType: "post" | "page", variant: stri
 /**
  * Get layout variant for a specific post from database settings
  */
-export async function getPostLayoutVariant(post: any, postType: "post" | "page"): Promise<string> {
+export async function getPostLayoutVariant(post: any, postType: string): Promise<string> {
   try {
     const theme = await getActiveTheme()
     const layoutVariants = theme.settings?.layout_variants
@@ -120,7 +120,7 @@ export async function getPostLayoutVariant(post: any, postType: "post" | "page")
 /**
  * Load layout component dynamically
  */
-export async function loadLayoutComponent(postType: "post" | "page", variant: string = "default"): Promise<any> {
+export async function loadLayoutComponent(postType: string, variant: string = "default"): Promise<any> {
   try {
     const layoutPath = await resolveLayoutPath(postType, variant)
 
