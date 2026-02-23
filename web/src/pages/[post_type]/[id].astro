@@ -1,5 +1,5 @@
 ---
-import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme } from '../../lib/api'
+import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import type { Post } from '@gl-admin/lib/api/types'
 
@@ -11,7 +11,17 @@ const allLayouts = import.meta.glob('../../../themes/*/layouts/**/*.astro')
 export const prerender = false
 
 export async function getStaticPaths() {
-  const postTypes = ['post', 'page']
+  // Dynamically fetch active post types from the API
+  let postTypes = ['post', 'page'] // fallback
+  try {
+    const types = await getPostTypes()
+    if (types && types.length > 0) {
+      postTypes = types.map(t => t.name)
+      console.log('Discovered post types:', postTypes)
+    }
+  } catch (error) {
+    console.warn('Could not fetch post types, using defaults:', error)
+  }
   
   // Fetch settings to determine URL structure
   let urlStructure = 'id' // default
@@ -161,39 +171,46 @@ if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
 }
 
 // Get layout variant for this post
-const layoutVariant = await getPostLayoutVariant(fullPost, postType as 'post' | 'page')
+const layoutVariant = await getPostLayoutVariant(fullPost, postType)
 
 // Get active theme for dynamic layout loading
 const activeTheme = await getActiveTheme()
 const themeSlug = activeTheme.slug
 console.log(`🎨 Active theme: ${activeTheme.name} (${themeSlug}), layout variant: ${layoutVariant}`)
 
-// WordPress-style: Dynamically load layout from active theme
-const layoutPath = `../../../themes/${themeSlug}/layouts/${postType}/${layoutVariant}.astro`
-console.log(`Loading layout from: ${layoutPath}`)
-
+// Layout fallback chain:
+// 1. themes/{theme}/layouts/{postType}/{variant}.astro  (exact match)
+// 2. themes/{theme}/layouts/post/{variant}.astro        (generic post layout)
+// 3. themes/default/layouts/{postType}/{variant}.astro  (default theme, exact type)
+// 4. themes/default/layouts/post/default.astro          (ultimate fallback)
 let LayoutComponent
-try {
-  // Try loading from active theme
-  const layoutModule = await allLayouts[layoutPath]() as any
-  LayoutComponent = layoutModule.default
-  console.log(`✓ Loaded ${themeSlug}/${postType}/${layoutVariant} layout`)
-} catch (error) {
-  console.error(`Failed to load layout from ${themeSlug}, falling back to default:`, error)
-  
-  // Fallback to default theme
-  try {
-    const fallbackPath = `../../../themes/default/layouts/${postType}/${layoutVariant}.astro`
-    const layoutModule = await allLayouts[fallbackPath]() as any
-    LayoutComponent = layoutModule.default
-    console.log(`✓ Loaded fallback default/${postType}/${layoutVariant} layout`)
-  } catch (fallbackError) {
-    console.error(`Failed to load default layout:`, fallbackError)
-    return new Response(null, {
-      status: 500,
-      statusText: 'Layout Not Found'
-    })
+const fallbackChain = [
+  `../../../themes/${themeSlug}/layouts/${postType}/${layoutVariant}.astro`,
+  `../../../themes/${themeSlug}/layouts/post/${layoutVariant}.astro`,
+  `../../../themes/${themeSlug}/layouts/post/default.astro`,
+  `../../../themes/default/layouts/${postType}/${layoutVariant}.astro`,
+  `../../../themes/default/layouts/post/default.astro`,
+]
+
+for (const candidatePath of fallbackChain) {
+  if (allLayouts[candidatePath]) {
+    try {
+      const layoutModule = await allLayouts[candidatePath]() as any
+      LayoutComponent = layoutModule.default
+      console.log(`✓ Loaded layout: ${candidatePath}`)
+      break
+    } catch (error) {
+      console.warn(`Failed to load layout ${candidatePath}:`, error)
+    }
   }
+}
+
+if (!LayoutComponent) {
+  console.error(`No layout found for ${postType}/${layoutVariant} in any fallback`)
+  return new Response(null, {
+    status: 500,
+    statusText: 'Layout Not Found'
+  })
 }
 
 const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
