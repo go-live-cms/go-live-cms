@@ -28,6 +28,16 @@ export interface ThemeConfig {
     type: string
     modulePath: string // Path to the block module
   }>
+  postTypes?: Array<{
+    name: string
+    label: string
+    description?: string
+    icon?: string
+    hierarchical?: boolean
+    hasArchive?: boolean
+    menuPosition?: number
+    supports?: string[]
+  }>
 }
 
 export const themeConfig: ThemeConfig = {
@@ -55,6 +65,18 @@ export const themeConfig: ThemeConfig = {
     {
       type: "alert",
       modulePath: "/themes/example/blocks/Alert/index.ts",
+    },
+  ],
+  postTypes: [
+    {
+      name: "product",
+      label: "Products",
+      description: "Product listings for the store",
+      icon: "shopping-bag",
+      hierarchical: false,
+      hasArchive: true,
+      menuPosition: 5,
+      supports: ["title", "content", "description", "featured_image"],
     },
   ],
 }

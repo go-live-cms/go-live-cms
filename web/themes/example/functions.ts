@@ -37,21 +37,22 @@ async function setup(context: ThemeFunctionsContext): Promise<void> {
     console.log("[Example Theme] Initialized default menu")
   }
 
-  // Example: Register custom post type (commented out - uncomment to test)
-  /*
+  // Register custom post type declared in theme.config.ts
+  // The Go backend scanner handles this declaratively, but setup() can also
+  // call registerPostType for dynamic post types not in the config.
   try {
     await context.apiClient.registerPostType({
-      name: 'Portfolio',
-      slug: 'portfolio',
-      description: 'Portfolio items showcasing work',
-      icon: 'briefcase',
-      supports: ['title', 'editor', 'thumbnail', 'excerpt']
-    });
-    console.log('[Example Theme] Registered portfolio post type');
+      name: "product",
+      slug: "product",
+      description: "Product listings for the store",
+      icon: "shopping-bag",
+      supports: ["title", "content", "description", "featured_image"],
+    })
+    console.log("[Example Theme] Registered product post type")
   } catch (error) {
-    console.error('[Example Theme] Failed to register post type:', error);
+    // Safe to ignore — upsert semantics mean this is idempotent
+    console.warn("[Example Theme] Post type registration note:", error)
   }
-  */
 }
 
 /**

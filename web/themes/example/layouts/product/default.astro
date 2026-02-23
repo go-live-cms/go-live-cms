@@ -1,0 +1,171 @@
+---
+/**
+ * Example Theme - Product Layout
+ * Custom layout for the "product" post type registered by this theme.
+ * Falls back to post/default.astro if this file is missing.
+ */
+import BlockRenderer from '@/components/BlockRenderer'
+
+interface Props {
+  post: any;
+  title: string;
+  description: string;
+}
+
+const { post, title, description } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+
+    <!-- Theme Assets -->
+    {Astro.locals.themeAssets?.styles?.map((style: any) => (
+      <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
+    ))}
+
+    <style>
+      .product-layout {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+      }
+      .product-hero {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+      }
+      @media (max-width: 768px) {
+        .product-hero {
+          grid-template-columns: 1fr;
+        }
+      }
+      .product-image {
+        width: 100%;
+        border-radius: 8px;
+        object-fit: cover;
+        aspect-ratio: 1;
+      }
+      .product-image-placeholder {
+        width: 100%;
+        aspect-ratio: 1;
+        background: #f0f0f0;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-size: 1.25rem;
+      }
+      .product-info h1 {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+      }
+      .product-description {
+        color: #666;
+        font-size: 1.1rem;
+        margin-bottom: 1.5rem;
+        line-height: 1.6;
+      }
+      .product-meta {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1.5rem;
+      }
+      .product-meta-tag {
+        background: #f0f4f8;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.875rem;
+        color: #555;
+      }
+      .product-content {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid #eee;
+      }
+      .product-content h2 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="example-header">
+      <nav>
+        <h1>{Astro.locals.themeName || 'Example Theme'}</h1>
+        {Astro.locals.themeMenu && (
+          <ul>
+            {Astro.locals.themeMenu.items.map((item: any) => (
+              <li><a href={item.url}>{item.label}</a></li>
+            ))}
+          </ul>
+        )}
+      </nav>
+    </header>
+
+    <main class="product-layout">
+      <div class="product-hero">
+        <div>
+          {post.featured_image_url ? (
+            <img
+              src={post.featured_image_url}
+              alt={post.title}
+              class="product-image"
+            />
+          ) : (
+            <div class="product-image-placeholder">No image</div>
+          )}
+        </div>
+
+        <div class="product-info">
+          <h1>{post.title}</h1>
+
+          {post.description && (
+            <p class="product-description">{post.description}</p>
+          )}
+
+          <div class="product-meta">
+            <span class="product-meta-tag">Product</span>
+            {post.published_at && (
+              <span class="product-meta-tag">
+                Added {new Date(post.published_at).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div class="product-content">
+        <h2>Details</h2>
+        {post.published_blocks ? (
+          <BlockRenderer doc={post.published_blocks} client:load />
+        ) : (
+          <p>No content available</p>
+        )}
+      </div>
+    </main>
+
+    <footer class="example-footer">
+      <p>
+        Powered by {Astro.locals.themeName} v{Astro.locals.themeVersion}
+      </p>
+    </footer>
+
+    <!-- Theme Scripts -->
+    {Astro.locals.themeAssets?.scripts?.map((script: any) => (
+      <script
+        src={script.src}
+        defer={script.defer}
+        async={script.async}
+        type={script.type || 'text/javascript'}
+      ></script>
+    ))}
+  </body>
+</html>
