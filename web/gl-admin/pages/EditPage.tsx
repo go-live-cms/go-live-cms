@@ -60,7 +60,7 @@ export default function EditPage() {
           <h1>Error</h1>
         </div>
         <div className="message error">{error}</div>
-        <button onClick={() => navigate("/content/pages")} className="btn btn-secondary">
+        <button onClick={() => navigate("/content/page")} className="btn btn-secondary">
           Back to Pages
         </button>
       </div>
@@ -74,7 +74,7 @@ export default function EditPage() {
           <h1>Page Not Found</h1>
         </div>
         <div className="message error">The requested page could not be found.</div>
-        <button onClick={() => navigate("/content/pages")} className="btn btn-secondary">
+        <button onClick={() => navigate("/content/page")} className="btn btn-secondary">
           Back to Pages
         </button>
       </div>

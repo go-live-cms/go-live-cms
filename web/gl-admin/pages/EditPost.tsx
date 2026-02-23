@@ -43,25 +43,11 @@ export default function EditContent() {
   }
 
   const getContentTypeName = (postType: string) => {
-    switch (postType) {
-      case "post":
-        return "Post"
-      case "page":
-        return "Page"
-      default:
-        return "Content"
-    }
+    return postType.charAt(0).toUpperCase() + postType.slice(1)
   }
 
   const getBackUrl = (postType: string) => {
-    switch (postType) {
-      case "post":
-        return "/content/posts"
-      case "page":
-        return "/content/pages"
-      default:
-        return "/content"
-    }
+    return `/content/${postType}`
   }
 
   if (loading) {
