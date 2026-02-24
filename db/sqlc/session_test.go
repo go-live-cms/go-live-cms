@@ -32,14 +32,16 @@ func createRandomSession(t *testing.T, user User) Session {
 	gofakeit.Seed(0)
 
 	arg := CreateSessionParams{
-		ID:           uuid.New(),
-		UserID:       user.ID,
-		Username:     user.Username,
-		RefreshToken: gofakeit.UUID(),
-		UserAgent:    gofakeit.UserAgent(),
-		ClientIp:     gofakeit.IPv4Address(),
-		IsBlocked:    false,
-		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		ID:               uuid.New(),
+		UserID:           user.ID,
+		Username:         user.Username,
+		RefreshTokenHash: []byte(gofakeit.UUID()),
+		RefreshKid:       sql.NullString{},
+		Jti:              uuid.NullUUID{},
+		UserAgent:        gofakeit.UserAgent(),
+		ClientIp:         gofakeit.IPv4Address(),
+		IsBlocked:        false,
+		ExpiresAt:        time.Now().Add(24 * time.Hour),
 	}
 
 	session, err := testQueries.CreateSession(context.Background(), arg)
@@ -49,7 +51,7 @@ func createRandomSession(t *testing.T, user User) Session {
 	require.Equal(t, arg.ID, session.ID)
 	require.Equal(t, arg.UserID, session.UserID)
 	require.Equal(t, arg.Username, session.Username)
-	require.Equal(t, arg.RefreshToken, session.RefreshToken)
+	require.Equal(t, arg.RefreshTokenHash, session.RefreshTokenHash)
 	require.Equal(t, arg.UserAgent, session.UserAgent)
 	require.Equal(t, arg.ClientIp, session.ClientIp)
 	require.Equal(t, arg.IsBlocked, session.IsBlocked)
@@ -75,7 +77,7 @@ func TestGetSession(t *testing.T) {
 	require.Equal(t, session1.ID, session2.ID)
 	require.Equal(t, session1.UserID, session2.UserID)
 	require.Equal(t, session1.Username, session2.Username)
-	require.Equal(t, session1.RefreshToken, session2.RefreshToken)
+	require.Equal(t, session1.RefreshTokenHash, session2.RefreshTokenHash)
 	require.Equal(t, session1.UserAgent, session2.UserAgent)
 	require.Equal(t, session1.ClientIp, session2.ClientIp)
 	require.Equal(t, session1.IsBlocked, session2.IsBlocked)
@@ -109,7 +111,7 @@ func TestUpdateSession(t *testing.T) {
 	require.Equal(t, session1.ID, session2.ID)
 	require.Equal(t, session1.UserID, session2.UserID)
 	require.Equal(t, arg.Username, session2.Username)
-	require.Equal(t, session1.RefreshToken, session2.RefreshToken)
+	require.Equal(t, session1.RefreshTokenHash, session2.RefreshTokenHash)
 	require.Equal(t, session1.UserAgent, session2.UserAgent)
 	require.Equal(t, session1.ClientIp, session2.ClientIp)
 	require.Equal(t, session1.IsBlocked, session2.IsBlocked)
@@ -213,14 +215,16 @@ func TestCreateSessionWithBlockedStatus(t *testing.T) {
 	user := createRandomUser(t)
 
 	arg := CreateSessionParams{
-		ID:           uuid.New(),
-		UserID:       user.ID,
-		Username:     user.Username,
-		RefreshToken: gofakeit.UUID(),
-		UserAgent:    gofakeit.UserAgent(),
-		ClientIp:     gofakeit.IPv4Address(),
-		IsBlocked:    true,
-		ExpiresAt:    time.Now().Add(24 * time.Hour),
+		ID:               uuid.New(),
+		UserID:           user.ID,
+		Username:         user.Username,
+		RefreshTokenHash: []byte(gofakeit.UUID()),
+		RefreshKid:       sql.NullString{},
+		Jti:              uuid.NullUUID{},
+		UserAgent:        gofakeit.UserAgent(),
+		ClientIp:         gofakeit.IPv4Address(),
+		IsBlocked:        true,
+		ExpiresAt:        time.Now().Add(24 * time.Hour),
 	}
 
 	session, err := testQueries.CreateSession(context.Background(), arg)
@@ -233,14 +237,16 @@ func TestCreateSessionWithExpiredTime(t *testing.T) {
 	user := createRandomUser(t)
 
 	arg := CreateSessionParams{
-		ID:           uuid.New(),
-		UserID:       user.ID,
-		Username:     user.Username,
-		RefreshToken: gofakeit.UUID(),
-		UserAgent:    gofakeit.UserAgent(),
-		ClientIp:     gofakeit.IPv4Address(),
-		IsBlocked:    false,
-		ExpiresAt:    time.Now().Add(-24 * time.Hour),
+		ID:               uuid.New(),
+		UserID:           user.ID,
+		Username:         user.Username,
+		RefreshTokenHash: []byte(gofakeit.UUID()),
+		RefreshKid:       sql.NullString{},
+		Jti:              uuid.NullUUID{},
+		UserAgent:        gofakeit.UserAgent(),
+		ClientIp:         gofakeit.IPv4Address(),
+		IsBlocked:        false,
+		ExpiresAt:        time.Now().Add(-24 * time.Hour),
 	}
 
 	session, err := testQueries.CreateSession(context.Background(), arg)
