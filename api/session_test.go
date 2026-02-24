@@ -42,15 +42,15 @@ func randomUserForSessions() db.User {
 func randomSession(user db.User) db.Session {
 	gofakeit.Seed(0)
 	return db.Session{
-		ID:           uuid.New(),
-		UserID:       user.ID,
-		Username:     user.Username,
-		RefreshToken: gofakeit.UUID(),
-		UserAgent:    gofakeit.UserAgent(),
-		ClientIp:     gofakeit.IPv4Address(),
-		IsBlocked:    false,
-		ExpiresAt:    time.Now().Add(24 * time.Hour),
-		CreatedAt:    time.Now(),
+		ID:               uuid.New(),
+		UserID:           user.ID,
+		Username:         user.Username,
+		RefreshTokenHash: []byte(gofakeit.UUID()),
+		UserAgent:        gofakeit.UserAgent(),
+		ClientIp:         gofakeit.IPv4Address(),
+		IsBlocked:        false,
+		ExpiresAt:        time.Now().Add(24 * time.Hour),
+		CreatedAt:        time.Now(),
 	}
 }
 
@@ -205,7 +205,7 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
 
-				session.RefreshToken = refreshToken
+				session.RefreshTokenHash = []byte(refreshToken)
 				store.EXPECT().
 					ListSessionsByUsername(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
@@ -258,7 +258,7 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
 				blockedSession := session
 				blockedSession.IsBlocked = true
-				blockedSession.RefreshToken = refreshToken
+				blockedSession.RefreshTokenHash = []byte(refreshToken)
 				store.EXPECT().
 					ListSessionsByUsername(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
@@ -532,7 +532,7 @@ func TestLogoutUserAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
-				session.RefreshToken = refreshToken
+				session.RefreshTokenHash = []byte(refreshToken)
 				store.EXPECT().
 					ListSessionsByUsername(gomock.Any(), gomock.Eq(user.Username)).
 					Times(1).
@@ -557,7 +557,7 @@ func TestLogoutUserAPI(t *testing.T) {
 				request.RemoteAddr = session.ClientIp + ":12345"
 			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
-				session.RefreshToken = refreshToken
+				session.RefreshTokenHash = []byte(refreshToken)
 				store.EXPECT().
 					ListSessionsByUser(gomock.Any(), gomock.Eq(user.ID)).
 					Times(1).
@@ -659,9 +659,7 @@ func requireBodyMatchLoginResponse(t *testing.T, body string, user db.User) {
 
 	require.NotEmpty(t, response.SessionID)
 	require.NotEmpty(t, response.AccessToken)
-	require.NotEmpty(t, response.RefreshToken)
 	require.NotZero(t, response.AccessTokenExpiresAt)
-	require.NotZero(t, response.RefreshTokenExpiresAt)
 	require.Equal(t, user.Username, response.User.Username)
 	require.Equal(t, user.Email, response.User.Email)
 	require.Equal(t, user.FullName, response.User.FullName)
