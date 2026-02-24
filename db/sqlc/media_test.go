@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -135,11 +137,13 @@ func TestCreatePostWithMediaTx(t *testing.T) {
 	_, media2 := createTestMedia(t)
 
 	title := gofakeit.Sentence(3)
+	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
 
 	arg := CreatePostWithMediaTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       title,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        slug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -276,10 +280,13 @@ func TestGetPostWithMedia(t *testing.T) {
 	_, media1 := createTestMedia(t)
 	_, media2 := createTestMedia(t)
 
+	postTitle := gofakeit.Sentence(3)
+	postSlug := strings.ToLower(strings.ReplaceAll(postTitle, " ", "-"))
 	arg := CreatePostWithMediaTxParams{
 		CreatePostsParams: CreatePostsParams{
-			Title:       gofakeit.Sentence(3),
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Title:       postTitle,
+			Slug:        postSlug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -313,10 +320,13 @@ func TestListPostsWithMedia(t *testing.T) {
 	_, media1 := createTestMedia(t)
 	_, media2 := createTestMedia(t)
 
+	title1 := gofakeit.Sentence(3)
+	slug1 := strings.ToLower(strings.ReplaceAll(title1, " ", "-"))
 	arg := CreatePostWithMediaTxParams{
 		CreatePostsParams: CreatePostsParams{
-			Title:       gofakeit.Sentence(3),
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Title:       title1,
+			Slug:        slug1,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -333,10 +343,13 @@ func TestListPostsWithMedia(t *testing.T) {
 	_, err := testStore.CreatePostWithMediaTx(context.Background(), arg)
 	require.NoError(t, err)
 
+	title2 := gofakeit.Sentence(3)
+	slug2 := strings.ToLower(strings.ReplaceAll(title2, " ", "-"))
 	_, err = testStore.CreatePostTx(context.Background(), CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
-			Title:       gofakeit.Sentence(3),
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Title:       title2,
+			Slug:        slug2,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -367,10 +380,13 @@ func TestGetPostsByUserWithMedia(t *testing.T) {
 	user := createTestUser(t)
 	_, media1 := createTestMedia(t)
 
+	postTitle2 := gofakeit.Sentence(3)
+	postSlug2 := strings.ToLower(strings.ReplaceAll(postTitle2, " ", "-"))
 	arg := CreatePostWithMediaTxParams{
 		CreatePostsParams: CreatePostsParams{
-			Title:       gofakeit.Sentence(3),
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Title:       postTitle2,
+			Slug:        postSlug2,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
