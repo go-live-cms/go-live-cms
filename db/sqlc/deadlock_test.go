@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -145,11 +146,14 @@ func TestConcurrentPostOperations_Deadlock(t *testing.T) {
 			_, err := testStore.CreatePostTx(context.Background(), CreatePostTxParams{
 				CreatePostsParams: CreatePostsParams{
 					Title:       gofakeit.Sentence(3),
-					Content:     gofakeit.Paragraph(3, 5, 10, " "),
+					Slug:        gofakeit.UUID(),
+					BlockDoc:    json.RawMessage(`{}`),
 					Description: gofakeit.Sentence(10),
 					UserID:      user1.ID,
 					Username:    user1.Username,
 					Url:         fmt.Sprintf("https://example.com/posts/%s", gofakeit.UUID()),
+					PostType:    "post",
+					PostStatus:  "published",
 				},
 				AuthorIDs: []int64{user1.ID},
 			})
@@ -163,10 +167,13 @@ func TestConcurrentPostOperations_Deadlock(t *testing.T) {
 				ID:          post1.Post.ID,
 				Title:       gofakeit.Sentence(3),
 				Description: gofakeit.Sentence(10),
-				Content:     gofakeit.Paragraph(3, 5, 10, " "),
 				UserID:      user1.ID,
 				Username:    user1.Username,
 				Url:         post1.Post.Url,
+				PostType:    post1.Post.PostType,
+				PostStatus:  post1.Post.PostStatus,
+				PostParent:  post1.Post.PostParent,
+				MenuOrder:   post1.Post.MenuOrder,
 			})
 			if err != nil {
 				errChan <- fmt.Errorf("update post: %w", err)
@@ -235,7 +242,8 @@ func TestHighConcurrencyStress(t *testing.T) {
 					_, err := testStore.CreatePostTx(context.Background(), CreatePostTxParams{
 						CreatePostsParams: CreatePostsParams{
 							Title:       fmt.Sprintf("Post-%d-%d", workerID, op),
-							Content:     gofakeit.Paragraph(3, 5, 10, " "),
+							Slug:        fmt.Sprintf("post-%d-%d", workerID, op),
+							BlockDoc:    json.RawMessage(`{}`),
 							Description: gofakeit.Sentence(10),
 							UserID:      user.ID,
 							Username:    user.Username,
@@ -430,11 +438,14 @@ func TestDeadlockWithPostsAndUsers(t *testing.T) {
 				_, err := q.UpdatePost(context.Background(), UpdatePostParams{
 					ID:          post1.Post.ID,
 					Title:       fmt.Sprintf("Updated-Tx1-%d", time.Now().UnixNano()),
-					Content:     post1.Post.Content,
 					Description: post1.Post.Description,
 					UserID:      post1.Post.UserID,
 					Username:    post1.Post.Username,
 					Url:         post1.Post.Url,
+					PostType:    post1.Post.PostType,
+					PostStatus:  post1.Post.PostStatus,
+					PostParent:  post1.Post.PostParent,
+					MenuOrder:   post1.Post.MenuOrder,
 				})
 				if err != nil {
 					return err
@@ -475,11 +486,14 @@ func TestDeadlockWithPostsAndUsers(t *testing.T) {
 				_, err = q.UpdatePost(context.Background(), UpdatePostParams{
 					ID:          post1.Post.ID,
 					Title:       fmt.Sprintf("Updated-Tx2-%d", time.Now().UnixNano()),
-					Content:     post1.Post.Content,
 					Description: post1.Post.Description,
 					UserID:      post1.Post.UserID,
 					Username:    post1.Post.Username,
 					Url:         post1.Post.Url,
+					PostType:    post1.Post.PostType,
+					PostStatus:  post1.Post.PostStatus,
+					PostParent:  post1.Post.PostParent,
+					MenuOrder:   post1.Post.MenuOrder,
 				})
 				return err
 			})
