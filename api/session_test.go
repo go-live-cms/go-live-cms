@@ -192,24 +192,23 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 
 	testCases := []struct {
 		name          string
-		body          gin.H
-		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
 		buildStubs    func(store *mockdb.MockStore, refreshToken string)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name: "OK",
-			body: gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-
-			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
-
-				session.RefreshTokenHash = []byte(refreshToken)
+				session.RefreshTokenHash = token.HashRefresh(refreshToken)
+				session.Username = user.Username
+				session.UserID = user.ID
 				store.EXPECT().
-					ListSessionsByUsername(gomock.Any(), gomock.Eq(user.Username)).
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
 					Times(1).
-					Return([]db.Session{session}, nil)
+					Return(session, nil)
+				store.EXPECT().
+					ExecTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -218,15 +217,9 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 		},
 		{
 			name: "InvalidRefreshToken",
-			body: gin.H{
-				"refresh_token": "invalid-token",
-			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-
-			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
 				store.EXPECT().
-					ListSessionsByUsername(gomock.Any(), gomock.Any()).
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -235,15 +228,15 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 		},
 		{
 			name: "SessionNotFound",
-			body: gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-
-			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
 				store.EXPECT().
-					ListSessionsByUsername(gomock.Any(), gomock.Eq(user.Username)).
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
 					Times(1).
-					Return([]db.Session{}, nil)
+					Return(db.Session{}, sql.ErrNoRows)
+				store.EXPECT().
+					GetAnySessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
+					Times(1).
+					Return(db.Session{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, recorder.Code)
@@ -251,18 +244,16 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 		},
 		{
 			name: "BlockedSession",
-			body: gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-
-			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
 				blockedSession := session
 				blockedSession.IsBlocked = true
-				blockedSession.RefreshTokenHash = []byte(refreshToken)
+				blockedSession.RefreshTokenHash = token.HashRefresh(refreshToken)
+				blockedSession.Username = user.Username
+				blockedSession.UserID = user.ID
 				store.EXPECT().
-					ListSessionsByUsername(gomock.Any(), gomock.Eq(user.Username)).
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
 					Times(1).
-					Return([]db.Session{blockedSession}, nil)
+					Return(blockedSession, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, recorder.Code)
@@ -281,28 +272,27 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 			server := newTestServer(t, store)
 
 			var refreshToken string
-			var data []byte
 			var err error
 
 			if tc.name != "InvalidRefreshToken" {
 				refreshToken, err = server.tokenMaker.CreateRefreshToken(user.ID, user.Username, time.Hour)
 				require.NoError(t, err)
-				tc.body["refresh_token"] = refreshToken
 			}
 
 			tc.buildStubs(store, refreshToken)
 
-			data, err = json.Marshal(tc.body)
-			require.NoError(t, err)
-
 			recorder := httptest.NewRecorder()
 			url := "/api/v1/auth/refresh"
-			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+			request, err := http.NewRequest(http.MethodPost, url, nil)
 			require.NoError(t, err)
-			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("User-Agent", session.UserAgent)
 
-			tc.setupAuth(t, request, server.tokenMaker)
+			if tc.name == "InvalidRefreshToken" {
+				request.AddCookie(&http.Cookie{Name: RefreshCookieName, Value: "invalid-token"})
+			} else if refreshToken != "" {
+				request.AddCookie(&http.Cookie{Name: RefreshCookieName, Value: refreshToken})
+			}
+
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -517,27 +507,26 @@ func TestLogoutUserAPI(t *testing.T) {
 	user := randomUserForSessions()
 	session := randomSession(user)
 	session.ClientIp = "192.0.2.1"
+	session.Username = user.Username
+	session.UserID = user.ID
 
 	testCases := []struct {
 		name          string
-		body          gin.H
 		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
 		buildStubs    func(store *mockdb.MockStore, refreshToken string)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
 			name: "OK_WithRefreshToken",
-			body: gin.H{},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
-				session.RefreshTokenHash = []byte(refreshToken)
+				session.RefreshTokenHash = token.HashRefresh(refreshToken)
 				store.EXPECT().
-					ListSessionsByUsername(gomock.Any(), gomock.Eq(user.Username)).
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
 					Times(1).
-					Return([]db.Session{session}, nil)
-
+					Return(session, nil)
 				store.EXPECT().
 					BlockSession(gomock.Any(), gomock.Eq(session.ID)).
 					Times(1).
@@ -549,45 +538,24 @@ func TestLogoutUserAPI(t *testing.T) {
 		},
 		{
 			name: "OK_WithoutRefreshToken",
-			body: gin.H{},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
-				request.Header.Set("User-Agent", session.UserAgent)
-
-				request.RemoteAddr = session.ClientIp + ":12345"
 			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
-				session.RefreshTokenHash = []byte(refreshToken)
-				store.EXPECT().
-					ListSessionsByUser(gomock.Any(), gomock.Eq(user.ID)).
-					Times(1).
-					Return([]db.Session{session}, nil)
-
-				store.EXPECT().
-					ListSessionsByUsername(gomock.Any(), gomock.Eq(user.Username)).
-					Times(1).
-					Return([]db.Session{session}, nil)
-
-				store.EXPECT().
-					BlockSession(gomock.Any(), gomock.Eq(session.ID)).
-					Times(1).
-					Return(nil)
+				// No cookie present — handler returns 200 immediately without DB calls
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
 		},
 		{
-			name: "InvalidRefreshToken",
-			body: gin.H{
-				"refresh_token": "invalid-token",
-			},
+			name: "NoAuthorization",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+				// No auth header
 			},
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
 				store.EXPECT().
-					ListSessionsByUsername(gomock.Any(), gomock.Any()).
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -607,27 +575,23 @@ func TestLogoutUserAPI(t *testing.T) {
 			server := newTestServer(t, store)
 
 			var refreshToken string
-			var data []byte
 			var err error
 
-			if tc.name != "InvalidRefreshToken" {
+			if tc.name == "OK_WithRefreshToken" {
 				refreshToken, err = server.tokenMaker.CreateRefreshToken(user.ID, user.Username, time.Hour)
 				require.NoError(t, err)
-				if tc.name == "OK_WithRefreshToken" {
-					tc.body["refresh_token"] = refreshToken
-				}
 			}
 
 			tc.buildStubs(store, refreshToken)
 
-			data, err = json.Marshal(tc.body)
-			require.NoError(t, err)
-
 			recorder := httptest.NewRecorder()
 			url := "/api/v1/auth/logout"
-			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+			request, err := http.NewRequest(http.MethodPost, url, nil)
 			require.NoError(t, err)
-			request.Header.Set("Content-Type", "application/json")
+
+			if refreshToken != "" {
+				request.AddCookie(&http.Cookie{Name: RefreshCookieName, Value: refreshToken})
+			}
 
 			tc.setupAuth(t, request, server.tokenMaker)
 			server.router.ServeHTTP(recorder, request)
