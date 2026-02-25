@@ -196,7 +196,7 @@ func TestCreateTaxonomyTypeAPI(t *testing.T) {
 			data, err := json.Marshal(tc.body)
 			require.NoError(t, err)
 
-			url := "/api/v1/taxonomy-types"
+			url := "/api/v1/taxonomy/types"
 			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "application/json")
@@ -260,7 +260,7 @@ func TestGetTaxonomyTypesAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := "/api/v1/taxonomy-types"
+			url := "/api/v1/taxonomy/types"
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -334,7 +334,7 @@ func TestGetTaxonomyTypeAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := fmt.Sprintf("/api/v1/taxonomy-types/%s", tc.typeName)
+			url := fmt.Sprintf("/api/v1/taxonomy/types/%s", tc.typeName)
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -517,7 +517,7 @@ func TestCreateTaxonomyTermAPI(t *testing.T) {
 			data, err := json.Marshal(tc.body)
 			require.NoError(t, err)
 
-			url := "/api/v1/taxonomy-terms"
+			url := "/api/v1/taxonomy/terms"
 			request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "application/json")
@@ -607,9 +607,9 @@ func TestGetTaxonomyTermByIDAPI(t *testing.T) {
 
 			var url string
 			if tc.name == "InvalidID" {
-				url = "/api/v1/taxonomy-terms/invalid_id"
+				url = "/api/v1/taxonomy/terms/invalid_id"
 			} else {
-				url = fmt.Sprintf("/api/v1/taxonomy-terms/%d", tc.termID)
+				url = fmt.Sprintf("/api/v1/taxonomy/terms/%d", tc.termID)
 			}
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
@@ -727,7 +727,7 @@ func TestGetTaxonomyTermsByTypeAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := fmt.Sprintf("/api/v1/taxonomy-terms/type/%s%s", tc.typeName, tc.query)
+			url := fmt.Sprintf("/api/v1/taxonomy/types/%s/terms%s", tc.typeName, tc.query)
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -817,7 +817,7 @@ func TestGetPopularTaxonomyTermsAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := fmt.Sprintf("/api/v1/taxonomy-terms/popular%s", tc.query)
+			url := fmt.Sprintf("/api/v1/taxonomy/terms/popular%s", tc.query)
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -906,7 +906,7 @@ func TestSearchTaxonomyTermsAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := fmt.Sprintf("/api/v1/taxonomy-terms/search%s", tc.query)
+			url := fmt.Sprintf("/api/v1/taxonomy/terms/search%s", tc.query)
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
@@ -1032,9 +1032,9 @@ func TestUpdateTaxonomyTermAPI(t *testing.T) {
 
 			var url string
 			if tc.name == "InvalidID" {
-				url = "/api/v1/taxonomy-terms/invalid_id"
+				url = "/api/v1/taxonomy/terms/invalid_id"
 			} else {
-				url = fmt.Sprintf("/api/v1/taxonomy-terms/%d", tc.termID)
+				url = fmt.Sprintf("/api/v1/taxonomy/terms/%d", tc.termID)
 			}
 			request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(data))
 			require.NoError(t, err)
@@ -1183,7 +1183,7 @@ func TestDeleteTaxonomyTermAPI(t *testing.T) {
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
 
-			url := fmt.Sprintf("/api/v1/taxonomy-terms/%d%s", tc.termID, tc.query)
+			url := fmt.Sprintf("/api/v1/taxonomy/terms/%d%s", tc.termID, tc.query)
 			request, err := http.NewRequest(http.MethodDelete, url, nil)
 			require.NoError(t, err)
 
