@@ -137,7 +137,8 @@ func TestCreatePostWithMediaTx(t *testing.T) {
 	_, media2 := createTestMedia(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostWithMediaTxParams{
 		CreatePostsParams: CreatePostsParams{
@@ -225,7 +226,7 @@ func TestMediaAnalyticsQueries(t *testing.T) {
 	require.Equal(t, int64(1), mediaCountMap["moderate"], "Moderate media should have 1 post in ListMediaWithPostCount")
 	require.Equal(t, int64(0), mediaCountMap["unused"], "Unused media should have 0 posts in ListMediaWithPostCount")
 
-	popularMedia, err := testQueries.GetPopularMedia(context.Background(), 10)
+	popularMedia, err := testQueries.GetPopularMedia(context.Background(), 1000)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(popularMedia), 2)
 
@@ -281,7 +282,8 @@ func TestGetPostWithMedia(t *testing.T) {
 	_, media2 := createTestMedia(t)
 
 	postTitle := gofakeit.Sentence(3)
-	postSlug := strings.ToLower(strings.ReplaceAll(postTitle, " ", "-"))
+	postTs := time.Now().UnixNano()
+	postSlug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(postTitle, " ", "-")), postTs)
 	arg := CreatePostWithMediaTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       postTitle,
