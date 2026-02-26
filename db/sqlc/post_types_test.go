@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/stretchr/testify/require"
@@ -18,7 +20,7 @@ func createTestPostType(t *testing.T) PostType {
 	require.NoError(t, err)
 
 	arg := CreatePostTypeParams{
-		Name:         gofakeit.Word() + "_type",
+		Name:         fmt.Sprintf("%s_type_%d", gofakeit.Word(), time.Now().UnixNano()),
 		Label:        gofakeit.Sentence(2),
 		Description:  sql.NullString{String: gofakeit.Sentence(10), Valid: true},
 		Public:       gofakeit.Bool(),
@@ -403,7 +405,7 @@ func TestPostMetaWithNullValue(t *testing.T) {
 }
 
 func TestPostTypeWithMinimalData(t *testing.T) {
-	name := gofakeit.Word() + "_minimal"
+	name := fmt.Sprintf("%s_minimal_%d", gofakeit.Word(), time.Now().UnixNano())
 	label := gofakeit.Sentence(2)
 
 	supports := []string{"title"}
@@ -452,7 +454,7 @@ func TestPostTypeSupportsJSONHandling(t *testing.T) {
 	require.NoError(t, err)
 
 	arg := CreatePostTypeParams{
-		Name:         gofakeit.Word() + "_complex",
+		Name:         fmt.Sprintf("%s_complex_%d", gofakeit.Word(), time.Now().UnixNano()),
 		Label:        gofakeit.Sentence(2),
 		Description:  sql.NullString{String: gofakeit.Sentence(5), Valid: true},
 		Public:       true,
