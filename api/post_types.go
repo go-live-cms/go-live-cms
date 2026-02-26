@@ -125,7 +125,7 @@ func (server *Server) getPostTypes(c *gin.Context) {
 }
 
 type createPostTypeRequest struct {
-	Name         string   `json:"name" binding:"required,min=2,max=50"`
+	Name         string   `json:"name" binding:"omitempty,min=2,max=50"`
 	Label        string   `json:"label" binding:"required,min=2,max=100"`
 	Slug         string   `json:"slug"` // Alias for name (theme API compat)
 	Description  string   `json:"description"`
@@ -151,6 +151,11 @@ func (server *Server) createPostType(c *gin.Context) {
 	name := req.Name
 	if name == "" && req.Slug != "" {
 		name = req.Slug
+	}
+
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name or slug is required"})
+		return
 	}
 
 	// Prevent overwriting system types
