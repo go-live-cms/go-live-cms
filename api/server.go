@@ -57,16 +57,18 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 
 	server.setupRoutes()
 
-	// Sync themes from filesystem on startup
-	fmt.Println("🎨 Scanning themes directory...")
-	themesPath := filepath.Join("web", "themes")
-	discoveredThemes, err := ScanThemesDirectory(themesPath)
-	if err != nil {
-		fmt.Printf("Warning: Failed to scan themes directory: %v\n", err)
-	} else {
-		fmt.Printf("Found %d theme(s)\n", len(discoveredThemes))
-		if err := server.SyncThemesToDatabase(discoveredThemes); err != nil {
-			fmt.Printf("Warning: Failed to sync themes: %v\n", err)
+	// Sync themes from filesystem on startup (skip in test mode)
+	if !config.IsTestMode {
+		fmt.Println("🎨 Scanning themes directory...")
+		themesPath := filepath.Join("web", "themes")
+		discoveredThemes, err := ScanThemesDirectory(themesPath)
+		if err != nil {
+			fmt.Printf("Warning: Failed to scan themes directory: %v\n", err)
+		} else {
+			fmt.Printf("Found %d theme(s)\n", len(discoveredThemes))
+			if err := server.SyncThemesToDatabase(discoveredThemes); err != nil {
+				fmt.Printf("Warning: Failed to sync themes: %v\n", err)
+			}
 		}
 	}
 
