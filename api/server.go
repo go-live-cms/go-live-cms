@@ -163,7 +163,7 @@ func (server *Server) setupRoutes() {
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 
-	router.Static("/uploads", "./uploads")
+	router.Static("/uploads", filepath.Dir(server.config.UploadPath))
 
 	//v1.GET("/test-log", server.testLog) // Temporary log endpoint for testing
 
