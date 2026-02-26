@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,8 @@ func createPostWithTransaction(t *testing.T) CreatePostTxResult {
 	user := createTestUser(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
@@ -74,7 +76,8 @@ func TestCreatePostTxWithMultipleAuthors(t *testing.T) {
 	user2 := createTestUser(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
@@ -193,7 +196,8 @@ func TestCreatePostWithMedia(t *testing.T) {
 	_, media2 := createTestMedia(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostWithMediaTxParams{
 		CreatePostsParams: CreatePostsParams{
@@ -239,7 +243,8 @@ func TestCreatePostWithType(t *testing.T) {
 	user := createTestUser(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
@@ -269,9 +274,10 @@ func TestCreatePostWithType(t *testing.T) {
 
 func TestCreateHierarchicalPosts(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	parentTitle := gofakeit.Sentence(3)
-	parentSlug := strings.ToLower(strings.ReplaceAll(parentTitle, " ", "-"))
+	parentSlug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(parentTitle, " ", "-")), ts)
 
 	parentArg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
@@ -295,7 +301,7 @@ func TestCreateHierarchicalPosts(t *testing.T) {
 	require.NotEmpty(t, parentResult.Post)
 
 	childTitle := gofakeit.Sentence(3)
-	childSlug := strings.ToLower(strings.ReplaceAll(childTitle, " ", "-"))
+	childSlug := fmt.Sprintf("%s-%d-child", strings.ToLower(strings.ReplaceAll(childTitle, " ", "-")), ts)
 
 	childArg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
@@ -330,10 +336,11 @@ func TestCreateHierarchicalPosts(t *testing.T) {
 
 func TestListPostsByType(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	for i := 0; i < 3; i++ {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
@@ -343,7 +350,7 @@ func TestListPostsByType(t *testing.T) {
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
-				Url:         fmt.Sprintf("https://example.com/posts/%s-%d", slug, i),
+				Url:         fmt.Sprintf("https://example.com/posts/%s", slug),
 				PostType:    "post",
 				PostStatus:  "published",
 				PostParent:  sql.NullInt64{},
@@ -357,7 +364,7 @@ func TestListPostsByType(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-page-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
@@ -367,7 +374,7 @@ func TestListPostsByType(t *testing.T) {
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
-				Url:         fmt.Sprintf("https://example.com/pages/%s-%d", slug, i),
+				Url:         fmt.Sprintf("https://example.com/pages/%s", slug),
 				PostType:    "page",
 				PostStatus:  "published",
 				PostParent:  sql.NullInt64{},
@@ -414,8 +421,9 @@ func TestListPostsWithSorting(t *testing.T) {
 	user := createTestUser(t)
 
 	titles := []string{"Alpha Post", "Beta Post", "Charlie Post"}
+	ts := time.Now().UnixNano()
 	for i, title := range titles {
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
@@ -473,10 +481,11 @@ func TestGetPostWithMeta(t *testing.T) {
 
 func TestCountPosts(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	for i := 0; i < 5; i++ {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		postType := "post"
 		if i%2 == 0 {
@@ -491,7 +500,7 @@ func TestCountPosts(t *testing.T) {
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
-				Url:         fmt.Sprintf("https://example.com/%s/%s-%d", postType, slug, i),
+				Url:         fmt.Sprintf("https://example.com/%s/%s", postType, slug),
 				PostType:    postType,
 				PostStatus:  "published",
 				PostParent:  sql.NullInt64{},
@@ -544,10 +553,11 @@ func TestUpdatePostWithNewFields(t *testing.T) {
 
 func TestListPostsWithMeta(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	for i := 0; i < 3; i++ {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		postType := "post"
 		if i == 0 {
@@ -610,11 +620,12 @@ func TestListPostsWithMeta(t *testing.T) {
 
 func TestListPostsByStatus(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	statuses := []string{"published", "draft", "published", "draft"}
 	for i, status := range statuses {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
