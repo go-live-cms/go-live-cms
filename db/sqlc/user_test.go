@@ -64,8 +64,8 @@ func createTestUserWithPosts(t *testing.T) (User, CreatePostTxResult) {
 	user := createTestUser(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
 	timestamp := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), timestamp)
 
 	postArg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
