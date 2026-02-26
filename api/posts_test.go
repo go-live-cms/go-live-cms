@@ -75,6 +75,10 @@ func TestCreatePostAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					CheckURLExists(gomock.Any(), gomock.Eq(post.Url)).
+					Times(1).
+					Return(false, nil)
 
 				store.EXPECT().
 					GetUser(gomock.Any(), gomock.Eq(user.ID)).
@@ -192,6 +196,11 @@ func TestCreatePostAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					CheckURLExists(gomock.Any(), gomock.Eq(post.Url)).
+					Times(1).
+					Return(false, nil)
+
 				store.EXPECT().
 					GetUser(gomock.Any(), gomock.Eq(user.ID)).
 					Times(1).
