@@ -808,6 +808,193 @@ func requireBodyMatchPost(t *testing.T, body string, post db.Post) {
 	require.Equal(t, post.Url, response.Post.Url)
 }
 
+func TestGetPostBySlugAPI(t *testing.T) {
+	user := randomUserForPosts()
+	post := randomPost(user)
+
+	testCases := []struct {
+		name          string
+		slug          string
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name: "OK",
+			slug: post.Slug,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPostBySlug(gomock.Any(), post.Slug).
+					Times(1).
+					Return(post, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				var resp map[string]interface{}
+				err := json.Unmarshal(recorder.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				p := resp["post"].(map[string]interface{})
+				require.Equal(t, post.Title, p["title"])
+				require.Equal(t, post.PostType, p["post_type"])
+			},
+		},
+		{
+			name: "NotFound",
+			slug: post.Slug,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPostBySlug(gomock.Any(), post.Slug).
+					Times(1).
+					Return(db.Post{}, sql.ErrNoRows)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name: "InternalError",
+			slug: post.Slug,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPostBySlug(gomock.Any(), post.Slug).
+					Times(1).
+					Return(db.Post{}, sql.ErrConnDone)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			server := newTestServer(t, store)
+			recorder := httptest.NewRecorder()
+
+			url := fmt.Sprintf("/api/v1/posts/slug/%s", tc.slug)
+			request, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(recorder)
+		})
+	}
+}
+
+func TestGetPostsByTypeAPI(t *testing.T) {
+	postType := randomPostType("article")
+	user := randomUserForPosts()
+	post := randomPost(user)
+
+	testCases := []struct {
+		name          string
+		postType      string
+		query         string
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:     "OK",
+			postType: postType.Name,
+			query:    "",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPostType(gomock.Any(), postType.Name).
+					Times(1).
+					Return(postType, nil)
+				store.EXPECT().
+					ListPostsByType(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return([]db.Post{post}, nil)
+				store.EXPECT().
+					CountPostsByType(gomock.Any(), postType.Name).
+					Times(1).
+					Return(int64(1), nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				var resp map[string]interface{}
+				err := json.Unmarshal(recorder.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				posts := resp["posts"].([]interface{})
+				require.Len(t, posts, 1)
+			},
+		},
+		{
+			name:     "PostTypeNotFound",
+			postType: postType.Name,
+			query:    "",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPostType(gomock.Any(), postType.Name).
+					Times(1).
+					Return(db.PostType{}, sql.ErrNoRows)
+				store.EXPECT().ListPostsByType(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().CountPostsByType(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:     "InvalidSortParam",
+			postType: postType.Name,
+			query:    "?sort=invalid",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPostType(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().ListPostsByType(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
+			name:     "InternalError",
+			postType: postType.Name,
+			query:    "",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPostType(gomock.Any(), postType.Name).
+					Times(1).
+					Return(postType, nil)
+				store.EXPECT().
+					ListPostsByType(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(nil, sql.ErrConnDone)
+				store.EXPECT().CountPostsByType(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			server := newTestServer(t, store)
+			recorder := httptest.NewRecorder()
+
+			url := fmt.Sprintf("/api/v1/posts/type/%s%s", tc.postType, tc.query)
+			request, err := http.NewRequest(http.MethodGet, url, nil)
+			require.NoError(t, err)
+
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(recorder)
+		})
+	}
+}
+
 func requireBodyMatchListRows(t *testing.T, body string, rows []db.ListPostsRow, expectedTotal int64) {
 	var response struct {
 		Posts []PostResponse `json:"posts"`
