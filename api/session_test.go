@@ -638,6 +638,47 @@ func requireBodyMatchRenewResponse(t *testing.T, body string) {
 	require.NotZero(t, response.AccessTokenExpiresAt)
 }
 
+func TestRegisterAPI(t *testing.T) {
+	testCases := []struct {
+		name          string
+		buildStubs    func(store *mockdb.MockStore)
+		checkResponse func(recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name: "OK",
+			buildStubs: func(store *mockdb.MockStore) {
+				// register is currently a stub; no DB calls expected
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				var resp map[string]interface{}
+				err := json.Unmarshal(recorder.Body.Bytes(), &resp)
+				require.NoError(t, err)
+				require.NotEmpty(t, resp["message"])
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+
+			server := newTestServer(t, store)
+			recorder := httptest.NewRecorder()
+
+			request, err := http.NewRequest(http.MethodPost, "/api/v1/auth/register", nil)
+			require.NoError(t, err)
+
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(recorder)
+		})
+	}
+}
+
 func requireBodyMatchSessionsList(t *testing.T, body string, sessions []db.Session) {
 	var response struct {
 		Sessions []SessionResponse `json:"sessions"`
