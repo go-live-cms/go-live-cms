@@ -76,9 +76,9 @@ func TestCreatePostMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			name:   "NoAuthorization",
-			postID: post.ID,
-			body:   gin.H{"media_id": media.ID},
+			name:      "NoAuthorization",
+			postID:    post.ID,
+			body:      gin.H{"media_id": media.ID},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().CreatePostMedia(gomock.Any(), gomock.Any()).Times(0)
@@ -102,9 +102,9 @@ func TestCreatePostMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			name:        "InvalidPostID",
-			postID:      0,
-			body:        gin.H{"media_id": media.ID},
+			name:   "InvalidPostID",
+			postID: 0,
+			body:   gin.H{"media_id": media.ID},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
@@ -307,9 +307,9 @@ func TestDeletePostMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			name:    "NoAuthorization",
-			postID:  post.ID,
-			mediaID: media.ID,
+			name:      "NoAuthorization",
+			postID:    post.ID,
+			mediaID:   media.ID,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().DeletePostMedia(gomock.Any(), gomock.Any()).Times(0)
