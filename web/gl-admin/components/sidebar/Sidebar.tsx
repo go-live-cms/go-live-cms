@@ -28,8 +28,11 @@ const bottomSections: Section[][] = [
     { icon: "plugins" as IconPath, name: "Plugins", link: "/plugins/" },
     { icon: "paintbrush" as IconPath, name: "Themes", link: "/themes/" },
   ],
-  [{ icon: "settings" as IconPath, name: "Settings", link: "/settings/" }],
-]
+  [
+    { icon: "user" as IconPath, name: "Users", link: "/users/" },
+    { icon: "settings" as IconPath, name: "Settings", link: "/settings/" }
+  ]
+];
 
 // Default content section (used before API loads)
 const defaultContentSection: Section[] = [

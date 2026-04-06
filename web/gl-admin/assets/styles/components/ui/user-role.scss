@@ -1,0 +1,52 @@
+@use "@gl-admin/assets/styles/variables";
+
+.gl-user-role {
+  align-items: center;
+  background: var(--user-role-background-default);
+  background-blend-mode: hard-light, normal;
+  border-radius: 0.25rem;
+  box-shadow: var(--box-shadow) inset;
+  cursor: default;
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 500;
+  padding: 0.3rem 0.5rem;
+  user-select: none;
+  width: fit-content;
+
+  &.admin {
+    background: var(--user-role-background-admin);
+    background-blend-mode: hard-light, normal;
+    font-weight: 600;
+  }
+
+  &.moderator {
+    background: var(--user-role-background-moderator);
+    background-blend-mode: hard-light, normal;
+    font-weight: 600;
+  }
+
+  &.author {
+    background: var(--user-role-background-author);
+    background-blend-mode: hard-light, normal;
+  }
+
+  &.editor {
+    background: var(--user-role-background-editor);
+    background-blend-mode: hard-light, normal;
+  }
+
+  &.viewer {
+    background: var(--user-role-background-viewer);
+    background-blend-mode: hard-light, normal;
+    opacity: 0.8;
+  }
+
+  &.skeleton {
+    background: var(--skeleton-background);
+    box-shadow: none;
+    height: 1.25rem;
+    width: 5rem;
+  }
+}

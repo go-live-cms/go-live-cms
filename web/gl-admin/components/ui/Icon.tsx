@@ -68,6 +68,7 @@ export const Icon: React.FC<Props> = ({
       style={{
         color: "var(--text-primary)",
         transform: transforms.join(" "),
+        transformOrigin: "center center",
       }}
       aria-label={alt}
       dangerouslySetInnerHTML={{ __html: svgContent }}

@@ -8,7 +8,7 @@ import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import Pagination from "@gl-admin/components/ui/Pagination"
 import PostTitle from "@gl-admin/components/ui/PostTitle"
-import PostDateTime from "@gl-admin/components/ui/PostDateTime"
+import DateTime from "@gl-admin/components/ui/DateTime"
 import PostStatus from "@gl-admin/components/ui/PostStatus"
 import PostType from "@gl-admin/components/ui/PostType"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
@@ -55,7 +55,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         key: "created_at",
         name: "Created at",
         width: "10.75rem",
-        render: (_, row) => <PostDateTime value={row?.created_at || null} />,
+        render: (_, row) => <DateTime value={row?.created_at || null} />,
       },
     ]
     if (!queryProp && !typeName) {
