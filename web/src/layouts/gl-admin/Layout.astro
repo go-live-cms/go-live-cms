@@ -9,6 +9,11 @@ import "@gl-admin/assets/styles/tailwind.css"
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GoLive Admin</title>
     <link rel="icon" href={favicon} sizes="any" />
+    
+    <!-- Inject active theme for block loading -->
+    <script is:inline define:vars={{ activeTheme: Astro.locals.activeTheme || 'default' }}>
+      window.__ACTIVE_THEME__ = activeTheme;
+    </script>
   </head>
   <body>
     <slot />

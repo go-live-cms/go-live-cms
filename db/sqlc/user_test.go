@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -63,13 +64,14 @@ func createTestUserWithPosts(t *testing.T) (User, CreatePostTxResult) {
 	user := createTestUser(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
 	timestamp := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), timestamp)
 
 	postArg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       title,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        slug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,

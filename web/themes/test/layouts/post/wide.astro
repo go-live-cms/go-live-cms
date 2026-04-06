@@ -1,0 +1,54 @@
+---
+/**
+ * Wide Post Layout
+ * Full-width content layout for immersive reading
+ */
+import BaseLayout from '../base.astro'
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import FormattedDate from '@/components/FormattedDate.astro'
+import BlockRenderer from '@/components/BlockRenderer'
+import type { Post } from '@gl-admin/lib/api/types'
+
+interface Props {
+  post: Post
+  title: string
+  description: string
+}
+
+const { post, title, description } = Astro.props
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  
+  <main class="post-layout-wide">
+    <article class="post-container-wide">
+      <header class="post-header">
+        {post.featured_image && (
+          <img 
+            src={post.featured_image} 
+            alt={post.title}
+            class="featured-image"
+          />
+        )}
+        <div class="header-content">
+          <h1 class="post-title">{post.title}</h1>
+          
+          <div class="post-meta">
+            <FormattedDate date={new Date(post.created_at)} />
+            <span class="author">by {post.username}</span>
+          </div>
+        </div>
+      </header>
+      
+      <div class="post-content">
+        {post.published_blocks && (
+          <BlockRenderer doc={post.published_blocks} client:load />
+        )}
+      </div>
+    </article>
+  </main>
+  
+  <Footer />
+</BaseLayout>

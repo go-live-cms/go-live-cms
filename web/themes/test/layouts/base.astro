@@ -1,0 +1,80 @@
+---
+/**
+ * Base Layout - Shared HTML structure
+ * All theme layouts should extend this
+ */
+import themeConfig from '../theme.config'
+import '@/assets/styles/global.css'
+
+interface Props {
+  title: string
+  description: string
+  theme?: 'light' | 'dark' | 'system'
+}
+
+const { title, description, theme = 'light' } = Astro.props
+
+// WordPress-style: Get theme assets registered in theme.config.ts
+const themeAssets = Astro.locals.themeAssets || {}
+// Backward compatibility fallback
+const legacyCssPath = Astro.locals.themeCssPath
+---
+
+<!doctype html>
+<html lang="en" data-theme={theme}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    
+    <!-- WordPress-style: Render theme-registered stylesheets (wp_enqueue_style equivalent) -->
+    {themeAssets.styles?.map((style: any) => (
+      <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
+    ))}
+    
+    <!-- Backward compatibility: legacy CSS path -->
+    {!themeAssets.styles?.length && legacyCssPath && (
+      <link rel="stylesheet" href={legacyCssPath} />
+    )}
+    
+    <!-- Theme preference handler (prevents FOUC) -->
+    <script is:inline>
+      // Immediately apply theme preference before render
+      (function() {
+        const storageKey = 'gl-theme-preference'
+        const stored = localStorage.getItem(storageKey) || 'light'
+        
+        let theme = stored
+        if (stored === 'system') {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        }
+        
+        document.documentElement.setAttribute('data-theme', theme)
+      })()
+    </script>
+    
+    <slot name="head" />
+  </head>
+  <body>
+    <!-- Debug: Theme indicator -->
+    <div style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: #ef4444; color: white; padding: 8px 16px; border-radius: 6px; font-family: monospace; font-size: 12px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+      🎨 {themeConfig.name} v{themeConfig.version}
+    </div>
+    
+    <slot />
+    <slot name="footer-scripts" />
+    
+    <!-- WordPress-style: Render theme-registered scripts (wp_enqueue_script equivalent) -->
+    {themeAssets.scripts?.map((script: any) => (
+      <script 
+        src={script.src} 
+        defer={script.defer} 
+        async={script.async}
+        type={script.type}
+      ></script>
+    ))}
+  </body>
+</html>

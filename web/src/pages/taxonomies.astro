@@ -2,18 +2,15 @@
 import Page from "@/layouts/Page.astro"
 import FormattedDate from "@/components/FormattedDate.astro"
 import { SITE_TITLE } from "@/consts"
-import { api } from "@gl-admin/lib/api"
-import type { Taxonomy } from "@gl-admin/lib/types"
+import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
+import type { TaxonomyType } from "@gl-admin/lib/api/types"
 
-let taxonomies: Taxonomy[] = []
-let popularTaxonomies: Taxonomy[] = []
+let taxonomies: TaxonomyType[] = []
 let error: string | null = null
 
 try {
-  const response = await api.getTaxonomies()
-  taxonomies = response.data
-  const popularResponse = await api.getPopularTaxonomies()
-  popularTaxonomies = popularResponse.data
+  const response = await getTaxonomyTypes()
+  taxonomies = response.data || []
 } catch (e) {
   error = e instanceof Error ? e.message : "Failed to fetch taxonomies"
   console.error("Error fetching taxonomies:", e)
@@ -99,21 +96,6 @@ try {
         <div class="error">
           <strong>Error:</strong> {error}
         </div>
-      )
-    }
-
-    {
-      popularTaxonomies.length > 0 && (
-        <section class="popular-section">
-          <h2>Popular Tags</h2>
-          <div class="popular-tags">
-            {popularTaxonomies.map((taxonomy) => (
-              <a href={`/taxonomies/${taxonomy.id}`} class="popular-tag">
-                {taxonomy.name}
-              </a>
-            ))}
-          </div>
-        </section>
       )
     }
 

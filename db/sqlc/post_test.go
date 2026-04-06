@@ -3,9 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
 	"github.com/stretchr/testify/require"
@@ -16,12 +18,14 @@ func createPostWithTransaction(t *testing.T) CreatePostTxResult {
 	user := createTestUser(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       title,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        slug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -40,7 +44,6 @@ func createPostWithTransaction(t *testing.T) CreatePostTxResult {
 	require.NotEmpty(t, result.UserPosts)
 
 	require.Equal(t, arg.Title, result.Post.Title)
-	require.Equal(t, arg.Content, result.Post.Content)
 	require.Equal(t, arg.Description, result.Post.Description)
 	require.Equal(t, arg.UserID, result.Post.UserID)
 	require.Equal(t, arg.Username, result.Post.Username)
@@ -73,12 +76,14 @@ func TestCreatePostTxWithMultipleAuthors(t *testing.T) {
 	user2 := createTestUser(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       title,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        slug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user1.ID,
 			Username:    user1.Username,
@@ -128,8 +133,9 @@ func TestListPosts(t *testing.T) {
 	}
 
 	posts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		Column1:     "",
-		Column2:     "",
+		PostType:    "",
+		PostStatus:  "",
+		UserID:      int64(0),
 		SortBy:      "",
 		OffsetCount: 5,
 		LimitCount:  5,
@@ -143,14 +149,12 @@ func TestUpdatePost(t *testing.T) {
 	result := createPostWithTransaction(t)
 
 	newTitle := gofakeit.Sentence(3)
-	newContent := gofakeit.Paragraph(3, 5, 10, " ")
 
 	arg := UpdatePostParams{
 		Title:       newTitle,
 		Description: result.Post.Description,
 		UserID:      result.Post.UserID,
 		Username:    result.Post.Username,
-		Content:     newContent,
 		Url:         result.Post.Url,
 		PostType:    result.Post.PostType,
 		PostStatus:  result.Post.PostStatus,
@@ -163,7 +167,6 @@ func TestUpdatePost(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, updatedPost)
 	require.Equal(t, newTitle, updatedPost.Title)
-	require.Equal(t, newContent, updatedPost.Content)
 	require.Equal(t, result.Post.ID, updatedPost.ID)
 
 	result2 := createPostWithTransaction(t)
@@ -172,7 +175,6 @@ func TestUpdatePost(t *testing.T) {
 		Description: "",
 		UserID:      result2.Post.UserID,
 		Username:    result2.Post.Username,
-		Content:     result2.Post.Content,
 		Url:         result2.Post.Url,
 		PostType:    result2.Post.PostType,
 		PostStatus:  result2.Post.PostStatus,
@@ -194,12 +196,14 @@ func TestCreatePostWithMedia(t *testing.T) {
 	_, media2 := createTestMedia(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostWithMediaTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       title,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        slug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -239,12 +243,14 @@ func TestCreatePostWithType(t *testing.T) {
 	user := createTestUser(t)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	ts := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 	arg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       title,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        slug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -268,14 +274,16 @@ func TestCreatePostWithType(t *testing.T) {
 
 func TestCreateHierarchicalPosts(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	parentTitle := gofakeit.Sentence(3)
-	parentSlug := strings.ToLower(strings.ReplaceAll(parentTitle, " ", "-"))
+	parentSlug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(parentTitle, " ", "-")), ts)
 
 	parentArg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       parentTitle,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        parentSlug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -293,12 +301,13 @@ func TestCreateHierarchicalPosts(t *testing.T) {
 	require.NotEmpty(t, parentResult.Post)
 
 	childTitle := gofakeit.Sentence(3)
-	childSlug := strings.ToLower(strings.ReplaceAll(childTitle, " ", "-"))
+	childSlug := fmt.Sprintf("%s-%d-child", strings.ToLower(strings.ReplaceAll(childTitle, " ", "-")), ts)
 
 	childArg := CreatePostTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       childTitle,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        childSlug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -327,19 +336,21 @@ func TestCreateHierarchicalPosts(t *testing.T) {
 
 func TestListPostsByType(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	for i := 0; i < 3; i++ {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
 				Title:       title,
-				Content:     gofakeit.Paragraph(3, 5, 10, " "),
+				Slug:        slug,
+				BlockDoc:    json.RawMessage(`{}`),
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
-				Url:         fmt.Sprintf("https://example.com/posts/%s-%d", slug, i),
+				Url:         fmt.Sprintf("https://example.com/posts/%s", slug),
 				PostType:    "post",
 				PostStatus:  "published",
 				PostParent:  sql.NullInt64{},
@@ -353,16 +364,17 @@ func TestListPostsByType(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-page-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
 				Title:       title,
-				Content:     gofakeit.Paragraph(3, 5, 10, " "),
+				Slug:        slug,
+				BlockDoc:    json.RawMessage(`{}`),
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
-				Url:         fmt.Sprintf("https://example.com/pages/%s-%d", slug, i),
+				Url:         fmt.Sprintf("https://example.com/pages/%s", slug),
 				PostType:    "page",
 				PostStatus:  "published",
 				PostParent:  sql.NullInt64{},
@@ -376,7 +388,8 @@ func TestListPostsByType(t *testing.T) {
 
 	posts, err := testQueries.ListPostsByType(context.Background(), ListPostsByTypeParams{
 		PostType:    "post",
-		Column2:     "",
+		PostStatus:  "",
+		UserID:      int64(0),
 		SortBy:      "",
 		OffsetCount: 0,
 		LimitCount:  10,
@@ -390,7 +403,8 @@ func TestListPostsByType(t *testing.T) {
 
 	pages, err := testQueries.ListPostsByType(context.Background(), ListPostsByTypeParams{
 		PostType:    "page",
-		Column2:     "",
+		PostStatus:  "",
+		UserID:      int64(0),
 		SortBy:      "",
 		OffsetCount: 0,
 		LimitCount:  10,
@@ -407,13 +421,15 @@ func TestListPostsWithSorting(t *testing.T) {
 	user := createTestUser(t)
 
 	titles := []string{"Alpha Post", "Beta Post", "Charlie Post"}
+	ts := time.Now().UnixNano()
 	for i, title := range titles {
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), ts)
 
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
 				Title:       title,
-				Content:     gofakeit.Paragraph(3, 5, 10, " "),
+				Slug:        slug,
+				BlockDoc:    json.RawMessage(`{}`),
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
@@ -430,8 +446,9 @@ func TestListPostsWithSorting(t *testing.T) {
 	}
 
 	posts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		Column1:     "",
-		Column2:     "",
+		PostType:    "",
+		PostStatus:  "",
+		UserID:      int64(0),
 		SortBy:      "title_asc",
 		OffsetCount: 0,
 		LimitCount:  10,
@@ -440,8 +457,9 @@ func TestListPostsWithSorting(t *testing.T) {
 	require.GreaterOrEqual(t, len(posts), 3)
 
 	postsByMenu, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		Column1:     "",
-		Column2:     "",
+		PostType:    "",
+		PostStatus:  "",
+		UserID:      int64(0),
 		SortBy:      "menu_order_asc",
 		OffsetCount: 0,
 		LimitCount:  10,
@@ -463,10 +481,11 @@ func TestGetPostWithMeta(t *testing.T) {
 
 func TestCountPosts(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	for i := 0; i < 5; i++ {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		postType := "post"
 		if i%2 == 0 {
@@ -476,11 +495,12 @@ func TestCountPosts(t *testing.T) {
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
 				Title:       title,
-				Content:     gofakeit.Paragraph(3, 5, 10, " "),
+				Slug:        slug,
+				BlockDoc:    json.RawMessage(`{}`),
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
-				Url:         fmt.Sprintf("https://example.com/%s/%s-%d", postType, slug, i),
+				Url:         fmt.Sprintf("https://example.com/%s/%s", postType, slug),
 				PostType:    postType,
 				PostStatus:  "published",
 				PostParent:  sql.NullInt64{},
@@ -513,7 +533,6 @@ func TestUpdatePostWithNewFields(t *testing.T) {
 		Description: "Updated Description",
 		UserID:      result.Post.UserID,
 		Username:    result.Post.Username,
-		Content:     "Updated Content",
 		Url:         result.Post.Url,
 		PostType:    "page",
 		PostStatus:  "draft",
@@ -526,7 +545,6 @@ func TestUpdatePostWithNewFields(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, updatedPost)
 	require.Equal(t, "Updated Title", updatedPost.Title)
-	require.Equal(t, "Updated Content", updatedPost.Content)
 	require.Equal(t, "page", updatedPost.PostType)
 	require.Equal(t, "draft", updatedPost.PostStatus)
 	require.Equal(t, int32(10), updatedPost.MenuOrder)
@@ -535,10 +553,11 @@ func TestUpdatePostWithNewFields(t *testing.T) {
 
 func TestListPostsWithMeta(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	for i := 0; i < 3; i++ {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		postType := "post"
 		if i == 0 {
@@ -548,7 +567,8 @@ func TestListPostsWithMeta(t *testing.T) {
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
 				Title:       title,
-				Content:     gofakeit.Paragraph(3, 5, 10, " "),
+				Slug:        slug,
+				BlockDoc:    json.RawMessage(`{}`),
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
@@ -565,8 +585,9 @@ func TestListPostsWithMeta(t *testing.T) {
 	}
 
 	postsWithMeta, err := testQueries.ListPostsWithMeta(context.Background(), ListPostsWithMetaParams{
-		Column1:     "",
-		Column2:     "",
+		PostType:    "",
+		PostStatus:  "",
+		UserID:      int64(0),
 		SortBy:      "menu_order_asc",
 		OffsetCount: 0,
 		LimitCount:  10,
@@ -582,7 +603,8 @@ func TestListPostsWithMeta(t *testing.T) {
 
 	pagesWithMeta, err := testQueries.ListPostsByTypeWithMeta(context.Background(), ListPostsByTypeWithMetaParams{
 		PostType:    "page",
-		Column2:     "",
+		PostStatus:  "",
+		UserID:      int64(0),
 		SortBy:      "",
 		OffsetCount: 0,
 		LimitCount:  10,
@@ -598,16 +620,18 @@ func TestListPostsWithMeta(t *testing.T) {
 
 func TestListPostsByStatus(t *testing.T) {
 	user := createTestUser(t)
+	ts := time.Now().UnixNano()
 
 	statuses := []string{"published", "draft", "published", "draft"}
 	for i, status := range statuses {
 		title := gofakeit.Sentence(3)
-		slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+		slug := fmt.Sprintf("%s-%d-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), i, ts)
 
 		arg := CreatePostTxParams{
 			CreatePostsParams: CreatePostsParams{
 				Title:       title,
-				Content:     gofakeit.Paragraph(3, 5, 10, " "),
+				Slug:        slug,
+				BlockDoc:    json.RawMessage(`{}`),
 				Description: gofakeit.Sentence(10),
 				UserID:      user.ID,
 				Username:    user.Username,
@@ -624,8 +648,9 @@ func TestListPostsByStatus(t *testing.T) {
 	}
 
 	publishedPosts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		Column1:     "",
-		Column2:     "published",
+		PostType:    "",
+		PostStatus:  "published",
+		UserID:      int64(0),
 		SortBy:      "",
 		OffsetCount: 0,
 		LimitCount:  10,
@@ -638,8 +663,9 @@ func TestListPostsByStatus(t *testing.T) {
 	}
 
 	draftPosts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		Column1:     "",
-		Column2:     "draft",
+		PostType:    "",
+		PostStatus:  "draft",
+		UserID:      int64(0),
 		SortBy:      "",
 		OffsetCount: 0,
 		LimitCount:  10,
@@ -652,8 +678,9 @@ func TestListPostsByStatus(t *testing.T) {
 	}
 
 	publishedPostsOfTypePost, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		Column1:     "post",
-		Column2:     "published",
+		PostType:    "post",
+		PostStatus:  "published",
+		UserID:      int64(0),
 		SortBy:      "",
 		OffsetCount: 0,
 		LimitCount:  10,

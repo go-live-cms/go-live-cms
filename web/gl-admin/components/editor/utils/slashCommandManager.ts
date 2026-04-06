@@ -1,6 +1,15 @@
 import { ReactRenderer } from "@tiptap/react"
 import { SlashCommandList } from "../ui/SlashCommand"
 
+/** Safely check if editor view is available (TipTap v3 throws on .view access when not mounted) */
+function isEditorReady(editor: any): boolean {
+  try {
+    return !!editor?.view?.dom
+  } catch {
+    return false
+  }
+}
+
 interface SlashCommandListRef {
   onKeyDown: (props: { event: KeyboardEvent; [key: string]: any }) => boolean
 }
@@ -53,9 +62,16 @@ class SlashCommandManager {
     this.currentRange = props.range
     this.getCursorCoordsFunction = getCursorCoords
 
-    // Use setTimeout to avoid flushSync error
+    // Use setTimeout to avoid flushSync error and ensure editor is mounted
     setTimeout(() => {
       if (!this.isActive) return // Check if still needed
+
+      // Check if editor view is available before proceeding
+      if (!isEditorReady(props.editor)) {
+        console.warn("[SlashCommandManager] Editor view not ready, cancelling")
+        this.isActive = false
+        return
+      }
 
       this.component = new ReactRenderer(SlashCommandList, {
         props: {
@@ -70,13 +86,27 @@ class SlashCommandManager {
       this.popup.appendChild(this.component.element)
       document.body.appendChild(this.popup)
 
-      const coords = getCursorCoords(props.editor, props.range)
-      this.positionPopup(coords)
+      try {
+        const coords = getCursorCoords(props.editor, props.range)
+        this.positionPopup(coords)
+      } catch (error) {
+        console.error("[SlashCommandManager] Failed to get cursor coords:", error)
+        this.exit()
+        return
+      }
 
       this.scrollHandler = () => {
         if (this.isActive && this.currentEditor && this.currentRange && this.getCursorCoordsFunction) {
-          const newCoords = this.getCursorCoordsFunction(this.currentEditor, this.currentRange)
-          this.positionPopup(newCoords)
+          // Check if view is still available
+          if (!isEditorReady(this.currentEditor)) {
+            return
+          }
+          try {
+            const newCoords = this.getCursorCoordsFunction(this.currentEditor, this.currentRange)
+            this.positionPopup(newCoords)
+          } catch (error) {
+            // Silent fail on scroll
+          }
         }
       }
 
@@ -90,6 +120,11 @@ class SlashCommandManager {
       return
     }
 
+    // Check if editor view is available
+    if (!isEditorReady(props.editor)) {
+      return
+    }
+
     this.currentRange = props.range
     this.getCursorCoordsFunction = getCursorCoords
 
@@ -99,8 +134,12 @@ class SlashCommandManager {
     })
 
     if (this.popup) {
-      const coords = getCursorCoords(props.editor, props.range)
-      this.positionPopup(coords)
+      try {
+        const coords = getCursorCoords(props.editor, props.range)
+        this.positionPopup(coords)
+      } catch (error) {
+        console.warn("[SlashCommandManager] Failed to update position:", error)
+      }
     }
   }
 

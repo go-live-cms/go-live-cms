@@ -25,6 +25,15 @@ server:
 test:
 	go test -v -cover ./...
 
+test-db:
+	go test -v -cover ./db/...
+
+test-api:
+	go test -v -cover ./api/...
+
+test-token:
+	go test -v -cover ./token/...
+
 mock:
 	mockgen -package mockdb -destination db/mock/store.go github.com/go-live-cms/go-live-cms/db/sqlc Store
 
@@ -67,4 +76,4 @@ proddown:
 prodlogs:
 	docker compose -f compose.yaml logs -f
 
-.PHONY: createdb dropdb postgres migrateup migratedown sqlc test mock dev devdown devlogs devlogs-api devlogs-web devrebuild prod proddown prodlogs docs install-godoc
+.PHONY: createdb dropdb postgres migrateup migratedown sqlc test test-db test-api test-token mock dev devdown devlogs devlogs-api devlogs-web devrebuild prod proddown prodlogs docs install-godoc

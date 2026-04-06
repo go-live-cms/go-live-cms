@@ -5,12 +5,25 @@ import Footer from '@/layouts/Footer.astro'
 import FormattedDate from '@/components/FormattedDate.astro'
 import TipTapContent from '@/components/TipTapContent.astro'
 import { SITE_TITLE, SITE_DESCRIPTION } from '../../consts'
-import { getPostsByType } from '../../lib/api'
+import { getPostsByType, getPostTypes } from '../../lib/api'
 
 export async function getStaticPaths() {
-  const postTypes = ['post', 'page']
+  // Dynamically fetch active post types from the API
+  let postTypes = ['post', 'page'] // fallback
+  try {
+    const types = await getPostTypes()
+    if (types && types.length > 0) {
+      postTypes = types.map(t => t.name)
+      console.log('Discovered post types for listing:', postTypes)
+    }
+  } catch (error) {
+    console.warn('Could not fetch post types, using defaults:', error)
+  }
   
-  const paths = []
+  const paths: Array<{
+    params: { post_type: string }
+    props: { postType: string; totalPosts: number | undefined }
+  }> = []
   
   for (const postType of postTypes) {
     try {
@@ -33,8 +46,8 @@ export async function getStaticPaths() {
   return paths
 }
 
-const { 'post_type': postType } = Astro.params 
-const { totalPosts } = Astro.props
+const { 'post_type': postType } = Astro.params as { post_type: string }
+const { totalPosts } = Astro.props as { postType: string; totalPosts: number | undefined }
 
 const { data: posts, meta } = await getPostsByType(postType, { 
   status: 'published',

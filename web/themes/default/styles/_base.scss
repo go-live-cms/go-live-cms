@@ -1,0 +1,206 @@
+@use "variables" as *;
+
+// ============================================
+// CSS Custom Properties for Theming
+// ============================================
+:root {
+  // Light mode (default)
+  --color-primary: rgb(#{$color-primary-light});
+  --color-accent: rgb(#{$color-accent-light});
+  --color-background: rgb(#{$color-background-light});
+  --color-surface: rgb(#{$color-surface-light});
+  --color-border: rgb(#{$color-border-light});
+
+  // Text colors (keeping as rgb() for opacity usage)
+  --text-primary: rgb(#{$color-text-primary-light});
+  --text-secondary: rgb(#{$color-text-secondary-light});
+  --text-tertiary: rgb(#{$color-text-tertiary-light});
+  --text-quaternary: rgb(#{$color-text-quaternary-light});
+  --text-quinary: rgb(#{$color-text-quinary-light});
+
+  // Semantic colors
+  --color-success: rgb(#{$color-success-light});
+  --color-warning: rgb(#{$color-warning-light});
+  --color-danger: rgb(#{$color-danger-light});
+  --color-info: rgb(#{$color-info-light});
+
+  // Typography
+  --font-sans: #{$font-sans};
+  --font-serif: #{$font-serif};
+  --font-mono: #{$font-mono};
+
+  // Shadows
+  --shadow-sm: #{$shadow-sm};
+  --shadow-md: #{$shadow-md};
+  --shadow-lg: #{$shadow-lg};
+
+  // Transitions
+  --transition: #{$transition-base};
+}
+
+// Dark mode
+[data-theme="dark"] {
+  --color-primary: rgb(#{$color-primary-dark});
+  --color-accent: rgb(#{$color-accent-dark});
+  --color-background: rgb(#{$color-background-dark});
+  --color-surface: rgb(#{$color-surface-dark});
+  --color-border: rgb(#{$color-border-dark});
+
+  --text-primary: rgb(#{$color-text-primary-dark});
+  --text-secondary: rgb(#{$color-text-secondary-dark});
+  --text-tertiary: rgb(#{$color-text-tertiary-dark});
+  --text-quaternary: rgb(#{$color-text-quaternary-dark});
+  --text-quinary: rgb(#{$color-text-quinary-dark});
+
+  --color-success: rgb(#{$color-success-dark});
+  --color-warning: rgb(#{$color-warning-dark});
+  --color-danger: rgb(#{$color-danger-dark});
+  --color-info: rgb(#{$color-info-dark});
+}
+
+// ============================================
+// Base Resets and Defaults
+// ============================================
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--text-primary);
+  min-height: 100vh;
+  transition:
+    background-color var(--transition),
+    color var(--transition);
+}
+
+// ============================================
+// Typography Defaults
+// ============================================
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: $spacing-md;
+  color: var(--text-primary);
+}
+
+h1 {
+  font-size: $font-size-4xl;
+}
+h2 {
+  font-size: $font-size-3xl;
+}
+h3 {
+  font-size: $font-size-2xl;
+}
+h4 {
+  font-size: $font-size-xl;
+}
+h5 {
+  font-size: $font-size-lg;
+}
+h6 {
+  font-size: $font-size-base;
+}
+
+p {
+  margin-bottom: $spacing-lg;
+  line-height: 1.7;
+}
+
+ul,
+ol {
+  margin-bottom: $spacing-lg;
+  padding-left: $spacing-xl;
+
+  li {
+    margin-bottom: $spacing-sm;
+    line-height: 1.7;
+  }
+}
+
+blockquote {
+  margin: $spacing-xl 0;
+  padding: $spacing-md $spacing-lg;
+  border-left: 4px solid var(--color-primary);
+  background: var(--color-surface);
+  font-style: italic;
+  border-radius: $radius-sm;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition:
+    color var(--transition),
+    opacity var(--transition);
+
+  &:hover {
+    color: var(--color-accent);
+  }
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-surface);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: $radius-sm;
+}
+
+pre {
+  font-family: var(--font-mono);
+  background: var(--color-surface);
+  padding: $spacing-lg;
+  border-radius: $radius-md;
+  overflow-x: auto;
+  margin-bottom: $spacing-md;
+
+  code {
+    background: none;
+    padding: 0;
+  }
+}
+
+// ============================================
+// Utility Classes
+// ============================================
+.container {
+  max-width: $container-max-width;
+  margin: 0 auto;
+  padding: 0 $spacing-lg;
+}
+
+.content {
+  max-width: $content-max-width;
+  margin: 0 auto;
+}
+
+.content-wide {
+  max-width: $content-wide-width;
+  margin: 0 auto;
+}

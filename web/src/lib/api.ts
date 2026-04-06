@@ -99,6 +99,61 @@ export async function getSettings(): Promise<any> {
   return apiCall("/settings")
 }
 
+// Theme API
+export interface Theme {
+  id: number
+  name: string
+  slug: string
+  description: string
+  version: string
+  author: string
+  config: any
+  active: boolean
+  created_at: string
+  changed_at: string
+}
+
+export interface ActiveThemeWithSettings extends Theme {
+  settings: Record<string, any>
+}
+
+export async function getThemes(): Promise<Theme[]> {
+  return apiCall("/themes")
+}
+
+export async function getActiveTheme(): Promise<ActiveThemeWithSettings> {
+  return apiCall("/themes/active")
+}
+
+export async function activateTheme(themeId: number): Promise<Theme> {
+  return apiCall(`/themes/${themeId}/activate`, { method: "PUT" })
+}
+
+export async function updateActiveThemeSettings(settings: Record<string, any>): Promise<any> {
+  return apiCall("/themes/active/settings", {
+    method: "PUT",
+    body: { settings },
+  })
+}
+
+export interface PostTypeInfo {
+  id: number
+  name: string
+  label: string
+  description: string
+  public: boolean
+  hierarchical: boolean
+  has_archive: boolean
+  menu_position: number | null
+  supports: string[]
+  is_active: boolean
+  registered_by: string
+}
+
+export async function getPostTypes(): Promise<PostTypeInfo[]> {
+  return apiCall("/post-types")
+}
+
 export async function getPostsByType(type: string, params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
   return getPosts({ ...params, type })
 }

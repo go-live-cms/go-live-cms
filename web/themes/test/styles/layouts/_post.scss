@@ -1,0 +1,299 @@
+@use "../variables" as *;
+
+// Post Layout: Default (Magazine Centered)
+.post-layout-default {
+  width: 100%;
+  padding: $spacing-3xl $spacing-lg;
+  background: var(--color-background);
+
+  .post-container {
+    max-width: $content-max-width;
+    margin: 0 auto;
+  }
+
+  .post-header {
+    margin-bottom: $spacing-3xl;
+    text-align: center;
+
+    .featured-image {
+      width: calc(100% + #{$spacing-2xl * 2});
+      margin-left: -$spacing-2xl;
+      margin-right: -$spacing-2xl;
+      height: auto;
+      margin-bottom: $spacing-2xl;
+      object-fit: cover;
+      max-height: 600px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+
+      @media (max-width: $breakpoint-md) {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+      }
+    }
+
+    .post-title {
+      font-family: var(--font-serif);
+      font-size: $font-size-4xl;
+      font-weight: 900;
+      margin-bottom: $spacing-md;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      color: var(--text-primary);
+
+      @media (min-width: $breakpoint-md) {
+        font-size: $font-size-5xl;
+      }
+    }
+
+    .post-meta {
+      display: flex;
+      gap: $spacing-lg;
+      justify-content: center;
+      color: var(--text-tertiary);
+      font-size: $font-size-sm;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-top: 2px solid var(--color-border);
+      border-bottom: 2px solid var(--color-border);
+      padding: $spacing-md 0;
+      margin-top: $spacing-xl;
+
+      .author {
+        font-weight: 700;
+        color: var(--color-primary);
+      }
+    }
+  }
+
+  .post-content {
+    font-size: $font-size-base;
+    line-height: 1.9;
+    color: var(--text-secondary);
+
+    // First paragraph drop cap
+    > p:first-of-type::first-letter {
+      font-family: var(--font-serif);
+      font-size: 4.5em;
+      font-weight: 700;
+      line-height: 0.9;
+      float: left;
+      margin: 0.1em 0.1em 0 0;
+      color: var(--color-primary);
+    }
+
+    // Block content styles
+    > * {
+      margin-bottom: $spacing-xl;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin-top: $spacing-3xl;
+      margin-bottom: $spacing-lg;
+    }
+
+    h4,
+    h5,
+    h6 {
+      margin-top: $spacing-2xl;
+      margin-bottom: $spacing-md;
+    }
+
+    blockquote {
+      border-left: 4px solid var(--color-primary);
+      padding-left: $spacing-xl;
+      font-size: $font-size-xl;
+      font-style: italic;
+      color: var(--text-primary);
+      margin: $spacing-2xl 0;
+    }
+  }
+
+  @media (max-width: $breakpoint-md) {
+    padding: $spacing-xl $spacing-md;
+
+    .post-header .post-title {
+      font-size: $font-size-3xl;
+    }
+  }
+}
+
+// Post Layout: Sidebar (Magazine Grid)
+.post-layout-sidebar {
+  width: 100%;
+  padding: $spacing-2xl $spacing-lg;
+  background: var(--color-background);
+
+  .layout-container {
+    max-width: $container-max-width;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: $spacing-3xl;
+  }
+
+  .post-main {
+    min-width: 0;
+
+    .post-header {
+      margin-bottom: $spacing-2xl;
+
+      .featured-image {
+        width: 100%;
+        margin-bottom: $spacing-xl;
+        object-fit: cover;
+        max-height: 500px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+      }
+
+      .post-title {
+        font-family: var(--font-serif);
+        font-size: $font-size-4xl;
+        font-weight: 900;
+        margin-bottom: $spacing-md;
+        line-height: 1.1;
+        color: var(--text-primary);
+      }
+
+      .post-meta {
+        display: flex;
+        gap: $spacing-md;
+        color: var(--text-tertiary);
+        font-size: $font-size-sm;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+
+        .author {
+          font-weight: 700;
+          color: var(--color-primary);
+        }
+      }
+    }
+
+    .post-content {
+      font-size: $font-size-base;
+      line-height: 1.8;
+    }
+  }
+
+  .sidebar {
+    .sidebar-section {
+      background: var(--color-surface);
+      padding: $spacing-xl;
+      margin-bottom: $spacing-xl;
+      border-left: 4px solid var(--color-accent);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+      h3 {
+        font-family: var(--font-serif);
+        font-size: $font-size-xl;
+        font-weight: 700;
+        margin-bottom: $spacing-md;
+        color: var(--color-primary);
+      }
+
+      ul {
+        list-style: none;
+
+        li {
+          margin-bottom: $spacing-sm;
+
+          a {
+            display: block;
+            padding: $spacing-sm;
+            transition: background $transition-fast;
+
+            &:hover {
+              background: rgb(var(--color-background));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  @media (max-width: $breakpoint-lg) {
+    .layout-container {
+      grid-template-columns: 1fr;
+      gap: $spacing-2xl;
+    }
+
+    .sidebar {
+      order: 2;
+    }
+  }
+
+  @media (max-width: $breakpoint-md) {
+    padding: $spacing-xl $spacing-md;
+
+    .post-main .post-header .post-title {
+      font-size: $font-size-3xl;
+    }
+  }
+}
+
+// Post Layout: Wide (Full-width)
+.post-layout-wide {
+  width: 100%;
+  padding: $spacing-3xl $spacing-lg;
+
+  .post-container-wide {
+    max-width: $content-wide-width;
+    margin: 0 auto;
+  }
+
+  .post-header {
+    margin-bottom: $spacing-3xl;
+
+    .featured-image {
+      width: 100%;
+      height: auto;
+      border-radius: $radius-lg;
+      margin-bottom: $spacing-2xl;
+      object-fit: cover;
+      max-height: 500px;
+    }
+
+    .header-content {
+      max-width: $content-max-width;
+      margin: 0 auto;
+
+      .post-title {
+        font-size: clamp($font-size-3xl, 5vw, $font-size-4xl);
+        font-weight: 700;
+        margin-bottom: $spacing-lg;
+        line-height: 1.1;
+      }
+
+      .post-meta {
+        display: flex;
+        gap: $spacing-lg;
+        color: rgb(var(--color-secondary));
+        font-size: $font-size-base;
+
+        .author {
+          font-weight: 500;
+        }
+      }
+    }
+  }
+
+  .post-content {
+    max-width: $content-max-width;
+    margin: 0 auto;
+    font-size: $font-size-lg;
+    line-height: 1.8;
+  }
+
+  @media (max-width: $breakpoint-md) {
+    padding: $spacing-2xl $spacing-md;
+
+    .post-header .header-content .post-title {
+      font-size: $font-size-3xl;
+    }
+  }
+}

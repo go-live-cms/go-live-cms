@@ -13,6 +13,8 @@ import (
 )
 
 type Querier interface {
+	// Then activate the specified theme
+	ActivateTheme(ctx context.Context, id int64) (Theme, error)
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockAllSessionsForUser(ctx context.Context, userID int64) error
@@ -38,9 +40,13 @@ type Querier interface {
 	CreateTaxonomyTerm(ctx context.Context, arg CreateTaxonomyTermParams) (TaxonomyTerm, error)
 	// Taxonomy Types Management
 	CreateTaxonomyType(ctx context.Context, arg CreateTaxonomyTypeParams) (TaxonomyType, error)
+	CreateTheme(ctx context.Context, arg CreateThemeParams) (Theme, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserPost(ctx context.Context, arg CreateUserPostParams) (UserPost, error)
+	// First deactivate all themes
+	DeactivateAllThemes(ctx context.Context) error
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
+	DeleteAllThemeSettings(ctx context.Context, themeID int64) error
 	DeleteExtensionSetting(ctx context.Context, key string) error
 	DeleteExtensionSettingsByExtension(ctx context.Context, arg DeleteExtensionSettingsByExtensionParams) error
 	DeleteMedia(ctx context.Context, id int64) error
@@ -55,10 +61,15 @@ type Querier interface {
 	DeletePostsByUserID(ctx context.Context, userID int64) error
 	DeleteTaxonomyTerm(ctx context.Context, id int64) error
 	DeleteTaxonomyType(ctx context.Context, name string) error
+	DeleteTheme(ctx context.Context, id int64) error
+	DeleteThemeSetting(ctx context.Context, arg DeleteThemeSettingParams) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserPost(ctx context.Context, postID int64) error
 	DeleteUserPostsByUserID(ctx context.Context, userID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
+	GetActiveTheme(ctx context.Context) (Theme, error)
+	// Get active theme with its settings
+	GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error)
 	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error)
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
@@ -103,11 +114,16 @@ type Querier interface {
 	GetTaxonomyTypeByID(ctx context.Context, id int64) (TaxonomyType, error)
 	GetTermChildren(ctx context.Context, parentID sql.NullInt64) ([]TaxonomyTerm, error)
 	GetTermParents(ctx context.Context, id int64) ([]TaxonomyTerm, error)
+	GetTheme(ctx context.Context, id int64) (Theme, error)
+	GetThemeBySlug(ctx context.Context, slug string) (Theme, error)
+	// Theme Settings Queries
+	GetThemeSetting(ctx context.Context, arg GetThemeSettingParams) (ThemeSetting, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
 	InsertPostVersion(ctx context.Context, arg InsertPostVersionParams) (InsertPostVersionRow, error)
+	ListActivePostTypes(ctx context.Context) ([]PostType, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
@@ -123,6 +139,8 @@ type Querier interface {
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
 	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)
 	ListTaxonomyTypes(ctx context.Context) ([]TaxonomyType, error)
+	ListThemeSettings(ctx context.Context, themeID int64) ([]ThemeSetting, error)
+	ListThemes(ctx context.Context) ([]Theme, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
@@ -131,6 +149,8 @@ type Querier interface {
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// Search and filtering
 	SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTermsParams) ([]SearchTaxonomyTermsRow, error)
+	SetPostTypeActive(ctx context.Context, arg SetPostTypeActiveParams) error
+	SetPostTypeActiveByRegisteredBy(ctx context.Context, arg SetPostTypeActiveByRegisteredByParams) error
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
@@ -145,10 +165,13 @@ type Querier interface {
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error)
 	UpdateTaxonomyTerm(ctx context.Context, arg UpdateTaxonomyTermParams) (TaxonomyTerm, error)
 	UpdateTaxonomyType(ctx context.Context, arg UpdateTaxonomyTypeParams) (TaxonomyType, error)
+	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserPostsOwnership(ctx context.Context, arg UpdateUserPostsOwnershipParams) error
 	UpsertExtensionSetting(ctx context.Context, arg UpsertExtensionSettingParams) (ExtensionSetting, error)
 	UpsertPostMeta(ctx context.Context, arg UpsertPostMetaParams) (PostMetum, error)
+	UpsertPostType(ctx context.Context, arg UpsertPostTypeParams) (PostType, error)
+	UpsertThemeSetting(ctx context.Context, arg UpsertThemeSettingParams) (ThemeSetting, error)
 }
 
 var _ Querier = (*Queries)(nil)

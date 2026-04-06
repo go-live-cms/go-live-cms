@@ -3,7 +3,8 @@ import { z } from "zod"
 // Block Spec v1 - Authoritative Types
 export type BlockID = string
 
-export type BlockType =
+/** Well-known block types built into the editor */
+export type KnownBlockType =
   | "paragraph"
   | "heading"
   | "blockquote"
@@ -14,7 +15,10 @@ export type BlockType =
   | "ordered_list"
   | "list_item"
 
-export interface BaseBlock<T extends BlockType = BlockType, A = Record<string, unknown>> {
+/** BlockType allows known types + arbitrary custom types from themes */
+export type BlockType = KnownBlockType | (string & {})
+
+export interface BaseBlock<T extends string = string, A = Record<string, unknown>> {
   id: BlockID
   type: T
   version: 1
@@ -79,6 +83,19 @@ export type ListItemBlock = BaseBlock<
   }
 >
 
+/**
+ * Custom block type for theme-defined blocks (e.g., alert, callout, etc.)
+ * Preserves the full ProseMirror JSON for round-trip fidelity.
+ */
+export type CustomBlock = BaseBlock<
+  string,
+  {
+    pm?: any
+    text?: string
+    [key: string]: unknown
+  }
+>
+
 export type Block =
   | ParagraphBlock
   | HeadingBlock
@@ -89,6 +106,7 @@ export type Block =
   | BulletListBlock
   | OrderedListBlock
   | ListItemBlock
+  | CustomBlock
 
 export interface BlockDocV1 {
   doc_version: 1 // spec version
@@ -169,7 +187,15 @@ export const zListItem = zBase.extend({
   }),
 })
 
-export const zBlock = z.discriminatedUnion("type", [
+/** Catch-all for theme/custom block types not in the known set */
+export const zCustomBlock = zBase.extend({
+  type: z.string(),
+  attrs: z.record(z.unknown()),
+  children: z.array(zBlockID).optional(),
+})
+
+// Use z.union so known types are matched first, with custom as fallback
+export const zBlock = z.union([
   zParagraph,
   zHeading,
   zBlockquote,
@@ -179,6 +205,7 @@ export const zBlock = z.discriminatedUnion("type", [
   zBulletList,
   zOrderedList,
   zListItem,
+  zCustomBlock,
 ])
 
 export const zBlockDocV1 = z.object({

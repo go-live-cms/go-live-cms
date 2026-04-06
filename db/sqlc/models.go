@@ -91,6 +91,8 @@ type PostType struct {
 	MenuPosition sql.NullInt32   `json:"menu_position"`
 	Supports     json.RawMessage `json:"supports"`
 	CreatedAt    time.Time       `json:"created_at"`
+	IsActive     bool            `json:"is_active"`
+	RegisteredBy string          `json:"registered_by"`
 }
 
 type PostVersion struct {
@@ -152,6 +154,28 @@ type TaxonomyType struct {
 	ShowUi       bool           `json:"show_ui"`
 	ShowInMenu   bool           `json:"show_in_menu"`
 	CreatedAt    time.Time      `json:"created_at"`
+}
+
+type Theme struct {
+	ID          int64           `json:"id"`
+	Name        string          `json:"name"`
+	Slug        string          `json:"slug"`
+	Description sql.NullString  `json:"description"`
+	Version     string          `json:"version"`
+	Author      sql.NullString  `json:"author"`
+	Config      json.RawMessage `json:"config"`
+	Active      bool            `json:"active"`
+	CreatedAt   time.Time       `json:"created_at"`
+	ChangedAt   time.Time       `json:"changed_at"`
+}
+
+type ThemeSetting struct {
+	ID           int64           `json:"id"`
+	ThemeID      int64           `json:"theme_id"`
+	SettingKey   string          `json:"setting_key"`
+	SettingValue json.RawMessage `json:"setting_value"`
+	CreatedAt    time.Time       `json:"created_at"`
+	ChangedAt    time.Time       `json:"changed_at"`
 }
 
 type User struct {

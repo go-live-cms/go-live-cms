@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	p "aidanwoods.dev/go-paseto"
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/util"
@@ -32,17 +33,29 @@ func newTestServer(t *testing.T, store db.Store) *Server {
 
 	gin.SetMode(gin.TestMode)
 
+	// Generate fresh PASETO v4 keys for each test
+	privKey := p.NewV4AsymmetricSecretKey()
+	pubKey := privKey.Public()
+	localKey := p.NewV4SymmetricKey()
+
 	tempDir := t.TempDir()
 	uploadPath := filepath.Join(tempDir, "uploads", "media")
 	err := os.MkdirAll(uploadPath, 0755)
 	require.NoError(t, err)
 
 	config := util.Config{
-		TokenSymmetricKey:   randomString(32),
-		AccessTokenDuration: time.Minute,
-		UploadPath:          uploadPath,
-		MaxUploadSize:       "10MB",
-		IsTestMode:          true,
+		PasetoV4PrivateKeyHex: privKey.ExportHex(),
+		PasetoV4PublicKeyHex:  pubKey.ExportHex(),
+		PasetoV4LocalKeyHex:   localKey.ExportHex(),
+		PasetoIssuer:          "test-issuer",
+		PasetoAudience:        "test-audience",
+		PasetoAccessKID:       "test-access-kid",
+		PasetoRefreshKID:      "test-refresh-kid",
+		AccessTokenDuration:   time.Minute,
+		RefreshTokenDuration:  time.Hour,
+		UploadPath:            uploadPath,
+		MaxUploadSize:         "10MB",
+		IsTestMode:            true,
 	}
 
 	server, err := NewServer(config, store)

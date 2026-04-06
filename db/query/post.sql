@@ -8,9 +8,11 @@ INSERT INTO posts (
     post_type,
     post_status,
     post_parent,
-    menu_order
+    menu_order,
+    slug,
+    block_doc
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 ) RETURNING *;
 
 -- name: CreateUserPost :one

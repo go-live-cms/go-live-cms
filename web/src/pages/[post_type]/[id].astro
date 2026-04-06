@@ -1,15 +1,27 @@
 ---
-import FormattedDate from '@/components/FormattedDate.astro'
-import BaseHead from '@/components/BaseHead.astro'
-import Header from '@/layouts/Header.astro'
-import Footer from '@/layouts/Footer.astro'
-import BlockRenderer from '@/components/BlockRenderer'
-import { SITE_TITLE } from '../../consts'
-import { getPostsByType, getPostById, getPostBySlug, getSettings } from '../../lib/api'
+import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes } from '../../lib/api'
+import { getPostLayoutVariant } from '../../lib/theme-loader'
 import type { Post } from '@gl-admin/lib/api/types'
 
+// WordPress-style: Auto-discover all theme layouts using glob imports
+// This allows dropping in new themes without modifying code
+const allLayouts = import.meta.glob('../../../themes/*/layouts/**/*.astro')
+
+// Disable static pre-rendering to allow dynamic theme loading
+export const prerender = false
+
 export async function getStaticPaths() {
-  const postTypes = ['post', 'page']
+  // Dynamically fetch active post types from the API
+  let postTypes = ['post', 'page'] // fallback
+  try {
+    const types = await getPostTypes()
+    if (types && types.length > 0) {
+      postTypes = types.map(t => t.name)
+      console.log('Discovered post types:', postTypes)
+    }
+  } catch (error) {
+    console.warn('Could not fetch post types, using defaults:', error)
+  }
   
   // Fetch settings to determine URL structure
   let urlStructure = 'id' // default
@@ -141,197 +153,73 @@ if (!fullPost || !fullPost.title) {
   })
 }
 
+// Phase 2: Apply theme content filter if available
+if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
+  try {
+    const filtered = await Astro.locals.themeFunctions.filterContent(
+      (fullPost as any).content,
+      fullPost,
+      Astro.locals.themeContext!
+    )
+    if (filtered && typeof filtered === 'string') {
+      (fullPost as any).content = filtered
+    }
+  } catch (error) {
+    console.error('[Theme] Error in filterContent:', error)
+    // Continue with unfiltered content
+  }
+}
+
+// Get layout variant for this post
+const layoutVariant = await getPostLayoutVariant(fullPost, postType)
+
+// Get active theme for dynamic layout loading
+const activeTheme = await getActiveTheme()
+const themeSlug = activeTheme.slug
+console.log(`🎨 Active theme: ${activeTheme.name} (${themeSlug}), layout variant: ${layoutVariant}`)
+
+// Layout fallback chain:
+// 1. themes/{theme}/layouts/{postType}/{variant}.astro  (exact match)
+// 2. themes/{theme}/layouts/post/{variant}.astro        (generic post layout)
+// 3. themes/default/layouts/{postType}/{variant}.astro  (default theme, exact type)
+// 4. themes/default/layouts/post/default.astro          (ultimate fallback)
+let LayoutComponent
+const fallbackChain = [
+  `../../../themes/${themeSlug}/layouts/${postType}/${layoutVariant}.astro`,
+  `../../../themes/${themeSlug}/layouts/post/${layoutVariant}.astro`,
+  `../../../themes/${themeSlug}/layouts/post/default.astro`,
+  `../../../themes/default/layouts/${postType}/${layoutVariant}.astro`,
+  `../../../themes/default/layouts/post/default.astro`,
+]
+
+for (const candidatePath of fallbackChain) {
+  if (allLayouts[candidatePath]) {
+    try {
+      const layoutModule = await allLayouts[candidatePath]() as any
+      LayoutComponent = layoutModule.default
+      console.log(`✓ Loaded layout: ${candidatePath}`)
+      break
+    } catch (error) {
+      console.warn(`Failed to load layout ${candidatePath}:`, error)
+    }
+  }
+}
+
+if (!LayoutComponent) {
+  console.error(`No layout found for ${postType}/${layoutVariant} in any fallback`)
+  return new Response(null, {
+    status: 500,
+    statusText: 'Layout Not Found'
+  })
+}
+
 const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
+const title = `${fullPost.title} | ${displayType}`
+const description = fullPost.description || `Read ${fullPost.title}`
 ---
 
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <BaseHead 
-      title={`${fullPost.title} | ${SITE_TITLE}`} 
-      description={fullPost.description} 
-    />
-    <style>
-      .prose {
-        max-width: none;
-        line-height: 1.7;
-        color: #374151;
-      }
-
-      .prose h1, .prose h2, .prose h3 {
-        margin-top: 2rem;
-        margin-bottom: 1rem;
-        font-weight: 600;
-        line-height: 1.3;
-      }
-
-      .prose h1 { font-size: 2.25rem; }
-      .prose h2 { font-size: 1.875rem; }
-      .prose h3 { font-size: 1.5rem; }
-
-      .prose p {
-        margin-bottom: 1rem;
-      }
-
-      .prose strong {
-        font-weight: 600;
-      }
-
-      .prose em {
-        font-style: italic;
-      }
-
-      .prose ul, .prose ol {
-        margin: 1rem 0;
-        padding-left: 2rem;
-      }
-
-      .prose li {
-        margin-bottom: 0.5rem;
-      }
-
-      .prose ul li {
-        list-style-type: disc;
-      }
-
-      .prose ol li {
-        list-style-type: decimal;
-      }
-
-      .prose blockquote {
-        border-left: 4px solid #e5e7eb;
-        padding-left: 1rem;
-        margin: 1.5rem 0;
-        font-style: italic;
-        color: #6b7280;
-        background-color: #f9fafb;
-        padding: 1rem;
-        border-radius: 0.25rem;
-      }
-
-      .prose code {
-        background-color: #f3f4f6;
-        padding: 0.125rem 0.25rem;
-        border-radius: 0.25rem;
-        font-size: 0.875rem;
-        font-family: 'Courier New', monospace;
-      }
-
-      .prose pre {
-        background-color: #1f2937;
-        color: #f9fafb;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        overflow-x: auto;
-        margin: 1.5rem 0;
-        font-family: 'Courier New', monospace;
-      }
-
-      .prose pre code {
-        background-color: transparent;
-        padding: 0;
-        color: inherit;
-      }
-
-      .prose a {
-        color: #3b82f6;
-        text-decoration: underline;
-        transition: color 0.2s;
-      }
-
-      .prose a:hover {
-        color: #1d4ed8;
-      }
-
-      .prose hr {
-        border: none;
-        border-top: 2px solid #e5e7eb;
-        margin: 2rem 0;
-      }
-
-      .prose img {
-        max-width: 100%;
-        height: auto;
-        border-radius: 0.5rem;
-        margin: 1.5rem 0;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-      }
-
-      .hero-image {
-        margin-bottom: 2rem;
-      }
-
-      .hero-image img {
-        width: 100%;
-        height: 300px;
-        object-fit: cover;
-        border-radius: 0.5rem;
-      }
-
-      .title {
-        margin-bottom: 2rem;
-      }
-
-      .date {
-        color: #6b7280;
-        font-size: 0.875rem;
-        margin-bottom: 0.5rem;
-      }
-
-      .content {
-        margin-top: 2rem;
-      }
-
-      .breadcrumb {
-        margin-bottom: 2rem;
-        font-size: 0.875rem;
-        color: #6b7280;
-      }
-
-      .breadcrumb a {
-        color: #3b82f6;
-        text-decoration: none;
-      }
-
-      .breadcrumb a:hover {
-        text-decoration: underline;
-      }
-    </style>
-  </head>
-
-  <body>
-    <Header />
-    <main>
-      <nav class="breadcrumb">
-        <a href="/">Home</a> › 
-        <a href={`/${postType}`}>{displayType}s</a> › 
-        <span>{fullPost.title}</span>
-      </nav>
-      
-      <article>
-        <div class="hero-image">
-          {fullPost.featured_image && (
-            <img src={fullPost.featured_image} alt={fullPost.title} />
-          )}
-        </div>
-        <div class="prose">
-          <div class="title">
-            <div class="date">
-              <FormattedDate date={new Date(fullPost.created_at)} />
-            </div>
-            <h1>{fullPost.title}</h1>
-            <hr />
-          </div>
-          {fullPost.published_blocks ? (
-            <BlockRenderer doc={fullPost.published_blocks} client:load />
-          ) : (
-            <div class="content">
-              <p>No published content available.</p>
-            </div>
-          )}
-        </div>
-      </article>
-    </main>
-    <Footer />
-  </body>
-</html>
+<LayoutComponent 
+  post={fullPost}
+  title={title}
+  description={description}
+/>

@@ -92,6 +92,8 @@ func (server *Server) createPost(c *gin.Context) {
 		PostType:    req.PostType,
 		PostStatus:  req.PostStatus,
 		MenuOrder:   req.MenuOrder,
+		Slug:        generateSlug(req.Title),
+		BlockDoc:    []byte(`{"doc_version":1,"blocks_order":[],"blocks":{}}`),
 	}
 
 	if req.PostParent != nil {

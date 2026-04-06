@@ -167,8 +167,31 @@ export function htmlToBlockDoc(html: string): BlockDocV1 {
       }
 
       default:
-        // Recursively process children for unknown elements
-        element.childNodes.forEach((child) => processNode(child))
+        // Check for custom block elements (e.g., <div data-block-type="alert">)
+        const blockType = element.getAttribute("data-block-type")
+        if (blockType) {
+          // Collect all data-* attributes as block attrs
+          const customAttrs: Record<string, unknown> = {
+            text: element.textContent || undefined,
+          }
+          for (const attr of Array.from(element.attributes)) {
+            if (attr.name.startsWith("data-") && attr.name !== "data-block-type" && attr.name !== "data-block-id") {
+              // Convert data-variant → variant
+              const key = attr.name.replace(/^data-/, "")
+              customAttrs[key] = attr.value
+            }
+          }
+          blocks[id] = {
+            id,
+            type: blockType,
+            version: 1,
+            attrs: customAttrs,
+          }
+          blocksOrder.push(id)
+        } else {
+          // Recursively process children for unknown elements
+          element.childNodes.forEach((child) => processNode(child))
+        }
     }
   }
 

@@ -1,0 +1,107 @@
+---
+/**
+ * System Fallback Theme
+ * 
+ * This is an emergency fallback theme shown when no themes are installed.
+ * It provides a minimal interface to guide users to install a theme.
+ * This file is embedded in the Docker image and cannot be deleted.
+ */
+
+const siteUrl = import.meta.env.SITE || 'http://localhost:4321'
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Theme Required - Go Live CMS</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: #1a202c;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+      
+      .container {
+        background: white;
+        border-radius: 16px;
+        padding: 3rem;
+        max-width: 600px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        text-align: center;
+      }
+      
+      .icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+      }
+      
+      h1 {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        color: #2d3748;
+      }
+      
+      p {
+        font-size: 1.125rem;
+        line-height: 1.6;
+        color: #4a5568;
+        margin-bottom: 2rem;
+      }
+      
+      .button {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 1.125rem;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+      }
+      
+      .info {
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 1px solid #e2e8f0;
+        font-size: 0.875rem;
+        color: #718096;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon">🎨</div>
+      <h1>No Theme Installed</h1>
+      <p>
+        Go Live CMS requires at least one theme to display your site.
+        Please install a theme from the admin dashboard to get started.
+      </p>
+      <a href="/gl-admin" class="button">
+        Go to Admin Dashboard
+      </a>
+      <div class="info">
+        <strong>For Developers:</strong> Install the default theme or create a custom theme
+        in the <code>/themes</code> directory.
+      </div>
+    </div>
+  </body>
+</html>

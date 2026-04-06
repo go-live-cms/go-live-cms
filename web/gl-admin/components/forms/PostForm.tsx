@@ -125,26 +125,12 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   // TODO: these are basically the same, fix it
   const getContentTypeName = (type?: string) => {
     const postType = type || contentType || initialData?.post_type || "post"
-    switch (postType) {
-      case "post":
-        return "Post"
-      case "page":
-        return "Page"
-      default:
-        return "Content"
-    }
+    return postType.charAt(0).toUpperCase() + postType.slice(1)
   }
 
   const getBackUrl = (type?: string) => {
     const postType = type || contentType || initialData?.post_type || "post"
-    switch (postType) {
-      case "post":
-        return "/content/posts"
-      case "page":
-        return "/content/pages"
-      default:
-        return "/content"
-    }
+    return `/content/${postType}`
   }
 
   mockPostType = {
@@ -154,6 +140,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     description: "",
     hierarchical: false,
     public: true,
+    has_archive: true,
+    menu_position: null,
+    supports: ["title", "content", "description"],
+    is_active: true,
+    registered_by: "system",
     show_ui: true,
     show_in_menu: true,
     created_at: new Date().toISOString(),
@@ -270,10 +261,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       }
 
       const baseUrl = window.location.origin
-      const fullUrl = `${baseUrl}/posts/${formData.slug}`
+      const postType = contentType || "post"
+      const fullUrl = `${baseUrl}/${postType}/${formData.slug}`
 
       if (mode === "create") {
-        const postType = contentType || "post"
         const postData: CreatePostRequest = {
           title: formData.title,
           url: fullUrl,

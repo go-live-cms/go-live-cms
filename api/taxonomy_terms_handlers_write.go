@@ -109,6 +109,30 @@ func (server *Server) createTaxonomyTerm(c *gin.Context) {
 		return
 	}
 
+	// Validate that the taxonomy type exists
+	_, err := server.store.GetTaxonomyTypeByID(c.Request.Context(), req.TaxonomyTypeID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "taxonomy type not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate taxonomy type"})
+		return
+	}
+
+	// Validate parent term if provided
+	if req.ParentID != nil {
+		_, err := server.store.GetTaxonomyTerm(c.Request.Context(), *req.ParentID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "parent term not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate parent term"})
+			return
+		}
+	}
+
 	// Generate SEO-friendly slug from term name
 	slug := generateSlug(req.Name)
 	if req.Slug != "" {

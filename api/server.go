@@ -3,8 +3,10 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"path/filepath"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -21,6 +23,7 @@ type Server struct {
 	router     *gin.Engine
 	config     util.Config
 	tokenMaker token.Maker
+	ctx        context.Context
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -49,9 +52,25 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		store:      store,
 		config:     config,
 		tokenMaker: tokenMaker,
+		ctx:        context.Background(),
 	}
 
 	server.setupRoutes()
+
+	// Sync themes from filesystem on startup (skip in test mode)
+	if !config.IsTestMode {
+		fmt.Println("🎨 Scanning themes directory...")
+		themesPath := filepath.Join("web", "themes")
+		discoveredThemes, err := ScanThemesDirectory(themesPath)
+		if err != nil {
+			fmt.Printf("Warning: Failed to scan themes directory: %v\n", err)
+		} else {
+			fmt.Printf("Found %d theme(s)\n", len(discoveredThemes))
+			if err := server.SyncThemesToDatabase(discoveredThemes); err != nil {
+				fmt.Printf("Warning: Failed to sync themes: %v\n", err)
+			}
+		}
+	}
 
 	if gin.Mode() == gin.DebugMode && !config.IsTestMode {
 		devModeUtil.CreateDefaultAdminUser(server.store)
@@ -126,8 +145,10 @@ func (server *Server) setupRoutes() {
 	posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
 
 	postTypes := v1.Group("/post-types")
-	postTypes.GET("", server.getPostTypes)      // GET /api/v1/post-types
-	postTypes.GET("/:name", server.getPostType) // GET /api/v1/post-types/product
+	postTypes.GET("", server.getPostTypes)                                            // GET /api/v1/post-types
+	postTypes.GET("/:name", server.getPostType)                                       // GET /api/v1/post-types/:name
+	postTypes.POST("", authMiddleware(server.tokenMaker), server.createPostType)      // POST /api/v1/post-types (auth)
+	postTypes.PUT("/:name", authMiddleware(server.tokenMaker), server.updatePostType) // PUT /api/v1/post-types/:name (auth)
 
 	// Taxonomy module routes (see taxonomy_routes.go for complete definitions)
 	server.RegisterTaxonomyRoutes(v1)
@@ -138,10 +159,13 @@ func (server *Server) setupRoutes() {
 	// Settings module routes (see settings_routes.go for complete definitions)
 	server.RegisterSettingsRoutes(v1)
 
+	// Theme module routes (see themes_routes.go for complete definitions)
+	server.registerThemeRoutes(v1)
+
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 
-	router.Static("/uploads", "./uploads")
+	router.Static("/uploads", filepath.Dir(server.config.UploadPath))
 
 	//v1.GET("/test-log", server.testLog) // Temporary log endpoint for testing
 

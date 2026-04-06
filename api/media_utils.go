@@ -93,7 +93,8 @@ func isValidMediaType(filename string) bool {
 //   - Streams file contents (memory efficient for large files)
 func saveUploadedFileWithOriginalName(file multipart.File, header *multipart.FileHeader, uploadPath string) (string, string, error) {
 	// Create upload directory if it doesn't exist
-	uploadsDir := filepath.Join(".", uploadPath)
+	// Use uploadPath directly so absolute paths (e.g. in tests) work on all platforms.
+	uploadsDir := uploadPath
 	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
 		return "", "", err
 	}

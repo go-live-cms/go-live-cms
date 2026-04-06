@@ -49,6 +49,8 @@ import (
 	"strconv"
 	"strings"
 
+	"database/sql"
+
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/token"
@@ -59,6 +61,13 @@ import (
 // Can optionally link to existing post via post_id parameter.
 // Auth: Requires Bearer token. Returns 201 with media JSON or error.
 func (server *Server) createMedia(c *gin.Context) {
+	// Validate request fields BEFORE saving the file to avoid orphaned uploads.
+	var req CreateMediaRequest
+	if err := c.ShouldBind(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	// Parse multipart form with size limit
 	maxUploadSize, err := parseFileSize(server.config.MaxUploadSize)
 	if err != nil {
@@ -94,13 +103,12 @@ func (server *Server) createMedia(c *gin.Context) {
 		return
 	}
 
-	fullPath := filepath.Join(".", mediaPath)
 	mimeType := getFileMimeType(actualFilename)
 
 	var width, height int32
 	if isImageFile(actualFilename) {
-		w, h, err := getImageDimensions(fullPath)
-		if err == nil {
+		w, h, imgErr := getImageDimensions(mediaPath)
+		if imgErr == nil {
 			width, height = w, h
 		}
 	}
@@ -108,22 +116,20 @@ func (server *Server) createMedia(c *gin.Context) {
 	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
 	userID := authPayload.UserID
 
-	name := c.PostForm("name")
+	name := req.Name
 	if name == "" {
 		name = strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename))
 	}
-
-	description := c.PostForm("description")
+	description := req.Description
 	if description == "" {
 		description = fmt.Sprintf("Uploaded file: %s", actualFilename)
 	}
-
-	alt := c.PostForm("alt")
+	alt := req.Alt
 	if alt == "" {
 		alt = strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename))
 	}
 
-	media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
+	mediaParams := db.CreateMediaParams{
 		Name:             name,
 		Description:      description,
 		Alt:              alt,
@@ -132,26 +138,53 @@ func (server *Server) createMedia(c *gin.Context) {
 		MimeType:         mimeType,
 		Width:            width,
 		Height:           height,
-		Duration:         0, // Set to 0 for non-video files
+		Duration:         0,
 		UserID:           userID,
 		OriginalFilename: actualFilename,
-	})
+	}
+
+	// If post_id is provided, create media and link to post atomically.
+	if req.PostID != nil {
+		order := int32(0)
+		if req.Order != nil {
+			order = *req.Order
+		}
+		result, txErr := server.store.CreateMediaAndLinkTx(c.Request.Context(), db.CreateMediaAndLinkTxParams{
+			Name:             mediaParams.Name,
+			Description:      mediaParams.Description,
+			Alt:              mediaParams.Alt,
+			MediaPath:        mediaParams.MediaPath,
+			UserID:           mediaParams.UserID,
+			FileSize:         mediaParams.FileSize,
+			MimeType:         mediaParams.MimeType,
+			Width:            mediaParams.Width,
+			Height:           mediaParams.Height,
+			Duration:         mediaParams.Duration,
+			OriginalFilename: mediaParams.OriginalFilename,
+			PostID:           *req.PostID,
+			Order:            order,
+		})
+		if txErr != nil {
+			os.Remove(mediaPath)
+			if strings.Contains(txErr.Error(), "post not found") || strings.Contains(txErr.Error(), "no rows") {
+				c.JSON(http.StatusBadRequest, gin.H{"error": txErr.Error()})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create media record"})
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{"media": toMediaResponse(result.Media)})
+		return
+	}
+
+	media, err := server.store.CreateMedia(c.Request.Context(), mediaParams)
 	if err != nil {
-		// Clean up uploaded file if database operation fails
-		os.Remove(filepath.Join(".", mediaPath))
+		os.Remove(mediaPath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create media record"})
 		return
 	}
 
-	// Handle optional post linking
-	postIDStr := c.PostForm("post_id")
-	if postIDStr != "" {
-		// TODO: Implement post linking after checking available DB methods
-		// Currently not available in the database schema
-	}
-
-	response := toMediaResponse(media)
-	c.JSON(http.StatusCreated, response)
+	c.JSON(http.StatusCreated, gin.H{"media": toMediaResponse(media)})
 }
 
 // createMediaBulk handles POST /media/bulk - multiple file upload with error collection.
@@ -213,12 +246,11 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 			continue
 		}
 
-		fullPath := filepath.Join(".", mediaPath)
 		mimeType := getFileMimeType(actualFilename)
 
 		var width, height int32
 		if isImageFile(actualFilename) {
-			w, h, err := getImageDimensions(fullPath)
+			w, h, err := getImageDimensions(mediaPath)
 			if err == nil {
 				width, height = w, h
 			}
@@ -238,7 +270,7 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 			OriginalFilename: actualFilename,
 		})
 		if err != nil {
-			os.Remove(filepath.Join(".", mediaPath))
+			os.Remove(mediaPath)
 			errors = append(errors, fmt.Sprintf("failed to create media record for %s: %v", fileHeader.Filename, err))
 			continue
 		}
@@ -277,7 +309,7 @@ func (server *Server) updateMedia(c *gin.Context) {
 
 	existingMedia, err := server.store.GetMedia(c.Request.Context(), id)
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
 			return
 		}
@@ -358,7 +390,7 @@ func (server *Server) deleteMedia(c *gin.Context) {
 
 	_, err = server.store.GetMedia(c.Request.Context(), id)
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
 			return
 		}

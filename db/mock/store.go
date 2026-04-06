@@ -38,6 +38,21 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 	return m.recorder
 }
 
+// ActivateTheme mocks base method.
+func (m *MockStore) ActivateTheme(arg0 context.Context, arg1 int64) (db.Theme, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ActivateTheme", arg0, arg1)
+	ret0, _ := ret[0].(db.Theme)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ActivateTheme indicates an expected call of ActivateTheme.
+func (mr *MockStoreMockRecorder) ActivateTheme(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ActivateTheme", reflect.TypeOf((*MockStore)(nil).ActivateTheme), arg0, arg1)
+}
+
 // AddPostToTaxonomyTerm mocks base method.
 func (m *MockStore) AddPostToTaxonomyTerm(arg0 context.Context, arg1 db.AddPostToTaxonomyTermParams) (db.PostTaxonomyRelationship, error) {
 	m.ctrl.T.Helper()
@@ -79,6 +94,21 @@ func (m *MockStore) BlockSession(arg0 context.Context, arg1 uuid.UUID) error {
 func (mr *MockStoreMockRecorder) BlockSession(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockSession", reflect.TypeOf((*MockStore)(nil).BlockSession), arg0, arg1)
+}
+
+// CheckURLExists mocks base method.
+func (m *MockStore) CheckURLExists(arg0 context.Context, arg1 string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckURLExists", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckURLExists indicates an expected call of CheckURLExists.
+func (mr *MockStoreMockRecorder) CheckURLExists(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckURLExists", reflect.TypeOf((*MockStore)(nil).CheckURLExists), arg0, arg1)
 }
 
 // CountFilteredPosts mocks base method.
@@ -411,6 +441,21 @@ func (mr *MockStoreMockRecorder) CreateTaxonomyType(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTaxonomyType", reflect.TypeOf((*MockStore)(nil).CreateTaxonomyType), arg0, arg1)
 }
 
+// CreateTheme mocks base method.
+func (m *MockStore) CreateTheme(arg0 context.Context, arg1 db.CreateThemeParams) (db.Theme, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateTheme", arg0, arg1)
+	ret0, _ := ret[0].(db.Theme)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateTheme indicates an expected call of CreateTheme.
+func (mr *MockStoreMockRecorder) CreateTheme(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateTheme", reflect.TypeOf((*MockStore)(nil).CreateTheme), arg0, arg1)
+}
+
 // CreateUser mocks base method.
 func (m *MockStore) CreateUser(arg0 context.Context, arg1 db.CreateUserParams) (db.User, error) {
 	m.ctrl.T.Helper()
@@ -441,6 +486,20 @@ func (mr *MockStoreMockRecorder) CreateUserPost(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUserPost", reflect.TypeOf((*MockStore)(nil).CreateUserPost), arg0, arg1)
 }
 
+// DeactivateAllThemes mocks base method.
+func (m *MockStore) DeactivateAllThemes(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeactivateAllThemes", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeactivateAllThemes indicates an expected call of DeactivateAllThemes.
+func (mr *MockStoreMockRecorder) DeactivateAllThemes(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeactivateAllThemes", reflect.TypeOf((*MockStore)(nil).DeactivateAllThemes), arg0)
+}
+
 // DeleteAllPostMeta mocks base method.
 func (m *MockStore) DeleteAllPostMeta(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -453,6 +512,48 @@ func (m *MockStore) DeleteAllPostMeta(arg0 context.Context, arg1 int64) error {
 func (mr *MockStoreMockRecorder) DeleteAllPostMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAllPostMeta", reflect.TypeOf((*MockStore)(nil).DeleteAllPostMeta), arg0, arg1)
+}
+
+// DeleteAllThemeSettings mocks base method.
+func (m *MockStore) DeleteAllThemeSettings(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAllThemeSettings", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAllThemeSettings indicates an expected call of DeleteAllThemeSettings.
+func (mr *MockStoreMockRecorder) DeleteAllThemeSettings(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAllThemeSettings", reflect.TypeOf((*MockStore)(nil).DeleteAllThemeSettings), arg0, arg1)
+}
+
+// DeleteExtensionSetting mocks base method.
+func (m *MockStore) DeleteExtensionSetting(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteExtensionSetting", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteExtensionSetting indicates an expected call of DeleteExtensionSetting.
+func (mr *MockStoreMockRecorder) DeleteExtensionSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExtensionSetting", reflect.TypeOf((*MockStore)(nil).DeleteExtensionSetting), arg0, arg1)
+}
+
+// DeleteExtensionSettingsByExtension mocks base method.
+func (m *MockStore) DeleteExtensionSettingsByExtension(arg0 context.Context, arg1 db.DeleteExtensionSettingsByExtensionParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteExtensionSettingsByExtension", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteExtensionSettingsByExtension indicates an expected call of DeleteExtensionSettingsByExtension.
+func (mr *MockStoreMockRecorder) DeleteExtensionSettingsByExtension(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteExtensionSettingsByExtension", reflect.TypeOf((*MockStore)(nil).DeleteExtensionSettingsByExtension), arg0, arg1)
 }
 
 // DeleteMedia mocks base method.
@@ -665,6 +766,34 @@ func (mr *MockStoreMockRecorder) DeleteTaxonomyType(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTaxonomyType", reflect.TypeOf((*MockStore)(nil).DeleteTaxonomyType), arg0, arg1)
 }
 
+// DeleteTheme mocks base method.
+func (m *MockStore) DeleteTheme(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTheme", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteTheme indicates an expected call of DeleteTheme.
+func (mr *MockStoreMockRecorder) DeleteTheme(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTheme", reflect.TypeOf((*MockStore)(nil).DeleteTheme), arg0, arg1)
+}
+
+// DeleteThemeSetting mocks base method.
+func (m *MockStore) DeleteThemeSetting(arg0 context.Context, arg1 db.DeleteThemeSettingParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteThemeSetting", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteThemeSetting indicates an expected call of DeleteThemeSetting.
+func (mr *MockStoreMockRecorder) DeleteThemeSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteThemeSetting", reflect.TypeOf((*MockStore)(nil).DeleteThemeSetting), arg0, arg1)
+}
+
 // DeleteUser mocks base method.
 func (m *MockStore) DeleteUser(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -763,6 +892,36 @@ func (mr *MockStoreMockRecorder) ExecTx(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecTx", reflect.TypeOf((*MockStore)(nil).ExecTx), arg0, arg1)
 }
 
+// GetActiveTheme mocks base method.
+func (m *MockStore) GetActiveTheme(arg0 context.Context) (db.Theme, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActiveTheme", arg0)
+	ret0, _ := ret[0].(db.Theme)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetActiveTheme indicates an expected call of GetActiveTheme.
+func (mr *MockStoreMockRecorder) GetActiveTheme(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveTheme", reflect.TypeOf((*MockStore)(nil).GetActiveTheme), arg0)
+}
+
+// GetActiveThemeWithSettings mocks base method.
+func (m *MockStore) GetActiveThemeWithSettings(arg0 context.Context) (db.GetActiveThemeWithSettingsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetActiveThemeWithSettings", arg0)
+	ret0, _ := ret[0].(db.GetActiveThemeWithSettingsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetActiveThemeWithSettings indicates an expected call of GetActiveThemeWithSettings.
+func (mr *MockStoreMockRecorder) GetActiveThemeWithSettings(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetActiveThemeWithSettings", reflect.TypeOf((*MockStore)(nil).GetActiveThemeWithSettings), arg0)
+}
+
 // GetAnySessionByRefreshTokenHash mocks base method.
 func (m *MockStore) GetAnySessionByRefreshTokenHash(arg0 context.Context, arg1 []byte) (db.Session, error) {
 	m.ctrl.T.Helper()
@@ -776,6 +935,21 @@ func (m *MockStore) GetAnySessionByRefreshTokenHash(arg0 context.Context, arg1 [
 func (mr *MockStoreMockRecorder) GetAnySessionByRefreshTokenHash(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAnySessionByRefreshTokenHash", reflect.TypeOf((*MockStore)(nil).GetAnySessionByRefreshTokenHash), arg0, arg1)
+}
+
+// GetExtensionSetting mocks base method.
+func (m *MockStore) GetExtensionSetting(arg0 context.Context, arg1 string) (db.ExtensionSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetExtensionSetting", arg0, arg1)
+	ret0, _ := ret[0].(db.ExtensionSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetExtensionSetting indicates an expected call of GetExtensionSetting.
+func (mr *MockStoreMockRecorder) GetExtensionSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExtensionSetting", reflect.TypeOf((*MockStore)(nil).GetExtensionSetting), arg0, arg1)
 }
 
 // GetFeaturedImage mocks base method.
@@ -836,6 +1010,21 @@ func (m *MockStore) GetMediaByPost(arg0 context.Context, arg1 int64) ([]db.Mediu
 func (mr *MockStoreMockRecorder) GetMediaByPost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMediaByPost", reflect.TypeOf((*MockStore)(nil).GetMediaByPost), arg0, arg1)
+}
+
+// GetMediaByPostWithOrder mocks base method.
+func (m *MockStore) GetMediaByPostWithOrder(arg0 context.Context, arg1 int64) ([]db.GetMediaByPostWithOrderRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMediaByPostWithOrder", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetMediaByPostWithOrderRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMediaByPostWithOrder indicates an expected call of GetMediaByPostWithOrder.
+func (mr *MockStoreMockRecorder) GetMediaByPostWithOrder(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMediaByPostWithOrder", reflect.TypeOf((*MockStore)(nil).GetMediaByPostWithOrder), arg0, arg1)
 }
 
 // GetMediaByUser mocks base method.
@@ -941,6 +1130,21 @@ func (m *MockStore) GetPostBlocks(arg0 context.Context, arg1 int64) (db.GetPostB
 func (mr *MockStoreMockRecorder) GetPostBlocks(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostBlocks", reflect.TypeOf((*MockStore)(nil).GetPostBlocks), arg0, arg1)
+}
+
+// GetPostBySlug mocks base method.
+func (m *MockStore) GetPostBySlug(arg0 context.Context, arg1 string) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostBySlug", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostBySlug indicates an expected call of GetPostBySlug.
+func (mr *MockStoreMockRecorder) GetPostBySlug(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostBySlug", reflect.TypeOf((*MockStore)(nil).GetPostBySlug), arg0, arg1)
 }
 
 // GetPostChildren mocks base method.
@@ -1228,6 +1432,21 @@ func (mr *MockStoreMockRecorder) GetSessionForUpdate(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSessionForUpdate", reflect.TypeOf((*MockStore)(nil).GetSessionForUpdate), arg0, arg1)
 }
 
+// GetSettings mocks base method.
+func (m *MockStore) GetSettings(arg0 context.Context) (db.Setting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetSettings", arg0)
+	ret0, _ := ret[0].(db.Setting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetSettings indicates an expected call of GetSettings.
+func (mr *MockStoreMockRecorder) GetSettings(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSettings", reflect.TypeOf((*MockStore)(nil).GetSettings), arg0)
+}
+
 // GetTaxonomyTerm mocks base method.
 func (m *MockStore) GetTaxonomyTerm(arg0 context.Context, arg1 int64) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
@@ -1348,6 +1567,51 @@ func (mr *MockStoreMockRecorder) GetTermParents(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTermParents", reflect.TypeOf((*MockStore)(nil).GetTermParents), arg0, arg1)
 }
 
+// GetTheme mocks base method.
+func (m *MockStore) GetTheme(arg0 context.Context, arg1 int64) (db.Theme, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTheme", arg0, arg1)
+	ret0, _ := ret[0].(db.Theme)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTheme indicates an expected call of GetTheme.
+func (mr *MockStoreMockRecorder) GetTheme(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTheme", reflect.TypeOf((*MockStore)(nil).GetTheme), arg0, arg1)
+}
+
+// GetThemeBySlug mocks base method.
+func (m *MockStore) GetThemeBySlug(arg0 context.Context, arg1 string) (db.Theme, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetThemeBySlug", arg0, arg1)
+	ret0, _ := ret[0].(db.Theme)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetThemeBySlug indicates an expected call of GetThemeBySlug.
+func (mr *MockStoreMockRecorder) GetThemeBySlug(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetThemeBySlug", reflect.TypeOf((*MockStore)(nil).GetThemeBySlug), arg0, arg1)
+}
+
+// GetThemeSetting mocks base method.
+func (m *MockStore) GetThemeSetting(arg0 context.Context, arg1 db.GetThemeSettingParams) (db.ThemeSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetThemeSetting", arg0, arg1)
+	ret0, _ := ret[0].(db.ThemeSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetThemeSetting indicates an expected call of GetThemeSetting.
+func (mr *MockStoreMockRecorder) GetThemeSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetThemeSetting", reflect.TypeOf((*MockStore)(nil).GetThemeSetting), arg0, arg1)
+}
+
 // GetUser mocks base method.
 func (m *MockStore) GetUser(arg0 context.Context, arg1 int64) (db.User, error) {
 	m.ctrl.T.Helper()
@@ -1421,6 +1685,51 @@ func (m *MockStore) InsertPostVersion(arg0 context.Context, arg1 db.InsertPostVe
 func (mr *MockStoreMockRecorder) InsertPostVersion(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPostVersion", reflect.TypeOf((*MockStore)(nil).InsertPostVersion), arg0, arg1)
+}
+
+// ListActivePostTypes mocks base method.
+func (m *MockStore) ListActivePostTypes(arg0 context.Context) ([]db.PostType, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListActivePostTypes", arg0)
+	ret0, _ := ret[0].([]db.PostType)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListActivePostTypes indicates an expected call of ListActivePostTypes.
+func (mr *MockStoreMockRecorder) ListActivePostTypes(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActivePostTypes", reflect.TypeOf((*MockStore)(nil).ListActivePostTypes), arg0)
+}
+
+// ListExtensionSettings mocks base method.
+func (m *MockStore) ListExtensionSettings(arg0 context.Context) ([]db.ExtensionSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListExtensionSettings", arg0)
+	ret0, _ := ret[0].([]db.ExtensionSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListExtensionSettings indicates an expected call of ListExtensionSettings.
+func (mr *MockStoreMockRecorder) ListExtensionSettings(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListExtensionSettings", reflect.TypeOf((*MockStore)(nil).ListExtensionSettings), arg0)
+}
+
+// ListExtensionSettingsByExtension mocks base method.
+func (m *MockStore) ListExtensionSettingsByExtension(arg0 context.Context, arg1 db.ListExtensionSettingsByExtensionParams) ([]db.ExtensionSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListExtensionSettingsByExtension", arg0, arg1)
+	ret0, _ := ret[0].([]db.ExtensionSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListExtensionSettingsByExtension indicates an expected call of ListExtensionSettingsByExtension.
+func (mr *MockStoreMockRecorder) ListExtensionSettingsByExtension(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListExtensionSettingsByExtension", reflect.TypeOf((*MockStore)(nil).ListExtensionSettingsByExtension), arg0, arg1)
 }
 
 // ListMedia mocks base method.
@@ -1618,6 +1927,36 @@ func (mr *MockStoreMockRecorder) ListTaxonomyTypes(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTaxonomyTypes", reflect.TypeOf((*MockStore)(nil).ListTaxonomyTypes), arg0)
 }
 
+// ListThemeSettings mocks base method.
+func (m *MockStore) ListThemeSettings(arg0 context.Context, arg1 int64) ([]db.ThemeSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListThemeSettings", arg0, arg1)
+	ret0, _ := ret[0].([]db.ThemeSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListThemeSettings indicates an expected call of ListThemeSettings.
+func (mr *MockStoreMockRecorder) ListThemeSettings(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListThemeSettings", reflect.TypeOf((*MockStore)(nil).ListThemeSettings), arg0, arg1)
+}
+
+// ListThemes mocks base method.
+func (m *MockStore) ListThemes(arg0 context.Context) ([]db.Theme, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListThemes", arg0)
+	ret0, _ := ret[0].([]db.Theme)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListThemes indicates an expected call of ListThemes.
+func (mr *MockStoreMockRecorder) ListThemes(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListThemes", reflect.TypeOf((*MockStore)(nil).ListThemes), arg0)
+}
+
 // ListUsers mocks base method.
 func (m *MockStore) ListUsers(arg0 context.Context, arg1 db.ListUsersParams) ([]db.User, error) {
 	m.ctrl.T.Helper()
@@ -1718,6 +2057,34 @@ func (m *MockStore) SearchTaxonomyTerms(arg0 context.Context, arg1 db.SearchTaxo
 func (mr *MockStoreMockRecorder) SearchTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).SearchTaxonomyTerms), arg0, arg1)
+}
+
+// SetPostTypeActive mocks base method.
+func (m *MockStore) SetPostTypeActive(arg0 context.Context, arg1 db.SetPostTypeActiveParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPostTypeActive", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetPostTypeActive indicates an expected call of SetPostTypeActive.
+func (mr *MockStoreMockRecorder) SetPostTypeActive(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostTypeActive", reflect.TypeOf((*MockStore)(nil).SetPostTypeActive), arg0, arg1)
+}
+
+// SetPostTypeActiveByRegisteredBy mocks base method.
+func (m *MockStore) SetPostTypeActiveByRegisteredBy(arg0 context.Context, arg1 db.SetPostTypeActiveByRegisteredByParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPostTypeActiveByRegisteredBy", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetPostTypeActiveByRegisteredBy indicates an expected call of SetPostTypeActiveByRegisteredBy.
+func (mr *MockStoreMockRecorder) SetPostTypeActiveByRegisteredBy(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostTypeActiveByRegisteredBy", reflect.TypeOf((*MockStore)(nil).SetPostTypeActiveByRegisteredBy), arg0, arg1)
 }
 
 // SetPublishedVersionOnPost mocks base method.
@@ -1909,6 +2276,21 @@ func (mr *MockStoreMockRecorder) UpdateSessionsUsername(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSessionsUsername", reflect.TypeOf((*MockStore)(nil).UpdateSessionsUsername), arg0, arg1)
 }
 
+// UpdateSettings mocks base method.
+func (m *MockStore) UpdateSettings(arg0 context.Context, arg1 db.UpdateSettingsParams) (db.Setting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSettings", arg0, arg1)
+	ret0, _ := ret[0].(db.Setting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateSettings indicates an expected call of UpdateSettings.
+func (mr *MockStoreMockRecorder) UpdateSettings(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSettings", reflect.TypeOf((*MockStore)(nil).UpdateSettings), arg0, arg1)
+}
+
 // UpdateTaxonomyTerm mocks base method.
 func (m *MockStore) UpdateTaxonomyTerm(arg0 context.Context, arg1 db.UpdateTaxonomyTermParams) (db.TaxonomyTerm, error) {
 	m.ctrl.T.Helper()
@@ -1937,6 +2319,21 @@ func (m *MockStore) UpdateTaxonomyType(arg0 context.Context, arg1 db.UpdateTaxon
 func (mr *MockStoreMockRecorder) UpdateTaxonomyType(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTaxonomyType", reflect.TypeOf((*MockStore)(nil).UpdateTaxonomyType), arg0, arg1)
+}
+
+// UpdateTheme mocks base method.
+func (m *MockStore) UpdateTheme(arg0 context.Context, arg1 db.UpdateThemeParams) (db.Theme, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTheme", arg0, arg1)
+	ret0, _ := ret[0].(db.Theme)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateTheme indicates an expected call of UpdateTheme.
+func (mr *MockStoreMockRecorder) UpdateTheme(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTheme", reflect.TypeOf((*MockStore)(nil).UpdateTheme), arg0, arg1)
 }
 
 // UpdateUser mocks base method.
@@ -1983,6 +2380,21 @@ func (mr *MockStoreMockRecorder) UpdateUserTx(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserTx", reflect.TypeOf((*MockStore)(nil).UpdateUserTx), arg0, arg1)
 }
 
+// UpsertExtensionSetting mocks base method.
+func (m *MockStore) UpsertExtensionSetting(arg0 context.Context, arg1 db.UpsertExtensionSettingParams) (db.ExtensionSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertExtensionSetting", arg0, arg1)
+	ret0, _ := ret[0].(db.ExtensionSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertExtensionSetting indicates an expected call of UpsertExtensionSetting.
+func (mr *MockStoreMockRecorder) UpsertExtensionSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertExtensionSetting", reflect.TypeOf((*MockStore)(nil).UpsertExtensionSetting), arg0, arg1)
+}
+
 // UpsertPostMeta mocks base method.
 func (m *MockStore) UpsertPostMeta(arg0 context.Context, arg1 db.UpsertPostMetaParams) (db.PostMetum, error) {
 	m.ctrl.T.Helper()
@@ -1996,4 +2408,34 @@ func (m *MockStore) UpsertPostMeta(arg0 context.Context, arg1 db.UpsertPostMetaP
 func (mr *MockStoreMockRecorder) UpsertPostMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPostMeta", reflect.TypeOf((*MockStore)(nil).UpsertPostMeta), arg0, arg1)
+}
+
+// UpsertPostType mocks base method.
+func (m *MockStore) UpsertPostType(arg0 context.Context, arg1 db.UpsertPostTypeParams) (db.PostType, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertPostType", arg0, arg1)
+	ret0, _ := ret[0].(db.PostType)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertPostType indicates an expected call of UpsertPostType.
+func (mr *MockStoreMockRecorder) UpsertPostType(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPostType", reflect.TypeOf((*MockStore)(nil).UpsertPostType), arg0, arg1)
+}
+
+// UpsertThemeSetting mocks base method.
+func (m *MockStore) UpsertThemeSetting(arg0 context.Context, arg1 db.UpsertThemeSettingParams) (db.ThemeSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertThemeSetting", arg0, arg1)
+	ret0, _ := ret[0].(db.ThemeSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertThemeSetting indicates an expected call of UpsertThemeSetting.
+func (mr *MockStoreMockRecorder) UpsertThemeSetting(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertThemeSetting", reflect.TypeOf((*MockStore)(nil).UpsertThemeSetting), arg0, arg1)
 }

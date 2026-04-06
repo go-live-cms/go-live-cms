@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -39,8 +40,9 @@ func createTestTaxonomyType(t *testing.T, name, label string, hierarchical bool)
 func createTestTaxonomyTerm(t *testing.T, taxonomyTypeID int64) TaxonomyTerm {
 	gofakeit.Seed(0)
 
-	name := gofakeit.Word()
-	slug := strings.ToLower(name)
+	ts := time.Now().UnixNano()
+	name := fmt.Sprintf("%s_%d", gofakeit.Word(), ts)
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.Split(name, "_")[0]), ts)
 
 	arg := CreateTaxonomyTermParams{
 		Name:           name,
@@ -95,8 +97,9 @@ func TestUpdateTaxonomyTerm(t *testing.T) {
 	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_tag_%s", suffix), "Test Tag", false)
 	term1 := createTestTaxonomyTerm(t, taxonomyType.ID)
 
-	newName := gofakeit.Word()
-	newSlug := strings.ToLower(newName)
+	ts := time.Now().UnixNano()
+	newName := fmt.Sprintf("%s-%d", gofakeit.Word(), ts)
+	newSlug := fmt.Sprintf("%s-%d", strings.ToLower(strings.Split(newName, "-")[0]), ts)
 	newDescription := gofakeit.Sentence(15)
 
 	arg := UpdateTaxonomyTermParams{
@@ -170,12 +173,14 @@ func TestCreatePostWithTaxonomyTermsTx(t *testing.T) {
 	term2 := createTestTaxonomyTerm(t, taxonomyType.ID)
 
 	title := gofakeit.Sentence(3)
-	slug := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	postTs := time.Now().UnixNano()
+	slug := fmt.Sprintf("%s-%d", strings.ToLower(strings.ReplaceAll(title, " ", "-")), postTs)
 
 	arg := CreatePostWithTaxonomyTermsTxParams{
 		CreatePostsParams: CreatePostsParams{
 			Title:       title,
-			Content:     gofakeit.Paragraph(3, 5, 10, " "),
+			Slug:        slug,
+			BlockDoc:    json.RawMessage(`{}`),
 			Description: gofakeit.Sentence(10),
 			UserID:      user.ID,
 			Username:    user.Username,
@@ -271,8 +276,8 @@ func TestCreateTaxonomyTermAndLinkTx(t *testing.T) {
 	taxonomyType := createTestTaxonomyType(t, fmt.Sprintf("test_category_%s", suffix), "Test Category", true)
 	_, post := createTestUserWithPosts(t)
 
-	name := "Technology"
-	slug := "technology"
+	name := fmt.Sprintf("Technology_%s", suffix)
+	slug := fmt.Sprintf("technology-%s", suffix)
 	description := "Tech-related posts"
 
 	arg := CreateTaxonomyTermAndLinkTxParams{

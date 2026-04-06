@@ -1,0 +1,90 @@
+---
+/**
+ * Full Width Page Layout
+ * Edge-to-edge layout for landing pages, portfolios, etc.
+ */
+import BaseLayout from '../base.astro'
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import BlockRenderer from '@/components/BlockRenderer'
+import type { Post } from '@gl-admin/lib/api/types'
+
+interface Props {
+  post: Post
+  title: string
+  description: string
+}
+
+const { post, title, description } = Astro.props
+---
+
+<BaseLayout title={title} description={description}>
+  <Header />
+  
+  <main class="page-layout-fullwidth">
+    <article class="page-container-fullwidth">
+      <header class="page-header">
+        <div class="header-inner">
+          <h1 class="page-title">{post.title}</h1>
+        </div>
+      </header>
+      
+      <div class="page-content">
+        {post.published_blocks && (
+          <BlockRenderer doc={post.published_blocks} client:load />
+        )}
+      </div>
+    </article>
+  </main>
+  
+  <Footer />
+</BaseLayout>
+
+<style>
+  .page-layout-fullwidth {
+    min-height: 80vh;
+  }
+  
+  .page-container-fullwidth {
+    width: 100%;
+  }
+  
+  .page-header {
+    background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-accent)));
+    padding: 4rem 0;
+    margin-bottom: 0;
+  }
+  
+  .header-inner {
+    max-width: var(--container-width);
+    margin: 0 auto;
+    padding: 0 var(--gutter);
+  }
+  
+  .page-title {
+    font-family: var(--font-heading);
+    font-size: 3.5rem;
+    line-height: 1.2;
+    margin: 0;
+    color: white;
+  }
+  
+  .page-content {
+    font-size: 1.125rem;
+    line-height: 1.7;
+  }
+  
+  @media (max-width: 768px) {
+    .page-header {
+      padding: 3rem 0;
+    }
+    
+    .header-inner {
+      padding: 0 1rem;
+    }
+    
+    .page-title {
+      font-size: 2.25rem;
+    }
+  }
+</style>

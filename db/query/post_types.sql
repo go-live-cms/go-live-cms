@@ -7,10 +7,38 @@ INSERT INTO post_types (
     hierarchical,
     has_archive,
     menu_position,
-    supports
+    supports,
+    is_active,
+    registered_by
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
 ) RETURNING *;
+
+-- name: UpsertPostType :one
+INSERT INTO post_types (
+    name,
+    label,
+    description,
+    public,
+    hierarchical,
+    has_archive,
+    menu_position,
+    supports,
+    is_active,
+    registered_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+) ON CONFLICT (name) DO UPDATE SET
+    label = EXCLUDED.label,
+    description = EXCLUDED.description,
+    public = EXCLUDED.public,
+    hierarchical = EXCLUDED.hierarchical,
+    has_archive = EXCLUDED.has_archive,
+    menu_position = EXCLUDED.menu_position,
+    supports = EXCLUDED.supports,
+    is_active = EXCLUDED.is_active,
+    registered_by = EXCLUDED.registered_by
+RETURNING *;
 
 -- name: GetPostType :one
 SELECT * FROM post_types 
@@ -24,6 +52,11 @@ WHERE id = $1 LIMIT 1;
 SELECT * FROM post_types
 ORDER BY menu_position ASC, name ASC;
 
+-- name: ListActivePostTypes :many
+SELECT * FROM post_types
+WHERE is_active = true
+ORDER BY menu_position ASC, name ASC;
+
 -- name: UpdatePostType :one
 UPDATE post_types
 SET label = COALESCE($1, label),
@@ -35,6 +68,16 @@ SET label = COALESCE($1, label),
     supports = COALESCE($7, supports)
 WHERE name = $8
 RETURNING *;
+
+-- name: SetPostTypeActive :exec
+UPDATE post_types
+SET is_active = $1
+WHERE name = $2;
+
+-- name: SetPostTypeActiveByRegisteredBy :exec
+UPDATE post_types
+SET is_active = $1
+WHERE registered_by = $2;
 
 -- name: DeletePostType :exec
 DELETE FROM post_types

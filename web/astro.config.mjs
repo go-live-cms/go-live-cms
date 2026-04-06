@@ -1,24 +1,27 @@
 // @ts-check
 
-import mdx from "@astrojs/mdx";
-import sitemap from "@astrojs/sitemap";
-import path from "path";
-import { defineConfig } from "astro/config";
+import mdx from "@astrojs/mdx"
+import node from "@astrojs/node"
+import sitemap from "@astrojs/sitemap"
+import path from "path"
+import { defineConfig } from "astro/config"
 
-import react from "@astrojs/react";
+import react from "@astrojs/react"
 
-import tailwindcss from "@tailwindcss/vite";
+import tailwindcss from "@tailwindcss/vite"
 
 // https://astro.build/config
 export default defineConfig({
   site: "https://example.com",
   integrations: [mdx(), sitemap(), react()],
+  publicDir: "public",
   vite: {
     plugins: [tailwindcss()],
     resolve: {
       alias: {
         "@": path.resolve("./src"),
         "@gl-admin": path.resolve("./gl-admin"),
+        "@themes": path.resolve("./themes"),
       },
     },
     server: {
@@ -39,7 +42,12 @@ export default defineConfig({
       watch: {
         usePolling: true,
       },
+      fs: {
+        // Allow serving files from themes directory
+        allow: [".", "../themes"],
+      },
     },
   },
   output: "server",
-});
+})
+// TODO: for production we need to change the output and adaptor.

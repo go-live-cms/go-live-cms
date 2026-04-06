@@ -42,6 +42,7 @@ services:
       - /app/web
       - go_modules:/go/pkg/mod
       - ./uploads:/app/uploads
+      - ./web/themes:/app/web/themes:ro
     entrypoint: ["/app/wait-for.sh", "postgres:5432", "--", "/app/start-dev.sh"]
 
   web:
