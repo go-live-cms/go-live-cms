@@ -121,8 +121,13 @@ export class BlockPersistenceManager {
         if (this.editor && !this.editor.isDestroyed) {
           try {
             const pmDoc = blockDocToPM(doc, this.editor.schema)
-            // Replace entire document content WITHOUT emitting update
-            this.editor.commands.setContent(pmDoc.toJSON(), { emitUpdate: false })
+            // Replace entire document content.
+            // NOTE: do NOT pass { emitUpdate: false } here — in TipTap 3 with y-tiptap,
+            // that flag sets preventUpdate:true on the ProseMirror transaction, which causes
+            // the y-tiptap plugin to skip the Yjs update. The "prosemirror" XML fragment
+            // never gets populated and the editor stays empty.
+            // Autosave is already suppressed by isInitializing = true for the next 500ms.
+            this.editor.commands.setContent(pmDoc.toJSON(), true)
           } catch (error) {
             console.error("Failed to convert/apply blocks to editor:", error)
           }

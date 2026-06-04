@@ -24,7 +24,7 @@ console.log("   - process.env.HOST:", process.env.HOST);
 console.log("   - Resolved HOST:", HOST);
 console.log(
   "   - process.env.PASETO_ALLOWED_AUDIENCES:",
-  process.env.PASETO_ALLOWED_AUDIENCES
+  process.env.PASETO_ALLOWED_AUDIENCES,
 );
 
 // Flexible public key loading (supports PEM, base64, or file)
@@ -47,7 +47,7 @@ function loadPublicKey() {
   }
 
   console.error(
-    "❌ Provide PASETO_V4_PUBLIC_PEM, PASETO_V4_PUBLIC_PEM_B64, or PASETO_V4_PUBLIC_PEM_FILE"
+    "❌ Provide PASETO_V4_PUBLIC_PEM, PASETO_V4_PUBLIC_PEM_B64, or PASETO_V4_PUBLIC_PEM_FILE",
   );
   process.exit(1);
 }
@@ -63,7 +63,10 @@ try {
   console.log("   - Primary Audience:", AUDIENCE);
   console.log("   - Allowed Audiences:", ALLOWED_AUDIENCES.join(", "));
   console.log("   - DATA_PATH:", DATA_PATH);
-  console.log("   - Squash endpoint:", SQUASH_SECRET ? "enabled" : "DISABLED (no SQUASH_SECRET set)");
+  console.log(
+    "   - Squash endpoint:",
+    SQUASH_SECRET ? "enabled" : "DISABLED (no SQUASH_SECRET set)",
+  );
 } catch (error) {
   console.error("❌ Failed to load PASETO v4.public key:", error.message);
   process.exit(1);
@@ -78,14 +81,53 @@ console.log("💾 LevelDB persistence initialised at:", DATA_PATH);
 
 setPersistence({
   bindState: async (docName, ydoc) => {
-    // Load persisted state into the in-memory ydoc on first open
-    const persistedYdoc = await ldb.getYDoc(docName);
-    Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(persistedYdoc));
-
-    // Stream every subsequent update to LevelDB so we never lose in-flight edits
+    // Register the update listener FIRST — before the async LevelDB read — so no
+    // client update that arrives during the IO round-trip is lost. A lost update
+    // would leave a GAP in the stored log (update N+1 without N), and every future
+    // getYDoc for this doc would then fail to integrate that gap and crash sync.
     ydoc.on("update", (update) => {
-      ldb.storeUpdate(docName, update);
+      try {
+        ldb.storeUpdate(docName, update);
+      } catch (err) {
+        console.error(`⚠️  Failed to persist update for ${docName}:`, err.message);
+      }
     });
+
+    // The LevelDB layer is only a SAFETY NET — the canonical document lives in
+    // Postgres (posts.block_doc) via the API autosave. A corrupt or gapped safety
+    // net must NEVER break live collaboration, so we validate the stored state in a
+    // throwaway doc before merging it into the live ydoc, and skip it on any problem.
+    try {
+      const persistedYdoc = await ldb.getYDoc(docName);
+      const update = Y.encodeStateAsUpdate(persistedYdoc);
+
+      // Probe: apply to a disposable doc. Gapped updates (missing dependencies)
+      // leave un-integrated "pending" structs. Applying such a doc to the live
+      // ydoc would poison it and crash on the next client message — detect & skip.
+      const probe = new Y.Doc();
+      Y.applyUpdate(probe, update);
+      const hasPending =
+        probe.store?.pendingStructs != null ||
+        (probe.store?.pendingClientsStructRefs?.size ?? 0) > 0;
+      probe.destroy();
+
+      if (hasPending) {
+        console.warn(
+          `⚠️  Persisted state for ${docName} is incomplete/corrupt — skipping it. ` +
+            `The Postgres working copy is canonical; the safety net will rebuild from live edits.`
+        );
+        return;
+      }
+
+      // Safe to merge. Yjs CRDT merges are additive, so live client content is
+      // never overwritten by older/empty persisted state.
+      Y.applyUpdate(ydoc, update);
+    } catch (err) {
+      console.error(
+        `⚠️  Failed to load persisted state for ${docName} — continuing without it:`,
+        err.message
+      );
+    }
   },
   writeState: async (_docName, _ydoc) => {
     // No-op: updates are written incrementally in the bindState update listener.
@@ -135,7 +177,7 @@ const wss = new WebSocketServer({ noServer: true });
 wss.on("connection", (ws, req) => {
   console.log(
     "✅ WebSocket connection established for user:",
-    req.auth?.username || "unknown"
+    req.auth?.username || "unknown",
   );
 
   // Keep connection alive to prevent idle disconnects behind proxies
@@ -170,7 +212,7 @@ server.on("upgrade", async (req, socket, head) => {
     if (!credential) {
       console.error("🚫 No ticket or token provided");
       socket.write(
-        "HTTP/1.1 401 Unauthorized\r\n\r\nNo authentication credentials provided\r\n"
+        "HTTP/1.1 401 Unauthorized\r\n\r\nNo authentication credentials provided\r\n",
       );
       socket.destroy();
       return;
@@ -205,8 +247,8 @@ server.on("upgrade", async (req, socket, head) => {
     if (!tokenValid) {
       throw new Error(
         `Token invalid for any allowed audience: ${ALLOWED_AUDIENCES.join(
-          ", "
-        )}`
+          ", ",
+        )}`,
       );
     }
     console.log("✅ Token verified successfully for user:", payload.sub);
@@ -224,7 +266,7 @@ server.on("upgrade", async (req, socket, head) => {
   } catch (error) {
     console.error("🚫 WebSocket authentication failed:", error.message);
     socket.write(
-      "HTTP/1.1 401 Unauthorized\r\n\r\nInvalid or expired authentication credentials\r\n"
+      "HTTP/1.1 401 Unauthorized\r\n\r\nInvalid or expired authentication credentials\r\n",
     );
     socket.destroy();
   }
@@ -236,10 +278,10 @@ server.on("error", (error) => {
 
 server.listen(PORT, HOST, () => {
   console.log(
-    `🔌 Yjs WebSocket server with PASETO v4.public auth running on ws://${HOST}:${PORT}`
+    `🔌 Yjs WebSocket server with PASETO v4.public auth running on ws://${HOST}:${PORT}`,
   );
   console.log(
-    `🔒 Expecting ?ticket=<v4.public> or ?token=<v4.public> (issuer=${ISSUER})`
+    `🔒 Expecting ?ticket=<v4.public> or ?token=<v4.public> (issuer=${ISSUER})`,
   );
   console.log(`🎯 Allowed audiences: ${ALLOWED_AUDIENCES.join(", ")}`);
   console.log("🛡️ Authentication happens during HTTP upgrade - no 4401 loops!");
