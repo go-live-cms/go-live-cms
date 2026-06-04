@@ -26,6 +26,12 @@ export class BlockPersistenceManager {
   // Guard: the initial API load + setContent must happen exactly once. A second
   // call (e.g. from a reconnect re-firing "synced") would overwrite unsaved edits.
   private hasInitialized: boolean = false
+  // Monotonic counter incremented on every notifyEditorChange. performSave snapshots
+  // this counter before mirroring; if the counter has advanced by the time the API
+  // call resolves, edits arrived DURING the save (their content is NOT in the doc
+  // we just persisted), so we must NOT clear hasUnsavedChanges and may need to
+  // re-schedule a follow-up save. Without this, in-flight edits are silently lost.
+  private editChangeSeq: number = 0
 
   // Configuration
   private readonly SAVE_DEBOUNCE_MS = 1500 // 1.5 seconds idle time
@@ -200,9 +206,16 @@ export class BlockPersistenceManager {
    */
   notifyEditorChange(): void {
     if (this.isInitializing) return
-    if (this.isSaving) return
     if (this.suspended) return
 
+    // Always record the edit and schedule a debounced save, EVEN while a save is
+    // in-flight. The previous `if (isSaving) return` early-out caused edits typed
+    // during the network round-trip to be silently dropped: their content was not
+    // yet mirrored into the BlockDoc (mirror runs once at the start of performSave),
+    // no new timer was scheduled, and the in-flight save's success path would then
+    // clear hasUnsavedChanges — losing the edit. The editChangeSeq counter +
+    // re-schedule logic in performSave handles the race correctly.
+    this.editChangeSeq++
     this.hasUnsavedChanges = true
     this.debouncedSave()
   }
@@ -229,6 +242,11 @@ export class BlockPersistenceManager {
     // Set isSaving FIRST so the mirror below (which writes the BlockDoc maps) does
     // not re-trigger handleDocumentChange → another save.
     this.isSaving = true
+
+    // Snapshot the edit counter BEFORE mirroring. Any edits that arrive AFTER
+    // this point won't be in the doc we're about to persist; we detect that
+    // by comparing this snapshot to editChangeSeq after the API call returns.
+    const seqAtSaveStart = this.editChangeSeq
 
     // Everything from the editor mirror through the API call lives inside the
     // try/finally so that any synchronous throw (e.g. pmToBlockDoc on a malformed
@@ -272,7 +290,14 @@ export class BlockPersistenceManager {
 
         // Success
         this.currentRevision = revision
-        this.hasUnsavedChanges = false
+        // Only clear hasUnsavedChanges if no new edits came in while the API
+        // call was in flight. If editChangeSeq advanced, those edits are NOT
+        // in the doc we just persisted — keep the flag set so the follow-up
+        // debounce (scheduled by notifyEditorChange, or re-scheduled in finally
+        // below if it fired into the isSaving guard) will pick them up.
+        if (this.editChangeSeq === seqAtSaveStart) {
+          this.hasUnsavedChanges = false
+        }
         this.onSaveSuccess?.(revision)
       } catch (error) {
         if (error instanceof UnauthorizedError) {
@@ -298,6 +323,18 @@ export class BlockPersistenceManager {
       }
     } finally {
       this.isSaving = false
+
+      // Recover from a "missed timer" race: while isSaving was true, the
+      // debounce timer that was set by notifyEditorChange may have already
+      // fired into performSave's `isSaving` guard and returned early — the
+      // timer is now consumed (saveTimer is null) but hasUnsavedChanges is
+      // still true. If we don't re-schedule here, those edits sit forever.
+      // Skip if suspended (resume() will handle it) or if a save was just
+      // queued via the ConflictError retry path (its setTimeout is independent
+      // and shouldn't be doubled-up).
+      if (this.hasUnsavedChanges && !this.saveTimer && !this.suspended) {
+        this.debouncedSave()
+      }
     }
   }
 
