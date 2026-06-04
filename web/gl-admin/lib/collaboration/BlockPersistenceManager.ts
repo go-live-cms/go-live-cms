@@ -23,6 +23,15 @@ export class BlockPersistenceManager {
   private suspendReason: "unauthorized" | null = null
   private unsubscribeDocChange?: () => void
   private suppressNextChange: boolean = false
+  // Guard: the initial API load + setContent must happen exactly once. A second
+  // call (e.g. from a reconnect re-firing "synced") would overwrite unsaved edits.
+  private hasInitialized: boolean = false
+  // Monotonic counter incremented on every notifyEditorChange. performSave snapshots
+  // this counter before mirroring; if the counter has advanced by the time the API
+  // call resolves, edits arrived DURING the save (their content is NOT in the doc
+  // we just persisted), so we must NOT clear hasUnsavedChanges and may need to
+  // re-schedule a follow-up save. Without this, in-flight edits are silently lost.
+  private editChangeSeq: number = 0
 
   // Configuration
   private readonly SAVE_DEBOUNCE_MS = 1500 // 1.5 seconds idle time
@@ -107,6 +116,17 @@ export class BlockPersistenceManager {
    * Load initial document state from API
    */
   async initialize(): Promise<void> {
+    // Idempotent on success: once a load has succeeded, subsequent calls return
+    // early (reconnects, effect re-runs must not re-seed the editor or they
+    // clobber unsaved typing). On failure we deliberately do NOT mark initialized
+    // so that a retry — e.g. after the token refreshes — can succeed.
+    if (this.hasInitialized) return
+
+    // Track success separately so we can both (a) decide whether to keep the
+    // hasInitialized guard set in the finally and (b) avoid leaving the manager
+    // stuck in isInitializing=true (which would permanently disable autosave).
+    let loadedOk = false
+
     try {
       const { doc, revision } = await blockAPIClient.getPostBlocks(this.postId)
       this.currentRevision = revision
@@ -116,12 +136,14 @@ export class BlockPersistenceManager {
         // Update Y.js BlockDoc
         this.blockDocManager.setBlockDocV1(doc)
 
-        // If we have an editor, convert and apply to editor state
-        // Use emitUpdate: false to prevent triggering autosave during initialization
+        // If we have an editor, convert and apply to editor state.
+        // emitUpdate:false suppresses TipTap's "update" event for this programmatic
+        // load (so it doesn't look like a user edit / trigger autosave). The content
+        // still syncs into the Yjs "prosemirror" fragment because the collaboration
+        // ySyncPlugin mirrors the transaction regardless of the emitUpdate flag.
         if (this.editor && !this.editor.isDestroyed) {
           try {
             const pmDoc = blockDocToPM(doc, this.editor.schema)
-            // Replace entire document content WITHOUT emitting update
             this.editor.commands.setContent(pmDoc.toJSON(), { emitUpdate: false })
           } catch (error) {
             console.error("Failed to convert/apply blocks to editor:", error)
@@ -130,19 +152,31 @@ export class BlockPersistenceManager {
       }
       // Empty block_doc is fine - editor will start with empty state
 
-      // Wait for editor and Y.js to fully stabilize before enabling autosave
-      setTimeout(() => {
-        this.isInitializing = false
-      }, 500)
+      loadedOk = true
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         this.suspended = true
         this.suspendReason = "unauthorized"
         this.onSaveError?.(error)
-        return
+      } else {
+        console.error("Failed to load initial document:", error)
+        this.onSaveError?.(error as Error)
       }
-      console.error("Failed to load initial document:", error)
-      this.onSaveError?.(error as Error)
+      // Leave hasInitialized=false so a later retry (e.g. after token refresh)
+      // can complete the load. Fall through to the finally to release the
+      // isInitializing latch — otherwise autosave stays permanently disabled.
+    } finally {
+      // Only mark "initialized" if the load actually succeeded; this is what
+      // prevents reconnect-driven re-seeds from clobbering unsaved typing.
+      if (loadedOk) this.hasInitialized = true
+
+      // Always release the init latch so autosave can run on the next edit,
+      // even when the initial load failed. The 500ms delay matches the original
+      // behaviour: give the editor + Y.js a beat to stabilise before we permit
+      // change handlers to schedule saves.
+      setTimeout(() => {
+        this.isInitializing = false
+      }, 500)
     }
   }
 
@@ -163,6 +197,30 @@ export class BlockPersistenceManager {
   }
 
   /**
+   * Notify that the editor content changed (called on every editor `update`).
+   *
+   * This is the PRIMARY autosave trigger. There is intentionally no per-keystroke
+   * editor → BlockDoc mirror (that would flood Yjs/WebSocket with full-document
+   * replacements); instead we just schedule the debounced save here and mirror the
+   * editor into the BlockDoc once, inside performSave, right before persisting.
+   */
+  notifyEditorChange(): void {
+    if (this.isInitializing) return
+    if (this.suspended) return
+
+    // Always record the edit and schedule a debounced save, EVEN while a save is
+    // in-flight. The previous `if (isSaving) return` early-out caused edits typed
+    // during the network round-trip to be silently dropped: their content was not
+    // yet mirrored into the BlockDoc (mirror runs once at the start of performSave),
+    // no new timer was scheduled, and the in-flight save's success path would then
+    // clear hasUnsavedChanges — losing the edit. The editChangeSeq counter +
+    // re-schedule logic in performSave handles the race correctly.
+    this.editChangeSeq++
+    this.hasUnsavedChanges = true
+    this.debouncedSave()
+  }
+
+  /**
    * Debounced save - resets timer on each call
    */
   private debouncedSave(): void {
@@ -178,49 +236,105 @@ export class BlockPersistenceManager {
   /**
    * Perform the actual save operation
    */
-  private async performSave(retryCount = 0): Promise<void> {
+  private async performSave(retryCount = 0, isExplicit = false): Promise<void> {
     if (!this.hasUnsavedChanges || this.isSaving || this.suspended) return
 
+    // Set isSaving FIRST so the mirror below (which writes the BlockDoc maps) does
+    // not re-trigger handleDocumentChange → another save.
     this.isSaving = true
-    this.onSaveStart?.()
 
+    // Snapshot the edit counter BEFORE mirroring. Any edits that arrive AFTER
+    // this point won't be in the doc we're about to persist; we detect that
+    // by comparing this snapshot to editChangeSeq after the API call returns.
+    const seqAtSaveStart = this.editChangeSeq
+
+    // Everything from the editor mirror through the API call lives inside the
+    // try/finally so that any synchronous throw (e.g. pmToBlockDoc on a malformed
+    // node, or an exception thrown by the consumer's syncFromEditor callback)
+    // still releases the isSaving latch in finally. Without this guard, a single
+    // bad keystroke could leave isSaving=true and disable autosave for the
+    // entire session.
     try {
+      // Mirror the live editor into the BlockDoc right before persisting, so the
+      // working copy reflects what the user actually typed. Done once per save
+      // here (not per keystroke) to avoid Yjs/WebSocket write amplification.
+      try {
+        this.syncFromEditor?.()
+      } catch (error) {
+        console.error("Failed to sync editor → BlockDoc before save:", error)
+        this.onSaveError?.(error as Error)
+        return // skip this save; isSaving is cleared by the outer finally
+      }
+
       const currentDoc = this.blockDocManager.getBlockDocV1()
 
-      const { doc, revision } = await blockAPIClient.updatePostBlocks(
-        this.postId,
-        currentDoc,
-        this.currentRevision,
-        this.title
-      )
-
-      // Success
-      this.currentRevision = revision
-      this.hasUnsavedChanges = false
-      this.onSaveSuccess?.(revision)
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        // Suspend until token is present; surface error once.
-        this.suspended = true
-        this.suspendReason = "unauthorized"
-        this.onSaveError?.(error)
-        return // stop retry loop
+      // Safety guard: never let an AUTOSAVE overwrite the working copy with an
+      // empty document. A valid doc always has >= 1 top-level block (ProseMirror
+      // guarantees at least one paragraph), so 0 blocks means an uninitialized
+      // /empty mirror — persisting that is exactly what previously wiped saved
+      // content. Explicit saves (force/publish) may still write empty intentionally.
+      if (currentDoc.blocks_order.length === 0 && !isExplicit) {
+        console.warn("[autosave] skipping empty document — would overwrite working copy")
+        return // outer finally clears isSaving
       }
 
-      if (error instanceof ConflictError && retryCount < this.MAX_RETRY_ATTEMPTS) {
-        await this.resolveConflict()
+      this.onSaveStart?.()
 
-        // Retry save after conflict resolution
-        setTimeout(() => {
-          this.performSave(retryCount + 1)
-        }, 500)
-        return
+      try {
+        const { doc, revision } = await blockAPIClient.updatePostBlocks(
+          this.postId,
+          currentDoc,
+          this.currentRevision,
+          this.title
+        )
+
+        // Success
+        this.currentRevision = revision
+        // Only clear hasUnsavedChanges if no new edits came in while the API
+        // call was in flight. If editChangeSeq advanced, those edits are NOT
+        // in the doc we just persisted — keep the flag set so the follow-up
+        // debounce (scheduled by notifyEditorChange, or re-scheduled in finally
+        // below if it fired into the isSaving guard) will pick them up.
+        if (this.editChangeSeq === seqAtSaveStart) {
+          this.hasUnsavedChanges = false
+        }
+        this.onSaveSuccess?.(revision)
+      } catch (error) {
+        if (error instanceof UnauthorizedError) {
+          // Suspend until token is present; surface error once.
+          this.suspended = true
+          this.suspendReason = "unauthorized"
+          this.onSaveError?.(error)
+          return // stop retry loop; outer finally clears isSaving
+        }
+
+        if (error instanceof ConflictError && retryCount < this.MAX_RETRY_ATTEMPTS) {
+          await this.resolveConflict()
+
+          // Retry save after conflict resolution (preserve explicit-save intent)
+          setTimeout(() => {
+            this.performSave(retryCount + 1, isExplicit)
+          }, 500)
+          return
+        }
+
+        console.error("Save failed:", error)
+        this.onSaveError?.(error as Error)
       }
-
-      console.error("Save failed:", error)
-      this.onSaveError?.(error as Error)
     } finally {
       this.isSaving = false
+
+      // Recover from a "missed timer" race: while isSaving was true, the
+      // debounce timer that was set by notifyEditorChange may have already
+      // fired into performSave's `isSaving` guard and returned early — the
+      // timer is now consumed (saveTimer is null) but hasUnsavedChanges is
+      // still true. If we don't re-schedule here, those edits sit forever.
+      // Skip if suspended (resume() will handle it) or if a save was just
+      // queued via the ConflictError retry path (its setTimeout is independent
+      // and shouldn't be doubled-up).
+      if (this.hasUnsavedChanges && !this.saveTimer && !this.suspended) {
+        this.debouncedSave()
+      }
     }
   }
 
@@ -253,7 +367,8 @@ export class BlockPersistenceManager {
       this.saveTimer = null
     }
 
-    await this.performSave()
+    // Explicit save: allowed to persist an empty document if the user truly cleared it.
+    await this.performSave(0, true)
   }
 
   /**

@@ -36,6 +36,8 @@ services:
       REFRESH_TOKEN_DURATION: "24h"
       MAX_UPLOAD_SIZE: "50MB"
       UPLOAD_PATH: "/uploads/media"
+      COLLAB_SERVER_URL: "http://websocket:1234"
+      COLLAB_SQUASH_SECRET: "dev-squash-secret"
     volumes:
       - .:/app
       - /app/tmp
@@ -75,11 +77,14 @@ services:
       - NODE_ENV=development
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=300
+      - DATA_PATH=/data/yjs
+      - SQUASH_SECRET=dev-squash-secret
     volumes:
       - ./websocket:/app
       - /app/node_modules
       # File-based PEM for reliable Docker env loading
       - ./websocket/public.pem:/run/secrets/public.pem:ro
+      - ws_data:/data/yjs
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:1234/"]
       interval: 10s
@@ -91,3 +96,4 @@ services:
 volumes:
   postgres_data:
   go_modules:
+  ws_data:
