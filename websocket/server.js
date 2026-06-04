@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { WebSocketServer } from "ws";
-import { setupWSConnection } from "y-websocket/bin/utils";
+import { setupWSConnection, setPersistence } from "y-websocket/bin/utils";
+import { LeveldbPersistence } from "y-leveldb";
+import * as Y from "yjs";
 import { URL } from "url";
 import { V4 } from "paseto";
 import { createPublicKey } from "crypto";
@@ -14,6 +16,8 @@ const AUDIENCE = process.env.PASETO_AUDIENCE || "go-live-cms-ws";
 const ALLOWED_AUDIENCES = process.env.PASETO_ALLOWED_AUDIENCES?.split(",") || [
   AUDIENCE,
 ];
+const DATA_PATH = (process.env.DATA_PATH || "./data").trim();
+const SQUASH_SECRET = (process.env.SQUASH_SECRET || "").trim();
 
 console.log("🔍 Environment debug:");
 console.log("   - process.env.HOST:", process.env.HOST);
@@ -58,14 +62,73 @@ try {
   console.log("   - Issuer:", ISSUER);
   console.log("   - Primary Audience:", AUDIENCE);
   console.log("   - Allowed Audiences:", ALLOWED_AUDIENCES.join(", "));
+  console.log("   - DATA_PATH:", DATA_PATH);
+  console.log("   - Squash endpoint:", SQUASH_SECRET ? "enabled" : "DISABLED (no SQUASH_SECRET set)");
 } catch (error) {
   console.error("❌ Failed to load PASETO v4.public key:", error.message);
   process.exit(1);
 }
 
-const server = http.createServer((_req, res) => {
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("GoLive WebSocket server is running");
+// PERSISTENCE BACKEND: y-leveldb (single-node, file-based).
+// To swap for y-redis (see issue #186), replace the ldb initialisation and
+// setPersistence callbacks below with y-redis equivalents.
+// See: https://github.com/yjs/y-redis
+const ldb = new LeveldbPersistence(DATA_PATH);
+console.log("💾 LevelDB persistence initialised at:", DATA_PATH);
+
+setPersistence({
+  bindState: async (docName, ydoc) => {
+    // Load persisted state into the in-memory ydoc on first open
+    const persistedYdoc = await ldb.getYDoc(docName);
+    Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(persistedYdoc));
+
+    // Stream every subsequent update to LevelDB so we never lose in-flight edits
+    ydoc.on("update", (update) => {
+      ldb.storeUpdate(docName, update);
+    });
+  },
+  writeState: async (_docName, _ydoc) => {
+    // No-op: updates are written incrementally in the bindState update listener.
+    // writeState fires when the last client disconnects; nothing extra needed here.
+  },
+});
+
+const server = http.createServer(async (req, res) => {
+  // Health check
+  if (req.method === "GET" && req.url === "/") {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("GoLive WebSocket server is running");
+    return;
+  }
+
+  // Internal squash endpoint — merges all LevelDB update entries for a document
+  // into a single snapshot. Called by the Go API after a post is published.
+  // TODO: bind internal endpoints to a separate port if WS port becomes internet-facing.
+  const squashMatch = req.url?.match(/^\/_internal\/documents\/(.+)\/squash$/);
+  if (req.method === "POST" && squashMatch) {
+    const auth = req.headers["authorization"] || "";
+    if (!SQUASH_SECRET || auth !== `Bearer ${SQUASH_SECRET}`) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "unauthorized" }));
+      return;
+    }
+    const docName = decodeURIComponent(squashMatch[1]);
+    console.log(`🗜️  Squash requested for document: ${docName}`);
+    try {
+      await ldb.flushDocument(docName);
+      console.log(`✅ Squash complete for: ${docName}`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, docName }));
+    } catch (err) {
+      console.error(`❌ Squash failed for ${docName}:`, err.message);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "squash failed", detail: err.message }));
+    }
+    return;
+  }
+
+  res.writeHead(404, { "Content-Type": "text/plain" });
+  res.end("Not found");
 });
 
 const wss = new WebSocketServer({ noServer: true });
@@ -202,7 +265,14 @@ function shutdown() {
   }
 
   try {
-    server.close(() => {
+    server.close(async () => {
+      // LevelDB is crash-safe; incomplete writes on hot-reload are recovered on next open.
+      try {
+        await ldb.destroy();
+        console.log("💾 LevelDB closed cleanly");
+      } catch (err) {
+        console.error("Warning: LevelDB close error:", err.message);
+      }
       console.log("✅ Server shutdown complete");
       process.exit(0);
     });

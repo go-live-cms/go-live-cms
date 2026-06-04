@@ -99,6 +99,16 @@ type Config struct {
 
 	// IsDevelopment enables development-mode behavior (verbose errors, debug logging, etc.)
 	IsDevelopment bool `mapstructure:"IS_DEVELOPMENT"`
+
+	// CollabServerURL is the internal base URL of the Yjs WebSocket server.
+	// Used for server-to-server calls such as the squash-on-publish endpoint.
+	// Example: "http://websocket:1234" (Docker) or "http://localhost:1234" (local dev)
+	CollabServerURL string `mapstructure:"COLLAB_SERVER_URL"`
+
+	// CollabSquashSecret is the shared secret sent as "Authorization: Bearer <secret>"
+	// to the WS server's /_internal/documents/:docName/squash endpoint.
+	// Must match SQUASH_SECRET in websocket/.env.
+	CollabSquashSecret string `mapstructure:"COLLAB_SQUASH_SECRET"`
 }
 
 // LoadConfig reads app.env (optional) and environment variables into Config.
@@ -158,6 +168,10 @@ func LoadConfig(path string) (config Config, err error) {
 
 	// Legacy JWT key default (deprecated)
 	viper.SetDefault("TOKEN_SYMMETRIC_KEY", "12345678901234567890123456789012")
+
+	// Collaborative editing server (optional — squash silently skipped if unset)
+	viper.SetDefault("COLLAB_SERVER_URL", "http://localhost:1234")
+	viper.SetDefault("COLLAB_SQUASH_SECRET", "")
 
 	// Try to read config file (optional)
 	if err = viper.ReadInConfig(); err != nil {

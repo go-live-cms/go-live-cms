@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -383,10 +384,54 @@ func (server *Server) publishPost(c *gin.Context) {
 		}
 	}
 
+	// Best-effort: compact the LevelDB collaboration log for this document.
+	// Squash failure is non-fatal and does not affect the publish response.
+	server.triggerCollabSquash(postID)
+
 	c.JSON(http.StatusOK, PublishResponse{
 		VersionID: version.ID,
 		VersionNo: version.VersionNo,
 	})
+}
+
+// triggerCollabSquash fires a best-effort async squash request to the WebSocket
+// collaboration server for the given postID. It runs in a goroutine and never
+// blocks or fails the caller. Squash merges all LevelDB update entries for the
+// document into a single snapshot, preventing unbounded log growth.
+//
+// Silently skips if CollabServerURL or CollabSquashSecret are not configured.
+func (server *Server) triggerCollabSquash(postID int64) {
+	collabURL := server.config.CollabServerURL
+	secret := server.config.CollabSquashSecret
+	if collabURL == "" || secret == "" {
+		return
+	}
+
+	go func() {
+		docName := fmt.Sprintf("post-%d", postID)
+		url := fmt.Sprintf("%s/_internal/documents/%s/squash", collabURL, docName)
+
+		req, err := http.NewRequest(http.MethodPost, url, nil)
+		if err != nil {
+			fmt.Printf("Warning: failed to build squash request for %s: %v\n", docName, err)
+			return
+		}
+		req.Header.Set("Authorization", "Bearer "+secret)
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("Warning: squash request failed for %s: %v\n", docName, err)
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("Warning: squash returned HTTP %d for %s\n", resp.StatusCode, docName)
+			return
+		}
+		fmt.Printf("✅ Squash complete for collab doc: %s\n", docName)
+	}()
 }
 
 // getPublicPostBlocks handles GET /public/posts/:id/blocks - get published snapshot
