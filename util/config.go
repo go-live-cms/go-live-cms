@@ -169,8 +169,11 @@ func LoadConfig(path string) (config Config, err error) {
 	// Legacy JWT key default (deprecated)
 	viper.SetDefault("TOKEN_SYMMETRIC_KEY", "12345678901234567890123456789012")
 
-	// Collaborative editing server (optional — squash silently skipped if unset)
-	viper.SetDefault("COLLAB_SERVER_URL", "http://localhost:1234")
+	// Collaborative editing server (optional — squash silently skipped if either is unset).
+	// Both default to empty so the feature is truly opt-in: setting only one would
+	// otherwise cause every publish to fire a goroutine that times out against
+	// http://localhost:1234 in environments without a co-located WS server.
+	viper.SetDefault("COLLAB_SERVER_URL", "")
 	viper.SetDefault("COLLAB_SQUASH_SECRET", "")
 
 	// Try to read config file (optional)

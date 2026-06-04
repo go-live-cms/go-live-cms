@@ -11,6 +11,7 @@
   "dependencies": {
     "y-websocket": "^2.0.4",
     "y-leveldb": "^0.2.0",
+    "yjs": "^13.6.31",
     "ws": "^8.16.0",
     "paseto": "^3.1.2",
     "dotenv": "^16.4.5"

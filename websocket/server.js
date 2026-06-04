@@ -79,18 +79,30 @@ try {
 const ldb = new LeveldbPersistence(DATA_PATH);
 console.log("💾 LevelDB persistence initialised at:", DATA_PATH);
 
+// Sentinel origin tagged on updates produced by our own restore step. We skip
+// persistence for these (otherwise reconnects would re-write the full snapshot
+// into LevelDB as a new entry on every connect, bloating the log).
+const PERSISTENCE_ORIGIN = "leveldb-restore";
+
 setPersistence({
   bindState: async (docName, ydoc) => {
     // Register the update listener FIRST — before the async LevelDB read — so no
     // client update that arrives during the IO round-trip is lost. A lost update
     // would leave a GAP in the stored log (update N+1 without N), and every future
     // getYDoc for this doc would then fail to integrate that gap and crash sync.
-    ydoc.on("update", (update) => {
-      try {
-        ldb.storeUpdate(docName, update);
-      } catch (err) {
-        console.error(`⚠️  Failed to persist update for ${docName}:`, err.message);
-      }
+    ydoc.on("update", (update, origin) => {
+      // Skip our own restore writes — they're already in LevelDB.
+      if (origin === PERSISTENCE_ORIGIN) return;
+
+      // storeUpdate is async; the surrounding sync try/catch wouldn't catch
+      // promise rejections, so attach an explicit .catch so persistence failures
+      // are at least logged instead of becoming an unhandledRejection.
+      Promise.resolve(ldb.storeUpdate(docName, update)).catch((err) => {
+        console.error(
+          `⚠️  Failed to persist update for ${docName}:`,
+          err?.message || err
+        );
+      });
     });
 
     // The LevelDB layer is only a SAFETY NET — the canonical document lives in
@@ -120,8 +132,9 @@ setPersistence({
       }
 
       // Safe to merge. Yjs CRDT merges are additive, so live client content is
-      // never overwritten by older/empty persisted state.
-      Y.applyUpdate(ydoc, update);
+      // never overwritten by older/empty persisted state. Tag the update with our
+      // sentinel origin so the listener above skips re-persisting it.
+      Y.applyUpdate(ydoc, update, PERSISTENCE_ORIGIN);
     } catch (err) {
       console.error(
         `⚠️  Failed to load persisted state for ${docName} — continuing without it:`,
@@ -308,6 +321,11 @@ function shutdown() {
 
   try {
     server.close(async () => {
+      // NOTE: y-leveldb's `destroy()` is poorly named — it does NOT delete the
+      // database on disk. It calls `db.close()` on the underlying abstract-level
+      // instance (just releases the file lock and flushes pending writes).
+      // The actual "wipe everything" method on this class is `clearAll()`.
+      // See: node_modules/y-leveldb/src/y-leveldb.js (destroy → _transact(db => db.close()))
       // LevelDB is crash-safe; incomplete writes on hot-reload are recovered on next open.
       try {
         await ldb.destroy();

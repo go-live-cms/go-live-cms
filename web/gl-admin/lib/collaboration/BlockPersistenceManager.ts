@@ -110,10 +110,16 @@ export class BlockPersistenceManager {
    * Load initial document state from API
    */
   async initialize(): Promise<void> {
-    // Idempotent: only the first call loads content. Subsequent calls (reconnects,
-    // effect re-runs) must not re-seed the editor or they clobber unsaved typing.
+    // Idempotent on success: once a load has succeeded, subsequent calls return
+    // early (reconnects, effect re-runs must not re-seed the editor or they
+    // clobber unsaved typing). On failure we deliberately do NOT mark initialized
+    // so that a retry — e.g. after the token refreshes — can succeed.
     if (this.hasInitialized) return
-    this.hasInitialized = true
+
+    // Track success separately so we can both (a) decide whether to keep the
+    // hasInitialized guard set in the finally and (b) avoid leaving the manager
+    // stuck in isInitializing=true (which would permanently disable autosave).
+    let loadedOk = false
 
     try {
       const { doc, revision } = await blockAPIClient.getPostBlocks(this.postId)
@@ -140,19 +146,31 @@ export class BlockPersistenceManager {
       }
       // Empty block_doc is fine - editor will start with empty state
 
-      // Wait for editor and Y.js to fully stabilize before enabling autosave
-      setTimeout(() => {
-        this.isInitializing = false
-      }, 500)
+      loadedOk = true
     } catch (error) {
       if (error instanceof UnauthorizedError) {
         this.suspended = true
         this.suspendReason = "unauthorized"
         this.onSaveError?.(error)
-        return
+      } else {
+        console.error("Failed to load initial document:", error)
+        this.onSaveError?.(error as Error)
       }
-      console.error("Failed to load initial document:", error)
-      this.onSaveError?.(error as Error)
+      // Leave hasInitialized=false so a later retry (e.g. after token refresh)
+      // can complete the load. Fall through to the finally to release the
+      // isInitializing latch — otherwise autosave stays permanently disabled.
+    } finally {
+      // Only mark "initialized" if the load actually succeeded; this is what
+      // prevents reconnect-driven re-seeds from clobbering unsaved typing.
+      if (loadedOk) this.hasInitialized = true
+
+      // Always release the init latch so autosave can run on the next edit,
+      // even when the initial load failed. The 500ms delay matches the original
+      // behaviour: give the editor + Y.js a beat to stabilise before we permit
+      // change handlers to schedule saves.
+      setTimeout(() => {
+        this.isInitializing = false
+      }, 500)
     }
   }
 
@@ -212,59 +230,72 @@ export class BlockPersistenceManager {
     // not re-trigger handleDocumentChange → another save.
     this.isSaving = true
 
-    // Mirror the live editor into the BlockDoc right before persisting, so the
-    // working copy reflects what the user actually typed. Done once per save here
-    // (not per keystroke) to avoid Yjs/WebSocket write amplification.
-    this.syncFromEditor?.()
-
-    const currentDoc = this.blockDocManager.getBlockDocV1()
-
-    // Safety guard: never let an AUTOSAVE overwrite the working copy with an empty
-    // document. A valid doc always has >= 1 top-level block (ProseMirror guarantees
-    // at least one paragraph), so 0 blocks means an uninitialized/empty mirror —
-    // persisting that is exactly what previously wiped saved content. Explicit
-    // saves (force/publish) may still write empty intentionally.
-    if (currentDoc.blocks_order.length === 0 && !isExplicit) {
-      console.warn("[autosave] skipping empty document — would overwrite working copy")
-      this.isSaving = false
-      return
-    }
-
-    this.onSaveStart?.()
-
+    // Everything from the editor mirror through the API call lives inside the
+    // try/finally so that any synchronous throw (e.g. pmToBlockDoc on a malformed
+    // node, or an exception thrown by the consumer's syncFromEditor callback)
+    // still releases the isSaving latch in finally. Without this guard, a single
+    // bad keystroke could leave isSaving=true and disable autosave for the
+    // entire session.
     try {
-      const { doc, revision } = await blockAPIClient.updatePostBlocks(
-        this.postId,
-        currentDoc,
-        this.currentRevision,
-        this.title
-      )
-
-      // Success
-      this.currentRevision = revision
-      this.hasUnsavedChanges = false
-      this.onSaveSuccess?.(revision)
-    } catch (error) {
-      if (error instanceof UnauthorizedError) {
-        // Suspend until token is present; surface error once.
-        this.suspended = true
-        this.suspendReason = "unauthorized"
-        this.onSaveError?.(error)
-        return // stop retry loop
+      // Mirror the live editor into the BlockDoc right before persisting, so the
+      // working copy reflects what the user actually typed. Done once per save
+      // here (not per keystroke) to avoid Yjs/WebSocket write amplification.
+      try {
+        this.syncFromEditor?.()
+      } catch (error) {
+        console.error("Failed to sync editor → BlockDoc before save:", error)
+        this.onSaveError?.(error as Error)
+        return // skip this save; isSaving is cleared by the outer finally
       }
 
-      if (error instanceof ConflictError && retryCount < this.MAX_RETRY_ATTEMPTS) {
-        await this.resolveConflict()
+      const currentDoc = this.blockDocManager.getBlockDocV1()
 
-        // Retry save after conflict resolution (preserve explicit-save intent)
-        setTimeout(() => {
-          this.performSave(retryCount + 1, isExplicit)
-        }, 500)
-        return
+      // Safety guard: never let an AUTOSAVE overwrite the working copy with an
+      // empty document. A valid doc always has >= 1 top-level block (ProseMirror
+      // guarantees at least one paragraph), so 0 blocks means an uninitialized
+      // /empty mirror — persisting that is exactly what previously wiped saved
+      // content. Explicit saves (force/publish) may still write empty intentionally.
+      if (currentDoc.blocks_order.length === 0 && !isExplicit) {
+        console.warn("[autosave] skipping empty document — would overwrite working copy")
+        return // outer finally clears isSaving
       }
 
-      console.error("Save failed:", error)
-      this.onSaveError?.(error as Error)
+      this.onSaveStart?.()
+
+      try {
+        const { doc, revision } = await blockAPIClient.updatePostBlocks(
+          this.postId,
+          currentDoc,
+          this.currentRevision,
+          this.title
+        )
+
+        // Success
+        this.currentRevision = revision
+        this.hasUnsavedChanges = false
+        this.onSaveSuccess?.(revision)
+      } catch (error) {
+        if (error instanceof UnauthorizedError) {
+          // Suspend until token is present; surface error once.
+          this.suspended = true
+          this.suspendReason = "unauthorized"
+          this.onSaveError?.(error)
+          return // stop retry loop; outer finally clears isSaving
+        }
+
+        if (error instanceof ConflictError && retryCount < this.MAX_RETRY_ATTEMPTS) {
+          await this.resolveConflict()
+
+          // Retry save after conflict resolution (preserve explicit-save intent)
+          setTimeout(() => {
+            this.performSave(retryCount + 1, isExplicit)
+          }, 500)
+          return
+        }
+
+        console.error("Save failed:", error)
+        this.onSaveError?.(error as Error)
+      }
     } finally {
       this.isSaving = false
     }
