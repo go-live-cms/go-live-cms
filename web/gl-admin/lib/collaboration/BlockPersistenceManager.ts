@@ -23,6 +23,9 @@ export class BlockPersistenceManager {
   private suspendReason: "unauthorized" | null = null
   private unsubscribeDocChange?: () => void
   private suppressNextChange: boolean = false
+  // Guard: the initial API load + setContent must happen exactly once. A second
+  // call (e.g. from a reconnect re-firing "synced") would overwrite unsaved edits.
+  private hasInitialized: boolean = false
 
   // Configuration
   private readonly SAVE_DEBOUNCE_MS = 1500 // 1.5 seconds idle time
@@ -107,6 +110,11 @@ export class BlockPersistenceManager {
    * Load initial document state from API
    */
   async initialize(): Promise<void> {
+    // Idempotent: only the first call loads content. Subsequent calls (reconnects,
+    // effect re-runs) must not re-seed the editor or they clobber unsaved typing.
+    if (this.hasInitialized) return
+    this.hasInitialized = true
+
     try {
       const { doc, revision } = await blockAPIClient.getPostBlocks(this.postId)
       this.currentRevision = revision
@@ -116,18 +124,15 @@ export class BlockPersistenceManager {
         // Update Y.js BlockDoc
         this.blockDocManager.setBlockDocV1(doc)
 
-        // If we have an editor, convert and apply to editor state
-        // Use emitUpdate: false to prevent triggering autosave during initialization
+        // If we have an editor, convert and apply to editor state.
+        // emitUpdate:false suppresses TipTap's "update" event for this programmatic
+        // load (so it doesn't look like a user edit / trigger autosave). The content
+        // still syncs into the Yjs "prosemirror" fragment because the collaboration
+        // ySyncPlugin mirrors the transaction regardless of the emitUpdate flag.
         if (this.editor && !this.editor.isDestroyed) {
           try {
             const pmDoc = blockDocToPM(doc, this.editor.schema)
-            // Replace entire document content.
-            // NOTE: do NOT pass { emitUpdate: false } here — in TipTap 3 with y-tiptap,
-            // that flag sets preventUpdate:true on the ProseMirror transaction, which causes
-            // the y-tiptap plugin to skip the Yjs update. The "prosemirror" XML fragment
-            // never gets populated and the editor stays empty.
-            // Autosave is already suppressed by isInitializing = true for the next 500ms.
-            this.editor.commands.setContent(pmDoc.toJSON(), true)
+            this.editor.commands.setContent(pmDoc.toJSON(), { emitUpdate: false })
           } catch (error) {
             console.error("Failed to convert/apply blocks to editor:", error)
           }
@@ -168,6 +173,23 @@ export class BlockPersistenceManager {
   }
 
   /**
+   * Notify that the editor content changed (called on every editor `update`).
+   *
+   * This is the PRIMARY autosave trigger. There is intentionally no per-keystroke
+   * editor → BlockDoc mirror (that would flood Yjs/WebSocket with full-document
+   * replacements); instead we just schedule the debounced save here and mirror the
+   * editor into the BlockDoc once, inside performSave, right before persisting.
+   */
+  notifyEditorChange(): void {
+    if (this.isInitializing) return
+    if (this.isSaving) return
+    if (this.suspended) return
+
+    this.hasUnsavedChanges = true
+    this.debouncedSave()
+  }
+
+  /**
    * Debounced save - resets timer on each call
    */
   private debouncedSave(): void {
@@ -183,15 +205,34 @@ export class BlockPersistenceManager {
   /**
    * Perform the actual save operation
    */
-  private async performSave(retryCount = 0): Promise<void> {
+  private async performSave(retryCount = 0, isExplicit = false): Promise<void> {
     if (!this.hasUnsavedChanges || this.isSaving || this.suspended) return
 
+    // Set isSaving FIRST so the mirror below (which writes the BlockDoc maps) does
+    // not re-trigger handleDocumentChange → another save.
     this.isSaving = true
+
+    // Mirror the live editor into the BlockDoc right before persisting, so the
+    // working copy reflects what the user actually typed. Done once per save here
+    // (not per keystroke) to avoid Yjs/WebSocket write amplification.
+    this.syncFromEditor?.()
+
+    const currentDoc = this.blockDocManager.getBlockDocV1()
+
+    // Safety guard: never let an AUTOSAVE overwrite the working copy with an empty
+    // document. A valid doc always has >= 1 top-level block (ProseMirror guarantees
+    // at least one paragraph), so 0 blocks means an uninitialized/empty mirror —
+    // persisting that is exactly what previously wiped saved content. Explicit
+    // saves (force/publish) may still write empty intentionally.
+    if (currentDoc.blocks_order.length === 0 && !isExplicit) {
+      console.warn("[autosave] skipping empty document — would overwrite working copy")
+      this.isSaving = false
+      return
+    }
+
     this.onSaveStart?.()
 
     try {
-      const currentDoc = this.blockDocManager.getBlockDocV1()
-
       const { doc, revision } = await blockAPIClient.updatePostBlocks(
         this.postId,
         currentDoc,
@@ -215,9 +256,9 @@ export class BlockPersistenceManager {
       if (error instanceof ConflictError && retryCount < this.MAX_RETRY_ATTEMPTS) {
         await this.resolveConflict()
 
-        // Retry save after conflict resolution
+        // Retry save after conflict resolution (preserve explicit-save intent)
         setTimeout(() => {
-          this.performSave(retryCount + 1)
+          this.performSave(retryCount + 1, isExplicit)
         }, 500)
         return
       }
@@ -258,7 +299,8 @@ export class BlockPersistenceManager {
       this.saveTimer = null
     }
 
-    await this.performSave()
+    // Explicit save: allowed to persist an empty document if the user truly cleared it.
+    await this.performSave(0, true)
   }
 
   /**

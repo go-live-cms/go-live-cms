@@ -68,6 +68,11 @@ export default forwardRef<EditorRef, Props>(function Editor(
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
   const persistenceRef = useRef<BlockPersistenceManager | null>(null)
   const titleRef = useRef<string | undefined>(title)
+  // Guard: the initial-content load (setContent from API) must run EXACTLY ONCE.
+  // The provider's "synced" event re-fires on every reconnect, and this effect
+  // re-subscribes on every keystroke (value is in its deps). Without this guard,
+  // each reconnect would re-run setContent and clobber the user's in-progress typing.
+  const hasInitializedRef = useRef(false)
 
   // Link modal state (from main)
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
@@ -268,6 +273,16 @@ export default forwardRef<EditorRef, Props>(function Editor(
     const onSynced = (isSynced: boolean) => {
       if (!isSynced) return
 
+      // Run the initial-content load only once for this editor instance.
+      // "synced" re-fires on every reconnect; re-running setContent below would
+      // overwrite unsaved edits (the "heartbeat" that deletes in-progress typing).
+      if (hasInitializedRef.current) {
+        if (import.meta.env.DEV) console.debug("[Editor] onSynced re-fired — skipping (already initialized)")
+        return
+      }
+      hasInitializedRef.current = true
+      if (import.meta.env.DEV) console.debug("[Editor] onSynced — running one-time content load")
+
       const frag = collabProvider.doc.getXmlFragment("prosemirror")
       const emptyShared = frag.length === 0
       const emptyLocal = editor.isEmpty
@@ -314,6 +329,19 @@ export default forwardRef<EditorRef, Props>(function Editor(
     collabProvider.provider.on("synced", onSynced)
     return () => collabProvider.provider.off("synced", onSynced)
   }, [editor, collabProvider, value, blockDocManager, persistenceManager])
+
+  // Autosave trigger: notify the persistence manager on every editor edit.
+  // The manager debounces and mirrors editor → BlockDoc once per save (see
+  // BlockPersistenceManager.notifyEditorChange / performSave). Without this,
+  // typing never reaches the working copy (block_doc) — only publish did.
+  useEffect(() => {
+    if (!editor || !persistenceManager) return
+    const handleEditorUpdate = () => persistenceManager.notifyEditorChange()
+    editor.on("update", handleEditorUpdate)
+    return () => {
+      editor.off("update", handleEditorUpdate)
+    }
+  }, [editor, persistenceManager])
 
   // External content changes (e.g. loading existing post)
   useEffect(() => {
