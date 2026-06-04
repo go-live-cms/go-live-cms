@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -401,7 +402,10 @@ func (server *Server) publishPost(c *gin.Context) {
 //
 // Silently skips if CollabServerURL or CollabSquashSecret are not configured.
 func (server *Server) triggerCollabSquash(postID int64) {
-	collabURL := server.config.CollabServerURL
+	// Trim trailing slashes so URLs like "http://websocket:1234/" don't produce
+	// "//_internal/..." (which the WS server's route regex would not match,
+	// silently breaking squash-on-publish).
+	collabURL := strings.TrimRight(server.config.CollabServerURL, "/")
 	secret := server.config.CollabSquashSecret
 	if collabURL == "" || secret == "" {
 		return

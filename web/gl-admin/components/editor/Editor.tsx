@@ -67,11 +67,18 @@ export default forwardRef<EditorRef, Props>(function Editor(
   const [isPublishing, setIsPublishing] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
   const persistenceRef = useRef<BlockPersistenceManager | null>(null)
+  // Tracks the postId that persistenceRef.current was created for, so we can
+  // detect navigation between posts (/content/edit/1 → /content/edit/2) where
+  // React Router reuses the same Editor instance with a new postId prop. Without
+  // this, the manager bound to the OLD postId would keep saving the user's edits
+  // to the previous post — a data-corruption bug.
+  const persistencePostIdRef = useRef<number | null>(null)
   const titleRef = useRef<string | undefined>(title)
   // Guard: the initial-content load (setContent from API) must run EXACTLY ONCE.
   // The provider's "synced" event re-fires on every reconnect, and this effect
   // re-subscribes on every keystroke (value is in its deps). Without this guard,
   // each reconnect would re-run setContent and clobber the user's in-progress typing.
+  // Reset to false whenever postId changes so the new post loads its content.
   const hasInitializedRef = useRef(false)
 
   // Link modal state (from main)
@@ -98,6 +105,16 @@ export default forwardRef<EditorRef, Props>(function Editor(
   // Block persistence manager
   const persistenceManager = useMemo(() => {
     if (blockDocManager && postId && !readOnly) {
+      // If the cached manager was created for a different postId (route
+      // navigation /content/edit/1 → /content/edit/2 without unmount), tear it
+      // down so we don't save edits for the new post to the previous post's ID.
+      // Also reset the run-once init guard so the new post loads its content.
+      if (persistenceRef.current && persistencePostIdRef.current !== postId) {
+        persistenceRef.current.destroy()
+        persistenceRef.current = null
+        hasInitializedRef.current = false
+      }
+
       if (!persistenceRef.current) {
         const token = authManager.getAccessToken() || undefined
         const manager = new BlockPersistenceManager(postId, blockDocManager, token, title)
@@ -130,6 +147,7 @@ export default forwardRef<EditorRef, Props>(function Editor(
         })
 
         persistenceRef.current = manager
+        persistencePostIdRef.current = postId
       }
       return persistenceRef.current
     }
