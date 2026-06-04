@@ -16,7 +16,9 @@ const AUDIENCE = process.env.PASETO_AUDIENCE || "go-live-cms-ws";
 const ALLOWED_AUDIENCES = process.env.PASETO_ALLOWED_AUDIENCES?.split(",") || [
   AUDIENCE,
 ];
-const DATA_PATH = (process.env.DATA_PATH || "./data").trim();
+// Trim first, THEN fall back to "./data", so DATA_PATH=" " (whitespace only)
+// resolves to "./data" rather than "" (which would silently use the CWD).
+const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
 const SQUASH_SECRET = (process.env.SQUASH_SECRET || "").trim();
 
 console.log("🔍 Environment debug:");
@@ -125,9 +127,21 @@ setPersistence({
 
       if (hasPending) {
         console.warn(
-          `⚠️  Persisted state for ${docName} is incomplete/corrupt — skipping it. ` +
+          `⚠️  Persisted state for ${docName} is incomplete/corrupt — clearing it. ` +
             `The Postgres working copy is canonical; the safety net will rebuild from live edits.`
         );
+        // Quarantine the corrupt entries — otherwise every subsequent reconnect
+        // would re-load the same gapped log, re-trigger this branch, and the log
+        // would only grow (it'd never actually rebuild from live edits as we
+        // claim above). clearDocument is scoped to this docName only; other
+        // documents in the same LevelDB instance are untouched. Best-effort;
+        // failure to clear is non-fatal — we still skip applying the bad state.
+        ldb.clearDocument(docName).catch((err) => {
+          console.error(
+            `⚠️  Failed to clear corrupt persisted state for ${docName}:`,
+            err?.message || err
+          );
+        });
         return;
       }
 

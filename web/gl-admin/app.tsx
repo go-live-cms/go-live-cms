@@ -16,9 +16,14 @@ import { useRouteClasses } from "./utils/useRouteClasses"
 // Wrapper so the Content list remounts when the post type changes.
 // Route-level keys must come from params, which are only available inside <Routes>,
 // so we need this thin component rather than an inline key prop on the route.
+//
+// Fallback to "all" if typeName is somehow undefined — defensive against future
+// refactors where the param could become optional. React treats `key={undefined}`
+// the same as no key, which would silently disable the remount/refetch behavior
+// this wrapper exists to provide.
 function ContentByType() {
-  const { typeName } = useParams<{ typeName: string }>()
-  return <ContentComponent key={typeName} />
+  const { typeName } = useParams<{ typeName?: string }>()
+  return <ContentComponent key={typeName || "all"} />
 }
 
 const NotFound = lazy(() => import("@gl-admin/pages/NotFound"))
