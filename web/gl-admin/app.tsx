@@ -1,5 +1,5 @@
 import { StrictMode, lazy, useEffect } from "react"
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom"
 import { GoLiveProvider } from "./contexts/GoLiveContext"
 import { ThemeProvider } from "./contexts/ThemeContext"
 import AuthGuard from "@gl-admin/components/AuthGuard"
@@ -13,9 +13,17 @@ import EditUser from "./pages/EditUser"
 import EditContent from "./pages/EditPost"
 import { useRouteClasses } from "./utils/useRouteClasses"
 
+// Wrapper so the Content list remounts when the post type changes.
+// Route-level keys must come from params, which are only available inside <Routes>,
+// so we need this thin component rather than an inline key prop on the route.
+function ContentByType() {
+  const { typeName } = useParams<{ typeName: string }>()
+  return <ContentComponent key={typeName} />
+}
+
 const NotFound = lazy(() => import("@gl-admin/pages/NotFound"))
 const Dashboard = lazy(() => import("@gl-admin/pages/Dashboard"))
-const Content = lazy(() => import("@gl-admin/pages/Content"))
+const ContentComponent = lazy(() => import("@gl-admin/pages/Content"))
 const Media = lazy(() => import("@gl-admin/pages/Media"))
 const Users = lazy(() => import("@gl-admin/pages/Users"))
 const BackfillBlocks = lazy(() => import("@gl-admin/pages/BackfillBlocks"))
@@ -34,8 +42,8 @@ function AppLayout() {
             <Route path="*" element={<Navigate to="/404" replace />} />
             <Route path="/" element={<Dashboard />} />
             <Route path="/404" element={<NotFound />} />
-            <Route path="/content" element={<Content key="content" />} />
-            <Route path="/content/:typeName" element={<Content key="content-type" />} />
+            <Route path="/content" element={<ContentComponent key="all" />} />
+            <Route path="/content/:typeName" element={<ContentByType />} />
             <Route path="/content/:typeName/new" element={<NewContent />} />
             <Route path="/content/edit/:id" element={<EditContent />} />
             <Route path="/media" element={<Media />} />
