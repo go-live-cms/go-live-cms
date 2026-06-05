@@ -27,11 +27,21 @@ export function collabDebug(...args: unknown[]): void {
 
 /**
  * Short, cheap fingerprint so we can spot content reverting/shrinking in the logs.
- * Y.XmlFragment#toJSON() returns a string, but we coerce defensively so a future
- * Yjs change (or any non-string input) can never throw inside debug instrumentation.
+ * Y.XmlFragment#toJSON() returns a string; we coerce defensively for any other
+ * input. JSON.stringify can throw (circular refs, BigInt), so it's wrapped — debug
+ * instrumentation must never be able to crash the app when GL_DEBUG_COLLAB is on.
  */
 export function contentFingerprint(value: unknown): string {
-  const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "")
+  let text: string
+  if (typeof value === "string") {
+    text = value
+  } else {
+    try {
+      text = JSON.stringify(value) ?? String(value)
+    } catch {
+      text = String(value)
+    }
+  }
   let hash = 0
   for (let i = 0; i < text.length; i++) {
     hash = (hash * 31 + text.charCodeAt(i)) | 0

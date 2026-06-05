@@ -224,6 +224,12 @@ export class BlockPersistenceManager {
     }
 
     this.saveTimer = setTimeout(() => {
+      // Null the ref now that the timer has fired, so `this.saveTimer` always
+      // reflects "a debounce is pending". performSave's missed-timer recovery
+      // relies on `!this.saveTimer`; without this, a fired-but-not-cleared timer
+      // looks pending forever and a follow-up save is never rescheduled — silently
+      // dropping edits that landed during an in-flight save.
+      this.saveTimer = null
       this.performSave()
     }, this.SAVE_DEBOUNCE_MS)
   }
@@ -241,8 +247,9 @@ export class BlockPersistenceManager {
       hasUnsavedChanges: this.hasUnsavedChanges,
     })
 
-    // Set isSaving FIRST so the mirror below (which writes the BlockDoc maps) does
-    // not re-trigger handleDocumentChange → another save.
+    // Mark the save in progress. This latch makes performSave non-re-entrant: a
+    // debounce timer that fires while a save is in flight hits the guard above and
+    // is absorbed; the finally block reschedules if edits are still pending.
     this.isSaving = true
 
     // Snapshot the edit counter BEFORE mirroring. Any edits that arrive AFTER

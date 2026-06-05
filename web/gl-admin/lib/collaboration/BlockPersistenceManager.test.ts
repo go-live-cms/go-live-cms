@@ -190,6 +190,38 @@ describe("in-flight edits are not dropped", () => {
   })
 })
 
+describe("missed-timer recovery", () => {
+  it("reschedules when a debounce timer fires INTO an in-flight save (consumed by the guard)", async () => {
+    const { manager } = makeManager()
+    await activate(manager)
+
+    // Make the first save hang so the next debounce timer fires while isSaving=true.
+    let resolveFirst: (v: any) => void = () => {}
+    api.updatePostBlocks.mockImplementationOnce(
+      () => new Promise((res) => { resolveFirst = res })
+    )
+
+    manager.notifyEditorChange()
+    await vi.advanceTimersByTimeAsync(1500) // T1 fires → performSave hangs (isSaving=true)
+
+    // Edit during the in-flight save schedules T2.
+    manager.notifyEditorChange()
+    // T2 fires while isSaving is still true → it's absorbed by performSave's guard.
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(api.updatePostBlocks).toHaveBeenCalledTimes(1) // only the hung first save
+
+    // Resolve the first save. The finally must reschedule because edits are still
+    // pending and no live timer remains. (With the stale-saveTimer bug, the
+    // recovery's `!saveTimer` check is false and the edit is silently dropped.)
+    resolveFirst({ doc: oneBlockDoc(), revision: 2 })
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(1500) // recovery's debounce fires
+
+    expect(api.updatePostBlocks).toHaveBeenCalledTimes(2)
+    expect(manager.hasUnsaved()).toBe(false)
+  })
+})
+
 describe("conflict (409) handling", () => {
   it("re-fetches latest and reconciles to the server copy (last-write-wins)", async () => {
     const { manager } = makeManager()
