@@ -154,6 +154,58 @@ describe("BlockDocManager — setBlockDocV1 (destructive replace)", () => {
   })
 })
 
+describe("BlockDocManager — setBlockDocV1 is incremental (no churn)", () => {
+  it("re-applying identical content emits NO change (no Yjs update / observer fire)", () => {
+    const m = freshManager()
+    const a = para("same")
+    const b = para("also")
+    const doc: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: [a.id, b.id],
+      blocks: { [a.id]: a, [b.id]: b },
+    }
+    m.setBlockDocV1(doc)
+
+    let calls = 0
+    const stop = m.onDocumentChange(() => {
+      calls++
+    })
+    // Re-apply a structurally-identical doc (fresh objects, same content).
+    m.setBlockDocV1({
+      doc_version: 1,
+      blocks_order: [a.id, b.id],
+      blocks: { [a.id]: { ...a, attrs: { ...a.attrs } }, [b.id]: { ...b, attrs: { ...b.attrs } } },
+    })
+    expect(calls).toBe(0) // no observer → no Yjs update → no WS broadcast / LevelDB write
+    stop()
+  })
+
+  it("updates only the changed block in place, leaving others untouched", () => {
+    const m = freshManager()
+    const a = para("one")
+    const b = para("two")
+    m.setBlockDocV1({ doc_version: 1, blocks_order: [a.id, b.id], blocks: { [a.id]: a, [b.id]: b } })
+
+    m.setBlockDocV1({
+      doc_version: 1,
+      blocks_order: [a.id, b.id],
+      blocks: { [a.id]: { ...a, attrs: { text: "ONE" } }, [b.id]: b },
+    })
+    expect(m.getBlock(a.id)?.attrs.text).toBe("ONE")
+    expect(m.getBlock(b.id)?.attrs.text).toBe("two")
+  })
+
+  it("a pure reorder keeps the same block contents", () => {
+    const m = freshManager()
+    const a = para("a")
+    const b = para("b")
+    m.setBlockDocV1({ doc_version: 1, blocks_order: [a.id, b.id], blocks: { [a.id]: a, [b.id]: b } })
+    m.setBlockDocV1({ doc_version: 1, blocks_order: [b.id, a.id], blocks: { [a.id]: a, [b.id]: b } })
+    expect(m.getBlockDocV1().blocks_order).toEqual([b.id, a.id])
+    expect(m.getBlock(a.id)?.attrs.text).toBe("a")
+  })
+})
+
 describe("BlockDocManager — onDocumentChange", () => {
   it("fires the callback with the latest doc on a change", () => {
     const m = freshManager()

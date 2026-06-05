@@ -10,6 +10,41 @@ function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36)
 }
 
+/** Order-independent deep equality for JSON-ish block attrs/children values. */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
+    return false
+  }
+  const aIsArr = Array.isArray(a)
+  const bIsArr = Array.isArray(b)
+  if (aIsArr || bIsArr) {
+    if (!aIsArr || !bIsArr || a.length !== b.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false
+    }
+    return true
+  }
+  const aKeys = Object.keys(a as Record<string, unknown>)
+  const bKeys = Object.keys(b as Record<string, unknown>)
+  if (aKeys.length !== bKeys.length) return false
+  for (const key of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(b, key)) return false
+    if (!deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) {
+      return false
+    }
+  }
+  return true
+}
+
+function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 /**
  * Manages Block Spec v1 documents in Yjs
  * Provides atomic operations on blocks and maintains document integrity
@@ -157,21 +192,62 @@ export class BlockDocManager {
   }
 
   /**
-   * Set complete BlockDocV1 (replaces entire document)
+   * Set complete BlockDocV1, applying only the DIFFERENCES against the current
+   * state. Identical content produces zero Yjs mutations (so the transaction emits
+   * no update — no WS broadcast, no LevelDB write, no observer fire).
+   *
+   * This replaces an earlier implementation that cleared and recreated every block
+   * on every call. That churn — combined with the (now-removed) handleDocumentChange
+   * autosave trigger — formed the 2s WS-restart "heartbeat" loop: each save rebuilt
+   * the whole map, the server echoed it back on resync, and the echo re-triggered
+   * a save. Diffing keeps the mirror cheap and makes a no-op save truly a no-op.
    */
   setBlockDocV1(doc: BlockDocV1): void {
     this.doc.transact(() => {
-      // Clear existing content
-      this.blocksOrder.delete(0, this.blocksOrder.length)
-      this.blocks.clear()
+      // 1) Remove blocks that are no longer present.
+      const targetIds = new Set(Object.keys(doc.blocks))
+      for (const existingId of Array.from(this.blocks.keys())) {
+        if (!targetIds.has(existingId)) {
+          this.blocks.delete(existingId)
+        }
+      }
 
-      // Set new content
-      this.blocksOrder.insert(0, doc.blocks_order)
+      // 2) Upsert blocks: create new ones, update changed fields in place, skip
+      //    unchanged ones (so identical blocks emit nothing).
+      for (const block of Object.values(doc.blocks)) {
+        this.upsertBlock(block)
+      }
 
-      Object.values(doc.blocks).forEach((block) => {
-        this.setBlock(block)
-      })
+      // 3) Replace the order array only when it actually differs.
+      if (!arraysEqual(this.blocksOrder.toArray(), doc.blocks_order)) {
+        this.blocksOrder.delete(0, this.blocksOrder.length)
+        this.blocksOrder.insert(0, doc.blocks_order)
+      }
     })
+  }
+
+  /**
+   * Insert a new block, or update an existing one in place touching only the
+   * fields that actually changed. Updating in place (rather than replacing the
+   * whole Y.Map) is what keeps unchanged saves from generating Yjs churn.
+   */
+  private upsertBlock(block: Block): void {
+    const existing = this.blocks.get(block.id)
+    if (!existing) {
+      this.setBlock(block)
+      return
+    }
+
+    if (existing.get("type") !== block.type) existing.set("type", block.type)
+    if (existing.get("version") !== block.version) existing.set("version", block.version)
+    if (!deepEqual(existing.get("attrs"), block.attrs)) existing.set("attrs", block.attrs)
+
+    const nextChildren = block.children && block.children.length > 0 ? block.children : undefined
+    const curChildren = (existing.get("children") as string[] | undefined) ?? undefined
+    if (!deepEqual(curChildren, nextChildren)) {
+      if (nextChildren) existing.set("children", nextChildren)
+      else if (existing.has("children")) existing.delete("children")
+    }
   }
 
   /**
