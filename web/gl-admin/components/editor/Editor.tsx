@@ -42,7 +42,7 @@ export interface EditorRef {
   getSaveStatus: () => { isSaving: boolean; isPublishing: boolean; saveStatus: "saved" | "saving" | "error" | null }
 }
 
-export default forwardRef<EditorRef, Props>(function Editor(
+const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
   {
     value,
     onChange,
@@ -455,4 +455,30 @@ export default forwardRef<EditorRef, Props>(function Editor(
       <CharacterCount editor={editor} minChars={minChars} maxChars={maxChars} />
     </div>
   )
+})
+
+// Theme gate: only mount the editor once the theme (and its TipTap block/extension
+// registry) has loaded, so the editor is created exactly ONCE with the full extension
+// set. Previously the editor was built with base extensions before the theme loaded and
+// then recreated when `isThemeLoaded` flipped (extensions + collabProvider are in the
+// useEditor deps), causing a double create in production (#198). This must be a separate
+// wrapper component — an early return before `useEditor` inside EditorInner would change
+// the hook count between renders and violate the Rules of Hooks.
+export default forwardRef<EditorRef, Props>(function Editor(props, ref) {
+  const { isThemeLoaded } = useTheme()
+
+  if (!isThemeLoaded) {
+    return (
+      <div className="notion-editor">
+        <div
+          className="editor-wrapper"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "200px" }}
+        >
+          <p style={{ color: "#999" }}>Loading theme…</p>
+        </div>
+      </div>
+    )
+  }
+
+  return <EditorInner ref={ref} {...props} />
 })
