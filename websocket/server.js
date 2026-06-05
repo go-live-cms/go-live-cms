@@ -3,6 +3,7 @@ import { WebSocketServer } from "ws";
 import { setupWSConnection, setPersistence } from "y-websocket/bin/utils";
 import { LeveldbPersistence } from "y-leveldb";
 import * as Y from "yjs";
+import { evaluatePersistedState } from "./persistence.js";
 import { URL } from "url";
 import { V4 } from "paseto";
 import { createPublicKey } from "crypto";
@@ -20,6 +21,14 @@ const ALLOWED_AUDIENCES = process.env.PASETO_ALLOWED_AUDIENCES?.split(",") || [
 // resolves to "./data" rather than "" (which would silently use the CWD).
 const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
 const SQUASH_SECRET = (process.env.SQUASH_SECRET || "").trim();
+
+// Debug-gated logging (COLLAB_DEBUG=1) for diagnosing the WS-restart instability.
+// Timestamped so it aligns with the browser's GL_DEBUG_COLLAB logs.
+const COLLAB_DEBUG = (process.env.COLLAB_DEBUG || "").trim() === "1";
+const collabDebug = (...args) => {
+  if (COLLAB_DEBUG) console.debug(`[collab t=${Date.now()}]`, ...args);
+};
+const docLen = (ydoc) => ydoc.getXmlFragment("prosemirror").length;
 
 console.log("🔍 Environment debug:");
 console.log("   - process.env.HOST:", process.env.HOST);
@@ -109,52 +118,42 @@ setPersistence({
 
     // The LevelDB layer is only a SAFETY NET — the canonical document lives in
     // Postgres (posts.block_doc) via the API autosave. A corrupt or gapped safety
-    // net must NEVER break live collaboration, so we validate the stored state in a
-    // throwaway doc before merging it into the live ydoc, and skip it on any problem.
-    try {
-      const persistedYdoc = await ldb.getYDoc(docName);
-      const update = Y.encodeStateAsUpdate(persistedYdoc);
+    // net must NEVER break live collaboration. evaluatePersistedState validates the
+    // stored state and tells us what to do; see websocket/persistence.js (unit
+    // tested in persistence.test.js).
+    const result = await evaluatePersistedState(ldb, docName);
+    collabDebug("bindState", docName, "decision", result.action, "liveDocLen", docLen(ydoc));
 
-      // Probe: apply to a disposable doc. Gapped updates (missing dependencies)
-      // leave un-integrated "pending" structs. Applying such a doc to the live
-      // ydoc would poison it and crash on the next client message — detect & skip.
-      const probe = new Y.Doc();
-      Y.applyUpdate(probe, update);
-      const hasPending =
-        probe.store?.pendingStructs != null ||
-        (probe.store?.pendingClientsStructRefs?.size ?? 0) > 0;
-      probe.destroy();
-
-      if (hasPending) {
-        console.warn(
-          `⚠️  Persisted state for ${docName} is incomplete/corrupt — clearing it. ` +
-            `The Postgres working copy is canonical; the safety net will rebuild from live edits.`
-        );
-        // Quarantine the corrupt entries — otherwise every subsequent reconnect
-        // would re-load the same gapped log, re-trigger this branch, and the log
-        // would only grow (it'd never actually rebuild from live edits as we
-        // claim above). clearDocument is scoped to this docName only; other
-        // documents in the same LevelDB instance are untouched. Best-effort;
-        // failure to clear is non-fatal — we still skip applying the bad state.
-        ldb.clearDocument(docName).catch((err) => {
-          console.error(
-            `⚠️  Failed to clear corrupt persisted state for ${docName}:`,
-            err?.message || err
-          );
-        });
-        return;
-      }
-
-      // Safe to merge. Yjs CRDT merges are additive, so live client content is
-      // never overwritten by older/empty persisted state. Tag the update with our
-      // sentinel origin so the listener above skips re-persisting it.
-      Y.applyUpdate(ydoc, update, PERSISTENCE_ORIGIN);
-    } catch (err) {
+    if (result.action === "skip") {
       console.error(
         `⚠️  Failed to load persisted state for ${docName} — continuing without it:`,
-        err.message
+        result.error?.message || result.error
       );
+      return;
     }
+
+    if (result.action === "clear") {
+      console.warn(
+        `⚠️  Persisted state for ${docName} is incomplete/corrupt — clearing it. ` +
+          `The Postgres working copy is canonical; the safety net will rebuild from live edits.`
+      );
+      // Quarantine the corrupt entries — otherwise every subsequent reconnect
+      // would re-load the same gapped log and re-trigger this branch. clearDocument
+      // is scoped to this docName only; other documents are untouched. Best-effort.
+      ldb.clearDocument(docName).catch((err) => {
+        console.error(
+          `⚠️  Failed to clear corrupt persisted state for ${docName}:`,
+          err?.message || err
+        );
+      });
+      return;
+    }
+
+    // action === "apply": safe to merge. Yjs CRDT merges are additive, so live
+    // client content is never overwritten by older/empty persisted state. Tag the
+    // update with our sentinel origin so the listener above skips re-persisting it.
+    Y.applyUpdate(ydoc, result.update, PERSISTENCE_ORIGIN);
+    collabDebug("bindState applied persisted state", docName, "liveDocLen", docLen(ydoc));
   },
   writeState: async (_docName, _ydoc) => {
     // No-op: updates are written incrementally in the bindState update listener.

@@ -3,6 +3,7 @@ import type { BlockDocV1 } from "../blocks-spec"
 import type { BlockDocManager } from "./BlockDocManager"
 import type { Editor } from "@tiptap/react"
 import { blockDocToPM } from "./blockBridge"
+import { collabDebug } from "./debug"
 
 /**
  * Manages debounced persistence of block documents to the API
@@ -21,8 +22,6 @@ export class BlockPersistenceManager {
   private hasUnsavedChanges: boolean = false
   private suspended: boolean = false
   private suspendReason: "unauthorized" | null = null
-  private unsubscribeDocChange?: () => void
-  private suppressNextChange: boolean = false
   // Guard: the initial API load + setContent must happen exactly once. A second
   // call (e.g. from a reconnect re-firing "synced") would overwrite unsaved edits.
   private hasInitialized: boolean = false
@@ -53,8 +52,19 @@ export class BlockPersistenceManager {
       blockAPIClient.setAuthToken(authToken)
     }
 
-    // Subscribe to block document changes and save cleanup function
-    this.unsubscribeDocChange = this.blockDocManager.onDocumentChange(this.handleDocumentChange.bind(this))
+    // NOTE: we intentionally do NOT subscribe to blockDocManager.onDocumentChange
+    // for autosave. Autosave is driven solely by editor edits via notifyEditorChange().
+    //
+    // Observing the BlockDoc maps caused a self-sustaining save loop after a WS
+    // restart (the "heartbeat"): performSave mirrors the editor into the maps via
+    // setBlockDocV1; that write syncs to the WS server, the server echoes it back on
+    // the next 2s resync, and the echo re-triggered another save → echo → ... forever,
+    // with the revision climbing every 2s. (setBlockDocV1 is now incremental and a
+    // no-op for unchanged content — see BlockDocManager — which further dampens this,
+    // but removing this map-observer trigger is what actually breaks the loop.)
+    // Editor updates already cover both local edits and remote collaborator edits
+    // (the collaboration plugin applies remote changes as editor transactions, which
+    // fire `update`), so map observation is redundant.
   }
 
   /**
@@ -166,6 +176,7 @@ export class BlockPersistenceManager {
       // can complete the load. Fall through to the finally to release the
       // isInitializing latch — otherwise autosave stays permanently disabled.
     } finally {
+      collabDebug("initialize done", { loadedOk, revision: this.currentRevision })
       // Only mark "initialized" if the load actually succeeded; this is what
       // prevents reconnect-driven re-seeds from clobbering unsaved typing.
       if (loadedOk) this.hasInitialized = true
@@ -178,22 +189,6 @@ export class BlockPersistenceManager {
         this.isInitializing = false
       }, 500)
     }
-  }
-
-  /**
-   * Handle document changes from the block manager
-   */
-  private handleDocumentChange(doc: BlockDocV1): void {
-    if (this.isInitializing) return // Ignore ALL changes during initial load
-    if (this.isSaving) return // Don't trigger saves during API updates
-    if (this.suspended) return // Don't queue saves while suspended
-    if (this.suppressNextChange) {
-      this.suppressNextChange = false
-      return
-    }
-
-    this.hasUnsavedChanges = true
-    this.debouncedSave()
   }
 
   /**
@@ -229,6 +224,12 @@ export class BlockPersistenceManager {
     }
 
     this.saveTimer = setTimeout(() => {
+      // Null the ref now that the timer has fired, so `this.saveTimer` always
+      // reflects "a debounce is pending". performSave's missed-timer recovery
+      // relies on `!this.saveTimer`; without this, a fired-but-not-cleared timer
+      // looks pending forever and a follow-up save is never rescheduled — silently
+      // dropping edits that landed during an in-flight save.
+      this.saveTimer = null
       this.performSave()
     }, this.SAVE_DEBOUNCE_MS)
   }
@@ -239,8 +240,16 @@ export class BlockPersistenceManager {
   private async performSave(retryCount = 0, isExplicit = false): Promise<void> {
     if (!this.hasUnsavedChanges || this.isSaving || this.suspended) return
 
-    // Set isSaving FIRST so the mirror below (which writes the BlockDoc maps) does
-    // not re-trigger handleDocumentChange → another save.
+    collabDebug("performSave start", {
+      retryCount,
+      isExplicit,
+      revision: this.currentRevision,
+      hasUnsavedChanges: this.hasUnsavedChanges,
+    })
+
+    // Mark the save in progress. This latch makes performSave non-re-entrant: a
+    // debounce timer that fires while a save is in flight hits the guard above and
+    // is absorbed; the finally block reschedules if edits are still pending.
     this.isSaving = true
 
     // Snapshot the edit counter BEFORE mirroring. Any edits that arrive AFTER
@@ -275,6 +284,7 @@ export class BlockPersistenceManager {
       // content. Explicit saves (force/publish) may still write empty intentionally.
       if (currentDoc.blocks_order.length === 0 && !isExplicit) {
         console.warn("[autosave] skipping empty document — would overwrite working copy")
+        collabDebug("performSave SKIP empty doc")
         return // outer finally clears isSaving
       }
 
@@ -346,7 +356,6 @@ export class BlockPersistenceManager {
       const { doc: latestDoc, revision } = await blockAPIClient.getPostBlocks(this.postId)
 
       // Update local state with server version (last-write-wins for Phase A)
-      this.suppressNextChange = true
       this.blockDocManager.setBlockDocV1(latestDoc)
       this.currentRevision = revision
       this.hasUnsavedChanges = false
@@ -424,11 +433,6 @@ export class BlockPersistenceManager {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
-    }
-    // IMPORTANT: unsubscribe so old instances don't keep saving
-    if (this.unsubscribeDocChange) {
-      this.unsubscribeDocChange()
-      this.unsubscribeDocChange = undefined
     }
   }
 }
