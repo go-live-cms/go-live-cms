@@ -261,6 +261,27 @@ describe("flag recovery — nothing latches autosave forever", () => {
   })
 })
 
+describe("no echo loop on reconnect (WS-restart heartbeat)", () => {
+  it("a blocks-map change that did NOT come from the editor does not trigger an autosave", async () => {
+    const { manager, blockDocManager } = makeManager()
+    await activate(manager)
+    api.updatePostBlocks.mockClear()
+
+    // Simulate the server echoing our own mirror churn back over the 2s resync:
+    // a blocks-map mutation that did not originate from a local editor edit.
+    // This must NOT schedule a save — otherwise mirror churn + echo form the
+    // self-sustaining 2s save loop seen after a WS restart (revision climbing,
+    // hasUnsavedChanges perpetually true, content erased).
+    blockDocManager.insertBlockAtPosition(
+      { id: id(), type: "paragraph", version: 1, attrs: { text: "echo" } },
+      0
+    )
+    await vi.advanceTimersByTimeAsync(3000)
+
+    expect(api.updatePostBlocks).not.toHaveBeenCalled()
+  })
+})
+
 describe("publish()", () => {
   it("force-saves then calls publishPost", async () => {
     const { manager } = makeManager()
