@@ -3,6 +3,7 @@ import type { BlockDocV1 } from "../blocks-spec"
 import type { BlockDocManager } from "./BlockDocManager"
 import type { Editor } from "@tiptap/react"
 import { blockDocToPM } from "./blockBridge"
+import { collabDebug } from "./debug"
 
 /**
  * Manages debounced persistence of block documents to the API
@@ -166,6 +167,7 @@ export class BlockPersistenceManager {
       // can complete the load. Fall through to the finally to release the
       // isInitializing latch — otherwise autosave stays permanently disabled.
     } finally {
+      collabDebug("initialize done", { loadedOk, revision: this.currentRevision })
       // Only mark "initialized" if the load actually succeeded; this is what
       // prevents reconnect-driven re-seeds from clobbering unsaved typing.
       if (loadedOk) this.hasInitialized = true
@@ -239,6 +241,13 @@ export class BlockPersistenceManager {
   private async performSave(retryCount = 0, isExplicit = false): Promise<void> {
     if (!this.hasUnsavedChanges || this.isSaving || this.suspended) return
 
+    collabDebug("performSave start", {
+      retryCount,
+      isExplicit,
+      revision: this.currentRevision,
+      hasUnsavedChanges: this.hasUnsavedChanges,
+    })
+
     // Set isSaving FIRST so the mirror below (which writes the BlockDoc maps) does
     // not re-trigger handleDocumentChange → another save.
     this.isSaving = true
@@ -275,6 +284,7 @@ export class BlockPersistenceManager {
       // content. Explicit saves (force/publish) may still write empty intentionally.
       if (currentDoc.blocks_order.length === 0 && !isExplicit) {
         console.warn("[autosave] skipping empty document — would overwrite working copy")
+        collabDebug("performSave SKIP empty doc")
         return // outer finally clears isSaving
       }
 

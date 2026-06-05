@@ -63,3 +63,31 @@ jobs:
           SERVER_ADDRESS: 0.0.0.0:8080
           API_PORT: :8080
         run: make test
+
+  web-tests:
+    name: Web tests (editor/collaboration)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install web deps
+        working-directory: web
+        run: npm ci
+
+      - name: Run web tests
+        working-directory: web
+        run: npm test
+
+      - name: Install websocket deps
+        working-directory: websocket
+        run: npm ci
+
+      - name: Run websocket tests
+        working-directory: websocket
+        run: npm test

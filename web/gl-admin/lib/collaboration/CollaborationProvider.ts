@@ -2,6 +2,7 @@ import { WebsocketProvider } from "y-websocket"
 import { Doc as YDoc } from "yjs"
 import { IndexeddbPersistence } from "y-indexeddb"
 import { authManager } from "../auth"
+import { collabDebug, collabDebugEnabled, contentFingerprint } from "./debug"
 
 const activeProviders = new Map<number, CollaborationProvider>()
 const refCounts = new Map<number, number>()
@@ -71,6 +72,27 @@ export class CollaborationProvider {
     })
 
     this.provider.on("status", () => {})
+
+    // Debug-gated instrumentation (localStorage GL_DEBUG_COLLAB=1) for diagnosing
+    // the WS-restart instability. Logs reconnect cadence + the prosemirror fragment
+    // fingerprint over time so we can see exactly when/why content reverts.
+    if (collabDebugEnabled()) {
+      const frag = this.doc.getXmlFragment("prosemirror")
+      const fp = () => contentFingerprint(frag.toJSON())
+      collabDebug("provider created", `post-${postId}`, fp())
+      this.provider.on("status", (e: any) => collabDebug("ws status", e?.status, fp()))
+      this.provider.on("sync", (isSynced: boolean) =>
+        collabDebug("provider sync", isSynced, "wsconnected", this.provider.wsconnected, fp())
+      )
+      this.provider.on("connection-error", (e: any) =>
+        collabDebug("connection-error", e?.message || String(e))
+      )
+      this.doc.on("update", (_update: Uint8Array, origin: unknown) => {
+        const originName =
+          origin == null ? "local" : (origin as any)?.constructor?.name ?? String(origin)
+        collabDebug("doc update", "origin", originName, fp())
+      })
+    }
   }
 
   private generateUserColor(userId: number): string {

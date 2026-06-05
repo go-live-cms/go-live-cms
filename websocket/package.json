@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon --signal SIGTERM --watch . server.js"
+    "dev": "nodemon --signal SIGTERM --watch . server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "y-websocket": "^2.0.4",
