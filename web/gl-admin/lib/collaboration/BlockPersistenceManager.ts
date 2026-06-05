@@ -22,8 +22,6 @@ export class BlockPersistenceManager {
   private hasUnsavedChanges: boolean = false
   private suspended: boolean = false
   private suspendReason: "unauthorized" | null = null
-  private unsubscribeDocChange?: () => void
-  private suppressNextChange: boolean = false
   // Guard: the initial API load + setContent must happen exactly once. A second
   // call (e.g. from a reconnect re-firing "synced") would overwrite unsaved edits.
   private hasInitialized: boolean = false
@@ -54,8 +52,17 @@ export class BlockPersistenceManager {
       blockAPIClient.setAuthToken(authToken)
     }
 
-    // Subscribe to block document changes and save cleanup function
-    this.unsubscribeDocChange = this.blockDocManager.onDocumentChange(this.handleDocumentChange.bind(this))
+    // NOTE: we intentionally do NOT subscribe to blockDocManager.onDocumentChange
+    // for autosave. Autosave is driven solely by editor edits via notifyEditorChange().
+    //
+    // Observing the BlockDoc maps caused a self-sustaining save loop after a WS
+    // restart (the "heartbeat"): performSave mirrors the editor into the maps via
+    // setBlockDocV1 (which clears + recreates every block — Yjs churn), that churn
+    // syncs to the WS server, the server echoes it back on the next 2s resync, and
+    // the echo re-triggered another save → churn → echo → ... forever, with the
+    // revision climbing every 2s. Editor updates already cover both local edits and
+    // remote collaborator edits (the collaboration plugin applies remote changes as
+    // editor transactions, which fire `update`), so map observation is redundant.
   }
 
   /**
@@ -180,22 +187,6 @@ export class BlockPersistenceManager {
         this.isInitializing = false
       }, 500)
     }
-  }
-
-  /**
-   * Handle document changes from the block manager
-   */
-  private handleDocumentChange(doc: BlockDocV1): void {
-    if (this.isInitializing) return // Ignore ALL changes during initial load
-    if (this.isSaving) return // Don't trigger saves during API updates
-    if (this.suspended) return // Don't queue saves while suspended
-    if (this.suppressNextChange) {
-      this.suppressNextChange = false
-      return
-    }
-
-    this.hasUnsavedChanges = true
-    this.debouncedSave()
   }
 
   /**
@@ -356,7 +347,6 @@ export class BlockPersistenceManager {
       const { doc: latestDoc, revision } = await blockAPIClient.getPostBlocks(this.postId)
 
       // Update local state with server version (last-write-wins for Phase A)
-      this.suppressNextChange = true
       this.blockDocManager.setBlockDocV1(latestDoc)
       this.currentRevision = revision
       this.hasUnsavedChanges = false
@@ -434,11 +424,6 @@ export class BlockPersistenceManager {
     if (this.saveTimer) {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
-    }
-    // IMPORTANT: unsubscribe so old instances don't keep saving
-    if (this.unsubscribeDocChange) {
-      this.unsubscribeDocChange()
-      this.unsubscribeDocChange = undefined
     }
   }
 }
