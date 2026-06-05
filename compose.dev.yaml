@@ -35,7 +35,7 @@ services:
       ACCESS_TOKEN_DURATION: "15m"
       REFRESH_TOKEN_DURATION: "24h"
       MAX_UPLOAD_SIZE: "50MB"
-      UPLOAD_PATH: "/uploads/media"
+      UPLOAD_PATH: "/app/uploads/media"
       COLLAB_SERVER_URL: "http://websocket:1234"
       COLLAB_SQUASH_SECRET: "dev-squash-secret"
     volumes:
