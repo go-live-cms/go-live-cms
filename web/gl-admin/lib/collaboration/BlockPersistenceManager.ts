@@ -57,12 +57,14 @@ export class BlockPersistenceManager {
     //
     // Observing the BlockDoc maps caused a self-sustaining save loop after a WS
     // restart (the "heartbeat"): performSave mirrors the editor into the maps via
-    // setBlockDocV1 (which clears + recreates every block — Yjs churn), that churn
-    // syncs to the WS server, the server echoes it back on the next 2s resync, and
-    // the echo re-triggered another save → churn → echo → ... forever, with the
-    // revision climbing every 2s. Editor updates already cover both local edits and
-    // remote collaborator edits (the collaboration plugin applies remote changes as
-    // editor transactions, which fire `update`), so map observation is redundant.
+    // setBlockDocV1; that write syncs to the WS server, the server echoes it back on
+    // the next 2s resync, and the echo re-triggered another save → echo → ... forever,
+    // with the revision climbing every 2s. (setBlockDocV1 is now incremental and a
+    // no-op for unchanged content — see BlockDocManager — which further dampens this,
+    // but removing this map-observer trigger is what actually breaks the loop.)
+    // Editor updates already cover both local edits and remote collaborator edits
+    // (the collaboration plugin applies remote changes as editor transactions, which
+    // fire `update`), so map observation is redundant.
   }
 
   /**

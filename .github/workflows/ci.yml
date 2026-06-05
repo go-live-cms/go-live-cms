@@ -74,7 +74,9 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # 22 (LTS) — satisfies jsdom@29's engines (>=20.19) without relying on
+          # how the "20" alias happens to resolve on the runner.
+          node-version: "22"
 
       - name: Install web deps
         working-directory: web

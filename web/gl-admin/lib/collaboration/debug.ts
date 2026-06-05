@@ -25,8 +25,13 @@ export function collabDebug(...args: unknown[]): void {
   }
 }
 
-/** Short, cheap fingerprint of a string so we can spot content reverting/shrinking. */
-export function contentFingerprint(text: string): string {
+/**
+ * Short, cheap fingerprint so we can spot content reverting/shrinking in the logs.
+ * Y.XmlFragment#toJSON() returns a string, but we coerce defensively so a future
+ * Yjs change (or any non-string input) can never throw inside debug instrumentation.
+ */
+export function contentFingerprint(value: unknown): string {
+  const text = typeof value === "string" ? value : (JSON.stringify(value) ?? "")
   let hash = 0
   for (let i = 0; i < text.length; i++) {
     hash = (hash * 31 + text.charCodeAt(i)) | 0

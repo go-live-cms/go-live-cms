@@ -10,7 +10,11 @@ function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36)
 }
 
-/** Order-independent deep equality for JSON-ish block attrs/children values. */
+/**
+ * Deep equality for JSON-ish block attrs/children values. Object comparison is
+ * key-order-independent; array comparison is order-SENSITIVE (intended — element
+ * order is meaningful for `children` and block ordering).
+ */
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (a === null || b === null || typeof a !== "object" || typeof b !== "object") {
