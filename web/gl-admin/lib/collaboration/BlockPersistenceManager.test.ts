@@ -312,6 +312,28 @@ describe("no echo loop on reconnect (WS-restart heartbeat)", () => {
 
     expect(api.updatePostBlocks).not.toHaveBeenCalled()
   })
+
+  it("REPEATED server echoes (the 2s resync) never trigger autosaves", async () => {
+    // The actual heartbeat: after a WS restart the server reflected a blocks-map update
+    // back to the client on every ~2s resync. With a doc-map autosave trigger, each echo
+    // scheduled a save → PUT every ~2s, revision climbing, content erased. Model many
+    // echoes over time and assert ZERO saves — the only legitimate autosave trigger is a
+    // real editor edit (notifyEditorChange).
+    const { manager, blockDocManager } = makeManager()
+    await activate(manager)
+    api.updatePostBlocks.mockClear()
+
+    for (let i = 0; i < 6; i++) {
+      blockDocManager.insertBlockAtPosition(
+        { id: id(), type: "paragraph", version: 1, attrs: { text: `echo-${i}` } },
+        0
+      )
+      await vi.advanceTimersByTimeAsync(2000) // one resync interval
+    }
+
+    expect(api.updatePostBlocks).not.toHaveBeenCalled()
+    expect(manager.hasUnsaved()).toBe(false)
+  })
 })
 
 describe("publish()", () => {
