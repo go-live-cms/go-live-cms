@@ -51,6 +51,15 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
    after a successful load and releases `isInitializing` in a `finally`. A failed load
    (e.g. 401) must remain retryable and must NOT permanently disable autosave.
 
+3b. **Seed the editor from the REST working copy ONLY when the live Yjs doc is empty.**
+   On a warm reload, IndexedDB + the WS server restore the prosemirror fragment and the
+   blocks maps — Yjs is the source of truth and the Collaboration plugin already shows
+   the content. `initialize()` must NOT `setContent`/`setBlockDocV1` over a non-empty
+   Yjs doc: `setContent` becomes delete-all + insert-new on the fragment (via ySyncPlugin),
+   creating a competing parallel state the 2s resync then fights — reverting the user's
+   content (the reload "heartbeat", reproducible via Ctrl+S then reload). Guard with
+   `!editor.isEmpty` / a non-empty `getBlockDocV1()`; only seed the side(s) that are empty.
+
 4. **`saveTimer` must be nulled when the debounce timer fires** (inside the
    `setTimeout` callback). The missed-timer recovery in `performSave`'s `finally` checks
    `!this.saveTimer`; a stale (fired-but-not-nulled) ref makes it skip rescheduling and

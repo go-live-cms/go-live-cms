@@ -118,6 +118,46 @@ describe("initialize()", () => {
   })
 })
 
+describe("warm reload — does not overwrite an already-populated Yjs doc", () => {
+  it("keeps live Yjs content and ignores the REST working copy when the doc is non-empty", async () => {
+    // Simulate a warm reload: IndexedDB + the WS server have already restored content
+    // into the collaborative doc BEFORE the REST load runs.
+    const blockDocManager = new BlockDocManager(new Y.Doc())
+    blockDocManager.setBlockDocV1(oneBlockDoc("live-yjs-content"))
+
+    const manager = new BlockPersistenceManager(1, blockDocManager, "tok")
+    manager.setSyncCallback(vi.fn())
+
+    // The REST working copy returns DIFFERENT (older) content.
+    api.getPostBlocks.mockResolvedValueOnce({ doc: oneBlockDoc("stale-rest-content"), revision: 3 })
+    await manager.initialize()
+    await vi.advanceTimersByTimeAsync(500)
+
+    // The live Yjs content must be preserved — overwriting it via setBlockDocV1/
+    // setContent is what caused the reload "heartbeat" (a competing parallel state
+    // the resync then fights). Revision is still adopted from the load.
+    const after = blockDocManager.getBlockDocV1()
+    const texts = after.blocks_order.map((bid) => (after.blocks[bid].attrs as { text?: string }).text)
+    expect(texts).toContain("live-yjs-content")
+    expect(texts).not.toContain("stale-rest-content")
+    expect(manager.getCurrentRevision()).toBe(3)
+  })
+
+  it("DOES seed from REST when the Yjs doc is empty (cold start)", async () => {
+    const blockDocManager = new BlockDocManager(new Y.Doc()) // empty
+    const manager = new BlockPersistenceManager(1, blockDocManager, "tok")
+    manager.setSyncCallback(vi.fn())
+
+    api.getPostBlocks.mockResolvedValueOnce({ doc: oneBlockDoc("rest-content"), revision: 1 })
+    await manager.initialize()
+    await vi.advanceTimersByTimeAsync(500)
+
+    const after = blockDocManager.getBlockDocV1()
+    const texts = after.blocks_order.map((bid) => (after.blocks[bid].attrs as { text?: string }).text)
+    expect(texts).toContain("rest-content")
+  })
+})
+
 describe("autosave", () => {
   it("debounced edit triggers a save with the current doc", async () => {
     const { manager } = makeManager()
