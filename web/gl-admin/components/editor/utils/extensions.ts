@@ -49,6 +49,9 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       Link.configure({
         autolink: true,
         openOnClick: false,
+        // Reject non-http(s) protocols at the input layer (#188). `protocols` limits
+        // autolink/paste schemes; `validate` is the stronger guard for typed hrefs.
+        protocols: ["http", "https"],
         validate: (href) => /^https?:\/\//.test(href),
         HTMLAttributes: {
           class: "editor-link",
