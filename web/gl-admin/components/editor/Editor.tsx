@@ -288,7 +288,7 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
   // Collaboration content sync
   useEffect(() => {
     if (!editor || !collabProvider) return
-    const onSynced = (isSynced: boolean) => {
+    const onSynced = async (isSynced: boolean) => {
       if (!isSynced) return
 
       // Run the initial-content load only once for this editor instance.
@@ -301,7 +301,20 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
       hasInitializedRef.current = true
       if (import.meta.env.DEV) console.debug("[Editor] onSynced — running one-time content load")
 
-      const frag = collabProvider.doc.getXmlFragment("prosemirror")
+      // Wait for IndexedDB to finish its initial load before deciding whether to seed.
+      // On the WS "synced" tick IndexedDB may not have applied yet, so the editor can
+      // look empty even though it has cached content. Seeding then would mint fresh Yjs
+      // structs that collide with IndexedDB's once it loads — diverging the doc (spurious
+      // saves, content/image erased, worse on every reload). After this await the
+      // emptiness checks below reflect the real, fully-restored state.
+      try {
+        await collabProvider.whenSynced
+      } catch {
+        /* ignore — proceed with whatever state we have */
+      }
+      if (editor.isDestroyed) return
+
+      const frag = collabProvider.doc.getXmlFragment("default")
       const emptyShared = frag.length === 0
       const emptyLocal = editor.isEmpty
 

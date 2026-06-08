@@ -77,7 +77,7 @@ export class CollaborationProvider {
     // the WS-restart instability. Logs reconnect cadence + the prosemirror fragment
     // fingerprint over time so we can see exactly when/why content reverts.
     if (collabDebugEnabled()) {
-      const frag = this.doc.getXmlFragment("prosemirror")
+      const frag = this.doc.getXmlFragment("default")
       const fp = () => contentFingerprint(frag.toJSON())
       collabDebug("provider created", `post-${postId}`, fp())
       this.provider.on("status", (e: any) => collabDebug("ws status", e?.status, fp()))
@@ -93,6 +93,17 @@ export class CollaborationProvider {
         collabDebug("doc update", "origin", originName, fp())
       })
     }
+  }
+
+  /**
+   * Resolves once the IndexedDB persistence has finished its initial load into the
+   * Y.Doc. Callers MUST await this before deciding whether to seed the editor from a
+   * non-Yjs source (the REST working copy): otherwise the doc can look empty on the WS
+   * "synced" tick while IndexedDB is still loading, and a setContent seed would mint
+   * fresh structs that then collide with IndexedDB's — diverging the document.
+   */
+  get whenSynced(): Promise<unknown> {
+    return this.persistence.whenSynced
   }
 
   private generateUserColor(userId: number): string {
