@@ -20,9 +20,11 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
 ## Files
 
 - `CollaborationProvider.ts` — per-post singleton: `Y.Doc` + `WebsocketProvider`
-  (`ws://…:1234`, `resyncInterval: 2000`) + `IndexeddbPersistence` (`post-<id>`).
-  Ref-counted; destroyed 750ms after last release. **`resyncInterval: 2000` = the "2s"
-  cadence** you'll see in any heartbeat-style bug.
+  (`ws://…:1234`, `resyncInterval: 2000`). Ref-counted; destroyed 750ms after last
+  release. **`resyncInterval: 2000` = the "2s" cadence** you'll see in any heartbeat-style
+  bug. **NO client-side `IndexeddbPersistence`** — it was removed deliberately (see rule
+  0). The WS server's LevelDB is the single live Yjs store; `whenSynced` is now a resolved
+  promise kept only for API symmetry.
 - `BlockDocManager.ts` — CRUD over the `blocks`/`blocks_order` maps. `setBlockDocV1` is
   **incremental** (diff/upsert) — see below.
 - `BlockPersistenceManager.ts` — the autosave **state machine**. The brains; most
@@ -32,6 +34,15 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
   Server side: `COLLAB_DEBUG=1`. Both are timestamped (`t=…`) so client+server logs align.
 
 ## Hard rules (violating these reintroduces shipped bugs)
+
+0. **Do NOT reintroduce client-side `IndexeddbPersistence` (or any client cache that
+   survives reloads).** The WS server (LevelDB) is the **single source of truth** for the
+   live Yjs state; Postgres `posts.block_doc` is the durable backup. A local Yjs cache
+   inevitably builds a *different struct history* for the same content than the server's
+   rebuilt doc; the two never converge, the 2s resync keeps applying "differences" (each a
+   PM transaction → a spurious autosave with no typing), and it **compounds every reload**
+   (the recurring "heartbeat" that erased text/images and "got worse each reload"). On
+   open, the editor loads purely from the server. Removed in the IndexedDB-removal commit.
 
 1. **Autosave is driven ONLY by `notifyEditorChange()`** (called from
    `editor.on("update")` in `Editor.tsx`). **Do NOT subscribe an autosave trigger to
@@ -51,14 +62,17 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
    after a successful load and releases `isInitializing` in a `finally`. A failed load
    (e.g. 401) must remain retryable and must NOT permanently disable autosave.
 
-3b. **Seed the editor from the REST working copy ONLY when the live Yjs doc is empty.**
-   On a warm reload, IndexedDB + the WS server restore the prosemirror fragment and the
-   blocks maps — Yjs is the source of truth and the Collaboration plugin already shows
-   the content. `initialize()` must NOT `setContent`/`setBlockDocV1` over a non-empty
-   Yjs doc: `setContent` becomes delete-all + insert-new on the fragment (via ySyncPlugin),
-   creating a competing parallel state the 2s resync then fights — reverting the user's
-   content (the reload "heartbeat", reproducible via Ctrl+S then reload). Guard with
-   `!editor.isEmpty` / a non-empty `getBlockDocV1()`; only seed the side(s) that are empty.
+3b. **Seed the editor from the REST working copy ONLY when the live Yjs doc is empty,
+   and ONLY after the WS `synced` event.** On a warm reload the WS server restores the
+   prosemirror fragment — Yjs is the source of truth and the Collaboration plugin already
+   shows the content. The seed runs inside `onSynced` (Editor.tsx) so the authoritative
+   server state has loaded before we test emptiness; seeding earlier (e.g. from
+   `initialize()` before WS sync) would mint fresh structs that then collide with the
+   server's on sync — the same divergence as rule 0. `setContent` over a non-empty doc
+   becomes delete-all + insert-new on the fragment (via ySyncPlugin), creating a competing
+   parallel state the 2s resync fights — reverting the user's content (the reload
+   "heartbeat", reproducible via Ctrl+S then reload). Guard with `!editor.isEmpty` /
+   `emptyShared`; only seed when the server genuinely has nothing.
 
 4. **`saveTimer` must be nulled when the debounce timer fires** (inside the
    `setTimeout` callback). The missed-timer recovery in `performSave`'s `finally` checks

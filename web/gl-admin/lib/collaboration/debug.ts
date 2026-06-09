@@ -9,6 +9,10 @@
  * Used to capture the disconnect → reconnect → resync sequence when diagnosing
  * the WS-restart instability. Every line is timestamped so client logs can be
  * aligned against the WS server's COLLAB_DEBUG logs on the same timeline.
+ *
+ * NOTE: uses `console.log`, NOT `console.debug` — Chrome's console hides debug-level
+ * messages unless "Verbose" is enabled in the level filter, which made these logs appear
+ * to be missing entirely even with the flag set. Keep it as `console.log`.
  */
 export function collabDebugEnabled(): boolean {
   try {
@@ -21,7 +25,7 @@ export function collabDebugEnabled(): boolean {
 export function collabDebug(...args: unknown[]): void {
   if (collabDebugEnabled()) {
     // eslint-disable-next-line no-console
-    console.debug(`[collab t=${Date.now()}]`, ...args)
+    console.log(`[collab t=${Date.now()}]`, ...args)
   }
 }
 

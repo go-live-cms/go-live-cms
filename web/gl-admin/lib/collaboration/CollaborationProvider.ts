@@ -1,6 +1,5 @@
 import { WebsocketProvider } from "y-websocket"
 import { Doc as YDoc } from "yjs"
-import { IndexeddbPersistence } from "y-indexeddb"
 import { authManager } from "../auth"
 import { collabDebug, collabDebugEnabled, contentFingerprint } from "./debug"
 
@@ -12,7 +11,6 @@ const DESTROY_DELAY_MS = 750
 export class CollaborationProvider {
   public doc: YDoc
   public provider: WebsocketProvider
-  public persistence: IndexeddbPersistence
   private postId: number
 
   static getInstance(postId: number): CollaborationProvider {
@@ -43,7 +41,13 @@ export class CollaborationProvider {
 
     this.doc = new YDoc()
 
-    this.persistence = new IndexeddbPersistence(`post-${postId}`, this.doc)
+    // NOTE: no client-side IndexedDB persistence. The WS server (LevelDB) is the SINGLE
+    // source of truth for the collaborative Yjs state. A client-side cache that survives
+    // reloads inevitably diverges from the server's rebuilt doc (different struct
+    // histories for the same content), and that divergence compounds on every reload —
+    // the root of the recurring "heartbeat"/content-erasure. Content also lives durably
+    // in Postgres (posts.block_doc) via the REST autosave, so dropping the local cache
+    // loses no data; the editor simply loads from the server on open.
 
     const user = authManager.getState().user
     const userInfo = {
@@ -73,21 +77,29 @@ export class CollaborationProvider {
 
     this.provider.on("status", () => {})
 
-    // Debug-gated instrumentation (localStorage GL_DEBUG_COLLAB=1) for diagnosing
-    // the WS-restart instability. Logs reconnect cadence + the prosemirror fragment
-    // fingerprint over time so we can see exactly when/why content reverts.
-    if (collabDebugEnabled()) {
+    // Debug instrumentation (localStorage GL_DEBUG_COLLAB=1) for diagnosing content
+    // reverts. The listeners are ALWAYS attached and re-check the flag at call time, so it
+    // can be toggled at runtime (set the flag, reload) without having to be set before this
+    // run-once constructor executed. The previous "if (enabled) attach" gating meant a flag
+    // set after page load produced no logs at all — which silently blinded earlier
+    // diagnosis. fp() (which serialises the fragment) only runs when the flag is on, so the
+    // disabled path stays cheap.
+    {
       const frag = this.doc.getXmlFragment("default")
       const fp = () => contentFingerprint(frag.toJSON())
-      collabDebug("provider created", `post-${postId}`, fp())
-      this.provider.on("status", (e: any) => collabDebug("ws status", e?.status, fp()))
-      this.provider.on("sync", (isSynced: boolean) =>
-        collabDebug("provider sync", isSynced, "wsconnected", this.provider.wsconnected, fp())
-      )
-      this.provider.on("connection-error", (e: any) =>
-        collabDebug("connection-error", e?.message || String(e))
-      )
+      if (collabDebugEnabled()) collabDebug("provider created", `post-${postId}`, fp())
+      this.provider.on("status", (e: any) => {
+        if (collabDebugEnabled()) collabDebug("ws status", e?.status, fp())
+      })
+      this.provider.on("sync", (isSynced: boolean) => {
+        if (collabDebugEnabled())
+          collabDebug("provider sync", isSynced, "wsconnected", this.provider.wsconnected, fp())
+      })
+      this.provider.on("connection-error", (e: any) => {
+        if (collabDebugEnabled()) collabDebug("connection-error", e?.message || String(e))
+      })
       this.doc.on("update", (_update: Uint8Array, origin: unknown) => {
+        if (!collabDebugEnabled()) return
         const originName =
           origin == null ? "local" : (origin as any)?.constructor?.name ?? String(origin)
         collabDebug("doc update", "origin", originName, fp())
@@ -96,14 +108,14 @@ export class CollaborationProvider {
   }
 
   /**
-   * Resolves once the IndexedDB persistence has finished its initial load into the
-   * Y.Doc. Callers MUST await this before deciding whether to seed the editor from a
-   * non-Yjs source (the REST working copy): otherwise the doc can look empty on the WS
-   * "synced" tick while IndexedDB is still loading, and a setContent seed would mint
-   * fresh structs that then collide with IndexedDB's — diverging the document.
+   * Kept for API compatibility with the seed path in Editor.tsx. There is no longer a
+   * client-side IndexedDB layer to wait for — the WS `synced` event (which already gates
+   * the seed in onSynced) is the single signal that the server's authoritative state has
+   * loaded into the Y.Doc. So this resolves immediately; the seed decision is made purely
+   * on `editor.isEmpty` after WS sync.
    */
   get whenSynced(): Promise<unknown> {
-    return this.persistence.whenSynced
+    return Promise.resolve()
   }
 
   private generateUserColor(userId: number): string {
@@ -116,7 +128,6 @@ export class CollaborationProvider {
 
     this.provider?.disconnect()
     this.provider?.destroy()
-    this.persistence?.destroy()
     this.doc?.destroy()
   }
 
@@ -129,7 +140,6 @@ export class CollaborationProvider {
         if (!inst) return
         inst.provider?.disconnect()
         inst.provider?.destroy()
-        inst.persistence?.destroy()
         inst.doc?.destroy()
         activeProviders.delete(postId)
         releaseTimers.delete(postId)

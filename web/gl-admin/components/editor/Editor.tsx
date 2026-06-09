@@ -301,12 +301,11 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
       hasInitializedRef.current = true
       if (import.meta.env.DEV) console.debug("[Editor] onSynced — running one-time content load")
 
-      // Wait for IndexedDB to finish its initial load before deciding whether to seed.
-      // On the WS "synced" tick IndexedDB may not have applied yet, so the editor can
-      // look empty even though it has cached content. Seeding then would mint fresh Yjs
-      // structs that collide with IndexedDB's once it loads — diverging the doc (spurious
-      // saves, content/image erased, worse on every reload). After this await the
-      // emptiness checks below reflect the real, fully-restored state.
+      // There is no longer a client-side IndexedDB cache; the WS "synced" event we are
+      // inside is the single signal that the server's authoritative Yjs state has loaded
+      // into the doc. So `whenSynced` resolves immediately and the emptiness checks below
+      // reflect the real, fully-restored state — we only seed from the REST working copy
+      // when the server genuinely has nothing. (await kept for API symmetry / future use.)
       try {
         await collabProvider.whenSynced
       } catch {
