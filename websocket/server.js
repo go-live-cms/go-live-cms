@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { WebSocketServer } from "ws";
-import { setupWSConnection, setPersistence } from "y-websocket/bin/utils";
+import { setupWSConnection, setPersistence, docs } from "y-websocket/bin/utils";
 import { LeveldbPersistence } from "y-leveldb";
 import * as Y from "yjs";
 import { evaluatePersistedState } from "./persistence.js";
@@ -28,7 +28,14 @@ const COLLAB_DEBUG = (process.env.COLLAB_DEBUG || "").trim() === "1";
 const collabDebug = (...args) => {
   if (COLLAB_DEBUG) console.debug(`[collab t=${Date.now()}]`, ...args);
 };
-const docLen = (ydoc) => ydoc.getXmlFragment("prosemirror").length;
+// The editor binds the @tiptap/extension-collaboration document to the "default"
+// XmlFragment (NOT "prosemirror"). Measuring "prosemirror" always returned 0, making
+// every server-side length log meaningless during past diagnosis. Measure "default".
+const docLen = (ydoc) => ydoc.getXmlFragment("default").length;
+
+// Derive the Yjs document name (e.g. "post-2892") from the upgrade request URL, the
+// same way y-websocket's setupWSConnection does, so we can correlate connection counts.
+const docNameFromReq = (req) => (req.url || "/").slice(1).split("?")[0].split("#")[0];
 
 console.log("🔍 Environment debug:");
 console.log("   - process.env.HOST:", process.env.HOST);
@@ -155,9 +162,26 @@ setPersistence({
     Y.applyUpdate(ydoc, result.update, PERSISTENCE_ORIGIN);
     collabDebug("bindState applied persisted state", docName, "liveDocLen", docLen(ydoc));
   },
-  writeState: async (_docName, _ydoc) => {
-    // No-op: updates are written incrementally in the bindState update listener.
-    // writeState fires when the last client disconnects; nothing extra needed here.
+  writeState: async (docName, _ydoc) => {
+    // Compact the append-only update log into a single snapshot when the last client
+    // disconnects. Updates are written incrementally by the bindState listener, but that
+    // log was ONLY ever squashed on publish — so across a session it grew unbounded, and
+    // because y-websocket destroys + rebuilds the in-memory doc from the FULL log every
+    // time the client count hits zero (which a browser reload does), every reconnect
+    // replayed an ever-larger history. When that history contains divergent struct sets
+    // for the same content (e.g. legacy pre-fix re-seeds), the rebuilt doc oscillates and
+    // the editor never converges — the "gets worse on every reload" erasure. flushDocument
+    // merges all stored updates for this doc into one, keeping the replayed state compact
+    // and stable. It does NOT drop content (CRDT merge), only collapses the log.
+    try {
+      await ldb.flushDocument(docName);
+      collabDebug("writeState flushed", docName);
+    } catch (err) {
+      console.error(
+        `⚠️  Failed to flush ${docName} on last disconnect:`,
+        err?.message || err
+      );
+    }
   },
 });
 
@@ -201,9 +225,12 @@ const server = http.createServer(async (req, res) => {
 
 const wss = new WebSocketServer({ noServer: true });
 wss.on("connection", (ws, req) => {
+  const docName = docNameFromReq(req);
   console.log(
     "✅ WebSocket connection established for user:",
     req.auth?.username || "unknown",
+    "doc:",
+    docName,
   );
 
   // Keep connection alive to prevent idle disconnects behind proxies
@@ -219,9 +246,21 @@ wss.on("connection", (ws, req) => {
 
   ws.on("close", () => {
     clearInterval(keepAliveInterval);
+    // Log AFTER y-websocket has removed this conn so the count reflects survivors.
+    setTimeout(() => {
+      const remaining = docs.get(docName)?.conns.size ?? 0;
+      console.log(`🔌 WS close — doc: ${docName} | live connections now: ${remaining}`);
+    }, 0);
   });
 
   setupWSConnection(ws, req);
+
+  // Always-on (not COLLAB_DEBUG-gated) so we can spot a runaway client count: a single
+  // editor tab must show exactly 1 live connection per post. More than 1 with one tab
+  // open means a zombie/duplicate binder is fighting over the doc — the kind of thing
+  // that produces an unkillable server-vs-editor tug-of-war.
+  const liveConns = docs.get(docName)?.conns.size ?? 0;
+  console.log(`🔗 WS open — doc: ${docName} | live connections now: ${liveConns}`);
 });
 
 server.on("upgrade", async (req, socket, head) => {
