@@ -1,7 +1,7 @@
 import { WebsocketProvider } from "y-websocket"
 import { Doc as YDoc } from "yjs"
 import { authManager } from "../auth"
-import { collabDebug, collabDebugEnabled, contentFingerprint } from "./debug"
+import { collabDebug, collabDebugEnabled, contentFingerprint, fragmentStructure } from "./debug"
 
 const activeProviders = new Map<number, CollaborationProvider>()
 const refCounts = new Map<number, number>()
@@ -102,7 +102,7 @@ export class CollaborationProvider {
         if (!collabDebugEnabled()) return
         const originName =
           origin == null ? "local" : (origin as any)?.constructor?.name ?? String(origin)
-        collabDebug("doc update", "origin", originName, fp())
+        collabDebug("doc update", "origin", originName, fp(), "|", fragmentStructure(frag))
       })
     }
   }

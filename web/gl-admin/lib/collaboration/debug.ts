@@ -35,6 +35,37 @@ export function collabDebug(...args: unknown[]): void {
  * input. JSON.stringify can throw (circular refs, BigInt), so it's wrapped — debug
  * instrumentation must never be able to crash the app when GL_DEBUG_COLLAB is on.
  */
+/**
+ * Compact, per-top-level-node summary of a Y.XmlFragment so we can see WHICH block
+ * appears/disappears/changes id between a local edit and a server push (the fingerprint
+ * only gives a total length+hash, which can't localise a divergence). Renders each child
+ * as `nodeName#blockIdPrefix(serialisedLen)`, e.g. `paragraph#a1b2c3(45) image#—(0)`.
+ * Defensive: instrumentation must never throw.
+ */
+export function fragmentStructure(frag: unknown): string {
+  try {
+    const f = frag as { toArray?: () => unknown[] }
+    const children = typeof f?.toArray === "function" ? f.toArray() : []
+    if (children.length === 0) return "(empty)"
+    return children
+      .map((c) => {
+        const el = c as {
+          nodeName?: string
+          getAttribute?: (k: string) => unknown
+          toString?: () => string
+        }
+        const name = el?.nodeName ?? "text"
+        const id = typeof el?.getAttribute === "function" ? el.getAttribute("data-block-id") : null
+        const idShort = id ? String(id).slice(0, 6) : "—"
+        const len = typeof el?.toString === "function" ? el.toString().length : 0
+        return `${name}#${idShort}(${len})`
+      })
+      .join(" ")
+  } catch (e) {
+    return `<structerr ${String(e)}>`
+  }
+}
+
 export function contentFingerprint(value: unknown): string {
   let text: string
   if (typeof value === "string") {
