@@ -50,18 +50,29 @@ export const BlockIdExtension = Extension.create({
           let tr = newState.tr
           let hasChanges = false
 
-          let pos = 0
-          newState.doc.content.forEach((node, offset, index) => {
-            const currentId = node.attrs["data-block-id"]
+          // Track ids already seen in THIS pass so we can regenerate DUPLICATES, not
+          // just missing/too-short ids. Splitting a block (pressing Enter) copies the
+          // origin node's attributes — including data-block-id — onto the new node, so a
+          // single keystroke silently mints a duplicate id. Duplicates are corrupting: the
+          // block_doc `blocks` map is keyed by id, so two blocks sharing an id collapse to
+          // one (the other is lost) on every save, and any id-based reconciliation then
+          // fights itself. The old guard (`!currentId || length < 10`) never caught this.
+          const seenIds = new Set<string>()
 
-            // Only assign ID if node doesn't have a valid one
-            if (!currentId || typeof currentId !== "string" || currentId.length < 10) {
-              // Generate a truly unique ID for new nodes
+          let pos = 0
+          newState.doc.content.forEach((node) => {
+            const currentId = node.attrs["data-block-id"]
+            const invalid = !currentId || typeof currentId !== "string" || currentId.length < 10
+            const duplicate = !invalid && seenIds.has(currentId as string)
+
+            if (invalid || duplicate) {
               const newId = generateBlockId()
               const attrs = { ...node.attrs, "data-block-id": newId }
-
               tr = tr.setNodeMarkup(pos, node.type, attrs, node.marks)
               hasChanges = true
+              seenIds.add(newId)
+            } else {
+              seenIds.add(currentId as string)
             }
 
             pos += node.nodeSize
