@@ -1,5 +1,6 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
+import { isChangeOrigin } from "@tiptap/extension-collaboration"
 
 const blockIdPluginKey = new PluginKey("blockId")
 
@@ -31,6 +32,20 @@ export const BlockIdExtension = Extension.create({
         appendTransaction(transactions, oldState, newState) {
           const docChanged = transactions.some((tr) => tr.docChanged)
           if (!docChanged) return null
+
+          // CRITICAL (collab): never assign block IDs in response to a change that came
+          // from the collaboration sync (a remote Yjs update applied by ySyncPlugin).
+          // crypto.randomUUID() produces a different id every call, so reacting to a
+          // remote update by minting a new id is a *new local* transaction that mirrors
+          // straight back into Yjs and is sent to the server; the next 2s resync delivers
+          // the server's version again, we mint again, forever. That feedback loop is the
+          // "heartbeat" — the editor and server ping-pong (PluginKey ↔ WebsocketProvider),
+          // never converge, and the delete-war erases the user's text and images. Block
+          // IDs for remote content arrive over the wire as synced node attributes; only
+          // the client that ORIGINATES a node needs to assign one, and pmToBlockDoc
+          // backfills any still-missing id at save time. isChangeOrigin() is TipTap's
+          // official "did this transaction come from Yjs?" check.
+          if (transactions.some((tr) => isChangeOrigin(tr))) return null
 
           let tr = newState.tr
           let hasChanges = false
