@@ -87,6 +87,18 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
    re-fires on every reconnect; without the guard, reconnects re-run `setContent` and
    clobber in-progress typing. The persistence manager has its own `hasInitialized`.
 
+7. **Editor plugins with `appendTransaction` (or `filterTransaction`) MUST ignore
+   collaboration-sync transactions.** `components/editor/extensions/BlockIdExtension.ts`
+   assigns `data-block-id`s; it ran on *every* `docChanged`, including the transactions
+   `ySyncPlugin` dispatches for **remote** Yjs updates, and minted a fresh
+   `crypto.randomUUID()` each time. That made a sync→appendTransaction→sync feedback loop
+   (random ids never converge) — a primary driver of the "heartbeat" content/image
+   erasure, distinct from rule 0. Guard with TipTap's `isChangeOrigin(tr)` (from
+   `@tiptap/extension-collaboration`): `if (transactions.some(tr => isChangeOrigin(tr)))
+   return null`. Only the client that originates a node assigns its id; remote ids arrive
+   as synced attributes and `pmToBlockDoc` backfills any missing at save time. Any future
+   doc-mutating plugin must do the same.
+
 ## State machine flags (BlockPersistenceManager)
 
 `isInitializing` (load latch, cleared 500ms after init in `finally`) · `isSaving`
