@@ -40,8 +40,14 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
 - TipTap is on **v3** (breaking from v2). `setContent`'s 2nd arg is an options object
   `{ emitUpdate }` — NOT the v2 boolean. `emitUpdate:false` only suppresses TipTap's
   `update` event; the collaboration ySyncPlugin still mirrors content to Yjs regardless.
-- StarterKit ships its own history → it conflicts with `@tiptap/extension-collaboration`
-  (a console warning). Disable StarterKit history when collab is on (open follow-up).
+- StarterKit's bundled undo/redo is **disabled when collaborating** (`undoRedo:
+  collabProvider ? false : undefined` in `editor/utils/extensions.ts`, #197) —
+  Collaboration ships its own Yjs-aware history. Keep it for non-collab editors.
+- **`yjs` is pinned to `13.6.31` (exact, no `^`) and must match `websocket/`'s pin.**
+  The two packages have separate lockfiles; loose ranges drifted apart once and
+  contributed to collab data corruption. See
+  `gl-admin/lib/collaboration/CLAUDE.md` rule 8 and `websocket/CLAUDE.md`'s top gotcha
+  (dual ESM/CJS instance) before touching any yjs-family dependency.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 </content>

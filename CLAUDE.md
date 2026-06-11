@@ -94,4 +94,11 @@ docker compose -f compose.dev.yaml restart websocket   # e.g. to test reconnects
 - The collaborative editor is the most sensitive subsystem and **now has test
   coverage** (added under #202 / PR #203). Read
   `web/gl-admin/lib/collaboration/CLAUDE.md` before touching it.
+- **The 2026-06 collab data-loss saga is RESOLVED** (PR #204): a stack of five real
+  bugs, the decisive one being a **dual yjs instance (ESM+CJS double-load) inside the
+  websocket server** — `npm ls` showed one deduped copy, but the ESM `import` and
+  y-websocket's CJS `require` each evaluated their own build, and cross-instance
+  `Y.applyUpdate` corrupted live docs. Details + guards: `websocket/CLAUDE.md` (top
+  gotcha) and `web/gl-admin/lib/collaboration/CLAUDE.md` (hard rules 0–8). `yjs` is
+  pinned `13.6.31` exact in BOTH `web/` and `websocket/` — keep them in lockstep.
 </content>
