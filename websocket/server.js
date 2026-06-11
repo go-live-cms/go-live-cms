@@ -1,14 +1,49 @@
 import "dotenv/config";
 import { WebSocketServer } from "ws";
-import { setupWSConnection, setPersistence, docs } from "y-websocket/bin/utils";
-import { LeveldbPersistence } from "y-leveldb";
-import * as Y from "yjs";
+import { createRequire } from "node:module";
 import { evaluatePersistedState } from "./persistence.js";
 import { URL } from "url";
 import { V4 } from "paseto";
 import { createPublicKey } from "crypto";
 import http from "http";
 import fs from "fs";
+
+// CRITICAL — single-yjs-instance rule (the root cause of the editor data-loss bugs):
+// yjs and y-leveldb ship BOTH ESM and CJS builds. y-websocket's server utils
+// (bin/utils.cjs) are CJS, so their require("yjs") loads dist/yjs.cjs. An ESM
+// `import * as Y from "yjs"` here loads dist/yjs.mjs — the SAME package evaluated a
+// SECOND time, with a separate class registry. Yjs itself warns at startup:
+//   "Yjs was already imported. This breaks constructor checks and will lead to
+//    issues!" (https://github.com/yjs/yjs/issues/438)
+// The damage: bindState's Y.applyUpdate (ESM build) onto the WSSharedDoc (CJS build)
+// fails yjs's internal constructor checks and silently mis-integrates, structurally
+// corrupting the live doc. Symptom: the doc "wedges" — it stops integrating a client's
+// updates (structural edits like Enter-splits / paragraph→heading trigger it), and the
+// 2s resync then resets that client's editor to the wedged state, erasing typed content.
+// So: load yjs / y-leveldb / bin/utils through createRequire so this whole process
+// shares the single CJS instance. The startup probe below hard-fails on regression.
+const require = createRequire(import.meta.url);
+const { setupWSConnection, setPersistence, docs, getYDoc } = require("y-websocket/bin/utils");
+const { LeveldbPersistence } = require("y-leveldb");
+const Y = require("yjs");
+
+// Fail fast if two yjs builds are ever loaded again (e.g. someone reverts the requires
+// above to ESM imports). A doc created by y-websocket's utils must be an instance of OUR
+// Y.Doc — if not, every cross-instance call corrupts documents, which is far worse than
+// a server that refuses to boot. Runs before setPersistence so bindState isn't invoked.
+{
+  const probe = getYDoc("__yjs-instance-probe__");
+  const sameInstance = probe instanceof Y.Doc;
+  probe.destroy();
+  docs.delete("__yjs-instance-probe__");
+  if (!sameInstance) {
+    console.error(
+      "❌ FATAL: two yjs instances are loaded (ESM/CJS dual import). " +
+        "All yjs-family packages must resolve to the same build — see the comment above this check.",
+    );
+    process.exit(1);
+  }
+}
 
 const HOST = process.env.HOST || "localhost";
 const PORT = Number(process.env.PORT) || 1234;
