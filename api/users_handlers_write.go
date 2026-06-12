@@ -167,6 +167,10 @@ func (server *Server) updateUser(c *gin.Context) {
 
 	// Last-admin guard: demoting the only remaining admin would leave the
 	// site with no account able to manage users, themes, or settings.
+	// Known race: the count runs outside the update/delete transaction, so
+	// two concurrent admin-removing operations (demote+demote, demote+delete)
+	// can each see count=2 and end at zero admins. Accepted until a
+	// transactional guard (count FOR UPDATE inside the Tx) is warranted.
 	demotingAdmin := req.Role != "" &&
 		strings.EqualFold(existingUser.Role, RoleAdmin) &&
 		!strings.EqualFold(req.Role, RoleAdmin)
@@ -284,6 +288,7 @@ func (server *Server) deleteUser(c *gin.Context) {
 
 	// Last-admin guard: deleting the only remaining admin would leave the
 	// site with no account able to manage users, themes, or settings.
+	// Same non-transactional race as the demote guard in updateUser above.
 	if strings.EqualFold(targetUser.Role, RoleAdmin) {
 		adminCount, err := server.store.CountUsersByRole(c.Request.Context(), RoleAdmin)
 		if err != nil {

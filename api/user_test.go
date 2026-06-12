@@ -574,6 +574,35 @@ func TestUpdateUserAPI(t *testing.T) {
 			},
 		},
 		{
+			name:   "InternalErrorAdminCountOnDemote",
+			userID: user.ID + 50,
+			body: gin.H{
+				"role": "contributor",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID+50, "admin_caller", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				adminCaller := randomUserNew()
+				adminCaller.ID = user.ID + 50
+				adminCaller.Role = RoleAdmin
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).
+					Times(2).
+					Return(adminCaller, nil)
+				store.EXPECT().
+					CountUsersByRole(gomock.Any(), gomock.Eq(RoleAdmin)).
+					Times(1).
+					Return(int64(0), fmt.Errorf("connection refused"))
+				store.EXPECT().
+					UpdateUserTx(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+		{
 			name:   "OK_DemoteAdminWhenAnotherExists",
 			userID: user.ID + 51,
 			body: gin.H{
@@ -872,6 +901,30 @@ func TestDeleteUserAPI(t *testing.T) {
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusConflict, recorder.Code)
+			},
+		},
+		{
+			name:   "InternalErrorAdminCountOnDelete",
+			userID: adminUser.ID,
+			body:   gin.H{},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
+					Times(2).
+					Return(adminUser, nil)
+				store.EXPECT().
+					CountUsersByRole(gomock.Any(), gomock.Eq(RoleAdmin)).
+					Times(1).
+					Return(int64(0), fmt.Errorf("connection refused"))
+				store.EXPECT().
+					DeleteUserTx(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
 			},
 		},
 		{
