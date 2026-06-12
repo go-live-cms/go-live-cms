@@ -6,17 +6,17 @@ import "github.com/gin-gonic/gin"
 func (server *Server) RegisterSettingsRoutes(rg *gin.RouterGroup) {
 	settings := rg.Group("/settings")
 	{
-		// Core settings (singleton)
+		// Core settings (singleton; writes are admin only)
 		settings.GET("", server.getSettings)
-		settings.PUT("", authMiddleware(server.tokenMaker), server.updateSettings)
+		settings.PUT("", authMiddleware(server.tokenMaker), requireSiteAdmin(server), server.updateSettings)
 	}
 
 	extensionSettings := rg.Group("/extension-settings")
 	{
-		// Extension settings (key-value)
+		// Extension settings (key-value; writes are admin only)
 		extensionSettings.GET("", server.listExtensionSettings)
 		extensionSettings.GET("/:key", server.getExtensionSetting)
-		extensionSettings.PUT("", authMiddleware(server.tokenMaker), server.upsertExtensionSetting)
-		extensionSettings.DELETE("/:key", authMiddleware(server.tokenMaker), server.deleteExtensionSetting)
+		extensionSettings.PUT("", authMiddleware(server.tokenMaker), requireSiteAdmin(server), server.upsertExtensionSetting)
+		extensionSettings.DELETE("/:key", authMiddleware(server.tokenMaker), requireSiteAdmin(server), server.deleteExtensionSetting)
 	}
 }

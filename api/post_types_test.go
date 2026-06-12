@@ -155,6 +155,29 @@ func TestCreatePostTypeAPI(t *testing.T) {
 			},
 		},
 		{
+			name: "ForbiddenEditor",
+			body: gin.H{
+				"name":  "product",
+				"label": "Products",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID+5, "editor_caller", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				// requireSiteAdmin rejects the editor: post-type writes are admin only
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(user.ID+5)).
+					Times(1).
+					Return(db.User{ID: user.ID + 5, Username: "editor_caller", Role: "editor"}, nil)
+				store.EXPECT().
+					UpsertPostType(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
 			name: "SystemTypeBlocked",
 			body: gin.H{
 				"name":  "post",
@@ -245,6 +268,9 @@ func TestCreatePostTypeAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			adminCaller := user
+			adminCaller.Role = "admin"
+			stubRoleLookup(store, adminCaller)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -352,6 +378,9 @@ func TestUpdatePostTypeAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			adminCaller := user
+			adminCaller.Role = "admin"
+			stubRoleLookup(store, adminCaller)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
