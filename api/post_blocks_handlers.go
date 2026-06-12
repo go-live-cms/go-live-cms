@@ -231,6 +231,12 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 	// Deduplicate blocks_order to prevent duplicate rendering
 	req.Doc.deduplicateBlocksOrder()
 
+	// Sanitize the block tree before it is persisted (stored-XSS defence, #188).
+	// Neutralises dangerous link/image URL schemes, on* handler attrs, disallowed
+	// node types, and unsafe highlight colors. Best-effort, never rejects the save.
+	// publishPost reads this already-sanitized working copy, so it's covered too.
+	req.Doc.sanitize()
+
 	// Validate Block Spec v1
 	if req.Doc.DocVersion != 1 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unsupported doc_version: %d", req.Doc.DocVersion)})

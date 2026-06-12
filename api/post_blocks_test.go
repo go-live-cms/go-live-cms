@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -321,6 +322,44 @@ func TestUpdatePostBlocksAPI(t *testing.T) {
 			tc.checkResponse(recorder)
 		})
 	}
+}
+
+// TestUpdatePostBlocksSanitizesOnSave verifies the sanitizer (#188) runs in the
+// save path: a javascript: link href in the posted block doc must be stripped
+// before the document is persisted.
+func TestUpdatePostBlocksSanitizesOnSave(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	store := mockdb.NewMockStore(ctrl)
+
+	body := `{"doc":{"doc_version":1,"blocks_order":["b1"],"blocks":{"b1":{"id":"b1","type":"paragraph","version":1,"attrs":{"pm":{"type":"paragraph","content":[{"type":"text","text":"click","marks":[{"type":"link","attrs":{"href":"javascript:alert(1)"}}]}]}}}}}}`
+
+	store.EXPECT().
+		UpdatePostBlocksIfRevisionMatches(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, params db.UpdatePostBlocksIfRevisionMatchesParams) (db.UpdatePostBlocksIfRevisionMatchesRow, error) {
+			require.NotContains(t, string(params.BlockDoc), "javascript:",
+				"sanitizer must strip the javascript: href before persisting")
+			return db.UpdatePostBlocksIfRevisionMatchesRow{Content: params.BlockDoc, Revision: 2}, nil
+		}).
+		Times(1)
+
+	// syncPostMediaAssociations runs after the save; no images → just lists media.
+	store.EXPECT().
+		GetMediaByPostWithOrder(gomock.Any(), int64(1)).
+		Return([]db.GetMediaByPostWithOrderRow{}, nil).
+		Times(1)
+
+	server := newTestServer(t, store)
+	recorder := httptest.NewRecorder()
+
+	request, err := http.NewRequest(http.MethodPut, "/api/v1/posts/1/blocks", bytes.NewReader([]byte(body)))
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("If-Match", "1")
+	addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, 1, "testuser", time.Minute)
+
+	server.router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
 }
 
 func TestPublishPostAPI(t *testing.T) {
