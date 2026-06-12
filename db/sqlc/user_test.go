@@ -95,6 +95,19 @@ func TestCreateUser(t *testing.T) {
 	require.NotEmpty(t, user)
 }
 
+func TestCountUsersByRole(t *testing.T) {
+	user := createTestUser(t) // role "contributor"
+
+	count, err := testQueries.CountUsersByRole(context.Background(), user.Role)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, count, int64(1))
+
+	// The comparison is case-insensitive on both sides
+	upper, err := testQueries.CountUsersByRole(context.Background(), strings.ToUpper(user.Role))
+	require.NoError(t, err)
+	require.Equal(t, count, upper)
+}
+
 func TestGetUser(t *testing.T) {
 	user1 := createTestUser(t)
 	user2, err := testQueries.GetUser(context.Background(), user1.ID)

@@ -21,6 +21,18 @@ func (q *Queries) CountTotalUsers(ctx context.Context) (int64, error) {
 	return total, err
 }
 
+const countUsersByRole = `-- name: CountUsersByRole :one
+SELECT COUNT(*) AS total FROM users
+WHERE lower(role) = lower($1)
+`
+
+func (q *Queries) CountUsersByRole(ctx context.Context, role string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUsersByRole, role)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
     username,

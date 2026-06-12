@@ -30,6 +30,7 @@ type Querier interface {
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
+	CountUsersByRole(ctx context.Context, role string) (int64, error)
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
