@@ -35,7 +35,7 @@ func randomUserForSessions() db.User {
 		HashedPassword:    hashedPassword,
 		PasswordChangedAt: gofakeit.Date(),
 		CreatedAt:         gofakeit.Date(),
-		Role:              "user",
+		Role:              "contributor",
 	}
 }
 

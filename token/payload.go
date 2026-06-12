@@ -36,15 +36,20 @@ var (
 //   - IssuedAt: When the token was created (for audit trails)
 //   - ExpiredAt: When the token expires (for validation)
 //   - TokenType: Distinguishes between "access" and "refresh" tokens
+//   - Role: INFORMATIONAL role snapshot from login time. Never use it for
+//     authorization — it goes stale on demotion and is empty on
+//     renewal-issued tokens; enforcement reads the role from the DB
+//     (api requireRole).
 //
 // JSON tags enable serialization for PASETO token bodies.
 type Payload struct {
-	ID        uuid.UUID `json:"id"`         // Unique token identifier
-	UserID    int64     `json:"user_id"`    // User's database ID
-	Username  string    `json:"username"`   // User's username
-	IssuedAt  time.Time `json:"issued_at"`  // Token creation time
-	ExpiredAt time.Time `json:"expired_at"` // Token expiration time
-	TokenType string    `json:"token_type"` // "access" or "refresh"
+	ID        uuid.UUID `json:"id"`             // Unique token identifier
+	UserID    int64     `json:"user_id"`        // User's database ID
+	Username  string    `json:"username"`       // User's username
+	IssuedAt  time.Time `json:"issued_at"`      // Token creation time
+	ExpiredAt time.Time `json:"expired_at"`     // Token expiration time
+	TokenType string    `json:"token_type"`     // "access" or "refresh"
+	Role      string    `json:"role,omitempty"` // Informational login-time role
 }
 
 // NewPayload creates a new token payload with the specified parameters.

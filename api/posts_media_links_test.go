@@ -143,6 +143,7 @@ func TestCreatePostMediaAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -344,6 +345,7 @@ func TestDeletePostMediaAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()

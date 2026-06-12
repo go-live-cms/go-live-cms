@@ -21,10 +21,12 @@ import (
 	"database/sql"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-live-cms/go-live-cms/token"
 	"github.com/go-live-cms/go-live-cms/util"
 )
 
@@ -38,7 +40,7 @@ import (
 //   - email: Valid email address
 //   - full_name: User's display name (2-100 chars)
 //   - password: Secure password (min 6 chars)
-//   - role: User role (user|admin|moderator)
+//   - role: User role (admin|editor|contributor)
 //
 // Authentication: Required (Bearer token + admin role)
 //
@@ -90,8 +92,11 @@ func (server *Server) createUser(c *gin.Context) {
 
 // updateUser modifies existing user account data with validation.
 //
-// Administrative endpoint for user profile updates including password changes.
-// Enforces unique constraints and provides atomic transaction support.
+// Self-or-admin endpoint: users may update their own profile, admins may
+// update anyone. Changing the role field is admin-only — a self-updater
+// sending "role" is rejected even with their current value, closing the
+// privilege-escalation hole where any authenticated user could promote
+// themselves.
 //
 // Path parameters:
 //   - id: User's database primary key
@@ -101,15 +106,15 @@ func (server *Server) createUser(c *gin.Context) {
 //   - full_name: Updated display name
 //   - email: New email address
 //   - password: New password (triggers hash update)
-//   - role: Updated role assignment
+//   - role: Updated role assignment (admin-only)
 //
-// Authentication: Required (Bearer token + admin role)
+// Authentication: Required (Bearer token; caller must be the target user or an admin)
 //
 // Returns:
 //   - 200 OK: User successfully updated
 //   - 400 Bad Request: Invalid user ID or request data
 //   - 401 Unauthorized: Invalid authentication token
-//   - 403 Forbidden: Insufficient permissions (non-admin)
+//   - 403 Forbidden: Not the account owner, or non-admin changing a role
 //   - 404 Not Found: User does not exist
 //   - 409 Conflict: Username or email already exists
 //   - 500 Internal Server Error: Database transaction failure
@@ -124,6 +129,28 @@ func (server *Server) updateUser(c *gin.Context) {
 	var req UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Self-or-admin check against the caller's CURRENT DB role (the token
+	// payload carries no trusted role information).
+	auth := c.MustGet(authorizationPayloadKey).(*token.Payload)
+	caller, err := server.store.GetUser(c.Request.Context(), auth.UserID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify user role"})
+		return
+	}
+	isAdmin := strings.EqualFold(caller.Role, RoleAdmin)
+	if !isAdmin && auth.UserID != id {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	if !isAdmin && req.Role != "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "only admins can change roles"})
 		return
 	}
 

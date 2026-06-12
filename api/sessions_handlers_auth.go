@@ -99,10 +99,21 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
-	// Generate access token
-	accessToken, err := server.tokenMaker.CreateToken(
+	// The v4 maker is needed both for the role-claim token below and for
+	// parsing the refresh token's JTI further down.
+	v4Maker, ok := server.tokenMaker.(*token.PasetoV4Maker)
+	if !ok {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrInvalidTokenType})
+		return
+	}
+
+	// Generate access token. Login is the one place with the fresh DB user in
+	// scope, so it embeds the informational role claim; renewal-issued tokens
+	// omit it. Enforcement always re-reads the role from the DB.
+	accessToken, err := v4Maker.CreateTokenWithRole(
 		user.ID,
 		user.Username,
+		user.Role,
 		server.config.AccessTokenDuration,
 	)
 	if err != nil {
@@ -124,13 +135,6 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	// Extract session details
 	userAgent := ctx.GetHeader("User-Agent")
 	clientIP := ctx.ClientIP()
-
-	// Parse refresh token for JTI
-	v4Maker, ok := server.tokenMaker.(*token.PasetoV4Maker)
-	if !ok {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrInvalidTokenType})
-		return
-	}
 
 	refreshParsed, err := v4Maker.ParseRefresh(refreshToken)
 	if err != nil {

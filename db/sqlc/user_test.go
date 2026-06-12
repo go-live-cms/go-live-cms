@@ -25,7 +25,7 @@ func createTestUser(t *testing.T) User {
 	email := fmt.Sprintf("%d_%s", timestamp, gofakeit.Email())
 	fullName := gofakeit.Name()
 	hashedPassword := gofakeit.Password(true, true, true, true, false, 32)
-	role := "user"
+	role := "contributor"
 
 	if username == "" || strings.TrimSpace(username) == "" {
 		username = fmt.Sprintf("testuser_%d", timestamp)
