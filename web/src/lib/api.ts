@@ -1,7 +1,9 @@
 import type { Post, PostSortOption, PaginationParams, ApiResponse } from "../../gl-admin/lib/api/types"
 
 const isDocker = typeof window === "undefined" || process.env.NODE_ENV === "development"
-const API_BASE = isDocker && typeof window === "undefined" ? "http://api:8080/api/v1" : "/api/v1"
+const API_BASE = isDocker && typeof window === "undefined"
+  ? (import.meta.env.SERVER_API_URL || "http://api:8080/api/v1")
+  : "/api/v1"
 
 console.log("Frontend API_BASE:", API_BASE)
 

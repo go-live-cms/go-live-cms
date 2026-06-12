@@ -10,6 +10,8 @@ import react from "@astrojs/react"
 
 import tailwindcss from "@tailwindcss/vite"
 
+const serverApiUrl = (process.env.SERVER_API_URL || "http://api:8080/api/v1").replace(/\/api\/v1\/?$/, "")
+
 // https://astro.build/config
 export default defineConfig({
   site: "https://example.com",
@@ -28,13 +30,13 @@ export default defineConfig({
       proxy: {
         // Proxy uploads to Go API - use the Docker service name
         "/uploads": {
-          target: "http://api:8080", // Use Docker service name instead of localhost
+          target: serverApiUrl,
           changeOrigin: true,
           secure: false,
         },
         // Proxy API calls to Go API
         "/api": {
-          target: "http://api:8080", // Use Docker service name instead of localhost
+          target: serverApiUrl,
           changeOrigin: true,
           secure: false,
         },
