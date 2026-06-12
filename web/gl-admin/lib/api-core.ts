@@ -14,8 +14,9 @@ import type {
 } from "./types"
 
 const isDocker = typeof window === "undefined" || process.env.NODE_ENV === "development"
-const API_BASE = isDocker && typeof window === "undefined" ? "http://api:8080/api/v1" : "/api/v1"
-const MEDIA_BASE = isDocker && typeof window === "undefined" ? "http://api:8080" : ""
+const _serverApiUrl = import.meta.env.SERVER_API_URL || "http://api:8080/api/v1"
+const API_BASE = isDocker && typeof window === "undefined" ? _serverApiUrl : "/api/v1"
+const MEDIA_BASE = isDocker && typeof window === "undefined" ? _serverApiUrl.replace(/\/api\/v1\/?$/, "") : ""
 
 console.log("API_BASE:", API_BASE)
 console.log("MEDIA_BASE:", MEDIA_BASE)

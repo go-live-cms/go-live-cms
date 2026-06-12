@@ -22,18 +22,15 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
-      - "8080:8080"
+      - "127.0.0.1:${HOST_API_PORT:-8080}:${HOST_API_PORT:-8080}"
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - ./app.env
     environment:
       DB_SOURCE: postgresql://root:secret@postgres:5432/golive_cms?sslmode=disable
       DB_DRIVER: postgres
-      SERVER_ADDRESS: "0.0.0.0:8080"
-      API_PORT: ":8080"
-      TOKEN_SYMMETRIC_KEY: "12345678901234567890123456789012"
-      ACCESS_TOKEN_DURATION: "15m"
-      REFRESH_TOKEN_DURATION: "24h"
       MAX_UPLOAD_SIZE: "50MB"
       UPLOAD_PATH: "/app/uploads/media"
       COLLAB_SERVER_URL: "http://websocket:1234"
@@ -52,13 +49,13 @@ services:
       context: ./web
       dockerfile: Dockerfile.dev
       args:
-        PUBLIC_API_URL: http://localhost:8080/api/v1
-        SERVER_API_URL: http://api:8080/api/v1
+        PUBLIC_API_URL: http://localhost:${HOST_API_PORT:-8080}/api/v1
+        SERVER_API_URL: http://api:${HOST_API_PORT:-8080}/api/v1
     ports:
       - "4321:4321"
     environment:
-      PUBLIC_API_URL: http://localhost:8080/api/v1
-      SERVER_API_URL: http://api:8080/api/v1
+      PUBLIC_API_URL: http://localhost:${HOST_API_PORT:-8080}/api/v1
+      SERVER_API_URL: http://api:${HOST_API_PORT:-8080}/api/v1
     volumes:
       - ./web:/app
       - /app/node_modules
