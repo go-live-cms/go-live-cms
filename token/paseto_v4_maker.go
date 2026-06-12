@@ -152,6 +152,18 @@ func NewPasetoV4Maker(privHex, pubHex, localHex, iss, aud, accessKID, refreshKID
 //
 // Implements the Maker interface.
 func (m *PasetoV4Maker) CreateToken(userID int64, username string, dur time.Duration) (string, error) {
+	return m.CreateTokenWithRole(userID, username, "", dur)
+}
+
+// CreateTokenWithRole generates a v4.public access token carrying an
+// INFORMATIONAL role claim. Not part of the Maker interface — only the login
+// flow (which has the fresh DB user in scope) calls it; renewal sticks with
+// CreateToken and omits the claim.
+//
+// The claim is for clients and observability only: authorization always
+// re-reads the role from the database (see api requireRole), so a stale claim
+// can never grant privileges. An empty role omits the claim entirely.
+func (m *PasetoV4Maker) CreateTokenWithRole(userID int64, username, role string, dur time.Duration) (string, error) {
 	t := p.NewToken()
 	now := time.Now()
 	t.SetIssuedAt(now)
@@ -164,6 +176,9 @@ func (m *PasetoV4Maker) CreateToken(userID int64, username string, dur time.Dura
 	_ = t.Set("user_id", strconv.FormatInt(userID, 10))
 	_ = t.Set("username", username)
 	_ = t.Set("token_type", "access")
+	if role != "" {
+		_ = t.Set("role", role)
+	}
 
 	footer, _ := json.Marshal(map[string]string{"kid": m.keys.AccessKID, "ver": "v4.public"})
 	t.SetFooter(footer)
@@ -261,6 +276,8 @@ func (m *PasetoV4Maker) VerifyToken(tok string) (*Payload, error) {
 	out.ExpiredAt, _ = pt.GetExpiration()
 	out.Username, _ = pt.GetString("username")
 	out.TokenType, _ = pt.GetString("token_type")
+	// Informational only; absent on renewal-issued and pre-#187 tokens.
+	out.Role, _ = pt.GetString("role")
 
 	if out.TokenType != "access" {
 		return nil, ErrInvalidTokenV4
