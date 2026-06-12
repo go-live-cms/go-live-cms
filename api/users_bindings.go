@@ -29,7 +29,8 @@ package api
 //   - Password: Minimum 6 characters, will be hashed before storage
 //   - Role: Must be one of: admin, editor, contributor
 //
-// Security note: Only admins can set arbitrary roles during creation.
+// Security note: This endpoint is admin-only, and role values are restricted
+// to the fixed list above (custom roles will replace this with a roles table).
 type CreateUserRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	Email    string `json:"email" binding:"required,email"`
