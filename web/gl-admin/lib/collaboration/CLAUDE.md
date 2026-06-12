@@ -4,12 +4,29 @@ This is the **most sensitive subsystem in the codebase**. It has bitten us repea
 with data-loss and feedback-loop bugs. It now has real test coverage — keep it green
 and add to it. Run `npm test` from `web/` after any change here.
 
+## ⚠️ The 2026-06 data-loss saga: resolved (read this first)
+
+The recurring "heartbeat" (content/images erased by autosaves with no typing, worse on
+every save+reload) was a **stack of five real bugs**, fixed on PR #204. The decisive
+root cause was **server-side: a dual yjs instance (ESM+CJS double-load)** in
+`websocket/` — see the top gotcha in `websocket/CLAUDE.md`. The other four were real
+and remain guarded by the hard rules below: client IndexedDB cache divergence (rule 0),
+the BlockId remote-update feedback loop (rule 7), duplicate `data-block-id`s on
+block-split, and client/server yjs version skew (rule 8). Debugging lesson: the
+browser-side symptom (server reasserting a frozen state every 2s = `resyncInterval`)
+pointed at the *server* long before the cause was found, and the yjs warning
+"Yjs was already imported" had been printed at every server boot — **read process logs
+from the very top**.
+
 ## The big mental model: TWO separate Yjs structures
 
 A post's `Y.Doc` (keyed `post-<id>`) holds **two independent shared types**:
 
-1. **`prosemirror` XmlFragment** — the editor content. The TipTap **Collaboration**
-   extension binds the editor to this. This is what the user sees/types.
+1. **The `"default"` XmlFragment** — the editor content. The TipTap **Collaboration**
+   extension binds the editor to this (`Collaboration.configure({ document })` with no
+   `field` option = fragment name `"default"`). **It is NOT named `"prosemirror"`** —
+   code inspecting `getXmlFragment("prosemirror")` reads an always-empty fragment (this
+   bug made all debug fingerprints useless during the saga's early diagnosis).
 2. **`blocks` + `blocks_order` Y.Maps** — the **Block Spec v1 mirror**, managed by
    `BlockDocManager`. This is a *derived* representation used for persistence + SSR.
 
@@ -20,9 +37,11 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
 ## Files
 
 - `CollaborationProvider.ts` — per-post singleton: `Y.Doc` + `WebsocketProvider`
-  (`ws://…:1234`, `resyncInterval: 2000`) + `IndexeddbPersistence` (`post-<id>`).
-  Ref-counted; destroyed 750ms after last release. **`resyncInterval: 2000` = the "2s"
-  cadence** you'll see in any heartbeat-style bug.
+  (`ws://…:1234`, `resyncInterval: 2000`). Ref-counted; destroyed 750ms after last
+  release. **`resyncInterval: 2000` = the "2s" cadence** you'll see in any heartbeat-style
+  bug. **NO client-side `IndexeddbPersistence`** — it was removed deliberately (see rule
+  0). The WS server's LevelDB is the single live Yjs store; `whenSynced` is now a resolved
+  promise kept only for API symmetry.
 - `BlockDocManager.ts` — CRUD over the `blocks`/`blocks_order` maps. `setBlockDocV1` is
   **incremental** (diff/upsert) — see below.
 - `BlockPersistenceManager.ts` — the autosave **state machine**. The brains; most
@@ -32,6 +51,15 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
   Server side: `COLLAB_DEBUG=1`. Both are timestamped (`t=…`) so client+server logs align.
 
 ## Hard rules (violating these reintroduces shipped bugs)
+
+0. **Do NOT reintroduce client-side `IndexeddbPersistence` (or any client cache that
+   survives reloads).** The WS server (LevelDB) is the **single source of truth** for the
+   live Yjs state; Postgres `posts.block_doc` is the durable backup. A local Yjs cache
+   inevitably builds a *different struct history* for the same content than the server's
+   rebuilt doc; the two never converge, the 2s resync keeps applying "differences" (each a
+   PM transaction → a spurious autosave with no typing), and it **compounds every reload**
+   (the recurring "heartbeat" that erased text/images and "got worse each reload"). On
+   open, the editor loads purely from the server. Removed in the IndexedDB-removal commit.
 
 1. **Autosave is driven ONLY by `notifyEditorChange()`** (called from
    `editor.on("update")` in `Editor.tsx`). **Do NOT subscribe an autosave trigger to
@@ -51,6 +79,18 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
    after a successful load and releases `isInitializing` in a `finally`. A failed load
    (e.g. 401) must remain retryable and must NOT permanently disable autosave.
 
+3b. **Seed the editor from the REST working copy ONLY when the live Yjs doc is empty,
+   and ONLY after the WS `synced` event.** On a warm reload the WS server restores the
+   prosemirror fragment — Yjs is the source of truth and the Collaboration plugin already
+   shows the content. The seed runs inside `onSynced` (Editor.tsx) so the authoritative
+   server state has loaded before we test emptiness; seeding earlier (e.g. from
+   `initialize()` before WS sync) would mint fresh structs that then collide with the
+   server's on sync — the same divergence as rule 0. `setContent` over a non-empty doc
+   becomes delete-all + insert-new on the fragment (via ySyncPlugin), creating a competing
+   parallel state the 2s resync fights — reverting the user's content (the reload
+   "heartbeat", reproducible via Ctrl+S then reload). Guard with `!editor.isEmpty` /
+   `emptyShared`; only seed when the server genuinely has nothing.
+
 4. **`saveTimer` must be nulled when the debounce timer fires** (inside the
    `setTimeout` callback). The missed-timer recovery in `performSave`'s `finally` checks
    `!this.saveTimer`; a stale (fired-but-not-nulled) ref makes it skip rescheduling and
@@ -63,6 +103,27 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
    `hasInitializedRef` (reset only on `postId` change). The provider's `synced` event
    re-fires on every reconnect; without the guard, reconnects re-run `setContent` and
    clobber in-progress typing. The persistence manager has its own `hasInitialized`.
+
+7. **Editor plugins with `appendTransaction` (or `filterTransaction`) MUST ignore
+   collaboration-sync transactions.** `components/editor/extensions/BlockIdExtension.ts`
+   assigns `data-block-id`s; it ran on *every* `docChanged`, including the transactions
+   `ySyncPlugin` dispatches for **remote** Yjs updates, and minted a fresh
+   `crypto.randomUUID()` each time. That made a sync→appendTransaction→sync feedback loop
+   (random ids never converge) — a primary driver of the "heartbeat" content/image
+   erasure, distinct from rule 0. Guard with TipTap's `isChangeOrigin(tr)` (from
+   `@tiptap/extension-collaboration`): `if (transactions.some(tr => isChangeOrigin(tr)))
+   return null`. Only the client that originates a node assigns its id; remote ids arrive
+   as synced attributes and `pmToBlockDoc` backfills any missing at save time. Any future
+   doc-mutating plugin must do the same. (BlockIdExtension also regenerates **duplicate**
+   ids — splitting a block copies attrs incl. the id onto the new node; the `blocks` map
+   is keyed by id, so duplicates silently collapse blocks on save. Keep both checks.)
+
+8. **`yjs` must be the exact same version in `web/` and `websocket/`** (currently pinned
+   `13.6.31`, no `^`), and y-websocket/y-protocols kept in lockstep. The two packages
+   have separate lockfiles, so loose ranges drift apart silently; mixed yjs versions
+   between peers can mis-integrate complex struct operations (Yjs requires all peers on
+   one version). Related but distinct: the **server-side dual ESM/CJS instance** hazard —
+   see `websocket/CLAUDE.md`, it's the top gotcha there.
 
 ## State machine flags (BlockPersistenceManager)
 
@@ -89,8 +150,17 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   in-flight Yjs state. See `websocket/CLAUDE.md`.
 - **Diagnostic finding (convergence harness, `reconnect.test.ts`):** at the pure-CRDT
   sync level, content is NEVER lost — not on disconnect, server restart, cleared
-  snapshot, or repeated resyncs. So editor-level bugs here are at the **editor-binding /
-  autosave layer**, not in Yjs sync. Start debugging there.
+  snapshot, or repeated resyncs. **Caveat learned the hard way:** these tests run in ONE
+  module system, so they can never reproduce the production dual-instance hazard
+  (ESM tests + CJS server builds). A green harness rules out CRDT logic, NOT the
+  server's runtime environment.
+- **Debugging a "server reasserts stale state every 2s" symptom:** that cadence is
+  `resyncInterval: 2000`; a server doc that stops integrating a client's updates
+  ("wedged" — typically right after a structural edit like an Enter-split or
+  paragraph→heading) re-erases the client on every resync. First check the websocket
+  container logs **from the very top** for "Yjs was already imported" and for swallowed
+  stack traces from y-websocket's messageListener (it `console.error`s and drops failed
+  integrations, leaving a permanent causal gap).
 
 ## How to test headlessly
 
@@ -108,5 +178,7 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   A real client-wins/merge (or at least a user warning) is wanted. Pinned by a test.
 - `setBlockDocV1` still does full delete+insert on the **order array** when it differs
   (fine — small, infrequent) and still rewrites *changed* blocks (expected).
-- StarterKit history vs collaboration history conflict (see `web/CLAUDE.md`).
+- Strategic refactor on the table: replace the bespoke y-websocket demo-server stack
+  with **Hocuspocus** (server-side load/store of `block_doc`, client becomes a dumb
+  editor) — tracked as a GitHub issue in the MVP milestone.
 </content>

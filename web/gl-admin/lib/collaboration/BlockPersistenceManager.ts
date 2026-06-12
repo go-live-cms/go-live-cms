@@ -141,17 +141,29 @@ export class BlockPersistenceManager {
       const { doc, revision } = await blockAPIClient.getPostBlocks(this.postId)
       this.currentRevision = revision
 
-      // Only set if the document is not empty (has actual content)
+      // Seed from the REST working copy ONLY when the live Yjs doc is empty (a cold
+      // start: no IndexedDB cache and an empty WS/LevelDB doc). When the collaborative
+      // doc has already been restored with content (a warm reload — IndexedDB + the WS
+      // server repopulate it, and the Collaboration plugin shows it), Yjs is the source
+      // of truth. Overwriting it here is the bug behind the reload "heartbeat":
+      // setContent(blockDocToPM(doc)) becomes delete-all + insert-new on the
+      // already-populated prosemirror fragment via ySyncPlugin, creating a competing
+      // parallel state that the 2s resync then fights, reverting the user's content.
+      // So we seed only the side(s) that are actually empty.
       if (doc.blocks_order.length > 0 || Object.keys(doc.blocks).length > 0) {
-        // Update Y.js BlockDoc
-        this.blockDocManager.setBlockDocV1(doc)
+        const current = this.blockDocManager.getBlockDocV1()
+        const blocksAlreadyPopulated =
+          current.blocks_order.length > 0 || Object.keys(current.blocks).length > 0
+        const editorAlreadyPopulated = !!this.editor && !this.editor.isDestroyed && !this.editor.isEmpty
 
-        // If we have an editor, convert and apply to editor state.
-        // emitUpdate:false suppresses TipTap's "update" event for this programmatic
-        // load (so it doesn't look like a user edit / trigger autosave). The content
-        // still syncs into the Yjs "prosemirror" fragment because the collaboration
-        // ySyncPlugin mirrors the transaction regardless of the emitUpdate flag.
-        if (this.editor && !this.editor.isDestroyed) {
+        if (!blocksAlreadyPopulated) {
+          this.blockDocManager.setBlockDocV1(doc)
+        }
+
+        if (this.editor && !this.editor.isDestroyed && !editorAlreadyPopulated) {
+          // emitUpdate:false suppresses TipTap's "update" event for this programmatic
+          // seed. The content still syncs into the Yjs "prosemirror" fragment because
+          // the collaboration ySyncPlugin mirrors the transaction regardless of the flag.
           try {
             const pmDoc = blockDocToPM(doc, this.editor.schema)
             this.editor.commands.setContent(pmDoc.toJSON(), { emitUpdate: false })

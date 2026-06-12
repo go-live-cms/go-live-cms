@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import * as Y from "yjs";
+import { createRequire } from "node:module";
 import { evaluatePersistedState, hasPendingStructs } from "./persistence.js";
+
+// Use the CJS yjs build — the same single instance persistence.js/server.js use.
+// An ESM import here would load the second (ESM) build, and docs created by this test
+// would cross instances inside evaluatePersistedState — the exact production bug the
+// createRequire pattern guards against (see server.js).
+const require = createRequire(import.meta.url);
+const Y = require("yjs");
 
 /** Minimal y-leveldb stand-in: getYDoc returns a provided doc; clearDocument noop. */
 function fakeLdb(getYDoc) {

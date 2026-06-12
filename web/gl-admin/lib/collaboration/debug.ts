@@ -9,6 +9,10 @@
  * Used to capture the disconnect → reconnect → resync sequence when diagnosing
  * the WS-restart instability. Every line is timestamped so client logs can be
  * aligned against the WS server's COLLAB_DEBUG logs on the same timeline.
+ *
+ * NOTE: uses `console.log`, NOT `console.debug` — Chrome's console hides debug-level
+ * messages unless "Verbose" is enabled in the level filter, which made these logs appear
+ * to be missing entirely even with the flag set. Keep it as `console.log`.
  */
 export function collabDebugEnabled(): boolean {
   try {
@@ -21,7 +25,7 @@ export function collabDebugEnabled(): boolean {
 export function collabDebug(...args: unknown[]): void {
   if (collabDebugEnabled()) {
     // eslint-disable-next-line no-console
-    console.debug(`[collab t=${Date.now()}]`, ...args)
+    console.log(`[collab t=${Date.now()}]`, ...args)
   }
 }
 
@@ -31,6 +35,37 @@ export function collabDebug(...args: unknown[]): void {
  * input. JSON.stringify can throw (circular refs, BigInt), so it's wrapped — debug
  * instrumentation must never be able to crash the app when GL_DEBUG_COLLAB is on.
  */
+/**
+ * Compact, per-top-level-node summary of a Y.XmlFragment so we can see WHICH block
+ * appears/disappears/changes id between a local edit and a server push (the fingerprint
+ * only gives a total length+hash, which can't localise a divergence). Renders each child
+ * as `nodeName#blockIdPrefix(serialisedLen)`, e.g. `paragraph#a1b2c3(45) image#—(0)`.
+ * Defensive: instrumentation must never throw.
+ */
+export function fragmentStructure(frag: unknown): string {
+  try {
+    const f = frag as { toArray?: () => unknown[] }
+    const children = typeof f?.toArray === "function" ? f.toArray() : []
+    if (children.length === 0) return "(empty)"
+    return children
+      .map((c) => {
+        const el = c as {
+          nodeName?: string
+          getAttribute?: (k: string) => unknown
+          toString?: () => string
+        }
+        const name = el?.nodeName ?? "text"
+        const id = typeof el?.getAttribute === "function" ? el.getAttribute("data-block-id") : null
+        const idShort = id ? String(id).slice(0, 6) : "—"
+        const len = typeof el?.toString === "function" ? el.toString().length : 0
+        return `${name}#${idShort}(${len})`
+      })
+      .join(" ")
+  } catch (e) {
+    return `<structerr ${String(e)}>`
+  }
+}
+
 export function contentFingerprint(value: unknown): string {
   let text: string
   if (typeof value === "string") {

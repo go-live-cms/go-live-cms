@@ -36,9 +36,20 @@ publish (`triggerCollabSquash`). `DATA_PATH` and `SQUASH_SECRET` come from
 
 ## Gotchas (learned the hard way)
 
-- **`yjs` is a direct dependency** of this package (server.js does `import * as Y`).
-  Keep it direct + a single deduped copy — two yjs instances cause
-  `integrateStructs`/`splice` corruption.
+- **ONE yjs INSTANCE, not just one copy (THE root cause of the editor data-loss saga).**
+  A single deduped `node_modules/yjs` is NOT enough: yjs and y-leveldb ship dual
+  ESM+CJS builds, and `y-websocket/bin/utils` is CJS (`require("yjs")` → `yjs.cjs`)
+  while this package is ESM (`import "yjs"` → `yjs.mjs`) — the same package evaluated
+  TWICE with separate class registries. Cross-instance calls (`Y.applyUpdate` from the
+  ESM build onto the CJS `WSSharedDoc` in bindState) fail yjs's internal constructor
+  checks and silently corrupt the doc: it "wedges" (stops integrating a client's updates
+  — structural edits like Enter-splits or paragraph→heading trigger it) and the client's
+  2s resync then erases the user's typed content. The tell: yjs prints
+  **"Yjs was already imported. This breaks constructor checks…"** at startup (yjs#438).
+  Therefore `server.js`/`persistence.js`/tests load yjs + y-leveldb + bin/utils via
+  `createRequire` (all CJS, one instance), and `server.js` has a startup probe that
+  `process.exit(1)`s if a doc from bin/utils isn't `instanceof` our `Y.Doc`. Never
+  revert these to bare ESM imports, and treat that startup warning as a release blocker.
 - **`ldb.destroy()` does NOT delete data** — it's poorly named; it calls
   `db.close()`. The destructive method is `clearAll()`. Calling `destroy()` on shutdown
   is correct (a reviewer flagged it as wiping data — it doesn't).

@@ -40,6 +40,12 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
         codeBlock: false,
         dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
         link: false,
+        // Collaboration ships its own Yjs-aware undo/redo (with Mod-z / Mod-y /
+        // Shift-Mod-z keymaps). Disable StarterKit's bundled undoRedo when collaborating
+        // to resolve the "@tiptap/extension-collaboration … not compatible with
+        // @tiptap/extension-undo-redo" conflict; keep it for non-collab editors where
+        // it's the only undo stack.
+        undoRedo: collabProvider ? false : undefined,
       }),
       CodeBlockLowlight.configure({
         lowlight,

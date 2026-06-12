@@ -1,4 +1,13 @@
-import * as Y from "yjs";
+import { createRequire } from "node:module";
+
+// Must be the SAME yjs instance as y-websocket/bin/utils and y-leveldb (their CJS
+// builds). An ESM `import * as Y from "yjs"` would load the second (ESM) build, and
+// cross-instance calls — encodeStateAsUpdate on a doc y-leveldb built, applyUpdate onto
+// the live WSSharedDoc — fail yjs's internal constructor checks and corrupt documents.
+// See the root-cause comment in server.js.
+const require = createRequire(import.meta.url);
+/** @type {typeof import("yjs")} */
+const Y = require("yjs");
 
 /**
  * Returns true if a Y.Doc has un-integrated ("pending") structs — i.e. it was
