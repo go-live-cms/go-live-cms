@@ -116,7 +116,7 @@ func (server *Server) createUser(c *gin.Context) {
 //   - 401 Unauthorized: Invalid authentication token
 //   - 403 Forbidden: Not the account owner, or non-admin changing a role
 //   - 404 Not Found: User does not exist
-//   - 409 Conflict: Username or email already exists
+//   - 409 Conflict: Username or email already exists, or demoting the last admin
 //   - 500 Internal Server Error: Database transaction failure
 func (server *Server) updateUser(c *gin.Context) {
 	idParam := c.Param("id")
@@ -163,6 +163,23 @@ func (server *Server) updateUser(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
 		return
+	}
+
+	// Last-admin guard: demoting the only remaining admin would leave the
+	// site with no account able to manage users, themes, or settings.
+	demotingAdmin := req.Role != "" &&
+		strings.EqualFold(existingUser.Role, RoleAdmin) &&
+		!strings.EqualFold(req.Role, RoleAdmin)
+	if demotingAdmin {
+		adminCount, err := server.store.CountUsersByRole(c.Request.Context(), RoleAdmin)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify admin count"})
+			return
+		}
+		if adminCount <= 1 {
+			c.JSON(http.StatusConflict, gin.H{"error": "cannot demote the last admin"})
+			return
+		}
 	}
 
 	// Prepare update parameters with existing values as defaults
@@ -238,6 +255,7 @@ func (server *Server) updateUser(c *gin.Context) {
 //   - 401 Unauthorized: Invalid authentication token
 //   - 403 Forbidden: Insufficient permissions (non-admin)
 //   - 404 Not Found: User does not exist
+//   - 409 Conflict: Target is the last remaining admin
 //   - 500 Internal Server Error: Database transaction failure
 func (server *Server) deleteUser(c *gin.Context) {
 	idParam := c.Param("id")
@@ -254,7 +272,7 @@ func (server *Server) deleteUser(c *gin.Context) {
 	}
 
 	// Verify user exists before attempting deletion
-	_, err = server.store.GetUser(c.Request.Context(), id)
+	targetUser, err := server.store.GetUser(c.Request.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -262,6 +280,20 @@ func (server *Server) deleteUser(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
 		return
+	}
+
+	// Last-admin guard: deleting the only remaining admin would leave the
+	// site with no account able to manage users, themes, or settings.
+	if strings.EqualFold(targetUser.Role, RoleAdmin) {
+		adminCount, err := server.store.CountUsersByRole(c.Request.Context(), RoleAdmin)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify admin count"})
+			return
+		}
+		if adminCount <= 1 {
+			c.JSON(http.StatusConflict, gin.H{"error": "cannot delete the last admin"})
+			return
+		}
 	}
 
 	if req.TransferToID != nil {

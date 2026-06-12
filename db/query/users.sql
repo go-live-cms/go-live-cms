@@ -85,3 +85,7 @@ WHERE user_id = $1;
 
 -- name: CountTotalUsers :one
 SELECT COUNT(*) AS total FROM users;
+
+-- name: CountUsersByRole :one
+SELECT COUNT(*) AS total FROM users
+WHERE lower(role) = lower(@role);
