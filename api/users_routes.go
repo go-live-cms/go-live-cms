@@ -60,10 +60,11 @@ func (server *Server) RegisterUserRoutes(v1 *gin.RouterGroup) {
 	admin.GET("", server.getUsers)                    // GET /api/v1/users?limit=10&sort=date_desc
 	admin.GET("/id/:id", server.getUserByID)          // GET /api/v1/users/id/123
 	admin.GET("/email/:email", server.getUserByEmail) // GET /api/v1/users/email/john@example.com
+	admin.DELETE("/:id", server.deleteUser)           // DELETE /api/v1/users/123 (admin only)
 
-	// Update/delete routes (self or admin access patterns handled in handlers)
-	usersAuth.PUT("/:id", server.updateUser)    // PUT /api/v1/users/123 (self or admin)
-	usersAuth.DELETE("/:id", server.deleteUser) // DELETE /api/v1/users/123 (admin only)
+	// Self-or-admin update: ownership and the role-change restriction are
+	// field-level rules enforced inside the handler, not by middleware.
+	usersAuth.PUT("/:id", server.updateUser) // PUT /api/v1/users/123 (self or admin)
 
 	// Public profile access by username (registered last to avoid parameter conflicts)
 	users.GET("/:username", server.getUserByUsername) // GET /api/v1/users/johndoe
