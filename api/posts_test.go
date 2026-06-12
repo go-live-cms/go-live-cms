@@ -30,7 +30,7 @@ func randomUserForPosts() db.User {
 		HashedPassword:    gofakeit.Password(true, true, true, true, false, 12),
 		PasswordChangedAt: gofakeit.Date(),
 		CreatedAt:         gofakeit.Date(),
-		Role:              "user",
+		Role:              "editor",
 	}
 }
 

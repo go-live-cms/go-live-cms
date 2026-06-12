@@ -27,7 +27,7 @@ package api
 //   - Email: Valid email format, will be normalized to lowercase
 //   - FullName: 2-100 characters for display purposes
 //   - Password: Minimum 6 characters, will be hashed before storage
-//   - Role: Must be one of: user, admin, moderator
+//   - Role: Must be one of: admin, editor, contributor
 //
 // Security note: Only admins can set arbitrary roles during creation.
 type CreateUserRequest struct {
@@ -35,7 +35,7 @@ type CreateUserRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	FullName string `json:"full_name" binding:"required,min=2,max=100"`
 	Password string `json:"password" binding:"required,min=6"`
-	Role     string `json:"role" binding:"required,oneof=user admin moderator"`
+	Role     string `json:"role" binding:"required,oneof=admin editor contributor"`
 }
 
 // UpdateUserRequest defines the structure for user profile updates.
@@ -48,7 +48,7 @@ type CreateUserRequest struct {
 //   - Email: Valid email format if provided
 //   - FullName: 2-100 characters if provided
 //   - Password: Minimum 6 characters if provided (triggers session invalidation)
-//   - Role: Must be valid role if provided (admin-only modification)
+//   - Role: Must be one of admin, editor, contributor if provided (admin-only modification)
 //
 // Access control: Users can update all fields except role. Admins can update any field.
 type UpdateUserRequest struct {
@@ -56,7 +56,7 @@ type UpdateUserRequest struct {
 	Email    string `json:"email" binding:"omitempty,email"`
 	FullName string `json:"full_name" binding:"omitempty,min=2,max=100"`
 	Password string `json:"password" binding:"omitempty,min=6"`
-	Role     string `json:"role" binding:"omitempty,oneof=user admin moderator"`
+	Role     string `json:"role" binding:"omitempty,oneof=admin editor contributor"`
 }
 
 // DeleteUserRequest defines options for user account deletion.

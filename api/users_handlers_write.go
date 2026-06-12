@@ -38,7 +38,7 @@ import (
 //   - email: Valid email address
 //   - full_name: User's display name (2-100 chars)
 //   - password: Secure password (min 6 chars)
-//   - role: User role (user|admin|moderator)
+//   - role: User role (admin|editor|contributor)
 //
 // Authentication: Required (Bearer token + admin role)
 //

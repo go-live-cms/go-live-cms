@@ -234,10 +234,13 @@ func CreateDummyData(store db.Store, config util.Config) {
 //
 // # Users Created
 //
-//   - editor: Full editing permissions (password: password123)
-//   - author: Content creation permissions (password: password123)
-//   - contributor: Limited content permissions (password: password123)
-//   - moderator: Content moderation permissions (password: password123)
+//   - editor: editor role — content management permissions (password: password123)
+//   - author: contributor role (password: password123)
+//   - contributor: contributor role (password: password123)
+//   - moderator: editor role (password: password123)
+//
+// Roles follow the admin/editor/contributor taxonomy; the legacy usernames are
+// kept so other seed code and muscle memory keep working.
 //
 // # Security Note
 //
@@ -265,7 +268,7 @@ func createDummyUsers(store db.Store) []db.User {
 	gofakeit.Seed(0)
 
 	usernames := []string{"editor", "author", "contributor", "moderator"}
-	roles := []string{"editor", "author", "author", "moderator"}
+	roles := []string{"editor", "contributor", "contributor", "editor"}
 
 	for i, username := range usernames {
 		hashedPassword, err := util.HashPassword("password123")
