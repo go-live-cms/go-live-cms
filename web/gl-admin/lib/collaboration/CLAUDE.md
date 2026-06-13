@@ -142,6 +142,15 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
 - `pmToBlockDoc` regenerates duplicate/invalid block ids.
 - **Known limitation:** a `code_block` with empty code can't round-trip (ProseMirror
   disallows empty text nodes) — `blockDocToPM` throws. Pinned by a test.
+- **Known limitation:** an empty `bullet_list`/`ordered_list` (no `children`) does NOT
+  throw — `blockToPMNode` emits `content: []` and `schema.nodeFromJSON` builds it without
+  validating the `listItem+` content rule, so a schema-invalid node passes through
+  silently (editor checks would later reject it). Pinned by a test; graceful handling is
+  a tracked follow-up.
+- Heading levels are **1–6** (`HeadingBlock.level`, the bridge, and the editor schema all
+  allow the full range). The `zHeading` Zod schema still pins `1|2|3`; that mismatch is
+  harmless today (no production caller of `validateBlockDoc`) — reconciling it + wiring
+  validation is a tracked follow-up.
 
 ## Canonical store & the WS layer
 

@@ -37,7 +37,10 @@ export type ParagraphBlock = BaseBlock<
 export type HeadingBlock = BaseBlock<
   "heading",
   {
-    level: 1 | 2 | 3
+    // Editor allows h1-h6 (StarterKit heading levels [1..6] in
+    // editor/utils/extensions.ts). The zHeading Zod schema still pins 1|2|3;
+    // reconciling that + wiring validation is tracked as a follow-up.
+    level: 1 | 2 | 3 | 4 | 5 | 6
     pm?: any
     text?: string
   }
