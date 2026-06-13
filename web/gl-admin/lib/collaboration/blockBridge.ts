@@ -105,7 +105,7 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         type: "heading",
         version: 1,
         attrs: {
-          level: node.attrs.level as 1 | 2 | 3,
+          level: node.attrs.level as 1 | 2 | 3 | 4 | 5 | 6,
           pm: node.toJSON(),
           text: node.textContent || undefined,
         },
