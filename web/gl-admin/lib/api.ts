@@ -12,13 +12,12 @@ import type {
   PaginationParams,
   ApiResponse,
 } from "./types"
+import { SERVER_API_URL, SERVER_MEDIA_URL } from "./server-api-url"
 
-const isDocker = typeof window === "undefined" || process.env.NODE_ENV === "development"
-const API_BASE = isDocker && typeof window === "undefined" ? "http://api:8080/api/v1" : "/api/v1"
-const MEDIA_BASE = isDocker && typeof window === "undefined" ? "http://api:8080" : ""
+const isServer = typeof window === "undefined"
+const API_BASE = isServer ? SERVER_API_URL : "/api/v1"
+const MEDIA_BASE = isServer ? SERVER_MEDIA_URL : ""
 
-console.log("API_BASE:", API_BASE)
-console.log("MEDIA_BASE:", MEDIA_BASE)
 
 interface ApiOptions {
   token?: string

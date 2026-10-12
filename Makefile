@@ -46,25 +46,25 @@ install-godoc: ## Install godoc tool
 
 # Development commands
 devbuild:
-	docker compose -f compose.dev.yaml up --build
+	docker compose --env-file app.env -f compose.dev.yaml up --build
 
 dev:
-	docker compose -f compose.dev.yaml up
+	docker compose --env-file app.env -f compose.dev.yaml up
 
 devdown:
-	docker compose -f compose.dev.yaml down
+	docker compose --env-file app.env -f compose.dev.yaml down
 
 devlogs:
-	docker compose -f compose.dev.yaml logs -f
+	docker compose --env-file app.env -f compose.dev.yaml logs -f
 
 devlogs-api:
-	docker compose -f compose.dev.yaml logs -f api
+	docker compose --env-file app.env -f compose.dev.yaml logs -f api
 
 devlogs-web:
-	docker compose -f compose.dev.yaml logs -f web
+	docker compose --env-file app.env -f compose.dev.yaml logs -f web
 
 devrebuild:
-	docker compose -f compose.dev.yaml up --build --force-recreate
+	docker compose --env-file app.env -f compose.dev.yaml up --build --force-recreate
 
 # Production commands
 prod:
