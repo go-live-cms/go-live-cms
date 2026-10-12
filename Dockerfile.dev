@@ -3,7 +3,7 @@ FROM golang:1.25-alpine3.22
 WORKDIR /app
 
 # Install air for live reloading
-RUN go install github.com/air-verse/air@latest
+RUN go install github.com/air-verse/air@v1.65.3
 
 # Install migrate tool
 RUN apk add --no-cache curl netcat-openbsd

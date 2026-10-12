@@ -732,6 +732,8 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 			PostStatus:  "published",
 			PostParent:  sql.NullInt64{Valid: false},
 			MenuOrder:   0,
+			Slug:        generateSlug(title),
+			BlockDoc:    generateDummyBlockDoc(title),
 		}
 
 		createdPost, err := store.CreatePosts(context.TODO(), postParams)
@@ -739,6 +741,7 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 			log.Printf("❌ Failed to create post '%s': %v", title, err)
 			continue
 		}
+		publishDummyDoc(store, createdPost.ID, postParams.BlockDoc)
 
 		blogMeta := map[string]string{
 			"featured_image":   fmt.Sprintf("/uploads/sample-image-%d.jpg", (i%12)+1),
@@ -927,6 +930,8 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 			PostStatus:  "published",
 			PostParent:  sql.NullInt64{Valid: false},
 			MenuOrder:   int32(i + 1),
+			Slug:        url,
+			BlockDoc:    generateDummyBlockDoc(pageData.title),
 		}
 
 		createdPage, err := store.CreatePosts(context.TODO(), pageParams)
@@ -934,6 +939,7 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 			log.Printf("❌ Failed to create page '%s': %v", pageData.title, err)
 			continue
 		}
+		publishDummyDoc(store, createdPage.ID, pageParams.BlockDoc)
 
 		for key, value := range pageData.meta {
 			_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
@@ -989,6 +995,8 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 					PostStatus:  "published",
 					PostParent:  sql.NullInt64{Int64: createdPage.ID, Valid: true},
 					MenuOrder:   int32(j + 1),
+					Slug:        childURL,
+					BlockDoc:    generateDummyBlockDoc(childData.title),
 				}
 
 				createdChild, err := store.CreatePosts(context.TODO(), childParams)
@@ -996,6 +1004,7 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 					log.Printf("❌ Failed to create child page '%s': %v", childData.title, err)
 					continue
 				}
+				publishDummyDoc(store, createdChild.ID, childParams.BlockDoc)
 
 				for key, value := range childData.meta {
 					_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
