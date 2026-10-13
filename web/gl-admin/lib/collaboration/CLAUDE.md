@@ -147,10 +147,9 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   validating the `listItem+` content rule, so a schema-invalid node passes through
   silently (editor checks would later reject it). Pinned by a test; graceful handling is
   a tracked follow-up.
-- Heading levels are **1–6** (`HeadingBlock.level`, the bridge, and the editor schema all
-  allow the full range). The `zHeading` Zod schema still pins `1|2|3`; that mismatch is
-  harmless today (no production caller of `validateBlockDoc`) — reconciling it + wiring
-  validation is a tracked follow-up.
+- Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
+  editor schema all allow the full range — keep them in sync). `validateBlockDoc` has no
+  production caller yet; wiring validation is a tracked follow-up.
 
 ## Canonical store & the WS layer
 

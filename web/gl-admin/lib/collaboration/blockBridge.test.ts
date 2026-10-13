@@ -464,7 +464,12 @@ describe("blockBridge — full round-trip (one of each type)", () => {
       { type: "bullet_list", text: undefined, children: [li] },
     ])
     expect(out.blocks[li].attrs.text).toBe("item")
+    // Type-specific attrs the summary above doesn't cover.
+    expect((out.blocks[h].attrs as any).level).toBe(2)
     expect((out.blocks[cb].attrs as any).code).toBe("go()")
+    expect((out.blocks[cb].attrs as any).language).toBe("go")
+    expect((out.blocks[img].attrs as any).src).toBe("/m/c.png")
+    expect((out.blocks[img].attrs as any).alt).toBe("c")
   })
 })
 
@@ -499,6 +504,7 @@ describe("blockBridge — additional edge cases", () => {
         blocks_order: [a],
         blocks: { [a]: { id: a, type: "heading", version: 1, attrs: { level, text: `H${level}` } } },
       })
+      expect((out.blocks[a].attrs as any).level).toBe(level)
       expect((out.blocks[a].attrs as any).pm.attrs.level).toBe(level)
     }
   })
@@ -533,7 +539,13 @@ describe("blockBridge — additional edge cases", () => {
     expect(nested).toBeTruthy()
     // Round-trips back to the same structure.
     const back = roundTrip(out)
-    expect(back.blocks[back.blocks_order[0]].type).toBe("bullet_list")
+    const backList = back.blocks[back.blocks_order[0]]
+    expect(backList.type).toBe("bullet_list")
+    expect(backList.children).toHaveLength(1)
+    const backItemPm = (back.blocks[backList.children![0]].attrs as any).pm
+    const backNested = backItemPm.content.find((n: any) => n.type === "bulletList")
+    expect(backNested).toBeTruthy()
+    expect(back.blocks[backList.children![0]].attrs.text).toBe("parentchild")
   })
 
   it("image without src round-trips (characterizes the nullish src)", () => {
@@ -565,6 +577,8 @@ describe("blockBridge — additional edge cases", () => {
     const node = pm.child(0)
     expect(node.type.name).toBe("bulletList")
     expect(node.childCount).toBe(0)
+    // ...and it really is schema-invalid: node.check() enforces the content rule.
+    expect(() => node.check()).toThrow()
     // And it round-trips back to an empty bullet_list with no children set.
     const back = pmToBlockDoc(pm)
     expect(back.blocks[back.blocks_order[0]].type).toBe("bullet_list")

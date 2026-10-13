@@ -3,6 +3,7 @@ import {
   validateBlock,
   validateBlockDoc,
   zBlockID,
+  zHeading,
   type BlockDocV1,
 } from "./index"
 
@@ -30,6 +31,11 @@ describe("validateBlock — known block types", () => {
   it("validates a heading with a legal level", () => {
     const block = { id: id(), type: "heading", version: 1, attrs: { level: 2, text: "T" } }
     expect(validateBlock(block).type).toBe("heading")
+  })
+
+  it("validates h4-h6 against the strict heading schema (not the custom catch-all)", () => {
+    const block = { id: id(), type: "heading", version: 1, attrs: { level: 5, text: "T" } }
+    expect(zHeading.safeParse(block).success).toBe(true)
   })
 
   it("validates a code_block (code required)", () => {

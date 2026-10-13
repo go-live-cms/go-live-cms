@@ -150,7 +150,7 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
           src: node.attrs.src || undefined,
           alt: node.attrs.alt || undefined,
           title: node.attrs.title || undefined,
-          mediaId: node.attrs.mediaId || undefined,
+          mediaId: node.attrs.mediaId ?? undefined,
         },
       }
 

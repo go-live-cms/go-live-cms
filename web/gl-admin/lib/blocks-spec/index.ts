@@ -38,8 +38,7 @@ export type HeadingBlock = BaseBlock<
   "heading",
   {
     // Editor allows h1-h6 (StarterKit heading levels [1..6] in
-    // editor/utils/extensions.ts). The zHeading Zod schema still pins 1|2|3;
-    // reconciling that + wiring validation is tracked as a follow-up.
+    // editor/utils/extensions.ts); keep zHeading below in sync.
     level: 1 | 2 | 3 | 4 | 5 | 6
     pm?: any
     text?: string
@@ -135,7 +134,7 @@ export const zParagraph = zBase.extend({
 export const zHeading = zBase.extend({
   type: z.literal("heading"),
   attrs: z.object({
-    level: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)]),
     pm: z.any().optional(),
     text: z.string().optional(),
   }),
