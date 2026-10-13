@@ -350,6 +350,8 @@ func TestUpdatePostBlocksSanitizesOnSave(t *testing.T) {
 		Return([]db.GetMediaByPostWithOrderRow{}, nil).
 		Times(1)
 
+	stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "editor"})
+
 	server := newTestServer(t, store)
 	recorder := httptest.NewRecorder()
 
