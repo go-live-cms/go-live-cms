@@ -356,6 +356,26 @@ func TestActivateThemeAPI(t *testing.T) {
 			},
 		},
 		{
+			name:    "ForbiddenEditor",
+			themeID: newTheme.ID,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, 2, "editor_caller", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				// requireSiteAdmin rejects the editor before any theme work
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(int64(2))).
+					Times(1).
+					Return(db.User{ID: 2, Username: "editor_caller", Role: "editor"}, nil)
+				store.EXPECT().
+					ActivateTheme(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
 			name:    "OK_NoCurrentActiveTheme",
 			themeID: newTheme.ID,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
@@ -457,6 +477,7 @@ func TestActivateThemeAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "admin"})
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -652,6 +673,7 @@ func TestUpdateThemeSettingAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "admin"})
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -775,6 +797,7 @@ func TestUpdateActiveThemeSettingsAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "admin"})
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()

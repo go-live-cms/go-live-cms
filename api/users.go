@@ -86,7 +86,7 @@
 //	    "id": 123,
 //	    "username": "johndoe",
 //	    "full_name": "John Doe",
-//	    "role": "user",
+//	    "role": "contributor",
 //	    "created_at": "2024-01-15T10:30:00Z"
 //	  }
 //	}
@@ -99,7 +99,7 @@
 //	    "username": "johndoe",
 //	    "email": "john@example.com",
 //	    "full_name": "John Doe",
-//	    "role": "user",
+//	    "role": "contributor",
 //	    "created_at": "2024-01-15T10:30:00Z"
 //	  }
 //	}
@@ -111,7 +111,7 @@
 //	  "email": "new@example.com",
 //	  "full_name": "New User",
 //	  "password": "securepassword",
-//	  "role": "user"
+//	  "role": "contributor"
 //	}
 //
 // # Future Enhancements (Planned)

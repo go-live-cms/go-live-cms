@@ -25,11 +25,7 @@
 package api
 
 import (
-	"net/http"
-	"strings"
-
 	"github.com/gin-gonic/gin"
-	"github.com/go-live-cms/go-live-cms/token"
 )
 
 // RegisterUserRoutes configures user management endpoints with proper access controls.
@@ -59,55 +55,17 @@ func (server *Server) RegisterUserRoutes(v1 *gin.RouterGroup) {
 
 	// Admin-only routes (require Bearer token + admin role)
 	admin := usersAuth.Group("")
-	admin.Use(requireRole("admin", server))
+	admin.Use(requireSiteAdmin(server))
 	admin.POST("", server.createUser)                 // POST /api/v1/users
 	admin.GET("", server.getUsers)                    // GET /api/v1/users?limit=10&sort=date_desc
 	admin.GET("/id/:id", server.getUserByID)          // GET /api/v1/users/id/123
 	admin.GET("/email/:email", server.getUserByEmail) // GET /api/v1/users/email/john@example.com
+	admin.DELETE("/:id", server.deleteUser)           // DELETE /api/v1/users/123 (admin only)
 
-	// Update/delete routes (self or admin access patterns handled in handlers)
-	usersAuth.PUT("/:id", server.updateUser)    // PUT /api/v1/users/123 (self or admin)
-	usersAuth.DELETE("/:id", server.deleteUser) // DELETE /api/v1/users/123 (admin only)
+	// Self-or-admin update: ownership and the role-change restriction are
+	// field-level rules enforced inside the handler, not by middleware.
+	usersAuth.PUT("/:id", server.updateUser) // PUT /api/v1/users/123 (self or admin)
 
 	// Public profile access by username (registered last to avoid parameter conflicts)
 	users.GET("/:username", server.getUserByUsername) // GET /api/v1/users/johndoe
-}
-
-// requireRole creates middleware that enforces role-based access control.
-//
-// Validates that the authenticated user has the required role for admin operations.
-// Retrieves user role from database using the token's UserID for accurate verification.
-//
-// Parameters:
-//   - role: Required role string (typically "admin")
-//   - server: Server instance for database access
-//
-// Returns:
-//   - gin.HandlerFunc: Middleware function for route protection
-//
-// Behavior:
-//   - Extracts auth payload from middleware context
-//   - Queries database to get current user role
-//   - Compares user role against required role (case-insensitive)
-//   - Returns 403 Forbidden if role insufficient or 500 on database error
-//   - Continues to handler if role matches
-func requireRole(role string, server *Server) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		auth := c.MustGet(authorizationPayloadKey).(*token.Payload)
-
-		// Get user from database to check current role
-		user, err := server.store.GetUser(c.Request.Context(), auth.UserID)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to verify user role"})
-			return
-		}
-
-		// Check if user has required role (case-insensitive)
-		if !strings.EqualFold(user.Role, role) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-			return
-		}
-
-		c.Next()
-	}
 }

@@ -301,6 +301,7 @@ func TestUpdatePostBlocksAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "editor"})
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -348,6 +349,8 @@ func TestUpdatePostBlocksSanitizesOnSave(t *testing.T) {
 		GetMediaByPostWithOrder(gomock.Any(), int64(1)).
 		Return([]db.GetMediaByPostWithOrderRow{}, nil).
 		Times(1)
+
+	stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "editor"})
 
 	server := newTestServer(t, store)
 	recorder := httptest.NewRecorder()
@@ -475,6 +478,7 @@ func TestPublishPostAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "editor"})
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()

@@ -393,6 +393,7 @@ func TestSetFeaturedImageAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -508,6 +509,7 @@ func TestRemoveFeaturedImageAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()

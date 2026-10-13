@@ -250,6 +250,7 @@ func TestCreateOrUpdatePostMetaAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "editor"})
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -391,6 +392,7 @@ func TestDeletePostMetaByKeyAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: "editor"})
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()

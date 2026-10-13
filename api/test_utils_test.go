@@ -10,6 +10,8 @@ import (
 
 	p "aidanwoods.dev/go-paseto"
 	"github.com/gin-gonic/gin"
+	"github.com/golang/mock/gomock"
+	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/util"
 	"github.com/stretchr/testify/require"
@@ -62,4 +64,17 @@ func newTestServer(t *testing.T, store db.Store) *Server {
 	require.NoError(t, err)
 
 	return server
+}
+
+// stubRoleLookup permits the requireRole middleware's caller-role DB lookup
+// for the given authenticated user. Call it AFTER a test case's own
+// buildStubs so per-case GetUser expectations keep precedence (gomock
+// consumes identical matchers in declaration order, skipping exhausted
+// ones). AnyTimes() also tolerates unauthenticated cases where the
+// middleware never runs.
+func stubRoleLookup(store *mockdb.MockStore, user db.User) {
+	store.EXPECT().
+		GetUser(gomock.Any(), gomock.Eq(user.ID)).
+		Return(user, nil).
+		AnyTimes()
 }

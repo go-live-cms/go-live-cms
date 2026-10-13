@@ -30,7 +30,7 @@ func randomUserForPosts() db.User {
 		HashedPassword:    gofakeit.Password(true, true, true, true, false, 12),
 		PasswordChangedAt: gofakeit.Date(),
 		CreatedAt:         gofakeit.Date(),
-		Role:              "user",
+		Role:              "editor",
 	}
 }
 
@@ -184,6 +184,34 @@ func TestCreatePostAPI(t *testing.T) {
 			},
 		},
 		{
+			name: "ForbiddenContributor",
+			body: gin.H{
+				"title":       post.Title,
+				"description": post.Description,
+				"url":         post.Url,
+				"author_ids":  []int64{user.ID},
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID+77, "contrib_caller", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				// requireContentEditor rejects the contributor before the handler runs
+				contributor := randomUserForPosts()
+				contributor.ID = user.ID + 77
+				contributor.Role = "contributor"
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(contributor.ID)).
+					Times(1).
+					Return(contributor, nil)
+				store.EXPECT().
+					CreatePostTx(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
 			name: "WithMedia",
 			body: gin.H{
 				"title":       post.Title,
@@ -236,6 +264,7 @@ func TestCreatePostAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -569,6 +598,7 @@ func TestUpdatePostAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -685,6 +715,7 @@ func TestDeletePostAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()

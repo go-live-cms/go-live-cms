@@ -189,6 +189,9 @@ func TestCreateTaxonomyTypeAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			editorCaller := user
+			editorCaller.Role = "editor"
+			stubRoleLookup(store, editorCaller)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -510,6 +513,9 @@ func TestCreateTaxonomyTermAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			editorCaller := user
+			editorCaller.Role = "editor"
+			stubRoleLookup(store, editorCaller)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -1023,6 +1029,9 @@ func TestUpdateTaxonomyTermAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			editorCaller := user
+			editorCaller.Role = "editor"
+			stubRoleLookup(store, editorCaller)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -1179,6 +1188,9 @@ func TestDeleteTaxonomyTermAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			editorCaller := user
+			editorCaller.Role = "editor"
+			stubRoleLookup(store, editorCaller)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
