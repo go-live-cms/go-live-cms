@@ -561,45 +561,15 @@ func TestUpdateUserAPI(t *testing.T) {
 					GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).
 					Times(2).
 					Return(adminCaller, nil)
-				store.EXPECT().
-					CountUsersByRole(gomock.Any(), gomock.Eq(RoleAdmin)).
-					Times(1).
-					Return(int64(1), nil)
+				// The transactional guard refuses the demotion
 				store.EXPECT().
 					UpdateUserTx(gomock.Any(), gomock.Any()).
-					Times(0)
+					Times(1).
+					Return(db.UpdateUserTxResult{}, db.ErrLastAdmin)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusConflict, recorder.Code)
-			},
-		},
-		{
-			name:   "InternalErrorAdminCountOnDemote",
-			userID: user.ID + 50,
-			body: gin.H{
-				"role": "contributor",
-			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID+50, "admin_caller", time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				adminCaller := randomUserNew()
-				adminCaller.ID = user.ID + 50
-				adminCaller.Role = RoleAdmin
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).
-					Times(2).
-					Return(adminCaller, nil)
-				store.EXPECT().
-					CountUsersByRole(gomock.Any(), gomock.Eq(RoleAdmin)).
-					Times(1).
-					Return(int64(0), fmt.Errorf("connection refused"))
-				store.EXPECT().
-					UpdateUserTx(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "cannot demote the last admin")
 			},
 		},
 		{
@@ -626,11 +596,6 @@ func TestUpdateUserAPI(t *testing.T) {
 					GetUser(gomock.Any(), gomock.Eq(otherAdmin.ID)).
 					Times(1).
 					Return(otherAdmin, nil)
-				store.EXPECT().
-					CountUsersByRole(gomock.Any(), gomock.Eq(RoleAdmin)).
-					Times(1).
-					Return(int64(2), nil)
-
 				demoted := otherAdmin
 				demoted.Role = "editor"
 				store.EXPECT().
@@ -891,22 +856,21 @@ func TestDeleteUserAPI(t *testing.T) {
 					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
 					Times(2).
 					Return(adminUser, nil)
+				// The transactional guard refuses the delete
 				store.EXPECT().
-					CountUsersByRole(gomock.Any(), gomock.Eq(RoleAdmin)).
+					DeleteUserTx(gomock.Any(), gomock.Eq(adminUser.ID)).
 					Times(1).
-					Return(int64(1), nil)
-				store.EXPECT().
-					DeleteUserTx(gomock.Any(), gomock.Any()).
-					Times(0)
+					Return(db.ErrLastAdmin)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusConflict, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "cannot delete the last admin")
 			},
 		},
 		{
-			name:   "InternalErrorAdminCountOnDelete",
+			name:   "ConflictDeleteLastAdminWithTransfer",
 			userID: adminUser.ID,
-			body:   gin.H{},
+			body:   gin.H{"transfer_to_id": adminUser.ID + 7},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
 			},
@@ -916,15 +880,19 @@ func TestDeleteUserAPI(t *testing.T) {
 					Times(2).
 					Return(adminUser, nil)
 				store.EXPECT().
-					CountUsersByRole(gomock.Any(), gomock.Eq(RoleAdmin)).
+					DeleteUserWithTransferTx(gomock.Any(), gomock.Eq(db.DeleteUserWithTransferTxParams{
+						UserID:       adminUser.ID,
+						TransferToID: adminUser.ID + 7,
+					})).
 					Times(1).
-					Return(int64(0), fmt.Errorf("connection refused"))
+					Return(db.ErrLastAdmin)
 				store.EXPECT().
 					DeleteUserTx(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+				require.Equal(t, http.StatusConflict, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "cannot delete the last admin")
 			},
 		},
 		{
@@ -946,10 +914,6 @@ func TestDeleteUserAPI(t *testing.T) {
 					GetUser(gomock.Any(), gomock.Eq(secondAdmin.ID)).
 					Times(1).
 					Return(secondAdmin, nil)
-				store.EXPECT().
-					CountUsersByRole(gomock.Any(), gomock.Eq(RoleAdmin)).
-					Times(1).
-					Return(int64(2), nil)
 				store.EXPECT().
 					DeleteUserTx(gomock.Any(), gomock.Eq(secondAdmin.ID)).
 					Times(1).

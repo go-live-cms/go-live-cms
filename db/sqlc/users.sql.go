@@ -21,18 +21,6 @@ func (q *Queries) CountTotalUsers(ctx context.Context) (int64, error) {
 	return total, err
 }
 
-const countUsersByRole = `-- name: CountUsersByRole :one
-SELECT COUNT(*) AS total FROM users
-WHERE lower(role) = lower($1)
-`
-
-func (q *Queries) CountUsersByRole(ctx context.Context, role string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countUsersByRole, role)
-	var total int64
-	err := row.Scan(&total)
-	return total, err
-}
-
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (
     username,
@@ -236,7 +224,40 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
-const transferPostsToAdmin = `-- name: TransferPostsToAdmin :exec
+const lockAdminUserIDs = `-- name: LockAdminUserIDs :many
+SELECT id FROM users
+WHERE lower(role) = 'admin'
+ORDER BY id
+FOR UPDATE
+`
+
+// Row-locks every admin so concurrent admin-removing transactions serialize
+// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
+// acquire in the same order and cannot deadlock each other.
+func (q *Queries) LockAdminUserIDs(ctx context.Context) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, lockAdminUserIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const transferPostsToAdmin =`-- name: TransferPostsToAdmin :exec
 UPDATE posts 
 SET user_id = $2, username = (SELECT username FROM users WHERE id = $2)
 WHERE user_id = $1

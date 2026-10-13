@@ -30,7 +30,6 @@ type Querier interface {
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
-	CountUsersByRole(ctx context.Context, role string) (int64, error)
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
@@ -143,6 +142,10 @@ type Querier interface {
 	ListThemeSettings(ctx context.Context, themeID int64) ([]ThemeSetting, error)
 	ListThemes(ctx context.Context) ([]Theme, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	// Row-locks every admin so concurrent admin-removing transactions serialize
+	// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
+	// acquire in the same order and cannot deadlock each other.
+	LockAdminUserIDs(ctx context.Context) ([]int64, error)
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error

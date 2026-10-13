@@ -3,8 +3,30 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 )
+
+// ErrLastAdmin is returned by user-removing transactions (delete, or an update
+// that moves the role off admin) when the target is the only remaining admin.
+var ErrLastAdmin = errors.New("operation would remove the last admin")
+
+// guardLastAdmin row-locks every admin inside the caller's transaction and
+// fails with ErrLastAdmin if userID is the only one. Holding the locks until
+// commit serializes concurrent admin-removing operations: a second remover
+// blocks, and on wake-up READ COMMITTED re-evaluates the role predicate, so a
+// row the first transaction demoted or deleted is no longer counted.
+func guardLastAdmin(ctx context.Context, q *Queries, userID int64) error {
+	adminIDs, err := q.LockAdminUserIDs(ctx)
+	if err != nil {
+		return err
+	}
+	if len(adminIDs) == 1 && adminIDs[0] == userID {
+		return ErrLastAdmin
+	}
+	return nil
+}
 
 type Store interface {
 	Querier
@@ -149,7 +171,12 @@ func (store *SQLStore) DeletePostTx(ctx context.Context, id int64) error {
 func (store *SQLStore) DeleteUserTx(ctx context.Context, id int64) error {
 	err := store.execTx(ctx, func(q *Queries) error {
 
-		err := q.DeleteUserSessions(ctx, id)
+		err := guardLastAdmin(ctx, q, id)
+		if err != nil {
+			return err
+		}
+
+		err = q.DeleteUserSessions(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -195,6 +222,12 @@ func (store *SQLStore) UpdateUserTx(ctx context.Context, arg UpdateUserTxParams)
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
 
+		if !strings.EqualFold(arg.Role, "admin") {
+			if err := guardLastAdmin(ctx, q, arg.ID); err != nil {
+				return err
+			}
+		}
+
 		if arg.CheckUniqueness {
 			existingUser, err := q.GetUserByUsername(ctx, arg.Username)
 			if err == nil && existingUser.ID != arg.ID {
@@ -236,7 +269,12 @@ type DeleteUserWithTransferTxParams struct {
 func (store *SQLStore) DeleteUserWithTransferTx(ctx context.Context, arg DeleteUserWithTransferTxParams) error {
 	err := store.execTx(ctx, func(q *Queries) error {
 
-		err := q.TransferPostsToAdmin(ctx, TransferPostsToAdminParams{
+		err := guardLastAdmin(ctx, q, arg.UserID)
+		if err != nil {
+			return err
+		}
+
+		err = q.TransferPostsToAdmin(ctx, TransferPostsToAdminParams{
 			UserID:   arg.UserID,
 			UserID_2: arg.TransferToID,
 		})

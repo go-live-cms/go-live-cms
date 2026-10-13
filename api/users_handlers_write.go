@@ -19,6 +19,7 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -165,28 +166,6 @@ func (server *Server) updateUser(c *gin.Context) {
 		return
 	}
 
-	// Last-admin guard: demoting the only remaining admin would leave the
-	// site with no account able to manage users, themes, settings, or
-	// post types.
-	// Known race: the count runs outside the update/delete transaction, so
-	// two concurrent admin-removing operations (demote+demote, demote+delete)
-	// can each see count=2 and end at zero admins. Accepted until a
-	// transactional guard (count FOR UPDATE inside the Tx) is warranted.
-	demotingAdmin := req.Role != "" &&
-		strings.EqualFold(existingUser.Role, RoleAdmin) &&
-		!strings.EqualFold(req.Role, RoleAdmin)
-	if demotingAdmin {
-		adminCount, err := server.store.CountUsersByRole(c.Request.Context(), RoleAdmin)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify admin count"})
-			return
-		}
-		if adminCount <= 1 {
-			c.JSON(http.StatusConflict, gin.H{"error": "cannot demote the last admin"})
-			return
-		}
-	}
-
 	// Prepare update parameters with existing values as defaults
 	updateParams := db.UpdateUserParams{
 		ID:                id,
@@ -222,12 +201,18 @@ func (server *Server) updateUser(c *gin.Context) {
 		updateParams.PasswordChangedAt = time.Now()
 	}
 
-	// Execute transactional update with uniqueness checks
+	// Execute transactional update with uniqueness checks. The transaction
+	// also refuses to demote the last admin (db.ErrLastAdmin), which would
+	// leave no account able to manage users, themes, settings, or post types.
 	result, err := server.store.UpdateUserTx(c.Request.Context(), db.UpdateUserTxParams{
 		UpdateUserParams: updateParams,
 		CheckUniqueness:  true,
 	})
 	if err != nil {
+		if errors.Is(err, db.ErrLastAdmin) {
+			c.JSON(http.StatusConflict, gin.H{"error": "cannot demote the last admin"})
+			return
+		}
 		if isUniqueViolation(err) || containsString(err.Error(), "already exists") {
 			c.JSON(http.StatusConflict, gin.H{"error": "username or email already exists"})
 			return
@@ -277,7 +262,7 @@ func (server *Server) deleteUser(c *gin.Context) {
 	}
 
 	// Verify user exists before attempting deletion
-	targetUser, err := server.store.GetUser(c.Request.Context(), id)
+	_, err = server.store.GetUser(c.Request.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -287,39 +272,28 @@ func (server *Server) deleteUser(c *gin.Context) {
 		return
 	}
 
-	// Last-admin guard: deleting the only remaining admin would leave the
-	// site with no account able to manage users, themes, settings, or
-	// post types.
-	// Same non-transactional race as the demote guard in updateUser above.
-	if strings.EqualFold(targetUser.Role, RoleAdmin) {
-		adminCount, err := server.store.CountUsersByRole(c.Request.Context(), RoleAdmin)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify admin count"})
-			return
-		}
-		if adminCount <= 1 {
-			c.JSON(http.StatusConflict, gin.H{"error": "cannot delete the last admin"})
-			return
-		}
-	}
-
+	// Both delete transactions refuse to remove the last admin
+	// (db.ErrLastAdmin), which would leave no account able to manage users,
+	// themes, settings, or post types.
+	failMsg := "failed to delete user"
 	if req.TransferToID != nil {
 		// Delete with content transfer to preserve data
+		failMsg = "failed to delete user with transfer"
 		err = server.store.DeleteUserWithTransferTx(c.Request.Context(), db.DeleteUserWithTransferTxParams{
 			UserID:       id,
 			TransferToID: *req.TransferToID,
 		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user with transfer"})
-			return
-		}
 	} else {
 		// Simple deletion without content transfer
 		err = server.store.DeleteUserTx(c.Request.Context(), id)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+	}
+	if err != nil {
+		if errors.Is(err, db.ErrLastAdmin) {
+			c.JSON(http.StatusConflict, gin.H{"error": "cannot delete the last admin"})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": failMsg})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

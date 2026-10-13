@@ -86,6 +86,11 @@ WHERE user_id = $1;
 -- name: CountTotalUsers :one
 SELECT COUNT(*) AS total FROM users;
 
--- name: CountUsersByRole :one
-SELECT COUNT(*) AS total FROM users
-WHERE lower(role) = lower(@role);
+-- name: LockAdminUserIDs :many
+-- Row-locks every admin so concurrent admin-removing transactions serialize
+-- (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
+-- acquire in the same order and cannot deadlock each other.
+SELECT id FROM users
+WHERE lower(role) = 'admin'
+ORDER BY id
+FOR UPDATE;
