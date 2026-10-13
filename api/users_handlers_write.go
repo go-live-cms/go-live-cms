@@ -19,6 +19,7 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -116,7 +117,7 @@ func (server *Server) createUser(c *gin.Context) {
 //   - 401 Unauthorized: Invalid authentication token
 //   - 403 Forbidden: Not the account owner, or non-admin changing a role
 //   - 404 Not Found: User does not exist
-//   - 409 Conflict: Username or email already exists
+//   - 409 Conflict: Username or email already exists, or demoting the last admin
 //   - 500 Internal Server Error: Database transaction failure
 func (server *Server) updateUser(c *gin.Context) {
 	idParam := c.Param("id")
@@ -200,12 +201,18 @@ func (server *Server) updateUser(c *gin.Context) {
 		updateParams.PasswordChangedAt = time.Now()
 	}
 
-	// Execute transactional update with uniqueness checks
+	// Execute transactional update with uniqueness checks. The transaction
+	// also refuses to demote the last admin (db.ErrLastAdmin), which would
+	// leave no account able to manage users, themes, settings, or post types.
 	result, err := server.store.UpdateUserTx(c.Request.Context(), db.UpdateUserTxParams{
 		UpdateUserParams: updateParams,
 		CheckUniqueness:  true,
 	})
 	if err != nil {
+		if errors.Is(err, db.ErrLastAdmin) {
+			c.JSON(http.StatusConflict, gin.H{"error": "cannot demote the last admin"})
+			return
+		}
 		if isUniqueViolation(err) || containsString(err.Error(), "already exists") {
 			c.JSON(http.StatusConflict, gin.H{"error": "username or email already exists"})
 			return
@@ -238,6 +245,7 @@ func (server *Server) updateUser(c *gin.Context) {
 //   - 401 Unauthorized: Invalid authentication token
 //   - 403 Forbidden: Insufficient permissions (non-admin)
 //   - 404 Not Found: User does not exist
+//   - 409 Conflict: Target is the last remaining admin
 //   - 500 Internal Server Error: Database transaction failure
 func (server *Server) deleteUser(c *gin.Context) {
 	idParam := c.Param("id")
@@ -264,23 +272,28 @@ func (server *Server) deleteUser(c *gin.Context) {
 		return
 	}
 
+	// Both delete transactions refuse to remove the last admin
+	// (db.ErrLastAdmin), which would leave no account able to manage users,
+	// themes, settings, or post types.
+	failMsg := "failed to delete user"
 	if req.TransferToID != nil {
 		// Delete with content transfer to preserve data
+		failMsg = "failed to delete user with transfer"
 		err = server.store.DeleteUserWithTransferTx(c.Request.Context(), db.DeleteUserWithTransferTxParams{
 			UserID:       id,
 			TransferToID: *req.TransferToID,
 		})
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user with transfer"})
-			return
-		}
 	} else {
 		// Simple deletion without content transfer
 		err = server.store.DeleteUserTx(c.Request.Context(), id)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
+	}
+	if err != nil {
+		if errors.Is(err, db.ErrLastAdmin) {
+			c.JSON(http.StatusConflict, gin.H{"error": "cannot delete the last admin"})
 			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": failMsg})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

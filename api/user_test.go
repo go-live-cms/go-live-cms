@@ -544,6 +544,70 @@ func TestUpdateUserAPI(t *testing.T) {
 			},
 		},
 		{
+			name:   "ConflictDemoteLastAdmin",
+			userID: user.ID + 50,
+			body: gin.H{
+				"role": "contributor",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID+50, "admin_caller", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				adminCaller := randomUserNew()
+				adminCaller.ID = user.ID + 50
+				adminCaller.Role = "admin"
+				// Caller check + target fetch hit the same (sole admin) row
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).
+					Times(2).
+					Return(adminCaller, nil)
+				// The transactional guard refuses the demotion
+				store.EXPECT().
+					UpdateUserTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.UpdateUserTxResult{}, db.ErrLastAdmin)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusConflict, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "cannot demote the last admin")
+			},
+		},
+		{
+			name:   "OK_DemoteAdminWhenAnotherExists",
+			userID: user.ID + 51,
+			body: gin.H{
+				"role": "editor",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID+50, "admin_caller", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				adminCaller := randomUserNew()
+				adminCaller.ID = user.ID + 50
+				adminCaller.Role = "admin"
+				otherAdmin := randomUserNew()
+				otherAdmin.ID = user.ID + 51
+				otherAdmin.Role = "admin"
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).
+					Times(1).
+					Return(adminCaller, nil)
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(otherAdmin.ID)).
+					Times(1).
+					Return(otherAdmin, nil)
+				demoted := otherAdmin
+				demoted.Role = "editor"
+				store.EXPECT().
+					UpdateUserTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.UpdateUserTxResult{User: demoted}, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
 			name:   "ForbiddenUpdateOtherUser",
 			userID: user.ID + 99,
 			body: gin.H{
@@ -777,6 +841,86 @@ func TestDeleteUserAPI(t *testing.T) {
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:   "ConflictDeleteLastAdmin",
+			userID: adminUser.ID,
+			body:   gin.H{},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				// Middleware caller check + handler target fetch on the sole admin
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
+					Times(2).
+					Return(adminUser, nil)
+				// The transactional guard refuses the delete
+				store.EXPECT().
+					DeleteUserTx(gomock.Any(), gomock.Eq(adminUser.ID)).
+					Times(1).
+					Return(db.ErrLastAdmin)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusConflict, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "cannot delete the last admin")
+			},
+		},
+		{
+			name:   "ConflictDeleteLastAdminWithTransfer",
+			userID: adminUser.ID,
+			body:   gin.H{"transfer_to_id": adminUser.ID + 7},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
+					Times(2).
+					Return(adminUser, nil)
+				store.EXPECT().
+					DeleteUserWithTransferTx(gomock.Any(), gomock.Eq(db.DeleteUserWithTransferTxParams{
+						UserID:       adminUser.ID,
+						TransferToID: adminUser.ID + 7,
+					})).
+					Times(1).
+					Return(db.ErrLastAdmin)
+				store.EXPECT().
+					DeleteUserTx(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusConflict, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "cannot delete the last admin")
+			},
+		},
+		{
+			name:   "OK_DeleteAdminWhenAnotherExists",
+			userID: adminUser.ID + 1,
+			body:   gin.H{},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				secondAdmin := randomUserNew()
+				secondAdmin.ID = adminUser.ID + 1
+				secondAdmin.Role = "admin"
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
+					Times(1).
+					Return(adminUser, nil)
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(secondAdmin.ID)).
+					Times(1).
+					Return(secondAdmin, nil)
+				store.EXPECT().
+					DeleteUserTx(gomock.Any(), gomock.Eq(secondAdmin.ID)).
+					Times(1).
+					Return(nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
 			},
 		},
 		{
