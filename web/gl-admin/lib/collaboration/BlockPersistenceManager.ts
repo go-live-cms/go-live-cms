@@ -2,7 +2,7 @@ import { blockAPIClient, ConflictError, UnauthorizedError } from "../api/blockAP
 import type { BlockDocV1 } from "../blocks-spec"
 import type { BlockDocManager } from "./BlockDocManager"
 import type { Editor } from "@tiptap/react"
-import { blockDocToPM } from "./blockBridge"
+import { setEditorBlockDoc } from "./blockBridge"
 import { collabDebug } from "./debug"
 
 /**
@@ -162,14 +162,9 @@ export class BlockPersistenceManager {
 
         if (this.editor && !this.editor.isDestroyed && !editorAlreadyPopulated) {
           // emitUpdate:false suppresses TipTap's "update" event for this programmatic
-          // seed. The content still syncs into the Yjs "prosemirror" fragment because
+          // seed. The content still syncs into the Yjs "default" fragment because
           // the collaboration ySyncPlugin mirrors the transaction regardless of the flag.
-          try {
-            const pmDoc = blockDocToPM(doc, this.editor.schema)
-            this.editor.commands.setContent(pmDoc.toJSON(), { emitUpdate: false })
-          } catch (error) {
-            console.error("Failed to convert/apply blocks to editor:", error)
-          }
+          setEditorBlockDoc(this.editor, doc)
         }
       }
       // Empty block_doc is fine - editor will start with empty state

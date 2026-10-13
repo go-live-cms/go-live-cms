@@ -1,4 +1,5 @@
 import { login, logout, renewAccessToken } from "./api/sessions"
+import { getMe } from "./api/users"
 
 export interface AuthState {
   isAuthenticated: boolean
@@ -251,6 +252,25 @@ export class AuthManager {
       await this.refreshAccessToken()
     }
     return { ...this.state }
+  }
+
+  // Re-reads the user from GET /users/me so role changes since login (demotion or
+  // promotion) take effect without logging out. The cached user is kept if this fails.
+  async refreshUser(): Promise<any | null> {
+    const token = this.state.accessToken
+    if (!token) return this.state.user
+    try {
+      const { user } = await getMe(token)
+      this.state.user = user
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify(user))
+      }
+      this.notifyListeners()
+      return user
+    } catch (error) {
+      console.error("Failed to refresh user:", error)
+      return this.state.user
+    }
   }
 
   getState(): AuthState {

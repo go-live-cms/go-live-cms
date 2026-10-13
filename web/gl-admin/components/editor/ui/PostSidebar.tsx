@@ -16,6 +16,8 @@ interface PostSidebarProps {
   slug?: string
   mode?: "create" | "edit"
   onSlugChange?: (slug: string) => void
+  // Disables every field for users who can't write content (contributors, #216)
+  readOnly?: boolean
 }
 
 export default function PostSidebar({
@@ -29,6 +31,7 @@ export default function PostSidebar({
   slug,
   mode = "create",
   onSlugChange,
+  readOnly = false,
 }: PostSidebarProps) {
   const [activeTab, setActiveTab] = useState<"general" | "advanced">("general")
   const [urlStructure, setUrlStructure] = useState<"id" | "slug">("id")
@@ -130,7 +133,7 @@ export default function PostSidebar({
         </button>
       </div>
 
-      <div className="post-settings__content">
+      <fieldset className="post-settings__content post-settings__fieldset" disabled={readOnly}>
         {activeTab === "general" && (
           <>
             <div className="post-settings__section">
@@ -255,7 +258,7 @@ export default function PostSidebar({
             </div>
 
             <div className="post-settings__section">
-              <FeaturedImage value={featuredImage} onChange={setFeaturedImage} postId={post.id} disabled={!post.id} />
+              <FeaturedImage value={featuredImage} onChange={setFeaturedImage} postId={post.id} disabled={!post.id || readOnly} />
               {featuredImageError && <small className="post-settings__field-error">Error: {featuredImageError}</small>}
             </div>
           </>
@@ -312,7 +315,7 @@ export default function PostSidebar({
             </div>
           </>
         )}
-      </div>
+      </fieldset>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { Node as PMNode, Schema } from "prosemirror-model"
 import type { BlockDocV1, Block, BlockID } from "../blocks-spec"
+import type { Editor } from "@tiptap/core"
 
 // Simple ID generator - matches BlockDocManager
 let idCounter = 0
@@ -219,6 +220,23 @@ export function blockDocToPM(doc: BlockDocV1, schema: Schema): PMNode {
   }
 
   return schema.nodeFromJSON(pmJSON)
+}
+
+/**
+ * Render a Block Spec v1 doc into an editor without firing TipTap's "update" event.
+ * Shared by BlockPersistenceManager.initialize (collab seed) and the read-only editor
+ * view. With collaboration on, the ySyncPlugin still mirrors this into Yjs regardless
+ * of emitUpdate. Returns false (and logs) if the doc can't be converted, e.g. a known
+ * blockDocToPM limitation like an empty code_block.
+ */
+export function setEditorBlockDoc(editor: Editor, doc: BlockDocV1): boolean {
+  try {
+    editor.commands.setContent(blockDocToPM(doc, editor.schema).toJSON(), { emitUpdate: false })
+    return true
+  } catch (error) {
+    console.error("Failed to convert/apply blocks to editor:", error)
+    return false
+  }
 }
 
 /**

@@ -107,6 +107,14 @@
     padding: 0;
   }
 
+  // The content wrapper is a <fieldset> so `disabled` locks every field for
+  // read-only users; reset the browser's default fieldset chrome.
+  &__fieldset {
+    margin: 0;
+    border: 0;
+    min-width: 0;
+  }
+
   &__section {
     border-bottom: 1px solid var(--border);
     padding: 20px;

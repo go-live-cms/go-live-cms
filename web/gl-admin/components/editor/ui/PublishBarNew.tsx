@@ -13,6 +13,8 @@ interface PublishBarProps {
   onPreview?: () => void
   collabStatus?: CollabStatus
   collabUsers?: CollabUser[]
+  // Disables Save/Publish for users who can't write content (contributors, #216)
+  readOnly?: boolean
 }
 
 export default function PublishBar({
@@ -26,6 +28,7 @@ export default function PublishBar({
   onPreview,
   collabStatus = "disconnected",
   collabUsers = [],
+  readOnly = false,
 }: PublishBarProps) {
   const statusLabel =
     collabStatus === "connected" ? "Connected" : collabStatus === "connecting" ? "Connecting…" : "Offline"
@@ -106,13 +109,13 @@ export default function PublishBar({
             type="button"
             className="btn btn--secondary"
             onClick={onSave}
-            disabled={isSaving || isPublishing}
+            disabled={readOnly || isSaving || isPublishing}
             title="Ctrl+S"
           >
             {isSaving ? "Saving..." : "Save Draft"}
           </button>
 
-          <button type="button" className="btn btn--primary" onClick={onPublish} disabled={isSaving || isPublishing}>
+          <button type="button" className="btn btn--primary" onClick={onPublish} disabled={readOnly || isSaving || isPublishing}>
             {isPublishing ? "Publishing..." : post.post_status === "published" ? "Update" : "Publish"}
           </button>
         </div>

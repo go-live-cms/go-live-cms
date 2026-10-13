@@ -3,7 +3,7 @@ import { EditorContent, useEditor } from "@tiptap/react"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
 import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
 import { BlockPersistenceManager } from "@gl-admin/lib/collaboration/BlockPersistenceManager"
-import { blockDocToPM, pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
+import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
 import { authManager } from "@gl-admin/lib/auth"
@@ -388,31 +388,46 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
 
   // Read-only view (e.g. contributors, #216): no collaboration provider and no
   // persistence manager, so nothing else loads the post's blocks. Load the REST working
-  // copy once per post and render it. No Yjs is involved on this path.
-  const readOnlyLoadedPostIdRef = useRef<number | null>(null)
+  // copy and render it. No Yjs is involved on this path.
+  // The guard is keyed by editor instance AND postId: if useEditor rebuilds the editor
+  // (deps change), the new, empty instance must load again.
+  const readOnlyLoadedRef = useRef<{ editor: typeof editor; postId: number } | null>(null)
   useEffect(() => {
     if (!editor || !readOnly || !postId || collabProvider) return
-    if (readOnlyLoadedPostIdRef.current === postId) return
+    const loaded = () => readOnlyLoadedRef.current?.editor === editor && readOnlyLoadedRef.current?.postId === postId
+    if (loaded()) return
 
     // Marked loaded only on success, so a cancelled run (StrictMode's mount/unmount/
     // mount) or a failed fetch doesn't block the next attempt.
     let cancelled = false
-    ;(async () => {
+    let inFlight = false
+    const load = async () => {
+      if (cancelled || inFlight || loaded()) return
+      inFlight = true
       try {
         const token = authManager.getAccessToken()
         if (token) blockAPIClient.setAuthToken(token)
         const { doc } = await blockAPIClient.getPostBlocks(postId)
         if (cancelled || editor.isDestroyed) return
-        if (doc.blocks_order.length > 0) {
-          editor.commands.setContent(blockDocToPM(doc, editor.schema).toJSON(), { emitUpdate: false })
-        }
-        readOnlyLoadedPostIdRef.current = postId
+        if (doc.blocks_order.length > 0) setEditorBlockDoc(editor, doc)
+        readOnlyLoadedRef.current = { editor, postId }
       } catch (error) {
         console.error("[Editor] Failed to load read-only content:", error)
+      } finally {
+        inFlight = false
       }
-    })()
+    }
+
+    load()
+    // An expired token makes the first fetch fail with 401. The auth manager notifies
+    // subscribers after it refreshes the token, so retry then (mirrors the persistence
+    // manager's suspend-on-401 / resume-on-new-token behavior).
+    const unsubscribe = authManager.subscribe((state) => {
+      if (state.accessToken) load()
+    })
     return () => {
       cancelled = true
+      unsubscribe()
     }
   }, [editor, readOnly, postId, collabProvider])
 

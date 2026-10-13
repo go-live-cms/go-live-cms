@@ -52,9 +52,13 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
 
 **Read-only editor (`readOnly` prop, used for contributors since #216):** creates no
 `CollaborationProvider` and no `BlockPersistenceManager`. A dedicated effect in
-`Editor.tsx` loads the REST working copy once per post (`getPostBlocks` → `blockDocToPM`
-→ `setContent`). No Yjs is involved, so the seeding rules below don't apply to it. The WS
-server rejects non-editors anyway (see `websocket/CLAUDE.md` → Auth).
+`Editor.tsx` loads the REST working copy (`getPostBlocks` → `setEditorBlockDoc`, the
+render helper in `blockBridge.ts` shared with `BlockPersistenceManager.initialize`). The
+loaded guard is keyed by editor instance + postId, and a failed load (e.g. 401) retries
+when `authManager` notifies about a refreshed token. No Yjs is involved, so the seeding
+rules below don't apply to it. `PostForm` re-reads the role from `/users/me` before
+mounting the editor, because the role cached at login can be stale. The WS server rejects
+non-editors anyway (see `websocket/CLAUDE.md` → Auth).
 
 ## Hard rules (violating these reintroduces shipped bugs)
 

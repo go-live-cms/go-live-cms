@@ -309,6 +309,13 @@ wss.on("connection", (ws, req) => {
 });
 
 server.on("upgrade", async (req, socket, head) => {
+  // Node's http server removes its own socket 'error' listener before emitting
+  // 'upgrade'. Without this one, a client that disconnects while we await the role
+  // lookup (ECONNRESET), or a write to an already-closed peer (EPIPE), is an
+  // uncaught 'error' that crashes the process and every live collab session.
+  socket.on("error", (err) => {
+    console.warn("⚠️  Upgrade socket error:", err.code || err.message);
+  });
   console.log("📡 WebSocket upgrade request:", req.url);
   try {
     console.log("🔗 WebSocket upgrade request");
