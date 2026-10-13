@@ -1,28 +1,50 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Navigate to repo root (script is in scripts/ subdirectory)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$REPO_ROOT"
+
 echo "🔑 Generating WebSocket .env from Go API keys..."
 
-OUT="websocket/.env"
-PUBFILE="websocket/public.pem"
-TMP="$(mktemp)"
-
-# 1) Run exporter
-echo "📤 Exporting keys from Go API..."
-if ! go run cmd/export-pubkey/main.go > "$TMP" 2>/dev/null; then
-    echo "❌ Failed to export public key. Make sure Go dependencies are installed."
-    echo "   Try: go mod download"
-    rm -f "$TMP"
+# Check if app.env exists
+if [[ ! -f "app.env" ]]; then
+    echo "❌ app.env not found. Please create it from example.app.env:"
+    echo "   cp example.app.env app.env"
     exit 1
 fi
 
-# 2) Extract PEM content from the multiline format
-echo "🔧 Extracting PEM content..."
-sed -n '/PASETO_V4_PUBLIC_PEM="/,/"$/p' "$TMP" | \
-  sed '1s/PASETO_V4_PUBLIC_PEM="//; $s/"$//' | \
-  sed 's/\\n/\n/g' > "$PUBFILE"
+OUT="websocket/.env"
+PUBFILE="websocket/public.pem"
 
-# 3) Verify PEM file was created properly
+# 1) Extract the hex public key from app.env (anchored, so comments are ignored)
+echo "📤 Reading public key from app.env..."
+read_env() { grep -E "^$1=" app.env | tail -n1 | cut -d= -f2- | tr -d ' \r"' || true; }
+PUB_KEY_HEX="$(read_env PASETO_V4_PUBLIC_KEY_HEX)"
+
+if [[ ! "$PUB_KEY_HEX" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    echo "❌ PASETO_V4_PUBLIC_KEY_HEX missing or not 64 hex chars (32 bytes) in app.env"
+    exit 1
+fi
+
+for tool in xxd base64 fold; do
+    command -v "$tool" >/dev/null || { echo "❌ '$tool' is required but not installed"; exit 1; }
+done
+
+# 2) Wrap the raw Ed25519 key in an SPKI DER structure and PEM-encode it.
+# SPKI prefix for Ed25519: 302a300506032b6570032100 (12 bytes) + 32-byte key.
+# Bytes are piped straight through, never stored in shell variables (which
+# would drop NULs and trailing newlines).
+echo "🔧 Converting public key to PEM format..."
+{
+    echo "-----BEGIN PUBLIC KEY-----"
+    printf '%s' "302a300506032b6570032100${PUB_KEY_HEX}" | xxd -r -p | base64 | tr -d '\n' | fold -w 64
+    echo
+    echo "-----END PUBLIC KEY-----"
+} > "$PUBFILE"
+
+# 4) Verify PEM file was created properly
 if [[ -s "$PUBFILE" ]] && grep -q "BEGIN PUBLIC KEY" "$PUBFILE"; then
     echo "✅ PEM file created successfully:"
     head -1 "$PUBFILE"
@@ -30,17 +52,15 @@ if [[ -s "$PUBFILE" ]] && grep -q "BEGIN PUBLIC KEY" "$PUBFILE"; then
     tail -1 "$PUBFILE"
 else
     echo "❌ PEM file creation failed or is empty"
-    echo "Debug: PEM file contents:"
-    cat "$PUBFILE" || echo "(file empty or missing)"
-    rm -f "$TMP"
+    rm -f "$PUBFILE"
     exit 1
 fi
 
-# 4) Extract issuer and audience
-ISS=$(grep "PASETO_ISSUER=" "$TMP" | cut -d= -f2 || echo "golive.auth")
-AUD=$(grep "PASETO_AUDIENCE=" "$TMP" | cut -d= -f2 || echo "golive.admin-ws")
+# 5) Extract issuer and audience
+ISS="$(read_env PASETO_ISSUER)"; ISS="${ISS:-golive.auth}"
+AUD="$(read_env PASETO_AUDIENCE)"; AUD="${AUD:-golive.admin-ws}"
 
-# 5) Write .env
+# 6) Write .env
 cat > "$OUT" <<EOF
 # WebSocket Server Configuration
 HOST=0.0.0.0
@@ -56,9 +76,6 @@ PASETO_ALLOWED_AUDIENCES=$AUD,golive.admin,golive.auth
 # Use file-based PEM to avoid multiline issues in env files
 PASETO_V4_PUBLIC_PEM_FILE=/run/secrets/public.pem
 EOF
-
-# Clean up
-rm -f "$TMP"
 
 echo "✅ Created $OUT with configuration"
 echo "✅ Created $PUBFILE with public key"

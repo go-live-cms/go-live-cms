@@ -1,6 +1,7 @@
 import React from "react"
 import type { PMNode } from "../types"
 import type { Block } from "@gl-admin/lib/blocks-spec"
+import { safeHref, safeCssColor } from "./safeUrl"
 
 /**
  * Render a single text node with its marks (bold, italic, link, code, etc.)
@@ -34,7 +35,7 @@ export function renderTextNode(node: PMNode, index: number): React.ReactNode {
           content = (
             <a
               key={`link-${index}`}
-              href={(mark.attrs?.href as string) || "#"}
+              href={safeHref(mark.attrs?.href as string | undefined) ?? "#"}
               target={(mark.attrs?.target as string) || undefined}
               rel={mark.attrs?.target === "_blank" ? "noopener noreferrer" : undefined}
             >
@@ -44,7 +45,7 @@ export function renderTextNode(node: PMNode, index: number): React.ReactNode {
           break
         case "highlight":
           content = (
-            <mark key={`highlight-${index}`} style={{ backgroundColor: mark.attrs?.color as string }}>
+            <mark key={`highlight-${index}`} style={{ backgroundColor: safeCssColor(mark.attrs?.color as string | undefined) }}>
               {content}
             </mark>
           )
