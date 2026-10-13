@@ -50,6 +50,12 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
 - `debug.ts` — gated logging. Enable in browser: `localStorage.setItem("GL_DEBUG_COLLAB","1")`.
   Server side: `COLLAB_DEBUG=1`. Both are timestamped (`t=…`) so client+server logs align.
 
+**Read-only editor (`readOnly` prop, used for contributors since #216):** creates no
+`CollaborationProvider` and no `BlockPersistenceManager`. A dedicated effect in
+`Editor.tsx` loads the REST working copy once per post (`getPostBlocks` → `blockDocToPM`
+→ `setContent`). No Yjs is involved, so the seeding rules below don't apply to it. The WS
+server rejects non-editors anyway (see `websocket/CLAUDE.md` → Auth).
+
 ## Hard rules (violating these reintroduces shipped bugs)
 
 0. **Do NOT reintroduce client-side `IndexeddbPersistence` (or any client cache that

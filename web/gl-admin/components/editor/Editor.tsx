@@ -3,7 +3,8 @@ import { EditorContent, useEditor } from "@tiptap/react"
 import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
 import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
 import { BlockPersistenceManager } from "@gl-admin/lib/collaboration/BlockPersistenceManager"
-import { pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
+import { blockDocToPM, pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
+import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
 import { authManager } from "@gl-admin/lib/auth"
 import { applyLink, openLinkModal } from "./utils/linkManager"
@@ -384,6 +385,36 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
       })
     }
   }, [value, editor, collabProvider])
+
+  // Read-only view (e.g. contributors, #216): no collaboration provider and no
+  // persistence manager, so nothing else loads the post's blocks. Load the REST working
+  // copy once per post and render it. No Yjs is involved on this path.
+  const readOnlyLoadedPostIdRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!editor || !readOnly || !postId || collabProvider) return
+    if (readOnlyLoadedPostIdRef.current === postId) return
+
+    // Marked loaded only on success, so a cancelled run (StrictMode's mount/unmount/
+    // mount) or a failed fetch doesn't block the next attempt.
+    let cancelled = false
+    ;(async () => {
+      try {
+        const token = authManager.getAccessToken()
+        if (token) blockAPIClient.setAuthToken(token)
+        const { doc } = await blockAPIClient.getPostBlocks(postId)
+        if (cancelled || editor.isDestroyed) return
+        if (doc.blocks_order.length > 0) {
+          editor.commands.setContent(blockDocToPM(doc, editor.schema).toJSON(), { emitUpdate: false })
+        }
+        readOnlyLoadedPostIdRef.current = postId
+      } catch (error) {
+        console.error("[Editor] Failed to load read-only content:", error)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [editor, readOnly, postId, collabProvider])
 
   // Cleanup collaboration provider on unmount
   useEffect(() => {

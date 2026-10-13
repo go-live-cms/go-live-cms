@@ -79,6 +79,8 @@ services:
       - CHOKIDAR_INTERVAL=300
       - DATA_PATH=/data/yjs
       - SQUASH_SECRET=dev-squash-secret
+      # Per-connection role check (#216): GET ${API_URL}/users/me
+      - API_URL=http://api:8080/api/v1
     volumes:
       - ./websocket:/app
       - /app/node_modules

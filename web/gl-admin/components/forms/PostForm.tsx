@@ -11,6 +11,7 @@ import PublishBar from "@gl-admin/components/editor/ui/PublishBarNew"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { useCollabPresence } from "@gl-admin/components/editor/utils/useCollabPresence"
+import { canEditContent } from "@gl-admin/lib/roles"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 import "@gl-admin/assets/styles/components/Toast.scss"
 
@@ -72,7 +73,13 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     changed_at: initialData?.changed_at || new Date().toISOString(),
   }
 
-  const { status: collabStatus, users: collabUsers } = useCollabPresence(initialData?.id, mode === "edit")
+  // Contributors can't edit content: the WS server rejects their collab connection and
+  // the API rejects their block saves (#216), so open the editor read-only and don't
+  // connect at all.
+  const contentReadOnly = !canEditContent(authManager.getState().user?.role)
+  const collabEnabled = mode === "edit" && !contentReadOnly
+
+  const { status: collabStatus, users: collabUsers } = useCollabPresence(initialData?.id, collabEnabled)
 
   const handlePostUpdate = (updates: Partial<Post>) => {
     setFormData((prev) => ({
@@ -411,8 +418,14 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           </div>
 
           <div className="post-editor__content">
+            {contentReadOnly && (
+              <p className="post-editor__readonly-notice" role="status">
+                View-only: contributors can't edit post content.
+              </p>
+            )}
             <Editor
               ref={editorRef}
+              readOnly={contentReadOnly}
               value={formData.content}
               title={formData.title}
               minChars={10}
@@ -422,7 +435,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               }}
               placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
               postId={initialData?.id}
-              enableCollaboration={mode === "edit"} // Only enable collaboration in edit mode
+              enableCollaboration={collabEnabled} // Only in edit mode, and only for editors/admins
               // Block Spec v1 persistence callbacks
               onSaveStart={() => {
                 setIsSaving(true)

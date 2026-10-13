@@ -11,6 +11,23 @@ Clients connect with `ws://…:1234/post-<id>?ticket=<v4.public token>`. The tok
 audiences `golive.admin-ws`, `golive.admin`, `golive.auth`). Public key loaded from
 `PASETO_V4_PUBLIC_PEM_FILE` (`/run/secrets/public.pem`).
 
+**Role check (#216).** After the token verifies, the upgrade calls `GET ${API_URL}/users/me`
+with the same token and admits only **admins and editors** (`access.js`, unit tested in
+`access.test.js`). This mirrors `requireContentEditor` in `api/auth_roles.go`, so keep the
+role lists in sync.
+- The token's `role` claim is **never** used to authorize: it's stale after a demotion and
+  empty on refresh-issued tokens. Always look up the current role from the DB.
+- A contributor, a deleted user, or a token the API rejects (401/403/404) gets **403**. If
+  the API is down, slow (3s timeout) or returns 5xx, the upgrade gets **503**. It fails
+  closed either way.
+- `API_URL` is required. The server `exit(1)`s at startup without it. Docker sets it to
+  `http://api:8080/api/v1`.
+- Known limitation: the role is checked **only at connect**. An editor demoted mid-session
+  keeps their open socket until it reconnects (REST saves are already blocked). Revisit
+  with Hocuspocus `onAuthenticate` (#206).
+- The admin SPA opens the editor `readOnly` for contributors (`canEditContent` in
+  `web/gl-admin/lib/roles.ts`), so they never attempt the connection.
+
 ## Persistence (LevelDB safety net)
 
 - `setPersistence` (`bindState`/`writeState`) backs each doc with `y-leveldb` at

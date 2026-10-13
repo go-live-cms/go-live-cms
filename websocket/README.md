@@ -56,9 +56,18 @@ cd websocket
 - Token previews are hidden in production (`NODE_ENV=production`)
 - Consider using `PASETO_V4_PUBLIC_PEM_FILE` for file-based keys
 - Remove `golive.admin` from `PASETO_ALLOWED_AUDIENCES` when using WS-specific tokens
+- Set `API_URL` (required) to the Go API base, e.g. `http://api:8080/api/v1`. Every
+  connection looks up the caller's current role there, and only admins and editors may
+  connect.
 
 ## Troubleshooting
 
 - **"No ticket provided"**: Frontend isn't passing authentication token
 - **"Token invalid"**: Check audience mismatch between API and WebSocket server
+- **403 Forbidden on connect**: The user isn't an admin or editor (contributors can't
+  collaborate), or the API no longer accepts the token
+- **503 Service Unavailable on connect**: The role lookup at `API_URL` failed. Check
+  that the API is up and reachable from the websocket container
+- **Server exits with "API_URL is required"**: Add `API_URL` to `websocket/.env` or the
+  compose `environment:` block
 - **Hot reload not working**: Ensure `CHOKIDAR_USEPOLLING=true` in Docker

@@ -2,6 +2,7 @@ import "dotenv/config";
 import { WebSocketServer } from "ws";
 import { createRequire } from "node:module";
 import { evaluatePersistedState } from "./persistence.js";
+import { canEditContent, fetchCurrentRole } from "./access.js";
 import { URL } from "url";
 import { V4 } from "paseto";
 import { createPublicKey } from "crypto";
@@ -56,6 +57,14 @@ const ALLOWED_AUDIENCES = process.env.PASETO_ALLOWED_AUDIENCES?.split(",") || [
 // resolves to "./data" rather than "" (which would silently use the CWD).
 const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
 const SQUASH_SECRET = (process.env.SQUASH_SECRET || "").trim();
+// Base URL of the Go API (e.g. http://api:8080/api/v1). Every upgrade looks up the
+// caller's current role at `${API_URL}/users/me`; see access.js. Required — without it
+// the server can't tell editors from contributors, so it refuses to start (fail closed).
+const API_URL = (process.env.API_URL || "").trim();
+if (!API_URL) {
+  console.error("❌ API_URL is required (e.g. http://api:8080/api/v1) for the per-connection role check");
+  process.exit(1);
+}
 
 // Debug-gated logging (COLLAB_DEBUG=1) for diagnosing the WS-restart instability.
 // Timestamped so it aligns with the browser's GL_DEBUG_COLLAB logs.
@@ -116,6 +125,7 @@ try {
   console.log("   - Primary Audience:", AUDIENCE);
   console.log("   - Allowed Audiences:", ALLOWED_AUDIENCES.join(", "));
   console.log("   - DATA_PATH:", DATA_PATH);
+  console.log("   - API_URL (role lookup):", API_URL);
   console.log(
     "   - Squash endpoint:",
     SQUASH_SECRET ? "enabled" : "DISABLED (no SQUASH_SECRET set)",
@@ -352,11 +362,34 @@ server.on("upgrade", async (req, socket, head) => {
       );
     }
     console.log("✅ Token verified successfully for user:", payload.sub);
-    console.log("👤 User roles:", payload.roles || "none");
+    // The token's `role` claim is informational only (stale on demotion, empty after
+    // refresh). Authorization uses the CURRENT role from the API — see access.js.
+    console.log("👤 Token role claim (informational):", payload.role || "none");
+
+    const docName = docNameFromReq(req);
+    let role;
+    try {
+      role = await fetchCurrentRole(API_URL, credential);
+    } catch (err) {
+      console.error(`🚫 Role lookup failed for user ${payload.username || payload.sub}, doc ${docName}:`, err.message);
+      socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\nCould not verify user role\r\n");
+      socket.destroy();
+      return;
+    }
+    if (!canEditContent(role)) {
+      console.warn(
+        `🚫 Forbidden: user ${payload.username || payload.sub} (role: ${role || "none"}) cannot edit ${docName}`,
+      );
+      socket.write("HTTP/1.1 403 Forbidden\r\n\r\nInsufficient role for collaborative editing\r\n");
+      socket.destroy();
+      return;
+    }
+    console.log("👤 Verified role:", role);
+
     req.auth = {
       sub: payload.sub,
       username: payload.username,
-      roles: payload.roles || [],
+      role,
       kid: footer?.kid,
       tokenPayload: payload,
     };
