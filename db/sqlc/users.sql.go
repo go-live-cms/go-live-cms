@@ -257,7 +257,7 @@ func (q *Queries) LockAdminUserIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
-const transferPostsToAdmin =`-- name: TransferPostsToAdmin :exec
+const transferPostsToAdmin = `-- name: TransferPostsToAdmin :exec
 UPDATE posts 
 SET user_id = $2, username = (SELECT username FROM users WHERE id = $2)
 WHERE user_id = $1
