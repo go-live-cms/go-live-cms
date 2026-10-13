@@ -6,6 +6,7 @@ import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { createUser, updateUser } from "@gl-admin/lib/api/users"
 import type { User } from "@gl-admin/lib/api/types"
 import { AuthManager } from "@gl-admin/lib/auth"
+import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
 
 type UserFormMode = "create" | "edit"
 
@@ -26,12 +27,7 @@ type UserFormProps = {
     roleOptions?: SelectOption[]
 }
 
-const DEFAULT_ROLE_OPTIONS: SelectOption[] = [
-    { value: "viewer", label: "Viewer" },
-    { value: "moderator", label: "Moderator" },
-    { value: "author", label: "Author" },
-    { value: "admin", label: "Administrator" },
-]
+const DEFAULT_ROLE_OPTIONS: SelectOption[] = USER_ROLE_OPTIONS
 
 function toUsername(seed?: string) {
     if (!seed) return ""

@@ -13,6 +13,7 @@ import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table
 import { getUsers } from "@gl-admin/lib/api/users"
 import type { User, ApiMeta } from "@gl-admin/lib/api/types"
 import { AuthManager } from "@gl-admin/lib/auth"
+import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
 
 const Users: React.FC = () => {
     const accessToken = AuthManager.getInstance().getAccessToken() || ""
@@ -81,10 +82,7 @@ const Users: React.FC = () => {
                 value={selectedFilters.role}
                 options={[
                     { label: "All Roles", value: "" },
-                    { label: "Admin", value: "admin" },
-                    { label: "Moderator", value: "moderator" },
-                    { label: "Author", value: "author" },
-                    { label: "Editor", value: "editor" },
+                    ...USER_ROLE_OPTIONS,
                 ]}
                 prefix="Role:"
                 onChange={(value) => setSelectedFilters((prev) => ({ ...prev, role: value }))}
