@@ -49,7 +49,6 @@
 //
 // Content generation uses mixed seeding strategies:
 //   - Most creators use gofakeit.Seed(0) for reproducible results
-//   - generateDummyContent seeds with time.Now() for content variety
 //   - Image downloads depend on external service availability
 //
 // # Network Dependencies
@@ -661,7 +660,7 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 //
 // Each post receives:
 //   - Unique URL slug with timestamp suffix to prevent conflicts
-//   - Generated markdown content via generateDummyContent()
+//   - Generated Block Spec v1 content via generateDummyBlockDoc()
 //   - Realistic descriptions using gofakeit sentences
 //   - Round-robin user assignment for diverse authorship
 //   - Post status set to "published" and type set to "post"
@@ -732,16 +731,15 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 			PostStatus:  "published",
 			PostParent:  sql.NullInt64{Valid: false},
 			MenuOrder:   0,
-			Slug:        generateSlug(title),
+			Slug:        seedSlug(title),
 			BlockDoc:    generateDummyBlockDoc(title),
 		}
 
-		createdPost, err := store.CreatePosts(context.TODO(), postParams)
+		createdPost, err := createSeedPost(store, postParams)
 		if err != nil {
 			log.Printf("❌ Failed to create post '%s': %v", title, err)
 			continue
 		}
-		publishDummyDoc(store, createdPost.ID, postParams.BlockDoc)
 
 		blogMeta := map[string]string{
 			"featured_image":   fmt.Sprintf("/uploads/sample-image-%d.jpg", (i%12)+1),
@@ -855,7 +853,7 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 //
 // # Content Format
 //
-// Page content uses markdown format with basic heading structure. Content
+// Page content is a Block Spec v1 document (headings, paragraphs, quote). Content
 // is minimal but structured to show proper page formatting.
 //
 // # Dependencies
@@ -930,16 +928,15 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 			PostStatus:  "published",
 			PostParent:  sql.NullInt64{Valid: false},
 			MenuOrder:   int32(i + 1),
-			Slug:        url,
+			Slug:        seedSlug(pageData.title),
 			BlockDoc:    generateDummyBlockDoc(pageData.title),
 		}
 
-		createdPage, err := store.CreatePosts(context.TODO(), pageParams)
+		createdPage, err := createSeedPost(store, pageParams)
 		if err != nil {
 			log.Printf("❌ Failed to create page '%s': %v", pageData.title, err)
 			continue
 		}
-		publishDummyDoc(store, createdPage.ID, pageParams.BlockDoc)
 
 		for key, value := range pageData.meta {
 			_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
@@ -995,16 +992,15 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 					PostStatus:  "published",
 					PostParent:  sql.NullInt64{Int64: createdPage.ID, Valid: true},
 					MenuOrder:   int32(j + 1),
-					Slug:        childURL,
+					Slug:        seedSlug(childData.title),
 					BlockDoc:    generateDummyBlockDoc(childData.title),
 				}
 
-				createdChild, err := store.CreatePosts(context.TODO(), childParams)
+				createdChild, err := createSeedPost(store, childParams)
 				if err != nil {
 					log.Printf("❌ Failed to create child page '%s': %v", childData.title, err)
 					continue
 				}
-				publishDummyDoc(store, createdChild.ID, childParams.BlockDoc)
 
 				for key, value := range childData.meta {
 					_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
@@ -1166,64 +1162,6 @@ func downloadImage(url, filepath string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
-}
-
-// generateDummyContent creates structured markdown content for demo posts and pages.
-// This function generates realistic article-style content with proper markdown
-// formatting and logical structure.
-//
-// # Content Structure
-//
-// Generated content follows a consistent article format:
-//  1. H1 heading (5-word sentence)
-//  2. Opening paragraph (3-5 sentences, 8 words each)
-//  3. "Key Points" section with H2 heading
-//  4. Bulleted list (3 items, 8 words each)
-//  5. Body paragraph (4-6 sentences, 10 words each)
-//  6. "Conclusion" section with H2 heading
-//  7. Closing paragraph (2-4 sentences, 8 words each)
-//
-// # Randomness Strategy
-//
-// Uses time-based seeding (time.Now().UnixNano()) to create content variety
-// across multiple runs. This differs from other functions that use deterministic
-// seeding (gofakeit.Seed(0)) for reproducibility.
-//
-// # Content Quality
-//
-// Content is generated using gofakeit's linguistic patterns, providing:
-//   - Grammatically correct sentences
-//   - Varied sentence structure and length
-//   - Realistic paragraph flow
-//   - Proper markdown formatting
-//
-// # Use Cases
-//
-//   - Blog post content generation
-//   - Page content for static pages
-//   - Theme development content testing
-//   - Content layout demonstrations
-//
-// # Reproducibility Note
-//
-// Due to time-based seeding, content will vary between runs. For deterministic
-// content generation, consider using gofakeit.Seed(0) instead of time-based seeding.
-func generateDummyContent() string {
-	gofakeit.Seed(time.Now().UnixNano())
-
-	content := fmt.Sprintf("# %s\n\n", gofakeit.Sentence(5))
-	content += fmt.Sprintf("%s\n\n", gofakeit.Paragraph(3, 5, 8, " "))
-	content += "## Key Points\n\n"
-
-	for i := 0; i < 3; i++ {
-		content += fmt.Sprintf("- %s\n", gofakeit.Sentence(8))
-	}
-
-	content += "\n" + gofakeit.Paragraph(4, 6, 10, " ") + "\n\n"
-	content += "## Conclusion\n\n"
-	content += gofakeit.Paragraph(2, 4, 8, " ")
-
-	return content
 }
 
 // min returns the smaller of two integers. This utility function is used
