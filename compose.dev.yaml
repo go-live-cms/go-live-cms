@@ -86,7 +86,7 @@ services:
       - ./websocket/public.pem:/run/secrets/public.pem:ro
       - ws_data:/data/yjs
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:1234/"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1234/"]
       interval: 10s
       timeout: 3s
       retries: 5
