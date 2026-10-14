@@ -66,10 +66,16 @@ test("fetchCurrentRole throws on network errors", async () => {
 });
 
 test("fetchCurrentRole throws when the API doesn't answer in time", async () => {
-  // Never resolves on its own; only the abort signal can end it.
+  // Never resolves on its own; only the abort signal can end it. AbortSignal.timeout's
+  // timer is unref'd, so hold a ref'd timer open (a real fetch would hold a socket);
+  // otherwise Node can see an empty event loop and cancel the test before the abort.
   const impl = (_url, init) =>
     new Promise((_resolve, reject) => {
-      init.signal.addEventListener("abort", () => reject(init.signal.reason));
+      const keepAlive = setTimeout(() => {}, 10_000);
+      init.signal.addEventListener("abort", () => {
+        clearTimeout(keepAlive);
+        reject(init.signal.reason);
+      });
     });
   await assert.rejects(fetchCurrentRole("http://api", "t", { fetchImpl: impl, timeoutMs: 20 }), {
     name: "TimeoutError",
