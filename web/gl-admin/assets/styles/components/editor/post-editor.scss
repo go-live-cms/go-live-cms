@@ -83,6 +83,16 @@
     }
   }
 
+  &__readonly-notice {
+    margin: 0 0 1rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+  }
+
   &__content {
     flex: 1;
     min-height: 500px;

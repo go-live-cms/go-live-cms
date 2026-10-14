@@ -14,6 +14,11 @@ export async function getUsers(
   }
 }
 
+// The caller's own profile, read from the DB (current role, not the login-time one).
+export async function getMe(token?: string): Promise<{ user: User }> {
+  return apiCall("/users/me", { token })
+}
+
 export async function getUserById(id: string | number, token?: string): Promise<{ user: User }> {
   return apiCall(`/users/id/${id}`, { token })
 }

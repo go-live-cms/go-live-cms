@@ -11,6 +11,7 @@ import PublishBar from "@gl-admin/components/editor/ui/PublishBarNew"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { useCollabPresence } from "@gl-admin/components/editor/utils/useCollabPresence"
+import { canEditContent } from "@gl-admin/lib/roles"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 import "@gl-admin/assets/styles/components/Toast.scss"
 
@@ -72,7 +73,30 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     changed_at: initialData?.changed_at || new Date().toISOString(),
   }
 
-  const { status: collabStatus, users: collabUsers } = useCollabPresence(initialData?.id, mode === "edit")
+  // Contributors can't edit content: the WS server rejects their collab connection and
+  // the API rejects their writes (#216), so open the editor read-only and don't connect
+  // at all. The role cached at login can be stale (demotion/promotion since), so in edit
+  // mode the current role is re-read from /users/me before the editor mounts. Otherwise
+  // a demoted editor would get an editable editor whose socket is rejected in a loop.
+  const [role, setRole] = useState<string | undefined>(() => authManager.getState().user?.role)
+  const [roleVerified, setRoleVerified] = useState(mode !== "edit")
+  useEffect(() => {
+    if (mode !== "edit") return
+    let cancelled = false
+    authManager.refreshUser().then((user) => {
+      if (cancelled) return
+      setRole(user?.role)
+      setRoleVerified(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
+
+  const contentReadOnly = !canEditContent(role)
+  const collabEnabled = mode === "edit" && roleVerified && !contentReadOnly
+
+  const { status: collabStatus, users: collabUsers } = useCollabPresence(initialData?.id, collabEnabled)
 
   const handlePostUpdate = (updates: Partial<Post>) => {
     setFormData((prev) => ({
@@ -209,6 +233,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   }
 
   const handleSave = async () => {
+    // Read-only users can't write; also covers the Ctrl+S shortcut (#216).
+    if (contentReadOnly) return
     // Use Block Spec v1 persistence for edit mode, fallback to traditional save for create mode
     if (mode === "edit" && editorRef.current && initialData?.id) {
       try {
@@ -224,6 +250,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   }
 
   const handlePublish = async () => {
+    if (contentReadOnly) return
     // Use Block Spec v1 publishing for edit mode, fallback to traditional publish for create mode
     if (mode === "edit" && editorRef.current && initialData?.id) {
       try {
@@ -391,6 +418,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         onSettingsToggle={() => setSidebarVisible(!sidebarVisible)}
         collabStatus={collabStatus}
         collabUsers={collabUsers}
+        readOnly={contentReadOnly}
       />
 
       <div
@@ -407,12 +435,22 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               className="post-editor__title-input"
               id="post-title"
               name="post-title"
+              readOnly={contentReadOnly}
             />
           </div>
 
           <div className="post-editor__content">
+            {roleVerified && contentReadOnly && (
+              <p className="post-editor__readonly-notice" role="status">
+                View-only: contributors can't edit post content.
+              </p>
+            )}
+            {/* Mount only once the current role is known, so a stale cached role never
+                opens a collab connection the server would reject. */}
+            {roleVerified && (
             <Editor
               ref={editorRef}
+              readOnly={contentReadOnly}
               value={formData.content}
               title={formData.title}
               minChars={10}
@@ -422,7 +460,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               }}
               placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
               postId={initialData?.id}
-              enableCollaboration={mode === "edit"} // Only enable collaboration in edit mode
+              enableCollaboration={collabEnabled} // Only in edit mode, and only for editors/admins
               // Block Spec v1 persistence callbacks
               onSaveStart={() => {
                 setIsSaving(true)
@@ -449,6 +487,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                 showError("Publish failed")
               }}
             />
+            )}
           </div>
         </div>
       </div>
@@ -464,6 +503,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         slug={formData.slug}
         mode={mode}
         onSlugChange={handleSlugChange}
+        readOnly={contentReadOnly}
       />
 
       <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
