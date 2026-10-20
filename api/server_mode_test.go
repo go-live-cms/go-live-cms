@@ -1,14 +1,17 @@
 package api
 
 import (
+	"database/sql"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-live-cms/go-live-cms/devModeUtil"
 	"github.com/go-live-cms/go-live-cms/util"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,8 +52,9 @@ func TestNewServerSeedingGate(t *testing.T) {
 	t.Run("release creates no users", func(t *testing.T) {
 		t.Chdir(t.TempDir())
 		ctrl := gomock.NewController(t)
-		store := mockdb.NewMockStore(ctrl) // only theme sync allowed: any seeding call fails
+		store := mockdb.NewMockStore(ctrl) // only theme sync and the seeded-account check allowed
 		allowThemeSync(store)
+		expectSeededAccountLookups(t, store, nil)
 
 		config := newTestConfig(t)
 		config.IsTestMode = false
@@ -81,6 +85,110 @@ func TestNewServerSeedingGate(t *testing.T) {
 
 		_, err := NewServer(config, store)
 		require.NoError(t, err)
+	})
+}
+
+func TestShouldCheckSeededAccounts(t *testing.T) {
+	testCases := []struct {
+		name     string
+		ginMode  string
+		testMode bool
+		want     bool
+	}{
+		{name: "release", ginMode: util.GinModeRelease, want: true},
+		{name: "test", ginMode: util.GinModeTest, want: true},
+		{name: "unset", ginMode: "", want: true},
+		{name: "debug", ginMode: util.GinModeDebug, want: false},
+		{name: "release in tests", ginMode: util.GinModeRelease, testMode: true, want: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := util.Config{GinMode: tc.ginMode, IsTestMode: tc.testMode}
+			require.Equal(t, tc.want, shouldCheckSeededAccounts(config))
+		})
+	}
+}
+
+// expectSeededAccountLookups answers the startup check's GetUserByUsername call
+// for every seeded account: a user hashed from passwords[username] when
+// present, sql.ErrNoRows otherwise.
+func expectSeededAccountLookups(t *testing.T, store *mockdb.MockStore, passwords map[string]string) {
+	for _, account := range devModeUtil.SeededAccounts() {
+		password, ok := passwords[account.Username]
+		if !ok {
+			store.EXPECT().
+				GetUserByUsername(gomock.Any(), gomock.Eq(account.Username)).
+				Times(1).
+				Return(db.User{}, sql.ErrNoRows)
+			continue
+		}
+		hashed, err := util.HashPassword(password)
+		require.NoError(t, err)
+		store.EXPECT().
+			GetUserByUsername(gomock.Any(), gomock.Eq(account.Username)).
+			Times(1).
+			Return(db.User{Username: account.Username, HashedPassword: hashed}, nil)
+	}
+}
+
+// releaseConfig is a non-test-mode release config, so NewServer runs the
+// seeded-account check.
+func releaseConfig(t *testing.T) util.Config {
+	config := newTestConfig(t)
+	config.IsTestMode = false
+	config.GinMode = util.GinModeRelease
+	return config
+}
+
+func TestNewServerSeededAccountCheck(t *testing.T) {
+	t.Run("refuses to start with the default admin password", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		allowThemeSync(store)
+		expectSeededAccountLookups(t, store, map[string]string{
+			"admin":  devModeUtil.DefaultAdminPassword,
+			"editor": devModeUtil.DummyUserPassword,
+		})
+
+		server, err := NewServer(releaseConfig(t), store)
+		require.Error(t, err)
+		require.Nil(t, server)
+		require.Contains(t, err.Error(), "refusing to start")
+		require.Contains(t, err.Error(), "admin, editor")
+		require.Contains(t, err.Error(), "readme.md")
+	})
+
+	t.Run("starts once the seeded passwords are rotated", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		allowThemeSync(store)
+		expectSeededAccountLookups(t, store, map[string]string{
+			"admin":  "a-new-strong-password",
+			"editor": "another-new-password",
+		})
+
+		server, err := NewServer(releaseConfig(t), store)
+		require.NoError(t, err)
+		require.NotNil(t, server)
+	})
+
+	t.Run("refuses to start when the check cannot run", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		allowThemeSync(store)
+		dbErr := errors.New("connection refused")
+		store.EXPECT().
+			GetUserByUsername(gomock.Any(), gomock.Eq(devModeUtil.DefaultAdminUsername)).
+			Times(1).
+			Return(db.User{}, dbErr)
+
+		server, err := NewServer(releaseConfig(t), store)
+		require.ErrorIs(t, err, dbErr)
+		require.Nil(t, server)
 	})
 }
 

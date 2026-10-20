@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -33,6 +35,8 @@ type Server struct {
 // Returns an initialized server ready to Start.
 //
 // Notes:
+//   - Outside debug mode (and tests), it returns an error if a dev seeded
+//     account still has its seeded password (checkSeededAccounts).
 //   - Dev seeding runs only when shouldSeedDevData(config) is true. It reads the
 //     config, not gin.Mode(), so the global Gin mode can't enable it by accident.
 //   - Token maker uses config PASETO keys (issuer/audience/KIDs) from util.Config.
@@ -54,6 +58,12 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		config:     config,
 		tokenMaker: tokenMaker,
 		ctx:        context.Background(),
+	}
+
+	if shouldCheckSeededAccounts(config) {
+		if err := checkSeededAccounts(server.store); err != nil {
+			return nil, err
+		}
 	}
 
 	server.setupRoutes()
@@ -85,6 +95,39 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 // (admin/123456) and dummy content: only with GIN_MODE=debug and outside tests.
 func shouldSeedDevData(config util.Config) bool {
 	return config.IsDebugMode() && !config.IsTestMode
+}
+
+// shouldCheckSeededAccounts reports whether startup must verify that no dev
+// seeded account still has its seeded password: outside debug mode and tests.
+func shouldCheckSeededAccounts(config util.Config) bool {
+	return !config.IsDebugMode() && !config.IsTestMode
+}
+
+// seededAccountsCheckTimeout bounds the startup lookups of seeded accounts.
+const seededAccountsCheckTimeout = 30 * time.Second
+
+// checkSeededAccounts returns an error if any account the dev seeders create
+// (admin/123456 and the dummy users) still has its seeded password. Before
+// #228 every deployment ran in debug mode and got these accounts, and their
+// passwords are public, so startup refuses to run until they are rotated.
+// A store error also fails the check: an unverified start is not allowed.
+func checkSeededAccounts(store db.Store) error {
+	ctx, cancel := context.WithTimeout(context.Background(), seededAccountsCheckTimeout)
+	defer cancel()
+
+	usernames, err := devModeUtil.FindSeededAccountsWithSeededPasswords(ctx, store)
+	if err != nil {
+		return fmt.Errorf("cannot verify that dev seeded accounts are disabled: %w", err)
+	}
+	if len(usernames) > 0 {
+		return fmt.Errorf(
+			"refusing to start: account(s) %s still have the publicly known password the dev seeders gave them "+
+				"(created by an older version that always ran in debug mode). Change their passwords, "+
+				"see \"Seeded dev accounts in production\" in readme.md for the steps",
+			strings.Join(usernames, ", "),
+		)
+	}
+	return nil
 }
 
 // devCORSOrigins are the local frontend origins allowed in debug mode.
