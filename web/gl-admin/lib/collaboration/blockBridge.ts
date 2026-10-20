@@ -42,32 +42,33 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
   for (let i = 0; i < pmDoc.content.childCount; i++) {
     const node = pmDoc.content.child(i)
     const block = pmNodeToBlock(node, blocks, seenIds)
-    if (block) {
-      blocks[block.id] = block
+    if (!block) continue
+
+    if (block.type === "bullet_list" || block.type === "ordered_list") {
+      // A list with no items can only come from an already schema-invalid PM node
+      // (the schema requires `listItem+`; nodeFromJSON doesn't enforce it). It holds
+      // no content, so skip it rather than persist a childless list block (#213).
+      if (node.childCount === 0) continue
+
       blocksOrder.push(block.id)
       seenIds.add(block.id)
 
-      // Handle list children
-      if ((block.type === "bullet_list" || block.type === "ordered_list") && node.content && node.content.size > 0) {
-        const children: BlockID[] = []
-
-        // Iterate through list items
-        for (let j = 0; j < node.content.childCount; j++) {
-          const listItemNode = node.content.child(j)
-          const listItemBlock = pmNodeToBlock(listItemNode, blocks, seenIds)
-          if (listItemBlock) {
-            blocks[listItemBlock.id] = listItemBlock
-            children.push(listItemBlock.id)
-            seenIds.add(listItemBlock.id)
-          }
-        }
-
-        // Update the list block with children
-        if (children.length > 0) {
-          blocks[block.id] = { ...block, children }
+      const children: BlockID[] = []
+      for (let j = 0; j < node.childCount; j++) {
+        const listItemBlock = pmNodeToBlock(node.child(j), blocks, seenIds)
+        if (listItemBlock) {
+          blocks[listItemBlock.id] = listItemBlock
+          children.push(listItemBlock.id)
+          seenIds.add(listItemBlock.id)
         }
       }
+      blocks[block.id] = { ...block, children }
+      continue
     }
+
+    blocks[block.id] = block
+    blocksOrder.push(block.id)
+    seenIds.add(block.id)
   }
 
   return {
@@ -328,34 +329,14 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>): any {
       return {
         type: "bulletList",
         attrs: baseAttrs,
-        content:
-          block.children
-            ?.map((childId) => {
-              const childBlock = allBlocks[childId]
-              if (!childBlock) {
-                console.warn(`Child block ${childId} not found`)
-                return null
-              }
-              return blockToPMNode(childBlock, allBlocks)
-            })
-            .filter(Boolean) || [],
+        content: listItemsToPM(block.children, allBlocks),
       }
 
     case "ordered_list":
       return {
         type: "orderedList",
         attrs: baseAttrs,
-        content:
-          block.children
-            ?.map((childId) => {
-              const childBlock = allBlocks[childId]
-              if (!childBlock) {
-                console.warn(`Child block ${childId} not found`)
-                return null
-              }
-              return blockToPMNode(childBlock, allBlocks)
-            })
-            .filter(Boolean) || [],
+        content: listItemsToPM(block.children, allBlocks),
       }
 
     case "list_item":
@@ -388,6 +369,30 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>): any {
       console.warn(`Unknown block type without PM data: ${(block as any).type}`)
       return null
   }
+}
+
+/**
+ * Convert a list block's children to PM listItem JSON. The schema requires
+ * `listItem+`, but schema.nodeFromJSON doesn't check content expressions, so an
+ * empty array would silently build a schema-invalid list (#213). When no child
+ * resolves (no children, or all ids dangling), synthesize one empty listItem —
+ * what the editor itself produces for a fresh list. It gets no data-block-id;
+ * pmToBlockDoc mints one at save time.
+ */
+function listItemsToPM(children: BlockID[] | undefined, allBlocks: Record<BlockID, Block>): any[] {
+  const items = (children ?? [])
+    .map((childId) => {
+      const childBlock = allBlocks[childId]
+      if (!childBlock) {
+        console.warn(`Child block ${childId} not found`)
+        return null
+      }
+      return blockToPMNode(childBlock, allBlocks)
+    })
+    .filter(Boolean)
+
+  if (items.length > 0) return items
+  return [{ type: "listItem", content: [{ type: "paragraph" }] }]
 }
 
 /**

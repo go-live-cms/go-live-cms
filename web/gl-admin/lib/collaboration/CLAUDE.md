@@ -152,11 +152,16 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
 - `pmToBlockDoc` regenerates duplicate/invalid block ids.
 - **Known limitation:** a `code_block` with empty code can't round-trip (ProseMirror
   disallows empty text nodes) — `blockDocToPM` throws. Pinned by a test.
-- **Known limitation:** an empty `bullet_list`/`ordered_list` (no `children`) does NOT
-  throw — `blockToPMNode` emits `content: []` and `schema.nodeFromJSON` builds it without
-  validating the `listItem+` content rule, so a schema-invalid node passes through
-  silently (editor checks would later reject it). Pinned by a test; graceful handling is
-  a tracked follow-up.
+- **`schema.nodeFromJSON` does NOT validate content expressions** — it will happily
+  build a schema-invalid node. Tests prove validity with `node.check()`.
+- **Empty lists (#213):** the schema requires `listItem+`. `blockDocToPM` gives a
+  `bullet_list`/`ordered_list` whose children are empty, absent, or all dangling ids
+  **one synthesized empty `listItem`** (empty paragraph inside) via `listItemsToPM`,
+  keeping the list's block id and position (dropping it could leave an empty `doc`,
+  which violates `block+` too). The synthesized item has no `data-block-id`;
+  `pmToBlockDoc` mints one at save. Conversely, `pmToBlockDoc` **skips** a childless
+  list node (only reachable from an already-invalid PM doc), so a childless list block
+  is never persisted.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema all allow the full range — keep them in sync). `validateBlockDoc` has no
   production caller yet; wiring validation is a tracked follow-up.

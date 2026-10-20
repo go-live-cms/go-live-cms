@@ -561,28 +561,87 @@ describe("blockBridge — additional edge cases", () => {
     expect((out.blocks[a].attrs as any).alt).toBe("no-src")
   })
 
-  it("characterizes an empty bullet_list (no children) on the way to PM", () => {
-    const a = id()
-    const doc: BlockDocV1 = {
-      doc_version: 1,
-      blocks_order: [a],
-      blocks: { [a]: { id: a, type: "bullet_list", version: 1, attrs: {}, children: [] } },
+  // #213: the schema requires `listItem+`, but schema.nodeFromJSON doesn't validate
+  // content expressions, so an empty list used to build a schema-invalid node silently.
+  // node.check() enforces the content rule, so it's the proof of validity here.
+  describe("empty lists (#213)", () => {
+    const cases = [
+      ["bullet_list", "bulletList", { children: [] }],
+      ["bullet_list", "bulletList", {}], // children absent
+      ["ordered_list", "orderedList", { children: [] }],
+      ["ordered_list", "orderedList", {}],
+    ] as const
+
+    for (const [blockType, pmType, extra] of cases) {
+      it(`${blockType} with ${"children" in extra ? "children: []" : "no children"} gets one empty listItem`, () => {
+        const a = id()
+        const doc: BlockDocV1 = {
+          doc_version: 1,
+          blocks_order: [a],
+          blocks: { [a]: { id: a, type: blockType, version: 1, attrs: {}, ...extra } as any },
+        }
+        const pm = blockDocToPM(doc, schema)
+        expect(() => pm.check()).not.toThrow()
+        const list = pm.child(0)
+        expect(list.type.name).toBe(pmType)
+        expect(list.attrs["data-block-id"]).toBe(a)
+        expect(list.childCount).toBe(1)
+        const item = list.child(0)
+        expect(item.type.name).toBe("listItem")
+        expect(item.childCount).toBe(1)
+        expect(item.child(0).type.name).toBe("paragraph")
+        expect(item.textContent).toBe("")
+      })
     }
-    // blockToPMNode emits a bulletList with content: [], which violates the
-    // schema's `listItem+` content rule. prosemirror's nodeFromJSON constructs
-    // it without validating content, so this does NOT throw here — but the
-    // resulting node is schema-invalid and would be rejected by editor checks.
-    // Tracked as a follow-up (graceful empty-list handling). Pinning current behavior:
-    const pm = blockDocToPM(doc, schema)
-    const node = pm.child(0)
-    expect(node.type.name).toBe("bulletList")
-    expect(node.childCount).toBe(0)
-    // ...and it really is schema-invalid: node.check() enforces the content rule.
-    expect(() => node.check()).toThrow()
-    // And it round-trips back to an empty bullet_list with no children set.
-    const back = pmToBlockDoc(pm)
-    expect(back.blocks[back.blocks_order[0]].type).toBe("bullet_list")
-    expect(back.blocks[back.blocks_order[0]].children).toBeUndefined()
+
+    it("a list whose children are all dangling ids also gets one empty listItem", () => {
+      const a = id()
+      const doc: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [a],
+        blocks: { [a]: { id: a, type: "bullet_list", version: 1, attrs: {}, children: ["missing-0000000000"] } },
+      }
+      const pm = blockDocToPM(doc, schema)
+      expect(() => pm.check()).not.toThrow()
+      expect(pm.child(0).childCount).toBe(1)
+    })
+
+    it("the healed list round-trips as a list with one empty list_item child", () => {
+      const a = id()
+      const out = roundTrip({
+        doc_version: 1,
+        blocks_order: [a],
+        blocks: { [a]: { id: a, type: "bullet_list", version: 1, attrs: {}, children: [] } },
+      })
+      expect(out.blocks_order).toEqual([a])
+      const list = out.blocks[a]
+      expect(list.type).toBe("bullet_list")
+      expect(list.children).toHaveLength(1)
+      const item = out.blocks[list.children![0]]
+      expect(item.type).toBe("list_item")
+      // The synthesized item carried no id; pmToBlockDoc minted a valid one.
+      expect(item.id.length).toBeGreaterThanOrEqual(10)
+      expect(item.attrs.text).toBeUndefined()
+    })
+
+    it("pmToBlockDoc never emits a childless list block (skips an invalid empty list node)", () => {
+      const list = id()
+      const para = id()
+      // nodeFromJSON builds the invalid empty list without complaint — exactly the
+      // input pmToBlockDoc must not persist.
+      const pmIn = schema.nodeFromJSON({
+        type: "doc",
+        content: [
+          { type: "orderedList", attrs: { "data-block-id": list }, content: [] },
+          { type: "paragraph", attrs: { "data-block-id": para }, content: [{ type: "text", text: "kept" }] },
+        ],
+      })
+      expect(() => pmIn.check()).toThrow()
+      const out = pmToBlockDoc(pmIn)
+      expect(out.blocks_order).toEqual([para])
+      expect(out.blocks[list]).toBeUndefined()
+      expect(out.blocks[para].attrs.text).toBe("kept")
+    })
   })
 
   it("forward-compat: an unknown attr on a known node survives via the pm blob", () => {
