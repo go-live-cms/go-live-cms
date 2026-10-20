@@ -19,13 +19,22 @@
 //
 // Metadata updates: PUT /media/:id for name, description, alt text changes.
 // Preserves file data, only updates database fields.
-// Requires resource ownership validation.
 //
 // # Delete Operations
 //
 // Soft deletion: DELETE /media/:id removes database records and unlinks from posts.
 // File cleanup: Automatic filesystem cleanup via database transaction.
-// Auth checks: Users can only delete their own media assets.
+//
+// # Ownership Policy (PUT and DELETE /media/:id)
+//
+// Both routes sit behind requireContentEditor, so only admins and editors
+// reach these handlers today. Within them:
+//   - admin:  may update/delete any media (moderation)
+//   - editor: may update/delete any media (moderation; editors can already
+//     delete any post)
+//   - any other role admitted later: own media only (403 otherwise)
+//
+// The rule lives in canModerateMedia (auth_roles.go).
 //
 // # Error Handling
 //
@@ -42,6 +51,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -292,7 +302,9 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 // updateMedia handles PUT /media/:id - metadata updates for existing media.
 // Accepts JSON with optional name, description, alt, media_path, file_size, etc.
 // Only updates provided fields, preserves existing values for omitted fields.
-// Auth: Requires Bearer token. Returns 200 with updated media JSON or error.
+// Auth: Requires Bearer token + editor-or-admin role. Admins and editors may
+// update any media; other roles only their own (see Ownership Policy above).
+// Returns 200 with updated media JSON or error.
 func (server *Server) updateMedia(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -307,6 +319,11 @@ func (server *Server) updateMedia(c *gin.Context) {
 		return
 	}
 
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
+
 	existingMedia, err := server.store.GetMedia(c.Request.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -314,6 +331,11 @@ func (server *Server) updateMedia(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media"})
+		return
+	}
+
+	if !canModerateMedia(caller) && existingMedia.UserID != caller.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only update your own media"})
 		return
 	}
 
@@ -376,7 +398,9 @@ func (server *Server) updateMedia(c *gin.Context) {
 // deleteMedia handles DELETE /media/:id - soft deletion with filesystem cleanup.
 // Removes database record, unlinks from posts, deletes physical file.
 // Uses database transaction for data consistency and automatic rollback.
-// Auth: Requires Bearer token, ownership validation. Returns 200 with success message.
+// Auth: Requires Bearer token + editor-or-admin role. Admins and editors may
+// delete any media; other roles only their own (see Ownership Policy above).
+// Returns 200 with success message.
 func (server *Server) deleteMedia(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseInt(idParam, 10, 64)
@@ -385,8 +409,10 @@ func (server *Server) deleteMedia(c *gin.Context) {
 		return
 	}
 
-	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
-	userID := authPayload.UserID
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
 
 	_, err = server.store.GetMedia(c.Request.Context(), id)
 	if err != nil {
@@ -399,11 +425,12 @@ func (server *Server) deleteMedia(c *gin.Context) {
 	}
 
 	err = server.store.DeleteMediaTx(c.Request.Context(), db.DeleteMediaTxParams{
-		MediaID: id,
-		UserID:  userID,
+		MediaID:  id,
+		UserID:   caller.ID,
+		AnyOwner: canModerateMedia(caller),
 	})
 	if err != nil {
-		if containsString(err.Error(), "permission denied") {
+		if errors.Is(err, db.ErrMediaNotOwned) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "you can only delete your own media"})
 			return
 		}

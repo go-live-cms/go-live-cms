@@ -51,6 +51,14 @@ func isSiteAdmin(user db.User) bool {
 	return hasRole(user, RoleAdmin)
 }
 
+// canModerateMedia reports whether the user may update or delete media
+// uploaded by OTHER users. Admins and editors can (content moderation; editors
+// can already delete any post, which is more destructive). Any other role that
+// reaches a media write handler is limited to its own uploads.
+func canModerateMedia(user db.User) bool {
+	return hasRole(user, RoleAdmin, RoleEditor)
+}
+
 // hasRole reports whether the user's role matches any of the given roles,
 // case-insensitively.
 func hasRole(user db.User, roles ...string) bool {

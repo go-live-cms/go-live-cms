@@ -131,6 +131,33 @@ func TestDeleteMediaTx(t *testing.T) {
 	require.Len(t, postMedia, 0)
 }
 
+func TestDeleteMediaTxOwnership(t *testing.T) {
+	_, media := createTestMedia(t)
+	other := createTestUser(t)
+
+	// Owner-scoped delete by a non-owner is rejected with the sentinel and
+	// leaves the media in place.
+	err := testStore.DeleteMediaTx(context.Background(), DeleteMediaTxParams{
+		MediaID: media.ID,
+		UserID:  other.ID,
+	})
+	require.ErrorIs(t, err, ErrMediaNotOwned)
+
+	_, err = testQueries.GetMedia(context.Background(), media.ID)
+	require.NoError(t, err)
+
+	// AnyOwner (moderation) deletes someone else's media.
+	err = testStore.DeleteMediaTx(context.Background(), DeleteMediaTxParams{
+		MediaID:  media.ID,
+		UserID:   other.ID,
+		AnyOwner: true,
+	})
+	require.NoError(t, err)
+
+	_, err = testQueries.GetMedia(context.Background(), media.ID)
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
 func TestCreatePostWithMediaTx(t *testing.T) {
 	user := createTestUser(t)
 	_, media1 := createTestMedia(t)

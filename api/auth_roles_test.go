@@ -17,6 +17,16 @@ import (
 	"github.com/go-live-cms/go-live-cms/token"
 )
 
+// TestCanModerateMedia pins the per-role media ownership policy: admins and
+// editors may touch anyone's media, every other role only its own.
+func TestCanModerateMedia(t *testing.T) {
+	require.True(t, canModerateMedia(db.User{Role: RoleAdmin}))
+	require.True(t, canModerateMedia(db.User{Role: RoleEditor}))
+	require.True(t, canModerateMedia(db.User{Role: "Editor"}))
+	require.False(t, canModerateMedia(db.User{Role: RoleContributor}))
+	require.False(t, canModerateMedia(db.User{Role: ""}))
+}
+
 // TestRequireRoleMiddleware exercises requireRole in isolation on synthetic
 // routes, covering the variadic role set, case-insensitivity, and the
 // DB-lookup failure modes.

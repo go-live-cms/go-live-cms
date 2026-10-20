@@ -728,17 +728,89 @@ func TestUpdateMediaAPI(t *testing.T) {
 	newName := gofakeit.Word()
 	newDescription := gofakeit.Sentence(10)
 
+	// Distinct callers for the ownership policy cases; none of them uploaded
+	// othersMedia.
+	admin := db.User{ID: 9002, Username: "admin", Role: RoleAdmin}
+	otherEditor := db.User{ID: 9003, Username: "editor", Role: RoleEditor}
+	contributor := db.User{ID: 9004, Username: "contributor", Role: RoleContributor}
+	othersMedia := randomMedia()
+	othersMedia.UserID = 9001
+
+	// moderatorUpdates stubs a moderator role editing media it does not own,
+	// which must succeed.
+	moderatorUpdates := func(store *mockdb.MockStore) {
+		store.EXPECT().
+			GetMedia(gomock.Any(), gomock.Eq(othersMedia.ID)).
+			Times(1).
+			Return(othersMedia, nil)
+
+		updatedMedia := othersMedia
+		updatedMedia.Name = newName
+		store.EXPECT().
+			UpdateMedia(gomock.Any(), gomock.Any()).
+			Times(1).
+			Return(updatedMedia, nil)
+	}
+
 	testCases := []struct {
 		name          string
 		mediaID       int64
+		caller        db.User
 		body          gin.H
 		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
 		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(recorder *httptest.ResponseRecorder)
 	}{
 		{
+			name:    "AdminUpdatesOthersMedia",
+			mediaID: othersMedia.ID,
+			caller:  admin,
+			body:    gin.H{"name": newName},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, admin.ID, admin.Username, time.Minute)
+			},
+			buildStubs: moderatorUpdates,
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:    "EditorUpdatesOthersMedia",
+			mediaID: othersMedia.ID,
+			caller:  otherEditor,
+			body:    gin.H{"name": newName},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, otherEditor.ID, otherEditor.Username, time.Minute)
+			},
+			buildStubs: moderatorUpdates,
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:    "ContributorBlockedByMiddleware",
+			mediaID: othersMedia.ID,
+			caller:  contributor,
+			body:    gin.H{"name": newName},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, contributor.ID, contributor.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetMedia(gomock.Any(), gomock.Any()).
+					Times(0)
+				store.EXPECT().
+					UpdateMedia(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
 			name:    "OK",
 			mediaID: media.ID,
+			caller:  user,
 			body: gin.H{
 				"name":        newName,
 				"description": newDescription,
@@ -769,6 +841,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 		{
 			name:    "NoAuthorization",
 			mediaID: media.ID,
+			caller:  user,
 			body: gin.H{
 				"name":        newName,
 				"description": newDescription,
@@ -790,6 +863,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 		{
 			name:    "NotFound",
 			mediaID: media.ID,
+			caller:  user,
 			body: gin.H{
 				"name": newName,
 			},
@@ -817,7 +891,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
-			stubRoleLookup(store, user)
+			stubRoleLookup(store, tc.caller)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -841,9 +915,19 @@ func TestDeleteMediaAPI(t *testing.T) {
 	user := randomUserForPosts()
 	media := randomMedia()
 
+	// Distinct callers for the ownership policy cases. owner uploaded
+	// ownedMedia; admin/editor/contributor did not.
+	owner := db.User{ID: 9001, Username: "owner", Role: RoleEditor}
+	admin := db.User{ID: 9002, Username: "admin", Role: RoleAdmin}
+	otherEditor := db.User{ID: 9003, Username: "editor", Role: RoleEditor}
+	contributor := db.User{ID: 9004, Username: "contributor", Role: RoleContributor}
+	ownedMedia := randomMedia()
+	ownedMedia.UserID = owner.ID
+
 	testCases := []struct {
 		name          string
 		mediaID       int64
+		caller        db.User
 		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
 		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(recorder *httptest.ResponseRecorder)
@@ -851,6 +935,7 @@ func TestDeleteMediaAPI(t *testing.T) {
 		{
 			name:    "OK",
 			mediaID: media.ID,
+			caller:  user,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
@@ -870,8 +955,108 @@ func TestDeleteMediaAPI(t *testing.T) {
 			},
 		},
 		{
+			name:    "OwnerDeletesOwnMedia",
+			mediaID: ownedMedia.ID,
+			caller:  owner,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, owner.ID, owner.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetMedia(gomock.Any(), gomock.Eq(ownedMedia.ID)).
+					Times(1).
+					Return(ownedMedia, nil)
+
+				store.EXPECT().
+					DeleteMediaTx(gomock.Any(), gomock.Eq(db.DeleteMediaTxParams{
+						MediaID:  ownedMedia.ID,
+						UserID:   owner.ID,
+						AnyOwner: true,
+					})).
+					Times(1).
+					Return(nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:    "AdminDeletesOthersMedia",
+			mediaID: ownedMedia.ID,
+			caller:  admin,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, admin.ID, admin.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetMedia(gomock.Any(), gomock.Eq(ownedMedia.ID)).
+					Times(1).
+					Return(ownedMedia, nil)
+
+				// AnyOwner must be set or the store's ownership check would
+				// reject the moderation delete.
+				store.EXPECT().
+					DeleteMediaTx(gomock.Any(), gomock.Eq(db.DeleteMediaTxParams{
+						MediaID:  ownedMedia.ID,
+						UserID:   admin.ID,
+						AnyOwner: true,
+					})).
+					Times(1).
+					Return(nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:    "EditorDeletesOthersMedia",
+			mediaID: ownedMedia.ID,
+			caller:  otherEditor,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, otherEditor.ID, otherEditor.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetMedia(gomock.Any(), gomock.Eq(ownedMedia.ID)).
+					Times(1).
+					Return(ownedMedia, nil)
+
+				store.EXPECT().
+					DeleteMediaTx(gomock.Any(), gomock.Eq(db.DeleteMediaTxParams{
+						MediaID:  ownedMedia.ID,
+						UserID:   otherEditor.ID,
+						AnyOwner: true,
+					})).
+					Times(1).
+					Return(nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:    "ContributorBlockedByMiddleware",
+			mediaID: ownedMedia.ID,
+			caller:  contributor,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, contributor.ID, contributor.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetMedia(gomock.Any(), gomock.Any()).
+					Times(0)
+				store.EXPECT().
+					DeleteMediaTx(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
 			name:    "NoAuthorization",
 			mediaID: media.ID,
+			caller:  user,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
@@ -889,6 +1074,7 @@ func TestDeleteMediaAPI(t *testing.T) {
 		{
 			name:    "NotFound",
 			mediaID: media.ID,
+			caller:  user,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
@@ -903,8 +1089,11 @@ func TestDeleteMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			name:    "PermissionDenied",
+			// The store's ownership rejection (only reachable for owner-scoped
+			// roles) maps to 403, not 500, via the ErrMediaNotOwned sentinel.
+			name:    "StoreRejectsNotOwned",
 			mediaID: media.ID,
+			caller:  user,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
@@ -917,10 +1106,32 @@ func TestDeleteMediaAPI(t *testing.T) {
 				store.EXPECT().
 					DeleteMediaTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(fmt.Errorf("permission denied: user does not own this media"))
+					Return(fmt.Errorf("user %d, media %d: %w", user.ID, media.ID, db.ErrMediaNotOwned))
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
+			name:    "StoreError",
+			mediaID: media.ID,
+			caller:  user,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetMedia(gomock.Any(), gomock.Eq(media.ID)).
+					Times(1).
+					Return(media, nil)
+
+				store.EXPECT().
+					DeleteMediaTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(sql.ErrConnDone)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
 			},
 		},
 	}
@@ -934,7 +1145,7 @@ func TestDeleteMediaAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
-			stubRoleLookup(store, user)
+			stubRoleLookup(store, tc.caller)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()

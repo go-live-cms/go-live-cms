@@ -28,7 +28,7 @@
 // - GET    /api/v1/media/post/:id  (media for post)
 // - GET    /api/v1/media/:id/posts (posts using media)
 // - PUT    /api/v1/media/:id       (update metadata)
-// - DELETE /api/v1/media/:id       (delete; ownership check)
+// - DELETE /api/v1/media/:id       (delete; admin/editor: any media)
 //
 // # Quickstart (single upload)
 //

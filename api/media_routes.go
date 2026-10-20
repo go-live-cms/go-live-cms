@@ -15,11 +15,18 @@
 //	GET    /media/popular → Public (popular media)
 //	GET    /media/search  → Public (search by query)
 //	GET    /media/:id     → Public (fetch by ID)
-//	PUT    /media/:id     → Auth Required (update metadata)
-//	DELETE /media/:id     → Auth Required (delete + ownership check)
+//	PUT    /media/:id     → Auth Required (update metadata; admin/editor: any media)
+//	DELETE /media/:id     → Auth Required (delete; admin/editor: any media)
 //	GET    /media/user/:id → Public (user's media)
 //	GET    /media/post/:id → Public (post's media)
 //	GET    /media/:id/posts → Public (posts using media)
+//
+// # Media Ownership Policy
+//
+// All write routes require the editor-or-admin role (requireContentEditor);
+// contributors get 403 from the middleware. Admins and editors may update and
+// delete media uploaded by anyone (moderation). Any role admitted to these
+// routes later is limited to its own media — see canModerateMedia.
 //
 // # Integration
 //
@@ -47,7 +54,7 @@ func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	media.POST("/batch", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk) // Batch upload (original path)
 	media.POST("/bulk", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk)  // Batch upload (alias for compatibility)
 	media.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updateMedia)        // Update metadata
-	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteMedia)     // Delete (ownership check)
+	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteMedia)     // Delete (admin/editor: any media)
 
 	// Read operations - public access for content consumption
 	media.GET("", server.getMedia)                // List/paginate/filter

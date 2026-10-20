@@ -13,6 +13,10 @@ import (
 // that moves the role off admin) when the target is the only remaining admin.
 var ErrLastAdmin = errors.New("operation would remove the last admin")
 
+// ErrMediaNotOwned is returned by DeleteMediaTx when an owner-scoped delete
+// (AnyOwner unset) targets media uploaded by a different user.
+var ErrMediaNotOwned = errors.New("media is owned by another user")
+
 // guardLastAdmin row-locks every admin inside the caller's transaction and
 // fails with ErrLastAdmin if userID is the only one. Holding the locks until
 // commit serializes concurrent admin-removing operations: a second remover
@@ -558,9 +562,13 @@ type CreatePostWithMediaTxResult struct {
 	PostMedia []PostMedium `json:"post_media"`
 }
 
+// DeleteMediaTxParams identifies the media to delete and the caller deleting it.
+// The ownership check (UserID must own the media) is skipped when AnyOwner is
+// set; the API sets it for roles allowed to moderate other users' media.
 type DeleteMediaTxParams struct {
-	MediaID int64
-	UserID  int64
+	MediaID  int64
+	UserID   int64
+	AnyOwner bool
 }
 
 type UpdatePostMediaTxParams struct {
@@ -656,8 +664,8 @@ func (store *SQLStore) DeleteMediaTx(ctx context.Context, arg DeleteMediaTxParam
 			return err
 		}
 
-		if media.UserID != arg.UserID {
-			return fmt.Errorf("user %d does not own media %d", arg.UserID, arg.MediaID)
+		if !arg.AnyOwner && media.UserID != arg.UserID {
+			return fmt.Errorf("user %d, media %d: %w", arg.UserID, arg.MediaID, ErrMediaNotOwned)
 		}
 
 		err = q.DeleteMediaPosts(ctx, arg.MediaID)
