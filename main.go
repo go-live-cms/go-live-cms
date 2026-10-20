@@ -38,6 +38,15 @@ func main() {
 	}
 
 	log.Println("🌐 Starting Go Live CMS API on port", config.ServerAddress)
+	// Server-to-server routes (collab WS role lookup) run on their own listener,
+	// which must not be published to the internet.
+	go func() {
+		log.Println("Starting internal API on", config.InternalServerAddress)
+		if err := server.StartInternal(config.InternalServerAddress); err != nil {
+			log.Fatal("cannot start internal server:", err)
+		}
+	}()
+
 	err = server.Start(config.ServerAddress)
 	if err != nil {
 		log.Fatal("cannot start server:", err)

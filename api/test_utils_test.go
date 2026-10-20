@@ -66,6 +66,7 @@ func newTestConfig(t *testing.T) util.Config {
 		RefreshTokenDuration:  time.Hour,
 		UploadPath:            uploadPath,
 		MaxUploadSize:         "10MB",
+		RoleLookupSecret:      testRoleLookupSecret,
 		IsTestMode:            true,
 	}
 }

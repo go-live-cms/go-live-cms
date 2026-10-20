@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -21,11 +22,14 @@ import (
 // Server bundles dependencies (db store, config, token maker) and the Gin router.
 // Safe for concurrent requests once constructed.
 type Server struct {
-	store      db.Store
-	router     *gin.Engine
-	config     util.Config
-	tokenMaker token.Maker
-	ctx        context.Context
+	store  db.Store
+	router *gin.Engine
+	// internalRouter serves server-to-server routes on a separate listener
+	// (INTERNAL_SERVER_ADDRESS) that is never published to the internet.
+	internalRouter *gin.Engine
+	config         util.Config
+	tokenMaker     token.Maker
+	ctx            context.Context
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -52,6 +56,14 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token maker: %w", err)
+	}
+	// The collab WS server can't authorize any connection without the internal
+	// role lookup, so refuse to start rather than silently lock every editor out.
+	// Trimmed once here (the WS server trims its copy too), so stray whitespace in
+	// app.env can't make the two sides disagree and turn every lookup into a 401.
+	config.RoleLookupSecret = strings.TrimSpace(config.RoleLookupSecret)
+	if config.RoleLookupSecret == "" {
+		return nil, errors.New("ROLE_LOOKUP_SECRET is required (shared with the collab WebSocket server)")
 	}
 	server := &Server{
 		store:      store,
@@ -228,6 +240,10 @@ func (server *Server) setupRoutes() {
 	//v1.GET("/test-log", server.testLog) // Temporary log endpoint for testing
 
 	server.router = router
+
+	// Server-to-server routes live on their own engine/listener, not under
+	// /api/v1, so they never share the public port (see internal_routes.go).
+	server.internalRouter = server.newInternalRouter()
 }
 
 // healthCheck returns basic liveness info and API version.
@@ -252,4 +268,12 @@ func (server *Server) healthCheck(c *gin.Context) {
 // Blocks until the server is shut down.
 func (server *Server) Start(address string) error {
 	return server.router.Run(address)
+}
+
+// StartInternal serves the server-to-server routes (internal_routes.go) on
+// address, e.g. "0.0.0.0:8081". Run it alongside Start; the port must only be
+// reachable from the private network (Docker doesn't publish it).
+// Blocks until the listener fails.
+func (server *Server) StartInternal(address string) error {
+	return server.internalRouter.Run(address)
 }

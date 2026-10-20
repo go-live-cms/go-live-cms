@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import * as Y from "yjs"
 import { BlockDocManager } from "./BlockDocManager"
 import type { Block, BlockDocV1 } from "../blocks-spec"
+import { getSchema } from "@tiptap/core"
+import StarterKit from "@tiptap/starter-kit"
+import { BlockIdExtension } from "@gl-admin/components/editor/extensions/BlockIdExtension"
+import { pmToBlockDoc, synthesizedItemId } from "./blockBridge"
 
 // --- Mock the API client module BEFORE importing the manager. ---------------
 // ConflictError / UnauthorizedError must be real classes so the manager's
@@ -388,5 +392,78 @@ describe("publish()", () => {
     expect(api.updatePostBlocks).toHaveBeenCalled() // forced save
     expect(api.publishPost).toHaveBeenCalledWith(1, "label", "msg")
     expect(result).toEqual({ versionId: 7, versionNo: 1 })
+  })
+})
+
+// #213: blocks the editor can't hold are hidden from it, never deleted by a save.
+describe("blocks dropped on load", () => {
+  const schema = getSchema([StarterKit, BlockIdExtension])
+
+  /** A minimal stand-in for the TipTap editor: real schema, records setContent. */
+  function fakeEditor() {
+    const editor = {
+      schema,
+      isDestroyed: false,
+      isEmpty: true,
+      content: null as any,
+      commands: { setContent: vi.fn((json: any) => void (editor.content = schema.nodeFromJSON(json))) },
+    }
+    return editor
+  }
+
+  const [p1, bad, list, p2] = [id(), id(), id(), id()]
+  const loadedDoc: BlockDocV1 = {
+    doc_version: 1,
+    blocks_order: [p1, bad, list, p2],
+    blocks: {
+      [p1]: { id: p1, type: "paragraph", version: 1, attrs: { text: "first" } },
+      // blockquote requires `block+`; an empty pm blob can't be built into a valid node.
+      [bad]: { id: bad, type: "blockquote", version: 1, attrs: { pm: { type: "blockquote", content: [] } } },
+      [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [] },
+      [p2]: { id: p2, type: "paragraph", version: 1, attrs: { text: "last" } },
+    },
+  }
+
+  function setup() {
+    const { manager, blockDocManager, syncFromEditor } = makeManager()
+    const editor = fakeEditor()
+    manager.setEditor(editor as any)
+    // Mirror what Editor.tsx's sync callback does: editor → BlockDoc maps.
+    syncFromEditor.mockImplementation(() => blockDocManager.setBlockDocV1(pmToBlockDoc(editor.content)))
+    const onSaveError = vi.fn()
+    manager.setCallbacks({ onSaveError })
+    api.getPostBlocks.mockResolvedValue({ doc: loadedDoc, revision: 1 })
+    return { manager, blockDocManager, editor, onSaveError }
+  }
+
+  it("seeds the editor and the maps with the same repaired doc, and reports the drop", async () => {
+    const { manager, blockDocManager, editor, onSaveError } = setup()
+    await activate(manager)
+
+    expect(editor.content.childCount).toBe(3) // p1, repaired list, p2
+    const maps = blockDocManager.getBlockDocV1()
+    expect(maps.blocks_order).toEqual([p1, list, p2])
+    expect(maps.blocks[bad]).toBeUndefined()
+    expect(maps.blocks[list].children).toEqual([synthesizedItemId(list)])
+    expect(maps).toEqual(pmToBlockDoc(editor.content))
+
+    expect(onSaveError).toHaveBeenCalledTimes(1)
+    expect(onSaveError.mock.calls[0][0].message).toContain(bad)
+  })
+
+  it("merges the dropped block back into every autosave at its original position", async () => {
+    const { manager, blockDocManager } = setup()
+    await activate(manager)
+
+    for (let save = 1; save <= 2; save++) {
+      manager.notifyEditorChange()
+      await vi.advanceTimersByTimeAsync(1500)
+      expect(api.updatePostBlocks).toHaveBeenCalledTimes(save)
+      const sent: BlockDocV1 = api.updatePostBlocks.mock.calls[save - 1][1]
+      expect(sent.blocks_order).toEqual([p1, bad, list, p2])
+      expect(sent.blocks[bad]).toEqual(loadedDoc.blocks[bad])
+    }
+    // The Yjs maps keep mirroring the editor; only the PUT payload carries the block.
+    expect(blockDocManager.getBlockDocV1().blocks[bad]).toBeUndefined()
   })
 })

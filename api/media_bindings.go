@@ -25,6 +25,8 @@
 //   - Invalid data types or formats
 package api
 
+import "encoding/json"
+
 // CreateMediaRequest defines the multipart form data structure for media uploads.
 // Used with POST /media for single file uploads with optional post linking.
 //
@@ -59,33 +61,59 @@ type CreateMediaRequest struct {
 //
 // # Supported Updates
 //   - Metadata: name, description, alt text
-//   - File properties: media_path, file_size, mime_type
-//   - Media dimensions: width, height, duration
-//   - Original filename reference
+//
+// # Server-Owned Fields
+//
+// media_path, file_size, mime_type, width, height, duration and
+// original_filename describe the stored file and are set on upload. They are
+// decoded here only so a request that sets them can be rejected with 400
+// (see serverOwnedFields): pointing one row's media_path at another row's file
+// would let deleting the first row remove the shared file, and the rest could
+// fake the file's metadata.
 //
 // # Validation Rules
 //   - String fields have min/max length constraints when provided
-//   - Numeric fields must be non-negative when provided
 //   - Empty/null values are ignored (no update performed)
-//
-// # Security Notes
-//   - media_path updates should be restricted in production
-//   - file_size/mime_type changes don't affect actual file
-//   - Consider permission checks for sensitive field updates
 //
 // # Example Usage
 //   curl -X PUT /api/v1/media/123 \
 //     -H "Content-Type: application/json" \
 //     -d '{"name": "Updated Hero Image", "alt": "New description"}'
 type UpdateMediaRequest struct {
-	Name             string `json:"name" binding:"omitempty,min=2,max=255"`
-	Description      string `json:"description" binding:"omitempty,min=5,max=500"`
-	Alt              string `json:"alt" binding:"omitempty,min=2,max=255"`
-	MediaPath        string `json:"media_path" binding:"omitempty,min=1,max=500"`
-	FileSize         *int64 `json:"file_size" binding:"omitempty,min=0"`
-	MimeType         string `json:"mime_type" binding:"omitempty"`
-	Width            *int32 `json:"width" binding:"omitempty,min=0"`
-	Height           *int32 `json:"height" binding:"omitempty,min=0"`
-	Duration         *int32 `json:"duration" binding:"omitempty,min=0"`
-	OriginalFilename string `json:"original_filename" binding:"omitempty"`
+	Name        string `json:"name" binding:"omitempty,min=2,max=255"`
+	Description string `json:"description" binding:"omitempty,min=5,max=500"`
+	Alt         string `json:"alt" binding:"omitempty,min=2,max=255"`
+
+	MediaPath        json.RawMessage `json:"media_path"`
+	FileSize         json.RawMessage `json:"file_size"`
+	MimeType         json.RawMessage `json:"mime_type"`
+	Width            json.RawMessage `json:"width"`
+	Height           json.RawMessage `json:"height"`
+	Duration         json.RawMessage `json:"duration"`
+	OriginalFilename json.RawMessage `json:"original_filename"`
+}
+
+// serverOwnedFields returns the JSON names of the server-owned file fields the
+// request sets (null counts as unset), in a stable order.
+func (req UpdateMediaRequest) serverOwnedFields() []string {
+	fields := []struct {
+		name string
+		raw  json.RawMessage
+	}{
+		{"media_path", req.MediaPath},
+		{"file_size", req.FileSize},
+		{"mime_type", req.MimeType},
+		{"width", req.Width},
+		{"height", req.Height},
+		{"duration", req.Duration},
+		{"original_filename", req.OriginalFilename},
+	}
+
+	var set []string
+	for _, f := range fields {
+		if len(f.raw) > 0 && string(f.raw) != "null" {
+			set = append(set, f.name)
+		}
+	}
+	return set
 }

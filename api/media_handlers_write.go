@@ -18,8 +18,9 @@
 // # Update Operations
 //
 // Metadata updates: PUT /media/:id for name, description, alt text changes.
-// Preserves file data, only updates database fields.
-// Requires resource ownership validation.
+// File fields (media_path, size, MIME type, dimensions) are server-owned and
+// rejected with 400. Any content editor may update any media item; there is
+// no per-owner check.
 //
 // # Delete Operations
 //
@@ -290,7 +291,10 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 }
 
 // updateMedia handles PUT /media/:id - metadata updates for existing media.
-// Accepts JSON with optional name, description, alt, media_path, file_size, etc.
+// Accepts JSON with optional name, description and alt. The file fields
+// (media_path, file_size, mime_type, width, height, duration,
+// original_filename) are server-owned: a request that sets any of them gets
+// 400 and nothing is written.
 // Only updates provided fields, preserves existing values for omitted fields.
 // Auth: Requires Bearer token. Returns 200 with updated media JSON or error.
 func (server *Server) updateMedia(c *gin.Context) {
@@ -306,64 +310,28 @@ func (server *Server) updateMedia(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if fields := req.serverOwnedFields(); len(fields) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("%s cannot be updated: file fields are set on upload", strings.Join(fields, ", ")),
+		})
+		return
+	}
 
-	existingMedia, err := server.store.GetMedia(c.Request.Context(), id)
+	// One statement that only touches name/description/alt: the file columns
+	// can't be written through this path, and concurrent partial updates
+	// don't overwrite each other's fields with a stale read. Empty strings
+	// are passed as NULL, which keeps the current value.
+	updatedMedia, err := server.store.UpdateMediaMetadata(c.Request.Context(), db.UpdateMediaMetadataParams{
+		ID:          id,
+		Name:        sql.NullString{String: req.Name, Valid: req.Name != ""},
+		Description: sql.NullString{String: req.Description, Valid: req.Description != ""},
+		Alt:         sql.NullString{String: req.Alt, Valid: req.Alt != ""},
+	})
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media"})
-		return
-	}
-
-	updateParams := db.UpdateMediaParams{
-		ID:               id,
-		Name:             existingMedia.Name,
-		Description:      existingMedia.Description,
-		Alt:              existingMedia.Alt,
-		MediaPath:        existingMedia.MediaPath,
-		FileSize:         existingMedia.FileSize,
-		MimeType:         existingMedia.MimeType,
-		Width:            existingMedia.Width,
-		Height:           existingMedia.Height,
-		Duration:         existingMedia.Duration,
-		OriginalFilename: existingMedia.OriginalFilename,
-	}
-
-	if req.Name != "" {
-		updateParams.Name = req.Name
-	}
-	if req.Description != "" {
-		updateParams.Description = req.Description
-	}
-	if req.Alt != "" {
-		updateParams.Alt = req.Alt
-	}
-	if req.MediaPath != "" {
-		updateParams.MediaPath = req.MediaPath
-	}
-	if req.FileSize != nil {
-		updateParams.FileSize = *req.FileSize
-	}
-	if req.MimeType != "" {
-		updateParams.MimeType = req.MimeType
-	}
-	if req.Width != nil {
-		updateParams.Width = *req.Width
-	}
-	if req.Height != nil {
-		updateParams.Height = *req.Height
-	}
-	if req.Duration != nil {
-		updateParams.Duration = *req.Duration
-	}
-	if req.OriginalFilename != "" {
-		updateParams.OriginalFilename = req.OriginalFilename
-	}
-
-	updatedMedia, err := server.store.UpdateMedia(c.Request.Context(), updateParams)
-	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})
 		return
 	}
