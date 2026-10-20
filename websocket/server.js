@@ -3,6 +3,7 @@ import { WebSocketServer } from "ws";
 import { createRequire } from "node:module";
 import { evaluatePersistedState } from "./persistence.js";
 import { canEditContent, fetchCurrentRole } from "./access.js";
+import { docNameForLog, upgradeContextForLog } from "./logsafe.js";
 import { URL } from "url";
 import { V4 } from "paseto";
 import { createPublicKey } from "crypto";
@@ -318,15 +319,16 @@ server.on("upgrade", async (req, socket, head) => {
   });
   // Never log req.url, req.headers or the query string here: the access token rides
   // in ?ticket= (or ?token=), so any of them would write a replayable bearer token to
-  // the logs (#220). The doc name is the only part of the URL that's safe to log.
-  const docName = docNameFromReq(req);
-  console.log("📡 WebSocket upgrade request for doc:", docName);
+  // the logs (#220). Log only the logsafe.js views (server.test.js enforces this).
+  const docName = docNameForLog(docNameFromReq(req));
+  const reqContext = upgradeContextForLog(req);
+  console.log(`📡 WebSocket upgrade request for doc: ${docName} | ${reqContext}`);
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
     const credential =
       url.searchParams.get("ticket") || url.searchParams.get("token");
     if (!credential) {
-      console.error(`🚫 No ticket or token provided for doc ${docName}`);
+      console.error(`🚫 No ticket or token provided for doc ${docName} | ${reqContext}`);
       socket.write(
         "HTTP/1.1 401 Unauthorized\r\n\r\nNo authentication credentials provided\r\n",
       );
@@ -399,7 +401,7 @@ server.on("upgrade", async (req, socket, head) => {
       wss.emit("connection", ws, req);
     });
   } catch (error) {
-    console.error(`🚫 WebSocket authentication failed for doc ${docName}:`, error.message);
+    console.error(`🚫 WebSocket authentication failed for doc ${docName} | ${reqContext}:`, error.message);
     socket.write(
       "HTTP/1.1 401 Unauthorized\r\n\r\nInvalid or expired authentication credentials\r\n",
     );

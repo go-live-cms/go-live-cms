@@ -30,6 +30,11 @@ role lists in sync.
   with Hocuspocus `onAuthenticate` (#206).
 - The admin SPA opens the editor `readOnly` for contributors (`canEditContent` in
   `web/gl-admin/lib/roles.ts`), so they never attempt the connection.
+- **Never log the raw upgrade request (#220).** The token is in the URL, so logging
+  `req.url`, `req.headers`, the query params or the credential writes a replayable
+  bearer token to the logs. Log only `docNameForLog` / `upgradeContextForLog` from
+  `logsafe.js` (sanitised, length-capped, header allowlist). `server.test.js` scans every
+  `console.*` / `collabDebug` call in `server.js` and fails on those identifiers.
 
 ## Persistence (LevelDB safety net)
 
