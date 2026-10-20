@@ -2,7 +2,14 @@ import { blockAPIClient, ConflictError, UnauthorizedError } from "../api/blockAP
 import type { BlockDocV1 } from "../blocks-spec"
 import type { BlockDocManager } from "./BlockDocManager"
 import type { Editor } from "@tiptap/react"
-import { setEditorBlockDoc } from "./blockBridge"
+import {
+  blockDocToPMWithReport,
+  pmToBlockDoc,
+  restoreDroppedBlocks,
+  setEditorBlockDoc,
+  type DroppedBlock,
+} from "./blockBridge"
+import type { Node as PMNode } from "prosemirror-model"
 import { collabDebug } from "./debug"
 
 /**
@@ -31,6 +38,11 @@ export class BlockPersistenceManager {
   // we just persisted), so we must NOT clear hasUnsavedChanges and may need to
   // re-schedule a follow-up save. Without this, in-flight edits are silently lost.
   private editChangeSeq: number = 0
+  // Blocks of the loaded REST doc that blockDocToPM couldn't turn into valid editor
+  // nodes (#213), and the doc they came from. The editor never shows them, so the
+  // editor mirror never contains them; performSave merges them back into every save
+  // so they are hidden, never deleted. Recomputed on every load and conflict reload.
+  private dropped: { source: BlockDocV1; blocks: DroppedBlock[] } | null = null
 
   // Configuration
   private readonly SAVE_DEBOUNCE_MS = 1500 // 1.5 seconds idle time
@@ -151,21 +163,30 @@ export class BlockPersistenceManager {
       // parallel state that the 2s resync then fights, reverting the user's content.
       // So we seed only the side(s) that are actually empty.
       if (doc.blocks_order.length > 0 || Object.keys(doc.blocks).length > 0) {
+        // Convert once, recording any blocks the editor can't hold. Done on every
+        // load, warm or cold: a block dropped when Yjs was first seeded is still
+        // missing from the editor, so it must still be merged back into saves.
+        const pmDoc = this.loadDroppedBlocks(doc, true)
+
         const current = this.blockDocManager.getBlockDocV1()
         const blocksAlreadyPopulated =
           current.blocks_order.length > 0 || Object.keys(current.blocks).length > 0
         const editorAlreadyPopulated = !!this.editor && !this.editor.isDestroyed && !this.editor.isEmpty
 
         if (!blocksAlreadyPopulated) {
-          this.blockDocManager.setBlockDocV1(doc)
+          // Seed the maps with what the editor will hold (repaired lists, without
+          // dropped blocks), not the raw doc, so the two agree from the start.
+          this.blockDocManager.setBlockDocV1(pmDoc ? pmToBlockDoc(pmDoc) : doc)
         }
 
         if (this.editor && !this.editor.isDestroyed && !editorAlreadyPopulated) {
           // emitUpdate:false suppresses TipTap's "update" event for this programmatic
           // seed. The content still syncs into the Yjs "default" fragment because
           // the collaboration ySyncPlugin mirrors the transaction regardless of the flag.
-          setEditorBlockDoc(this.editor, doc)
+          setEditorBlockDoc(this.editor, pmDoc ?? doc)
         }
+      } else {
+        this.dropped = null
       }
       // Empty block_doc is fine - editor will start with empty state
 
@@ -196,6 +217,34 @@ export class BlockPersistenceManager {
         this.isInitializing = false
       }, 500)
     }
+  }
+
+  /**
+   * Convert a REST doc against the editor schema and remember which blocks had to be
+   * dropped, so performSave can merge them back. Returns the converted PM doc, or null
+   * when there is no editor to convert against. When `notify` is set, dropped blocks
+   * are surfaced through onSaveError so the user knows some content is hidden.
+   */
+  private loadDroppedBlocks(doc: BlockDocV1, notify: boolean): PMNode | null {
+    if (!this.editor || this.editor.isDestroyed) {
+      this.dropped = null
+      return null
+    }
+    const { node, dropped } = blockDocToPMWithReport(doc, this.editor.schema)
+    this.dropped = dropped.length > 0 ? { source: doc, blocks: dropped } : null
+    if (dropped.length > 0) {
+      collabDebug("blocks dropped on load", { ids: dropped.map((d) => d.id) })
+      if (notify) {
+        this.onSaveError?.(
+          new Error(
+            `${dropped.length} block(s) could not be shown in the editor (${dropped
+              .map((d) => d.id)
+              .join(", ")}). They are kept in the saved document.`
+          )
+        )
+      }
+    }
+    return node
   }
 
   /**
@@ -295,12 +344,18 @@ export class BlockPersistenceManager {
         return // outer finally clears isSaving
       }
 
+      // Put back the blocks the editor couldn't show, so saving never deletes them.
+      // Only the PUT payload carries them; the Yjs maps keep mirroring the editor.
+      const docToSave = this.dropped
+        ? restoreDroppedBlocks(currentDoc, this.dropped.source, this.dropped.blocks)
+        : currentDoc
+
       this.onSaveStart?.()
 
       try {
         const { doc, revision } = await blockAPIClient.updatePostBlocks(
           this.postId,
-          currentDoc,
+          docToSave,
           this.currentRevision,
           this.title
         )
@@ -362,8 +417,11 @@ export class BlockPersistenceManager {
     try {
       const { doc: latestDoc, revision } = await blockAPIClient.getPostBlocks(this.postId)
 
-      // Update local state with server version (last-write-wins for Phase A)
-      this.blockDocManager.setBlockDocV1(latestDoc)
+      // Update local state with server version (last-write-wins for Phase A).
+      // Refresh the dropped-block record against the new source doc, and mirror the
+      // maps from the repaired doc, as initialize() does.
+      const pmDoc = this.loadDroppedBlocks(latestDoc, false)
+      this.blockDocManager.setBlockDocV1(pmDoc ? pmToBlockDoc(pmDoc) : latestDoc)
       this.currentRevision = revision
       this.hasUnsavedChanges = false
 

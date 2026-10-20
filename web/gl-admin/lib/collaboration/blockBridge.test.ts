@@ -5,7 +5,13 @@ import TextAlign from "@tiptap/extension-text-align"
 import { Schema } from "prosemirror-model"
 import { ImageWithMediaId } from "@gl-admin/components/editor/extensions/ImageWithMediaId"
 import { BlockIdExtension } from "@gl-admin/components/editor/extensions/BlockIdExtension"
-import { pmToBlockDoc, blockDocToPM } from "./blockBridge"
+import {
+  pmToBlockDoc,
+  blockDocToPM,
+  blockDocToPMWithReport,
+  restoreDroppedBlocks,
+  synthesizedItemId,
+} from "./blockBridge"
 import type { BlockDocV1 } from "../blocks-spec"
 
 // A minimal test-only custom node, standing in for a theme block (e.g. "alert").
@@ -237,24 +243,31 @@ describe("blockBridge — edge cases", () => {
         [good]: { id: good, type: "paragraph", version: 1, attrs: { text: "kept" } },
       },
     }
-    const pm = blockDocToPM(doc, schema)
+    const { node: pm, dropped } = blockDocToPMWithReport(doc, schema)
     expect(() => pm.check()).not.toThrow()
     expect(pm.childCount).toBe(1)
     expect(pm.child(0).attrs["data-block-id"]).toBe(good)
     expect(pm.textContent).toBe("kept")
+    expect(dropped).toEqual([{ id: bad, parentId: null, afterId: null }])
   })
 
-  it("documents the empty-code-block limitation (cannot build an empty text node)", () => {
-    // ProseMirror disallows empty text nodes, so a code_block with empty code
-    // cannot be reconstructed by blockDocToPM. Pinning this so it's a conscious
-    // constraint rather than a surprise crash in production.
+  it("an empty code_block is dropped on its own instead of failing the whole doc", () => {
+    // ProseMirror disallows empty text nodes, so nodeFromJSON throws for a code_block
+    // with empty code. That throw is now per block: the rest of the doc still loads.
     const a = id()
+    const b = id()
     const doc: BlockDocV1 = {
       doc_version: 1,
-      blocks_order: [a],
-      blocks: { [a]: { id: a, type: "code_block", version: 1, attrs: { code: "" } } },
+      blocks_order: [b, a],
+      blocks: {
+        [b]: { id: b, type: "paragraph", version: 1, attrs: { text: "before" } },
+        [a]: { id: a, type: "code_block", version: 1, attrs: { code: "" } },
+      },
     }
-    expect(() => blockDocToPM(doc, schema)).toThrow()
+    const { node, dropped } = blockDocToPMWithReport(doc, schema)
+    expect(node.childCount).toBe(1)
+    expect(node.textContent).toBe("before")
+    expect(dropped).toEqual([{ id: a, parentId: null, afterId: b }])
   })
 })
 
@@ -608,7 +621,7 @@ describe("blockBridge — additional edge cases", () => {
         expect(list.childCount).toBe(1)
         const item = list.child(0)
         expect(item.type.name).toBe("listItem")
-        expect(item.attrs["data-block-id"]).toBe(`${a}-item`)
+        expect(item.attrs["data-block-id"]).toBe(synthesizedItemId(a))
         expect(item.childCount).toBe(1)
         expect(item.child(0).type.name).toBe("paragraph")
         expect(item.textContent).toBe("")
@@ -640,7 +653,7 @@ describe("blockBridge — additional edge cases", () => {
       expect(list.children).toHaveLength(1)
       const item = out.blocks[list.children![0]]
       expect(item.type).toBe("list_item")
-      expect(item.id).toBe(`${a}-item`)
+      expect(item.id).toBe(synthesizedItemId(a))
       expect(item.attrs.text).toBeUndefined()
     })
 
@@ -661,37 +674,89 @@ describe("blockBridge — additional edge cases", () => {
       expect(save2).toEqual(save1)
     })
 
-    it("drops non-listItem children; a list left empty gets the synthesized item", () => {
+    it("the synthesized item id passes pmToBlockDoc's length check even for a short list id", () => {
+      const a = "L1" // shorter than pmToBlockDoc's 10-char minimum
+      expect(synthesizedItemId(a).length).toBeGreaterThanOrEqual(10)
+      const doc: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [a],
+        blocks: { [a]: { id: a, type: "bullet_list", version: 1, attrs: {}, children: [] } },
+      }
+      const pm = blockDocToPM(doc, schema)
+      const save1 = pmToBlockDoc(pm)
+      const save2 = pmToBlockDoc(pm)
+      const itemId = save1.blocks[save1.blocks_order[0]].children![0]
+      expect(itemId).toBe(synthesizedItemId(a))
+      expect(save2.blocks[save2.blocks_order[0]].children).toEqual([itemId])
+    })
+
+    it("wraps a paragraph child in a listItem, keeping its text and id", () => {
       const list = id()
       const para = id()
       const item = id()
-      const blocks = {
-        [para]: { id: para, type: "paragraph", version: 1, attrs: { text: "stray" } },
-        [item]: { id: item, type: "list_item", version: 1, attrs: { text: "real" } },
-      } as const
-      const mixed = blockDocToPM(
+      const { node, dropped } = blockDocToPMWithReport(
         {
           doc_version: 1,
           blocks_order: [list],
-          blocks: { ...blocks, [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [para, item] } } as any,
+          blocks: {
+            [para]: { id: para, type: "paragraph", version: 1, attrs: { text: "Buy milk" } },
+            [item]: { id: item, type: "list_item", version: 1, attrs: { text: "real" } },
+            [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [para, item] },
+          },
         },
         schema,
       )
-      expect(() => mixed.check()).not.toThrow()
-      expect(mixed.child(0).childCount).toBe(1)
-      expect(mixed.child(0).child(0).attrs["data-block-id"]).toBe(item)
-      expect(mixed.child(0).textContent).toBe("real")
+      expect(() => node.check()).not.toThrow()
+      expect(dropped).toEqual([])
+      const pmList = node.child(0)
+      expect(pmList.childCount).toBe(2)
+      expect(pmList.child(0).type.name).toBe("listItem")
+      expect(pmList.child(0).attrs["data-block-id"]).toBe(para)
+      expect(pmList.child(0).textContent).toBe("Buy milk")
+      expect(pmList.child(1).attrs["data-block-id"]).toBe(item)
+    })
 
-      const onlyStray = blockDocToPM(
+    it("drops and reports a child that can't be a list item; a list left empty gets the synthesized item", () => {
+      const list = id()
+      const heading = id()
+      const { node, dropped } = blockDocToPMWithReport(
         {
           doc_version: 1,
           blocks_order: [list],
-          blocks: { ...blocks, [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [para] } } as any,
+          blocks: {
+            [heading]: { id: heading, type: "heading", version: 1, attrs: { level: 2, text: "H" } },
+            [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [heading] },
+          },
         },
         schema,
       )
-      expect(() => onlyStray.check()).not.toThrow()
-      expect(onlyStray.child(0).child(0).attrs["data-block-id"]).toBe(`${list}-item`)
+      expect(() => node.check()).not.toThrow()
+      expect(dropped).toEqual([{ id: heading, parentId: list, afterId: null }])
+      expect(node.child(0).child(0).attrs["data-block-id"]).toBe(synthesizedItemId(list))
+    })
+
+    it("one invalid list item is dropped on its own; its valid siblings stay", () => {
+      const list = id()
+      const [i1, bad, i2] = [id(), id(), id()]
+      const { node, dropped } = blockDocToPMWithReport(
+        {
+          doc_version: 1,
+          blocks_order: [list],
+          blocks: {
+            [i1]: { id: i1, type: "list_item", version: 1, attrs: { text: "one" } },
+            // listItem requires `paragraph block*`; an empty pm blob violates it.
+            [bad]: { id: bad, type: "list_item", version: 1, attrs: { pm: { type: "listItem", content: [] } } },
+            [i2]: { id: i2, type: "list_item", version: 1, attrs: { text: "two" } },
+            [list]: { id: list, type: "ordered_list", version: 1, attrs: {}, children: [i1, bad, i2] },
+          },
+        },
+        schema,
+      )
+      expect(() => node.check()).not.toThrow()
+      const pmList = node.child(0)
+      expect(pmList.childCount).toBe(2)
+      expect(pmList.textContent).toBe("onetwo")
+      expect(dropped).toEqual([{ id: bad, parentId: list, afterId: i1 }])
     })
 
     it("pmToBlockDoc never emits a childless list block (skips an invalid empty list node)", () => {
@@ -711,6 +776,96 @@ describe("blockBridge — additional edge cases", () => {
       expect(out.blocks_order).toEqual([para])
       expect(out.blocks[list]).toBeUndefined()
       expect(out.blocks[para].attrs.text).toBe("kept")
+    })
+  })
+
+  describe("restoreDroppedBlocks — dropped blocks survive a save", () => {
+    const badQuote = (bid: string) =>
+      ({ id: bid, type: "blockquote", version: 1, attrs: { pm: { type: "blockquote", content: [] } } }) as const
+    const para = (bid: string, text: string) => ({ id: bid, type: "paragraph", version: 1, attrs: { text } }) as const
+
+    /** Load → editor → save, then merge the dropped blocks back (what performSave does). */
+    function saveAfterLoad(source: BlockDocV1, edit?: (saved: BlockDocV1) => BlockDocV1) {
+      const { node, dropped } = blockDocToPMWithReport(source, schema)
+      let saved = pmToBlockDoc(node)
+      if (edit) saved = edit(saved)
+      return restoreDroppedBlocks(saved, source, dropped)
+    }
+
+    it("puts dropped top-level blocks back in their original positions, in order", () => {
+      const [p1, bad1, bad2, p2] = [id(), id(), id(), id()]
+      const source: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [bad1, p1, bad2, p2],
+        blocks: { [p1]: para(p1, "a"), [bad1]: badQuote(bad1), [bad2]: badQuote(bad2), [p2]: para(p2, "b") },
+      }
+      const out = saveAfterLoad(source)
+      expect(out.blocks_order).toEqual([bad1, p1, bad2, p2])
+      expect(out.blocks[bad1]).toEqual(source.blocks[bad1])
+      expect(out.blocks[bad2]).toEqual(source.blocks[bad2])
+    })
+
+    it("appends a dropped block at the end when its preceding block was deleted", () => {
+      const [p1, bad, p2] = [id(), id(), id()]
+      const source: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [p1, bad, p2],
+        blocks: { [p1]: para(p1, "a"), [bad]: badQuote(bad), [p2]: para(p2, "b") },
+      }
+      const out = saveAfterLoad(source, (saved) => {
+        const { [p1]: _gone, ...blocks } = saved.blocks
+        return { ...saved, blocks_order: [p2], blocks }
+      })
+      expect(out.blocks_order).toEqual([p2, bad])
+    })
+
+    it("puts a dropped list item back into its list", () => {
+      const list = id()
+      const [i1, bad, i2] = [id(), id(), id()]
+      const source: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [list],
+        blocks: {
+          [i1]: { id: i1, type: "list_item", version: 1, attrs: { text: "one" } },
+          [bad]: { id: bad, type: "list_item", version: 1, attrs: { pm: { type: "listItem", content: [] } } },
+          [i2]: { id: i2, type: "list_item", version: 1, attrs: { text: "two" } },
+          [list]: { id: list, type: "ordered_list", version: 1, attrs: {}, children: [i1, bad, i2] },
+        },
+      }
+      const out = saveAfterLoad(source)
+      expect(out.blocks[list].children).toEqual([i1, bad, i2])
+      expect(out.blocks[bad]).toEqual(source.blocks[bad])
+    })
+
+    it("a list whose only item is dropped keeps that item on save, next to the synthesized one", () => {
+      const list = id()
+      const item = id()
+      const source: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [list],
+        blocks: {
+          // An unknown mark makes nodeFromJSON throw for this item.
+          [item]: {
+            id: item,
+            type: "list_item",
+            version: 1,
+            attrs: { pm: { type: "listItem", content: [{ type: "paragraph", content: [{ type: "text", text: "x", marks: [{ type: "nope" }] }] }] } },
+          },
+          [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [item] },
+        },
+      }
+      const { dropped } = blockDocToPMWithReport(source, schema)
+      expect(dropped).toEqual([{ id: item, parentId: list, afterId: null }])
+      const out = saveAfterLoad(source)
+      expect(out.blocks_order).toEqual([list])
+      expect(out.blocks[list].children).toEqual([item, synthesizedItemId(list)])
+      expect(out.blocks[item]).toEqual(source.blocks[item])
+    })
+
+    it("is a no-op when nothing was dropped", () => {
+      const p = id()
+      const doc: BlockDocV1 = { doc_version: 1, blocks_order: [p], blocks: { [p]: para(p, "x") } }
+      expect(restoreDroppedBlocks(doc, doc, [])).toBe(doc)
     })
   })
 
