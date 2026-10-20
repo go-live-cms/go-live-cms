@@ -19,6 +19,26 @@ export function canEditContent(role) {
   return CONTENT_EDITOR_ROLES.includes(normalized);
 }
 
+// The only doc names the editor opens (`post-${postId}` in CollaborationProvider.ts).
+// Anything else is rejected before auth, so a client can't make the server create and
+// persist Yjs docs under arbitrary names, or put crafted text into log lines.
+const COLLAB_DOC_NAME = /^post-[1-9]\d{0,18}$/;
+
+export function isCollabDocName(name) {
+  return typeof name === "string" && COLLAB_DOC_NAME.test(name);
+}
+
+// Reads the credential from an upgrade request (?ticket=, or legacy ?token=) and strips
+// the query string and fragment from req.url, so nothing downstream (y-websocket's
+// setupWSConnection, the connection handler, any log) can see the token (#220).
+// Returns null when neither param is present.
+export function takeCredential(req) {
+  const raw = req.url || "/";
+  const params = new URLSearchParams(raw.split("#")[0].split("?").slice(1).join("?"));
+  req.url = raw.split("?")[0].split("#")[0];
+  return params.get("ticket") || params.get("token") || null;
+}
+
 // Fetches the caller's current role from the API.
 //
 // Returns:

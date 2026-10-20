@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canEditContent, fetchCurrentRole } from "./access.js";
+import { canEditContent, fetchCurrentRole, isCollabDocName, takeCredential } from "./access.js";
 
 /** Fake fetch that records the request and answers with the given status/body. */
 function fakeFetch(status, body = {}) {
@@ -29,6 +29,41 @@ test("canEditContent denies contributors and missing roles", () => {
   assert.equal(canEditContent(undefined), false);
   assert.equal(canEditContent(null), false);
   assert.equal(canEditContent(["admin"]), false);
+});
+
+test("isCollabDocName accepts only post-<positive id>", () => {
+  for (const ok of ["post-1", "post-2892", "post-9223372036854775807"]) {
+    assert.equal(isCollabDocName(ok), true, ok);
+  }
+  for (const bad of ["", "post-", "post-0", "post-01", "post-1a", "Post-1", "post-1/x", "post-1 | x",
+    "anything", "_internal/documents/post-1/squash", "post-12345678901234567890", undefined, 1]) {
+    assert.equal(isCollabDocName(bad), false, String(bad));
+  }
+});
+
+test("takeCredential reads ?ticket= and strips the query from req.url", () => {
+  const req = { url: "/post-12?ticket=v4.public.SECRET&x=1#frag" };
+  assert.equal(takeCredential(req), "v4.public.SECRET");
+  assert.equal(req.url, "/post-12");
+});
+
+test("takeCredential falls back to the legacy ?token= param", () => {
+  const req = { url: "/post-12?token=v4.public.SECRET" };
+  assert.equal(takeCredential(req), "v4.public.SECRET");
+  assert.equal(req.url, "/post-12");
+});
+
+test("takeCredential prefers ticket and decodes percent-encoding", () => {
+  const req = { url: "/post-1?token=old&ticket=v4.public.a%2Bb" };
+  assert.equal(takeCredential(req), "v4.public.a+b");
+});
+
+test("takeCredential returns null without a credential and still strips the query", () => {
+  for (const url of ["/post-1", "/post-1?", "/post-1?ticket=", "/post-1#ticket=x", undefined]) {
+    const req = { url };
+    assert.equal(takeCredential(req), null, String(url));
+    assert.ok(!req.url.includes("?") && !req.url.includes("#"), req.url);
+  }
 });
 
 test("fetchCurrentRole returns user.role and sends the bearer token to /users/me", async () => {

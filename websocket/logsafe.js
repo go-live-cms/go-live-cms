@@ -1,15 +1,14 @@
 // Log-safe views of WebSocket upgrade requests (#220).
 //
-// The editor's access token rides in the upgrade URL (?ticket= / ?token=), so the
-// upgrade handler must NEVER log req.url, req.headers or the query string. These
-// helpers build the only request context it logs: the doc name plus an allowlist of
-// non-secret fields. All of it is attacker-controlled and logged before
-// authentication, so every value is length-capped and escaped so it can't flood the
-// logs or forge a line.
+// The editor's access token rides in the upgrade URL (?ticket= / ?token=), so nothing
+// may log req.url, req.headers or the query string. These helpers build the only
+// request context that gets logged: the doc name plus an allowlist of non-secret
+// fields. All of it is attacker-controlled and may be logged before authentication, so
+// every value is length-capped and escaped so it can't flood the logs or forge a line.
 //
-// Pure, so it's unit tested in logsafe.test.js (and server.test.js guards that
-// server.js doesn't log the raw request). Must NOT import yjs — see the
-// single-yjs-instance gotcha in websocket/CLAUDE.md.
+// Pure, so it's unit tested in logsafe.test.js (and log-guard.test.js checks that no
+// module logs the raw request). Must NOT import yjs — see the single-yjs-instance
+// gotcha in websocket/CLAUDE.md.
 
 export const MAX_LOG_FIELD_LEN = 80;
 

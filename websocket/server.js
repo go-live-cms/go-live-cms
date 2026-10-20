@@ -2,9 +2,8 @@ import "dotenv/config";
 import { WebSocketServer } from "ws";
 import { createRequire } from "node:module";
 import { evaluatePersistedState } from "./persistence.js";
-import { canEditContent, fetchCurrentRole } from "./access.js";
+import { canEditContent, fetchCurrentRole, isCollabDocName, takeCredential } from "./access.js";
 import { docNameForLog, upgradeContextForLog } from "./logsafe.js";
-import { URL } from "url";
 import { V4 } from "paseto";
 import { createPublicKey } from "crypto";
 import http from "http";
@@ -150,6 +149,7 @@ const PERSISTENCE_ORIGIN = "leveldb-restore";
 
 setPersistence({
   bindState: async (docName, ydoc) => {
+    const logDoc = docNameForLog(docName);
     // Register the update listener FIRST — before the async LevelDB read — so no
     // client update that arrives during the IO round-trip is lost. A lost update
     // would leave a GAP in the stored log (update N+1 without N), and every future
@@ -163,7 +163,7 @@ setPersistence({
       // are at least logged instead of becoming an unhandledRejection.
       Promise.resolve(ldb.storeUpdate(docName, update)).catch((err) => {
         console.error(
-          `⚠️  Failed to persist update for ${docName}:`,
+          `⚠️  Failed to persist update for ${logDoc}:`,
           err?.message || err
         );
       });
@@ -175,11 +175,11 @@ setPersistence({
     // stored state and tells us what to do; see websocket/persistence.js (unit
     // tested in persistence.test.js).
     const result = await evaluatePersistedState(ldb, docName);
-    collabDebug("bindState", docName, "decision", result.action, "liveDocLen", docLen(ydoc));
+    collabDebug("bindState", logDoc, "decision", result.action, "liveDocLen", docLen(ydoc));
 
     if (result.action === "skip") {
       console.error(
-        `⚠️  Failed to load persisted state for ${docName} — continuing without it:`,
+        `⚠️  Failed to load persisted state for ${logDoc} — continuing without it:`,
         result.error?.message || result.error
       );
       return;
@@ -187,7 +187,7 @@ setPersistence({
 
     if (result.action === "clear") {
       console.warn(
-        `⚠️  Persisted state for ${docName} is incomplete/corrupt — clearing it. ` +
+        `⚠️  Persisted state for ${logDoc} is incomplete/corrupt — clearing it. ` +
           `The Postgres working copy is canonical; the safety net will rebuild from live edits.`
       );
       // Quarantine the corrupt entries — otherwise every subsequent reconnect
@@ -195,7 +195,7 @@ setPersistence({
       // is scoped to this docName only; other documents are untouched. Best-effort.
       ldb.clearDocument(docName).catch((err) => {
         console.error(
-          `⚠️  Failed to clear corrupt persisted state for ${docName}:`,
+          `⚠️  Failed to clear corrupt persisted state for ${logDoc}:`,
           err?.message || err
         );
       });
@@ -206,9 +206,10 @@ setPersistence({
     // client content is never overwritten by older/empty persisted state. Tag the
     // update with our sentinel origin so the listener above skips re-persisting it.
     Y.applyUpdate(ydoc, result.update, PERSISTENCE_ORIGIN);
-    collabDebug("bindState applied persisted state", docName, "liveDocLen", docLen(ydoc));
+    collabDebug("bindState applied persisted state", logDoc, "liveDocLen", docLen(ydoc));
   },
   writeState: async (docName, _ydoc) => {
+    const logDoc = docNameForLog(docName);
     // Compact the append-only update log into a single snapshot when the last client
     // disconnects. Updates are written incrementally by the bindState listener, but that
     // log was ONLY ever squashed on publish — so across a session it grew unbounded, and
@@ -221,10 +222,10 @@ setPersistence({
     // and stable. It does NOT drop content (CRDT merge), only collapses the log.
     try {
       await ldb.flushDocument(docName);
-      collabDebug("writeState flushed", docName);
+      collabDebug("writeState flushed", logDoc);
     } catch (err) {
       console.error(
-        `⚠️  Failed to flush ${docName} on last disconnect:`,
+        `⚠️  Failed to flush ${logDoc} on last disconnect:`,
         err?.message || err
       );
     }
@@ -251,14 +252,15 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const docName = decodeURIComponent(squashMatch[1]);
-    console.log(`🗜️  Squash requested for document: ${docName}`);
+    const logDoc = docNameForLog(docName);
+    console.log(`🗜️  Squash requested for document: ${logDoc}`);
     try {
       await ldb.flushDocument(docName);
-      console.log(`✅ Squash complete for: ${docName}`);
+      console.log(`✅ Squash complete for: ${logDoc}`);
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, docName }));
     } catch (err) {
-      console.error(`❌ Squash failed for ${docName}:`, err.message);
+      console.error(`❌ Squash failed for ${logDoc}:`, err.message);
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "squash failed", detail: err.message }));
     }
@@ -272,11 +274,12 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 wss.on("connection", (ws, req) => {
   const docName = docNameFromReq(req);
+  const logDoc = docNameForLog(docName);
   console.log(
     "✅ WebSocket connection established for user:",
     req.auth?.username || "unknown",
     "doc:",
-    docName,
+    logDoc,
   );
 
   // Keep connection alive to prevent idle disconnects behind proxies
@@ -295,7 +298,7 @@ wss.on("connection", (ws, req) => {
     // Log AFTER y-websocket has removed this conn so the count reflects survivors.
     setTimeout(() => {
       const remaining = docs.get(docName)?.conns.size ?? 0;
-      console.log(`🔌 WS close — doc: ${docName} | live connections now: ${remaining}`);
+      console.log(`🔌 WS close — doc: ${logDoc} | live connections now: ${remaining}`);
     }, 0);
   });
 
@@ -306,7 +309,7 @@ wss.on("connection", (ws, req) => {
   // open means a zombie/duplicate binder is fighting over the doc — the kind of thing
   // that produces an unkillable server-vs-editor tug-of-war.
   const liveConns = docs.get(docName)?.conns.size ?? 0;
-  console.log(`🔗 WS open — doc: ${docName} | live connections now: ${liveConns}`);
+  console.log(`🔗 WS open — doc: ${logDoc} | live connections now: ${liveConns}`);
 });
 
 server.on("upgrade", async (req, socket, head) => {
@@ -317,22 +320,29 @@ server.on("upgrade", async (req, socket, head) => {
   socket.on("error", (err) => {
     console.warn("⚠️  Upgrade socket error:", err.code || err.message);
   });
-  // Never log req.url, req.headers or the query string here: the access token rides
-  // in ?ticket= (or ?token=), so any of them would write a replayable bearer token to
-  // the logs (#220). Log only the logsafe.js views (server.test.js enforces this).
-  const docName = docNameForLog(docNameFromReq(req));
-  const reqContext = upgradeContextForLog(req);
-  console.log(`📡 WebSocket upgrade request for doc: ${docName} | ${reqContext}`);
+  // The access token rides in ?ticket= (or ?token=). takeCredential strips it from
+  // req.url before anything else reads the request, so nothing below (or y-websocket)
+  // can log it (#220). Still never log req.headers; use the logsafe.js views.
+  const credential = takeCredential(req);
+  const rawDocName = docNameFromReq(req);
+  const docName = docNameForLog(rawDocName);
+  console.log(`📡 WebSocket upgrade request for doc: ${docName}`);
+
+  // Rejections log the client context (origin, UA, peer IP) to make them traceable;
+  // accepted upgrades don't, so we don't retain that for every editor connect.
+  const reject = (status, body, reason, level = "error") => {
+    console[level](`🚫 ${reason} | doc ${docName} | ${upgradeContextForLog(req)}`);
+    socket.write(`HTTP/1.1 ${status}\r\n\r\n${body}\r\n`);
+    socket.destroy();
+  };
+
+  if (!isCollabDocName(rawDocName)) {
+    reject("400 Bad Request", "Unknown document", "Invalid document name", "warn");
+    return;
+  }
   try {
-    const url = new URL(req.url || "/", `http://${req.headers.host}`);
-    const credential =
-      url.searchParams.get("ticket") || url.searchParams.get("token");
     if (!credential) {
-      console.error(`🚫 No ticket or token provided for doc ${docName} | ${reqContext}`);
-      socket.write(
-        "HTTP/1.1 401 Unauthorized\r\n\r\nNo authentication credentials provided\r\n",
-      );
-      socket.destroy();
+      reject("401 Unauthorized", "No authentication credentials provided", "No ticket or token provided");
       return;
     }
     console.log("🔑 Verifying PASETO v4.public credential...");
@@ -375,17 +385,20 @@ server.on("upgrade", async (req, socket, head) => {
     try {
       role = await fetchCurrentRole(API_URL, credential);
     } catch (err) {
-      console.error(`🚫 Role lookup failed for user ${payload.username || payload.sub}, doc ${docName}:`, err.message);
-      socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\nCould not verify user role\r\n");
-      socket.destroy();
+      reject(
+        "503 Service Unavailable",
+        "Could not verify user role",
+        `Role lookup failed for user ${payload.username || payload.sub}: ${err.message}`,
+      );
       return;
     }
     if (!canEditContent(role)) {
-      console.warn(
-        `🚫 Forbidden: user ${payload.username || payload.sub} (role: ${role || "none"}) cannot edit ${docName}`,
+      reject(
+        "403 Forbidden",
+        "Insufficient role for collaborative editing",
+        `Forbidden: user ${payload.username || payload.sub} (role: ${role || "none"}) cannot edit`,
+        "warn",
       );
-      socket.write("HTTP/1.1 403 Forbidden\r\n\r\nInsufficient role for collaborative editing\r\n");
-      socket.destroy();
       return;
     }
     console.log("👤 Verified role:", role);
@@ -401,11 +414,11 @@ server.on("upgrade", async (req, socket, head) => {
       wss.emit("connection", ws, req);
     });
   } catch (error) {
-    console.error(`🚫 WebSocket authentication failed for doc ${docName} | ${reqContext}:`, error.message);
-    socket.write(
-      "HTTP/1.1 401 Unauthorized\r\n\r\nInvalid or expired authentication credentials\r\n",
+    reject(
+      "401 Unauthorized",
+      "Invalid or expired authentication credentials",
+      `WebSocket authentication failed: ${error.message}`,
     );
-    socket.destroy();
   }
 });
 

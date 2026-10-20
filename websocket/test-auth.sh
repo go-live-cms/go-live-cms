@@ -32,7 +32,7 @@ echo ""
 # Test 1: Connection without token (should fail)
 echo "🧪 Test 1: Connection without authentication token"
 echo "Expected: Connection should be rejected"
-timeout 5 wscat -c "$WS_URL" -w 1 2>/dev/null && echo "❌ FAIL: Connection without token was accepted" || echo "✅ PASS: Connection without token was rejected"
+timeout 5 wscat -c "$WS_URL/post-1" -w 1 2>/dev/null && echo "❌ FAIL: Connection without token was accepted" || echo "✅ PASS: Connection without token was rejected"
 echo ""
 
 # Test 2: Get access token
@@ -44,7 +44,6 @@ TOKEN_RESPONSE=$(curl -s -X POST "$GO_API_URL/api/v1/auth/login" \
 if echo "$TOKEN_RESPONSE" | grep -q "access_token"; then
     ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
     echo "✅ PASS: Successfully obtained access token"
-    echo "  Token preview: ${ACCESS_TOKEN:0:20}..."
 else
     echo "❌ FAIL: Could not obtain access token"
     echo "  Response: $TOKEN_RESPONSE"
@@ -60,7 +59,7 @@ echo "Note: This test requires manual verification - watch WebSocket server logs
 # Create a test WebSocket connection with token
 # Note: wscat doesn't support custom subprotocols easily, so we'll use query parameter as fallback
 echo "Testing with token as query parameter (fallback method)..."
-timeout 3 wscat -c "$WS_URL/?ticket=$ACCESS_TOKEN" -w 1 2>/dev/null && echo "✅ Ticket-based connection test completed" || echo "⚠️  Connection test completed (check server logs)"
+timeout 3 wscat -c "$WS_URL/post-1?ticket=$ACCESS_TOKEN" -w 1 2>/dev/null && echo "✅ Ticket-based connection test completed" || echo "⚠️  Connection test completed (check server logs)"
 echo ""
 
 # Test 4: Check server logs for authentication messages

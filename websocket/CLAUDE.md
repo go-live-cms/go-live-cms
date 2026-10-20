@@ -32,9 +32,20 @@ role lists in sync.
   `web/gl-admin/lib/roles.ts`), so they never attempt the connection.
 - **Never log the raw upgrade request (#220).** The token is in the URL, so logging
   `req.url`, `req.headers`, the query params or the credential writes a replayable
-  bearer token to the logs. Log only `docNameForLog` / `upgradeContextForLog` from
-  `logsafe.js` (sanitised, length-capped, header allowlist). `server.test.js` scans every
-  `console.*` / `collabDebug` call in `server.js` and fails on those identifiers.
+  bearer token to the logs.
+  - The upgrade handler calls `takeCredential(req)` (`access.js`) **first**. It reads
+    `ticket`/`token` and strips the query from `req.url`, so nothing downstream
+    (y-websocket, the connection handler, logs) ever sees the token.
+  - Log doc names via `docNameForLog`, and client context (origin, UA, peer IP) via
+    `upgradeContextForLog`, both in `logsafe.js`. The context is logged **only on
+    rejected upgrades**, to avoid retaining IPs for every connect.
+  - `log-guard.test.js` scans every log call (`console.*`, `console[level]`,
+    `collabDebug`, `process.std{out,err}.write`) in every non-test module. It fails on
+    `req.url`/`req.headers`/`searchParams`/`credential`/`token`/`params`/`url`, and on
+    aliasing `console` methods. A value renamed through another variable still slips
+    past it; the `takeCredential` strip is the real guarantee.
+- **Doc names must be `post-<id>`** (`isCollabDocName`). Anything else gets **400**
+  before auth, so clients can't create and persist Yjs docs under arbitrary names.
 
 ## Persistence (LevelDB safety net)
 
