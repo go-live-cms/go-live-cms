@@ -18,8 +18,9 @@
 // # Update Operations
 //
 // Metadata updates: PUT /media/:id for name, description, alt text changes.
-// Preserves file data, only updates database fields.
-// Requires resource ownership validation.
+// File fields (media_path, size, MIME type, dimensions) are server-owned and
+// rejected with 400. Any content editor may update any media item; there is
+// no per-owner check.
 //
 // # Delete Operations
 //
@@ -316,41 +317,21 @@ func (server *Server) updateMedia(c *gin.Context) {
 		return
 	}
 
-	existingMedia, err := server.store.GetMedia(c.Request.Context(), id)
+	// One statement that only touches name/description/alt: the file columns
+	// can't be written through this path, and concurrent partial updates
+	// don't overwrite each other's fields with a stale read. Empty strings
+	// are passed as NULL, which keeps the current value.
+	updatedMedia, err := server.store.UpdateMediaMetadata(c.Request.Context(), db.UpdateMediaMetadataParams{
+		ID:          id,
+		Name:        sql.NullString{String: req.Name, Valid: req.Name != ""},
+		Description: sql.NullString{String: req.Description, Valid: req.Description != ""},
+		Alt:         sql.NullString{String: req.Alt, Valid: req.Alt != ""},
+	})
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media"})
-		return
-	}
-
-	updateParams := db.UpdateMediaParams{
-		ID:               id,
-		Name:             existingMedia.Name,
-		Description:      existingMedia.Description,
-		Alt:              existingMedia.Alt,
-		MediaPath:        existingMedia.MediaPath,
-		FileSize:         existingMedia.FileSize,
-		MimeType:         existingMedia.MimeType,
-		Width:            existingMedia.Width,
-		Height:           existingMedia.Height,
-		Duration:         existingMedia.Duration,
-		OriginalFilename: existingMedia.OriginalFilename,
-	}
-
-	if req.Name != "" {
-		updateParams.Name = req.Name
-	}
-	if req.Description != "" {
-		updateParams.Description = req.Description
-	}
-	if req.Alt != "" {
-		updateParams.Alt = req.Alt
-	}
-	updatedMedia, err := server.store.UpdateMedia(c.Request.Context(), updateParams)
-	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})
 		return
 	}

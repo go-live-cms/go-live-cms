@@ -725,19 +725,14 @@ func TestSearchMediaAPI(t *testing.T) {
 func TestUpdateMediaAPI(t *testing.T) {
 	user := randomUserForPosts()
 	media := randomMedia()
-	media.FileSize = 2048
-	media.MimeType = "image/jpeg"
-	media.Width = 640
-	media.Height = 480
-	media.OriginalFilename = "hero.jpg"
 	newName := gofakeit.Word()
 	newDescription := gofakeit.Sentence(10)
 
-	// A request touching any server-owned file field is rejected before the
-	// store is read or written.
-	rejectBeforeStore := func(store *mockdb.MockStore) {
+	// The handler only ever writes through the metadata-only query; the
+	// full-row UpdateMedia (which can write file columns) must never be used.
+	noStoreWrites := func(store *mockdb.MockStore) {
 		store.EXPECT().
-			GetMedia(gomock.Any(), gomock.Any()).
+			UpdateMediaMetadata(gomock.Any(), gomock.Any()).
 			Times(0)
 		store.EXPECT().
 			UpdateMedia(gomock.Any(), gomock.Any()).
@@ -773,33 +768,22 @@ func TestUpdateMediaAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-
-				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Eq(media.ID)).
-					Times(1).
-					Return(media, nil)
-
 				updatedMedia := media
 				updatedMedia.Name = newName
 				updatedMedia.Description = newDescription
 
-				// File fields are carried over from the stored row untouched.
+				// Omitted alt is passed as NULL so the query keeps it.
 				store.EXPECT().
-					UpdateMedia(gomock.Any(), gomock.Eq(db.UpdateMediaParams{
-						ID:               media.ID,
-						Name:             newName,
-						Description:      newDescription,
-						Alt:              media.Alt,
-						MediaPath:        media.MediaPath,
-						FileSize:         media.FileSize,
-						MimeType:         media.MimeType,
-						Width:            media.Width,
-						Height:           media.Height,
-						Duration:         media.Duration,
-						OriginalFilename: media.OriginalFilename,
+					UpdateMediaMetadata(gomock.Any(), gomock.Eq(db.UpdateMediaMetadataParams{
+						ID:          media.ID,
+						Name:        sql.NullString{String: newName, Valid: true},
+						Description: sql.NullString{String: newDescription, Valid: true},
 					})).
 					Times(1).
 					Return(updatedMedia, nil)
+				store.EXPECT().
+					UpdateMedia(gomock.Any(), gomock.Any()).
+					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -817,27 +801,13 @@ func TestUpdateMediaAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Eq(media.ID)).
-					Times(1).
-					Return(media, nil)
-
 				updatedMedia := media
 				updatedMedia.Name = newName
 
 				store.EXPECT().
-					UpdateMedia(gomock.Any(), gomock.Eq(db.UpdateMediaParams{
-						ID:               media.ID,
-						Name:             newName,
-						Description:      media.Description,
-						Alt:              media.Alt,
-						MediaPath:        media.MediaPath,
-						FileSize:         media.FileSize,
-						MimeType:         media.MimeType,
-						Width:            media.Width,
-						Height:           media.Height,
-						Duration:         media.Duration,
-						OriginalFilename: media.OriginalFilename,
+					UpdateMediaMetadata(gomock.Any(), gomock.Eq(db.UpdateMediaMetadataParams{
+						ID:   media.ID,
+						Name: sql.NullString{String: newName, Valid: true},
 					})).
 					Times(1).
 					Return(updatedMedia, nil)
@@ -858,7 +828,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
-			buildStubs:    rejectBeforeStore,
+			buildStubs:    noStoreWrites,
 			checkResponse: requireRejected("media_path"),
 		},
 		{
@@ -870,7 +840,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
-			buildStubs:    rejectBeforeStore,
+			buildStubs:    noStoreWrites,
 			checkResponse: requireRejected("media_path"),
 		},
 		{
@@ -887,7 +857,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
-			buildStubs:    rejectBeforeStore,
+			buildStubs:    noStoreWrites,
 			checkResponse: requireRejected("file_size", "mime_type", "width", "height", "duration", "original_filename"),
 		},
 		{
@@ -899,14 +869,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Any()).
-					Times(0)
-				store.EXPECT().
-					UpdateMedia(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
+			buildStubs: noStoreWrites,
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
@@ -922,12 +885,31 @@ func TestUpdateMediaAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Eq(media.ID)).
+					UpdateMediaMetadata(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Medium{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:    "InternalError",
+			mediaID: media.ID,
+			body: gin.H{
+				"name": newName,
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					UpdateMediaMetadata(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.Medium{}, sql.ErrConnDone)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
 			},
 		},
 	}

@@ -2187,6 +2187,21 @@ func (mr *MockStoreMockRecorder) UpdateMedia(arg0, arg1 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMedia", reflect.TypeOf((*MockStore)(nil).UpdateMedia), arg0, arg1)
 }
 
+// UpdateMediaMetadata mocks base method.
+func (m *MockStore) UpdateMediaMetadata(arg0 context.Context, arg1 db.UpdateMediaMetadataParams) (db.Medium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateMediaMetadata", arg0, arg1)
+	ret0, _ := ret[0].(db.Medium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateMediaMetadata indicates an expected call of UpdateMediaMetadata.
+func (mr *MockStoreMockRecorder) UpdateMediaMetadata(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateMediaMetadata", reflect.TypeOf((*MockStore)(nil).UpdateMediaMetadata), arg0, arg1)
+}
+
 // UpdatePost mocks base method.
 func (m *MockStore) UpdatePost(arg0 context.Context, arg1 db.UpdatePostParams) (db.Post, error) {
 	m.ctrl.T.Helper()

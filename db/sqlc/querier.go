@@ -165,6 +165,10 @@ type Querier interface {
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
+	// Metadata-only update used by PUT /media/:id. The file columns (media_path,
+	// file_size, mime_type, dimensions, original_filename) are set on upload and
+	// deliberately not writable here. NULL args keep the current value.
+	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdatePostBlocksIfRevisionMatches(ctx context.Context, arg UpdatePostBlocksIfRevisionMatchesParams) (UpdatePostBlocksIfRevisionMatchesRow, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)

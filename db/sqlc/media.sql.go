@@ -1312,3 +1312,52 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 	)
 	return i, err
 }
+
+const updateMediaMetadata = `-- name: UpdateMediaMetadata :one
+UPDATE media
+SET
+    name = COALESCE($1, name),
+    description = COALESCE($2, description),
+    alt = COALESCE($3, alt),
+    changed_at = now()
+WHERE id = $4
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata
+`
+
+type UpdateMediaMetadataParams struct {
+	Name        sql.NullString `json:"name"`
+	Description sql.NullString `json:"description"`
+	Alt         sql.NullString `json:"alt"`
+	ID          int64          `json:"id"`
+}
+
+// Metadata-only update used by PUT /media/:id. The file columns (media_path,
+// file_size, mime_type, dimensions, original_filename) are set on upload and
+// deliberately not writable here. NULL args keep the current value.
+func (q *Queries) UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, updateMediaMetadata,
+		arg.Name,
+		arg.Description,
+		arg.Alt,
+		arg.ID,
+	)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Alt,
+		&i.MediaPath,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.FileSize,
+		&i.MimeType,
+		&i.Width,
+		&i.Height,
+		&i.Duration,
+		&i.OriginalFilename,
+		&i.Metadata,
+	)
+	return i, err
+}
