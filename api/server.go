@@ -30,6 +30,9 @@ type Server struct {
 	config         util.Config
 	tokenMaker     token.Maker
 	ctx            context.Context
+
+	// Collab (WebSocket) ticket minting; see collab_routes.go.
+	collabTickets collabTicketMaker
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -70,6 +73,8 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		config:     config,
 		tokenMaker: tokenMaker,
 		ctx:        context.Background(),
+
+		collabTickets: tokenMaker,
 	}
 
 	if shouldCheckSeededAccounts(config) {
@@ -177,6 +182,7 @@ func corsOrigins(config util.Config) []string {
 //   - /api/v1/taxonomy-terms: CRUD, lookup, popular, search, posts
 //   - /api/v1/taxonomies: legacy aliases for terms (back-compat)
 //   - /api/v1/media: upload/batch, search, popular, CRUD, relations
+//   - /api/v1/collab: collab socket ticket minting (the WS server verifies and burns them)
 //   - Static /uploads → ./uploads (serve uploaded files)
 //
 // Auth:
@@ -231,6 +237,9 @@ func (server *Server) setupRoutes() {
 
 	// Theme module routes (see themes_routes.go for complete definitions)
 	server.registerThemeRoutes(v1)
+
+	// Collaboration (WebSocket) ticket routes (see collab_routes.go)
+	server.registerCollabRoutes(v1)
 
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)

@@ -34,8 +34,14 @@ is split into consistently-named files in `api/`:
 
 PASETO v4: asymmetric (`PASETO_V4_PUBLIC/PRIVATE_KEY_HEX`) for access tokens, local
 symmetric (`PASETO_V4_LOCAL_KEY_HEX`) for refresh. Issuer/audience/KIDs in `util/config.go`.
-The WebSocket server verifies the **same** public-key tokens (audience `golive.admin-ws`,
-also accepts `golive.admin`/`golive.auth` during migration).
+The WebSocket server never sees access tokens (#233). The editor exchanges its access
+token for a **collab ticket** at `POST /collab/tickets` (admin/editor): v4.public, signed
+with the access key, audience `golive.admin-ws`, `token_type: ws_ticket`, `doc` claim,
+30s TTL (`token/ws_ticket.go`, `collab_*.go`). `VerifyToken` rejects tickets, so they're
+not bearer tokens. The API never accepts a ticket back: the WS server verifies it
+locally, burns its jti (single use, in the WS process), and gets the user's current
+role from the internal role endpoint below (#223). The ticket never leaves the WS
+server.
 
 - **`authMiddleware` loads the caller's DB row on every authenticated request** and
   caches it under `authorization_user`. Get it with `server.callerUser(c)`; don't
@@ -108,8 +114,9 @@ also accepts `golive.admin`/`golive.auth` during migration).
 - It is
   authenticated with `Authorization: Bearer <ROLE_LOOKUP_SECRET>` (constant-time
   compare), **not** `authMiddleware`, so it works with WS-only tickets
-  (`golive.admin-ws`). It reads the role from the DB and refuses (403) tickets issued
-  before the user's latest password change. 404 means the user is gone.
+  (`golive.admin-ws`, `token_type: ws_ticket`, #233). The WS server passes the
+  ticket's `user_id` and `iat`. It reads the role from the DB and refuses (403) tickets
+  issued before the user's latest password change. 404 means the user is gone.
 - `ROLE_LOOKUP_SECRET` is **required**: `NewServer` errors without it. It has no
   default, so `LoadConfig` binds it with `viper.BindEnv`. Without that, viper's
   `Unmarshal` drops env-only keys it doesn't know (see `util/config_test.go`).

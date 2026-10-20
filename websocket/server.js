@@ -2,8 +2,14 @@ import "dotenv/config";
 import { WebSocketServer } from "ws";
 import { createRequire } from "node:module";
 import { evaluatePersistedState } from "./persistence.js";
-import { authorizeUpgrade } from "./access.js";
-import { URL } from "url";
+import {
+  fetchCurrentRole,
+  isCollabDocName,
+  TicketReplayGuard,
+  verifyTicket,
+  TICKET_AUDIENCE,
+} from "./access.js";
+import { createUpgradeHandler, docNameFromReq } from "./upgrade.js";
 import { createPublicKey } from "crypto";
 import http from "http";
 import fs from "fs";
@@ -48,10 +54,6 @@ const Y = require("yjs");
 const HOST = process.env.HOST || "localhost";
 const PORT = Number(process.env.PORT) || 1234;
 const ISSUER = process.env.PASETO_ISSUER || "go-live-cms";
-const AUDIENCE = process.env.PASETO_AUDIENCE || "go-live-cms-ws";
-const ALLOWED_AUDIENCES = process.env.PASETO_ALLOWED_AUDIENCES?.split(",") || [
-  AUDIENCE,
-];
 // Trim first, THEN fall back to "./data", so DATA_PATH=" " (whitespace only)
 // resolves to "./data" rather than "" (which would silently use the CWD).
 const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
@@ -87,17 +89,15 @@ const collabDebug = (...args) => {
 // every server-side length log meaningless during past diagnosis. Measure "default".
 const docLen = (ydoc) => ydoc.getXmlFragment("default").length;
 
-// Derive the Yjs document name (e.g. "post-2892") from the upgrade request URL, the
-// same way y-websocket's setupWSConnection does, so we can correlate connection counts.
-const docNameFromReq = (req) => (req.url || "/").slice(1).split("?")[0].split("#")[0];
 
 console.log("🔍 Environment debug:");
 console.log("   - process.env.HOST:", process.env.HOST);
 console.log("   - Resolved HOST:", HOST);
-console.log(
-  "   - process.env.PASETO_ALLOWED_AUDIENCES:",
-  process.env.PASETO_ALLOWED_AUDIENCES,
-);
+if (process.env.PASETO_AUDIENCE || process.env.PASETO_ALLOWED_AUDIENCES) {
+  // Pre-#233 settings. Only collab tickets (audience golive.admin-ws) are accepted now;
+  // access tokens never authenticate a socket, whatever these say.
+  console.warn("⚠️  PASETO_AUDIENCE / PASETO_ALLOWED_AUDIENCES are ignored (tickets only, #233)");
+}
 
 // Flexible public key loading (supports PEM, base64, or file)
 function loadPublicKey() {
@@ -132,8 +132,7 @@ try {
   console.log("   - Host:", HOST);
   console.log("   - Port:", PORT);
   console.log("   - Issuer:", ISSUER);
-  console.log("   - Primary Audience:", AUDIENCE);
-  console.log("   - Allowed Audiences:", ALLOWED_AUDIENCES.join(", "));
+  console.log("   - Ticket audience:", TICKET_AUDIENCE);
   console.log("   - DATA_PATH:", DATA_PATH);
   console.log("   - INTERNAL_API_URL (role lookup):", INTERNAL_API_URL);
   console.log("   - Role lookup: internal endpoint, shared secret (ROLE_LOOKUP_SECRET set)");
@@ -260,7 +259,21 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "unauthorized" }));
       return;
     }
-    const docName = decodeURIComponent(squashMatch[1]);
+    // decodeURIComponent throws on a malformed escape; in this async handler that would
+    // be an unhandled rejection, which exits the process (every live session with it).
+    let docName;
+    try {
+      docName = decodeURIComponent(squashMatch[1]);
+    } catch {
+      docName = null;
+    }
+    // Same rule as the upgrade handler, so every doc name this process logs or touches
+    // in LevelDB is a valid post-<id>.
+    if (!isCollabDocName(docName)) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "invalid document name" }));
+      return;
+    }
     console.log(`🗜️  Squash requested for document: ${docName}`);
     try {
       await ldb.flushDocument(docName);
@@ -319,87 +332,22 @@ wss.on("connection", (ws, req) => {
   console.log(`🔗 WS open — doc: ${docName} | live connections now: ${liveConns}`);
 });
 
-server.on("upgrade", async (req, socket, head) => {
-  // Node's http server removes its own socket 'error' listener before emitting
-  // 'upgrade'. Without this one, a client that disconnects while we await the role
-  // lookup (ECONNRESET), or a write to an already-closed peer (EPIPE), is an
-  // uncaught 'error' that crashes the process and every live collab session.
-  socket.on("error", (err) => {
-    console.warn("⚠️  Upgrade socket error:", err.code || err.message);
-  });
-  console.log("📡 WebSocket upgrade request:", req.url);
-  try {
-    console.log("🔗 WebSocket upgrade request");
-    console.log("📍 URL:", req.url);
-    console.log("🔍 Headers:", JSON.stringify(req.headers, null, 2));
-
-    const url = new URL(req.url || "/", `http://${req.headers.host}`);
-    console.log("🎯 Parsed URL params:", Object.fromEntries(url.searchParams));
-    const credential =
-      url.searchParams.get("ticket") || url.searchParams.get("token");
-    if (!credential) {
-      console.error("🚫 No ticket or token provided");
-      socket.write(
-        "HTTP/1.1 401 Unauthorized\r\n\r\nNo authentication credentials provided\r\n",
-      );
-      socket.destroy();
-      return;
-    }
-    console.log("🔑 Verifying PASETO v4.public credential...");
-    if (process.env.NODE_ENV !== "production") {
-      console.log("🔍 Token preview:", credential.substring(0, 50) + "...");
-    }
-    console.log("🎯 Trying audiences:", ALLOWED_AUDIENCES.join(", "));
-
-    const docName = docNameFromReq(req);
-    // Verifies the ticket, then reads the CURRENT role from the API's internal endpoint
-    // (shared secret, not the ticket — #223). The token's `role` claim is never used to
-    // authorize (stale on demotion, empty after refresh). See access.js.
-    const decision = await authorizeUpgrade(credential, {
-      publicKey: PUBLIC_KEY,
-      issuer: ISSUER,
-      audiences: ALLOWED_AUDIENCES,
-      apiUrl: INTERNAL_API_URL,
-      secret: ROLE_LOOKUP_SECRET,
-    });
-    const who = decision.payload ? decision.payload.username || decision.payload.sub : "unknown";
-
-    if (!decision.ok) {
-      if (decision.status === 401) throw new Error(decision.reason);
-      if (decision.status === 503) {
-        console.error(`🚫 Role lookup failed for user ${who}, doc ${docName}:`, decision.reason);
-        socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\nCould not verify user role\r\n");
-      } else {
-        console.warn(`🚫 Forbidden: user ${who} cannot edit ${docName}: ${decision.reason}`);
-        socket.write("HTTP/1.1 403 Forbidden\r\n\r\nInsufficient role for collaborative editing\r\n");
-      }
-      socket.destroy();
-      return;
-    }
-
-    const { payload, footer, role } = decision;
-    console.log(`✅ Token verified for user ${who} (audience: ${decision.audience})`);
-    console.log("👤 Token role claim (informational):", payload.role || "none");
-    console.log("👤 Verified role:", role);
-
-    req.auth = {
-      sub: payload.sub,
-      username: payload.username,
-      role,
-      kid: footer?.kid,
-      tokenPayload: payload,
-    };
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req);
-    });
-  } catch (error) {
-    console.error("🚫 WebSocket authentication failed:", error.message);
-    socket.write(
-      "HTTP/1.1 401 Unauthorized\r\n\r\nInvalid or expired authentication credentials\r\n",
-    );
-    socket.destroy();
-  }
-});
+// Ticket auth, single-use burn, role check and doc-name validation live in upgrade.js
+// (unit tested there); the ticket checks and the role lookup are in access.js
+// (#223, #233). The ticket never leaves this process.
+const usedTickets = new TicketReplayGuard();
+server.on(
+  "upgrade",
+  createUpgradeHandler({
+    verifyTicket: (ticket, docName) => verifyTicket(ticket, PUBLIC_KEY, { issuer: ISSUER, docName }),
+    consumeTicket: (claims) => usedTickets.consume(claims),
+    fetchRole: (identity) => fetchCurrentRole(INTERNAL_API_URL, identity, ROLE_LOOKUP_SECRET),
+    accept: (req, socket, head) =>
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit("connection", ws, req);
+      }),
+  }),
+);
 
 server.on("error", (error) => {
   console.error("❌ HTTP server error:", error);
@@ -410,9 +358,8 @@ server.listen(PORT, HOST, () => {
     `🔌 Yjs WebSocket server with PASETO v4.public auth running on ws://${HOST}:${PORT}`,
   );
   console.log(
-    `🔒 Expecting ?ticket=<v4.public> or ?token=<v4.public> (issuer=${ISSUER})`,
+    `🔒 Expecting ?ticket=<collab ticket> (issuer=${ISSUER}, audience=${TICKET_AUDIENCE}, single use)`,
   );
-  console.log(`🎯 Allowed audiences: ${ALLOWED_AUDIENCES.join(", ")}`);
   console.log("🛡️ Authentication happens during HTTP upgrade - no 4401 loops!");
 });
 

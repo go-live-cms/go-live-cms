@@ -1,8 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createPublicKey } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { V4 } from "paseto";
-import { authorizeUpgrade, canEditContent, fetchCurrentRole, ticketIdentity } from "./access.js";
+import {
+  canEditContent,
+  fetchCurrentRole,
+  isCollabDocName,
+  stripCollabPrefix,
+  takeCredential,
+  ticketIdentity,
+  verifyTicket,
+  TicketReplayGuard,
+  TICKET_AUDIENCE,
+  TICKET_CLOCK_TOLERANCE_MS,
+  TICKET_TYPE,
+} from "./access.js";
 
 /** Fake fetch that records the request and answers with the given status/body. */
 function fakeFetch(status, body = {}) {
@@ -18,7 +31,18 @@ function fakeFetch(status, body = {}) {
   return { impl, calls };
 }
 
-const identity = { userId: "7", issuedAt: 1760000000 };
+const ISSUER = "golive.auth";
+const privateKey = await V4.generateKey("public");
+const publicKey = createPublicKey(privateKey);
+
+/** Signs a token shaped like the API's (token/ws_ticket.go), with overridable claims. */
+function sign(claims = {}, { audience = TICKET_AUDIENCE, expiresIn = "30s", key = privateKey } = {}) {
+  return V4.sign(
+    { user_id: "7", username: "alice", token_type: TICKET_TYPE, doc: "post-12", ...claims },
+    key,
+    { issuer: ISSUER, audience, expiresIn, jti: randomUUID() },
+  );
+}
 
 test("canEditContent allows admin and editor, case-insensitively", () => {
   assert.equal(canEditContent("admin"), true);
@@ -34,6 +58,100 @@ test("canEditContent denies contributors and missing roles", () => {
   assert.equal(canEditContent(null), false);
   assert.equal(canEditContent(["admin"]), false);
 });
+
+test("isCollabDocName accepts only post-<positive id>", () => {
+  for (const ok of ["post-1", "post-2892", "post-9223372036854775807"]) {
+    assert.equal(isCollabDocName(ok), true, ok);
+  }
+  for (const bad of ["", "post-", "post-0", "post-01", "post-1a", "Post-1", "post-1/x", "post-1 | x",
+    "anything", "_internal/documents/post-1/squash", "post-12345678901234567890", undefined, 1]) {
+    assert.equal(isCollabDocName(bad), false, String(bad));
+  }
+});
+
+test("takeCredential reads ?ticket= and strips the query from req.url", () => {
+  const req = { url: "/post-12?ticket=v4.public.SECRET&x=1#frag" };
+  assert.equal(takeCredential(req), "v4.public.SECRET");
+  assert.equal(req.url, "/post-12");
+});
+
+test("takeCredential ignores the pre-#233 ?token= param but still strips it", () => {
+  const req = { url: "/post-12?token=v4.public.SECRET" };
+  assert.equal(takeCredential(req), null);
+  assert.equal(req.url, "/post-12");
+});
+
+test("takeCredential reads ticket (not token) and decodes percent-encoding", () => {
+  const req = { url: "/post-1?token=old&ticket=v4.public.a%2Bb" };
+  assert.equal(takeCredential(req), "v4.public.a+b");
+});
+
+test("takeCredential returns null without a credential and still strips the query", () => {
+  for (const url of ["/post-1", "/post-1?", "/post-1?ticket=", "/post-1#ticket=x", undefined]) {
+    const req = { url };
+    assert.equal(takeCredential(req), null, String(url));
+    assert.ok(!req.url.includes("?") && !req.url.includes("#"), req.url);
+  }
+});
+
+test("stripCollabPrefix drops the proxy's /collab prefix and nothing else", () => {
+  const cases = [
+    ["/collab/post-12", "/post-12"],
+    ["/post-12", "/post-12"],
+    ["/collabx/post-12", "/collabx/post-12"],
+    ["/collab", "/collab"],
+    ["/x/collab/post-12", "/x/collab/post-12"],
+  ];
+  for (const [before, after] of cases) {
+    const req = { url: before };
+    stripCollabPrefix(req);
+    assert.equal(req.url, after, before);
+  }
+});
+
+test("verifyTicket accepts a ticket for this doc", async () => {
+  const payload = await verifyTicket(await sign(), publicKey, { issuer: ISSUER, docName: "post-12" });
+  assert.equal(payload.username, "alice");
+  assert.equal(payload.doc, "post-12");
+});
+
+test("verifyTicket rejects a ticket minted for another doc", async () => {
+  await assert.rejects(
+    verifyTicket(await sign(), publicKey, { issuer: ISSUER, docName: "post-13" }),
+    /different document/,
+  );
+});
+
+test("verifyTicket rejects an access token (wrong audience)", async () => {
+  const access = await sign({ token_type: "access", doc: undefined }, { audience: "golive.admin" });
+  await assert.rejects(verifyTicket(access, publicKey, { issuer: ISSUER, docName: "post-12" }));
+});
+
+test("verifyTicket rejects a non-ticket token even with the ticket audience", async () => {
+  const access = await sign({ token_type: "access" });
+  await assert.rejects(
+    verifyTicket(access, publicKey, { issuer: ISSUER, docName: "post-12" }),
+    /not a collab ticket/,
+  );
+});
+
+test("verifyTicket rejects expired, foreign-key and wrong-issuer tickets", async () => {
+  const opts = { issuer: ISSUER, docName: "post-12" };
+  const expired = await V4.sign(
+    { token_type: TICKET_TYPE, doc: "post-12", exp: new Date(Date.now() - 60_000).toISOString() },
+    privateKey,
+    { issuer: ISSUER, audience: TICKET_AUDIENCE },
+  );
+  await assert.rejects(verifyTicket(expired, publicKey, opts));
+
+  const otherKey = await V4.generateKey("public");
+  await assert.rejects(verifyTicket(await sign({}, { key: otherKey }), publicKey, opts));
+
+  await assert.rejects(verifyTicket(await sign(), publicKey, { ...opts, issuer: "someone.else" }));
+});
+
+/** Identity as ticketIdentity returns it, for the role-lookup tests. */
+const identity = { userId: "7", issuedAt: 1760000000 };
 
 test("ticketIdentity extracts user_id and iat (as Unix seconds)", () => {
   assert.deepEqual(ticketIdentity({ user_id: "42", iat: "2025-10-09T08:53:20Z" }), {
@@ -119,135 +237,38 @@ test("fetchCurrentRole throws when the API doesn't answer in time", async () => 
   });
 });
 
-// --- authorizeUpgrade with real PASETO v4.public tickets (#223) ---------------------
-//
-// The point of #223: a WS-only ticket (audience golive.admin-ws ONLY, which the API's
-// authMiddleware would reject) must still be authorized, because the role lookup no
-// longer forwards the ticket to the API.
-
-const ISSUER = "golive.auth";
-const WS_AUDIENCE = "golive.admin-ws";
-const privateKey = await V4.generateKey("public");
-const publicKey = createPublicKey(privateKey);
-
-/** Signs a ticket the way token/paseto_v4_maker.go does (user_id as a decimal string). */
-function signTicket({ audience = WS_AUDIENCE, userId = "7", role = "admin", issuer = ISSUER, tokenType = "access" } = {}) {
-  const claims = { user_id: userId, username: "alice", role };
-  if (tokenType !== null) claims.token_type = tokenType; // null = omit the claim
-  return V4.sign(claims, privateKey, {
-    issuer,
-    audience,
-    subject: "alice",
-    expiresIn: "15m",
-  });
-}
-
-function upgradeOptions(fetchImpl) {
-  return {
-    publicKey,
-    issuer: ISSUER,
-    // WS-only: the API audiences (golive.admin, golive.auth) are NOT accepted.
-    audiences: [WS_AUDIENCE],
-    apiUrl: "http://api:8080/api/v1",
-    secret: "role-secret",
-    fetchImpl,
-  };
-}
-
-test("authorizeUpgrade admits an editor holding a golive.admin-ws-only ticket", async () => {
-  const ticket = await signTicket({ role: "contributor" }); // stale claim, must be ignored
-  const { impl, calls } = fakeFetch(200, { role: "editor" });
-
-  const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
-
-  assert.equal(decision.ok, true);
-  assert.equal(decision.role, "editor");
-  assert.equal(decision.audience, WS_AUDIENCE);
-  assert.equal(calls.length, 1);
-  const iat = Math.floor(Date.parse(decision.payload.iat) / 1000);
-  assert.equal(calls[0].url, `http://api:8080/api/v1/internal/users/7/role?issued_at=${iat}`);
-  assert.equal(calls[0].init.headers.Authorization, "Bearer role-secret");
-  // The ticket itself never goes to the API.
-  assert.ok(!JSON.stringify(calls[0]).includes(ticket));
+test("verifyTicket rejects a ticket without a jti (it couldn't be burned)", async () => {
+  const noJti = await V4.sign(
+    { user_id: "7", token_type: TICKET_TYPE, doc: "post-12" },
+    privateKey,
+    { issuer: ISSUER, audience: TICKET_AUDIENCE, expiresIn: "30s" },
+  );
+  await assert.rejects(verifyTicket(noJti, publicKey, { issuer: ISSUER, docName: "post-12" }), /no jti/);
 });
 
-test("authorizeUpgrade denies a contributor (DB role) with 403 even if the ticket claims admin", async () => {
-  const ticket = await signTicket({ role: "admin" });
-  const { impl } = fakeFetch(200, { role: "contributor" });
-
-  const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
-
-  assert.equal(decision.ok, false);
-  assert.equal(decision.status, 403);
+test("a verified ticket's user_id and iat feed ticketIdentity", async () => {
+  const claims = await verifyTicket(await sign(), publicKey, { issuer: ISSUER, docName: "post-12" });
+  const id = ticketIdentity(claims);
+  assert.equal(id.userId, "7");
+  assert.ok(Math.abs(id.issuedAt - Date.now() / 1000) < 5, String(id.issuedAt));
 });
 
-test("authorizeUpgrade denies with 403 when the API says the user is gone or the ticket is revoked", async () => {
-  for (const status of [403, 404]) {
-    const ticket = await signTicket();
-    const { impl } = fakeFetch(status);
-    const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
-    assert.equal(decision.ok, false, `status ${status}`);
-    assert.equal(decision.status, 403, `status ${status}`);
-  }
+test("TicketReplayGuard accepts each jti once", () => {
+  const guard = new TicketReplayGuard();
+  const exp = new Date(Date.now() + 30_000).toISOString();
+  assert.equal(guard.consume({ jti: "a", exp }), true);
+  assert.equal(guard.consume({ jti: "a", exp }), false);
+  assert.equal(guard.consume({ jti: "b", exp }), true);
 });
 
-test("authorizeUpgrade answers 503 when the role lookup fails", async () => {
-  const ticket = await signTicket();
-  const impl = async () => {
-    throw new TypeError("fetch failed");
-  };
-
-  const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
-
-  assert.equal(decision.ok, false);
-  assert.equal(decision.status, 503);
-});
-
-test("authorizeUpgrade answers 401 for a ticket outside the allowed audiences, without calling the API", async () => {
-  const ticket = await signTicket({ audience: "golive.admin" });
-  const { impl, calls } = fakeFetch(200, { role: "admin" });
-
-  const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
-
-  assert.equal(decision.ok, false);
-  assert.equal(decision.status, 401);
-  assert.equal(calls.length, 0);
-});
-
-test("authorizeUpgrade answers 401 for a ticket signed by another key", async () => {
-  const otherKey = await V4.generateKey("public");
-  const ticket = await V4.sign({ user_id: "7" }, otherKey, {
-    issuer: ISSUER,
-    audience: WS_AUDIENCE,
-    expiresIn: "15m",
-  });
-  const { impl, calls } = fakeFetch(200, { role: "admin" });
-
-  const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
-
-  assert.equal(decision.status, 401);
-  assert.equal(calls.length, 0);
-});
-
-test("authorizeUpgrade denies with 403 a verified ticket without a usable user_id, without calling the API", async () => {
-  const ticket = await signTicket({ userId: "not-a-number" });
-  const { impl, calls } = fakeFetch(200, { role: "admin" });
-
-  const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
-
-  assert.equal(decision.status, 403);
-  assert.equal(calls.length, 0);
-});
-
-test("authorizeUpgrade answers 401 for a validly signed token that isn't an access token, without calling the API", async () => {
-  for (const tokenType of ["refresh", "password_reset", "", null]) {
-    const ticket = await signTicket({ tokenType });
-    const { impl, calls } = fakeFetch(200, { role: "admin" });
-
-    const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
-
-    assert.equal(decision.ok, false, `token_type ${tokenType}`);
-    assert.equal(decision.status, 401, `token_type ${tokenType}`);
-    assert.equal(calls.length, 0, `token_type ${tokenType}`);
-  }
+test("TicketReplayGuard remembers a jti until exp + clock tolerance, then forgets it", () => {
+  const guard = new TicketReplayGuard();
+  const now = Date.parse("2026-10-20T12:00:00Z");
+  const exp = new Date(now + 30_000).toISOString();
+  assert.equal(guard.consume({ jti: "a", exp }, now), true);
+  // Still inside the window in which verifyTicket would accept it: must stay burned.
+  assert.equal(guard.consume({ jti: "a", exp }, now + 30_000 + TICKET_CLOCK_TOLERANCE_MS), false);
+  // Past it the ticket can't verify any more, so the entry is pruned (bounded memory).
+  guard.consume({ jti: "other", exp: new Date(now + 120_000).toISOString() }, now + 31_000 + TICKET_CLOCK_TOLERANCE_MS);
+  assert.equal(guard.size, 1);
 });

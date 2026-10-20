@@ -58,7 +58,6 @@ fi
 
 # 5) Extract issuer and audience
 ISS="$(read_env PASETO_ISSUER)"; ISS="${ISS:-golive.auth}"
-AUD="$(read_env PASETO_AUDIENCE)"; AUD="${AUD:-golive.admin-ws}"
 
 # 6) Write .env
 cat > "$OUT" <<EOF
@@ -67,11 +66,10 @@ HOST=0.0.0.0
 PORT=1234
 NODE_ENV=development
 
-# PASETO v4.public Authentication Configuration  
-# Auto-generated from Go API keys
+# PASETO v4.public Authentication Configuration
+# Auto-generated from Go API keys. Sockets authenticate with single-use collab
+# tickets (audience golive.admin-ws, fixed), never with access tokens (#233).
 PASETO_ISSUER=$ISS
-PASETO_AUDIENCE=$AUD
-PASETO_ALLOWED_AUDIENCES=$AUD,golive.admin,golive.auth
 
 # Use file-based PEM to avoid multiline issues in env files
 PASETO_V4_PUBLIC_PEM_FILE=/run/secrets/public.pem
