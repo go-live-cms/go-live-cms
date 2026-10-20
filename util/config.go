@@ -65,7 +65,8 @@ type Config struct {
 	// IsTestMode toggles test utilities and mock behavior
 	IsTestMode bool `mapstructure:"IS_TEST_MODE"`
 
-	// GinMode is the Gin engine mode: "release" (default), "debug" or "test".
+	// GinMode is the Gin engine mode: "release" (default), "debug" or "test",
+	// lowercase and exact (gin itself panics on other GIN_MODE env values).
 	// Debug mode enables the dev CORS allowlist and seeds the default admin
 	// (admin/123456) plus dummy data on startup, so only set it in development.
 	GinMode string `mapstructure:"GIN_MODE"`
@@ -207,7 +208,9 @@ func LoadConfig(path string) (config Config, err error) {
 		return config, err
 	}
 
-	config.GinMode = strings.ToLower(strings.TrimSpace(config.GinMode))
+	// Exact values only, no case/space normalization: gin's own init() reads the
+	// GIN_MODE env var and panics on anything else before LoadConfig runs, so
+	// accepting " Release " here would only ever work from app.env.
 	switch config.GinMode {
 	case GinModeDebug, GinModeRelease, GinModeTest:
 	default:

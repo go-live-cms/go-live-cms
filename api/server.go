@@ -108,8 +108,10 @@ func corsOrigins(config util.Config) []string {
 // setupRoutes configures the Gin engine:
 //
 //   - CORS:
-//   - Debug: allows localhost origins on :4321 and credentials
-//   - Release: allowlist example domain (adjust in production)
+//   - Origins from CORS_ALLOWED_ORIGINS, plus the localhost :4321 origins in
+//     debug mode (corsOrigins); credentials allowed
+//   - None configured (release without CORS_ALLOWED_ORIGINS): no CORS
+//     middleware, same-origin only
 //   - /health (public): liveness endpoint
 //   - /api/v1/auth: register, login, refresh, logout (logout requires auth)
 //   - /api/v1/sessions: list/block (auth required)

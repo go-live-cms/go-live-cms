@@ -16,7 +16,8 @@ func TestLoadConfigGinMode(t *testing.T) {
 	}{
 		{name: "defaults to release", want: GinModeRelease},
 		{name: "debug", env: "debug", set: true, want: GinModeDebug},
-		{name: "normalizes case and spaces", env: " Release ", set: true, want: GinModeRelease},
+		{name: "rejects non-lowercase", env: "Release", set: true, wantErr: true},
+		{name: "rejects surrounding spaces", env: " release ", set: true, wantErr: true},
 		{name: "test", env: "test", set: true, want: GinModeTest},
 		{name: "invalid", env: "production", set: true, wantErr: true},
 	}

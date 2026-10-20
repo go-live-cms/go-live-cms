@@ -34,15 +34,25 @@ func TestShouldSeedDevData(t *testing.T) {
 	}
 }
 
+// allowThemeSync lets NewServer's startup theme sync talk to the store, so the
+// seeding-gate tests fail only on seeding calls, not on theme scanning.
+func allowThemeSync(store *mockdb.MockStore) {
+	// With no themes on disk and none in the DB, the sync makes no other calls.
+	store.EXPECT().ListThemes(gomock.Any()).AnyTimes().Return([]db.Theme{}, nil)
+}
+
 // TestNewServerSeedingGate runs NewServer with test mode off, so only GIN_MODE
-// decides whether startup seeding touches the store. The themes directory
-// doesn't exist relative to api/, so the theme sync makes no store calls.
+// decides whether startup seeding touches the store. It runs from an empty
+// temp dir so the relative web/themes path never resolves, and the theme sync
+// calls are allowed anyway, so only user/seed store calls are strict.
 func TestNewServerSeedingGate(t *testing.T) {
 	t.Run("release creates no users", func(t *testing.T) {
+		t.Chdir(t.TempDir())
 		ctrl := gomock.NewController(t)
-		store := mockdb.NewMockStore(ctrl) // no expectations: any store call fails
+		store := mockdb.NewMockStore(ctrl) // only theme sync allowed: any seeding call fails
+		allowThemeSync(store)
 
-		config := newTestServer(t, store).config
+		config := newTestConfig(t)
 		config.IsTestMode = false
 		config.GinMode = util.GinModeRelease
 
@@ -51,8 +61,10 @@ func TestNewServerSeedingGate(t *testing.T) {
 	})
 
 	t.Run("debug runs the seeders", func(t *testing.T) {
+		t.Chdir(t.TempDir())
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
+		allowThemeSync(store)
 		// Existing admin and users make both seeders return early.
 		store.EXPECT().
 			GetUserByUsername(gomock.Any(), gomock.Eq("admin")).
@@ -63,7 +75,7 @@ func TestNewServerSeedingGate(t *testing.T) {
 			Times(1).
 			Return(int64(2), nil)
 
-		config := newTestServer(t, store).config
+		config := newTestConfig(t)
 		config.IsTestMode = false
 		config.GinMode = util.GinModeDebug
 
