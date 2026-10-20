@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canEditContent, fetchCurrentRole, isCollabDocName, takeCredential } from "./access.js";
+import {
+  canEditContent,
+  fetchCurrentRole,
+  isCollabDocName,
+  stripCollabPrefix,
+  takeCredential,
+} from "./access.js";
 
 /** Fake fetch that records the request and answers with the given status/body. */
 function fakeFetch(status, body = {}) {
@@ -63,6 +69,21 @@ test("takeCredential returns null without a credential and still strips the quer
     const req = { url };
     assert.equal(takeCredential(req), null, String(url));
     assert.ok(!req.url.includes("?") && !req.url.includes("#"), req.url);
+  }
+});
+
+test("stripCollabPrefix drops the proxy's /collab prefix and nothing else", () => {
+  const cases = [
+    ["/collab/post-12", "/post-12"],
+    ["/post-12", "/post-12"],
+    ["/collabx/post-12", "/collabx/post-12"],
+    ["/collab", "/collab"],
+    ["/x/collab/post-12", "/x/collab/post-12"],
+  ];
+  for (const [before, after] of cases) {
+    const req = { url: before };
+    stripCollabPrefix(req);
+    assert.equal(req.url, after, before);
   }
 });
 

@@ -39,6 +39,18 @@ export function takeCredential(req) {
   return params.get("ticket") || params.get("token") || null;
 }
 
+// Outside development the editor connects to `${location.host}/collab/post-<id>`
+// (CollaborationProvider.ts) through a reverse proxy, which may or may not strip the
+// prefix. Drop it here so the doc name (y-websocket's, LevelDB's, the logs', and the
+// API's squash calls, which use bare post-<id>) is the same either way. Run after
+// takeCredential, which has already removed the query string.
+export const COLLAB_PATH_PREFIX = "/collab";
+
+export function stripCollabPrefix(req) {
+  const url = req.url || "/";
+  if (url.startsWith(`${COLLAB_PATH_PREFIX}/`)) req.url = url.slice(COLLAB_PATH_PREFIX.length);
+}
+
 // Fetches the caller's current role from the API.
 //
 // Returns:

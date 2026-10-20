@@ -22,7 +22,8 @@ const FILES = process.env.LOG_GUARD_FILES
 
 // Identifiers that would put the token (or a container of it) into a log line.
 const FORBIDDEN = [
-  /\breq\.(url|headers|rawHeaders)\b/,
+  /\breq\b(?!\.auth\b)/, // the request (its url, headers, or the whole object); req.auth is the verified identity
+  /\bsocket\b/,
   /\bsearchParams\b/,
   /\bcredential\b/,
   /\btoken\b/,
@@ -30,13 +31,23 @@ const FORBIDDEN = [
   /(^|[^\w.$])url\b/, // a parsed URL object (not API_URL / x.url)
 ];
 
+// The logsafe.js views may take req; their output is what's allowed in logs.
+const SANITIZER_CALL = /\b(upgradeContextForLog|docNameForLog)\s*\([^()]*\)/g;
+
 const LOG_CALL = /\b(console\s*(\.\s*\w+|\[[^\]]*\])|collabDebug|process\.std(out|err)\.write)\s*\(/g;
 // `console` used as anything but an immediate method call: `const log = console.log`,
 // `.forEach(console.log)`, `.bind(console)`, `const c = console`.
 const CONSOLE_ALIAS = /\bconsole\b(?!\s*(\.\s*\w+|\[[^\]]*\])\s*\()/g;
 
-// Characters after which a `/` starts a regex literal rather than a division.
-const REGEX_PREFIX = /[(,=:[!&|?{};+\-*%<>~^]|^$/;
+// A `/` starts a regex literal (rather than a division) after one of these characters,
+// after one of these keywords, or at the start of the file. After `)`, `]`, `}`, an
+// identifier or a literal it's a division. (A regex starting a statement right after a
+// `}` is misread as division; nothing here writes that.)
+const REGEX_PREFIX_CHARS = new Set("(,=:[!&|?{};+-*%<>~^");
+const REGEX_PREFIX_KEYWORDS = new Set([
+  "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw",
+  "case", "do", "else", "yield", "await",
+]);
 
 /**
  * Returns `src` with comments removed and string / regex literal contents replaced by
@@ -47,6 +58,20 @@ function blankLiterals(src) {
   let out = "";
   const stack = [{ kind: "code", braces: 0 }];
   const blank = (s) => s.replace(/[^\n]/g, " ");
+  // Last non-whitespace code character emitted, and the identifier ending at it (if
+  // any): enough to tell a regex literal from a division without rescanning `out`.
+  let prevSig = "";
+  let prevWord = "";
+  const emit = (s) => {
+    out += s;
+    for (const ch of s) {
+      if (/\s/.test(ch)) continue;
+      prevWord = /[\w$]/.test(ch) ? (/[\w$]/.test(prevSig) ? prevWord : "") + ch : "";
+      prevSig = ch;
+    }
+  };
+  const regexAllowed = () =>
+    prevSig === "" || REGEX_PREFIX_CHARS.has(prevSig) || REGEX_PREFIX_KEYWORDS.has(prevWord);
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
     const next = src[i + 1];
@@ -54,10 +79,10 @@ function blankLiterals(src) {
 
     if (top.kind === "str") {
       if (c === "\\") { out += " " + blank(next ?? ""); i++; continue; }
-      if (c === top.quote) { stack.pop(); out += c; continue; }
+      if (c === top.quote) { stack.pop(); emit(c); continue; }
       if (top.quote === "`" && c === "$" && next === "{") {
         stack.push({ kind: "code", braces: 0 });
-        out += "${";
+        emit("${");
         i++;
         continue;
       }
@@ -79,7 +104,7 @@ function blankLiterals(src) {
       i = stop - 1;
       continue;
     }
-    if (c === "/" && REGEX_PREFIX.test(out.trimEnd().slice(-1))) {
+    if (c === "/" && regexAllowed()) {
       let j = i + 1;
       let inClass = false;
       for (; j < src.length && src[j] !== "\n"; j++) {
@@ -88,17 +113,19 @@ function blankLiterals(src) {
         else if (src[j] === "]") inClass = false;
         else if (src[j] === "/" && !inClass) break;
       }
-      out += "/" + blank(src.slice(i + 1, j)) + "/";
+      out += "/" + blank(src.slice(i + 1, j));
+      emit("/"); // closing slash; a regex is a value, so a following `/` divides
+      prevSig = ")";
       i = j;
       continue;
     }
-    if (c === "'" || c === '"' || c === "`") { stack.push({ kind: "str", quote: c }); out += c; continue; }
+    if (c === "'" || c === '"' || c === "`") { stack.push({ kind: "str", quote: c }); emit(c); continue; }
     if (c === "{") top.braces++;
     if (c === "}") {
-      if (stack.length > 1 && top.braces === 0) { stack.pop(); out += c; continue; } // end of ${…}
+      if (stack.length > 1 && top.braces === 0) { stack.pop(); emit(c); continue; } // end of ${…}
       top.braces--;
     }
-    out += c;
+    emit(c);
   }
   return out;
 }
@@ -128,7 +155,10 @@ function consoleAliases(src) {
 }
 
 const offenders = (src) =>
-  logCallArgs(src).filter(({ code }) => FORBIDDEN.some((re) => re.test(code)));
+  logCallArgs(src).filter(({ code }) => {
+    const unsanitized = code.replace(SANITIZER_CALL, "SAFE");
+    return FORBIDDEN.some((re) => re.test(unsanitized));
+  });
 
 test("scanner ignores message text in strings", () => {
   assert.deepEqual(offenders('console.log("token url credential req.url", \'params\');'), []);
@@ -143,6 +173,24 @@ test("scanner isn't fooled by apostrophes in comments or quotes in regexes", () 
   assert.equal(offenders("console.log(\n  // don't log this\n  req.url,\n);").length, 1);
   assert.equal(offenders("console.log(/* it's */ credential);").length, 1);
   assert.equal(offenders("const q = /'/; console.log(req.url); const r = /\"/;").length, 1);
+});
+
+test("scanner treats a / after return, typeof etc. as a regex, and after values as division", () => {
+  assert.equal(offenders("function q(s) { return /'/.test(s) }\nconsole.log(req.url);").length, 1);
+  assert.equal(offenders("const t = typeof /\"/;\nconsole.log(credential);").length, 1);
+  // Divisions must not be read as regexes (which would swallow the code up to the next /).
+  assert.equal(offenders("const a = n / 2; const b = (n) / 3; console.log(req.url); const c = x / 4;").length, 1);
+  assert.equal(offenders("const r = /a/ / 2; console.log(token);").length, 1);
+});
+
+test("scanner flags logging the whole request or socket, but allows the logsafe views", () => {
+  assert.equal(offenders("console.log(req);").length, 1);
+  assert.equal(offenders("console.dir({ req }, { depth: 1 });").length, 1);
+  assert.equal(offenders("console.log(socket);").length, 1);
+  assert.deepEqual(offenders("console.log(req.auth?.username, req.auth.role);"), []);
+  assert.deepEqual(offenders("console.warn(`x ${upgradeContextForLog(req)} ${docNameForLog(name)}`);"), []);
+  // A sanitizer wrapping something else doesn't launder a raw req alongside it.
+  assert.equal(offenders("console.log(upgradeContextForLog(req), req.headers);").length, 1);
 });
 
 test("scanner covers console[level], other console methods and stdout writes", () => {

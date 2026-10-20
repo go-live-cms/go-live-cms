@@ -6,10 +6,18 @@ and **LevelDB** persistence. Port 1234. Entry: `server.js`. Dev: `npm run dev`
 
 ## Auth
 
-Clients connect with `ws://…:1234/post-<id>?ticket=<v4.public token>`. The token is the
+Clients connect with `ws://…:1234/post-<id>?ticket=<v4.public token>`. Outside dev, the
+editor uses `${host}/collab/post-<id>` through a reverse proxy, and `stripCollabPrefix`
+drops `/collab` whether or not the proxy did. The token is the
 **same** PASETO the Go API issues. Verified during the HTTP upgrade (issuer `golive.auth`;
 audiences `golive.admin-ws`, `golive.admin`, `golive.auth`). Public key loaded from
 `PASETO_V4_PUBLIC_PEM_FILE` (`/run/secrets/public.pem`).
+
+**The upgrade flow lives in `upgrade.js`** (`createUpgradeHandler`, unit tested in
+`upgrade.test.js` with a fake socket). `server.js` only injects the PASETO check, the
+role lookup and `wss.handleUpgrade`. Order: socket `error` listener → `takeCredential`
+→ `stripCollabPrefix` → doc-name check (**400**) → credential present (**401**) → verify
+(**401**) → role lookup (**503**) → role allowed (**403**) → accept.
 
 **Role check (#216).** After the token verifies, the upgrade calls `GET ${API_URL}/users/me`
 with the same token and admits only **admins and editors** (`access.js`, unit tested in
@@ -41,11 +49,15 @@ role lists in sync.
     rejected upgrades**, to avoid retaining IPs for every connect.
   - `log-guard.test.js` scans every log call (`console.*`, `console[level]`,
     `collabDebug`, `process.std{out,err}.write`) in every non-test module. It fails on
-    `req.url`/`req.headers`/`searchParams`/`credential`/`token`/`params`/`url`, and on
-    aliasing `console` methods. A value renamed through another variable still slips
-    past it; the `takeCredential` strip is the real guarantee.
-- **Doc names must be `post-<id>`** (`isCollabDocName`). Anything else gets **400**
-  before auth, so clients can't create and persist Yjs docs under arbitrary names.
+    `req` (anything but `req.auth`, including the whole object), `socket`,
+    `searchParams`, `credential`, `token`, `params` and `url`, and on aliasing `console`
+    methods. Arguments passed to `docNameForLog`/`upgradeContextForLog` are exempt. A
+    value renamed through another variable still slips past it; the `takeCredential`
+    strip is the real guarantee.
+- **Doc names must be `post-<id>`** (`isCollabDocName`). The upgrade answers anything
+  else with **400** before auth, and so does the squash endpoint, which also answers 400
+  to a malformed `%` escape instead of throwing. So every doc name this process logs or
+  stores is valid, and post-auth logs print `docName` directly.
 
 ## Persistence (LevelDB safety net)
 
