@@ -5,8 +5,9 @@
 // fetched from the API on every upgrade, read from the DB the same way
 // api/auth_roles.go's requireRole does for REST requests.
 //
-// The lookup goes to the API's internal endpoint (GET /internal/users/:id/role),
-// authenticated with the shared ROLE_LOOKUP_SECRET, NOT with the client's ticket (#223).
+// The lookup goes to the API's internal listener (GET /internal/users/:id/role, a separate
+// port that isn't published), authenticated with the shared ROLE_LOOKUP_SECRET, NOT with
+// the client's ticket (#223).
 // It used to call /users/me with the ticket, which only worked while the API accepted the
 // ticket as an API access token; a WS-only ticket (audience golive.admin-ws) would get 401
 // there and every user would be locked out. The ticket now never leaves this process.
@@ -27,8 +28,14 @@ export function canEditContent(role) {
   return CONTENT_EDITOR_ROLES.includes(normalized);
 }
 
-// Verifies a PASETO v4.public ticket against each allowed audience in turn.
-// Returns { payload, footer, audience } or null if no audience accepts it.
+// token_type values accepted as a collab ticket. The API's authMiddleware used to enforce
+// "access" when the ticket was forwarded to /users/me; we must enforce it ourselves now so
+// any future v4.public token signed with the same key (e.g. a link token) can't open a
+// socket. Add a dedicated WS ticket type here when the API starts issuing one.
+export const ACCEPTED_TOKEN_TYPES = ["access"];
+
+// Verifies a PASETO v4.public ticket against each allowed audience in turn, and requires
+// an accepted token_type. Returns { payload, footer, audience } or null if it isn't valid.
 export async function verifyTicket(credential, { publicKey, issuer, audiences, verify = V4.verify }) {
   for (const aud of audiences) {
     try {
@@ -38,6 +45,7 @@ export async function verifyTicket(credential, { publicKey, issuer, audiences, v
         clockTolerance: "60s",
         complete: true,
       });
+      if (!ACCEPTED_TOKEN_TYPES.includes(result.payload?.token_type)) return null;
       return { payload: result.payload, footer: result.footer, audience: aud.trim() };
     } catch {
       continue;
@@ -96,7 +104,11 @@ export async function fetchCurrentRole(apiUrl, { userId, issuedAt }, secret, { f
 export async function authorizeUpgrade(credential, { publicKey, issuer, audiences, apiUrl, secret, fetchImpl, timeoutMs, verify }) {
   const verified = await verifyTicket(credential, { publicKey, issuer, audiences, verify });
   if (!verified) {
-    return { ok: false, status: 401, reason: `ticket invalid for any allowed audience: ${audiences.join(", ")}` };
+    return {
+      ok: false,
+      status: 401,
+      reason: `ticket invalid (bad signature/issuer/expiry, audience not in ${audiences.join(", ")}, or token_type not ${ACCEPTED_TOKEN_TYPES.join("/")})`,
+    };
   }
   const { payload } = verified;
 

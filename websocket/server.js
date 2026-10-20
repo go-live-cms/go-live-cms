@@ -56,14 +56,18 @@ const ALLOWED_AUDIENCES = process.env.PASETO_ALLOWED_AUDIENCES?.split(",") || [
 // resolves to "./data" rather than "" (which would silently use the CWD).
 const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
 const SQUASH_SECRET = (process.env.SQUASH_SECRET || "").trim();
-// Base URL of the Go API (e.g. http://api:8080/api/v1). Every upgrade looks up the
-// caller's current role at `${API_URL}/internal/users/:id/role`, authenticated with
+// Base URL of the Go API's INTERNAL listener (e.g. http://api:8081 — a separate,
+// unpublished port, not the public /api/v1). Every upgrade looks up the caller's current
+// role at `${INTERNAL_API_URL}/internal/users/:id/role`, authenticated with
 // ROLE_LOOKUP_SECRET (not the client's ticket); see access.js. Both are required —
 // without them the server can't tell editors from contributors, so it refuses to start
 // (fail closed).
-const API_URL = (process.env.API_URL || "").trim();
-if (!API_URL) {
-  console.error("❌ API_URL is required (e.g. http://api:8080/api/v1) for the per-connection role check");
+const INTERNAL_API_URL = (process.env.INTERNAL_API_URL || "").trim();
+if (!INTERNAL_API_URL) {
+  console.error(
+    "❌ INTERNAL_API_URL is required (e.g. http://api:8081, the API's internal listener) for the per-connection role check" +
+      (process.env.API_URL ? " — API_URL is no longer used for this (#223)" : ""),
+  );
   process.exit(1);
 }
 const ROLE_LOOKUP_SECRET = (process.env.ROLE_LOOKUP_SECRET || "").trim();
@@ -131,7 +135,7 @@ try {
   console.log("   - Primary Audience:", AUDIENCE);
   console.log("   - Allowed Audiences:", ALLOWED_AUDIENCES.join(", "));
   console.log("   - DATA_PATH:", DATA_PATH);
-  console.log("   - API_URL (role lookup):", API_URL);
+  console.log("   - INTERNAL_API_URL (role lookup):", INTERNAL_API_URL);
   console.log("   - Role lookup: internal endpoint, shared secret (ROLE_LOOKUP_SECRET set)");
   console.log(
     "   - Squash endpoint:",
@@ -355,7 +359,7 @@ server.on("upgrade", async (req, socket, head) => {
       publicKey: PUBLIC_KEY,
       issuer: ISSUER,
       audiences: ALLOWED_AUDIENCES,
-      apiUrl: API_URL,
+      apiUrl: INTERNAL_API_URL,
       secret: ROLE_LOOKUP_SECRET,
     });
     const who = decision.payload ? decision.payload.username || decision.payload.sub : "unknown";

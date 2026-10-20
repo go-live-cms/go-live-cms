@@ -19,7 +19,7 @@ import (
 
 const testRoleLookupSecret = "test-role-lookup-secret"
 
-// TestInternalUserRoleAPI covers GET /api/v1/internal/users/:id/role, the
+// TestInternalUserRoleAPI covers GET /internal/users/:id/role, the
 // collab WS server's role lookup (#223): shared-secret auth instead of a user
 // token, the role read from the DB, and the password-change cutoff.
 func TestInternalUserRoleAPI(t *testing.T) {
@@ -39,7 +39,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 	}{
 		{
 			name:          "OK",
-			path:          fmt.Sprintf("/api/v1/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
@@ -55,7 +55,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "MissingSecret",
-			path:          fmt.Sprintf("/api/v1/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
@@ -66,7 +66,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "WrongSecret",
-			path:          fmt.Sprintf("/api/v1/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "Bearer not-the-secret",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
@@ -77,7 +77,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "InvalidID",
-			path:          fmt.Sprintf("/api/v1/internal/users/abc/role?issued_at=%d", ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/abc/role?issued_at=%d", ticketIssuedAt),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
@@ -88,7 +88,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "MissingIssuedAt",
-			path:          fmt.Sprintf("/api/v1/internal/users/%d/role", user.ID),
+			path:          fmt.Sprintf("/internal/users/%d/role", user.ID),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
@@ -99,7 +99,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "UserNotFound",
-			path:          fmt.Sprintf("/api/v1/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(db.User{}, sql.ErrNoRows)
@@ -110,7 +110,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "IssuedBeforePasswordChange",
-			path:          fmt.Sprintf("/api/v1/internal/users/%d/role?issued_at=%d", user.ID, user.PasswordChangedAt.Add(-time.Minute).Unix()),
+			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, user.PasswordChangedAt.Add(-time.Minute).Unix()),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
@@ -121,7 +121,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "InternalError",
-			path:          fmt.Sprintf("/api/v1/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(db.User{}, errors.New("db down"))
@@ -149,7 +149,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 				request.Header.Set(authorizationHeaderKey, tc.authorization)
 			}
 
-			server.router.ServeHTTP(recorder, request)
+			server.internalRouter.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
 		})
 	}
@@ -164,12 +164,12 @@ func TestInternalUserRoleRejectsUserToken(t *testing.T) {
 	store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
 	server := newTestServer(t, store)
 
-	request, err := http.NewRequest(http.MethodGet, "/api/v1/internal/users/1/role?issued_at=1", nil)
+	request, err := http.NewRequest(http.MethodGet, "/internal/users/1/role?issued_at=1", nil)
 	require.NoError(t, err)
 	addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, 1, "someone", time.Minute)
 
 	recorder := httptest.NewRecorder()
-	server.router.ServeHTTP(recorder, request)
+	server.internalRouter.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusUnauthorized, recorder.Code)
 }
 
@@ -180,4 +180,53 @@ func TestNewServerRequiresRoleLookupSecret(t *testing.T) {
 
 	_, err := NewServer(config, nil)
 	require.ErrorContains(t, err, "ROLE_LOOKUP_SECRET")
+}
+
+// The internal routes must not be reachable on the public listener at all,
+// even with the right secret.
+func TestInternalRoutesNotOnPublicRouter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := mockdb.NewMockStore(ctrl)
+	store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
+	server := newTestServer(t, store)
+
+	for _, path := range []string{"/internal/users/1/role?issued_at=1", "/api/v1/internal/users/1/role?issued_at=1"} {
+		request, err := http.NewRequest(http.MethodGet, path, nil)
+		require.NoError(t, err)
+		request.Header.Set(authorizationHeaderKey, "Bearer "+testRoleLookupSecret)
+
+		recorder := httptest.NewRecorder()
+		server.router.ServeHTTP(recorder, request)
+		require.Equal(t, http.StatusNotFound, recorder.Code, path)
+	}
+}
+
+// Whitespace around the configured secret is trimmed once in NewServer, so the
+// WS server (which trims its copy too) still matches.
+func TestInternalSecretIsTrimmed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	user := randomUserNew()
+	user.ID = 9
+	user.Role = RoleAdmin
+	user.PasswordChangedAt = time.Now().Add(-time.Hour)
+
+	store := mockdb.NewMockStore(ctrl)
+	store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+
+	config := newTestServer(t, nil).config
+	config.RoleLookupSecret = "  " + testRoleLookupSecret + " \n"
+	server, err := NewServer(config, store)
+	require.NoError(t, err)
+
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, time.Now().Unix()), nil)
+	require.NoError(t, err)
+	request.Header.Set(authorizationHeaderKey, "Bearer "+testRoleLookupSecret)
+
+	recorder := httptest.NewRecorder()
+	server.internalRouter.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
 }

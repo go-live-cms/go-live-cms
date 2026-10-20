@@ -12,7 +12,7 @@ audiences `golive.admin-ws`, `golive.admin`, `golive.auth`). Public key loaded f
 `PASETO_V4_PUBLIC_PEM_FILE` (`/run/secrets/public.pem`).
 
 **Role check (#216, #223).** After the ticket verifies, the upgrade calls
-`GET ${API_URL}/internal/users/<user_id>/role?issued_at=<iat unix>` with
+`GET ${INTERNAL_API_URL}/internal/users/<user_id>/role?issued_at=<iat unix>` with
 `Authorization: Bearer ${ROLE_LOOKUP_SECRET}` and admits only **admins and editors**
 (`authorizeUpgrade` in `access.js`, unit tested in `access.test.js` with real PASETO
 tickets). This mirrors `requireContentEditor` in `api/auth_roles.go`, so keep the role
@@ -23,6 +23,12 @@ lists in sync.
   `golive.admin-ws` only) gets 401 from the API's `authMiddleware`, so every user would
   have been locked out. Now the ticket never leaves this process: we send the verified
   ticket's `user_id` and `iat`, and the API (`api/internal_routes.go`) answers from the DB.
+  That endpoint is on the API's **separate internal listener** (`:8081`, never
+  published), not the public `/api/v1`.
+- **Only `token_type: "access"` tickets are accepted** (`ACCEPTED_TOKEN_TYPES` in
+  `access.js`, else 401). The API's `authMiddleware` used to enforce this when the ticket
+  was forwarded; now we must. If the API starts issuing a dedicated WS ticket type, add
+  it there.
   Rejected: B (API accepts the WS audience on `/users/me`) leaks WS knowledge into the
   API middleware and makes the ticket usable against an API route. If Hocuspocus (#206)
   lands, keep this lookup and call it from `onAuthenticate`.
@@ -34,10 +40,11 @@ lists in sync.
   403). Only new upgrades are checked, so an already-open socket survives the change.
 - **503:** the API is down, slow (3s timeout), returns 5xx, or rejects the shared secret
   (401 means misconfiguration, not a user problem). It fails closed either way.
-- `API_URL` and `ROLE_LOOKUP_SECRET` are required. The server `exit(1)`s at startup
-  without either. The API's `NewServer` also refuses to start without
-  `ROLE_LOOKUP_SECRET`; both sides must hold the same value. Docker sets `API_URL` to
-  `http://api:8080/api/v1` and the secret in `compose.dev.yaml`.
+- `INTERNAL_API_URL` and `ROLE_LOOKUP_SECRET` are required. The server `exit(1)`s at
+  startup without either. `API_URL` (the public `/api/v1`) is no longer used. The API's
+  `NewServer` also refuses to start without `ROLE_LOOKUP_SECRET`; both sides must hold
+  the same value (both trim it). Docker sets `INTERNAL_API_URL=http://api:8081` and the
+  secret in `compose.dev.yaml`.
 - `access.js` imports `paseto` but must never import yjs (single-instance rule below).
 - Known limitation: the role is checked **only at connect**. An editor demoted mid-session
   keeps their open socket until it reconnects (REST saves are already blocked). Revisit

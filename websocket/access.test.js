@@ -131,8 +131,10 @@ const privateKey = await V4.generateKey("public");
 const publicKey = createPublicKey(privateKey);
 
 /** Signs a ticket the way token/paseto_v4_maker.go does (user_id as a decimal string). */
-function signTicket({ audience = WS_AUDIENCE, userId = "7", role = "admin", issuer = ISSUER } = {}) {
-  return V4.sign({ user_id: userId, username: "alice", token_type: "access", role }, privateKey, {
+function signTicket({ audience = WS_AUDIENCE, userId = "7", role = "admin", issuer = ISSUER, tokenType = "access" } = {}) {
+  const claims = { user_id: userId, username: "alice", role };
+  if (tokenType !== null) claims.token_type = tokenType; // null = omit the claim
+  return V4.sign(claims, privateKey, {
     issuer,
     audience,
     subject: "alice",
@@ -235,4 +237,17 @@ test("authorizeUpgrade denies with 403 a verified ticket without a usable user_i
 
   assert.equal(decision.status, 403);
   assert.equal(calls.length, 0);
+});
+
+test("authorizeUpgrade answers 401 for a validly signed token that isn't an access token, without calling the API", async () => {
+  for (const tokenType of ["refresh", "password_reset", "", null]) {
+    const ticket = await signTicket({ tokenType });
+    const { impl, calls } = fakeFetch(200, { role: "admin" });
+
+    const decision = await authorizeUpgrade(ticket, upgradeOptions(impl));
+
+    assert.equal(decision.ok, false, `token_type ${tokenType}`);
+    assert.equal(decision.status, 401, `token_type ${tokenType}`);
+    assert.equal(calls.length, 0, `token_type ${tokenType}`);
+  }
 });

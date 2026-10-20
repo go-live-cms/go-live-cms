@@ -110,8 +110,13 @@ type Config struct {
 	// Must match SQUASH_SECRET in websocket/.env.
 	CollabSquashSecret string `mapstructure:"COLLAB_SQUASH_SECRET"`
 
+	// InternalServerAddress is the bind address of the separate server-to-server
+	// listener (e.g. "0.0.0.0:8081") that serves /internal/* routes. Never publish
+	// this port; only the collab WS server on the private network should reach it.
+	InternalServerAddress string `mapstructure:"INTERNAL_SERVER_ADDRESS"`
+
 	// RoleLookupSecret is the shared secret the collab WebSocket server sends as
-	// "Authorization: Bearer <secret>" to GET /api/v1/internal/users/:id/role, its
+	// "Authorization: Bearer <secret>" to GET /internal/users/:id/role, its
 	// per-connection role check. Must match ROLE_LOOKUP_SECRET in websocket/.env.
 	// Required: NewServer refuses to start without it (no default).
 	RoleLookupSecret string `mapstructure:"ROLE_LOOKUP_SECRET"`
@@ -150,6 +155,7 @@ func LoadConfig(path string) (config Config, err error) {
 	// Server defaults
 	viper.SetDefault("SERVER_ADDRESS", "0.0.0.0:8080")
 	viper.SetDefault("API_PORT", ":8080")
+	viper.SetDefault("INTERNAL_SERVER_ADDRESS", "0.0.0.0:8081") // server-to-server only, never published
 
 	// Token duration defaults
 	viper.SetDefault("ACCESS_TOKEN_DURATION", "15m")   // 15 minutes
