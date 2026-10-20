@@ -41,7 +41,12 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
   release. **`resyncInterval: 2000` = the "2s" cadence** you'll see in any heartbeat-style
   bug. **NO client-side `IndexeddbPersistence`** — it was removed deliberately (see rule
   0). The WS server's LevelDB is the single live Yjs store; `whenSynced` is now a resolved
-  promise kept only for API symmetry.
+  promise kept only for API symmetry. **Never put the access token in the socket URL
+  (#233):** proxy logs record it. The provider passes `WebSocketPolyfill:
+  createTicketedWebSocket(...)` (`ticketSocket.ts`), which fetches a single-use, 30s,
+  doc-bound ticket (`createCollabTicket` → `POST /collab/tickets`) before every connect
+  and reconnect, then opens the real socket with `?ticket=`. A failed ticket fetch is
+  reported as error + close, so y-websocket's normal backoff retries it.
 - `BlockDocManager.ts` — CRUD over the `blocks`/`blocks_order` maps. `setBlockDocV1` is
   **incremental** (diff/upsert) — see below.
 - `BlockPersistenceManager.ts` — the autosave **state machine**. The brains; most

@@ -2,9 +2,8 @@ import "dotenv/config";
 import { WebSocketServer } from "ws";
 import { createRequire } from "node:module";
 import { evaluatePersistedState } from "./persistence.js";
-import { fetchCurrentRole, isCollabDocName } from "./access.js";
+import { isCollabDocName, redeemTicket, verifyTicket, TICKET_AUDIENCE } from "./access.js";
 import { createUpgradeHandler, docNameFromReq } from "./upgrade.js";
-import { V4 } from "paseto";
 import { createPublicKey } from "crypto";
 import http from "http";
 import fs from "fs";
@@ -49,17 +48,14 @@ const Y = require("yjs");
 const HOST = process.env.HOST || "localhost";
 const PORT = Number(process.env.PORT) || 1234;
 const ISSUER = process.env.PASETO_ISSUER || "go-live-cms";
-const AUDIENCE = process.env.PASETO_AUDIENCE || "go-live-cms-ws";
-const ALLOWED_AUDIENCES = process.env.PASETO_ALLOWED_AUDIENCES?.split(",") || [
-  AUDIENCE,
-];
 // Trim first, THEN fall back to "./data", so DATA_PATH=" " (whitespace only)
 // resolves to "./data" rather than "" (which would silently use the CWD).
 const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
 const SQUASH_SECRET = (process.env.SQUASH_SECRET || "").trim();
-// Base URL of the Go API (e.g. http://api:8080/api/v1). Every upgrade looks up the
-// caller's current role at `${API_URL}/users/me`; see access.js. Required — without it
-// the server can't tell editors from contributors, so it refuses to start (fail closed).
+// Base URL of the Go API (e.g. http://api:8080/api/v1). Every upgrade redeems its ticket
+// at `${API_URL}/collab/tickets/redeem`, which also returns the caller's current role;
+// see access.js. Required — without it no ticket can be redeemed and the server can't
+// tell editors from contributors, so it refuses to start (fail closed).
 const API_URL = (process.env.API_URL || "").trim();
 if (!API_URL) {
   console.error("❌ API_URL is required (e.g. http://api:8080/api/v1) for the per-connection role check");
@@ -81,10 +77,11 @@ const docLen = (ydoc) => ydoc.getXmlFragment("default").length;
 console.log("🔍 Environment debug:");
 console.log("   - process.env.HOST:", process.env.HOST);
 console.log("   - Resolved HOST:", HOST);
-console.log(
-  "   - process.env.PASETO_ALLOWED_AUDIENCES:",
-  process.env.PASETO_ALLOWED_AUDIENCES,
-);
+if (process.env.PASETO_AUDIENCE || process.env.PASETO_ALLOWED_AUDIENCES) {
+  // Pre-#233 settings. Only collab tickets (audience golive.admin-ws) are accepted now;
+  // access tokens never authenticate a socket, whatever these say.
+  console.warn("⚠️  PASETO_AUDIENCE / PASETO_ALLOWED_AUDIENCES are ignored (tickets only, #233)");
+}
 
 // Flexible public key loading (supports PEM, base64, or file)
 function loadPublicKey() {
@@ -119,10 +116,9 @@ try {
   console.log("   - Host:", HOST);
   console.log("   - Port:", PORT);
   console.log("   - Issuer:", ISSUER);
-  console.log("   - Primary Audience:", AUDIENCE);
-  console.log("   - Allowed Audiences:", ALLOWED_AUDIENCES.join(", "));
+  console.log("   - Ticket audience:", TICKET_AUDIENCE);
   console.log("   - DATA_PATH:", DATA_PATH);
-  console.log("   - API_URL (role lookup):", API_URL);
+  console.log("   - API_URL (ticket redemption + role):", API_URL);
   console.log(
     "   - Squash endpoint:",
     SQUASH_SECRET ? "enabled" : "DISABLED (no SQUASH_SECRET set)",
@@ -319,34 +315,13 @@ wss.on("connection", (ws, req) => {
   console.log(`🔗 WS open — doc: ${docName} | live connections now: ${liveConns}`);
 });
 
-// Verifies the PASETO v4.public credential against each allowed audience. Throws if
-// none accepts it (the upgrade handler answers 401).
-async function verifyCredential(credential) {
-  console.log("🔑 Verifying PASETO v4.public credential...");
-  console.log("🎯 Trying audiences:", ALLOWED_AUDIENCES.join(", "));
-  for (const aud of ALLOWED_AUDIENCES) {
-    try {
-      const result = await V4.verify(credential, PUBLIC_KEY, {
-        issuer: ISSUER,
-        audience: aud.trim(),
-        clockTolerance: "60s",
-        complete: true,
-      });
-      console.log(`✅ Token verified successfully for audience: ${aud}`);
-      return { payload: result.payload, footer: result.footer };
-    } catch (err) {
-      continue;
-    }
-  }
-  throw new Error(`Token invalid for any allowed audience: ${ALLOWED_AUDIENCES.join(", ")}`);
-}
-
-// Auth, role check and doc-name validation live in upgrade.js (unit tested there).
+// Ticket auth, role check and doc-name validation live in upgrade.js (unit tested
+// there); the ticket checks themselves are in access.js (#233).
 server.on(
   "upgrade",
   createUpgradeHandler({
-    verifyCredential,
-    fetchRole: (credential) => fetchCurrentRole(API_URL, credential),
+    verifyTicket: (ticket, docName) => verifyTicket(ticket, PUBLIC_KEY, { issuer: ISSUER, docName }),
+    redeemTicket: (ticket) => redeemTicket(API_URL, ticket),
     accept: (req, socket, head) =>
       wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit("connection", ws, req);
@@ -363,9 +338,8 @@ server.listen(PORT, HOST, () => {
     `🔌 Yjs WebSocket server with PASETO v4.public auth running on ws://${HOST}:${PORT}`,
   );
   console.log(
-    `🔒 Expecting ?ticket=<v4.public> or ?token=<v4.public> (issuer=${ISSUER})`,
+    `🔒 Expecting ?ticket=<collab ticket> (issuer=${ISSUER}, audience=${TICKET_AUDIENCE}, single use)`,
   );
-  console.log(`🎯 Allowed audiences: ${ALLOWED_AUDIENCES.join(", ")}`);
   console.log("🛡️ Authentication happens during HTTP upgrade - no 4401 loops!");
 });
 
