@@ -290,7 +290,10 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 }
 
 // updateMedia handles PUT /media/:id - metadata updates for existing media.
-// Accepts JSON with optional name, description, alt, media_path, file_size, etc.
+// Accepts JSON with optional name, description and alt. The file fields
+// (media_path, file_size, mime_type, width, height, duration,
+// original_filename) are server-owned: a request that sets any of them gets
+// 400 and nothing is written.
 // Only updates provided fields, preserves existing values for omitted fields.
 // Auth: Requires Bearer token. Returns 200 with updated media JSON or error.
 func (server *Server) updateMedia(c *gin.Context) {
@@ -304,6 +307,12 @@ func (server *Server) updateMedia(c *gin.Context) {
 	var req UpdateMediaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if fields := req.serverOwnedFields(); len(fields) > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("%s cannot be updated: file fields are set on upload", strings.Join(fields, ", ")),
+		})
 		return
 	}
 
@@ -340,28 +349,6 @@ func (server *Server) updateMedia(c *gin.Context) {
 	if req.Alt != "" {
 		updateParams.Alt = req.Alt
 	}
-	if req.MediaPath != "" {
-		updateParams.MediaPath = req.MediaPath
-	}
-	if req.FileSize != nil {
-		updateParams.FileSize = *req.FileSize
-	}
-	if req.MimeType != "" {
-		updateParams.MimeType = req.MimeType
-	}
-	if req.Width != nil {
-		updateParams.Width = *req.Width
-	}
-	if req.Height != nil {
-		updateParams.Height = *req.Height
-	}
-	if req.Duration != nil {
-		updateParams.Duration = *req.Duration
-	}
-	if req.OriginalFilename != "" {
-		updateParams.OriginalFilename = req.OriginalFilename
-	}
-
 	updatedMedia, err := server.store.UpdateMedia(c.Request.Context(), updateParams)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})

@@ -725,8 +725,34 @@ func TestSearchMediaAPI(t *testing.T) {
 func TestUpdateMediaAPI(t *testing.T) {
 	user := randomUserForPosts()
 	media := randomMedia()
+	media.FileSize = 2048
+	media.MimeType = "image/jpeg"
+	media.Width = 640
+	media.Height = 480
+	media.OriginalFilename = "hero.jpg"
 	newName := gofakeit.Word()
 	newDescription := gofakeit.Sentence(10)
+
+	// A request touching any server-owned file field is rejected before the
+	// store is read or written.
+	rejectBeforeStore := func(store *mockdb.MockStore) {
+		store.EXPECT().
+			GetMedia(gomock.Any(), gomock.Any()).
+			Times(0)
+		store.EXPECT().
+			UpdateMedia(gomock.Any(), gomock.Any()).
+			Times(0)
+	}
+	requireRejected := func(fields ...string) func(recorder *httptest.ResponseRecorder) {
+		return func(recorder *httptest.ResponseRecorder) {
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			var body struct {
+				Error string `json:"error"`
+			}
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+			require.Contains(t, body.Error, strings.Join(fields, ", "))
+		}
+	}
 
 	testCases := []struct {
 		name          string
@@ -757,14 +783,112 @@ func TestUpdateMediaAPI(t *testing.T) {
 				updatedMedia.Name = newName
 				updatedMedia.Description = newDescription
 
+				// File fields are carried over from the stored row untouched.
 				store.EXPECT().
-					UpdateMedia(gomock.Any(), gomock.Any()).
+					UpdateMedia(gomock.Any(), gomock.Eq(db.UpdateMediaParams{
+						ID:               media.ID,
+						Name:             newName,
+						Description:      newDescription,
+						Alt:              media.Alt,
+						MediaPath:        media.MediaPath,
+						FileSize:         media.FileSize,
+						MimeType:         media.MimeType,
+						Width:            media.Width,
+						Height:           media.Height,
+						Duration:         media.Duration,
+						OriginalFilename: media.OriginalFilename,
+					})).
 					Times(1).
 					Return(updatedMedia, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
+		},
+		{
+			name:    "NullFileFieldIsIgnored",
+			mediaID: media.ID,
+			body: gin.H{
+				"name":       newName,
+				"media_path": nil,
+				"file_size":  nil,
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetMedia(gomock.Any(), gomock.Eq(media.ID)).
+					Times(1).
+					Return(media, nil)
+
+				updatedMedia := media
+				updatedMedia.Name = newName
+
+				store.EXPECT().
+					UpdateMedia(gomock.Any(), gomock.Eq(db.UpdateMediaParams{
+						ID:               media.ID,
+						Name:             newName,
+						Description:      media.Description,
+						Alt:              media.Alt,
+						MediaPath:        media.MediaPath,
+						FileSize:         media.FileSize,
+						MimeType:         media.MimeType,
+						Width:            media.Width,
+						Height:           media.Height,
+						Duration:         media.Duration,
+						OriginalFilename: media.OriginalFilename,
+					})).
+					Times(1).
+					Return(updatedMedia, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			// Pointing a row at another row's file would let deleting this
+			// row remove the shared file.
+			name:    "RejectsMediaPath",
+			mediaID: media.ID,
+			body: gin.H{
+				"name":       newName,
+				"media_path": "/uploads/media/someone-elses.jpg",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs:    rejectBeforeStore,
+			checkResponse: requireRejected("media_path"),
+		},
+		{
+			name:    "RejectsEmptyMediaPath",
+			mediaID: media.ID,
+			body: gin.H{
+				"media_path": "",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs:    rejectBeforeStore,
+			checkResponse: requireRejected("media_path"),
+		},
+		{
+			name:    "RejectsFileMetadata",
+			mediaID: media.ID,
+			body: gin.H{
+				"file_size":         1,
+				"mime_type":         "text/html",
+				"width":             0,
+				"height":            1,
+				"duration":          5,
+				"original_filename": "evil.html",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs:    rejectBeforeStore,
+			checkResponse: requireRejected("file_size", "mime_type", "width", "height", "duration", "original_filename"),
 		},
 		{
 			name:    "NoAuthorization",
