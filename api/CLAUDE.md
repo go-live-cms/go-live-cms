@@ -47,8 +47,14 @@ server.
   caches it under `authorization_user`. Get it with `server.callerUser(c)`; don't
   call `GetUser` for the caller again. A deleted user's still-valid token gets **403**.
 - **Roles** live only in `auth_roles.go` (`requireSiteAdmin`, `requireContentEditor`,
-  and `isSiteAdmin`/`hasRole` for inline self-or-admin checks). Never compare
+  `isSiteAdmin`/`hasRole` for inline self-or-admin checks, and
+  `canModerateMedia`/`canWriteMedia` for media ownership). Never compare
   role strings elsewhere; the token's `role` claim is informational only.
+- **Media ownership:** admins and editors may update/delete any media; any other
+  role only its own (`canWriteMedia`, used by both PUT and DELETE `/media/:id`).
+  DELETE removes the stored file after the transaction commits, but only when
+  `media_path` resolves inside `UploadPath` (`removeMediaFile`). PUT rejects
+  `media_path`, but old/seeded rows may hold anything, so keep that check.
 - **Password change revokes everything.** `UpdateUserTx{PasswordChanged: true}`
   locks the user row, stamps `password_changed_at` itself, and blocks every
   session. `authMiddleware` then rejects access tokens whose `iat` is before
