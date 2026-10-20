@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -330,6 +331,66 @@ func TestUpdateUserTx(t *testing.T) {
 	require.Equal(t, arg.Username, result.User.Username)
 	require.Equal(t, arg.Email, result.User.Email)
 	require.Equal(t, arg.Role, result.User.Role)
+}
+
+func TestUpdateUserTx_RevokeSessions(t *testing.T) {
+	user := createTestUser(t)
+	other := createTestUser(t)
+
+	newSession := func(owner User) Session {
+		session, err := testQueries.CreateSession(context.Background(), CreateSessionParams{
+			ID:               uuid.New(),
+			UserID:           owner.ID,
+			Username:         owner.Username,
+			RefreshTokenHash: []byte(uuid.NewString()),
+			UserAgent:        "test",
+			ClientIp:         "127.0.0.1",
+			ExpiresAt:        time.Now().Add(time.Hour),
+		})
+		require.NoError(t, err)
+		return session
+	}
+	userSessions := []Session{newSession(user), newSession(user)}
+	otherSession := newSession(other)
+
+	updateArg := UpdateUserParams{
+		ID:                user.ID,
+		Username:          user.Username,
+		FullName:          user.FullName,
+		Email:             user.Email,
+		HashedPassword:    "new-hash",
+		Role:              user.Role,
+		PasswordChangedAt: time.Now(),
+	}
+
+	// Without the flag, sessions are left alone.
+	_, err := testStore.UpdateUserTx(context.Background(), UpdateUserTxParams{UpdateUserParams: updateArg})
+	require.NoError(t, err)
+	for _, s := range userSessions {
+		got, err := testQueries.GetSession(context.Background(), s.ID)
+		require.NoError(t, err)
+		require.False(t, got.IsBlocked)
+	}
+
+	_, err = testStore.UpdateUserTx(context.Background(), UpdateUserTxParams{
+		UpdateUserParams: updateArg,
+		RevokeSessions:   true,
+	})
+	require.NoError(t, err)
+
+	for _, s := range userSessions {
+		got, err := testQueries.GetSession(context.Background(), s.ID)
+		require.NoError(t, err)
+		require.True(t, got.IsBlocked, "user's session %s should be blocked", s.ID)
+
+		// A blocked session's refresh token no longer resolves.
+		_, err = testQueries.GetSessionByRefreshTokenHash(context.Background(), s.RefreshTokenHash)
+		require.ErrorIs(t, err, sql.ErrNoRows)
+	}
+
+	got, err := testQueries.GetSession(context.Background(), otherSession.ID)
+	require.NoError(t, err)
+	require.False(t, got.IsBlocked, "another user's session must be untouched")
 }
 
 func TestUpdateUserTx_UniqueConstraintViolation(t *testing.T) {

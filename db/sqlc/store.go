@@ -210,6 +210,10 @@ func (store *SQLStore) DeleteUserTx(ctx context.Context, id int64) error {
 type UpdateUserTxParams struct {
 	UpdateUserParams
 	CheckUniqueness bool
+	// RevokeSessions blocks every session the user holds, in the same
+	// transaction as the update. Set it on password changes so a stolen
+	// refresh token cannot outlive the password it was issued under.
+	RevokeSessions bool
 }
 
 type UpdateUserTxResult struct {
@@ -251,6 +255,12 @@ func (store *SQLStore) UpdateUserTx(ctx context.Context, arg UpdateUserTxParams)
 				Username: arg.Username,
 			})
 			if err != nil {
+				return err
+			}
+		}
+
+		if arg.RevokeSessions {
+			if err := q.BlockAllSessionsForUser(ctx, arg.ID); err != nil {
 				return err
 			}
 		}

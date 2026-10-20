@@ -69,8 +69,8 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	// Public: browse and discover taxonomy types
 	// Protected: create new taxonomy type definitions
 	types := tg.Group("/types")
-	types.GET("", server.getTaxonomyTypes)                                       // GET /api/v1/taxonomy/types
-	types.POST("", authMiddleware(server.tokenMaker), requireContentEditor(server), server.createTaxonomyType) // POST /api/v1/taxonomy/types
+	types.GET("", server.getTaxonomyTypes)                                                                                   // GET /api/v1/taxonomy/types
+	types.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createTaxonomyType) // POST /api/v1/taxonomy/types
 
 	// Type-Specific Term Browsing (must come before generic type lookup to avoid conflicts)
 	// Public: list terms within specific taxonomy types
@@ -98,9 +98,9 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	terms.GET("/:id", server.getTaxonomyTermByID) // GET /api/v1/taxonomy/terms/:id
 
 	// Protected term management operations (editor-or-admin role)
-	terms.POST("", authMiddleware(server.tokenMaker), requireContentEditor(server), server.createTaxonomyTerm)       // POST /api/v1/taxonomy/terms
-	terms.PUT("/:id", authMiddleware(server.tokenMaker), requireContentEditor(server), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy/terms/:id
-	terms.DELETE("/:id", authMiddleware(server.tokenMaker), requireContentEditor(server), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy/terms/:id
+	terms.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createTaxonomyTerm)       // POST /api/v1/taxonomy/terms
+	terms.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy/terms/:id
+	terms.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy/terms/:id
 
 	// Cross-Module Integration
 	// Post-taxonomy term associations for bidirectional relationships

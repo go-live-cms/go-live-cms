@@ -28,7 +28,7 @@ func randomUserForPosts() db.User {
 		FullName:          gofakeit.Name(),
 		Email:             gofakeit.Email(),
 		HashedPassword:    gofakeit.Password(true, true, true, true, false, 12),
-		PasswordChangedAt: gofakeit.Date(),
+		PasswordChangedAt: gofakeit.PastDate(),
 		CreatedAt:         gofakeit.Date(),
 		Role:              "editor",
 	}

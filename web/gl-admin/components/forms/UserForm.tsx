@@ -17,6 +17,7 @@ type UserFormData = {
     role?: string
     password?: string
     confirm_password?: string
+    current_password?: string
 }
 
 type UserFormProps = {
@@ -54,7 +55,12 @@ export default function UserForm({
     const [isSaving, setIsSaving] = useState(false)
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
     const [showPasswordFields, setShowPasswordFields] = useState(mode === "create")
-    const accessToken = AuthManager.getInstance().getAccessToken() || ""
+    const authManager = AuthManager.getInstance()
+    const accessToken = authManager.getAccessToken() || ""
+    // The API requires the current password when you change your OWN
+    // password; an admin resetting someone else's doesn't need it.
+    const currentUserId = authManager.getState().user?.id
+    const isSelf = mode === "edit" && initialData != null && currentUserId != null && (initialData as any).id === currentUserId
 
     const [formData, setFormData] = useState<UserFormData>({
         username: "",
@@ -76,6 +82,7 @@ export default function UserForm({
                     ((Array.isArray((initialData as any).roles) && (initialData as any).roles[0]) || roleOptions?.[0]?.value),
                 password: "",
                 confirm_password: "",
+                current_password: "",
             })
         }
     }, [mode, initialData])
@@ -134,10 +141,13 @@ export default function UserForm({
                     if (pwd !== cpwd) {
                         throw new Error("Passwords do not match.")
                     }
+                    if (isSelf && !formData.current_password) {
+                        throw new Error("Enter your current password to change it.")
+                    }
                 }
             }
 
-            const payload: Partial<User> & { password?: string } = {
+            const payload: Partial<User> & { password?: string; current_password?: string } = {
                 username,
                 email,
                 full_name: formData.full_name?.trim() || undefined,
@@ -145,6 +155,9 @@ export default function UserForm({
             }
             if (pwd) {
                 payload.password = pwd
+                if (isSelf) {
+                    payload.current_password = formData.current_password
+                }
             }
 
             let result: { user: User }
@@ -152,7 +165,13 @@ export default function UserForm({
                 result = await createUser(payload as any, accessToken)
                 showSuccess("User created successfully!")
             } else if (initialData) {
-                result = await updateUser((initialData as any).id, payload as any, accessToken)
+                const updated = await updateUser((initialData as any).id, payload as any, accessToken)
+                // Changing your own password invalidates your current access
+                // token; the API returns a fresh one to switch to.
+                if (updated?.access_token) {
+                    authManager.adoptAccessToken(updated)
+                }
+                result = updated
                 showSuccess("User updated successfully!")
             } else {
                 throw new Error("Invalid edit operation: no initial user data.")
@@ -256,6 +275,15 @@ export default function UserForm({
                         <div className="space-y-4">
                             <h3 className="text-lg font-medium">Change Password</h3>
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                {isSelf && (
+                                    <Input
+                                        title="Current Password"
+                                        type="password"
+                                        name="current_password"
+                                        value={formData.current_password || ""}
+                                        onChange={(e: any) => handleChange("current_password", e.currentTarget?.value ?? e.target?.value ?? "")}
+                                    />
+                                )}
                                 <Input
                                     title="New Password"
                                     type="password"
@@ -277,6 +305,7 @@ export default function UserForm({
                                     setShowPasswordFields(false)
                                     handleChange("password", "")
                                     handleChange("confirm_password", "")
+                                    handleChange("current_password", "")
                                 }}
                                 className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50"
                             >

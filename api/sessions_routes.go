@@ -58,14 +58,14 @@ import "github.com/gin-gonic/gin"
 func (server *Server) RegisterSessionRoutes(v1 *gin.RouterGroup) {
 	// Authentication endpoints - mixed access patterns
 	auth := v1.Group("/auth")
-	auth.POST("/register", server.register)                                    // POST /api/v1/auth/register
-	auth.POST("/login", server.loginUser)                                      // POST /api/v1/auth/login
-	auth.POST("/refresh", server.renewAccessToken)                             // POST /api/v1/auth/refresh
-	auth.POST("/logout", authMiddleware(server.tokenMaker), server.logoutUser) // POST /api/v1/auth/logout
+	auth.POST("/register", server.register)                                                  // POST /api/v1/auth/register
+	auth.POST("/login", server.loginUser)                                                    // POST /api/v1/auth/login
+	auth.POST("/refresh", server.renewAccessToken)                                           // POST /api/v1/auth/refresh
+	auth.POST("/logout", authMiddleware(server.tokenMaker, server.store), server.logoutUser) // POST /api/v1/auth/logout
 
 	// Session management endpoints - uniformly protected
 	sessions := v1.Group("/sessions")
-	sessions.Use(authMiddleware(server.tokenMaker))
+	sessions.Use(authMiddleware(server.tokenMaker, server.store))
 	sessions.GET("", server.getUserSessions)    // GET /api/v1/sessions
 	sessions.PUT("/block", server.blockSession) // PUT /api/v1/sessions/block
 }

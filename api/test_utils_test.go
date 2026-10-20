@@ -66,8 +66,8 @@ func newTestServer(t *testing.T, store db.Store) *Server {
 	return server
 }
 
-// stubRoleLookup permits the requireRole middleware's caller-role DB lookup
-// for the given authenticated user. Call it AFTER a test case's own
+// stubRoleLookup permits authMiddleware's caller DB lookup (which requireRole
+// and callerUser then reuse) for the given authenticated user. Call it AFTER a test case's own
 // buildStubs so per-case GetUser expectations keep precedence (gomock
 // consumes identical matchers in declaration order, skipping exhausted
 // ones). AnyTimes() also tolerates unauthenticated cases where the

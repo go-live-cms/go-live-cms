@@ -50,7 +50,7 @@ func (server *Server) RegisterUserRoutes(v1 *gin.RouterGroup) {
 
 	// Authenticated user routes (require valid Bearer token)
 	usersAuth := users.Group("")
-	usersAuth.Use(authMiddleware(server.tokenMaker))
+	usersAuth.Use(authMiddleware(server.tokenMaker, server.store))
 	usersAuth.GET("/me", server.getMe) // GET /api/v1/users/me
 
 	// Admin-only routes (require Bearer token + admin role)

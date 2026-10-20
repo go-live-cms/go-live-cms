@@ -48,16 +48,21 @@ type CreateUserRequest struct {
 //   - Username: 3-50 characters if provided
 //   - Email: Valid email format if provided
 //   - FullName: 2-100 characters if provided
-//   - Password: Minimum 6 characters if provided (triggers session invalidation)
+//   - Password: Minimum 6 characters if provided. The handler blocks every
+//     session the user holds in the same transaction as the change.
+//   - CurrentPassword: The caller's existing password. The handler requires it
+//     (and checks it) when a user changes their own password; it is ignored
+//     for an admin resetting someone else's.
 //   - Role: Must be one of admin, editor, contributor if provided (admin-only modification)
 //
 // Access control: Users can update all fields except role. Admins can update any field.
 type UpdateUserRequest struct {
-	Username string `json:"username" binding:"omitempty,min=3,max=50"`
-	Email    string `json:"email" binding:"omitempty,email"`
-	FullName string `json:"full_name" binding:"omitempty,min=2,max=100"`
-	Password string `json:"password" binding:"omitempty,min=6"`
-	Role     string `json:"role" binding:"omitempty,oneof=admin editor contributor"`
+	Username        string `json:"username" binding:"omitempty,min=3,max=50"`
+	Email           string `json:"email" binding:"omitempty,email"`
+	FullName        string `json:"full_name" binding:"omitempty,min=2,max=100"`
+	Password        string `json:"password" binding:"omitempty,min=6"`
+	CurrentPassword string `json:"current_password"`
+	Role            string `json:"role" binding:"omitempty,oneof=admin editor contributor"`
 }
 
 // DeleteUserRequest defines options for user account deletion.

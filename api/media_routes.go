@@ -43,11 +43,11 @@ func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	media := v1.Group("/media")
 
 	// Write operations - require Bearer authentication + editor-or-admin role
-	media.POST("", authMiddleware(server.tokenMaker), requireContentEditor(server), server.createMedia)           // Single upload
-	media.POST("/batch", authMiddleware(server.tokenMaker), requireContentEditor(server), server.createMediaBulk) // Batch upload (original path)
-	media.POST("/bulk", authMiddleware(server.tokenMaker), requireContentEditor(server), server.createMediaBulk)  // Batch upload (alias for compatibility)
-	media.PUT("/:id", authMiddleware(server.tokenMaker), requireContentEditor(server), server.updateMedia)        // Update metadata
-	media.DELETE("/:id", authMiddleware(server.tokenMaker), requireContentEditor(server), server.deleteMedia)     // Delete (ownership check)
+	media.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMedia)           // Single upload
+	media.POST("/batch", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk) // Batch upload (original path)
+	media.POST("/bulk", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk)  // Batch upload (alias for compatibility)
+	media.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updateMedia)        // Update metadata
+	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteMedia)     // Delete (ownership check)
 
 	// Read operations - public access for content consumption
 	media.GET("", server.getMedia)                // List/paginate/filter

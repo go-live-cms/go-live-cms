@@ -33,7 +33,7 @@ func randomUserForSessions() db.User {
 		FullName:          gofakeit.Name(),
 		Email:             gofakeit.Email(),
 		HashedPassword:    hashedPassword,
-		PasswordChangedAt: gofakeit.Date(),
+		PasswordChangedAt: gofakeit.PastDate(),
 		CreatedAt:         gofakeit.Date(),
 		Role:              "contributor",
 	}
@@ -259,6 +259,56 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 				require.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
 		},
+		{
+			// Revoked by logout / manual block / password change: a plain
+			// 401, NOT a reuse alarm. Escalating would also revoke the fresh
+			// session a password change just issued.
+			name: "RevokedSessionIsNotReuse",
+			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
+				revoked := session
+				revoked.IsBlocked = true
+				revoked.ReplacedBy = uuid.NullUUID{}
+				store.EXPECT().
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
+					Times(1).
+					Return(db.Session{}, sql.ErrNoRows)
+				store.EXPECT().
+					GetAnySessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
+					Times(1).
+					Return(revoked, nil)
+				store.EXPECT().
+					BlockAllSessionsForUser(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+				require.Contains(t, recorder.Body.String(), ErrSessionBlocked)
+			},
+		},
+		{
+			// A rotated session's token being presented again is real reuse.
+			name: "RotatedSessionReuseBlocksAll",
+			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
+				rotated := session
+				rotated.IsBlocked = true
+				rotated.ReplacedBy = uuid.NullUUID{UUID: uuid.New(), Valid: true}
+				store.EXPECT().
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
+					Times(1).
+					Return(db.Session{}, sql.ErrNoRows)
+				store.EXPECT().
+					GetAnySessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
+					Times(1).
+					Return(rotated, nil)
+				store.EXPECT().
+					BlockAllSessionsForUser(gomock.Any(), gomock.Eq(rotated.UserID)).
+					Times(1).
+					Return(nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusConflict, recorder.Code)
+			},
+		},
 	}
 
 	for i := range testCases {
@@ -369,6 +419,7 @@ func TestGetUserSessionsAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -484,6 +535,7 @@ func TestBlockSessionAPI(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
+			stubRoleLookup(store, user)
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()
@@ -583,6 +635,7 @@ func TestLogoutUserAPI(t *testing.T) {
 			}
 
 			tc.buildStubs(store, refreshToken)
+			stubRoleLookup(store, user)
 
 			recorder := httptest.NewRecorder()
 			url := "/api/v1/auth/logout"

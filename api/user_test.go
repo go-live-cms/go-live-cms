@@ -29,7 +29,7 @@ func randomUserNew() db.User {
 		FullName:          gofakeit.Name(),
 		Email:             gofakeit.Email(),
 		HashedPassword:    gofakeit.Password(true, true, true, true, false, 12),
-		PasswordChangedAt: gofakeit.Date(),
+		PasswordChangedAt: gofakeit.PastDate(),
 		CreatedAt:         gofakeit.Date(),
 		Role:              "contributor",
 	}
@@ -491,20 +491,25 @@ func TestUpdateUserAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				// Called twice: caller role check + existing-user fetch
+				// One lookup: the caller's row doubles as the target on a
+				// self-update.
 				store.EXPECT().
 					GetUser(gomock.Any(), gomock.Eq(user.ID)).
-					Times(2).
+					Times(1).
 					Return(user, nil)
 
 				updatedUser := user
 				updatedUser.Username = newUsername
 				updatedUser.Email = newEmail
 
+				// No password in the body, so no sessions are revoked.
 				store.EXPECT().
 					UpdateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.UpdateUserTxResult{User: updatedUser}, nil)
+					DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
+						require.False(t, arg.RevokeSessions)
+						return db.UpdateUserTxResult{User: updatedUser}, nil
+					})
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -556,10 +561,10 @@ func TestUpdateUserAPI(t *testing.T) {
 				adminCaller := randomUserNew()
 				adminCaller.ID = user.ID + 50
 				adminCaller.Role = "admin"
-				// Caller check + target fetch hit the same (sole admin) row
+				// Self-update: the caller lookup is also the target fetch
 				store.EXPECT().
 					GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).
-					Times(2).
+					Times(1).
 					Return(adminCaller, nil)
 				// The transactional guard refuses the demotion
 				store.EXPECT().
@@ -632,6 +637,30 @@ func TestUpdateUserAPI(t *testing.T) {
 			},
 		},
 		{
+			// Authorization runs before binding: a non-owner learns nothing
+			// from validation errors and gets the same 403 as a valid body.
+			name:   "ForbiddenUpdateOtherUserInvalidBody",
+			userID: user.ID + 99,
+			body: gin.H{
+				"email": "not-an-email",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetUser(gomock.Any(), gomock.Eq(user.ID)).
+					Times(1).
+					Return(user, nil)
+				store.EXPECT().
+					UpdateUserTx(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
 			name:   "ForbiddenSelfRoleChange",
 			userID: user.ID,
 			body: gin.H{
@@ -679,20 +708,21 @@ func TestUpdateUserAPI(t *testing.T) {
 				"username": newUsername,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				// First call (caller role check) succeeds; second call
-				// (target fetch) misses. gomock consumes identical
-				// matchers in declaration order.
+				// Admin caller found; the target row is missing.
+				adminCaller := randomUserNew()
+				adminCaller.ID = user.ID + 50
+				adminCaller.Role = "admin"
 				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(user.ID)).
+					GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).
 					Times(1).
-					Return(user, nil)
+					Return(adminCaller, nil)
 				store.EXPECT().
 					GetUser(gomock.Any(), gomock.Eq(user.ID)).
 					Times(1).
 					Return(db.User{}, sql.ErrNoRows)
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID+50, "admin_caller", time.Minute)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -707,7 +737,7 @@ func TestUpdateUserAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					GetUser(gomock.Any(), gomock.Eq(user.ID)).
-					Times(2).
+					Times(1).
 					Return(user, nil)
 
 				store.EXPECT().
@@ -748,6 +778,184 @@ func TestUpdateUserAPI(t *testing.T) {
 			tc.setupAuth(t, request, server.tokenMaker)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
+		})
+	}
+}
+
+func TestUpdateUserPasswordAPI(t *testing.T) {
+	const currentPassword = "current-secret"
+	const newPassword = "brand-new-secret"
+
+	hashedCurrent, err := util.HashPassword(currentPassword)
+	require.NoError(t, err)
+
+	user := randomUserNew()
+	user.HashedPassword = hashedCurrent
+
+	adminCaller := randomUserNew()
+	adminCaller.ID = user.ID + 50
+	adminCaller.Role = "admin"
+
+	// expectPasswordUpdate asserts the tx stores a hash of newPassword and
+	// revokes the target's sessions in the same transaction.
+	expectPasswordUpdate := func(t *testing.T, store *mockdb.MockStore, target db.User) {
+		store.EXPECT().
+			UpdateUserTx(gomock.Any(), gomock.Any()).
+			Times(1).
+			DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
+				require.Equal(t, target.ID, arg.ID)
+				require.True(t, arg.RevokeSessions)
+				require.NoError(t, util.CheckPassword(newPassword, arg.HashedPassword))
+				require.True(t, arg.PasswordChangedAt.After(target.PasswordChangedAt))
+				updated := target
+				updated.HashedPassword = arg.HashedPassword
+				updated.PasswordChangedAt = arg.PasswordChangedAt
+				return db.UpdateUserTxResult{User: updated}, nil
+			})
+	}
+
+	refreshCookie := func(recorder *httptest.ResponseRecorder) *http.Cookie {
+		for _, c := range recorder.Result().Cookies() {
+			if c.Name == RefreshCookieName {
+				return c
+			}
+		}
+		return nil
+	}
+
+	testCases := []struct {
+		name          string
+		userID        int64
+		callerID      int64
+		body          gin.H
+		buildStubs    func(t *testing.T, store *mockdb.MockStore)
+		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
+	}{
+		{
+			name:     "OK_SelfChangeRevokesAndStartsNewSession",
+			userID:   user.ID,
+			callerID: user.ID,
+			body:     gin.H{"password": newPassword, "current_password": currentPassword},
+			buildStubs: func(t *testing.T, store *mockdb.MockStore) {
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				expectPasswordUpdate(t, store, user)
+				// All prior sessions were blocked in the tx; the caller gets
+				// exactly one fresh session to stay signed in.
+				store.EXPECT().
+					CreateSession(gomock.Any(), gomock.Any()).
+					Times(1).
+					DoAndReturn(func(_ any, arg db.CreateSessionParams) (db.Session, error) {
+						require.Equal(t, user.ID, arg.UserID)
+						require.False(t, arg.IsBlocked)
+						return db.Session{ID: arg.ID, UserID: arg.UserID}, nil
+					})
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				cookie := refreshCookie(recorder)
+				require.NotNil(t, cookie, "self password change must set a new refresh cookie")
+				require.NotEmpty(t, cookie.Value)
+				// The caller's old access token predates the change, so a new
+				// one comes back for the client to adopt.
+				var body struct {
+					AccessToken string `json:"access_token"`
+					ExpiresAt   int64  `json:"expires_at"`
+				}
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+				require.NotEmpty(t, body.AccessToken)
+				require.Greater(t, body.ExpiresAt, time.Now().Unix())
+			},
+		},
+		{
+			name:     "ForbiddenSelfChangeWithoutCurrentPassword",
+			userID:   user.ID,
+			callerID: user.ID,
+			body:     gin.H{"password": newPassword},
+			buildStubs: func(t *testing.T, store *mockdb.MockStore) {
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				store.EXPECT().UpdateUserTx(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "current password is required")
+			},
+		},
+		{
+			name:     "ForbiddenSelfChangeWithWrongCurrentPassword",
+			userID:   user.ID,
+			callerID: user.ID,
+			body:     gin.H{"password": newPassword, "current_password": "not-the-password"},
+			buildStubs: func(t *testing.T, store *mockdb.MockStore) {
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				store.EXPECT().UpdateUserTx(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "current password is incorrect")
+			},
+		},
+		{
+			// Admins changing their OWN password are not exempt: a leaked
+			// admin token is the worst case.
+			name:     "ForbiddenAdminSelfChangeWithoutCurrentPassword",
+			userID:   adminCaller.ID,
+			callerID: adminCaller.ID,
+			body:     gin.H{"password": newPassword},
+			buildStubs: func(t *testing.T, store *mockdb.MockStore) {
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).Times(1).Return(adminCaller, nil)
+				store.EXPECT().UpdateUserTx(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
+			name:     "OK_AdminResetsOtherUserPassword",
+			userID:   user.ID,
+			callerID: adminCaller.ID,
+			body:     gin.H{"password": newPassword},
+			buildStubs: func(t *testing.T, store *mockdb.MockStore) {
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).Times(1).Return(adminCaller, nil)
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				// The target's sessions are revoked; the admin's own session
+				// is untouched, so no new one is minted.
+				expectPasswordUpdate(t, store, user)
+				store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.Nil(t, refreshCookie(recorder))
+				require.NotContains(t, recorder.Body.String(), "access_token")
+			},
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(t, store)
+
+			server := newTestServer(t, store)
+			recorder := httptest.NewRecorder()
+
+			data, err := json.Marshal(tc.body)
+			require.NoError(t, err)
+
+			url := fmt.Sprintf("/api/v1/users/%d", tc.userID)
+			request, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(data))
+			require.NoError(t, err)
+			request.Header.Set("Content-Type", "application/json")
+
+			addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, tc.callerID, "caller", time.Minute)
+			server.router.ServeHTTP(recorder, request)
+			tc.checkResponse(t, recorder)
 		})
 	}
 }
@@ -1026,7 +1234,9 @@ func TestGetMeAPI(t *testing.T) {
 			},
 		},
 		{
-			name: "UserNotFound",
+			// authMiddleware's caller lookup rejects a deleted account's
+			// still-valid token before the handler runs.
+			name: "DeletedUserForbidden",
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
@@ -1037,7 +1247,7 @@ func TestGetMeAPI(t *testing.T) {
 					Return(db.User{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
+				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
 		},
 		{

@@ -100,7 +100,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	}
 
 	// The v4 maker is needed both for the role-claim token below and for
-	// parsing the refresh token's JTI further down.
+	// parsing the refresh token's JTI in startSession.
 	v4Maker, ok := server.tokenMaker.(*token.PasetoV4Maker)
 	if !ok {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrInvalidTokenType})
@@ -121,65 +121,11 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
-	// Generate refresh token
-	refreshToken, err := server.tokenMaker.CreateRefreshToken(
-		user.ID,
-		user.Username,
-		server.config.RefreshTokenDuration,
-	)
+	session, err := server.startSession(ctx, v4Maker, user, now)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrTokenCreationFailed})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Extract session details
-	userAgent := ctx.GetHeader("User-Agent")
-	clientIP := ctx.ClientIP()
-
-	refreshParsed, err := v4Maker.ParseRefresh(refreshToken)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse refresh token"})
-		return
-	}
-
-	refreshJTI, err := refreshParsed.GetJti()
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get JTI from refresh token"})
-		return
-	}
-
-	jtiUUID, err := uuid.Parse(refreshJTI)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "invalid JTI format"})
-		return
-	}
-
-	// Create session record
-	refreshHash := token.HashRefresh(refreshToken)
-	sessionID := uuid.New()
-
-	session, err := server.store.CreateSession(ctx.Request.Context(), db.CreateSessionParams{
-		ID:               sessionID,
-		UserID:           user.ID,
-		Username:         user.Username,
-		RefreshTokenHash: refreshHash,
-		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
-		Jti:              uuid.NullUUID{UUID: jtiUUID, Valid: true},
-		UserAgent:        userAgent,
-		ClientIp:         clientIP,
-		IsBlocked:        false,
-		ExpiresAt:        now.Add(server.config.RefreshTokenDuration),
-	})
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
-		return
-	}
-
-	// Set secure refresh cookie
-	server.setSecureCookie(ctx, RefreshCookieName, refreshToken, now.Add(server.config.RefreshTokenDuration))
-
-	// Log successful login
-	logSecurityEvent(LogSessionCreated, session.ID.String(), user.ID, fmt.Sprintf("IP: %s, UA: %s", clientIP, userAgent))
 
 	// Return response
 	accessExpiresAt := now.Add(server.config.AccessTokenDuration)
@@ -193,6 +139,64 @@ func (server *Server) loginUser(ctx *gin.Context) {
 
 	ctx.Header("Cache-Control", "no-store")
 	ctx.JSON(http.StatusOK, rsp)
+}
+
+// startSession mints a refresh token for the user, records a new session for
+// it, and sets the refresh cookie on the response.
+//
+// Shared by login and by a self password change, which revokes every session
+// and then starts a fresh one so the caller stays signed in.
+//
+// The returned error's message is safe to send to the client.
+func (server *Server) startSession(ctx *gin.Context, v4Maker *token.PasetoV4Maker, user db.User, now time.Time) (db.Session, error) {
+	refreshToken, err := v4Maker.CreateRefreshToken(
+		user.ID,
+		user.Username,
+		server.config.RefreshTokenDuration,
+	)
+	if err != nil {
+		return db.Session{}, fmt.Errorf("%s", ErrTokenCreationFailed)
+	}
+
+	refreshParsed, err := v4Maker.ParseRefresh(refreshToken)
+	if err != nil {
+		return db.Session{}, fmt.Errorf("failed to parse refresh token")
+	}
+
+	refreshJTI, err := refreshParsed.GetJti()
+	if err != nil {
+		return db.Session{}, fmt.Errorf("failed to get JTI from refresh token")
+	}
+
+	jtiUUID, err := uuid.Parse(refreshJTI)
+	if err != nil {
+		return db.Session{}, fmt.Errorf("invalid JTI format")
+	}
+
+	userAgent := ctx.GetHeader("User-Agent")
+	clientIP := ctx.ClientIP()
+
+	session, err := server.store.CreateSession(ctx.Request.Context(), db.CreateSessionParams{
+		ID:               uuid.New(),
+		UserID:           user.ID,
+		Username:         user.Username,
+		RefreshTokenHash: token.HashRefresh(refreshToken),
+		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
+		Jti:              uuid.NullUUID{UUID: jtiUUID, Valid: true},
+		UserAgent:        userAgent,
+		ClientIp:         clientIP,
+		IsBlocked:        false,
+		ExpiresAt:        now.Add(server.config.RefreshTokenDuration),
+	})
+	if err != nil {
+		return db.Session{}, fmt.Errorf("failed to create session")
+	}
+
+	server.setSecureCookie(ctx, RefreshCookieName, refreshToken, now.Add(server.config.RefreshTokenDuration))
+
+	logSecurityEvent(LogSessionCreated, session.ID.String(), user.ID, fmt.Sprintf("IP: %s, UA: %s", clientIP, userAgent))
+
+	return session, nil
 }
 
 // renewAccessToken rotates tokens using refresh cookie and implements reuse detection.
@@ -257,8 +261,18 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	session, err := server.store.GetSessionByRefreshTokenHash(ctx.Request.Context(), refreshHash)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// Check for reuse detection - token was used before
+			// The token is known but its session is blocked. Only a ROTATED
+			// session (replaced_by set) means the token was already spent,
+			// i.e. reuse. A session that was merely blocked (logout, manual
+			// block, password change) is just dead: escalating it to reuse
+			// would revoke the fresh session a password change hands out the
+			// moment another old device tries to refresh.
 			if s2, err2 := server.store.GetAnySessionByRefreshTokenHash(ctx.Request.Context(), refreshHash); err2 == nil {
+				if !s2.ReplacedBy.Valid {
+					ctx.JSON(http.StatusUnauthorized, gin.H{"error": ErrSessionBlocked})
+					return
+				}
+
 				// Block all sessions for this user
 				_ = server.store.BlockAllSessionsForUser(ctx.Request.Context(), s2.UserID)
 

@@ -4,12 +4,15 @@
 package api
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/token"
 )
 
@@ -18,6 +21,7 @@ const (
 	authorizationHeaderKey  = "authorization"
 	authorizationTypeBearer = "bearer"
 	authorizationPayloadKey = "authorization_payload"
+	authorizationUserKey    = "authorization_user"
 )
 
 // authMiddleware returns a Gin middleware that enforces Bearer auth using the provided token.Maker.
@@ -26,11 +30,19 @@ const (
 //   - Expects header: "Authorization: Bearer <access-token>"
 //   - Verifies the token cryptographically via tokenMaker.VerifyToken
 //   - Requires payload.TokenType == "access"
+//   - Loads the caller's CURRENT database row and rejects tokens issued
+//     before the user's latest password change (see issuedBeforePasswordChange)
 //   - On success: stores *token.Payload under context key "authorization_payload"
-//   - On failure: aborts with 401 JSON { "error": "<reason>" }
+//     and the db.User under "authorization_user" (read back via callerUser,
+//     so requireRole does not query the user a second time)
+//   - On failure: aborts with 401 JSON { "error": "<reason>" }; 403 if the
+//     token's user no longer exists; 500 if the user lookup fails
 //
 // Notes:
 //   - Only access tokens are accepted (refresh tokens are rejected).
+//   - Access tokens are stateless, so the password-change check is what makes
+//     a password change end every existing login immediately instead of
+//     leaving stolen access tokens usable until they expire.
 //   - Error messages are intentionally generic to avoid leaking details.
 //   - Handlers can retrieve the payload with:
 //     payload, _ := ctx.Get("authorization_payload")
@@ -40,7 +52,7 @@ const (
 //
 //	r := gin.Default()
 //	r.GET("/me", authMiddleware(maker), func(c *gin.Context) { /* ... */ })
-func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
+func authMiddleware(tokenMaker token.Maker, store db.Store) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		authorizationHeader := ctx.GetHeader(authorizationHeaderKey)
 
@@ -77,8 +89,39 @@ func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
 			return
 		}
 
-		// make payload available to handlers
+		user, err := store.GetUser(ctx.Request.Context(), payload.UserID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+				return
+			}
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to verify user"})
+			return
+		}
+
+		if issuedBeforePasswordChange(payload.IssuedAt, user.PasswordChangedAt) {
+			err := errors.New("token was issued before the latest password change")
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			return
+		}
+
+		// make payload and caller available to handlers
 		ctx.Set(authorizationPayloadKey, payload)
+		ctx.Set(authorizationUserKey, user)
 		ctx.Next()
 	})
+}
+
+// issuedBeforePasswordChange reports whether a token predates the user's
+// latest password change and must therefore be rejected.
+//
+// The comparison is at whole-second granularity: PASETO v4 serializes iat as
+// RFC 3339 without fractional seconds, while password_changed_at keeps
+// microseconds. Comparing the raw values would reject the fresh session a
+// self password change issues in the same request (its tokens' iat truncates
+// to the start of that second, i.e. before password_changed_at). The cost is
+// that a token issued earlier within the very same second as the change
+// survives it.
+func issuedBeforePasswordChange(issuedAt, passwordChangedAt time.Time) bool {
+	return issuedAt.Unix() < passwordChangedAt.Unix()
 }
