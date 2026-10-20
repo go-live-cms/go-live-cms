@@ -2,9 +2,8 @@ import "dotenv/config";
 import { WebSocketServer } from "ws";
 import { createRequire } from "node:module";
 import { evaluatePersistedState } from "./persistence.js";
-import { canEditContent, fetchCurrentRole } from "./access.js";
+import { authorizeUpgrade } from "./access.js";
 import { URL } from "url";
-import { V4 } from "paseto";
 import { createPublicKey } from "crypto";
 import http from "http";
 import fs from "fs";
@@ -57,12 +56,23 @@ const ALLOWED_AUDIENCES = process.env.PASETO_ALLOWED_AUDIENCES?.split(",") || [
 // resolves to "./data" rather than "" (which would silently use the CWD).
 const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
 const SQUASH_SECRET = (process.env.SQUASH_SECRET || "").trim();
-// Base URL of the Go API (e.g. http://api:8080/api/v1). Every upgrade looks up the
-// caller's current role at `${API_URL}/users/me`; see access.js. Required — without it
-// the server can't tell editors from contributors, so it refuses to start (fail closed).
-const API_URL = (process.env.API_URL || "").trim();
-if (!API_URL) {
-  console.error("❌ API_URL is required (e.g. http://api:8080/api/v1) for the per-connection role check");
+// Base URL of the Go API's INTERNAL listener (e.g. http://api:8081 — a separate,
+// unpublished port, not the public /api/v1). Every upgrade looks up the caller's current
+// role at `${INTERNAL_API_URL}/internal/users/:id/role`, authenticated with
+// ROLE_LOOKUP_SECRET (not the client's ticket); see access.js. Both are required —
+// without them the server can't tell editors from contributors, so it refuses to start
+// (fail closed).
+const INTERNAL_API_URL = (process.env.INTERNAL_API_URL || "").trim();
+if (!INTERNAL_API_URL) {
+  console.error(
+    "❌ INTERNAL_API_URL is required (e.g. http://api:8081, the API's internal listener) for the per-connection role check" +
+      (process.env.API_URL ? " — API_URL is no longer used for this (#223)" : ""),
+  );
+  process.exit(1);
+}
+const ROLE_LOOKUP_SECRET = (process.env.ROLE_LOOKUP_SECRET || "").trim();
+if (!ROLE_LOOKUP_SECRET) {
+  console.error("❌ ROLE_LOOKUP_SECRET is required (must match ROLE_LOOKUP_SECRET in the Go API's config) for the per-connection role check");
   process.exit(1);
 }
 
@@ -125,7 +135,8 @@ try {
   console.log("   - Primary Audience:", AUDIENCE);
   console.log("   - Allowed Audiences:", ALLOWED_AUDIENCES.join(", "));
   console.log("   - DATA_PATH:", DATA_PATH);
-  console.log("   - API_URL (role lookup):", API_URL);
+  console.log("   - INTERNAL_API_URL (role lookup):", INTERNAL_API_URL);
+  console.log("   - Role lookup: internal endpoint, shared secret (ROLE_LOOKUP_SECRET set)");
   console.log(
     "   - Squash endpoint:",
     SQUASH_SECRET ? "enabled" : "DISABLED (no SQUASH_SECRET set)",
@@ -340,57 +351,35 @@ server.on("upgrade", async (req, socket, head) => {
     }
     console.log("🎯 Trying audiences:", ALLOWED_AUDIENCES.join(", "));
 
-    let tokenValid = false;
-    let payload, footer;
-
-    for (const aud of ALLOWED_AUDIENCES) {
-      try {
-        const result = await V4.verify(credential, PUBLIC_KEY, {
-          issuer: ISSUER,
-          audience: aud.trim(),
-          clockTolerance: "60s",
-          complete: true,
-        });
-        payload = result.payload;
-        footer = result.footer;
-        tokenValid = true;
-        console.log(`✅ Token verified successfully for audience: ${aud}`);
-        break;
-      } catch (err) {
-        continue;
-      }
-    }
-
-    if (!tokenValid) {
-      throw new Error(
-        `Token invalid for any allowed audience: ${ALLOWED_AUDIENCES.join(
-          ", ",
-        )}`,
-      );
-    }
-    console.log("✅ Token verified successfully for user:", payload.sub);
-    // The token's `role` claim is informational only (stale on demotion, empty after
-    // refresh). Authorization uses the CURRENT role from the API — see access.js.
-    console.log("👤 Token role claim (informational):", payload.role || "none");
-
     const docName = docNameFromReq(req);
-    let role;
-    try {
-      role = await fetchCurrentRole(API_URL, credential);
-    } catch (err) {
-      console.error(`🚫 Role lookup failed for user ${payload.username || payload.sub}, doc ${docName}:`, err.message);
-      socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\nCould not verify user role\r\n");
+    // Verifies the ticket, then reads the CURRENT role from the API's internal endpoint
+    // (shared secret, not the ticket — #223). The token's `role` claim is never used to
+    // authorize (stale on demotion, empty after refresh). See access.js.
+    const decision = await authorizeUpgrade(credential, {
+      publicKey: PUBLIC_KEY,
+      issuer: ISSUER,
+      audiences: ALLOWED_AUDIENCES,
+      apiUrl: INTERNAL_API_URL,
+      secret: ROLE_LOOKUP_SECRET,
+    });
+    const who = decision.payload ? decision.payload.username || decision.payload.sub : "unknown";
+
+    if (!decision.ok) {
+      if (decision.status === 401) throw new Error(decision.reason);
+      if (decision.status === 503) {
+        console.error(`🚫 Role lookup failed for user ${who}, doc ${docName}:`, decision.reason);
+        socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\nCould not verify user role\r\n");
+      } else {
+        console.warn(`🚫 Forbidden: user ${who} cannot edit ${docName}: ${decision.reason}`);
+        socket.write("HTTP/1.1 403 Forbidden\r\n\r\nInsufficient role for collaborative editing\r\n");
+      }
       socket.destroy();
       return;
     }
-    if (!canEditContent(role)) {
-      console.warn(
-        `🚫 Forbidden: user ${payload.username || payload.sub} (role: ${role || "none"}) cannot edit ${docName}`,
-      );
-      socket.write("HTTP/1.1 403 Forbidden\r\n\r\nInsufficient role for collaborative editing\r\n");
-      socket.destroy();
-      return;
-    }
+
+    const { payload, footer, role } = decision;
+    console.log(`✅ Token verified for user ${who} (audience: ${decision.audience})`);
+    console.log("👤 Token role claim (informational):", payload.role || "none");
     console.log("👤 Verified role:", role);
 
     req.auth = {
