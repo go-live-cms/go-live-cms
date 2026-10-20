@@ -24,7 +24,8 @@ import (
 //     (and therefore authMiddleware) rejects it: a ticket is never an API
 //     bearer token
 //   - bound to one collab document (the "doc" claim)
-//   - short-lived; the API also burns its jti on redemption (single use)
+//   - short-lived; the collab server burns its jti on first use (single use)
+//     and looks up the user's current role on the API's internal listener
 const (
 	// WSTicketAudience is the audience claim of collab tickets. The collab
 	// server accepts only this audience.
@@ -76,7 +77,9 @@ func (m *PasetoV4Maker) CreateWSTicket(userID int64, username, doc string, dur t
 }
 
 // VerifyWSTicket checks a collab ticket's signature, issuer, audience, type
-// and expiry. It does NOT enforce single use; the caller burns the jti.
+// and expiry. It does NOT enforce single use (the collab server does). The
+// API itself never accepts tickets; this is the Go reference for the checks
+// websocket/access.js verifyTicket makes, used by tests.
 func (m *PasetoV4Maker) VerifyWSTicket(tok string) (*WSTicketPayload, error) {
 	parser := p.NewParser()
 	parser.AddRule(p.IssuedBy(m.keys.Issuer))

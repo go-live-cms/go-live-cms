@@ -1,4 +1,5 @@
-// The WebSocket upgrade flow: ticket auth + role check + doc-name validation (#216, #220, #233).
+// The WebSocket upgrade flow: ticket auth + role check + doc-name validation
+// (#216, #220, #223, #233).
 //
 // Extracted from server.js (which boots the server on import) so the ordering
 // guarantees are unit tested in upgrade.test.js:
@@ -7,7 +8,7 @@
 //   3. client context (origin, UA, peer IP) is logged only on rejections.
 // Dependencies are injected. Must NOT import yjs — see the single-yjs-instance gotcha
 // in websocket/CLAUDE.md.
-import { canEditContent, isCollabDocName, stripCollabPrefix, takeCredential } from "./access.js";
+import { canEditContent, isCollabDocName, stripCollabPrefix, takeCredential, ticketIdentity } from "./access.js";
 import { docNameForLog, upgradeContextForLog } from "./logsafe.js";
 
 // Derive the Yjs document name (e.g. "post-2892") from the request URL, the same way
@@ -18,11 +19,14 @@ export const docNameFromReq = (req) => (req.url || "/").slice(1).split("?")[0].s
  * Returns an `upgrade` listener.
  * - verifyTicket(ticket, docName) → the ticket's claims; throws if it is invalid,
  *   expired, not a ticket, or for another doc (→ 401).
- * - redeemTicket(ticket) → { userId, username, role, doc }, or null if the API refuses
- *   it (→ 401); throws if the API can't answer (→ 503). Redeeming burns the ticket.
+ * - consumeTicket(claims) → false if the ticket was already used (→ 401). Burning it
+ *   happens before the role lookup, so a ticket can't be retried after a failure.
+ * - fetchRole(identity) → the user's CURRENT role from the API's internal listener, or
+ *   null if the user is gone or the ticket predates a password change (→ 403); throws if
+ *   the API can't answer (→ 503). identity is ticketIdentity(claims): { userId, issuedAt }.
  * - accept(req, socket, head) completes the WebSocket handshake.
  */
-export function createUpgradeHandler({ verifyTicket, redeemTicket, accept }) {
+export function createUpgradeHandler({ verifyTicket, consumeTicket, fetchRole, accept }) {
   return async (req, socket, head) => {
     // Node's http server removes its own socket 'error' listener before emitting
     // 'upgrade'. Without this one, a client that disconnects while we await the role
@@ -70,45 +74,46 @@ export function createUpgradeHandler({ verifyTicket, redeemTicket, accept }) {
       );
       return;
     }
+    const who = claims.username || claims.sub;
 
-    // Redeeming burns the ticket and returns the CURRENT role from the DB. Tickets carry
-    // no role claim, and access is never decided from token contents.
-    let redeemed;
+    // Single use: a ticket that leaked (e.g. into a proxy access log) can't open a second
+    // socket. Burned before the role lookup, so a failed lookup can't be retried with it;
+    // the editor fetches a fresh ticket on every reconnect.
+    if (!consumeTicket(claims)) {
+      reject("401 Unauthorized", "Invalid or expired ticket", `Ticket already used by user ${who}`, { warn: true });
+      return;
+    }
+
+    // The role always comes from the DB (tickets carry no role claim), looked up on the
+    // API's internal listener with the shared secret. The ticket never leaves this process.
+    const identity = ticketIdentity(claims);
+    if (!identity) {
+      reject("403 Forbidden", "Insufficient role for collaborative editing", `Ticket for ${who} has no valid user_id/iat`);
+      return;
+    }
+    let role;
     try {
-      redeemed = await redeemTicket(credential);
+      role = await fetchRole(identity);
     } catch (err) {
-      reject(
-        "503 Service Unavailable",
-        "Could not verify ticket",
-        `Ticket redemption failed for user ${claims.username || claims.sub}: ${err.message}`,
-      );
+      reject("503 Service Unavailable", "Could not verify user role", `Role lookup failed for user ${who}: ${err.message}`);
       return;
     }
-    if (!redeemed || redeemed.doc !== rawDocName) {
-      reject(
-        "401 Unauthorized",
-        "Invalid or expired ticket",
-        `API refused ticket for user ${claims.username || claims.sub} (used, expired or revoked)`,
-        { warn: true },
-      );
-      return;
-    }
-    if (!canEditContent(redeemed.role)) {
+    if (!canEditContent(role)) {
       reject(
         "403 Forbidden",
         "Insufficient role for collaborative editing",
-        `Forbidden: user ${redeemed.username || claims.sub} (role: ${redeemed.role || "none"}) cannot edit`,
+        `Forbidden: user ${who} (role: ${role || "none"}) cannot edit`,
         { warn: true },
       );
       return;
     }
-    console.log(`👤 Ticket redeemed for user ${redeemed.username} (role: ${redeemed.role}), doc ${docName}`);
+    console.log(`👤 Ticket accepted for user ${who} (role: ${role}), doc ${docName}`);
 
     req.auth = {
       sub: claims.sub,
-      userId: redeemed.userId,
-      username: redeemed.username,
-      role: redeemed.role,
+      userId: identity.userId,
+      username: claims.username,
+      role,
     };
     try {
       accept(req, socket, head);

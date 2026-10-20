@@ -57,8 +57,11 @@ cd websocket
 - Sockets authenticate with `?ticket=<collab ticket>`: single use, 30s, bound to one
   document, minted by `POST /api/v1/collab/tickets`. Access tokens are never accepted,
   so a proxy access log holding the socket URL holds nothing replayable (#233).
-- Set `API_URL` (required) to the Go API base, e.g. `http://api:8080/api/v1`. Every
-  connection redeems its ticket there, which also returns the caller's current role.
+- This server verifies each ticket and burns it itself (in memory, so run one instance;
+  y-websocket requires that anyway). The ticket never goes back to the API.
+- Set `INTERNAL_API_URL` (required) to the API's internal listener, e.g.
+  `http://api:8081` (never publish that port), and `ROLE_LOOKUP_SECRET` (required) to the
+  same value as the API's. Every connection looks up the caller's current role there.
   Only admins and editors may connect.
 
 ## Troubleshooting
@@ -68,9 +71,10 @@ cd websocket
   `PASETO_ISSUER` match the API), the ticket is for another document, expired, or was
   already used. Every connect needs a fresh ticket
 - **403 Forbidden on connect**: The user isn't an admin or editor (contributors can't
-  collaborate)
-- **503 Service Unavailable on connect**: Ticket redemption at `API_URL` failed. Check
-  that the API is up and reachable from the websocket container
-- **Server exits with "API_URL is required"**: Add `API_URL` to `websocket/.env` or the
-  compose `environment:` block
+  collaborate), was deleted, or changed their password after the ticket was minted
+- **503 Service Unavailable on connect**: The role lookup at `INTERNAL_API_URL` failed.
+  Check that the API's internal listener is up and reachable from the websocket
+  container, and that `ROLE_LOOKUP_SECRET` matches on both sides (a mismatch is a 503)
+- **Server exits with "INTERNAL_API_URL is required" / "ROLE_LOOKUP_SECRET is required"**:
+  Add them to `websocket/.env` or the compose `environment:` block
 - **Hot reload not working**: Ensure `CHOKIDAR_USEPOLLING=true` in Docker

@@ -67,7 +67,7 @@ timeout 3 wscat -c "$WS_URL/$DOC?ticket=$TICKET" -w 1 2>/dev/null && echo "✅ T
 echo ""
 
 # Test 3b: Reusing the same ticket (should fail: tickets are single use)
-echo "🧪 Test 3b: Reusing a redeemed ticket"
+echo "🧪 Test 3b: Reusing a used ticket"
 echo "Expected: Connection should be rejected"
 timeout 3 wscat -c "$WS_URL/$DOC?ticket=$TICKET" -w 1 2>/dev/null && echo "❌ FAIL: Reused ticket was accepted" || echo "✅ PASS: Reused ticket was rejected"
 echo ""
@@ -81,7 +81,7 @@ echo ""
 # Test 4: Check server logs for authentication messages
 echo "🧪 Test 4: Server log verification"
 echo "Check your WebSocket server terminal for these messages:"
-echo "  ✅ Success: '👤 Ticket redeemed for user ...'"
+echo "  ✅ Success: '👤 Ticket accepted for user ...'"
 echo "  ✅ Success: '🚀 WebSocket connection established for user: ...'"
 echo "  ❌ Failure: '🚫 Ticket rejected: ...'"
 echo ""

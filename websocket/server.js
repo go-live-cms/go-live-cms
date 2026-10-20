@@ -2,7 +2,13 @@ import "dotenv/config";
 import { WebSocketServer } from "ws";
 import { createRequire } from "node:module";
 import { evaluatePersistedState } from "./persistence.js";
-import { isCollabDocName, redeemTicket, verifyTicket, TICKET_AUDIENCE } from "./access.js";
+import {
+  fetchCurrentRole,
+  isCollabDocName,
+  TicketReplayGuard,
+  verifyTicket,
+  TICKET_AUDIENCE,
+} from "./access.js";
 import { createUpgradeHandler, docNameFromReq } from "./upgrade.js";
 import { createPublicKey } from "crypto";
 import http from "http";
@@ -52,13 +58,23 @@ const ISSUER = process.env.PASETO_ISSUER || "go-live-cms";
 // resolves to "./data" rather than "" (which would silently use the CWD).
 const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
 const SQUASH_SECRET = (process.env.SQUASH_SECRET || "").trim();
-// Base URL of the Go API (e.g. http://api:8080/api/v1). Every upgrade redeems its ticket
-// at `${API_URL}/collab/tickets/redeem`, which also returns the caller's current role;
-// see access.js. Required — without it no ticket can be redeemed and the server can't
-// tell editors from contributors, so it refuses to start (fail closed).
-const API_URL = (process.env.API_URL || "").trim();
-if (!API_URL) {
-  console.error("❌ API_URL is required (e.g. http://api:8080/api/v1) for the per-connection role check");
+// Base URL of the Go API's INTERNAL listener (e.g. http://api:8081 — a separate,
+// unpublished port, not the public /api/v1). Every upgrade looks up the caller's current
+// role at `${INTERNAL_API_URL}/internal/users/:id/role`, authenticated with
+// ROLE_LOOKUP_SECRET (not the client's ticket); see access.js. Both are required —
+// without them the server can't tell editors from contributors, so it refuses to start
+// (fail closed).
+const INTERNAL_API_URL = (process.env.INTERNAL_API_URL || "").trim();
+if (!INTERNAL_API_URL) {
+  console.error(
+    "❌ INTERNAL_API_URL is required (e.g. http://api:8081, the API's internal listener) for the per-connection role check" +
+      (process.env.API_URL ? " — API_URL is no longer used for this (#223)" : ""),
+  );
+  process.exit(1);
+}
+const ROLE_LOOKUP_SECRET = (process.env.ROLE_LOOKUP_SECRET || "").trim();
+if (!ROLE_LOOKUP_SECRET) {
+  console.error("❌ ROLE_LOOKUP_SECRET is required (must match ROLE_LOOKUP_SECRET in the Go API's config) for the per-connection role check");
   process.exit(1);
 }
 
@@ -118,7 +134,8 @@ try {
   console.log("   - Issuer:", ISSUER);
   console.log("   - Ticket audience:", TICKET_AUDIENCE);
   console.log("   - DATA_PATH:", DATA_PATH);
-  console.log("   - API_URL (ticket redemption + role):", API_URL);
+  console.log("   - INTERNAL_API_URL (role lookup):", INTERNAL_API_URL);
+  console.log("   - Role lookup: internal endpoint, shared secret (ROLE_LOOKUP_SECRET set)");
   console.log(
     "   - Squash endpoint:",
     SQUASH_SECRET ? "enabled" : "DISABLED (no SQUASH_SECRET set)",
@@ -315,13 +332,16 @@ wss.on("connection", (ws, req) => {
   console.log(`🔗 WS open — doc: ${docName} | live connections now: ${liveConns}`);
 });
 
-// Ticket auth, role check and doc-name validation live in upgrade.js (unit tested
-// there); the ticket checks themselves are in access.js (#233).
+// Ticket auth, single-use burn, role check and doc-name validation live in upgrade.js
+// (unit tested there); the ticket checks and the role lookup are in access.js
+// (#223, #233). The ticket never leaves this process.
+const usedTickets = new TicketReplayGuard();
 server.on(
   "upgrade",
   createUpgradeHandler({
     verifyTicket: (ticket, docName) => verifyTicket(ticket, PUBLIC_KEY, { issuer: ISSUER, docName }),
-    redeemTicket: (ticket) => redeemTicket(API_URL, ticket),
+    consumeTicket: (claims) => usedTickets.consume(claims),
+    fetchRole: (identity) => fetchCurrentRole(INTERNAL_API_URL, identity, ROLE_LOOKUP_SECRET),
     accept: (req, socket, head) =>
       wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit("connection", ws, req);

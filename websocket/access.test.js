@@ -1,15 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createPublicKey } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { V4 } from "paseto";
 import {
   canEditContent,
+  fetchCurrentRole,
   isCollabDocName,
-  redeemTicket,
   stripCollabPrefix,
   takeCredential,
+  ticketIdentity,
   verifyTicket,
+  TicketReplayGuard,
   TICKET_AUDIENCE,
+  TICKET_CLOCK_TOLERANCE_MS,
   TICKET_TYPE,
 } from "./access.js";
 
@@ -36,7 +40,7 @@ function sign(claims = {}, { audience = TICKET_AUDIENCE, expiresIn = "30s", key 
   return V4.sign(
     { user_id: "7", username: "alice", token_type: TICKET_TYPE, doc: "post-12", ...claims },
     key,
-    { issuer: ISSUER, audience, expiresIn },
+    { issuer: ISSUER, audience, expiresIn, jti: randomUUID() },
   );
 }
 
@@ -146,45 +150,77 @@ test("verifyTicket rejects expired, foreign-key and wrong-issuer tickets", async
   await assert.rejects(verifyTicket(await sign(), publicKey, { ...opts, issuer: "someone.else" }));
 });
 
-test("redeemTicket POSTs the ticket to /collab/tickets/redeem and returns the current role", async () => {
-  const { impl, calls } = fakeFetch(200, {
-    user: { id: 7, username: "alice", role: "editor" },
-    doc: "post-12",
-  });
-  const result = await redeemTicket("http://api:8080/api/v1/", "tkt123", { fetchImpl: impl });
+/** Identity as ticketIdentity returns it, for the role-lookup tests. */
+const identity = { userId: "7", issuedAt: 1760000000 };
 
-  assert.deepEqual(result, { userId: 7, username: "alice", role: "editor", doc: "post-12" });
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://api:8080/api/v1/collab/tickets/redeem");
-  assert.equal(calls[0].init.method, "POST");
-  assert.equal(calls[0].init.headers.Authorization, "Bearer tkt123");
+test("ticketIdentity extracts user_id and iat (as Unix seconds)", () => {
+  assert.deepEqual(ticketIdentity({ user_id: "42", iat: "2025-10-09T08:53:20Z" }), {
+    userId: "42",
+    issuedAt: 1760000000,
+  });
+  assert.deepEqual(ticketIdentity({ user_id: 42, iat: "2025-10-09T08:53:20.900Z" }), {
+    userId: "42",
+    issuedAt: 1760000000,
+  });
 });
 
-test("redeemTicket returns null when the API rejects the ticket or the user is gone", async () => {
-  for (const status of [401, 403, 404]) {
-    const { impl } = fakeFetch(status, { error: "nope" });
-    assert.equal(await redeemTicket("http://api", "t", { fetchImpl: impl }), null, `status ${status}`);
+test("ticketIdentity rejects missing or malformed claims", () => {
+  const iat = "2025-10-09T08:53:20Z";
+  for (const payload of [
+    undefined,
+    {},
+    { iat },
+    { user_id: "", iat },
+    { user_id: "0", iat },
+    { user_id: "-1", iat },
+    { user_id: "7/../../users/me", iat },
+    { user_id: "7" },
+    { user_id: "7", iat: "not a date" },
+  ]) {
+    assert.equal(ticketIdentity(payload), null, JSON.stringify(payload));
   }
 });
 
-test("redeemTicket reports a null role when the body has none", async () => {
-  const { impl } = fakeFetch(200, { user: {} });
-  assert.equal((await redeemTicket("http://api", "t", { fetchImpl: impl })).role, null);
+test("fetchCurrentRole calls the internal endpoint with the shared secret, not a user token", async () => {
+  const { impl, calls } = fakeFetch(200, { role: "editor" });
+  const role = await fetchCurrentRole("http://api:8080/api/v1/", identity, "s3cret", { fetchImpl: impl });
+
+  assert.equal(role, "editor");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://api:8080/api/v1/internal/users/7/role?issued_at=1760000000");
+  assert.equal(calls[0].init.headers.Authorization, "Bearer s3cret");
 });
 
-test("redeemTicket throws on server errors", async () => {
+test("fetchCurrentRole returns null when the user is gone or the ticket predates a password change", async () => {
+  for (const status of [403, 404]) {
+    const { impl } = fakeFetch(status, { error: "nope" });
+    assert.equal(await fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl }), null, `status ${status}`);
+  }
+});
+
+test("fetchCurrentRole throws when the API rejects the shared secret (config error → 503, not 403)", async () => {
+  const { impl } = fakeFetch(401, { error: "unauthorized" });
+  await assert.rejects(fetchCurrentRole("http://api", identity, "wrong", { fetchImpl: impl }), /ROLE_LOOKUP_SECRET/);
+});
+
+test("fetchCurrentRole returns null when the body has no role", async () => {
+  const { impl } = fakeFetch(200, {});
+  assert.equal(await fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl }), null);
+});
+
+test("fetchCurrentRole throws on server errors", async () => {
   const { impl } = fakeFetch(500);
-  await assert.rejects(redeemTicket("http://api", "t", { fetchImpl: impl }), /500/);
+  await assert.rejects(fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl }), /500/);
 });
 
-test("redeemTicket throws on network errors", async () => {
+test("fetchCurrentRole throws on network errors", async () => {
   const impl = async () => {
     throw new TypeError("fetch failed");
   };
-  await assert.rejects(redeemTicket("http://api", "t", { fetchImpl: impl }), /fetch failed/);
+  await assert.rejects(fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl }), /fetch failed/);
 });
 
-test("redeemTicket throws when the API doesn't answer in time", async () => {
+test("fetchCurrentRole throws when the API doesn't answer in time", async () => {
   // Never resolves on its own; only the abort signal can end it. AbortSignal.timeout's
   // timer is unref'd, so hold a ref'd timer open (a real fetch would hold a socket);
   // otherwise Node can see an empty event loop and cancel the test before the abort.
@@ -196,7 +232,43 @@ test("redeemTicket throws when the API doesn't answer in time", async () => {
         reject(init.signal.reason);
       });
     });
-  await assert.rejects(redeemTicket("http://api", "t", { fetchImpl: impl, timeoutMs: 20 }), {
+  await assert.rejects(fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl, timeoutMs: 20 }), {
     name: "TimeoutError",
   });
+});
+
+test("verifyTicket rejects a ticket without a jti (it couldn't be burned)", async () => {
+  const noJti = await V4.sign(
+    { user_id: "7", token_type: TICKET_TYPE, doc: "post-12" },
+    privateKey,
+    { issuer: ISSUER, audience: TICKET_AUDIENCE, expiresIn: "30s" },
+  );
+  await assert.rejects(verifyTicket(noJti, publicKey, { issuer: ISSUER, docName: "post-12" }), /no jti/);
+});
+
+test("a verified ticket's user_id and iat feed ticketIdentity", async () => {
+  const claims = await verifyTicket(await sign(), publicKey, { issuer: ISSUER, docName: "post-12" });
+  const id = ticketIdentity(claims);
+  assert.equal(id.userId, "7");
+  assert.ok(Math.abs(id.issuedAt - Date.now() / 1000) < 5, String(id.issuedAt));
+});
+
+test("TicketReplayGuard accepts each jti once", () => {
+  const guard = new TicketReplayGuard();
+  const exp = new Date(Date.now() + 30_000).toISOString();
+  assert.equal(guard.consume({ jti: "a", exp }), true);
+  assert.equal(guard.consume({ jti: "a", exp }), false);
+  assert.equal(guard.consume({ jti: "b", exp }), true);
+});
+
+test("TicketReplayGuard remembers a jti until exp + clock tolerance, then forgets it", () => {
+  const guard = new TicketReplayGuard();
+  const now = Date.parse("2026-10-20T12:00:00Z");
+  const exp = new Date(now + 30_000).toISOString();
+  assert.equal(guard.consume({ jti: "a", exp }, now), true);
+  // Still inside the window in which verifyTicket would accept it: must stay burned.
+  assert.equal(guard.consume({ jti: "a", exp }, now + 30_000 + TICKET_CLOCK_TOLERANCE_MS), false);
+  // Past it the ticket can't verify any more, so the entry is pruned (bounded memory).
+  guard.consume({ jti: "other", exp: new Date(now + 120_000).toISOString() }, now + 31_000 + TICKET_CLOCK_TOLERANCE_MS);
+  assert.equal(guard.size, 1);
 });

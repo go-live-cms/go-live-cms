@@ -38,10 +38,10 @@ The WebSocket server never sees access tokens (#233). The editor exchanges its a
 token for a **collab ticket** at `POST /collab/tickets` (admin/editor): v4.public, signed
 with the access key, audience `golive.admin-ws`, `token_type: ws_ticket`, `doc` claim,
 30s TTL (`token/ws_ticket.go`, `collab_*.go`). `VerifyToken` rejects tickets, so they're
-not bearer tokens. The WS server redeems each ticket at `POST /collab/tickets/redeem`
-(the ticket is the credential, no authMiddleware). That burns the jti in
-`ticketReplayGuard` and returns the user's current role. The guard is **in-memory**, so
-it assumes one API process. Multiple replicas would need a shared store there.
+not bearer tokens. The API never accepts a ticket back: the WS server verifies it
+locally, burns its jti (single use, in the WS process), and gets the user's current
+role from the internal role endpoint below (#223). The ticket never leaves the WS
+server.
 
 - **`authMiddleware` loads the caller's DB row on every authenticated request** and
   caches it under `authorization_user`. Get it with `server.callerUser(c)`; don't
@@ -81,6 +81,27 @@ it assumes one API process. Multiple replicas would need a shared store there.
 - Config: `COLLAB_SERVER_URL` + `COLLAB_SQUASH_SECRET` in `util/config.go`. **Both
   default to empty (opt-in)** — if either is unset, squash is silently skipped. The URL
   is trailing-slash-trimmed before building the request.
+
+## Collaboration integration (WS role lookup, #223)
+
+- `GET /internal/users/:id/role?issued_at=<unix>` (`internal_routes.go`,
+  `internal_handlers_read.go`) is the WS server's per-connection role check.
+- **It is on a separate listener, not under `/api/v1`.** `newInternalRouter` builds its
+  own Gin engine and `main.go` serves it with `StartInternal(INTERNAL_SERVER_ADDRESS)`
+  (default `0.0.0.0:8081`). Never publish that port (compose doesn't). The public
+  router answers 404 for `/internal/*` and `/api/v1/internal/*` (tested). Put any new
+  server-to-server route there, not on `v1`.
+- It is
+  authenticated with `Authorization: Bearer <ROLE_LOOKUP_SECRET>` (constant-time
+  compare), **not** `authMiddleware`, so it works with WS-only tickets
+  (`golive.admin-ws`, `token_type: ws_ticket`, #233). The WS server passes the
+  ticket's `user_id` and `iat`. It reads the role from the DB and refuses (403) tickets
+  issued before the user's latest password change. 404 means the user is gone.
+- `ROLE_LOOKUP_SECRET` is **required**: `NewServer` errors without it. It has no
+  default, so `LoadConfig` binds it with `viper.BindEnv`. Without that, viper's
+  `Unmarshal` drops env-only keys it doesn't know (see `util/config_test.go`).
+  `NewServer` trims it once, and the WS server trims its copy too, so stray whitespace
+  in `app.env` can't make the two sides disagree.
 
 ## Gotchas
 

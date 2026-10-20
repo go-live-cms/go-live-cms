@@ -38,6 +38,11 @@ services:
       UPLOAD_PATH: "/app/uploads/media"
       COLLAB_SERVER_URL: "http://websocket:1234"
       COLLAB_SQUASH_SECRET: "dev-squash-secret"
+      # Required: the WS server's per-connection role lookup (#223)
+      ROLE_LOOKUP_SECRET: "dev-role-lookup-secret"
+      # Server-to-server listener (/internal/*). Deliberately NOT in `ports:`;
+      # only the websocket service reaches it over the compose network.
+      INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
     volumes:
       - .:/app
       - /app/tmp
@@ -79,9 +84,11 @@ services:
       - CHOKIDAR_INTERVAL=300
       - DATA_PATH=/data/yjs
       - SQUASH_SECRET=dev-squash-secret
-      # Ticket redemption + per-connection role check (#216, #233):
-      # POST ${API_URL}/collab/tickets/redeem
-      - API_URL=http://api:8080/api/v1
+      # Per-connection role check (#216, #223): GET ${INTERNAL_API_URL}/internal/users/:id/role
+      # on the API's unpublished internal listener, with ROLE_LOOKUP_SECRET (must match the
+      # api service's value). Tickets (#233) are verified and burned in the WS process.
+      - INTERNAL_API_URL=http://api:8081
+      - ROLE_LOOKUP_SECRET=dev-role-lookup-secret
     volumes:
       - ./websocket:/app
       - /app/node_modules

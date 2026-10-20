@@ -15,46 +15,80 @@ the credential is in the URL, and every proxy or load balancer access log in fro
 records it. Before **every** connect and reconnect, the editor POSTs `{doc}` to
 `/api/v1/collab/tickets` (`ticketSocket.ts`, via y-websocket's `WebSocketPolyfill` hook).
 It gets back a v4.public ticket: audience `golive.admin-ws`, `token_type: ws_ticket`, a
-`doc` claim, 30s TTL and a unique jti (`token/ws_ticket.go`). A ticket is not an API bearer
-token (wrong audience and type). `takeCredential` reads only `?ticket=`. There is no
-`?token=` / access-token fallback, because the editor and this server ship together.
+`doc` claim, `user_id`, 30s TTL and a unique jti (`token/ws_ticket.go`). A ticket is not an
+API bearer token (wrong audience and type), and the API never accepts one back.
+`takeCredential` reads only `?ticket=`. There is no `?token=` / access-token fallback,
+because the editor and this server ship together.
 
 **The upgrade flow lives in `upgrade.js`** (`createUpgradeHandler`, unit tested in
-`upgrade.test.js` with a fake socket). `server.js` only injects the ticket check, the
-redemption and `wss.handleUpgrade`. Order: socket `error` listener → `takeCredential`
-→ `stripCollabPrefix` → doc-name check (**400**) → ticket present (**401**) →
-`verifyTicket` (**401**) → `redeemTicket` (**503** if the API can't answer, **401** if
-it refuses) → role allowed (**403**) → accept.
+`upgrade.test.js`, both with stubs and wired to the real `access.js` functions with signed
+tickets). `server.js` only injects the dependencies. Order: socket `error` listener →
+`takeCredential` → `stripCollabPrefix` → doc-name check (**400**) → ticket present
+(**401**) → `verifyTicket` (**401**) → burn the jti (**401** if already used) →
+`ticketIdentity` (**403** if no usable `user_id`/`iat`) → `fetchCurrentRole` (**503** if
+the API can't answer) → role allowed (**403**) → accept.
 1. **`verifyTicket`** (`access.js`) checks the signature, issuer (`PASETO_ISSUER`),
-   audience, type and expiry locally, and that `doc` equals the URL's doc name. The public
-   key comes from `PASETO_V4_PUBLIC_PEM_FILE` (`/run/secrets/public.pem`).
-   `PASETO_AUDIENCE` / `PASETO_ALLOWED_AUDIENCES` are ignored now, and a startup warning
-   says so.
-2. **`redeemTicket`** POSTs it to `${API_URL}/collab/tickets/redeem` (`Authorization:
-   Bearer <ticket>`). The API burns the jti (**single use**). This is in memory, so it
-   assumes one API process. The API also rejects tickets minted before a password change
-   and returns the user's **current** role from the DB. Redemption is the role check.
+   audience, `token_type: ws_ticket`, expiry, jti/exp presence, and that `doc` equals the
+   URL's doc name. The public key comes from `PASETO_V4_PUBLIC_PEM_FILE`
+   (`/run/secrets/public.pem`). `PASETO_AUDIENCE` / `PASETO_ALLOWED_AUDIENCES` are ignored
+   now, and a startup warning says so.
+2. **`TicketReplayGuard`** (`access.js`) burns the jti: **single use**, so a ticket a
+   proxy logged can't open a second socket. It's burned before the role lookup, so a
+   failed lookup can't be retried with it (the client fetches a fresh ticket on
+   reconnect). It's in memory, which assumes **one collab server process**. That already
+   holds, because y-websocket keeps live docs in memory. A jti is kept until its ticket's
+   `exp` + the 5s clock tolerance, the whole time `verifyTicket` could still accept it.
+3. **`fetchCurrentRole`** calls
+   `GET ${INTERNAL_API_URL}/internal/users/<user_id>/role?issued_at=<iat unix>` with
+   `Authorization: Bearer ${ROLE_LOOKUP_SECRET}`. That endpoint is on the API's
+   **separate internal listener** (`:8081`, never published), not the public `/api/v1`
+   (`api/internal_routes.go`). **The ticket never leaves this process.**
+
+**Decision: #223 + #233 merged (2026-10).** Two PRs replaced the old "forward the
+client's token to `/users/me`" check in parallel:
+- #223 (internal role lookup by `user_id`/`iat` with a shared secret);
+- #233 (single-use tickets that the API redeemed at a public `POST /collab/tickets/redeem`,
+  which burned the jti in an API-side replay guard and returned the role).
+
+The merge keeps #223's lookup and #233's tickets, and moves the single-use burn into this
+process. So the API only mints tickets, the redeem endpoint is gone, and no API route ever
+accepts a ticket. Rejected alternatives:
+- (a) Move redeem to the internal listener: more Go code, and the ticket still travels to
+  the API.
+- (b) Keep both: two API round trips and duplicate role/password checks per connect.
+- (c, from #223) B, the API accepting the WS audience on `/users/me`: leaks WS knowledge
+  into the API middleware and makes the ticket usable against an API route.
+
+If Hocuspocus (#206) lands, keep this lookup and call it from `onAuthenticate`.
 
 **Role check (#216).** Only **admins and editors** are admitted. This mirrors
 `requireContentEditor` in `api/auth_roles.go`, so keep the role lists in sync.
-- Tickets carry no `role` claim, and access is never decided from token contents.
-- A ticket the API refuses (used, expired, password changed, user deleted) gets **401**.
-  A contributor gets **403**. If the API is down, slow (3s timeout) or returns 5xx, the
-  upgrade gets **503**. It fails closed either way. The ticket is burned regardless, so
-  the client's reconnect fetches a new one. Only new upgrades are checked, so an
-  already-open socket survives a password change.
-- A ticket logged by a proxy is useless once redeemed, which happens milliseconds after
-  minting. The residual risk is a ticket whose upgrade never reached this server: it
-  stays valid for at most 30s, for one document.
-- `API_URL` is required. The server `exit(1)`s at startup without it. Docker sets it to
-  `http://api:8080/api/v1`.
+- Tickets carry no `role` claim, and access is never decided from token contents. The
+  role always comes from the DB via the internal endpoint.
+- **401:** a missing, invalid, expired, wrong-type, other-doc or already-used ticket.
+- **403:**
+  - a contributor;
+  - a deleted user (API 404);
+  - a ticket without a usable `user_id`/`iat`;
+  - a ticket issued before the user's latest password change. The API applies the same
+    `issuedBeforePasswordChange` cutoff as `authMiddleware` and answers 403.
+
+  Only new upgrades are checked, so an already-open socket survives the change.
+- **503:** the API is down, slow (3s timeout), returns 5xx, or rejects the shared secret
+  (401 means misconfiguration, not a user problem). It fails closed either way.
+- `INTERNAL_API_URL` and `ROLE_LOOKUP_SECRET` are required. The server `exit(1)`s at
+  startup without either. `API_URL` (the public `/api/v1`) is no longer used. The API's
+  `NewServer` also refuses to start without `ROLE_LOOKUP_SECRET`; both sides must hold
+  the same value (both trim it). Docker sets `INTERNAL_API_URL=http://api:8081` and the
+  secret in `compose.dev.yaml`.
+- `access.js` imports `paseto` but must never import yjs (single-instance rule below).
 - Known limitation: the role is checked **only at connect**. An editor demoted mid-session
   keeps their open socket until it reconnects (REST saves are already blocked). Revisit
   with Hocuspocus `onAuthenticate` (#206).
 - The admin SPA opens the editor `readOnly` for contributors (`canEditContent` in
   `web/gl-admin/lib/roles.ts`), so they never attempt the connection.
 - **Never log the raw upgrade request (#220).** The ticket is in the URL. It's single use,
-  but an unredeemed one is still a credential for 30s, so don't log `req.url`,
+  but an unused one is still a credential for 30s, so don't log `req.url`,
   `req.headers`, the query params or the credential.
   - The upgrade handler calls `takeCredential(req)` (`access.js`) **first**. It reads
     `ticket` and strips the query from `req.url`, so nothing downstream
