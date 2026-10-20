@@ -35,7 +35,9 @@ import (
 // # Security Recommendations
 //
 //   - Change the default password immediately after first login
-//   - Disable this function in production builds
+//   - Runs only with GIN_MODE=debug. Outside debug mode, startup refuses to
+//     run while this account still has this password
+//     (FindSeededAccountsWithSeededPasswords)
 //   - Consider environment-based password injection for CI/testing
 //   - Use strong passwords for any production admin accounts
 //
@@ -69,20 +71,20 @@ import (
 // without modifying source code.
 func CreateDefaultAdminUser(store db.Store) {
 	log.Println("🔧 Checking for default admin user...")
-	existingUser, err := store.GetUserByUsername(context.TODO(), "admin")
-	if err == nil && existingUser.Username == "admin" {
+	existingUser, err := store.GetUserByUsername(context.TODO(), DefaultAdminUsername)
+	if err == nil && existingUser.Username == DefaultAdminUsername {
 		log.Println("ℹ️  Default admin user already exists, skipping creation")
 		return
 	}
 
-	hashedPassword, err := util.HashPassword("123456")
+	hashedPassword, err := util.HashPassword(DefaultAdminPassword)
 	if err != nil {
 		log.Printf("❌ Failed to hash admin password: %v", err)
 		return
 	}
 
 	adminUser := db.CreateUserParams{
-		Username:       "admin",
+		Username:       DefaultAdminUsername,
 		Email:          "admin@golive-cms.local",
 		FullName:       "Default Administrator",
 		HashedPassword: hashedPassword,
@@ -97,7 +99,7 @@ func CreateDefaultAdminUser(store db.Store) {
 	log.Printf("✅ Default admin user created successfully:")
 	log.Printf("    Email: %s", createdUser.Email)
 	log.Printf("    Username: %s", createdUser.Username)
-	log.Printf("    Password: 123456")
+	log.Printf("    Password: %s", DefaultAdminPassword)
 	log.Printf("    Role: %s", createdUser.Role)
 	log.Printf("    Note: This is a development-only user, change password in production!")
 }

@@ -83,6 +83,13 @@ also accepts `golive.admin`/`golive.auth` during migration).
 - Debug mode seeds `admin`/`123456` + dummy data on startup (`shouldSeedDevData`)
   and allows the local `:4321` origins. Gate dev-only behaviour on
   `config.IsDebugMode()`, **not** `gin.Mode()` (global state, and tests set it).
+- **Outside debug mode, `NewServer` refuses to start** if a seeded account
+  (`admin`/`123456`, or the dummy `editor`/`author`/`contributor`/`moderator` with
+  `password123`) still has its seeded password (`checkSeededAccounts`), or if the
+  lookup fails. Older versions always ran in debug mode, so real deployments
+  have these accounts. Seeded credentials live in `devModeUtil/seeded_accounts.go`;
+  add any new seeded account there. Recovery steps: readme "Seeded dev accounts in
+  production". `NewServer` tests that turn test mode off must expect these lookups.
 - CORS origins come from `CORS_ALLOWED_ORIGINS` (comma-separated). In release with
   none set, no CORS middleware is installed (same-origin only).
 

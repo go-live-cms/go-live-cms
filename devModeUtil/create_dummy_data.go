@@ -266,11 +266,9 @@ func createDummyUsers(store db.Store) []db.User {
 	var users []db.User
 	gofakeit.Seed(0)
 
-	usernames := []string{"editor", "author", "contributor", "moderator"}
-	roles := []string{"editor", "contributor", "contributor", "editor"}
-
-	for i, username := range usernames {
-		hashedPassword, err := util.HashPassword("password123")
+	for _, dummy := range dummyUsers {
+		username := dummy.username
+		hashedPassword, err := util.HashPassword(DummyUserPassword)
 		if err != nil {
 			log.Printf("❌ Failed to hash password for %s: %v", username, err)
 			continue
@@ -281,7 +279,7 @@ func createDummyUsers(store db.Store) []db.User {
 			Email:          fmt.Sprintf("%s@golive-cms.local", username),
 			FullName:       gofakeit.Name(),
 			HashedPassword: hashedPassword,
-			Role:           roles[i],
+			Role:           dummy.role,
 		}
 
 		createdUser, err := store.CreateUser(context.TODO(), user)

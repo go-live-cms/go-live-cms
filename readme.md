@@ -77,6 +77,51 @@ make proddown      # Stop production environment
 make prodlogs      # View production logs
 ```
 
+#### Seeded dev accounts in production
+
+Versions before #228 always ran the API in debug mode, so every deployment got the
+dev accounts: `admin` / `123456` (admin role) and `editor`, `author`, `contributor`,
+`moderator` / `password123`. Those passwords are public. Outside debug mode the API
+now **refuses to start** while any of them still has its seeded password, and logs:
+
+```
+❌ Cannot set up server: refusing to start: account(s) admin, editor still have the publicly known password ...
+```
+
+It also refuses to start if it cannot run that check (for example, the database is
+unreachable).
+
+To recover, set new passwords directly in the database. You don't need to log in, and
+debug mode isn't involved. With the production compose stack:
+
+```bash
+docker compose exec postgres psql -U root -d golive_cms
+```
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Give admin a new password (bcrypt, which the API verifies). Setting
+-- password_changed_at revokes its access tokens; blocking sessions revokes refresh tokens.
+UPDATE users
+   SET hashed_password = crypt('<a new strong password>', gen_salt('bf', 10)),
+       password_changed_at = now()
+ WHERE username = 'admin';
+
+-- Lock the dummy accounts the error named with random passwords nobody knows
+-- (or delete them if they own nothing you need). Trim the list to those names.
+UPDATE users
+   SET hashed_password = crypt(encode(gen_random_bytes(32), 'hex'), gen_salt('bf', 10)),
+       password_changed_at = now()
+ WHERE username IN ('editor', 'author', 'contributor', 'moderator');
+
+UPDATE sessions SET is_blocked = true
+ WHERE username IN ('admin', 'editor', 'author', 'contributor', 'moderator');
+```
+
+Then start the API again. If an account was used while it had the known password,
+review what it changed.
+
 ### Database Management
 
 ```bash
