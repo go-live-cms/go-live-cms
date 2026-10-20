@@ -11,20 +11,34 @@ Clients connect with `ws://…:1234/post-<id>?ticket=<v4.public token>`. The tok
 audiences `golive.admin-ws`, `golive.admin`, `golive.auth`). Public key loaded from
 `PASETO_V4_PUBLIC_PEM_FILE` (`/run/secrets/public.pem`).
 
-**Role check (#216).** After the token verifies, the upgrade calls `GET ${API_URL}/users/me`
-with the same token and admits only **admins and editors** (`access.js`, unit tested in
-`access.test.js`). This mirrors `requireContentEditor` in `api/auth_roles.go`, so keep the
-role lists in sync.
+**Role check (#216, #223).** After the ticket verifies, the upgrade calls
+`GET ${API_URL}/internal/users/<user_id>/role?issued_at=<iat unix>` with
+`Authorization: Bearer ${ROLE_LOOKUP_SECRET}` and admits only **admins and editors**
+(`authorizeUpgrade` in `access.js`, unit tested in `access.test.js` with real PASETO
+tickets). This mirrors `requireContentEditor` in `api/auth_roles.go`, so keep the role
+lists in sync.
+- **Decision (#223): option A, an internal endpoint with a shared secret.** The lookup
+  used to call `/users/me` with the client's ticket, which only worked while the API
+  accepted the ticket as an API access token. A WS-only ticket (audience
+  `golive.admin-ws` only) gets 401 from the API's `authMiddleware`, so every user would
+  have been locked out. Now the ticket never leaves this process: we send the verified
+  ticket's `user_id` and `iat`, and the API (`api/internal_routes.go`) answers from the DB.
+  Rejected: B (API accepts the WS audience on `/users/me`) leaks WS knowledge into the
+  API middleware and makes the ticket usable against an API route. If Hocuspocus (#206)
+  lands, keep this lookup and call it from `onAuthenticate`.
 - The token's `role` claim is **never** used to authorize: it's stale after a demotion and
   empty on refresh-issued tokens. Always look up the current role from the DB.
-- A contributor, a deleted user, or a token the API rejects (401/403/404) gets **403**.
-  That includes a token issued before the user's latest password change: the API
-  rejects those (see `api/CLAUDE.md`), but only new upgrades are checked, so an
-  already-open socket survives the change. If
-  the API is down, slow (3s timeout) or returns 5xx, the upgrade gets **503**. It fails
-  closed either way.
-- `API_URL` is required. The server `exit(1)`s at startup without it. Docker sets it to
-  `http://api:8080/api/v1`.
+- **403:** a contributor, a deleted user (API 404), a ticket without a usable
+  `user_id`/`iat`, or a ticket issued before the user's latest password change (the API
+  applies the same `issuedBeforePasswordChange` cutoff as `authMiddleware` and answers
+  403). Only new upgrades are checked, so an already-open socket survives the change.
+- **503:** the API is down, slow (3s timeout), returns 5xx, or rejects the shared secret
+  (401 means misconfiguration, not a user problem). It fails closed either way.
+- `API_URL` and `ROLE_LOOKUP_SECRET` are required. The server `exit(1)`s at startup
+  without either. The API's `NewServer` also refuses to start without
+  `ROLE_LOOKUP_SECRET`; both sides must hold the same value. Docker sets `API_URL` to
+  `http://api:8080/api/v1` and the secret in `compose.dev.yaml`.
+- `access.js` imports `paseto` but must never import yjs (single-instance rule below).
 - Known limitation: the role is checked **only at connect**. An editor demoted mid-session
   keeps their open socket until it reconnects (REST saves are already blocked). Revisit
   with Hocuspocus `onAuthenticate` (#206).

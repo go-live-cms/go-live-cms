@@ -109,6 +109,12 @@ type Config struct {
 	// to the WS server's /_internal/documents/:docName/squash endpoint.
 	// Must match SQUASH_SECRET in websocket/.env.
 	CollabSquashSecret string `mapstructure:"COLLAB_SQUASH_SECRET"`
+
+	// RoleLookupSecret is the shared secret the collab WebSocket server sends as
+	// "Authorization: Bearer <secret>" to GET /api/v1/internal/users/:id/role, its
+	// per-connection role check. Must match ROLE_LOOKUP_SECRET in websocket/.env.
+	// Required: NewServer refuses to start without it (no default).
+	RoleLookupSecret string `mapstructure:"ROLE_LOOKUP_SECRET"`
 }
 
 // LoadConfig reads app.env (optional) and environment variables into Config.
@@ -175,6 +181,14 @@ func LoadConfig(path string) (config Config, err error) {
 	// http://localhost:1234 in environments without a co-located WS server.
 	viper.SetDefault("COLLAB_SERVER_URL", "")
 	viper.SetDefault("COLLAB_SQUASH_SECRET", "")
+
+	// Required, so deliberately no default. Bind it explicitly instead: viper's
+	// Unmarshal only sees AutomaticEnv values for keys it already knows from a
+	// default or app.env, so without this a ROLE_LOOKUP_SECRET set only in the
+	// environment (e.g. compose) would be silently dropped.
+	if err = viper.BindEnv("ROLE_LOOKUP_SECRET"); err != nil {
+		return config, err
+	}
 
 	// Try to read config file (optional)
 	if err = viper.ReadInConfig(); err != nil {

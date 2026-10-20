@@ -38,6 +38,8 @@ services:
       UPLOAD_PATH: "/app/uploads/media"
       COLLAB_SERVER_URL: "http://websocket:1234"
       COLLAB_SQUASH_SECRET: "dev-squash-secret"
+      # Required: the WS server's per-connection role lookup (#223)
+      ROLE_LOOKUP_SECRET: "dev-role-lookup-secret"
     volumes:
       - .:/app
       - /app/tmp
@@ -79,8 +81,10 @@ services:
       - CHOKIDAR_INTERVAL=300
       - DATA_PATH=/data/yjs
       - SQUASH_SECRET=dev-squash-secret
-      # Per-connection role check (#216): GET ${API_URL}/users/me
+      # Per-connection role check (#216, #223): GET ${API_URL}/internal/users/:id/role
+      # with ROLE_LOOKUP_SECRET (must match the api service's value)
       - API_URL=http://api:8080/api/v1
+      - ROLE_LOOKUP_SECRET=dev-role-lookup-secret
     volumes:
       - ./websocket:/app
       - /app/node_modules

@@ -76,6 +76,18 @@ also accepts `golive.admin`/`golive.auth` during migration).
   default to empty (opt-in)** — if either is unset, squash is silently skipped. The URL
   is trailing-slash-trimmed before building the request.
 
+## Collaboration integration (WS role lookup, #223)
+
+- `GET /api/v1/internal/users/:id/role?issued_at=<unix>` (`internal_routes.go`,
+  `internal_handlers_read.go`) is the WS server's per-connection role check. It is
+  authenticated with `Authorization: Bearer <ROLE_LOOKUP_SECRET>` (constant-time
+  compare), **not** `authMiddleware`, so it works with WS-only tickets
+  (`golive.admin-ws`). It reads the role from the DB and refuses (403) tickets issued
+  before the user's latest password change. 404 means the user is gone.
+- `ROLE_LOOKUP_SECRET` is **required**: `NewServer` errors without it. It has no
+  default, so `LoadConfig` binds it with `viper.BindEnv`. Without that, viper's
+  `Unmarshal` drops env-only keys it doesn't know (see `util/config_test.go`).
+
 ## Gotchas
 
 - `block_doc` (jsonb on `posts`) is the **working copy** the editor loads;

@@ -4,9 +4,11 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -47,6 +49,11 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token maker: %w", err)
+	}
+	// The collab WS server can't authorize any connection without the internal
+	// role lookup, so refuse to start rather than silently lock every editor out.
+	if strings.TrimSpace(config.RoleLookupSecret) == "" {
+		return nil, errors.New("ROLE_LOOKUP_SECRET is required (shared with the collab WebSocket server)")
 	}
 	server := &Server{
 		store:      store,
@@ -95,6 +102,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 //   - /api/v1/taxonomy-terms: CRUD, lookup, popular, search, posts
 //   - /api/v1/taxonomies: legacy aliases for terms (back-compat)
 //   - /api/v1/media: upload/batch, search, popular, CRUD, relations
+//   - /api/v1/internal: server-to-server (shared secret, not PASETO)
 //   - Static /uploads → ./uploads (serve uploaded files)
 //
 // Auth:
@@ -161,6 +169,9 @@ func (server *Server) setupRoutes() {
 
 	// Theme module routes (see themes_routes.go for complete definitions)
 	server.registerThemeRoutes(v1)
+
+	// Server-to-server routes, shared-secret auth (see internal_routes.go)
+	server.RegisterInternalRoutes(v1)
 
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
