@@ -35,6 +35,15 @@ func newTestServer(t *testing.T, store db.Store) *Server {
 
 	gin.SetMode(gin.TestMode)
 
+	server, err := NewServer(newTestConfig(t), store)
+	require.NoError(t, err)
+
+	return server
+}
+
+// newTestConfig returns a test-mode config with fresh PASETO v4 keys and a
+// temp upload dir, for tests that need to call NewServer themselves.
+func newTestConfig(t *testing.T) util.Config {
 	// Generate fresh PASETO v4 keys for each test
 	privKey := p.NewV4AsymmetricSecretKey()
 	pubKey := privKey.Public()
@@ -45,7 +54,7 @@ func newTestServer(t *testing.T, store db.Store) *Server {
 	err := os.MkdirAll(uploadPath, 0755)
 	require.NoError(t, err)
 
-	config := util.Config{
+	return util.Config{
 		PasetoV4PrivateKeyHex: privKey.ExportHex(),
 		PasetoV4PublicKeyHex:  pubKey.ExportHex(),
 		PasetoV4LocalKeyHex:   localKey.ExportHex(),
@@ -60,11 +69,6 @@ func newTestServer(t *testing.T, store db.Store) *Server {
 		RoleLookupSecret:      testRoleLookupSecret,
 		IsTestMode:            true,
 	}
-
-	server, err := NewServer(config, store)
-	require.NoError(t, err)
-
-	return server
 }
 
 // stubRoleLookup permits authMiddleware's caller DB lookup (which requireRole

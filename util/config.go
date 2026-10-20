@@ -5,6 +5,8 @@
 package util
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -27,7 +29,8 @@ import (
 // Security note (production):
 //   - Prefer loading PASETO keys from a secrets manager or file path instead of
 //     embedding raw keys in environment variables.
-//   - In development, leave CookieDomain empty and CookieSecure=false.
+//   - In development (GIN_MODE=debug), leave CookieDomain empty and CookieSecure=false.
+//     Outside debug mode the Secure flag is always set and CookieSecure is ignored.
 type Config struct {
 	// DBDriver selects the database driver (e.g. "postgres")
 	DBDriver string `mapstructure:"DB_DRIVER"`
@@ -63,6 +66,18 @@ type Config struct {
 	// IsTestMode toggles test utilities and mock behavior
 	IsTestMode bool `mapstructure:"IS_TEST_MODE"`
 
+	// GinMode is the Gin engine mode: "release" (default), "debug" or "test",
+	// lowercase and exact (gin itself panics on other GIN_MODE env values).
+	// Debug mode enables the dev CORS allowlist and seeds the default admin
+	// (admin/123456) plus dummy data on startup, so only set it in development.
+	GinMode string `mapstructure:"GIN_MODE"`
+
+	// CORSAllowedOrigins is a comma-separated list of origins allowed to make
+	// credentialed cross-origin requests (e.g. "https://admin.example.com").
+	// In debug mode the local dev origins are always allowed as well. When empty
+	// in release mode, no CORS headers are sent (same-origin only).
+	CORSAllowedOrigins string `mapstructure:"CORS_ALLOWED_ORIGINS"`
+
 	// PASETO v4 public key (Ed25519) for asymmetric operations (v4.public tokens)
 	// Hex-encoded: public key = 32 bytes (64 hex chars), private key = 64 bytes (128 hex chars)
 	PasetoV4PublicKeyHex string `mapstructure:"PASETO_V4_PUBLIC_KEY_HEX"`
@@ -93,12 +108,9 @@ type Config struct {
 	// Leave empty in development to avoid cross-port cookie issues
 	CookieDomain string `mapstructure:"COOKIE_DOMAIN"`
 
-	// CookieSecure determines if cookies require HTTPS
-	// Should be false in development, true in production
+	// CookieSecure sets the Secure flag on auth cookies, but is only read in
+	// debug mode (GIN_MODE=debug) so local HTTP works. Every other mode forces Secure.
 	CookieSecure bool `mapstructure:"COOKIE_SECURE"`
-
-	// IsDevelopment enables development-mode behavior (verbose errors, debug logging, etc.)
-	IsDevelopment bool `mapstructure:"IS_DEVELOPMENT"`
 
 	// CollabServerURL is the internal base URL of the Yjs WebSocket server.
 	// Used for server-to-server calls such as the squash-on-publish endpoint.
@@ -173,10 +185,12 @@ func LoadConfig(path string) (config Config, err error) {
 
 	// Cookie defaults (development-safe)
 	viper.SetDefault("COOKIE_DOMAIN", "")    // Empty in dev to avoid cross-port issues
-	viper.SetDefault("COOKIE_SECURE", false) // false in dev, should be true in production
+	viper.SetDefault("COOKIE_SECURE", false) // only read in debug mode; release forces Secure
 
-	// Environment defaults
-	viper.SetDefault("IS_DEVELOPMENT", true)
+	// Gin mode defaults to release so a deployment never seeds dev data or
+	// opens the dev CORS allowlist unless debug is set explicitly.
+	viper.SetDefault("GIN_MODE", GinModeRelease)
+	viper.SetDefault("CORS_ALLOWED_ORIGINS", "")
 
 	// Legacy JWT key default (deprecated)
 	viper.SetDefault("TOKEN_SYMMETRIC_KEY", "12345678901234567890123456789012")
@@ -209,5 +223,42 @@ func LoadConfig(path string) (config Config, err error) {
 		return config, err
 	}
 
+	// Exact values only, no case/space normalization: gin's own init() reads the
+	// GIN_MODE env var and panics on anything else before LoadConfig runs, so
+	// accepting " Release " here would only ever work from app.env.
+	switch config.GinMode {
+	case GinModeDebug, GinModeRelease, GinModeTest:
+	default:
+		return config, fmt.Errorf("invalid GIN_MODE %q: must be %q, %q or %q",
+			config.GinMode, GinModeDebug, GinModeRelease, GinModeTest)
+	}
+
 	return config, nil
+}
+
+// Gin engine modes accepted by GIN_MODE. They match gin.DebugMode,
+// gin.ReleaseMode and gin.TestMode (util doesn't import gin).
+const (
+	GinModeDebug   = "debug"
+	GinModeRelease = "release"
+	GinModeTest    = "test"
+)
+
+// IsDebugMode reports whether GIN_MODE is "debug", the only mode that seeds
+// dev data, allows the local dev CORS origins and lets COOKIE_SECURE drop the
+// Secure flag from auth cookies.
+func (c Config) IsDebugMode() bool {
+	return c.GinMode == GinModeDebug
+}
+
+// AllowedOrigins returns CORSAllowedOrigins split on commas, trimmed, with
+// empty entries dropped.
+func (c Config) AllowedOrigins() []string {
+	var origins []string
+	for _, o := range strings.Split(c.CORSAllowedOrigins, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return origins
 }

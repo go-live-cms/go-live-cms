@@ -27,6 +27,13 @@ services:
     environment:
       DB_SOURCE: postgresql://root:secret@postgres:5432/golive_cms?sslmode=disable
       DB_DRIVER: postgres
+      # Explicit so a GIN_MODE=debug in a copied app.env can't enable dev seeding,
+      # dev CORS or a non-Secure refresh cookie here. Release always sets Secure
+      # (browsers accept Secure cookies on http://localhost; use HTTPS elsewhere).
+      GIN_MODE: release
+      # The web app (and admin SPA) is served from :4321, a different origin than
+      # the API, so release mode needs it allowed explicitly. Set your real domain.
+      CORS_ALLOWED_ORIGINS: "http://localhost:4321"
       SERVER_ADDRESS: "0.0.0.0:8080"
       API_PORT: ":8080"
       TOKEN_SYMMETRIC_KEY: "12345678901234567890123456789012"

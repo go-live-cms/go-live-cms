@@ -76,6 +76,26 @@ also accepts `golive.admin`/`golive.auth` during migration).
   default to empty (opt-in)** — if either is unset, squash is silently skipped. The URL
   is trailing-slash-trimmed before building the request.
 
+## Gin mode, dev seeding, CORS
+
+- `GIN_MODE` (`util.Config.GinMode`) defaults to **release**; `main.go` applies it.
+  Only `compose.dev.yaml` sets `debug`. An invalid value fails `LoadConfig`.
+- Debug mode seeds `admin`/`123456` + dummy data on startup (`shouldSeedDevData`)
+  and allows the local `:4321` origins. Gate dev-only behaviour on
+  `config.IsDebugMode()`, **not** `gin.Mode()` (global state, and tests set it).
+- **Outside debug mode, `NewServer` refuses to start** if a seeded account
+  (`admin`/`123456`, or the dummy `editor`/`author`/`contributor`/`moderator` with
+  `password123`) still has its seeded password (`checkSeededAccounts`), or if the
+  lookup fails. Older versions always ran in debug mode, so real deployments
+  have these accounts. Seeded credentials live in `devModeUtil/seeded_accounts.go`;
+  add any new seeded account there. Recovery steps: readme "Seeded dev accounts in
+  production". `NewServer` tests that turn test mode off must expect these lookups.
+- CORS origins come from `CORS_ALLOWED_ORIGINS` (comma-separated). In release with
+  none set, no CORS middleware is installed (same-origin only).
+- **Cookies:** the refresh cookie is always `Secure` outside debug mode
+  (`applyCookieSecurity` in `sessions_cookies.go`). Only in debug does
+  `COOKIE_SECURE` (default false) decide it, so local HTTP works. There is no
+  separate `IS_DEVELOPMENT` switch any more (#236): debug mode *is* development.
 ## Collaboration integration (WS role lookup, #223)
 
 - `GET /internal/users/:id/role?issued_at=<unix>` (`internal_routes.go`,

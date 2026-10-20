@@ -12,8 +12,10 @@
 // # Development vs Production
 //
 // Cookie behavior adapts to environment:
-//   - **Development**: Flexible security for local HTTP testing
-//   - **Production**: Enforced HTTPS and strict security settings
+//   - **Development** (GIN_MODE=debug only): Secure follows COOKIE_SECURE so
+//     local HTTP works
+//   - **Production** (every other mode, including the release default):
+//     Secure is always set
 //   - **Domain handling**: localhost exemptions for local development
 //
 // # Constants and Configuration
@@ -44,7 +46,7 @@ const (
 // Security features:
 //   - httpOnly prevents JavaScript access
 //   - SameSite=Strict blocks cross-site requests
-//   - Secure flag enforced in production
+//   - Secure flag enforced outside GIN_MODE=debug
 //   - Path restriction limits cookie scope
 //   - Domain configuration supports dev/prod environments
 //
@@ -63,19 +65,7 @@ func (server *Server) setSecureCookie(ctx *gin.Context, name, value string, expi
 		Expires:  expiration,
 	}
 
-	// Environment-specific security configuration
-	if server.config.IsDevelopment {
-		cookie.Secure = server.config.CookieSecure
-		if server.config.CookieDomain != "localhost" && server.config.CookieDomain != "" {
-			cookie.Domain = server.config.CookieDomain
-		}
-	} else {
-		cookie.Secure = true
-		if server.config.CookieDomain != "" {
-			cookie.Domain = server.config.CookieDomain
-		}
-	}
-
+	server.applyCookieSecurity(cookie)
 	http.SetCookie(ctx.Writer, cookie)
 }
 
@@ -100,18 +90,25 @@ func (server *Server) clearSecureCookie(ctx *gin.Context, name string) {
 		MaxAge:   -1,
 	}
 
-	// Mirror security settings from setSecureCookie for consistency
-	if server.config.IsDevelopment {
+	// Same Secure/Domain as setSecureCookie, or the browser won't replace it
+	server.applyCookieSecurity(cookie)
+	http.SetCookie(ctx.Writer, cookie)
+}
+
+// applyCookieSecurity sets Secure and Domain for the environment. Development
+// means GIN_MODE=debug (config.IsDebugMode), the same switch that gates dev
+// seeding and dev CORS, so a deployment that sets nothing gets Secure cookies.
+func (server *Server) applyCookieSecurity(cookie *http.Cookie) {
+	if server.config.IsDebugMode() {
 		cookie.Secure = server.config.CookieSecure
 		if server.config.CookieDomain != "localhost" && server.config.CookieDomain != "" {
 			cookie.Domain = server.config.CookieDomain
 		}
-	} else {
-		cookie.Secure = true
-		if server.config.CookieDomain != "" {
-			cookie.Domain = server.config.CookieDomain
-		}
+		return
 	}
 
-	http.SetCookie(ctx.Writer, cookie)
+	cookie.Secure = true
+	if server.config.CookieDomain != "" {
+		cookie.Domain = server.config.CookieDomain
+	}
 }
