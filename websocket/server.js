@@ -316,18 +316,17 @@ server.on("upgrade", async (req, socket, head) => {
   socket.on("error", (err) => {
     console.warn("⚠️  Upgrade socket error:", err.code || err.message);
   });
-  console.log("📡 WebSocket upgrade request:", req.url);
+  // Never log req.url, req.headers or the query string here: the access token rides
+  // in ?ticket= (or ?token=), so any of them would write a replayable bearer token to
+  // the logs (#220). The doc name is the only part of the URL that's safe to log.
+  const docName = docNameFromReq(req);
+  console.log("📡 WebSocket upgrade request for doc:", docName);
   try {
-    console.log("🔗 WebSocket upgrade request");
-    console.log("📍 URL:", req.url);
-    console.log("🔍 Headers:", JSON.stringify(req.headers, null, 2));
-
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
-    console.log("🎯 Parsed URL params:", Object.fromEntries(url.searchParams));
     const credential =
       url.searchParams.get("ticket") || url.searchParams.get("token");
     if (!credential) {
-      console.error("🚫 No ticket or token provided");
+      console.error(`🚫 No ticket or token provided for doc ${docName}`);
       socket.write(
         "HTTP/1.1 401 Unauthorized\r\n\r\nNo authentication credentials provided\r\n",
       );
@@ -335,9 +334,6 @@ server.on("upgrade", async (req, socket, head) => {
       return;
     }
     console.log("🔑 Verifying PASETO v4.public credential...");
-    if (process.env.NODE_ENV !== "production") {
-      console.log("🔍 Token preview:", credential.substring(0, 50) + "...");
-    }
     console.log("🎯 Trying audiences:", ALLOWED_AUDIENCES.join(", "));
 
     let tokenValid = false;
@@ -373,7 +369,6 @@ server.on("upgrade", async (req, socket, head) => {
     // refresh). Authorization uses the CURRENT role from the API — see access.js.
     console.log("👤 Token role claim (informational):", payload.role || "none");
 
-    const docName = docNameFromReq(req);
     let role;
     try {
       role = await fetchCurrentRole(API_URL, credential);
@@ -404,7 +399,7 @@ server.on("upgrade", async (req, socket, head) => {
       wss.emit("connection", ws, req);
     });
   } catch (error) {
-    console.error("🚫 WebSocket authentication failed:", error.message);
+    console.error(`🚫 WebSocket authentication failed for doc ${docName}:`, error.message);
     socket.write(
       "HTTP/1.1 401 Unauthorized\r\n\r\nInvalid or expired authentication credentials\r\n",
     );
