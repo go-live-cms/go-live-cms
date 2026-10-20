@@ -27,13 +27,14 @@ type Server struct {
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
-// registers routes/middleware, and (in Gin debug mode, unless test mode) seeds
+// registers routes/middleware, and (when GIN_MODE=debug, unless test mode) seeds
 // dev data via devModeUtil.
 //
 // Returns an initialized server ready to Start.
 //
 // Notes:
-//   - Dev seeding runs only when gin.Mode()==gin.DebugMode && !config.IsTestMode.
+//   - Dev seeding runs only when shouldSeedDevData(config) is true. It reads the
+//     config, not gin.Mode(), so the global Gin mode can't enable it by accident.
 //   - Token maker uses config PASETO keys (issuer/audience/KIDs) from util.Config.
 func NewServer(config util.Config, store db.Store) (*Server, error) {
 	tokenMaker, err := token.NewPasetoV4Maker(
@@ -72,12 +73,36 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		}
 	}
 
-	if gin.Mode() == gin.DebugMode && !config.IsTestMode {
+	if shouldSeedDevData(config) {
 		devModeUtil.CreateDefaultAdminUser(server.store)
 		devModeUtil.CreateDummyData(server.store, server.config)
 	}
 
 	return server, nil
+}
+
+// shouldSeedDevData reports whether startup should create the default admin
+// (admin/123456) and dummy content: only with GIN_MODE=debug and outside tests.
+func shouldSeedDevData(config util.Config) bool {
+	return config.IsDebugMode() && !config.IsTestMode
+}
+
+// devCORSOrigins are the local frontend origins allowed in debug mode.
+var devCORSOrigins = []string{
+	"http://localhost:4321",
+	"http://127.0.0.1:4321",
+	"http://0.0.0.0:4321",
+	"http://web:4321",
+}
+
+// corsOrigins returns the origins allowed to make credentialed cross-origin
+// requests: CORS_ALLOWED_ORIGINS, plus the local dev origins in debug mode.
+func corsOrigins(config util.Config) []string {
+	origins := config.AllowedOrigins()
+	if config.IsDebugMode() {
+		origins = append(origins, devCORSOrigins...)
+	}
+	return origins
 }
 
 // setupRoutes configures the Gin engine:
@@ -103,23 +128,11 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 func (server *Server) setupRoutes() {
 	router := gin.Default()
 
-	if gin.Mode() == gin.DebugMode {
-		// Development CORS allowlist — adjust for your local frontend ports
+	// No origins configured (release without CORS_ALLOWED_ORIGINS) means
+	// same-origin only: skip the middleware rather than send CORS headers.
+	if origins := corsOrigins(server.config); len(origins) > 0 {
 		router.Use(cors.New(cors.Config{
-			AllowOrigins: []string{
-				"http://localhost:4321",
-				"http://127.0.0.1:4321",
-				"http://0.0.0.0:4321",
-				"http://web:4321",
-			},
-			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "If-Match", "ETag", "X-Revision"},
-			AllowCredentials: true,
-		}))
-	} else {
-		// Production CORS — replace with your domain(s)
-		router.Use(cors.New(cors.Config{
-			AllowOrigins:     []string{"https://yourdomain.com"},
+			AllowOrigins:     origins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "If-Match", "ETag", "X-Revision"},
 			AllowCredentials: true,

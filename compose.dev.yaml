@@ -31,6 +31,9 @@ services:
     environment:
       DB_SOURCE: postgresql://root:secret@postgres:5432/golive_cms?sslmode=disable
       DB_DRIVER: postgres
+      # Dev only: debug mode seeds admin/123456 + dummy data and allows the local
+      # web origins for CORS. GIN_MODE defaults to release everywhere else.
+      GIN_MODE: debug
       # Container always listens on 8080; HOST_API_PORT only remaps the host side.
       SERVER_ADDRESS: "0.0.0.0:8080"
       API_PORT: ":8080"

@@ -5,6 +5,8 @@
 package util
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -62,6 +64,17 @@ type Config struct {
 
 	// IsTestMode toggles test utilities and mock behavior
 	IsTestMode bool `mapstructure:"IS_TEST_MODE"`
+
+	// GinMode is the Gin engine mode: "release" (default), "debug" or "test".
+	// Debug mode enables the dev CORS allowlist and seeds the default admin
+	// (admin/123456) plus dummy data on startup, so only set it in development.
+	GinMode string `mapstructure:"GIN_MODE"`
+
+	// CORSAllowedOrigins is a comma-separated list of origins allowed to make
+	// credentialed cross-origin requests (e.g. "https://admin.example.com").
+	// In debug mode the local dev origins are always allowed as well. When empty
+	// in release mode, no CORS headers are sent (same-origin only).
+	CORSAllowedOrigins string `mapstructure:"CORS_ALLOWED_ORIGINS"`
 
 	// PASETO v4 public key (Ed25519) for asymmetric operations (v4.public tokens)
 	// Hex-encoded: public key = 32 bytes (64 hex chars), private key = 64 bytes (128 hex chars)
@@ -166,6 +179,11 @@ func LoadConfig(path string) (config Config, err error) {
 	// Environment defaults
 	viper.SetDefault("IS_DEVELOPMENT", true)
 
+	// Gin mode defaults to release so a deployment never seeds dev data or
+	// opens the dev CORS allowlist unless debug is set explicitly.
+	viper.SetDefault("GIN_MODE", GinModeRelease)
+	viper.SetDefault("CORS_ALLOWED_ORIGINS", "")
+
 	// Legacy JWT key default (deprecated)
 	viper.SetDefault("TOKEN_SYMMETRIC_KEY", "12345678901234567890123456789012")
 
@@ -189,5 +207,39 @@ func LoadConfig(path string) (config Config, err error) {
 		return config, err
 	}
 
+	config.GinMode = strings.ToLower(strings.TrimSpace(config.GinMode))
+	switch config.GinMode {
+	case GinModeDebug, GinModeRelease, GinModeTest:
+	default:
+		return config, fmt.Errorf("invalid GIN_MODE %q: must be %q, %q or %q",
+			config.GinMode, GinModeDebug, GinModeRelease, GinModeTest)
+	}
+
 	return config, nil
+}
+
+// Gin engine modes accepted by GIN_MODE. They match gin.DebugMode,
+// gin.ReleaseMode and gin.TestMode (util doesn't import gin).
+const (
+	GinModeDebug   = "debug"
+	GinModeRelease = "release"
+	GinModeTest    = "test"
+)
+
+// IsDebugMode reports whether GIN_MODE is "debug", the only mode that seeds
+// dev data and allows the local dev CORS origins.
+func (c Config) IsDebugMode() bool {
+	return c.GinMode == GinModeDebug
+}
+
+// AllowedOrigins returns CORSAllowedOrigins split on commas, trimmed, with
+// empty entries dropped.
+func (c Config) AllowedOrigins() []string {
+	var origins []string
+	for _, o := range strings.Split(c.CORSAllowedOrigins, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return origins
 }

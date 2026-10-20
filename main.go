@@ -20,7 +20,9 @@ func main() {
 
 	log.Println("🚀 Starting Go Live CMS...")
 
-	gin.SetMode(gin.DebugMode)
+	// GIN_MODE defaults to release; debug (dev seeding, dev CORS) must be opted into.
+	gin.SetMode(config.GinMode)
+	log.Println("⚙️  Gin mode:", gin.Mode())
 
 	log.Println("📊 Connecting to database...")
 	conn, err := sql.Open(config.DBDriver, config.DBSource)
