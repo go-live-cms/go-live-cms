@@ -122,7 +122,8 @@ non-editors anyway (see `websocket/CLAUDE.md` → Auth).
    (random ids never converge) — a primary driver of the "heartbeat" content/image
    erasure, distinct from rule 0. Guard with TipTap's `isChangeOrigin(tr)` (from
    `@tiptap/extension-collaboration`): `if (transactions.some(tr => isChangeOrigin(tr)))
-   return null`. Only the client that originates a node assigns its id; remote ids arrive
+   return null`. Only the client that originates a node assigns its id (top-level nodes
+   and list items, #238); remote ids arrive
    as synced attributes and `pmToBlockDoc` backfills any missing at save time. Any future
    doc-mutating plugin must do the same. (BlockIdExtension also regenerates **duplicate**
    ids — splitting a block copies attrs incl. the id onto the new node; the `blocks` map
@@ -176,15 +177,23 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   above. A list left with no items (children empty, absent, all dangling, or all
   dropped) gets **one synthesized empty `listItem`**, keeping the list's block id and
   position. The synthesized item's id is **deterministic (`synthesizedItemId`:
-  `<listId>-list-item`, always ≥ 10 chars)**, not random: `BlockIdExtension` only stamps
-  top-level nodes, so an id-less item would be re-minted by `pmToBlockDoc` on every save
-  and churn Yjs (rule 2). Conversely, `pmToBlockDoc` **skips** a childless list node
-  (only reachable from an already-invalid PM doc), so a childless list block is never
-  persisted.
-- **Known gap:** listItems created *in the editor* have no `data-block-id` (same
-  top-level-only stamping), so `pmToBlockDoc` mints them a new id on every save. Also,
-  list `children` have no cycle guard — a list that contains itself recurses deeply
-  before the per-block try/catch absorbs the stack overflow. Both are tracked follow-ups.
+  `<listId>-list-item`, always ≥ 10 chars)**, not random: the same block doc must give
+  the same item id on every load, and in both the maps (seeded from `pmToBlockDoc` of
+  the repaired doc) and the editor. Conversely, `pmToBlockDoc` **skips** a
+  childless list node (only reachable from an already-invalid PM doc), so a childless
+  list block is never persisted.
+- **List item ids (#238):** `BlockIdExtension` stamps every `listItem` whose parent is
+  a `bulletList`/`orderedList` (any depth), not just top-level nodes, regenerating
+  missing/invalid/duplicate ids deduped across the whole doc. Before this, items made
+  in the editor (Enter-split, paste, toggling a list) had no id or a copied duplicate,
+  so `pmToBlockDoc` minted them a new id on **every** save and `setBlockDocV1` deleted +
+  re-inserted them and rewrote the list's `children` each time (rule 2). Pinned by
+  `components/editor/extensions/BlockIdExtension.test.ts` (headless `Editor`). Note for
+  such tests: StarterKit's TrailingNode appends its own transaction (no sync meta) when
+  the doc ends in a list, which re-runs `appendTransaction` without the rule-7 guard.
+- **Known gap:** list `children` have no cycle guard — a list that contains itself
+  recurses deeply before the per-block try/catch absorbs the stack overflow. Tracked
+  follow-up.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema all allow the full range — keep them in sync). `validateBlockDoc` has no
   production caller yet; wiring validation is a tracked follow-up.

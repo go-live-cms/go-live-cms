@@ -19,7 +19,8 @@ function generateBlockId(): string {
 }
 
 /**
- * TipTap extension that ensures all top-level nodes have stable block IDs
+ * TipTap extension that ensures all top-level nodes, and every listItem of a
+ * bulletList/orderedList, have stable, unique block IDs
  */
 export const BlockIdExtension = Extension.create({
   name: "blockId",
@@ -59,23 +60,37 @@ export const BlockIdExtension = Extension.create({
           // fights itself. The old guard (`!currentId || length < 10`) never caught this.
           const seenIds = new Set<string>()
 
-          let pos = 0
-          newState.doc.content.forEach((node) => {
-            const currentId = node.attrs["data-block-id"]
-            const invalid = !currentId || typeof currentId !== "string" || currentId.length < 10
-            const duplicate = !invalid && seenIds.has(currentId as string)
+          // Stamp top-level nodes AND list items (#238). pmToBlockDoc stores every
+          // listItem of a list as its own block, so an item without a stable id (a new
+          // item from Enter, paste, or toggling a list has none, or a duplicate copied
+          // on split) got a freshly minted id on EVERY save, and setBlockDocV1 then
+          // deleted + re-inserted it and rewrote the list's children each time (rule 2).
+          // Ids are deduped across the whole doc, in document order, like pmToBlockDoc.
+          // setNodeMarkup doesn't change node sizes, so newState positions stay valid.
+          newState.doc.descendants((node, pos, parent) => {
+            const topLevel = parent === newState.doc
+            const listItem =
+              node.type.name === "listItem" &&
+              (parent?.type.name === "bulletList" || parent?.type.name === "orderedList")
 
-            if (invalid || duplicate) {
-              const newId = generateBlockId()
-              const attrs = { ...node.attrs, "data-block-id": newId }
-              tr = tr.setNodeMarkup(pos, node.type, attrs, node.marks)
-              hasChanges = true
-              seenIds.add(newId)
-            } else {
-              seenIds.add(currentId as string)
+            if (topLevel || listItem) {
+              const currentId = node.attrs["data-block-id"]
+              const invalid = !currentId || typeof currentId !== "string" || currentId.length < 10
+              const duplicate = !invalid && seenIds.has(currentId as string)
+
+              if (invalid || duplicate) {
+                const newId = generateBlockId()
+                const attrs = { ...node.attrs, "data-block-id": newId }
+                tr = tr.setNodeMarkup(pos, node.type, attrs, node.marks)
+                hasChanges = true
+                seenIds.add(newId)
+              } else {
+                seenIds.add(currentId as string)
+              }
             }
 
-            pos += node.nodeSize
+            // Inline content can't hold list items; don't walk it.
+            return !node.isTextblock
           })
 
           return hasChanges ? tr : null
