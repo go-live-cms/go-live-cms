@@ -5,7 +5,7 @@ processes + Postgres, run via Docker Compose.
 
 | Process | Port | Stack | Dir |
 |---------|------|-------|-----|
-| API | 8080 | Go, Gin, sqlc, PASETO v4 | `api/`, `db/`, `token/`, `util/` |
+| API | 8080 (+ 8081 internal, never published) | Go, Gin, sqlc, PASETO v4 | `api/`, `db/`, `token/`, `util/` |
 | WebSocket collab | 1234 | Node, y-websocket, Yjs, LevelDB | `websocket/` |
 | Web | 4321 | Astro SSR + React admin SPA | `web/` |
 | DB | 5432 | PostgreSQL 12 | `db/migration/` |

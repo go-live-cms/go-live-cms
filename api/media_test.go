@@ -739,19 +739,42 @@ func TestUpdateMediaAPI(t *testing.T) {
 	othersMedia.UserID = 9001
 
 	// moderatorUpdates stubs a moderator role editing media it does not own,
-	// which must succeed.
+	// which must succeed without the ownership read (one query).
 	moderatorUpdates := func(store *mockdb.MockStore) {
 		store.EXPECT().
-			GetMedia(gomock.Any(), gomock.Eq(othersMedia.ID)).
-			Times(1).
-			Return(othersMedia, nil)
+			GetMedia(gomock.Any(), gomock.Any()).
+			Times(0)
 
 		updatedMedia := othersMedia
 		updatedMedia.Name = newName
 		store.EXPECT().
-			UpdateMedia(gomock.Any(), gomock.Any()).
+			UpdateMediaMetadata(gomock.Any(), gomock.Eq(db.UpdateMediaMetadataParams{
+				ID:   othersMedia.ID,
+				Name: sql.NullString{String: newName, Valid: true},
+			})).
 			Times(1).
 			Return(updatedMedia, nil)
+	}
+
+	// The handler only ever writes through the metadata-only query; the
+	// full-row UpdateMedia (which can write file columns) must never be used.
+	noStoreWrites := func(store *mockdb.MockStore) {
+		store.EXPECT().
+			UpdateMediaMetadata(gomock.Any(), gomock.Any()).
+			Times(0)
+		store.EXPECT().
+			UpdateMedia(gomock.Any(), gomock.Any()).
+			Times(0)
+	}
+	requireRejected := func(fields ...string) func(recorder *httptest.ResponseRecorder) {
+		return func(recorder *httptest.ResponseRecorder) {
+			require.Equal(t, http.StatusBadRequest, recorder.Code)
+			var body struct {
+				Error string `json:"error"`
+			}
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+			require.Contains(t, body.Error, strings.Join(fields, ", "))
+		}
 	}
 
 	testCases := []struct {
@@ -801,9 +824,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 				store.EXPECT().
 					GetMedia(gomock.Any(), gomock.Any()).
 					Times(0)
-				store.EXPECT().
-					UpdateMedia(gomock.Any(), gomock.Any()).
-					Times(0)
+				noStoreWrites(store)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
@@ -821,24 +842,101 @@ func TestUpdateMediaAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-
-				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Eq(media.ID)).
-					Times(1).
-					Return(media, nil)
-
 				updatedMedia := media
 				updatedMedia.Name = newName
 				updatedMedia.Description = newDescription
 
+				// Omitted alt is passed as NULL so the query keeps it.
+				store.EXPECT().
+					UpdateMediaMetadata(gomock.Any(), gomock.Eq(db.UpdateMediaMetadataParams{
+						ID:          media.ID,
+						Name:        sql.NullString{String: newName, Valid: true},
+						Description: sql.NullString{String: newDescription, Valid: true},
+					})).
+					Times(1).
+					Return(updatedMedia, nil)
 				store.EXPECT().
 					UpdateMedia(gomock.Any(), gomock.Any()).
+					Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			name:    "NullFileFieldIsIgnored",
+			mediaID: media.ID,
+			caller:  user,
+			body: gin.H{
+				"name":       newName,
+				"media_path": nil,
+				"file_size":  nil,
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				updatedMedia := media
+				updatedMedia.Name = newName
+
+				store.EXPECT().
+					UpdateMediaMetadata(gomock.Any(), gomock.Eq(db.UpdateMediaMetadataParams{
+						ID:   media.ID,
+						Name: sql.NullString{String: newName, Valid: true},
+					})).
 					Times(1).
 					Return(updatedMedia, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
 			},
+		},
+		{
+			// Pointing a row at another row's file would let deleting this
+			// row remove the shared file.
+			name:    "RejectsMediaPath",
+			mediaID: media.ID,
+			caller:  user,
+			body: gin.H{
+				"name":       newName,
+				"media_path": "/uploads/media/someone-elses.jpg",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs:    noStoreWrites,
+			checkResponse: requireRejected("media_path"),
+		},
+		{
+			name:    "RejectsEmptyMediaPath",
+			mediaID: media.ID,
+			caller:  user,
+			body: gin.H{
+				"media_path": "",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs:    noStoreWrites,
+			checkResponse: requireRejected("media_path"),
+		},
+		{
+			name:    "RejectsFileMetadata",
+			mediaID: media.ID,
+			caller:  user,
+			body: gin.H{
+				"file_size":         1,
+				"mime_type":         "text/html",
+				"width":             0,
+				"height":            1,
+				"duration":          5,
+				"original_filename": "evil.html",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs:    noStoreWrites,
+			checkResponse: requireRejected("file_size", "mime_type", "width", "height", "duration", "original_filename"),
 		},
 		{
 			name:    "NoAuthorization",
@@ -850,14 +948,7 @@ func TestUpdateMediaAPI(t *testing.T) {
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Any()).
-					Times(0)
-				store.EXPECT().
-					UpdateMedia(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
+			buildStubs: noStoreWrites,
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusUnauthorized, recorder.Code)
 			},
@@ -874,12 +965,32 @@ func TestUpdateMediaAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Eq(media.ID)).
+					UpdateMediaMetadata(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(db.Medium{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			name:    "InternalError",
+			mediaID: media.ID,
+			caller:  user,
+			body: gin.H{
+				"name": newName,
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					UpdateMediaMetadata(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.Medium{}, sql.ErrConnDone)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
 			},
 		},
 	}
@@ -1194,7 +1305,7 @@ func TestMediaWriteOwnerScopedRole(t *testing.T) {
 			mediaID: ownMedia.ID,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(ownMedia.ID)).Times(1).Return(ownMedia, nil)
-				store.EXPECT().UpdateMedia(gomock.Any(), gomock.Any()).Times(1).Return(ownMedia, nil)
+				store.EXPECT().UpdateMediaMetadata(gomock.Any(), gomock.Any()).Times(1).Return(ownMedia, nil)
 			},
 			expectedCode: http.StatusOK,
 		},
@@ -1204,7 +1315,7 @@ func TestMediaWriteOwnerScopedRole(t *testing.T) {
 			mediaID: othersMedia.ID,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(othersMedia.ID)).Times(1).Return(othersMedia, nil)
-				store.EXPECT().UpdateMedia(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().UpdateMediaMetadata(gomock.Any(), gomock.Any()).Times(0)
 			},
 			expectedCode: http.StatusForbidden,
 		},
