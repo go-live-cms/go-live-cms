@@ -57,6 +57,7 @@ func newTestServer(t *testing.T, store db.Store) *Server {
 		RefreshTokenDuration:  time.Hour,
 		UploadPath:            uploadPath,
 		MaxUploadSize:         "10MB",
+		RoleLookupSecret:      testRoleLookupSecret,
 		IsTestMode:            true,
 	}
 
