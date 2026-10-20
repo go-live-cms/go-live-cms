@@ -85,6 +85,10 @@ also accepts `golive.admin`/`golive.auth` during migration).
   `config.IsDebugMode()`, **not** `gin.Mode()` (global state, and tests set it).
 - CORS origins come from `CORS_ALLOWED_ORIGINS` (comma-separated). In release with
   none set, no CORS middleware is installed (same-origin only).
+- **Cookies:** the refresh cookie is always `Secure` outside debug mode
+  (`applyCookieSecurity` in `sessions_cookies.go`). Only in debug does
+  `COOKIE_SECURE` (default false) decide it, so local HTTP works. There is no
+  separate `IS_DEVELOPMENT` switch any more (#236): debug mode *is* development.
 
 ## Gotchas
 

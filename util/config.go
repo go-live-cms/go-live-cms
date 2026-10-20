@@ -29,7 +29,8 @@ import (
 // Security note (production):
 //   - Prefer loading PASETO keys from a secrets manager or file path instead of
 //     embedding raw keys in environment variables.
-//   - In development, leave CookieDomain empty and CookieSecure=false.
+//   - In development (GIN_MODE=debug), leave CookieDomain empty and CookieSecure=false.
+//     Outside debug mode the Secure flag is always set and CookieSecure is ignored.
 type Config struct {
 	// DBDriver selects the database driver (e.g. "postgres")
 	DBDriver string `mapstructure:"DB_DRIVER"`
@@ -107,12 +108,9 @@ type Config struct {
 	// Leave empty in development to avoid cross-port cookie issues
 	CookieDomain string `mapstructure:"COOKIE_DOMAIN"`
 
-	// CookieSecure determines if cookies require HTTPS
-	// Should be false in development, true in production
+	// CookieSecure sets the Secure flag on auth cookies, but is only read in
+	// debug mode (GIN_MODE=debug) so local HTTP works. Every other mode forces Secure.
 	CookieSecure bool `mapstructure:"COOKIE_SECURE"`
-
-	// IsDevelopment enables development-mode behavior (verbose errors, debug logging, etc.)
-	IsDevelopment bool `mapstructure:"IS_DEVELOPMENT"`
 
 	// CollabServerURL is the internal base URL of the Yjs WebSocket server.
 	// Used for server-to-server calls such as the squash-on-publish endpoint.
@@ -175,10 +173,7 @@ func LoadConfig(path string) (config Config, err error) {
 
 	// Cookie defaults (development-safe)
 	viper.SetDefault("COOKIE_DOMAIN", "")    // Empty in dev to avoid cross-port issues
-	viper.SetDefault("COOKIE_SECURE", false) // false in dev, should be true in production
-
-	// Environment defaults
-	viper.SetDefault("IS_DEVELOPMENT", true)
+	viper.SetDefault("COOKIE_SECURE", false) // only read in debug mode; release forces Secure
 
 	// Gin mode defaults to release so a deployment never seeds dev data or
 	// opens the dev CORS allowlist unless debug is set explicitly.
@@ -230,7 +225,8 @@ const (
 )
 
 // IsDebugMode reports whether GIN_MODE is "debug", the only mode that seeds
-// dev data and allows the local dev CORS origins.
+// dev data, allows the local dev CORS origins and lets COOKIE_SECURE drop the
+// Secure flag from auth cookies.
 func (c Config) IsDebugMode() bool {
 	return c.GinMode == GinModeDebug
 }
