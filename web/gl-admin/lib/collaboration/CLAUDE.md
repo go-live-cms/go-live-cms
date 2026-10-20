@@ -196,9 +196,10 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   `components/editor/extensions/BlockIdExtension.test.ts` (headless `Editor`). Note for
   such tests: StarterKit's TrailingNode appends its own transaction (no sync meta) when
   the doc ends in a list, which re-runs `appendTransaction` without the rule-7 guard.
-- **Known gap:** list `children` have no cycle guard — a list that contains itself
-  recurses deeply before the per-block try/catch absorbs the stack overflow. Tracked
-  follow-up.
+- **Cycles:** `listItemsToPM` tracks the lists being converted. A list that (directly
+  or through another list) contains itself throws at the child that closes the cycle,
+  so that child is dropped and reported like any other bad child. Nothing recurses
+  unboundedly, and `restoreDroppedBlocks` keeps the stored structure on save.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema all allow the full range — keep them in sync). `validateBlockDoc` has no
   production caller yet; wiring validation is a tracked follow-up.

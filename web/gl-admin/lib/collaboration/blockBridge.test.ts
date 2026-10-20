@@ -735,6 +735,50 @@ describe("blockBridge — additional edge cases", () => {
       expect(node.child(0).child(0).attrs["data-block-id"]).toBe(synthesizedItemId(list))
     })
 
+    it("a list that contains itself is converted without recursing forever", () => {
+      const list = id()
+      const item = id()
+      const source: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [list],
+        blocks: {
+          [item]: { id: item, type: "list_item", version: 1, attrs: { text: "one" } },
+          [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [item, list] },
+        },
+      }
+      const { node, dropped } = blockDocToPMWithReport(source, schema)
+      expect(() => node.check()).not.toThrow()
+      expect(node.child(0).textContent).toBe("one")
+      expect(dropped).toEqual([{ id: list, parentId: list, afterId: item }])
+      // Restoring after a save doesn't duplicate the list or loop.
+      const out = restoreDroppedBlocks(pmToBlockDoc(node), source, dropped)
+      expect(out.blocks_order).toEqual([list])
+      expect(out.blocks[list].children).toEqual([item])
+    })
+
+    it("two lists that contain each other are converted, and the save keeps both", () => {
+      const [a, b] = [id(), id()]
+      const source: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [a],
+        blocks: {
+          [a]: { id: a, type: "bullet_list", version: 1, attrs: {}, children: [b] },
+          [b]: { id: b, type: "ordered_list", version: 1, attrs: {}, children: [a] },
+        },
+      }
+      const { node, dropped } = blockDocToPMWithReport(source, schema)
+      expect(() => node.check()).not.toThrow()
+      expect(node.childCount).toBe(1)
+      expect(dropped).toEqual([
+        { id: a, parentId: b, afterId: null }, // closes the cycle inside b
+        { id: b, parentId: a, afterId: null }, // b is a list, so it can't be an item of a
+      ])
+      const out = restoreDroppedBlocks(pmToBlockDoc(node), source, dropped)
+      expect(out.blocks_order).toEqual([a])
+      expect(out.blocks[a].children).toEqual([b, synthesizedItemId(a)])
+      expect(out.blocks[b]).toEqual(source.blocks[b])
+    })
+
     it("one invalid list item is dropped on its own; its valid siblings stay", () => {
       const list = id()
       const [i1, bad, i2] = [id(), id(), id()]
