@@ -9,6 +9,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -915,8 +917,9 @@ func TestDeleteMediaAPI(t *testing.T) {
 	user := randomUserForPosts()
 	media := randomMedia()
 
-	// Distinct callers for the ownership policy cases. owner uploaded
-	// ownedMedia; admin/editor/contributor did not.
+	// Distinct callers for the ownership policy cases. owner (an editor)
+	// uploaded ownedMedia; admin/editor/contributor did not. The owner-scoped
+	// (non-moderator) path is covered by TestMediaWriteOwnerScopedRole.
 	owner := db.User{ID: 9001, Username: "owner", Role: RoleEditor}
 	admin := db.User{ID: 9002, Username: "admin", Role: RoleAdmin}
 	otherEditor := db.User{ID: 9003, Username: "editor", Role: RoleEditor}
@@ -955,7 +958,7 @@ func TestDeleteMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			name:    "OwnerDeletesOwnMedia",
+			name:    "EditorDeletesOwnMedia",
 			mediaID: ownedMedia.ID,
 			caller:  owner,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
@@ -1089,9 +1092,8 @@ func TestDeleteMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			// The store's ownership rejection (only reachable for owner-scoped
-			// roles) maps to 403, not 500, via the ErrMediaNotOwned sentinel.
-			name:    "StoreRejectsNotOwned",
+			// The row vanished between the handler's read and the transaction.
+			name:    "DeletedConcurrently",
 			mediaID: media.ID,
 			caller:  user,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
@@ -1106,10 +1108,10 @@ func TestDeleteMediaAPI(t *testing.T) {
 				store.EXPECT().
 					DeleteMediaTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(fmt.Errorf("user %d, media %d: %w", user.ID, media.ID, db.ErrMediaNotOwned))
+					Return(sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
@@ -1158,6 +1160,221 @@ func TestDeleteMediaAPI(t *testing.T) {
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
+	}
+}
+
+// TestMediaWriteOwnerScopedRole covers the non-moderator branch of the media
+// ownership policy. requireContentEditor keeps every such role off the real
+// routes today, so the handlers are mounted on synthetic routes behind
+// authMiddleware only, as a role admitted to these routes later would see them.
+func TestMediaWriteOwnerScopedRole(t *testing.T) {
+	contributor := db.User{ID: 9101, Username: "contributor", Role: RoleContributor}
+
+	ownMedia := randomMedia()
+	ownMedia.ID = 501
+	ownMedia.UserID = contributor.ID
+	othersMedia := randomMedia()
+	othersMedia.ID = 502
+	othersMedia.UserID = 9102
+
+	ownerScopedDelete := func(mediaID int64) db.DeleteMediaTxParams {
+		return db.DeleteMediaTxParams{MediaID: mediaID, UserID: contributor.ID, AnyOwner: false}
+	}
+
+	testCases := []struct {
+		name         string
+		method       string
+		mediaID      int64
+		buildStubs   func(store *mockdb.MockStore)
+		expectedCode int
+	}{
+		{
+			name:    "UpdateOwnMedia",
+			method:  http.MethodPut,
+			mediaID: ownMedia.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(ownMedia.ID)).Times(1).Return(ownMedia, nil)
+				store.EXPECT().UpdateMedia(gomock.Any(), gomock.Any()).Times(1).Return(ownMedia, nil)
+			},
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:    "UpdateOthersMediaForbidden",
+			method:  http.MethodPut,
+			mediaID: othersMedia.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(othersMedia.ID)).Times(1).Return(othersMedia, nil)
+				store.EXPECT().UpdateMedia(gomock.Any(), gomock.Any()).Times(0)
+			},
+			expectedCode: http.StatusForbidden,
+		},
+		{
+			name:    "DeleteOwnMedia",
+			method:  http.MethodDelete,
+			mediaID: ownMedia.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(ownMedia.ID)).Times(1).Return(ownMedia, nil)
+				store.EXPECT().
+					DeleteMediaTx(gomock.Any(), gomock.Eq(ownerScopedDelete(ownMedia.ID))).
+					Times(1).
+					Return(nil)
+			},
+			expectedCode: http.StatusOK,
+		},
+		{
+			name:    "DeleteOthersMediaForbidden",
+			method:  http.MethodDelete,
+			mediaID: othersMedia.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(othersMedia.ID)).Times(1).Return(othersMedia, nil)
+				store.EXPECT().DeleteMediaTx(gomock.Any(), gomock.Any()).Times(0)
+			},
+			expectedCode: http.StatusForbidden,
+		},
+		{
+			// Ownership moved (e.g. user transfer) between the handler's read
+			// and the transaction: the store's re-check maps to 403, not 500.
+			name:    "DeleteOwnerChangedConcurrently",
+			method:  http.MethodDelete,
+			mediaID: ownMedia.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(ownMedia.ID)).Times(1).Return(ownMedia, nil)
+				store.EXPECT().
+					DeleteMediaTx(gomock.Any(), gomock.Eq(ownerScopedDelete(ownMedia.ID))).
+					Times(1).
+					Return(fmt.Errorf("user %d, media %d: %w", contributor.ID, ownMedia.ID, db.ErrMediaNotOwned))
+			},
+			expectedCode: http.StatusForbidden,
+		},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+			stubRoleLookup(store, contributor)
+
+			server := newTestServer(t, store)
+			auth := authMiddleware(server.tokenMaker, server.store)
+			server.router.PUT("/owner-scoped/media/:id", auth, server.updateMedia)
+			server.router.DELETE("/owner-scoped/media/:id", auth, server.deleteMedia)
+
+			var body io.Reader
+			if tc.method == http.MethodPut {
+				body = strings.NewReader(`{"name":"renamed"}`)
+			}
+			url := fmt.Sprintf("/owner-scoped/media/%d", tc.mediaID)
+			request, err := http.NewRequest(tc.method, url, body)
+			require.NoError(t, err)
+			request.Header.Set("Content-Type", "application/json")
+			addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, contributor.ID, contributor.Username, time.Minute)
+
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, request)
+			require.Equal(t, tc.expectedCode, recorder.Code)
+		})
+	}
+}
+
+// TestDeleteMediaRemovesFile checks that a successful delete removes the
+// stored file, and that a media_path outside the upload directory is left
+// alone without failing the request.
+func TestDeleteMediaRemovesFile(t *testing.T) {
+	admin := db.User{ID: 9201, Username: "admin", Role: RoleAdmin}
+
+	testCases := []struct {
+		name       string
+		insideDir  bool
+		createFile bool
+		expectGone bool
+	}{
+		{name: "FileInUploadDirRemoved", insideDir: true, createFile: true, expectGone: true},
+		{name: "MissingFileStillOK", insideDir: true, createFile: false, expectGone: true},
+		{name: "PathOutsideUploadDirKept", insideDir: false, createFile: true, expectGone: false},
+	}
+
+	for i := range testCases {
+		tc := testCases[i]
+
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			server := newTestServer(t, store)
+
+			dir := server.config.UploadPath
+			if !tc.insideDir {
+				dir = t.TempDir()
+			}
+			filePath := filepath.Join(dir, "upload.jpg")
+			if tc.createFile {
+				require.NoError(t, os.WriteFile(filePath, []byte("img"), 0644))
+			}
+
+			media := randomMedia()
+			media.MediaPath = filePath
+
+			store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(media.ID)).Times(1).Return(media, nil)
+			store.EXPECT().DeleteMediaTx(gomock.Any(), gomock.Any()).Times(1).Return(nil)
+			stubRoleLookup(store, admin)
+
+			request, err := http.NewRequest(http.MethodDelete, fmt.Sprintf("/api/v1/media/%d", media.ID), nil)
+			require.NoError(t, err)
+			addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, admin.ID, admin.Username, time.Minute)
+
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, request)
+			require.Equal(t, http.StatusOK, recorder.Code)
+
+			_, statErr := os.Stat(filePath)
+			if tc.expectGone {
+				require.True(t, os.IsNotExist(statErr), "file should be removed")
+			} else {
+				require.NoError(t, statErr, "file outside the upload dir must not be removed")
+			}
+		})
+	}
+}
+
+// TestRemoveMediaFile pins the upload-directory confinement: media_path is
+// client-editable, so anything resolving outside the directory is refused.
+func TestRemoveMediaFile(t *testing.T) {
+	root := t.TempDir()
+	uploadDir := filepath.Join(root, "uploads", "media")
+	sibling := filepath.Join(root, "uploads", "media2")
+	require.NoError(t, os.MkdirAll(uploadDir, 0755))
+	require.NoError(t, os.MkdirAll(sibling, 0755))
+
+	inside := filepath.Join(uploadDir, "a.jpg")
+	escaped := filepath.Join(root, "secret.env")
+	siblingFile := filepath.Join(sibling, "b.jpg")
+	for _, p := range []string{inside, escaped, siblingFile} {
+		require.NoError(t, os.WriteFile(p, []byte("x"), 0644))
+	}
+
+	require.NoError(t, removeMediaFile(uploadDir, inside))
+	_, err := os.Stat(inside)
+	require.True(t, os.IsNotExist(err))
+
+	require.NoError(t, removeMediaFile(uploadDir, filepath.Join(uploadDir, "missing.jpg")))
+
+	for _, p := range []string{
+		filepath.Join(uploadDir, "..", "..", "secret.env"),
+		escaped,
+		siblingFile,
+		uploadDir,
+	} {
+		require.ErrorIs(t, removeMediaFile(uploadDir, p), errOutsideUploadDir, p)
+	}
+	for _, p := range []string{escaped, siblingFile} {
+		_, err := os.Stat(p)
+		require.NoError(t, err, "%s must survive", p)
 	}
 }
 

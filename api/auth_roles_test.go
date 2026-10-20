@@ -25,6 +25,12 @@ func TestCanModerateMedia(t *testing.T) {
 	require.True(t, canModerateMedia(db.User{Role: "Editor"}))
 	require.False(t, canModerateMedia(db.User{Role: RoleContributor}))
 	require.False(t, canModerateMedia(db.User{Role: ""}))
+
+	media := db.Medium{UserID: 1}
+	require.True(t, canWriteMedia(db.User{ID: 2, Role: RoleAdmin}, media))
+	require.True(t, canWriteMedia(db.User{ID: 2, Role: RoleEditor}, media))
+	require.True(t, canWriteMedia(db.User{ID: 1, Role: RoleContributor}, media))
+	require.False(t, canWriteMedia(db.User{ID: 2, Role: RoleContributor}, media))
 }
 
 // TestRequireRoleMiddleware exercises requireRole in isolation on synthetic

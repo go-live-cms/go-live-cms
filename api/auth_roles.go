@@ -59,6 +59,13 @@ func canModerateMedia(user db.User) bool {
 	return hasRole(user, RoleAdmin, RoleEditor)
 }
 
+// canWriteMedia reports whether the user may update or delete the given
+// media: moderators may touch any media, everyone else only their own
+// uploads. PUT and DELETE /media/:id both decide through this.
+func canWriteMedia(user db.User, media db.Medium) bool {
+	return canModerateMedia(user) || media.UserID == user.ID
+}
+
 // hasRole reports whether the user's role matches any of the given roles,
 // case-insensitively.
 func hasRole(user db.User, roles ...string) bool {

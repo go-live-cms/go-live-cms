@@ -22,8 +22,9 @@
 //
 // # Delete Operations
 //
-// Soft deletion: DELETE /media/:id removes database records and unlinks from posts.
-// File cleanup: Automatic filesystem cleanup via database transaction.
+// Deletion: DELETE /media/:id removes database records and unlinks from posts
+// in one transaction, then removes the stored file from the upload directory
+// (best effort, and only for paths inside UploadPath; see removeMediaFile).
 //
 // # Ownership Policy (PUT and DELETE /media/:id)
 //
@@ -34,7 +35,9 @@
 //     delete any post)
 //   - any other role admitted later: own media only (403 otherwise)
 //
-// The rule lives in canModerateMedia (auth_roles.go).
+// Both handlers decide through canWriteMedia (auth_roles.go). Media is
+// publicly readable, so answering 403 (not 404) for someone else's media
+// reveals nothing.
 //
 // # Error Handling
 //
@@ -53,6 +56,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -334,7 +338,7 @@ func (server *Server) updateMedia(c *gin.Context) {
 		return
 	}
 
-	if !canModerateMedia(caller) && existingMedia.UserID != caller.ID {
+	if !canWriteMedia(caller, existingMedia) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "you can only update your own media"})
 		return
 	}
@@ -395,8 +399,8 @@ func (server *Server) updateMedia(c *gin.Context) {
 	})
 }
 
-// deleteMedia handles DELETE /media/:id - soft deletion with filesystem cleanup.
-// Removes database record, unlinks from posts, deletes physical file.
+// deleteMedia handles DELETE /media/:id - deletion with filesystem cleanup.
+// Removes database record, unlinks from posts, then deletes the physical file.
 // Uses database transaction for data consistency and automatic rollback.
 // Auth: Requires Bearer token + editor-or-admin role. Admins and editors may
 // delete any media; other roles only their own (see Ownership Policy above).
@@ -414,7 +418,9 @@ func (server *Server) deleteMedia(c *gin.Context) {
 		return
 	}
 
-	_, err = server.store.GetMedia(c.Request.Context(), id)
+	// The row is read up front for the ownership decision (same as PUT) and
+	// for the file path to remove after the delete commits.
+	media, err := server.store.GetMedia(c.Request.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
@@ -424,18 +430,35 @@ func (server *Server) deleteMedia(c *gin.Context) {
 		return
 	}
 
+	if !canWriteMedia(caller, media) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only delete your own media"})
+		return
+	}
+
+	// DeleteMediaTx re-checks ownership inside the transaction (skipped for
+	// moderators), so a concurrent delete or owner change between the read
+	// above and the delete still resolves to 404/403 rather than 500.
 	err = server.store.DeleteMediaTx(c.Request.Context(), db.DeleteMediaTxParams{
 		MediaID:  id,
 		UserID:   caller.ID,
 		AnyOwner: canModerateMedia(caller),
 	})
 	if err != nil {
-		if errors.Is(err, db.ErrMediaNotOwned) {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+		case errors.Is(err, db.ErrMediaNotOwned):
 			c.JSON(http.StatusForbidden, gin.H{"error": "you can only delete your own media"})
-			return
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete media"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete media"})
 		return
+	}
+
+	// Best effort: the row is gone either way. A leftover file is logged, not
+	// surfaced, because the delete itself succeeded and cannot be retried.
+	if err := removeMediaFile(server.config.UploadPath, media.MediaPath); err != nil {
+		log.Printf("deleteMedia: media %d deleted but file %q not removed: %v", id, media.MediaPath, err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

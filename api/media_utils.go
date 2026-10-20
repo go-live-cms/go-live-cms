@@ -32,6 +32,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -127,6 +128,36 @@ func saveUploadedFileWithOriginalName(file multipart.File, header *multipart.Fil
 	}
 
 	return fmt.Sprintf("%s/%s", uploadPath, filename), filename, nil
+}
+
+// errOutsideUploadDir is returned by removeMediaFile for a media_path that
+// does not resolve inside the upload directory.
+var errOutsideUploadDir = errors.New("media path is outside the upload directory")
+
+// removeMediaFile deletes the stored file behind a media row.
+//
+// media_path is client-editable via PUT /media/:id, so it is not trusted: only
+// a path that resolves strictly inside uploadPath is removed, otherwise a
+// caller could point a row at any file the API process can delete (app.env,
+// source files) and then DELETE it. An already-missing file is not an error.
+func removeMediaFile(uploadPath, mediaPath string) error {
+	base, err := filepath.Abs(uploadPath)
+	if err != nil {
+		return err
+	}
+	target, err := filepath.Abs(mediaPath)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(base, target)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return errOutsideUploadDir
+	}
+
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // fileExists checks if a file exists at the given path.
