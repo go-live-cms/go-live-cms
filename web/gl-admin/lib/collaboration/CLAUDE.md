@@ -181,10 +181,13 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   and churn Yjs (rule 2). Conversely, `pmToBlockDoc` **skips** a childless list node
   (only reachable from an already-invalid PM doc), so a childless list block is never
   persisted.
+- **Cycles:** `listItemsToPM` tracks the lists being converted. A list that (directly
+  or through another list) contains itself throws at the child that closes the cycle,
+  so that child is dropped and reported like any other bad child. Nothing recurses
+  unboundedly, and `restoreDroppedBlocks` keeps the stored structure on save.
 - **Known gap:** listItems created *in the editor* have no `data-block-id` (same
-  top-level-only stamping), so `pmToBlockDoc` mints them a new id on every save. Also,
-  list `children` have no cycle guard — a list that contains itself recurses deeply
-  before the per-block try/catch absorbs the stack overflow. Both are tracked follow-ups.
+  top-level-only stamping), so `pmToBlockDoc` mints them a new id on every save.
+  Tracked as a follow-up.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema all allow the full range — keep them in sync). `validateBlockDoc` has no
   production caller yet; wiring validation is a tracked follow-up.

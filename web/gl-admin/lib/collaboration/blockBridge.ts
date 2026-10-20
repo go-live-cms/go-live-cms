@@ -218,6 +218,8 @@ export interface DroppedBlock {
 interface ConvertContext {
   schema: Schema
   dropped: DroppedBlock[]
+  /** Lists currently being converted, to catch a list that (transitively) contains itself. */
+  listsInProgress: Set<BlockID>
 }
 
 /**
@@ -240,7 +242,7 @@ export function blockDocToPM(doc: BlockDocV1, schema: Schema): PMNode {
  * The doc-level `block+` rule is not checked: an empty block doc stays an empty PM doc.
  */
 export function blockDocToPMWithReport(doc: BlockDocV1, schema: Schema): { node: PMNode; dropped: DroppedBlock[] } {
-  const ctx: ConvertContext = { schema, dropped: [] }
+  const ctx: ConvertContext = { schema, dropped: [], listsInProgress: new Set() }
   const nodes: PMNode[] = []
   let afterId: BlockID | null = null
 
@@ -467,8 +469,26 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
  *   so restoreDroppedBlocks puts it back on save;
  * - when no item is left (none, all dangling, or all dropped), synthesize one empty
  *   listItem, which is what the editor itself produces for a fresh list.
+ * A list that (transitively) lists itself as a child throws here, so the child that
+ * closes the cycle is dropped like any other bad child instead of recursing until the
+ * stack overflows.
  */
 function listItemsToPM(
+  listId: BlockID,
+  children: BlockID[] | undefined,
+  allBlocks: Record<BlockID, Block>,
+  ctx: ConvertContext,
+): any[] {
+  if (ctx.listsInProgress.has(listId)) throw new Error(`list ${listId} contains itself`)
+  ctx.listsInProgress.add(listId)
+  try {
+    return convertListChildren(listId, children, allBlocks, ctx)
+  } finally {
+    ctx.listsInProgress.delete(listId)
+  }
+}
+
+function convertListChildren(
   listId: BlockID,
   children: BlockID[] | undefined,
   allBlocks: Record<BlockID, Block>,
