@@ -105,6 +105,37 @@ func TestUpdateMedia(t *testing.T) {
 	require.Equal(t, newDescription, media2.Description)
 }
 
+func TestUpdateMediaMetadata(t *testing.T) {
+	_, media1 := createTestMedia(t)
+
+	newAlt := gofakeit.Sentence(3)
+
+	// Only alt is set; NULL name/description keep their values and the file
+	// columns are untouched.
+	media2, err := testQueries.UpdateMediaMetadata(context.Background(), UpdateMediaMetadataParams{
+		ID:  media1.ID,
+		Alt: sql.NullString{String: newAlt, Valid: true},
+	})
+	require.NoError(t, err)
+	require.Equal(t, media1.ID, media2.ID)
+	require.Equal(t, newAlt, media2.Alt)
+	require.Equal(t, media1.Name, media2.Name)
+	require.Equal(t, media1.Description, media2.Description)
+	require.Equal(t, media1.MediaPath, media2.MediaPath)
+	require.Equal(t, media1.FileSize, media2.FileSize)
+	require.Equal(t, media1.MimeType, media2.MimeType)
+	require.Equal(t, media1.Width, media2.Width)
+	require.Equal(t, media1.Height, media2.Height)
+	require.Equal(t, media1.Duration, media2.Duration)
+	require.Equal(t, media1.OriginalFilename, media2.OriginalFilename)
+
+	_, err = testQueries.UpdateMediaMetadata(context.Background(), UpdateMediaMetadataParams{
+		ID:   media1.ID + 1_000_000,
+		Name: sql.NullString{String: "missing", Valid: true},
+	})
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
 func TestDeleteMediaTx(t *testing.T) {
 	user, media := createTestMedia(t)
 	_, post := createTestUserWithPosts(t)

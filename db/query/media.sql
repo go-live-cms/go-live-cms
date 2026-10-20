@@ -88,6 +88,19 @@ SET
 WHERE id = $1
 RETURNING *;
 
+-- name: UpdateMediaMetadata :one
+-- Metadata-only update used by PUT /media/:id. The file columns (media_path,
+-- file_size, mime_type, dimensions, original_filename) are set on upload and
+-- deliberately not writable here. NULL args keep the current value.
+UPDATE media
+SET
+    name = COALESCE(sqlc.narg('name'), name),
+    description = COALESCE(sqlc.narg('description'), description),
+    alt = COALESCE(sqlc.narg('alt'), alt),
+    changed_at = now()
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
 -- name: DeleteMedia :exec
 DELETE FROM media
 WHERE id = $1;
