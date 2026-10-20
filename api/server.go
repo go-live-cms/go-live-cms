@@ -24,6 +24,10 @@ type Server struct {
 	config     util.Config
 	tokenMaker token.Maker
 	ctx        context.Context
+
+	// Collab (WebSocket) tickets; see collab_routes.go.
+	collabTickets     collabTicketMaker
+	usedCollabTickets *ticketReplayGuard
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -53,6 +57,9 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		config:     config,
 		tokenMaker: tokenMaker,
 		ctx:        context.Background(),
+
+		collabTickets:     tokenMaker,
+		usedCollabTickets: newTicketReplayGuard(),
 	}
 
 	server.setupRoutes()
@@ -95,6 +102,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 //   - /api/v1/taxonomy-terms: CRUD, lookup, popular, search, posts
 //   - /api/v1/taxonomies: legacy aliases for terms (back-compat)
 //   - /api/v1/media: upload/batch, search, popular, CRUD, relations
+//   - /api/v1/collab: collab socket tickets (mint, redeem)
 //   - Static /uploads → ./uploads (serve uploaded files)
 //
 // Auth:
@@ -161,6 +169,9 @@ func (server *Server) setupRoutes() {
 
 	// Theme module routes (see themes_routes.go for complete definitions)
 	server.registerThemeRoutes(v1)
+
+	// Collaboration (WebSocket) ticket routes (see collab_routes.go)
+	server.registerCollabRoutes(v1)
 
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)

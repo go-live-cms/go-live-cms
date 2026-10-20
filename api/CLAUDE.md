@@ -34,8 +34,14 @@ is split into consistently-named files in `api/`:
 
 PASETO v4: asymmetric (`PASETO_V4_PUBLIC/PRIVATE_KEY_HEX`) for access tokens, local
 symmetric (`PASETO_V4_LOCAL_KEY_HEX`) for refresh. Issuer/audience/KIDs in `util/config.go`.
-The WebSocket server verifies the **same** public-key tokens (audience `golive.admin-ws`,
-also accepts `golive.admin`/`golive.auth` during migration).
+The WebSocket server never sees access tokens (#233). The editor exchanges its access
+token for a **collab ticket** at `POST /collab/tickets` (admin/editor): v4.public, signed
+with the access key, audience `golive.admin-ws`, `token_type: ws_ticket`, `doc` claim,
+30s TTL (`token/ws_ticket.go`, `collab_*.go`). `VerifyToken` rejects tickets, so they're
+not bearer tokens. The WS server redeems each ticket at `POST /collab/tickets/redeem`
+(the ticket is the credential, no authMiddleware). That burns the jti in
+`ticketReplayGuard` and returns the user's current role. The guard is **in-memory**, so
+it assumes one API process. Multiple replicas would need a shared store there.
 
 - **`authMiddleware` loads the caller's DB row on every authenticated request** and
   caches it under `authorization_user`. Get it with `server.callerUser(c)`; don't

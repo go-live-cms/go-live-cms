@@ -1,4 +1,4 @@
-// The WebSocket upgrade flow: auth + role check + doc-name validation (#216, #220).
+// The WebSocket upgrade flow: ticket auth + role check + doc-name validation (#216, #220, #233).
 //
 // Extracted from server.js (which boots the server on import) so the ordering
 // guarantees are unit tested in upgrade.test.js:
@@ -16,12 +16,13 @@ export const docNameFromReq = (req) => (req.url || "/").slice(1).split("?")[0].s
 
 /**
  * Returns an `upgrade` listener.
- * - verifyCredential(credential) → { payload, footer }; throws if the token is invalid.
- * - fetchRole(credential) → the caller's current role (or null); throws if the API
- *   can't answer (→ 503).
+ * - verifyTicket(ticket, docName) → the ticket's claims; throws if it is invalid,
+ *   expired, not a ticket, or for another doc (→ 401).
+ * - redeemTicket(ticket) → { userId, username, role, doc }, or null if the API refuses
+ *   it (→ 401); throws if the API can't answer (→ 503). Redeeming burns the ticket.
  * - accept(req, socket, head) completes the WebSocket handshake.
  */
-export function createUpgradeHandler({ verifyCredential, fetchRole, accept }) {
+export function createUpgradeHandler({ verifyTicket, redeemTicket, accept }) {
   return async (req, socket, head) => {
     // Node's http server removes its own socket 'error' listener before emitting
     // 'upgrade'. Without this one, a client that disconnects while we await the role
@@ -30,7 +31,7 @@ export function createUpgradeHandler({ verifyCredential, fetchRole, accept }) {
     socket.on("error", (err) => {
       console.warn("⚠️  Upgrade socket error:", err.code || err.message);
     });
-    // The access token rides in ?ticket= (or ?token=). takeCredential strips it from
+    // The single-use ticket rides in ?ticket= (#233). takeCredential strips it from
     // req.url before anything else reads the request, so nothing below (or y-websocket)
     // can log it (#220). Still never log req.headers; use the logsafe.js views.
     const credential = takeCredential(req);
@@ -54,54 +55,60 @@ export function createUpgradeHandler({ verifyCredential, fetchRole, accept }) {
       return;
     }
     if (!credential) {
-      reject("401 Unauthorized", "No authentication credentials provided", "No ticket or token provided");
+      reject("401 Unauthorized", "No ticket provided", "No ticket provided");
       return;
     }
 
-    let payload, footer;
+    let claims;
     try {
-      ({ payload, footer } = await verifyCredential(credential));
+      claims = await verifyTicket(credential, rawDocName);
     } catch (error) {
       reject(
         "401 Unauthorized",
-        "Invalid or expired authentication credentials",
-        `WebSocket authentication failed: ${error.message}`,
+        "Invalid or expired ticket",
+        `Ticket rejected: ${error.message}`,
       );
       return;
     }
-    console.log("✅ Token verified successfully for user:", payload.sub);
-    // The token's `role` claim is informational only (stale on demotion, empty after
-    // refresh). Authorization uses the CURRENT role from the API — see access.js.
-    console.log("👤 Token role claim (informational):", payload.role || "none");
 
-    let role;
+    // Redeeming burns the ticket and returns the CURRENT role from the DB. Tickets carry
+    // no role claim, and access is never decided from token contents.
+    let redeemed;
     try {
-      role = await fetchRole(credential);
+      redeemed = await redeemTicket(credential);
     } catch (err) {
       reject(
         "503 Service Unavailable",
-        "Could not verify user role",
-        `Role lookup failed for user ${payload.username || payload.sub}: ${err.message}`,
+        "Could not verify ticket",
+        `Ticket redemption failed for user ${claims.username || claims.sub}: ${err.message}`,
       );
       return;
     }
-    if (!canEditContent(role)) {
+    if (!redeemed || redeemed.doc !== rawDocName) {
       reject(
-        "403 Forbidden",
-        "Insufficient role for collaborative editing",
-        `Forbidden: user ${payload.username || payload.sub} (role: ${role || "none"}) cannot edit`,
+        "401 Unauthorized",
+        "Invalid or expired ticket",
+        `API refused ticket for user ${claims.username || claims.sub} (used, expired or revoked)`,
         { warn: true },
       );
       return;
     }
-    console.log("👤 Verified role:", role);
+    if (!canEditContent(redeemed.role)) {
+      reject(
+        "403 Forbidden",
+        "Insufficient role for collaborative editing",
+        `Forbidden: user ${redeemed.username || claims.sub} (role: ${redeemed.role || "none"}) cannot edit`,
+        { warn: true },
+      );
+      return;
+    }
+    console.log(`👤 Ticket redeemed for user ${redeemed.username} (role: ${redeemed.role}), doc ${docName}`);
 
     req.auth = {
-      sub: payload.sub,
-      username: payload.username,
-      role,
-      kid: footer?.kid,
-      tokenPayload: payload,
+      sub: claims.sub,
+      userId: redeemed.userId,
+      username: redeemed.username,
+      role: redeemed.role,
     };
     try {
       accept(req, socket, head);

@@ -51,23 +51,39 @@ else
 fi
 echo ""
 
-# Test 3: Connection with valid token (should succeed)
-echo "🧪 Test 3: Connection with valid authentication token"
-echo "Expected: Connection should be accepted"
+# Test 3: Connection with a collab ticket (should succeed)
+# The access token never goes in the socket URL (#233); exchange it for a
+# single-use ticket bound to one document.
+echo "🧪 Test 3: Connection with a collab ticket"
+echo "Expected: Connection should be accepted (admin/editor only)"
 echo "Note: This test requires manual verification - watch WebSocket server logs"
 
-# Create a test WebSocket connection with token
-# Note: wscat doesn't support custom subprotocols easily, so we'll use query parameter as fallback
-echo "Testing with token as query parameter (fallback method)..."
-timeout 3 wscat -c "$WS_URL/post-1?ticket=$ACCESS_TOKEN" -w 1 2>/dev/null && echo "✅ Ticket-based connection test completed" || echo "⚠️  Connection test completed (check server logs)"
+DOC=${TEST_DOC:-"post-1"}
+TICKET=$(curl -s -X POST "$GO_API_URL/api/v1/collab/tickets" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"doc\":\"$DOC\"}" | grep -o '"ticket":"[^"]*"' | cut -d'"' -f4)
+timeout 3 wscat -c "$WS_URL/$DOC?ticket=$TICKET" -w 1 2>/dev/null && echo "✅ Ticket-based connection test completed" || echo "⚠️  Connection test completed (check server logs)"
+echo ""
+
+# Test 3b: Reusing the same ticket (should fail: tickets are single use)
+echo "🧪 Test 3b: Reusing a redeemed ticket"
+echo "Expected: Connection should be rejected"
+timeout 3 wscat -c "$WS_URL/$DOC?ticket=$TICKET" -w 1 2>/dev/null && echo "❌ FAIL: Reused ticket was accepted" || echo "✅ PASS: Reused ticket was rejected"
+echo ""
+
+# Test 3c: The access token itself (should fail)
+echo "🧪 Test 3c: Access token in the URL"
+echo "Expected: Connection should be rejected"
+timeout 3 wscat -c "$WS_URL/$DOC?ticket=$ACCESS_TOKEN" -w 1 2>/dev/null && echo "❌ FAIL: Access token was accepted" || echo "✅ PASS: Access token was rejected"
 echo ""
 
 # Test 4: Check server logs for authentication messages
 echo "🧪 Test 4: Server log verification"
 echo "Check your WebSocket server terminal for these messages:"
-echo "  ✅ Success: '✅ Token verified successfully for user: ...'"
+echo "  ✅ Success: '👤 Ticket redeemed for user ...'"
 echo "  ✅ Success: '🚀 WebSocket connection established for user: ...'"
-echo "  ❌ Failure: '🚫 WebSocket authentication failed: ...'"
+echo "  ❌ Failure: '🚫 Ticket rejected: ...'"
 echo ""
 
 echo "📝 Manual Testing Instructions:"
@@ -80,7 +96,7 @@ echo ""
 echo "🎯 Expected Frontend Behavior:"
 echo "  ✅ Collaborative editing should work when logged in"
 echo "  ❌ WebSocket should fail when not authenticated"
-echo "  🔄 Should reconnect with fresh token on expiry"
+echo "  🔄 Should fetch a fresh ticket on every reconnect"
 echo ""
 
 echo "✨ Test script completed!"

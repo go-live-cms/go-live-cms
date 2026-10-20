@@ -6,31 +6,46 @@ and **LevelDB** persistence. Port 1234. Entry: `server.js`. Dev: `npm run dev`
 
 ## Auth
 
-Clients connect with `ws://…:1234/post-<id>?ticket=<v4.public token>`. Outside dev, the
+Clients connect with `ws://…:1234/post-<id>?ticket=<collab ticket>`. Outside dev, the
 editor uses `${host}/collab/post-<id>` through a reverse proxy, and `stripCollabPrefix`
-drops `/collab` whether or not the proxy did. The token is the
-**same** PASETO the Go API issues. Verified during the HTTP upgrade (issuer `golive.auth`;
-audiences `golive.admin-ws`, `golive.admin`, `golive.auth`). Public key loaded from
-`PASETO_V4_PUBLIC_PEM_FILE` (`/run/secrets/public.pem`).
+drops `/collab` whether or not the proxy did.
+
+**Never the access token (#233).** Browsers can't set headers on a WebSocket handshake, so
+the credential is in the URL, and every proxy or load balancer access log in front of :1234
+records it. Before **every** connect and reconnect, the editor POSTs `{doc}` to
+`/api/v1/collab/tickets` (`ticketSocket.ts`, via y-websocket's `WebSocketPolyfill` hook).
+It gets back a v4.public ticket: audience `golive.admin-ws`, `token_type: ws_ticket`, a
+`doc` claim, 30s TTL and a unique jti (`token/ws_ticket.go`). A ticket is not an API bearer
+token (wrong audience and type). `takeCredential` reads only `?ticket=`. There is no
+`?token=` / access-token fallback, because the editor and this server ship together.
 
 **The upgrade flow lives in `upgrade.js`** (`createUpgradeHandler`, unit tested in
-`upgrade.test.js` with a fake socket). `server.js` only injects the PASETO check, the
-role lookup and `wss.handleUpgrade`. Order: socket `error` listener → `takeCredential`
-→ `stripCollabPrefix` → doc-name check (**400**) → credential present (**401**) → verify
-(**401**) → role lookup (**503**) → role allowed (**403**) → accept.
+`upgrade.test.js` with a fake socket). `server.js` only injects the ticket check, the
+redemption and `wss.handleUpgrade`. Order: socket `error` listener → `takeCredential`
+→ `stripCollabPrefix` → doc-name check (**400**) → ticket present (**401**) →
+`verifyTicket` (**401**) → `redeemTicket` (**503** if the API can't answer, **401** if
+it refuses) → role allowed (**403**) → accept.
+1. **`verifyTicket`** (`access.js`) checks the signature, issuer (`PASETO_ISSUER`),
+   audience, type and expiry locally, and that `doc` equals the URL's doc name. The public
+   key comes from `PASETO_V4_PUBLIC_PEM_FILE` (`/run/secrets/public.pem`).
+   `PASETO_AUDIENCE` / `PASETO_ALLOWED_AUDIENCES` are ignored now, and a startup warning
+   says so.
+2. **`redeemTicket`** POSTs it to `${API_URL}/collab/tickets/redeem` (`Authorization:
+   Bearer <ticket>`). The API burns the jti (**single use**). This is in memory, so it
+   assumes one API process. The API also rejects tickets minted before a password change
+   and returns the user's **current** role from the DB. Redemption is the role check.
 
-**Role check (#216).** After the token verifies, the upgrade calls `GET ${API_URL}/users/me`
-with the same token and admits only **admins and editors** (`access.js`, unit tested in
-`access.test.js`). This mirrors `requireContentEditor` in `api/auth_roles.go`, so keep the
-role lists in sync.
-- The token's `role` claim is **never** used to authorize: it's stale after a demotion and
-  empty on refresh-issued tokens. Always look up the current role from the DB.
-- A contributor, a deleted user, or a token the API rejects (401/403/404) gets **403**.
-  That includes a token issued before the user's latest password change: the API
-  rejects those (see `api/CLAUDE.md`), but only new upgrades are checked, so an
-  already-open socket survives the change. If
-  the API is down, slow (3s timeout) or returns 5xx, the upgrade gets **503**. It fails
-  closed either way.
+**Role check (#216).** Only **admins and editors** are admitted. This mirrors
+`requireContentEditor` in `api/auth_roles.go`, so keep the role lists in sync.
+- Tickets carry no `role` claim, and access is never decided from token contents.
+- A ticket the API refuses (used, expired, password changed, user deleted) gets **401**.
+  A contributor gets **403**. If the API is down, slow (3s timeout) or returns 5xx, the
+  upgrade gets **503**. It fails closed either way. The ticket is burned regardless, so
+  the client's reconnect fetches a new one. Only new upgrades are checked, so an
+  already-open socket survives a password change.
+- A ticket logged by a proxy is useless once redeemed, which happens milliseconds after
+  minting. The residual risk is a ticket whose upgrade never reached this server: it
+  stays valid for at most 30s, for one document.
 - `API_URL` is required. The server `exit(1)`s at startup without it. Docker sets it to
   `http://api:8080/api/v1`.
 - Known limitation: the role is checked **only at connect**. An editor demoted mid-session
@@ -38,11 +53,11 @@ role lists in sync.
   with Hocuspocus `onAuthenticate` (#206).
 - The admin SPA opens the editor `readOnly` for contributors (`canEditContent` in
   `web/gl-admin/lib/roles.ts`), so they never attempt the connection.
-- **Never log the raw upgrade request (#220).** The token is in the URL, so logging
-  `req.url`, `req.headers`, the query params or the credential writes a replayable
-  bearer token to the logs.
+- **Never log the raw upgrade request (#220).** The ticket is in the URL. It's single use,
+  but an unredeemed one is still a credential for 30s, so don't log `req.url`,
+  `req.headers`, the query params or the credential.
   - The upgrade handler calls `takeCredential(req)` (`access.js`) **first**. It reads
-    `ticket`/`token` and strips the query from `req.url`, so nothing downstream
+    `ticket` and strips the query from `req.url`, so nothing downstream
     (y-websocket, the connection handler, logs) ever sees the token.
   - Log doc names via `docNameForLog`, and client context (origin, UA, peer IP) via
     `upgradeContextForLog`, both in `logsafe.js`. The context is logged **only on

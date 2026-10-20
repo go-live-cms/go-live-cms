@@ -1,6 +1,8 @@
 import { WebsocketProvider } from "y-websocket"
 import { Doc as YDoc } from "yjs"
 import { authManager } from "../auth"
+import { createCollabTicket } from "../api/collab"
+import { createTicketedWebSocket } from "./ticketSocket"
 import { collabDebug, collabDebugEnabled, contentFingerprint, fragmentStructure } from "./debug"
 
 const activeProviders = new Map<number, CollaborationProvider>()
@@ -59,11 +61,13 @@ export class CollaborationProvider {
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
     const wsHost = process.env.NODE_ENV === "development" ? "localhost:1234" : `${window.location.host}/collab`
 
-    const token = authManager.getAccessToken()
     const baseUrl = `${wsProtocol}//${wsHost}/`
+    const docName = `post-${postId}`
 
-    this.provider = new WebsocketProvider(baseUrl, `post-${postId}`, this.doc, {
-      params: token ? { ticket: token } : undefined,
+    // Never put the access token in the socket URL: proxy access logs record it. Each
+    // connect and reconnect fetches a fresh single-use ticket instead (#233).
+    this.provider = new WebsocketProvider(baseUrl, docName, this.doc, {
+      WebSocketPolyfill: createTicketedWebSocket(async () => (await createCollabTicket(docName)).ticket),
       maxBackoffTime: 5000,
       resyncInterval: 2000,
       connect: true,
