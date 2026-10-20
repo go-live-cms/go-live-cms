@@ -1987,6 +1987,34 @@ func (mr *MockStoreMockRecorder) LockAdminUserIDs(arg0 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockAdminUserIDs", reflect.TypeOf((*MockStore)(nil).LockAdminUserIDs), arg0)
 }
 
+// LockUserForShare mocks base method.
+func (m *MockStore) LockUserForShare(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockUserForShare", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LockUserForShare indicates an expected call of LockUserForShare.
+func (mr *MockStoreMockRecorder) LockUserForShare(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockUserForShare", reflect.TypeOf((*MockStore)(nil).LockUserForShare), arg0, arg1)
+}
+
+// LockUserForUpdate mocks base method.
+func (m *MockStore) LockUserForUpdate(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockUserForUpdate", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LockUserForUpdate indicates an expected call of LockUserForUpdate.
+func (mr *MockStoreMockRecorder) LockUserForUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockUserForUpdate", reflect.TypeOf((*MockStore)(nil).LockUserForUpdate), arg0, arg1)
+}
+
 // RemoveAllPostTaxonomies mocks base method.
 func (m *MockStore) RemoveAllPostTaxonomies(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()

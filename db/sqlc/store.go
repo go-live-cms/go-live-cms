@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ErrLastAdmin is returned by user-removing transactions (delete, or an update
@@ -210,10 +211,19 @@ func (store *SQLStore) DeleteUserTx(ctx context.Context, id int64) error {
 type UpdateUserTxParams struct {
 	UpdateUserParams
 	CheckUniqueness bool
-	// RevokeSessions blocks every session the user holds, in the same
-	// transaction as the update. Set it on password changes so a stolen
-	// refresh token cannot outlive the password it was issued under.
-	RevokeSessions bool
+	// PasswordChanged marks HashedPassword as a new password. The transaction
+	// then locks the user row, stamps PasswordChangedAt itself (overriding the
+	// caller's value), and blocks every session the user holds, so a stolen
+	// refresh or access token cannot outlive the password it was issued under.
+	//
+	// The row lock serializes against refresh-token rotation, which takes the
+	// same row FOR SHARE (LockUserForShare) and mints its access token before
+	// committing. A rotation that commits first therefore has its new session
+	// blocked here and its token's iat at or before PasswordChangedAt; one
+	// that waits finds its session already blocked. Stamping the time only
+	// after the lock is what makes that ordering hold; a timestamp taken
+	// before hashing or before the wait would let such tokens survive.
+	PasswordChanged bool
 }
 
 type UpdateUserTxResult struct {
@@ -230,6 +240,16 @@ func (store *SQLStore) UpdateUserTx(ctx context.Context, arg UpdateUserTxParams)
 			if err := guardLastAdmin(ctx, q, arg.ID); err != nil {
 				return err
 			}
+		}
+
+		// Taken after guardLastAdmin so the lock order matches its
+		// LockAdminUserIDs (admin rows first), avoiding deadlocks with a
+		// concurrent demotion.
+		if arg.PasswordChanged {
+			if err := q.LockUserForUpdate(ctx, arg.ID); err != nil {
+				return err
+			}
+			arg.PasswordChangedAt = time.Now()
 		}
 
 		if arg.CheckUniqueness {
@@ -259,7 +279,7 @@ func (store *SQLStore) UpdateUserTx(ctx context.Context, arg UpdateUserTxParams)
 			}
 		}
 
-		if arg.RevokeSessions {
+		if arg.PasswordChanged {
 			if err := q.BlockAllSessionsForUser(ctx, arg.ID); err != nil {
 				return err
 			}

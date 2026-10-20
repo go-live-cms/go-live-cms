@@ -44,6 +44,7 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -198,6 +199,10 @@ func (server *Server) startSession(ctx *gin.Context, v4Maker *token.PasetoV4Make
 
 	return session, nil
 }
+
+// errSessionNoLongerActive aborts a refresh rotation whose old session was
+// blocked or rotated while the rotation waited for its locks.
+var errSessionNoLongerActive = errors.New("session no longer active")
 
 // renewAccessToken rotates tokens using refresh cookie and implements reuse detection.
 //
@@ -354,11 +359,34 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
+	// Mint the access token BEFORE the rotation commits, so its iat is never
+	// later than a password change that commits after this rotation (see
+	// db.UpdateUserTxParams.PasswordChanged). Minted after the commit, it
+	// could postdate password_changed_at and survive the change.
+	accessToken, err := server.tokenMaker.CreateToken(
+		userID,
+		username,
+		server.config.AccessTokenDuration,
+	)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrTokenCreationFailed})
+		return
+	}
+
 	// Atomic session rotation
 	newRefreshHash := token.HashRefresh(newRefreshToken)
 	var newSessionID uuid.UUID
 
 	err = server.store.ExecTx(ctx.Request.Context(), func(q *db.Queries) error {
+		// Serialize against a password change on this user, which holds the
+		// user row FOR UPDATE while it stamps password_changed_at and blocks
+		// every session. Either it commits first (our old session is then
+		// blocked and RotateToNewSession matches nothing), or we do (and its
+		// block then sees the session we create here).
+		if err := q.LockUserForShare(ctx.Request.Context(), userID); err != nil {
+			return err
+		}
+
 		// Lock old session
 		_, err := q.GetSessionForUpdate(ctx.Request.Context(), session.ID)
 		if err != nil {
@@ -393,25 +421,20 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		}
 
 		if rowsAffected == 0 {
-			return fmt.Errorf("concurrent session rotation detected")
+			return errSessionNoLongerActive
 		}
 
 		return nil
 	})
 
 	if err != nil {
+		if errors.Is(err, errSessionNoLongerActive) {
+			// Blocked (e.g. a password change won the user-row lock) or
+			// rotated by a concurrent refresh while we waited.
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": ErrSessionBlocked})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate session atomically"})
-		return
-	}
-
-	// Create new access token
-	accessToken, err := server.tokenMaker.CreateToken(
-		userID,
-		username,
-		server.config.AccessTokenDuration,
-	)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrTokenCreationFailed})
 		return
 	}
 

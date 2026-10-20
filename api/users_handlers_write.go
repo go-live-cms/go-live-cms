@@ -214,16 +214,16 @@ func (server *Server) updateUser(c *gin.Context) {
 	if req.Role != "" {
 		updateParams.Role = req.Role
 	}
-	now := time.Now()
 	if passwordChanged {
-		// Hash new password and update timestamp
+		// password_changed_at is stamped inside UpdateUserTx, under the user
+		// row lock, not here: hashing takes long enough for a concurrent
+		// refresh to mint a token that would otherwise postdate it.
 		hashedPassword, err := util.HashPassword(req.Password)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 			return
 		}
 		updateParams.HashedPassword = hashedPassword
-		updateParams.PasswordChangedAt = now
 	}
 
 	// Execute transactional update with uniqueness checks. The transaction
@@ -233,7 +233,7 @@ func (server *Server) updateUser(c *gin.Context) {
 	result, err := server.store.UpdateUserTx(c.Request.Context(), db.UpdateUserTxParams{
 		UpdateUserParams: updateParams,
 		CheckUniqueness:  true,
-		RevokeSessions:   passwordChanged,
+		PasswordChanged:  passwordChanged,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrLastAdmin) {
@@ -264,7 +264,7 @@ func (server *Server) updateUser(c *gin.Context) {
 		// If any of this fails the password change still stands and they
 		// sign in again.
 		if isSelf {
-			if err := server.issueSelfSessionAfterPasswordChange(c, result.User, now, rsp); err != nil {
+			if err := server.issueSelfSessionAfterPasswordChange(c, result.User, time.Now(), rsp); err != nil {
 				logSecurityEvent(LogPasswordChanged, "none", id, fmt.Sprintf("Failed to start a new session for the caller: %v", err))
 			}
 		}

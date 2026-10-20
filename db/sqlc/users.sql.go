@@ -257,6 +257,28 @@ func (q *Queries) LockAdminUserIDs(ctx context.Context) ([]int64, error) {
 	return items, nil
 }
 
+const lockUserForShare = `-- name: LockUserForShare :exec
+SELECT id FROM users WHERE id = $1 FOR SHARE
+`
+
+// Taken by refresh-token rotation so it cannot interleave with a password
+// change on the same user (which holds the row FOR UPDATE).
+func (q *Queries) LockUserForShare(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, lockUserForShare, id)
+	return err
+}
+
+const lockUserForUpdate = `-- name: LockUserForUpdate :exec
+SELECT id FROM users WHERE id = $1 FOR UPDATE
+`
+
+// Serializes a password change against concurrent refresh-token rotation
+// (see UpdateUserTx and LockUserForShare).
+func (q *Queries) LockUserForUpdate(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, lockUserForUpdate, id)
+	return err
+}
+
 const transferPostsToAdmin = `-- name: TransferPostsToAdmin :exec
 UPDATE posts 
 SET user_id = $2, username = (SELECT username FROM users WHERE id = $2)

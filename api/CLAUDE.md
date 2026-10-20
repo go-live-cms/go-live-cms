@@ -15,8 +15,9 @@ is split into consistently-named files in `api/`:
 - `*_utils.go` — domain helpers
 
 `server.go` builds the Gin engine, CORS, and registers all route groups under
-`/api/v1` (+ a `/public` group for SSR). Auth via `authMiddleware(tokenMaker)`; the
-payload is under context key `authorization_payload` (`getAuthPayload(c)`).
+`/api/v1` (+ a `/public` group for SSR). Auth via
+`authMiddleware(server.tokenMaker, server.store)`; the payload is under context key
+`authorization_payload` (`getAuthPayload(c)`).
 
 > Note: `media` is the one domain whose handler split is incomplete (some handlers
 > still in `api/media.go`). Tracked in a GitHub issue.
@@ -35,6 +36,30 @@ PASETO v4: asymmetric (`PASETO_V4_PUBLIC/PRIVATE_KEY_HEX`) for access tokens, lo
 symmetric (`PASETO_V4_LOCAL_KEY_HEX`) for refresh. Issuer/audience/KIDs in `util/config.go`.
 The WebSocket server verifies the **same** public-key tokens (audience `golive.admin-ws`,
 also accepts `golive.admin`/`golive.auth` during migration).
+
+- **`authMiddleware` loads the caller's DB row on every authenticated request** and
+  caches it under `authorization_user`. Get it with `server.callerUser(c)`; don't
+  call `GetUser` for the caller again. A deleted user's still-valid token gets **403**.
+- **Roles** live only in `auth_roles.go` (`requireSiteAdmin`, `requireContentEditor`,
+  and `isSiteAdmin`/`hasRole` for inline self-or-admin checks). Never compare
+  role strings elsewhere; the token's `role` claim is informational only.
+- **Password change revokes everything.** `UpdateUserTx{PasswordChanged: true}`
+  locks the user row, stamps `password_changed_at` itself, and blocks every
+  session. `authMiddleware` then rejects access tokens whose `iat` is before
+  `password_changed_at` (401). The comparison is per second because PASETO `iat`
+  has no fractional part, so a token issued earlier in the *same* second survives.
+  Refresh rotation takes the user row `FOR SHARE` and mints its access token
+  before committing, so it can't slip a token past a concurrent change. Don't
+  set `password_changed_at` in a handler.
+- **Self password change** (`PUT /users/:id` with `password`) requires
+  `current_password` (403 if missing/wrong). The refresh cookie is scoped to
+  `/api/v1/auth`, so the request can't tell which session sent it. Instead the
+  response sets a fresh refresh cookie and returns a new `access_token` (the
+  admin UI adopts it). An admin resetting someone else's password needs no
+  current password.
+- **Refresh reuse vs revoked:** a blocked session's refresh token is only treated
+  as *reuse* (409, blocks all sessions) if the session was rotated (`replaced_by`
+  set). A session blocked by logout or a password change just gets 401.
 
 ## Tests
 

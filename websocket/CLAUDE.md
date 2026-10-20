@@ -17,7 +17,10 @@ with the same token and admits only **admins and editors** (`access.js`, unit te
 role lists in sync.
 - The token's `role` claim is **never** used to authorize: it's stale after a demotion and
   empty on refresh-issued tokens. Always look up the current role from the DB.
-- A contributor, a deleted user, or a token the API rejects (401/403/404) gets **403**. If
+- A contributor, a deleted user, or a token the API rejects (401/403/404) gets **403**.
+  That includes a token issued before the user's latest password change: the API
+  rejects those (see `api/CLAUDE.md`), but only new upgrades are checked, so an
+  already-open socket survives the change. If
   the API is down, slow (3s timeout) or returns 5xx, the upgrade gets **503**. It fails
   closed either way.
 - `API_URL` is required. The server `exit(1)`s at startup without it. Docker sets it to

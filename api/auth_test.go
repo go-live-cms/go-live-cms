@@ -186,7 +186,8 @@ func TestPasswordChangeRevokesAccessTokens(t *testing.T) {
 		Times(1).
 		DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
 			stored.HashedPassword = arg.HashedPassword
-			stored.PasswordChangedAt = arg.PasswordChangedAt
+			// The real tx stamps password_changed_at under the row lock.
+			stored.PasswordChangedAt = time.Now()
 			return db.UpdateUserTxResult{User: stored}, nil
 		})
 	store.EXPECT().

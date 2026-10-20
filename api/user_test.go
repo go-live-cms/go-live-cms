@@ -507,7 +507,7 @@ func TestUpdateUserAPI(t *testing.T) {
 					UpdateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
 					DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
-						require.False(t, arg.RevokeSessions)
+						require.False(t, arg.PasswordChanged)
 						return db.UpdateUserTxResult{User: updatedUser}, nil
 					})
 			},
@@ -804,12 +804,13 @@ func TestUpdateUserPasswordAPI(t *testing.T) {
 			Times(1).
 			DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
 				require.Equal(t, target.ID, arg.ID)
-				require.True(t, arg.RevokeSessions)
+				require.True(t, arg.PasswordChanged)
 				require.NoError(t, util.CheckPassword(newPassword, arg.HashedPassword))
-				require.True(t, arg.PasswordChangedAt.After(target.PasswordChangedAt))
+
 				updated := target
 				updated.HashedPassword = arg.HashedPassword
-				updated.PasswordChangedAt = arg.PasswordChangedAt
+				// The real tx stamps password_changed_at under the row lock.
+				updated.PasswordChangedAt = time.Now()
 				return db.UpdateUserTxResult{User: updated}, nil
 			})
 	}

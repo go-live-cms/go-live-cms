@@ -94,3 +94,12 @@ SELECT id FROM users
 WHERE lower(role) = 'admin'
 ORDER BY id
 FOR UPDATE;
+-- name: LockUserForUpdate :exec
+-- Serializes a password change against concurrent refresh-token rotation
+-- (see UpdateUserTx and LockUserForShare).
+SELECT id FROM users WHERE id = $1 FOR UPDATE;
+
+-- name: LockUserForShare :exec
+-- Taken by refresh-token rotation so it cannot interleave with a password
+-- change on the same user (which holds the row FOR UPDATE).
+SELECT id FROM users WHERE id = $1 FOR SHARE;

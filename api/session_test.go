@@ -309,6 +309,34 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 				require.Equal(t, http.StatusConflict, recorder.Code)
 			},
 		},
+		{
+			// A password change won the user-row lock and blocked the session
+			// while this rotation waited: 401, not a 500.
+			name: "RotationLostToPasswordChange",
+			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
+				active := session
+				active.IsBlocked = false
+				active.ReplacedBy = uuid.NullUUID{}
+				active.RefreshTokenHash = token.HashRefresh(refreshToken)
+				active.Username = user.Username
+				active.UserID = user.ID
+				store.EXPECT().
+					GetSessionByRefreshTokenHash(gomock.Any(), gomock.Eq(token.HashRefresh(refreshToken))).
+					Times(1).
+					Return(active, nil)
+				store.EXPECT().
+					ExecTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(errSessionNoLongerActive)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+				require.Contains(t, recorder.Body.String(), ErrSessionBlocked)
+				for _, c := range recorder.Result().Cookies() {
+					require.NotEqual(t, RefreshCookieName, c.Name, "no new refresh cookie on a lost rotation")
+				}
+			},
+		},
 	}
 
 	for i := range testCases {

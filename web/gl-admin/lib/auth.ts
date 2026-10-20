@@ -180,13 +180,27 @@ export class AuthManager {
       return true // Token is still valid
     }
 
+    return this.forceRefresh()
+  }
+
+  // Refreshes even when the local expiry says the token is still good. The
+  // server can revoke a token early (a password change rejects every access
+  // token issued before it), and only its 401 tells us; apiCall calls this
+  // then. Shares an in-flight refresh. Returns false, after clearing auth, if
+  // the refresh session was revoked too.
+  async forceRefresh(): Promise<boolean> {
+    if (this.refreshPromise) {
+      return this.refreshPromise
+    }
+
     this.lastRefreshAttempt = Date.now()
 
     this.refreshPromise = this.performRefresh()
-    const result = await this.refreshPromise
-    this.refreshPromise = null
-
-    return result
+    try {
+      return await this.refreshPromise
+    } finally {
+      this.refreshPromise = null
+    }
   }
 
   private async performRefresh(): Promise<boolean> {
