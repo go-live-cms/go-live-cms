@@ -146,6 +146,12 @@ type Querier interface {
 	// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
 	// acquire in the same order and cannot deadlock each other.
 	LockAdminUserIDs(ctx context.Context) ([]int64, error)
+	// Taken by refresh-token rotation so it cannot interleave with a password
+	// change on the same user (which holds the row FOR UPDATE).
+	LockUserForShare(ctx context.Context, id int64) error
+	// Serializes a password change against concurrent refresh-token rotation
+	// (see UpdateUserTx and LockUserForShare).
+	LockUserForUpdate(ctx context.Context, id int64) error
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error

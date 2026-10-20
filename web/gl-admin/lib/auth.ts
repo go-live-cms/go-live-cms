@@ -180,13 +180,27 @@ export class AuthManager {
       return true // Token is still valid
     }
 
+    return this.forceRefresh()
+  }
+
+  // Refreshes even when the local expiry says the token is still good. The
+  // server can revoke a token early (a password change rejects every access
+  // token issued before it), and only its 401 tells us; apiCall calls this
+  // then. Shares an in-flight refresh. Returns false, after clearing auth, if
+  // the refresh session was revoked too.
+  async forceRefresh(): Promise<boolean> {
+    if (this.refreshPromise) {
+      return this.refreshPromise
+    }
+
     this.lastRefreshAttempt = Date.now()
 
     this.refreshPromise = this.performRefresh()
-    const result = await this.refreshPromise
-    this.refreshPromise = null
-
-    return result
+    try {
+      return await this.refreshPromise
+    } finally {
+      this.refreshPromise = null
+    }
   }
 
   private async performRefresh(): Promise<boolean> {
@@ -194,25 +208,7 @@ export class AuthManager {
       console.log("refreshing access token...")
 
       const response = await renewAccessToken() // No parameters - uses HttpOnly cookie
-
-      // Use access_token_expires_at or expires_at field from response
-      const tokenExpiry = response.access_token_expires_at
-        ? new Date(response.access_token_expires_at).getTime()
-        : response.expires_at
-          ? response.expires_at * 1000
-          : Date.now() + 15 * 60 * 1000
-
-      this.state.accessToken = response.access_token
-      this.state.tokenExpiry = tokenExpiry
-      this.state.isAuthenticated = true
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem("access_token", response.access_token)
-        localStorage.setItem("token_expiry", tokenExpiry.toString())
-      }
-
-      this.scheduleTokenRefresh()
-      this.notifyListeners()
+      this.adoptAccessToken(response)
 
       console.log("Token refreshed successfully")
       return true
@@ -271,6 +267,30 @@ export class AuthManager {
       console.error("Failed to refresh user:", error)
       return this.state.user
     }
+  }
+
+  // Switches to an access token the API handed back outside the refresh flow
+  // (e.g. after changing your own password, which invalidates the old token).
+  // Accepts the same fields as the login/refresh responses.
+  adoptAccessToken(response: { access_token: string; access_token_expires_at?: string; expires_at?: number }): void {
+    // Use access_token_expires_at or expires_at field from response
+    const tokenExpiry = response.access_token_expires_at
+      ? new Date(response.access_token_expires_at).getTime()
+      : response.expires_at
+        ? response.expires_at * 1000
+        : Date.now() + 15 * 60 * 1000
+
+    this.state.accessToken = response.access_token
+    this.state.tokenExpiry = tokenExpiry
+    this.state.isAuthenticated = true
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("access_token", response.access_token)
+      localStorage.setItem("token_expiry", tokenExpiry.toString())
+    }
+
+    this.scheduleTokenRefresh()
+    this.notifyListeners()
   }
 
   getState(): AuthState {

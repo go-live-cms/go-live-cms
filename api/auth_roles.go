@@ -11,7 +11,8 @@
 // The caller's role is read from the DATABASE on every request, not from the
 // token payload. A demotion or deletion therefore takes effect immediately
 // instead of lingering until the access token expires. The cost is one
-// indexed GetUser query per protected request.
+// indexed GetUser query per protected request, run once by authMiddleware
+// and shared with requireRole through the request context.
 package api
 
 import (
@@ -20,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-live-cms/go-live-cms/token"
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
 // Built-in roles, ordered by privilege. Stored as plain strings in users.role;
@@ -43,6 +44,54 @@ func requireContentEditor(server *Server) gin.HandlerFunc {
 	return requireRole(server, RoleAdmin, RoleEditor)
 }
 
+// isSiteAdmin reports whether the user holds site-administration privileges.
+// Handlers that need an inline admin check (e.g. self-or-admin endpoints) use
+// this instead of comparing role strings themselves.
+func isSiteAdmin(user db.User) bool {
+	return hasRole(user, RoleAdmin)
+}
+
+// hasRole reports whether the user's role matches any of the given roles,
+// case-insensitively.
+func hasRole(user db.User, roles ...string) bool {
+	for _, role := range roles {
+		if strings.EqualFold(user.Role, role) {
+			return true
+		}
+	}
+	return false
+}
+
+// callerUser loads the authenticated caller's CURRENT database row.
+//
+// Must run after authMiddleware, which already loaded the row for this
+// request; that copy is returned without another query. The lookup below
+// only runs if it is missing. On failure it aborts with the response
+// already written and returns ok=false; the caller just returns:
+//   - 403 Forbidden: the token's user no longer exists (deleted account
+//     holding a still-valid token)
+//   - 500 Internal Server Error: database failure during the lookup
+func (server *Server) callerUser(c *gin.Context) (db.User, bool) {
+	if cached, exists := c.Get(authorizationUserKey); exists {
+		if user, ok := cached.(db.User); ok {
+			return user, true
+		}
+	}
+
+	auth := getAuthPayload(c)
+
+	user, err := server.store.GetUser(c.Request.Context(), auth.UserID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return db.User{}, false
+		}
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to verify user role"})
+		return db.User{}, false
+	}
+	return user, true
+}
+
 // requireRole creates middleware that enforces role-based access control.
 //
 // Must run after authMiddleware (it reads the token payload from the context).
@@ -55,25 +104,16 @@ func requireContentEditor(server *Server) gin.HandlerFunc {
 //   - 500 Internal Server Error: database failure during the role lookup
 func requireRole(server *Server, roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		auth := c.MustGet(authorizationPayloadKey).(*token.Payload)
-
-		user, err := server.store.GetUser(c.Request.Context(), auth.UserID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-				return
-			}
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to verify user role"})
+		user, ok := server.callerUser(c)
+		if !ok {
 			return
 		}
 
-		for _, role := range roles {
-			if strings.EqualFold(user.Role, role) {
-				c.Next()
-				return
-			}
+		if !hasRole(user, roles...) {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
 		}
 
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		c.Next()
 	}
 }

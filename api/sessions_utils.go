@@ -54,6 +54,7 @@ const (
 	LogUAIPChange       = "ℹ️  User agent or IP change detected"
 	LogSessionCreated   = "✅ New session created"
 	LogSessionRefreshed = "🔄 Session refreshed successfully"
+	LogPasswordChanged  = "🔑 Password changed - all sessions blocked"
 )
 
 // Feature flags for development and debugging

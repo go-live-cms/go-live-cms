@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -332,6 +333,71 @@ func TestUpdateUserTx(t *testing.T) {
 	require.Equal(t, arg.Role, result.User.Role)
 }
 
+func TestUpdateUserTx_PasswordChanged(t *testing.T) {
+	user := createTestUser(t)
+	other := createTestUser(t)
+
+	newSession := func(owner User) Session {
+		session, err := testQueries.CreateSession(context.Background(), CreateSessionParams{
+			ID:               uuid.New(),
+			UserID:           owner.ID,
+			Username:         owner.Username,
+			RefreshTokenHash: []byte(uuid.NewString()),
+			UserAgent:        "test",
+			ClientIp:         "127.0.0.1",
+			ExpiresAt:        time.Now().Add(time.Hour),
+		})
+		require.NoError(t, err)
+		return session
+	}
+	userSessions := []Session{newSession(user), newSession(user)}
+	otherSession := newSession(other)
+
+	updateArg := UpdateUserParams{
+		ID:                user.ID,
+		Username:          user.Username,
+		FullName:          user.FullName,
+		Email:             user.Email,
+		HashedPassword:    "new-hash",
+		Role:              user.Role,
+		PasswordChangedAt: user.PasswordChangedAt,
+	}
+
+	// Without the flag, sessions are left alone.
+	_, err := testStore.UpdateUserTx(context.Background(), UpdateUserTxParams{UpdateUserParams: updateArg})
+	require.NoError(t, err)
+	for _, s := range userSessions {
+		got, err := testQueries.GetSession(context.Background(), s.ID)
+		require.NoError(t, err)
+		require.False(t, got.IsBlocked)
+	}
+
+	// The caller's PasswordChangedAt is ignored: the tx stamps it itself.
+	updateArg.PasswordChangedAt = time.Now().Add(-time.Hour)
+	before := time.Now()
+	result, err := testStore.UpdateUserTx(context.Background(), UpdateUserTxParams{
+		UpdateUserParams: updateArg,
+		PasswordChanged:  true,
+	})
+	require.NoError(t, err)
+	require.False(t, result.User.PasswordChangedAt.Before(before.Truncate(time.Microsecond)),
+		"password_changed_at must be stamped inside the tx, not taken from the caller")
+
+	for _, s := range userSessions {
+		got, err := testQueries.GetSession(context.Background(), s.ID)
+		require.NoError(t, err)
+		require.True(t, got.IsBlocked, "user's session %s should be blocked", s.ID)
+
+		// A blocked session's refresh token no longer resolves.
+		_, err = testQueries.GetSessionByRefreshTokenHash(context.Background(), s.RefreshTokenHash)
+		require.ErrorIs(t, err, sql.ErrNoRows)
+	}
+
+	got, err := testQueries.GetSession(context.Background(), otherSession.ID)
+	require.NoError(t, err)
+	require.False(t, got.IsBlocked, "another user's session must be untouched")
+}
+
 func TestUpdateUserTx_UniqueConstraintViolation(t *testing.T) {
 	user1 := createTestUser(t)
 	user2 := createTestUser(t)
@@ -348,4 +414,83 @@ func TestUpdateUserTx_UniqueConstraintViolation(t *testing.T) {
 	_, err := testStore.UpdateUserTx(context.Background(), arg)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "already exists")
+}
+
+// TestUpdateUserTx_PasswordChangedBlocksConcurrentRotation reproduces the
+// refresh-vs-password-change race: a rotation-like transaction holding the
+// user row FOR SHARE inserts a new session and commits only after the
+// password change has started. The change must wait for it and then block
+// that session too, and its password_changed_at must postdate the rotation.
+func TestUpdateUserTx_PasswordChangedBlocksConcurrentRotation(t *testing.T) {
+	user := createTestUser(t)
+	ctx := context.Background()
+
+	locked := make(chan struct{})
+	release := make(chan struct{})
+	rotationDone := make(chan error, 1)
+	var rotated Session
+
+	go func() {
+		rotationDone <- testStore.ExecTx(ctx, func(q *Queries) error {
+			if err := q.LockUserForShare(ctx, user.ID); err != nil {
+				return err
+			}
+			var err error
+			rotated, err = q.CreateSession(ctx, CreateSessionParams{
+				ID:               uuid.New(),
+				UserID:           user.ID,
+				Username:         user.Username,
+				RefreshTokenHash: []byte(uuid.NewString()),
+				UserAgent:        "test",
+				ClientIp:         "127.0.0.1",
+				ExpiresAt:        time.Now().Add(time.Hour),
+			})
+			if err != nil {
+				return err
+			}
+			close(locked)
+			<-release
+			return nil
+		})
+	}()
+
+	<-locked
+
+	changeDone := make(chan UpdateUserTxResult, 1)
+	changeErr := make(chan error, 1)
+	go func() {
+		result, err := testStore.UpdateUserTx(ctx, UpdateUserTxParams{
+			UpdateUserParams: UpdateUserParams{
+				ID:                user.ID,
+				Username:          user.Username,
+				FullName:          user.FullName,
+				Email:             user.Email,
+				HashedPassword:    "new-hash",
+				Role:              user.Role,
+				PasswordChangedAt: user.PasswordChangedAt,
+			},
+			PasswordChanged: true,
+		})
+		changeErr <- err
+		changeDone <- result
+	}()
+
+	// The password change must be stuck on the user-row lock.
+	select {
+	case err := <-changeErr:
+		t.Fatalf("password change finished while the rotation held the user row (err=%v)", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	releasedAt := time.Now()
+	close(release)
+	require.NoError(t, <-rotationDone)
+	require.NoError(t, <-changeErr)
+	result := <-changeDone
+
+	got, err := testQueries.GetSession(ctx, rotated.ID)
+	require.NoError(t, err)
+	require.True(t, got.IsBlocked, "a session committed by a concurrent rotation must be blocked by the password change")
+	require.True(t, result.User.PasswordChangedAt.After(releasedAt),
+		"password_changed_at must be stamped after the rotation released the row")
 }

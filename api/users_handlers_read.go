@@ -27,7 +27,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
-	"github.com/go-live-cms/go-live-cms/token"
 )
 
 // getUserByUsername retrieves public user profile by username.
@@ -75,18 +74,12 @@ func (server *Server) getUserByUsername(c *gin.Context) {
 // Returns:
 //   - 200 OK: Complete user profile with private data
 //   - 401 Unauthorized: Invalid or missing authentication token
-//   - 404 Not Found: Authenticated user account not found
+//   - 403 Forbidden: Authenticated user account no longer exists
 //   - 500 Internal Server Error: Database query failure
 func (server *Server) getMe(c *gin.Context) {
-	auth := c.MustGet(authorizationPayloadKey).(*token.Payload)
-
-	user, err := server.store.GetUser(c.Request.Context(), auth.UserID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
+	// authMiddleware already loaded the caller's current row.
+	user, ok := server.callerUser(c)
+	if !ok {
 		return
 	}
 

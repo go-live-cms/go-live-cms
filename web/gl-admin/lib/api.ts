@@ -34,7 +34,7 @@ export function getMediaURL(mediaPath: string): string {
   return cleanPath
 }
 
-export async function apiCall(endpoint: string, options: ApiOptions = {}) {
+export async function apiCall(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<any> {
   const { token, method = "GET", body } = options
 
   // Import authManager dynamically to avoid circular dependency
@@ -61,12 +61,24 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}) {
   const response = await fetch(url, config)
 
   if (response.status === 401) {
-    // Give authManager a chance to refresh or prompt login
-    try {
-      if (authManager && typeof authManager.refreshAccessToken === "function") {
-        await authManager.refreshAccessToken()
+    // The server can reject a token the client still thinks is fresh (e.g.
+    // it predates a password change), so a 401 always gets a real refresh
+    // and one retry; the local expiry check is not consulted. Auth
+    // endpoints are excluded: their 401s mean bad credentials, not a stale
+    // token. If the refresh session is gone too, the refresh clears auth
+    // and the user is sent to log in.
+    if (!isRetry && !isServer && !endpoint.startsWith("/auth/")) {
+      let refreshed = false
+      try {
+        // Another request may already have swapped in a new token.
+        const current = authManager.getAccessToken()
+        refreshed = (!!current && current !== authToken) || (await authManager.forceRefresh())
+      } catch {}
+      if (refreshed) {
+        // Drop any caller-supplied token: it is the stale one.
+        return apiCall(endpoint, { ...options, token: undefined }, true)
       }
-    } catch {}
+    }
     throw new Error(`HTTP 401: ${await response.text()}`)
   }
 

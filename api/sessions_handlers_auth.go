@@ -44,6 +44,7 @@ package api
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -100,7 +101,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	}
 
 	// The v4 maker is needed both for the role-claim token below and for
-	// parsing the refresh token's JTI further down.
+	// parsing the refresh token's JTI in startSession.
 	v4Maker, ok := server.tokenMaker.(*token.PasetoV4Maker)
 	if !ok {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrInvalidTokenType})
@@ -121,65 +122,11 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
-	// Generate refresh token
-	refreshToken, err := server.tokenMaker.CreateRefreshToken(
-		user.ID,
-		user.Username,
-		server.config.RefreshTokenDuration,
-	)
+	session, err := server.startSession(ctx, v4Maker, user, now)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrTokenCreationFailed})
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Extract session details
-	userAgent := ctx.GetHeader("User-Agent")
-	clientIP := ctx.ClientIP()
-
-	refreshParsed, err := v4Maker.ParseRefresh(refreshToken)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse refresh token"})
-		return
-	}
-
-	refreshJTI, err := refreshParsed.GetJti()
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get JTI from refresh token"})
-		return
-	}
-
-	jtiUUID, err := uuid.Parse(refreshJTI)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "invalid JTI format"})
-		return
-	}
-
-	// Create session record
-	refreshHash := token.HashRefresh(refreshToken)
-	sessionID := uuid.New()
-
-	session, err := server.store.CreateSession(ctx.Request.Context(), db.CreateSessionParams{
-		ID:               sessionID,
-		UserID:           user.ID,
-		Username:         user.Username,
-		RefreshTokenHash: refreshHash,
-		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
-		Jti:              uuid.NullUUID{UUID: jtiUUID, Valid: true},
-		UserAgent:        userAgent,
-		ClientIp:         clientIP,
-		IsBlocked:        false,
-		ExpiresAt:        now.Add(server.config.RefreshTokenDuration),
-	})
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
-		return
-	}
-
-	// Set secure refresh cookie
-	server.setSecureCookie(ctx, RefreshCookieName, refreshToken, now.Add(server.config.RefreshTokenDuration))
-
-	// Log successful login
-	logSecurityEvent(LogSessionCreated, session.ID.String(), user.ID, fmt.Sprintf("IP: %s, UA: %s", clientIP, userAgent))
 
 	// Return response
 	accessExpiresAt := now.Add(server.config.AccessTokenDuration)
@@ -194,6 +141,68 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	ctx.Header("Cache-Control", "no-store")
 	ctx.JSON(http.StatusOK, rsp)
 }
+
+// startSession mints a refresh token for the user, records a new session for
+// it, and sets the refresh cookie on the response.
+//
+// Shared by login and by a self password change, which revokes every session
+// and then starts a fresh one so the caller stays signed in.
+//
+// The returned error's message is safe to send to the client.
+func (server *Server) startSession(ctx *gin.Context, v4Maker *token.PasetoV4Maker, user db.User, now time.Time) (db.Session, error) {
+	refreshToken, err := v4Maker.CreateRefreshToken(
+		user.ID,
+		user.Username,
+		server.config.RefreshTokenDuration,
+	)
+	if err != nil {
+		return db.Session{}, fmt.Errorf("%s", ErrTokenCreationFailed)
+	}
+
+	refreshParsed, err := v4Maker.ParseRefresh(refreshToken)
+	if err != nil {
+		return db.Session{}, fmt.Errorf("failed to parse refresh token")
+	}
+
+	refreshJTI, err := refreshParsed.GetJti()
+	if err != nil {
+		return db.Session{}, fmt.Errorf("failed to get JTI from refresh token")
+	}
+
+	jtiUUID, err := uuid.Parse(refreshJTI)
+	if err != nil {
+		return db.Session{}, fmt.Errorf("invalid JTI format")
+	}
+
+	userAgent := ctx.GetHeader("User-Agent")
+	clientIP := ctx.ClientIP()
+
+	session, err := server.store.CreateSession(ctx.Request.Context(), db.CreateSessionParams{
+		ID:               uuid.New(),
+		UserID:           user.ID,
+		Username:         user.Username,
+		RefreshTokenHash: token.HashRefresh(refreshToken),
+		RefreshKid:       sql.NullString{String: server.config.PasetoRefreshKID, Valid: true},
+		Jti:              uuid.NullUUID{UUID: jtiUUID, Valid: true},
+		UserAgent:        userAgent,
+		ClientIp:         clientIP,
+		IsBlocked:        false,
+		ExpiresAt:        now.Add(server.config.RefreshTokenDuration),
+	})
+	if err != nil {
+		return db.Session{}, fmt.Errorf("failed to create session")
+	}
+
+	server.setSecureCookie(ctx, RefreshCookieName, refreshToken, now.Add(server.config.RefreshTokenDuration))
+
+	logSecurityEvent(LogSessionCreated, session.ID.String(), user.ID, fmt.Sprintf("IP: %s, UA: %s", clientIP, userAgent))
+
+	return session, nil
+}
+
+// errSessionNoLongerActive aborts a refresh rotation whose old session was
+// blocked or rotated while the rotation waited for its locks.
+var errSessionNoLongerActive = errors.New("session no longer active")
 
 // renewAccessToken rotates tokens using refresh cookie and implements reuse detection.
 //
@@ -257,8 +266,18 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	session, err := server.store.GetSessionByRefreshTokenHash(ctx.Request.Context(), refreshHash)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// Check for reuse detection - token was used before
+			// The token is known but its session is blocked. Only a ROTATED
+			// session (replaced_by set) means the token was already spent,
+			// i.e. reuse. A session that was merely blocked (logout, manual
+			// block, password change) is just dead: escalating it to reuse
+			// would revoke the fresh session a password change hands out the
+			// moment another old device tries to refresh.
 			if s2, err2 := server.store.GetAnySessionByRefreshTokenHash(ctx.Request.Context(), refreshHash); err2 == nil {
+				if !s2.ReplacedBy.Valid {
+					ctx.JSON(http.StatusUnauthorized, gin.H{"error": ErrSessionBlocked})
+					return
+				}
+
 				// Block all sessions for this user
 				_ = server.store.BlockAllSessionsForUser(ctx.Request.Context(), s2.UserID)
 
@@ -340,11 +359,34 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
+	// Mint the access token BEFORE the rotation commits, so its iat is never
+	// later than a password change that commits after this rotation (see
+	// db.UpdateUserTxParams.PasswordChanged). Minted after the commit, it
+	// could postdate password_changed_at and survive the change.
+	accessToken, err := server.tokenMaker.CreateToken(
+		userID,
+		username,
+		server.config.AccessTokenDuration,
+	)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrTokenCreationFailed})
+		return
+	}
+
 	// Atomic session rotation
 	newRefreshHash := token.HashRefresh(newRefreshToken)
 	var newSessionID uuid.UUID
 
 	err = server.store.ExecTx(ctx.Request.Context(), func(q *db.Queries) error {
+		// Serialize against a password change on this user, which holds the
+		// user row FOR UPDATE while it stamps password_changed_at and blocks
+		// every session. Either it commits first (our old session is then
+		// blocked and RotateToNewSession matches nothing), or we do (and its
+		// block then sees the session we create here).
+		if err := q.LockUserForShare(ctx.Request.Context(), userID); err != nil {
+			return err
+		}
+
 		// Lock old session
 		_, err := q.GetSessionForUpdate(ctx.Request.Context(), session.ID)
 		if err != nil {
@@ -379,25 +421,20 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		}
 
 		if rowsAffected == 0 {
-			return fmt.Errorf("concurrent session rotation detected")
+			return errSessionNoLongerActive
 		}
 
 		return nil
 	})
 
 	if err != nil {
+		if errors.Is(err, errSessionNoLongerActive) {
+			// Blocked (e.g. a password change won the user-row lock) or
+			// rotated by a concurrent refresh while we waited.
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": ErrSessionBlocked})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to rotate session atomically"})
-		return
-	}
-
-	// Create new access token
-	accessToken, err := server.tokenMaker.CreateToken(
-		userID,
-		username,
-		server.config.AccessTokenDuration,
-	)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": ErrTokenCreationFailed})
 		return
 	}
 

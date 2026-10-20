@@ -145,10 +145,10 @@ func (server *Server) setupRoutes() {
 	posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
 
 	postTypes := v1.Group("/post-types")
-	postTypes.GET("", server.getPostTypes)                                            // GET /api/v1/post-types
-	postTypes.GET("/:name", server.getPostType)                                       // GET /api/v1/post-types/:name
-	postTypes.POST("", authMiddleware(server.tokenMaker), requireSiteAdmin(server), server.createPostType)      // POST /api/v1/post-types (admin)
-	postTypes.PUT("/:name", authMiddleware(server.tokenMaker), requireSiteAdmin(server), server.updatePostType) // PUT /api/v1/post-types/:name (admin)
+	postTypes.GET("", server.getPostTypes)                                                                                    // GET /api/v1/post-types
+	postTypes.GET("/:name", server.getPostType)                                                                               // GET /api/v1/post-types/:name
+	postTypes.POST("", authMiddleware(server.tokenMaker, server.store), requireSiteAdmin(server), server.createPostType)      // POST /api/v1/post-types (admin)
+	postTypes.PUT("/:name", authMiddleware(server.tokenMaker, server.store), requireSiteAdmin(server), server.updatePostType) // PUT /api/v1/post-types/:name (admin)
 
 	// Taxonomy module routes (see taxonomy_routes.go for complete definitions)
 	server.RegisterTaxonomyRoutes(v1)

@@ -20,9 +20,9 @@ package api
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -99,6 +99,12 @@ func (server *Server) createUser(c *gin.Context) {
 // privilege-escalation hole where any authenticated user could promote
 // themselves.
 //
+// A password change blocks every session the target user holds, so stolen
+// refresh tokens die with the old password. Changing your OWN password also
+// requires current_password; the caller is then issued a fresh session (new
+// refresh cookie) so they stay signed in. An admin resetting someone else's
+// password needs no current password and gets no new session.
+//
 // Path parameters:
 //   - id: User's database primary key
 //
@@ -106,7 +112,8 @@ func (server *Server) createUser(c *gin.Context) {
 //   - username: New unique username
 //   - full_name: Updated display name
 //   - email: New email address
-//   - password: New password (triggers hash update)
+//   - password: New password (hashes it and revokes all the user's sessions)
+//   - current_password: Required with password on a self-change
 //   - role: Updated role assignment (admin-only)
 //
 // Authentication: Required (Bearer token; caller must be the target user or an admin)
@@ -115,7 +122,8 @@ func (server *Server) createUser(c *gin.Context) {
 //   - 200 OK: User successfully updated
 //   - 400 Bad Request: Invalid user ID or request data
 //   - 401 Unauthorized: Invalid authentication token
-//   - 403 Forbidden: Not the account owner, or non-admin changing a role
+//   - 403 Forbidden: Not the account owner, non-admin changing a role, or a
+//     self password change with a missing or wrong current_password
 //   - 404 Not Found: User does not exist
 //   - 409 Conflict: Username or email already exists, or demoting the last admin
 //   - 500 Internal Server Error: Database transaction failure
@@ -127,43 +135,59 @@ func (server *Server) updateUser(c *gin.Context) {
 		return
 	}
 
+	// Self-or-admin check against the caller's CURRENT DB role (the token
+	// payload carries no trusted role information). Runs before binding so a
+	// non-owner gets 403 whether or not the body is valid.
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
+	isAdmin := isSiteAdmin(caller)
+	isSelf := caller.ID == id
+	if !isAdmin && !isSelf {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+
 	var req UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Self-or-admin check against the caller's CURRENT DB role (the token
-	// payload carries no trusted role information).
-	auth := c.MustGet(authorizationPayloadKey).(*token.Payload)
-	caller, err := server.store.GetUser(c.Request.Context(), auth.UserID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify user role"})
-		return
-	}
-	isAdmin := strings.EqualFold(caller.Role, RoleAdmin)
-	if !isAdmin && auth.UserID != id {
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-		return
-	}
 	if !isAdmin && req.Role != "" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "only admins can change roles"})
 		return
 	}
 
-	// Retrieve existing user data
-	existingUser, err := server.store.GetUser(c.Request.Context(), id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+	// A self-update targets the caller's own row, which is already loaded.
+	existingUser := caller
+	if !isSelf {
+		var err error
+		existingUser, err = server.store.GetUser(c.Request.Context(), id)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
-		return
+	}
+
+	// Changing your own password requires the current one, so a leaked
+	// access token alone cannot take over the account. Admins resetting
+	// someone else's password skip this.
+	passwordChanged := req.Password != ""
+	if passwordChanged && isSelf {
+		if req.CurrentPassword == "" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "current password is required"})
+			return
+		}
+		if err := util.CheckPassword(req.CurrentPassword, existingUser.HashedPassword); err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "current password is incorrect"})
+			return
+		}
 	}
 
 	// Prepare update parameters with existing values as defaults
@@ -190,23 +214,26 @@ func (server *Server) updateUser(c *gin.Context) {
 	if req.Role != "" {
 		updateParams.Role = req.Role
 	}
-	if req.Password != "" {
-		// Hash new password and update timestamp
+	if passwordChanged {
+		// password_changed_at is stamped inside UpdateUserTx, under the user
+		// row lock, not here: hashing takes long enough for a concurrent
+		// refresh to mint a token that would otherwise postdate it.
 		hashedPassword, err := util.HashPassword(req.Password)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 			return
 		}
 		updateParams.HashedPassword = hashedPassword
-		updateParams.PasswordChangedAt = time.Now()
 	}
 
 	// Execute transactional update with uniqueness checks. The transaction
 	// also refuses to demote the last admin (db.ErrLastAdmin), which would
-	// leave no account able to manage users, themes, settings, or post types.
+	// leave no account able to manage users, themes, settings, or post types,
+	// and on a password change blocks every session the user holds.
 	result, err := server.store.UpdateUserTx(c.Request.Context(), db.UpdateUserTxParams{
 		UpdateUserParams: updateParams,
 		CheckUniqueness:  true,
+		PasswordChanged:  passwordChanged,
 	})
 	if err != nil {
 		if errors.Is(err, db.ErrLastAdmin) {
@@ -221,9 +248,56 @@ func (server *Server) updateUser(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	rsp := gin.H{
 		"user": toPrivateUser(result.User),
-	})
+	}
+
+	if passwordChanged {
+		logSecurityEvent(LogPasswordChanged, "all", id, fmt.Sprintf("Changed by user %d", caller.ID))
+
+		// The refresh cookie is scoped to /api/v1/auth, so this request
+		// cannot say which session it came from. Instead, the self-changer
+		// gets a brand-new session (and cookie) to stay signed in; every
+		// session that existed before the change is now blocked. Their
+		// current access token predates the change too, so authMiddleware
+		// now rejects it: hand back a fresh one for the client to adopt.
+		// If any of this fails the password change still stands and they
+		// sign in again.
+		if isSelf {
+			if err := server.issueSelfSessionAfterPasswordChange(c, result.User, time.Now(), rsp); err != nil {
+				logSecurityEvent(LogPasswordChanged, "none", id, fmt.Sprintf("Failed to start a new session for the caller: %v", err))
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, rsp)
+}
+
+// issueSelfSessionAfterPasswordChange starts a fresh refresh session for a
+// user who just changed their own password, and adds a new access token to
+// rsp under the same keys login uses (access_token, access_token_expires_at,
+// expires_at).
+func (server *Server) issueSelfSessionAfterPasswordChange(c *gin.Context, user db.User, now time.Time, rsp gin.H) error {
+	v4Maker, ok := server.tokenMaker.(*token.PasetoV4Maker)
+	if !ok {
+		return errors.New(ErrInvalidTokenType)
+	}
+
+	if _, err := server.startSession(c, v4Maker, user, now); err != nil {
+		return err
+	}
+
+	accessToken, err := v4Maker.CreateTokenWithRole(user.ID, user.Username, user.Role, server.config.AccessTokenDuration)
+	if err != nil {
+		return errors.New(ErrTokenCreationFailed)
+	}
+
+	accessExpiresAt := now.Add(server.config.AccessTokenDuration)
+	rsp["access_token"] = accessToken
+	rsp["access_token_expires_at"] = accessExpiresAt
+	rsp["expires_at"] = accessExpiresAt.Unix()
+	c.Header("Cache-Control", "no-store")
+	return nil
 }
 
 // deleteUser removes user account with optional content transfer.

@@ -37,6 +37,13 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
 
 ## Misc
 
+- **Auth / 401s:** `apiCall` (`gl-admin/lib/api.ts`) treats a 401 as "the server
+  revoked this token". It calls `authManager.forceRefresh()` and retries once,
+  ignoring the local expiry, because a password change invalidates access tokens
+  early. `/auth/*` endpoints are excluded (there a 401 means bad credentials). A
+  failed refresh clears auth. `blockAPI.ts` does NOT go through this: it throws
+  `UnauthorizedError` to the collab persistence layer.
+
 - TipTap is on **v3** (breaking from v2). `setContent`'s 2nd arg is an options object
   `{ emitUpdate }` — NOT the v2 boolean. `emitUpdate:false` only suppresses TipTap's
   `update` event; the collaboration ySyncPlugin still mirrors content to Yjs regardless.
