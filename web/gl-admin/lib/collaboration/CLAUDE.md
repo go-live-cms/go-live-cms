@@ -153,15 +153,25 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
 - **Known limitation:** a `code_block` with empty code can't round-trip (ProseMirror
   disallows empty text nodes) — `blockDocToPM` throws. Pinned by a test.
 - **`schema.nodeFromJSON` does NOT validate content expressions** — it will happily
-  build a schema-invalid node. Tests prove validity with `node.check()`.
-- **Empty lists (#213):** the schema requires `listItem+`. `blockDocToPM` gives a
-  `bullet_list`/`ordered_list` whose children are empty, absent, or all dangling ids
-  **one synthesized empty `listItem`** (empty paragraph inside) via `listItemsToPM`,
-  keeping the list's block id and position (dropping it could leave an empty `doc`,
-  which violates `block+` too). The synthesized item has no `data-block-id`;
-  `pmToBlockDoc` mints one at save. Conversely, `pmToBlockDoc` **skips** a childless
-  list node (only reachable from an already-invalid PM doc), so a childless list block
-  is never persisted.
+  build a schema-invalid node. So `blockDocToPM` runs `check()` on **each top-level
+  block** and drops (with a `console.warn`) any that fail. It deliberately does not
+  throw for the whole doc: if `setEditorBlockDoc` fails, `initialize()` has still seeded
+  the block maps, the editor is empty, and the next autosave would overwrite the entire
+  working copy. The doc-level `block+` rule is not checked (an empty block doc stays an
+  empty PM doc). Tests prove validity with `node.check()`.
+- **Empty lists (#213):** the schema requires `listItem+`. In `listItemsToPM`, a list
+  child that doesn't convert to a `listItem` is dropped. A list left with no items
+  (children empty, absent, all dangling, or all dropped) gets **one synthesized empty
+  `listItem`** (empty paragraph inside), keeping the list's block id and position.
+  The synthesized item's id is **deterministic (`<listId>-item`)**, not random:
+  `BlockIdExtension` only stamps top-level nodes, so an id-less item would be re-minted
+  by `pmToBlockDoc` on every save and churn Yjs (rule 2). Conversely, `pmToBlockDoc`
+  **skips** a childless list node (only reachable from an already-invalid PM doc), so a
+  childless list block is never persisted.
+- **Known gap:** listItems created *in the editor* have no `data-block-id` (same
+  top-level-only stamping), so `pmToBlockDoc` mints them a new id on every save. Also,
+  list `children` have no cycle guard — a list that contains itself recurses until the
+  stack overflows. Both are tracked follow-ups.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema all allow the full range — keep them in sync). `validateBlockDoc` has no
   production caller yet; wiring validation is a tracked follow-up.

@@ -224,6 +224,26 @@ describe("blockBridge — edge cases", () => {
     expect(texts).toEqual(["first", "second"])
   })
 
+  it("drops a schema-invalid top-level block but keeps the rest of the doc", () => {
+    const bad = id()
+    const good = id()
+    // A blockquote whose pm blob has no content violates `block+`; nodeFromJSON
+    // builds it anyway, so blockDocToPM must catch it with check().
+    const doc: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: [bad, good],
+      blocks: {
+        [bad]: { id: bad, type: "blockquote", version: 1, attrs: { pm: { type: "blockquote", content: [] } } },
+        [good]: { id: good, type: "paragraph", version: 1, attrs: { text: "kept" } },
+      },
+    }
+    const pm = blockDocToPM(doc, schema)
+    expect(() => pm.check()).not.toThrow()
+    expect(pm.childCount).toBe(1)
+    expect(pm.child(0).attrs["data-block-id"]).toBe(good)
+    expect(pm.textContent).toBe("kept")
+  })
+
   it("documents the empty-code-block limitation (cannot build an empty text node)", () => {
     // ProseMirror disallows empty text nodes, so a code_block with empty code
     // cannot be reconstructed by blockDocToPM. Pinning this so it's a conscious
@@ -588,6 +608,7 @@ describe("blockBridge — additional edge cases", () => {
         expect(list.childCount).toBe(1)
         const item = list.child(0)
         expect(item.type.name).toBe("listItem")
+        expect(item.attrs["data-block-id"]).toBe(`${a}-item`)
         expect(item.childCount).toBe(1)
         expect(item.child(0).type.name).toBe("paragraph")
         expect(item.textContent).toBe("")
@@ -619,9 +640,58 @@ describe("blockBridge — additional edge cases", () => {
       expect(list.children).toHaveLength(1)
       const item = out.blocks[list.children![0]]
       expect(item.type).toBe("list_item")
-      // The synthesized item carried no id; pmToBlockDoc minted a valid one.
-      expect(item.id.length).toBeGreaterThanOrEqual(10)
+      expect(item.id).toBe(`${a}-item`)
       expect(item.attrs.text).toBeUndefined()
+    })
+
+    it("the synthesized item's id is stable across loads and saves (no Yjs churn, rule 2)", () => {
+      const a = id()
+      const doc: BlockDocV1 = {
+        doc_version: 1,
+        blocks_order: [a],
+        blocks: { [a]: { id: a, type: "ordered_list", version: 1, attrs: {}, children: [] } },
+      }
+      const pm = blockDocToPM(doc, schema)
+      // Two saves of the same editor doc, and a fresh load, must agree on the item id.
+      const save1 = pmToBlockDoc(pm)
+      const save2 = pmToBlockDoc(pm)
+      const reload = pmToBlockDoc(blockDocToPM(doc, schema))
+      expect(save2.blocks[a].children).toEqual(save1.blocks[a].children)
+      expect(reload.blocks[a].children).toEqual(save1.blocks[a].children)
+      expect(save2).toEqual(save1)
+    })
+
+    it("drops non-listItem children; a list left empty gets the synthesized item", () => {
+      const list = id()
+      const para = id()
+      const item = id()
+      const blocks = {
+        [para]: { id: para, type: "paragraph", version: 1, attrs: { text: "stray" } },
+        [item]: { id: item, type: "list_item", version: 1, attrs: { text: "real" } },
+      } as const
+      const mixed = blockDocToPM(
+        {
+          doc_version: 1,
+          blocks_order: [list],
+          blocks: { ...blocks, [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [para, item] } } as any,
+        },
+        schema,
+      )
+      expect(() => mixed.check()).not.toThrow()
+      expect(mixed.child(0).childCount).toBe(1)
+      expect(mixed.child(0).child(0).attrs["data-block-id"]).toBe(item)
+      expect(mixed.child(0).textContent).toBe("real")
+
+      const onlyStray = blockDocToPM(
+        {
+          doc_version: 1,
+          blocks_order: [list],
+          blocks: { ...blocks, [list]: { id: list, type: "bullet_list", version: 1, attrs: {}, children: [para] } } as any,
+        },
+        schema,
+      )
+      expect(() => onlyStray.check()).not.toThrow()
+      expect(onlyStray.child(0).child(0).attrs["data-block-id"]).toBe(`${list}-item`)
     })
 
     it("pmToBlockDoc never emits a childless list block (skips an invalid empty list node)", () => {

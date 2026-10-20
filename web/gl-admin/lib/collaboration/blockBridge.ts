@@ -1,4 +1,4 @@
-import { Node as PMNode, Schema } from "prosemirror-model"
+import { Fragment, Node as PMNode, Schema } from "prosemirror-model"
 import type { BlockDocV1, Block, BlockID } from "../blocks-spec"
 import type { Editor } from "@tiptap/core"
 
@@ -41,15 +41,17 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
   // Iterate through top-level nodes
   for (let i = 0; i < pmDoc.content.childCount; i++) {
     const node = pmDoc.content.child(i)
+    const isList = node.type.name === "bulletList" || node.type.name === "orderedList"
+
+    // A list with no items can only come from an already schema-invalid PM node
+    // (the schema requires `listItem+`; nodeFromJSON doesn't enforce it). It holds
+    // no content, so skip it rather than persist a childless list block (#213).
+    if (isList && node.childCount === 0) continue
+
     const block = pmNodeToBlock(node, blocks, seenIds)
     if (!block) continue
 
-    if (block.type === "bullet_list" || block.type === "ordered_list") {
-      // A list with no items can only come from an already schema-invalid PM node
-      // (the schema requires `listItem+`; nodeFromJSON doesn't enforce it). It holds
-      // no content, so skip it rather than persist a childless list block (#213).
-      if (node.childCount === 0) continue
-
+    if (isList) {
       blocksOrder.push(block.id)
       seenIds.add(block.id)
 
@@ -220,7 +222,23 @@ export function blockDocToPM(doc: BlockDocV1, schema: Schema): PMNode {
       .filter(Boolean), // Remove nulls
   }
 
-  return schema.nodeFromJSON(pmJSON)
+  const pmDoc = schema.nodeFromJSON(pmJSON)
+
+  // nodeFromJSON doesn't check content expressions, so validate each top-level block
+  // here. An invalid block is dropped (and logged) rather than failing the whole doc:
+  // if setEditorBlockDoc fails, the editor stays empty while autosave stays armed, so
+  // the next save would overwrite the entire working copy. The doc-level `block+`
+  // rule is deliberately not checked: an empty block doc stays an empty PM doc.
+  const valid: PMNode[] = []
+  pmDoc.forEach((node) => {
+    try {
+      node.check()
+      valid.push(node)
+    } catch (error) {
+      console.warn(`Dropping schema-invalid block ${node.attrs["data-block-id"]}:`, error)
+    }
+  })
+  return valid.length === pmDoc.childCount ? pmDoc : pmDoc.copy(Fragment.from(valid))
 }
 
 /**
@@ -329,14 +347,14 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>): any {
       return {
         type: "bulletList",
         attrs: baseAttrs,
-        content: listItemsToPM(block.children, allBlocks),
+        content: listItemsToPM(block.id, block.children, allBlocks),
       }
 
     case "ordered_list":
       return {
         type: "orderedList",
         attrs: baseAttrs,
-        content: listItemsToPM(block.children, allBlocks),
+        content: listItemsToPM(block.id, block.children, allBlocks),
       }
 
     case "list_item":
@@ -373,26 +391,32 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>): any {
 
 /**
  * Convert a list block's children to PM listItem JSON. The schema requires
- * `listItem+`, but schema.nodeFromJSON doesn't check content expressions, so an
- * empty array would silently build a schema-invalid list (#213). When no child
- * resolves (no children, or all ids dangling), synthesize one empty listItem —
- * what the editor itself produces for a fresh list. It gets no data-block-id;
- * pmToBlockDoc mints one at save time.
+ * `listItem+`, but schema.nodeFromJSON doesn't check content expressions (#213), so:
+ * - a child that doesn't convert to a listItem is dropped (a list can't hold it);
+ * - when no child is left (none, all dangling, or all dropped), synthesize one empty
+ *   listItem, which is what the editor itself produces for a fresh list.
+ * The synthesized item's id is derived from the list id, NOT random: BlockIdExtension
+ * only stamps top-level nodes, so a missing item id would be re-minted by
+ * pmToBlockDoc on every save, and setBlockDocV1 would churn Yjs each time (rule 2).
  */
-function listItemsToPM(children: BlockID[] | undefined, allBlocks: Record<BlockID, Block>): any[] {
-  const items = (children ?? [])
-    .map((childId) => {
-      const childBlock = allBlocks[childId]
-      if (!childBlock) {
-        console.warn(`Child block ${childId} not found`)
-        return null
-      }
-      return blockToPMNode(childBlock, allBlocks)
-    })
-    .filter(Boolean)
+function listItemsToPM(listId: BlockID, children: BlockID[] | undefined, allBlocks: Record<BlockID, Block>): any[] {
+  const items: any[] = []
+  for (const childId of children ?? []) {
+    const childBlock = allBlocks[childId]
+    if (!childBlock) {
+      console.warn(`Child block ${childId} not found`)
+      continue
+    }
+    const childNode = blockToPMNode(childBlock, allBlocks)
+    if (childNode?.type !== "listItem") {
+      console.warn(`Dropping non-listItem child ${childId} (${childBlock.type}) of list ${listId}`)
+      continue
+    }
+    items.push(childNode)
+  }
 
   if (items.length > 0) return items
-  return [{ type: "listItem", content: [{ type: "paragraph" }] }]
+  return [{ type: "listItem", attrs: { "data-block-id": `${listId}-item` }, content: [{ type: "paragraph" }] }]
 }
 
 /**
