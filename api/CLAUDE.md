@@ -127,6 +127,28 @@ server.
   `includeSubDomains` (it reaches the site's host through the `/api` proxy,
   which may be the apex domain). Don't add a
   `Cross-Origin-Resource-Policy`: the web app loads `/uploads` cross-origin.
+
+## Rate limiting and client IP (#190, #156)
+
+- `ratelimit.go`: a general per-IP limit on the `/api/v1` and `/public` groups, plus
+  stricter per-IP limits on `/auth/register` and `/auth/refresh`. Login has a per-IP
+  cap plus a **per IP+username** limit checked in `loginUser` after binding. Self
+  password changes have a **per user+IP** limit inside `updateUser`, because only the
+  body says whether a password is changing. Per-user-only keys would let an attacker
+  lock the owner out, so don't use them. 429 +
+  `Retry-After` + `{"error": ...}`. Limits are per minute from `RATE_LIMIT_*` in
+  `util/config.go`, and 0 disables one. **A zero `Config` (tests) has every limit off**,
+  so existing handler tests aren't throttled; rate-limit tests set them explicitly.
+- Counters are in memory (`memoryRateLimitStore`, x/time/rate, 32 locked shards,
+  idle buckets evicted after a minute, LRU eviction past 100k keys) behind
+  `RateLimitStore`, the seam for Redis/Valkey (#185). Key clients with `clientKey`
+  (IPv6 → its /64), not the raw IP.
+- **`ctx.ClientIP()` only reads X-Forwarded-For from `TRUSTED_PROXIES`** (none by
+  default; `SetTrustedProxies` in `setupRoutes`, which returns its error to
+  `NewServer`; `nil` on the internal router). Don't parse forwarding headers yourself.
+  Dev compose trusts the private Docker ranges because the Vite proxy sets XFF.
+- The internal listener is not limited on purpose (see the `ratelimit.go` header).
+
 ## Collaboration integration (WS role lookup, #223)
 
 - `GET /internal/users/:id/role?issued_at=<unix>` (`internal_routes.go`,

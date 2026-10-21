@@ -131,6 +131,40 @@ type Config struct {
 	// per-connection role check. Must match ROLE_LOOKUP_SECRET in websocket/.env.
 	// Required: NewServer refuses to start without it (no default).
 	RoleLookupSecret string `mapstructure:"ROLE_LOOKUP_SECRET"`
+
+	// TrustedProxies is a comma-separated list of proxy IPs/CIDRs whose
+	// X-Forwarded-For / X-Real-IP headers are believed when working out the
+	// client IP (rate limiting, session IPs). Empty (the default) trusts no
+	// proxy: the client IP is the TCP peer, so the headers can't be spoofed.
+	// Set it to your reverse proxy / load balancer addresses.
+	TrustedProxies string `mapstructure:"TRUSTED_PROXIES"`
+
+	// Rate limits, in requests per minute per client IP (token bucket: the full
+	// minute's allowance may be spent at once, then it refills evenly). 0
+	// disables that limit. LoadConfig defaults them; a zero Config (tests) has
+	// every limit off.
+	//
+	// RateLimitGeneralPerMinute applies to every public API request.
+	RateLimitGeneralPerMinute int `mapstructure:"RATE_LIMIT_GENERAL_PER_MINUTE"`
+	// RateLimitLoginPerMinute applies to POST /auth/login per client IP *and*
+	// username, and to POST /auth/register per client IP.
+	RateLimitLoginPerMinute int `mapstructure:"RATE_LIMIT_LOGIN_PER_MINUTE"`
+	// RateLimitLoginIPPerMinute caps POST /auth/login per client IP across all
+	// usernames (credential spraying). Keep it well above
+	// RateLimitLoginPerMinute so clients sharing an IP aren't easily locked out.
+	RateLimitLoginIPPerMinute int `mapstructure:"RATE_LIMIT_LOGIN_IP_PER_MINUTE"`
+	// RateLimitRefreshPerMinute applies to POST /auth/refresh.
+	RateLimitRefreshPerMinute int `mapstructure:"RATE_LIMIT_REFRESH_PER_MINUTE"`
+	// RateLimitPasswordChangePerMinute applies to self password changes
+	// (PUT /users/:id with a password), per user and client IP, so a stolen
+	// token's guesses can't block the owner's own password change.
+	RateLimitPasswordChangePerMinute int `mapstructure:"RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE"`
+
+	// RateLimitExemptCIDRs is a comma-separated list of client IPs/CIDRs that
+	// skip the general limit (the auth limits still apply). Use it for trusted
+	// server-side callers that funnel many users through one address, such as
+	// the web container's SSR requests.
+	RateLimitExemptCIDRs string `mapstructure:"RATE_LIMIT_EXEMPT_CIDRS"`
 }
 
 // LoadConfig reads app.env (optional) and environment variables into Config.
@@ -198,6 +232,18 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("COLLAB_SERVER_URL", "")
 	viper.SetDefault("COLLAB_SQUASH_SECRET", "")
 
+	// Client IP and rate limiting. No trusted proxies by default, so
+	// X-Forwarded-For can't be forged to dodge the limits. The general limit
+	// is generous because in dev every browser request reaches the API through
+	// the web container's proxy, i.e. from one IP.
+	viper.SetDefault("TRUSTED_PROXIES", "")
+	viper.SetDefault("RATE_LIMIT_GENERAL_PER_MINUTE", 600)
+	viper.SetDefault("RATE_LIMIT_LOGIN_PER_MINUTE", 10)
+	viper.SetDefault("RATE_LIMIT_LOGIN_IP_PER_MINUTE", 100)
+	viper.SetDefault("RATE_LIMIT_REFRESH_PER_MINUTE", 30)
+	viper.SetDefault("RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE", 5)
+	viper.SetDefault("RATE_LIMIT_EXEMPT_CIDRS", "")
+
 	// Required, so deliberately no default. Bind it explicitly instead: viper's
 	// Unmarshal only sees AutomaticEnv values for keys it already knows from a
 	// default or app.env, so without this a ROLE_LOOKUP_SECRET set only in the
@@ -229,7 +275,42 @@ func LoadConfig(path string) (config Config, err error) {
 			config.GinMode, GinModeDebug, GinModeRelease, GinModeTest)
 	}
 
+	for name, v := range map[string]int{
+		"RATE_LIMIT_GENERAL_PER_MINUTE":         config.RateLimitGeneralPerMinute,
+		"RATE_LIMIT_LOGIN_PER_MINUTE":           config.RateLimitLoginPerMinute,
+		"RATE_LIMIT_LOGIN_IP_PER_MINUTE":        config.RateLimitLoginIPPerMinute,
+		"RATE_LIMIT_REFRESH_PER_MINUTE":         config.RateLimitRefreshPerMinute,
+		"RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE": config.RateLimitPasswordChangePerMinute,
+	} {
+		if v < 0 {
+			return config, fmt.Errorf("invalid %s %d: must be >= 0 (0 disables the limit)", name, v)
+		}
+	}
+
 	return config, nil
+}
+
+// splitList splits a comma-separated config value, trimming entries and
+// dropping empty ones.
+func splitList(s string) []string {
+	var out []string
+	for _, v := range strings.Split(s, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// TrustedProxyList returns TrustedProxies as a list (nil when empty, which
+// trusts no proxy). gin validates the entries.
+func (c Config) TrustedProxyList() []string {
+	return splitList(c.TrustedProxies)
+}
+
+// RateLimitExemptList returns RateLimitExemptCIDRs as a list.
+func (c Config) RateLimitExemptList() []string {
+	return splitList(c.RateLimitExemptCIDRs)
 }
 
 // Gin engine modes accepted by GIN_MODE. They match gin.DebugMode,
@@ -250,11 +331,5 @@ func (c Config) IsDebugMode() bool {
 // AllowedOrigins returns CORSAllowedOrigins split on commas, trimmed, with
 // empty entries dropped.
 func (c Config) AllowedOrigins() []string {
-	var origins []string
-	for _, o := range strings.Split(c.CORSAllowedOrigins, ",") {
-		if o = strings.TrimSpace(o); o != "" {
-			origins = append(origins, o)
-		}
-	}
-	return origins
+	return splitList(c.CORSAllowedOrigins)
 }

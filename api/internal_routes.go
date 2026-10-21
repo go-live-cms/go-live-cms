@@ -33,6 +33,10 @@ import (
 //   - GET /internal/users/:id/role?issued_at=<unix seconds> (WS role lookup)
 func (server *Server) newInternalRouter() *gin.Engine {
 	router := gin.New()
+	// Nothing proxies this listener; log the real peer, not a header.
+	if err := router.SetTrustedProxies(nil); err != nil {
+		panic(err) // nil can't fail to parse
+	}
 	router.Use(gin.Logger(), gin.Recovery())
 
 	internal := router.Group("/internal")

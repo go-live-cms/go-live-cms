@@ -57,6 +57,37 @@ describe("apiCall 401 handling", () => {
     expect(authManager.getState().isAuthenticated).toBe(false)
   })
 
+  it("stays signed in and retries after Retry-After when the refresh is rate limited", async () => {
+    vi.useFakeTimers()
+    try {
+      let refreshCalls = 0
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url !== "/api/v1/auth/refresh") return json(401, { error: "token revoked" })
+        refreshCalls++
+        if (refreshCalls === 1) {
+          return new Response(JSON.stringify({ error: "too many requests, try again later" }), {
+            status: 429,
+            headers: { "content-type": "application/json", "Retry-After": "7" },
+          })
+        }
+        return json(200, { access_token: "new-token", expires_at: FRESH_LOOKING.expires_at })
+      })
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+
+      await expect(apiCall("/users/me")).rejects.toThrow(/HTTP 401/)
+      expect(authManager.getState().isAuthenticated).toBe(true)
+      expect(authManager.getAccessToken()).toBe("stale-token")
+
+      await vi.advanceTimersByTimeAsync(6_000)
+      expect(refreshCalls).toBe(1)
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(refreshCalls).toBe(2)
+      expect(authManager.getAccessToken()).toBe("new-token")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("retries without refreshing when another request already swapped in a new token", async () => {
     fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
       const auth = (init.headers as Record<string, string>).Authorization

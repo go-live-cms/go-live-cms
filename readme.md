@@ -122,6 +122,45 @@ UPDATE sessions SET is_blocked = true
 Then start the API again. If an account was used while it had the known password,
 review what it changed.
 
+#### Rate limiting and client IPs
+
+The API limits requests per client IP and answers `429 Too Many Requests` with a
+`Retry-After` header (seconds) and `{"error": "..."}` once a limit is used up. Limits
+are requests per minute; the whole minute's allowance can be spent at once, then it
+refills evenly. `0` turns a limit off.
+
+| Variable | Default | Applies to |
+|----------|---------|------------|
+| `RATE_LIMIT_GENERAL_PER_MINUTE` | 600 | every `/api/v1` and `/public` request, per IP |
+| `RATE_LIMIT_LOGIN_PER_MINUTE` | 10 | `POST /auth/login` per IP *and* username; `POST /auth/register` per IP |
+| `RATE_LIMIT_LOGIN_IP_PER_MINUTE` | 100 | `POST /auth/login` per IP across all usernames |
+| `RATE_LIMIT_REFRESH_PER_MINUTE` | 30 | `POST /auth/refresh`, per IP |
+| `RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE` | 5 | changing your own password (`PUT /users/:id`), per user and IP |
+| `RATE_LIMIT_EXEMPT_CIDRS` | empty | IPs/CIDRs that skip the general limit (auth limits still apply) |
+
+`/health`, `/uploads` and the internal listener aren't limited. IPv6 clients are
+counted per /64, since one host usually holds the whole block. Login is limited per IP
+and username, so a few bad guesses against one account can't lock out everyone else
+behind the same IP; the looser per-IP cap limits guessing across usernames. Counters
+are kept in memory (up to 100,000 clients per limit), so each API process enforces its
+own limits. When the admin app's token refresh is rate limited, it stays signed in and
+retries after `Retry-After`.
+
+**Client IP and `TRUSTED_PROXIES`.** By default the API trusts no proxy: the client IP
+is the TCP peer, and `X-Forwarded-For` / `X-Real-IP` are ignored. Otherwise anyone
+could send a new `X-Forwarded-For` with each request and never hit a limit. If the API
+runs behind a reverse proxy or load balancer, list its addresses (comma-separated IPs or
+CIDRs) in `TRUSTED_PROXIES`, e.g. `TRUSTED_PROXIES=10.0.0.0/8`. Then the client IP is
+read from the headers that proxy sets. Without it, every request seems to come from the
+proxy and all clients share one allowance.
+
+Requests the web app makes server-side (Astro SSR) all come from the web container's
+IP. On a busy site, add that address or its Docker network to
+`RATE_LIMIT_EXEMPT_CIDRS`. If browser API calls also pass through the web tier, it
+must forward the client IP in `X-Forwarded-For` and be listed in `TRUSTED_PROXIES`.
+In development the Vite proxy does that (`xfwd`), and `compose.dev.yaml` trusts the
+private Docker ranges.
+
 ### Database Management
 
 ```bash

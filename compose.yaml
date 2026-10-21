@@ -44,6 +44,9 @@ services:
       ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
       # Server-to-server listener (/internal/*). Never add it to `ports:`.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
+      # Behind a reverse proxy, list its IPs/CIDRs so rate limits key on the real
+      # client (X-Forwarded-For). Empty trusts no proxy. See readme "Rate limiting".
+      TRUSTED_PROXIES: ""
     entrypoint: ["/app/wait-for.sh", "postgres:5432", "--", "/app/start.sh"]
     command: ["/app/main"]
 

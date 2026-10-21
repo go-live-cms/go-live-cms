@@ -34,11 +34,14 @@ export default defineConfig({
           changeOrigin: true,
           secure: false,
         },
-        // Proxy API calls to Go API
+        // Proxy API calls to Go API. xfwd sends the browser's IP as
+        // X-Forwarded-For, which the API trusts in dev (TRUSTED_PROXIES in
+        // compose.dev.yaml), so its rate limits key on the browser, not on us.
         "/api": {
           target: serverApiUrl,
           changeOrigin: true,
           secure: false,
+          xfwd: true,
         },
       },
       watch: {

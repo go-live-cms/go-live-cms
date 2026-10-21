@@ -58,9 +58,11 @@ import "github.com/gin-gonic/gin"
 func (server *Server) RegisterSessionRoutes(v1 *gin.RouterGroup) {
 	// Authentication endpoints - mixed access patterns
 	auth := v1.Group("/auth")
-	auth.POST("/register", server.register)                                                  // POST /api/v1/auth/register
-	auth.POST("/login", server.loginUser)                                                    // POST /api/v1/auth/login
-	auth.POST("/refresh", server.renewAccessToken)                                           // POST /api/v1/auth/refresh
+	// Credential and token endpoints get their own, stricter per-IP limits on
+	// top of the general one (brute force, token hammering; see ratelimit.go).
+	auth.POST("/register", server.rateLimits.register.perIP(), server.register)              // POST /api/v1/auth/register
+	auth.POST("/login", server.rateLimits.loginIP.perIP(), server.loginUser)                 // POST /api/v1/auth/login (+ per-username limit in the handler)
+	auth.POST("/refresh", server.rateLimits.refresh.perIP(), server.renewAccessToken)        // POST /api/v1/auth/refresh
 	auth.POST("/logout", authMiddleware(server.tokenMaker, server.store), server.logoutUser) // POST /api/v1/auth/logout
 
 	// Session management endpoints - uniformly protected
