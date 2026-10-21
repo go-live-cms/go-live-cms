@@ -62,7 +62,7 @@ jobs:
           DB_SOURCE: postgresql://root:secret@localhost:5432/golive_cms?sslmode=disable
           SERVER_ADDRESS: 0.0.0.0:8080
           API_PORT: :8080
-        run: make test
+        run: make coverage-check
 
   web-tests:
     name: Web tests (editor/collaboration)

@@ -79,7 +79,12 @@ server.
 
 - `go test ./...` (or `make test`). Handler tests use `MockStore`; `db/sqlc/*_test.go`
   run against a real Postgres test DB.
-- CI (`.github/workflows/ci.yml`) runs the Go suite with a Postgres service.
+- CI (`.github/workflows/ci.yml`) runs the Go suite with a Postgres service via
+  `make coverage-check`, which fails if total coverage drops below `COVERAGE_MIN`
+  in the Makefile. Raise the floor when coverage goes up; never lower it to pass.
+- sqlc integration tests share one DB across runs and are not cleaned up: use
+  unique values (UUID/UnixNano suffixes) and restore global state such as the
+  active theme with `t.Cleanup`.
 
 ## Collaboration integration (squash-on-publish)
 
