@@ -71,10 +71,6 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if config.RoleLookupSecret == "" {
 		return nil, errors.New("ROLE_LOOKUP_SECRET is required (shared with the collab WebSocket server)")
 	}
-	// Validated here so setupRoutes' SetTrustedProxies can't fail.
-	if _, err := parsePrefixes(config.TrustedProxyList()); err != nil {
-		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
-	}
 	limits, err := newRateLimits(config)
 	if err != nil {
 		return nil, err
@@ -95,7 +91,9 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		}
 	}
 
-	server.setupRoutes()
+	if err := server.setupRoutes(); err != nil {
+		return nil, err
+	}
 
 	// Sync themes from filesystem on startup (skip in test mode)
 	if !config.IsTestMode {
@@ -202,14 +200,15 @@ func corsOrigins(config util.Config) []string {
 // Auth:
 //   - Endpoints wrapped with authMiddleware require a valid *access* token
 //     (Bearer scheme). Payload is available under context key "authorization_payload".
-func (server *Server) setupRoutes() {
+//
+// It fails only on an invalid TRUSTED_PROXIES list.
+func (server *Server) setupRoutes() error {
 	router := gin.Default()
 
 	// Only believe X-Forwarded-For / X-Real-IP from TRUSTED_PROXIES (none by
 	// default), so a client can't pick its own ClientIP and dodge rate limits.
-	// NewServer has already validated the list.
 	if err := router.SetTrustedProxies(server.config.TrustedProxyList()); err != nil {
-		panic(fmt.Sprintf("invalid TRUSTED_PROXIES: %v", err))
+		return fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
 	}
 
 	// No origins configured (release without CORS_ALLOWED_ORIGINS) means
@@ -278,6 +277,7 @@ func (server *Server) setupRoutes() {
 	// Server-to-server routes live on their own engine/listener, not under
 	// /api/v1, so they never share the public port (see internal_routes.go).
 	server.internalRouter = server.newInternalRouter()
+	return nil
 }
 
 // healthCheck returns basic liveness info and API version.

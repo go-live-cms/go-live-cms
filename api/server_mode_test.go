@@ -217,7 +217,7 @@ func TestCORSOrigins(t *testing.T) {
 			server := newTestServer(t, mockdb.NewMockStore(ctrl))
 			server.config.GinMode = tc.ginMode
 			server.config.CORSAllowedOrigins = tc.configured
-			server.setupRoutes()
+			require.NoError(t, server.setupRoutes())
 
 			request, err := http.NewRequest(http.MethodGet, "/health", nil)
 			require.NoError(t, err)

@@ -1,4 +1,4 @@
-import { login, logout, renewAccessToken } from "./api/sessions"
+import { login, logout, RefreshError, renewAccessToken } from "./api/sessions"
 import { getMe } from "./api/users"
 
 export interface AuthState {
@@ -187,7 +187,8 @@ export class AuthManager {
   // server can revoke a token early (a password change rejects every access
   // token issued before it), and only its 401 tells us; apiCall calls this
   // then. Shares an in-flight refresh. Returns false, after clearing auth, if
-  // the refresh session was revoked too.
+  // the refresh session was revoked too. A rate-limited refresh (429) also
+  // returns false but keeps the user signed in and retries later.
   async forceRefresh(): Promise<boolean> {
     if (this.refreshPromise) {
       return this.refreshPromise
@@ -213,10 +214,29 @@ export class AuthManager {
       console.log("Token refreshed successfully")
       return true
     } catch (error) {
+      if (error instanceof RefreshError && error.status === 429) {
+        // The API's refresh rate limit (#190) says nothing about the session,
+        // so stay signed in and try again once the limit allows.
+        console.warn("Token refresh rate limited; retrying later")
+        this.scheduleRefreshRetry(error.retryAfterSeconds)
+        return false
+      }
       console.error("Token refresh failed:", error)
       this.clearAuth()
       return false
     }
+  }
+
+  private scheduleRefreshRetry(retryAfterSeconds: number | null): void {
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer)
+    }
+    if (typeof window === "undefined") return
+
+    const delay = Math.max(1, retryAfterSeconds ?? 30) * 1000
+    this.refreshTimer = setTimeout(() => {
+      void this.forceRefresh()
+    }, delay)
   }
 
   private scheduleTokenRefresh(): void {

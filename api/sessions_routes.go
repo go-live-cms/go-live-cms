@@ -61,7 +61,7 @@ func (server *Server) RegisterSessionRoutes(v1 *gin.RouterGroup) {
 	// Credential and token endpoints get their own, stricter per-IP limits on
 	// top of the general one (brute force, token hammering; see ratelimit.go).
 	auth.POST("/register", server.rateLimits.register.perIP(), server.register)              // POST /api/v1/auth/register
-	auth.POST("/login", server.rateLimits.login.perIP(), server.loginUser)                   // POST /api/v1/auth/login
+	auth.POST("/login", server.rateLimits.loginIP.perIP(), server.loginUser)                 // POST /api/v1/auth/login (+ per-username limit in the handler)
 	auth.POST("/refresh", server.rateLimits.refresh.perIP(), server.renewAccessToken)        // POST /api/v1/auth/refresh
 	auth.POST("/logout", authMiddleware(server.tokenMaker, server.store), server.logoutUser) // POST /api/v1/auth/logout
 

@@ -180,9 +180,10 @@ func (server *Server) updateUser(c *gin.Context) {
 	// someone else's password skip this.
 	passwordChanged := req.Password != ""
 	if passwordChanged && isSelf {
-		// Limited per user, not per IP: whoever holds the access token could
-		// otherwise guess current_password from as many addresses as they have.
-		if !server.rateLimits.passwordChange.allow(c, strconv.FormatInt(caller.ID, 10)) {
+		// Limited per user and client: guesses at current_password from one
+		// address are capped, but a token thief's guesses can't use up the
+		// owner's allowance and block the change that would revoke their token.
+		if !server.rateLimits.passwordChange.allow(c, strconv.FormatInt(caller.ID, 10)+"|"+clientKey(c.ClientIP())) {
 			return
 		}
 		if req.CurrentPassword == "" {

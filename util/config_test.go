@@ -65,6 +65,7 @@ func TestLoadConfigRateLimitDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 600, config.RateLimitGeneralPerMinute)
 	require.Equal(t, 10, config.RateLimitLoginPerMinute)
+	require.Equal(t, 100, config.RateLimitLoginIPPerMinute)
 	require.Equal(t, 30, config.RateLimitRefreshPerMinute)
 	require.Equal(t, 5, config.RateLimitPasswordChangePerMinute)
 	require.Empty(t, config.TrustedProxyList(), "no proxy is trusted by default")

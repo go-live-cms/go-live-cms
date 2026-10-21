@@ -29,7 +29,8 @@ func (c *fakeClock) advance(d time.Duration) { c.t = c.t.Add(d) }
 
 func newTestMemoryStore(perMinute int) (*memoryRateLimitStore, *fakeClock) {
 	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
-	store := newMemoryRateLimitStore(perMinute)
+	// One shard, so a Take on any key sweeps every key (eviction tests).
+	store := newShardedMemoryRateLimitStore(perMinute, 1, rateLimitMaxKeys)
 	store.now = clock.now
 	return store, clock
 }
@@ -113,18 +114,73 @@ func TestMemoryRateLimitStoreEvictsIdleKeys(t *testing.T) {
 	clock.advance(30 * time.Second)
 	_, _, _ = store.Take(ctx, "other")
 	require.Equal(t, 2, store.len())
-	store.mu.Lock()
-	_, idleKept := store.entries["idle"]
-	_, busyKept := store.entries["busy"]
-	store.mu.Unlock()
-	require.False(t, idleKept, "idle key evicted")
-	require.True(t, busyKept, "recently used key kept")
+	require.False(t, store.has("idle"), "idle key evicted")
+	require.True(t, store.has("busy"), "recently used key kept")
 
 	// An evicted key starts with a full allowance, as it would have anyway.
 	ok, _, _ = store.Take(ctx, "idle")
 	require.True(t, ok)
 	ok, _, _ = store.Take(ctx, "idle")
 	require.True(t, ok)
+}
+
+// has reports whether key is tracked (tests).
+func (s *memoryRateLimitStore) has(key string) bool {
+	sh := s.shard(key)
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+	_, ok := sh.entries[key]
+	return ok
+}
+
+func TestMemoryRateLimitStoreCapsKeys(t *testing.T) {
+	clock := &fakeClock{t: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	store := newShardedMemoryRateLimitStore(5, 1, 3)
+	store.now = clock.now
+	ctx := context.Background()
+
+	for _, key := range []string{"a", "b", "c"} {
+		_, _, _ = store.Take(ctx, key)
+		clock.advance(time.Second)
+	}
+	_, _, _ = store.Take(ctx, "a") // a is now the most recently used
+
+	// Full of active keys: a new one evicts the least recently used (b).
+	_, _, _ = store.Take(ctx, "d")
+	require.Equal(t, 3, store.len())
+	require.False(t, store.has("b"))
+	for _, key := range []string{"a", "c", "d"} {
+		require.True(t, store.has(key), key)
+	}
+}
+
+func TestMemoryRateLimitStoreShardsKeys(t *testing.T) {
+	store := newMemoryRateLimitStore(5)
+	ctx := context.Background()
+	for i := range 1000 {
+		ok, _, err := store.Take(ctx, fmt.Sprintf("key-%d", i))
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+	require.Equal(t, 1000, store.len())
+
+	used := 0
+	for _, sh := range store.shards {
+		if len(sh.entries) > 0 {
+			used++
+		}
+	}
+	require.Greater(t, used, 1, "keys spread over several shards")
+}
+
+func TestClientKey(t *testing.T) {
+	require.Equal(t, "192.0.2.1", clientKey("192.0.2.1"))
+	require.Equal(t, "192.0.2.1", clientKey("::ffff:192.0.2.1"), "IPv4-mapped IPv6 keys as IPv4")
+	require.Equal(t, "2001:db8:1:2::/64", clientKey("2001:db8:1:2:aaaa:bbbb:cccc:dddd"))
+	require.Equal(t, clientKey("2001:db8:1:2::1"), clientKey("2001:db8:1:2:ffff::9"), "same /64, same key")
+	require.NotEqual(t, clientKey("2001:db8:1:2::1"), clientKey("2001:db8:1:3::1"))
+	require.Equal(t, "2001:db8:1:2::/64", clientKey("2001:db8:1:2::1%eth0"), "zone ignored")
+	require.Equal(t, "not-an-ip", clientKey("not-an-ip"))
 }
 
 func TestRateLimitMiddleware(t *testing.T) {
@@ -148,6 +204,13 @@ func TestRateLimitMiddleware(t *testing.T) {
 		require.Equal(t, http.StatusOK, pingFrom(router, "192.0.2.1:1234").Code)
 		requireRateLimited(t, pingFrom(router, "192.0.2.1:5678")) // same IP, other port
 		require.Equal(t, http.StatusOK, pingFrom(router, "192.0.2.2:1234").Code)
+	})
+
+	t.Run("IPv6 addresses in one /64 share an allowance", func(t *testing.T) {
+		router := newRateLimitedRouter(newRateLimiter("test", 1))
+		require.Equal(t, http.StatusOK, pingFrom(router, "[2001:db8:1:2::1]:1234").Code)
+		requireRateLimited(t, pingFrom(router, "[2001:db8:1:2::abcd]:1234"))
+		require.Equal(t, http.StatusOK, pingFrom(router, "[2001:db8:1:3::1]:1234").Code)
 	})
 
 	t.Run("disabled limiter lets everything through", func(t *testing.T) {
@@ -199,17 +262,22 @@ func TestParsePrefixes(t *testing.T) {
 	require.Error(t, err)
 	_, err = parsePrefixes([]string{"example.com"})
 	require.Error(t, err)
+	_, err = parsePrefixes([]string{"fe80::1%eth0"})
+	require.Error(t, err, "zoned addresses can't match a client IP")
 }
 
 func TestNewServerRejectsInvalidRateLimitConfig(t *testing.T) {
-	config := newTestConfig(t)
-	config.TrustedProxies = "not-an-ip"
-	_, err := NewServer(config, mockdb.NewMockStore(gomock.NewController(t)))
-	require.ErrorContains(t, err, "TRUSTED_PROXIES")
+	// Errors, not panics, including values only gin's parser rejects.
+	for _, proxies := range []string{"not-an-ip", "fe80::1%eth0"} {
+		config := newTestConfig(t)
+		config.TrustedProxies = proxies
+		_, err := NewServer(config, mockdb.NewMockStore(gomock.NewController(t)))
+		require.ErrorContains(t, err, "TRUSTED_PROXIES", proxies)
+	}
 
-	config = newTestConfig(t)
+	config := newTestConfig(t)
 	config.RateLimitExemptCIDRs = "10.0.0.0/99"
-	_, err = NewServer(config, mockdb.NewMockStore(gomock.NewController(t)))
+	_, err := NewServer(config, mockdb.NewMockStore(gomock.NewController(t)))
 	require.ErrorContains(t, err, "RATE_LIMIT_EXEMPT_CIDRS")
 }
 
@@ -224,7 +292,11 @@ func newRateLimitedTestServer(t *testing.T, store db.Store, configure func(*util
 }
 
 func loginRequest(t *testing.T, remoteAddr, forwardedFor string) *http.Request {
-	body, err := json.Marshal(gin.H{"username": "nobody", "password": "wrong-password"})
+	return loginRequestAs(t, "nobody", remoteAddr, forwardedFor)
+}
+
+func loginRequestAs(t *testing.T, username, remoteAddr, forwardedFor string) *http.Request {
+	body, err := json.Marshal(gin.H{"username": username, "password": "wrong-password"})
 	require.NoError(t, err)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
@@ -306,6 +378,48 @@ func TestLoginRateLimit(t *testing.T) {
 		server.router.ServeHTTP(recorder, loginRequest(t, proxy, "203.0.113.2"))
 		require.Equal(t, http.StatusUnauthorized, recorder.Code)
 	})
+
+	t.Run("one username locked out doesn't block others from the same IP", func(t *testing.T) {
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		expectFailedLogins(store, limit+1)
+		server := newRateLimitedTestServer(t, store, func(c *util.Config) {
+			c.RateLimitLoginPerMinute = limit
+			c.RateLimitLoginIPPerMinute = 100
+		})
+
+		const sharedIP = "198.51.100.1:4000"
+		for range limit {
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, loginRequestAs(t, "victim", sharedIP, ""))
+			require.Equal(t, http.StatusUnauthorized, recorder.Code)
+		}
+		recorder := httptest.NewRecorder()
+		server.router.ServeHTTP(recorder, loginRequestAs(t, "victim", sharedIP, ""))
+		requireRateLimited(t, recorder)
+
+		recorder = httptest.NewRecorder()
+		server.router.ServeHTTP(recorder, loginRequestAs(t, "colleague", sharedIP, ""))
+		require.Equal(t, http.StatusUnauthorized, recorder.Code, "another user behind the same IP can still log in")
+	})
+
+	t.Run("per-IP cap limits spraying across usernames", func(t *testing.T) {
+		const ipLimit = 5
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		expectFailedLogins(store, ipLimit)
+		server := newRateLimitedTestServer(t, store, func(c *util.Config) {
+			c.RateLimitLoginPerMinute = limit
+			c.RateLimitLoginIPPerMinute = ipLimit
+		})
+
+		for i := range ipLimit {
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, loginRequestAs(t, fmt.Sprintf("user%d", i), "198.51.100.1:4000", ""))
+			require.Equal(t, http.StatusUnauthorized, recorder.Code)
+		}
+		recorder := httptest.NewRecorder()
+		server.router.ServeHTTP(recorder, loginRequestAs(t, "user-next", "198.51.100.1:4000", ""))
+		requireRateLimited(t, recorder)
+	})
 }
 
 func TestGeneralRateLimitAppliesToAPIRoutes(t *testing.T) {
@@ -352,9 +466,13 @@ func TestSelfPasswordChangeRateLimit(t *testing.T) {
 		return recorder
 	}
 
+	const thief, owner = "198.51.100.1:4000", "198.51.100.99:4000"
 	for range limit {
-		require.Equal(t, http.StatusForbidden, attempt("198.51.100.1:4000").Code, "wrong current password")
+		require.Equal(t, http.StatusForbidden, attempt(thief).Code, "wrong current password")
 	}
-	// Keyed by user: switching IPs doesn't reset the allowance.
-	requireRateLimited(t, attempt("198.51.100.99:4000"))
+	requireRateLimited(t, attempt(thief))
+
+	// Keyed by user and client: the thief's guesses don't use up the owner's
+	// allowance, so the owner can still change the password.
+	require.Equal(t, http.StatusForbidden, attempt(owner).Code, "reaches the password check")
 }

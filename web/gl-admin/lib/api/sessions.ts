@@ -35,6 +35,20 @@ export async function logout(token?: string): Promise<any> {
   return response.json()
 }
 
+// A failed POST /auth/refresh. status tells a revoked session (401/409) apart
+// from a rate limit (429, with retryAfterSeconds from Retry-After), which says
+// nothing about the session.
+export class RefreshError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly retryAfterSeconds: number | null = null
+  ) {
+    super(message)
+    this.name = "RefreshError"
+  }
+}
+
 export async function renewAccessToken(): Promise<any> {
   const url = `/api/v1/auth/refresh`
   const response = await fetch(url, {
@@ -46,13 +60,15 @@ export async function renewAccessToken(): Promise<any> {
   })
 
   if (!response.ok) {
-    const error = await response.text()
+    const text = await response.text()
+    let message = `HTTP ${response.status}: ${text}`
     try {
-      const errorObj = JSON.parse(error)
-      throw new Error(errorObj.error || `HTTP ${response.status}`)
+      message = JSON.parse(text).error || `HTTP ${response.status}`
     } catch {
-      throw new Error(`HTTP ${response.status}: ${error}`)
+      // not JSON; keep the raw text
     }
+    const retryAfter = Number.parseInt(response.headers.get("Retry-After") ?? "", 10)
+    throw new RefreshError(message, response.status, Number.isFinite(retryAfter) ? retryAfter : null)
   }
 
   return response.json()

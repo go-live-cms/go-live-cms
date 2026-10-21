@@ -147,14 +147,18 @@ type Config struct {
 	//
 	// RateLimitGeneralPerMinute applies to every public API request.
 	RateLimitGeneralPerMinute int `mapstructure:"RATE_LIMIT_GENERAL_PER_MINUTE"`
-	// RateLimitLoginPerMinute applies to POST /auth/login and POST
-	// /auth/register (separate allowances).
+	// RateLimitLoginPerMinute applies to POST /auth/login per client IP *and*
+	// username, and to POST /auth/register per client IP.
 	RateLimitLoginPerMinute int `mapstructure:"RATE_LIMIT_LOGIN_PER_MINUTE"`
+	// RateLimitLoginIPPerMinute caps POST /auth/login per client IP across all
+	// usernames (credential spraying). Keep it well above
+	// RateLimitLoginPerMinute so clients sharing an IP aren't easily locked out.
+	RateLimitLoginIPPerMinute int `mapstructure:"RATE_LIMIT_LOGIN_IP_PER_MINUTE"`
 	// RateLimitRefreshPerMinute applies to POST /auth/refresh.
 	RateLimitRefreshPerMinute int `mapstructure:"RATE_LIMIT_REFRESH_PER_MINUTE"`
 	// RateLimitPasswordChangePerMinute applies to self password changes
-	// (PUT /users/:id with a password), keyed by user rather than IP so a
-	// stolen access token can't guess current_password from many addresses.
+	// (PUT /users/:id with a password), per user and client IP, so a stolen
+	// token's guesses can't block the owner's own password change.
 	RateLimitPasswordChangePerMinute int `mapstructure:"RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE"`
 
 	// RateLimitExemptCIDRs is a comma-separated list of client IPs/CIDRs that
@@ -239,6 +243,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("TRUSTED_PROXIES", "")
 	viper.SetDefault("RATE_LIMIT_GENERAL_PER_MINUTE", 600)
 	viper.SetDefault("RATE_LIMIT_LOGIN_PER_MINUTE", 10)
+	viper.SetDefault("RATE_LIMIT_LOGIN_IP_PER_MINUTE", 100)
 	viper.SetDefault("RATE_LIMIT_REFRESH_PER_MINUTE", 30)
 	viper.SetDefault("RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE", 5)
 	viper.SetDefault("RATE_LIMIT_EXEMPT_CIDRS", "")
@@ -277,6 +282,7 @@ func LoadConfig(path string) (config Config, err error) {
 	for name, v := range map[string]int{
 		"RATE_LIMIT_GENERAL_PER_MINUTE":         config.RateLimitGeneralPerMinute,
 		"RATE_LIMIT_LOGIN_PER_MINUTE":           config.RateLimitLoginPerMinute,
+		"RATE_LIMIT_LOGIN_IP_PER_MINUTE":        config.RateLimitLoginIPPerMinute,
 		"RATE_LIMIT_REFRESH_PER_MINUTE":         config.RateLimitRefreshPerMinute,
 		"RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE": config.RateLimitPasswordChangePerMinute,
 	} {
@@ -301,7 +307,7 @@ func splitList(s string) []string {
 }
 
 // TrustedProxyList returns TrustedProxies as a list (nil when empty, which
-// trusts no proxy).
+// trusts no proxy). gin validates the entries.
 func (c Config) TrustedProxyList() []string {
 	return splitList(c.TrustedProxies)
 }

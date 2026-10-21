@@ -41,8 +41,10 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   revoked this token". It calls `authManager.forceRefresh()` and retries once,
   ignoring the local expiry, because a password change invalidates access tokens
   early. `/auth/*` endpoints are excluded (there a 401 means bad credentials). A
-  failed refresh clears auth. `blockAPI.ts` does NOT go through this: it throws
-  `UnauthorizedError` to the collab persistence layer.
+  failed refresh clears auth, except a **429** (API rate limit, #190): then the user
+  stays signed in and `authManager` retries after `Retry-After` (`RefreshError`).
+  `blockAPI.ts` does NOT go through this: it throws `UnauthorizedError` to the collab
+  persistence layer.
 
 - TipTap is on **v3** (breaking from v2). `setContent`'s 2nd arg is an options object
   `{ emitUpdate }` — NOT the v2 boolean. `emitUpdate:false` only suppresses TipTap's

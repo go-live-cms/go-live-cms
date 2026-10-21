@@ -48,6 +48,11 @@ services:
       # Server-to-server listener (/internal/*). Deliberately NOT in `ports:`;
       # only the websocket service reaches it over the compose network.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
+      # Dev only: browser requests arrive through the web container's Vite proxy,
+      # which sets X-Forwarded-For (xfwd in astro.config.mjs). Trust the private
+      # Docker ranges so rate limits key on the browser, not the proxy. Never use
+      # ranges this broad in production; list your real proxy instead.
+      TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     volumes:
       - .:/app
       - /app/tmp

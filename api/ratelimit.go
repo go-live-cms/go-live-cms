@@ -2,24 +2,34 @@
 //
 // # Tiers
 //
-//   - General: every /api/v1 and /public request, per client IP
+//   - General: every /api/v1 and /public request, per client
 //     (RATE_LIMIT_GENERAL_PER_MINUTE). IPs in RATE_LIMIT_EXEMPT_CIDRS skip it.
-//   - Login and register: POST /auth/login, POST /auth/register, per client IP,
-//     each with its own allowance (RATE_LIMIT_LOGIN_PER_MINUTE).
-//   - Refresh: POST /auth/refresh, per client IP (RATE_LIMIT_REFRESH_PER_MINUTE).
-//   - Password change: a self PUT /users/:id with a password, per user
-//     (RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE), checked inside updateUser
-//     because only the body says whether a password is being changed.
+//   - Login: POST /auth/login, per client (RATE_LIMIT_LOGIN_IP_PER_MINUTE) and,
+//     checked in loginUser once the body is bound, per client and username
+//     (RATE_LIMIT_LOGIN_PER_MINUTE). The pair limit holds brute force on one
+//     account down, while one client's bad guesses can't lock out everyone
+//     else behind the same IP. The looser per-client limit caps spraying
+//     across usernames.
+//   - Register: POST /auth/register, per client (RATE_LIMIT_LOGIN_PER_MINUTE).
+//   - Refresh: POST /auth/refresh, per client (RATE_LIMIT_REFRESH_PER_MINUTE).
+//     The admin client keeps the user signed in on a 429 and retries later.
+//   - Password change: a self PUT /users/:id with a password, per user and
+//     client (RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE), checked inside updateUser
+//     because only the body says whether a password is being changed. Keying
+//     by user alone would let whoever stole a token lock the owner out of the
+//     password change that revokes it.
 //
 // The internal listener (/internal/*) is not limited: only the collab WS server
 // can reach it, it calls once per connection for every editor, and its
 // shared secret can't be guessed in any useful number of requests.
 //
-// # Client IP
+// # Client identity
 //
-// Keys use gin's ClientIP, which reads X-Forwarded-For / X-Real-IP only when
-// the TCP peer is in TRUSTED_PROXIES (none by default). Otherwise anyone could
-// send a fresh X-Forwarded-For per request and never hit a limit.
+// The client is gin's ClientIP, which reads X-Forwarded-For / X-Real-IP only
+// when the TCP peer is in TRUSTED_PROXIES (none by default). Otherwise anyone
+// could send a fresh X-Forwarded-For per request and never hit a limit. IPv6
+// clients are keyed by their /64 (clientKey), because one host or subscriber
+// usually holds a whole /64 and could otherwise use a new address per request.
 //
 // # Storage
 //
@@ -31,6 +41,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"hash/maphash"
 	"log"
 	"math"
 	"net/http"
@@ -52,18 +63,37 @@ type RateLimitStore interface {
 	Take(ctx context.Context, key string) (allowed bool, retryAfter time.Duration, err error)
 }
 
+const (
+	// rateLimitShards splits each store's keys across independently locked
+	// maps, so requests (and idle sweeps) for different keys rarely contend.
+	rateLimitShards = 32
+	// rateLimitMaxKeys bounds the keys one store tracks (~100 bytes each plus
+	// the key), so a flood of distinct clients can't grow memory without bound.
+	rateLimitMaxKeys = 100_000
+)
+
 // memoryRateLimitStore is an in-process token bucket per key
 // (golang.org/x/time/rate). Each bucket holds perMinute tokens and refills
 // perMinute tokens a minute, so a full bucket refills in exactly one minute.
 // A bucket idle that long is therefore identical to a new one, and is evicted.
+//
+// When a shard is full of buckets that are all still in use, the least
+// recently used one is evicted to make room: that client merely starts again
+// with a full allowance, which beats failing every new client.
 type memoryRateLimitStore struct {
 	limit rate.Limit
 	burst int
 	// idleTTL is how long a bucket may go unused before it is evicted. It is
 	// at least the time a bucket takes to refill completely.
-	idleTTL time.Duration
-	now     func() time.Time
+	idleTTL         time.Duration
+	maxKeysPerShard int
+	now             func() time.Time
 
+	seed   maphash.Seed
+	shards []*rateLimitShard
+}
+
+type rateLimitShard struct {
 	mu        sync.Mutex
 	entries   map[string]*rateLimitEntry
 	lastSweep time.Time
@@ -77,32 +107,55 @@ type rateLimitEntry struct {
 // newMemoryRateLimitStore returns a store allowing perMinute requests a minute
 // per key (perMinute must be > 0).
 func newMemoryRateLimitStore(perMinute int) *memoryRateLimitStore {
-	return &memoryRateLimitStore{
-		limit:   rate.Limit(float64(perMinute) / 60),
-		burst:   perMinute,
-		idleTTL: time.Minute,
-		now:     time.Now,
-		entries: make(map[string]*rateLimitEntry),
+	return newShardedMemoryRateLimitStore(perMinute, rateLimitShards, rateLimitMaxKeys)
+}
+
+// newShardedMemoryRateLimitStore is newMemoryRateLimitStore with explicit
+// sharding and capacity (tests use one small shard).
+func newShardedMemoryRateLimitStore(perMinute, shards, maxKeys int) *memoryRateLimitStore {
+	s := &memoryRateLimitStore{
+		limit:           rate.Limit(float64(perMinute) / 60),
+		burst:           perMinute,
+		idleTTL:         time.Minute,
+		maxKeysPerShard: max(1, maxKeys/shards),
+		now:             time.Now,
+		seed:            maphash.MakeSeed(),
+		shards:          make([]*rateLimitShard, shards),
 	}
+	for i := range s.shards {
+		s.shards[i] = &rateLimitShard{entries: make(map[string]*rateLimitEntry)}
+	}
+	return s
+}
+
+func (s *memoryRateLimitStore) shard(key string) *rateLimitShard {
+	return s.shards[maphash.String(s.seed, key)%uint64(len(s.shards))]
 }
 
 // Take implements RateLimitStore. It never returns an error.
 func (s *memoryRateLimitStore) Take(_ context.Context, key string) (bool, time.Duration, error) {
 	now := s.now()
+	sh := s.shard(key)
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
 	// Sweep at most once per idleTTL so a request costs O(1) amortized.
-	if now.Sub(s.lastSweep) >= s.idleTTL {
-		s.evictIdleLocked(now)
-		s.lastSweep = now
+	if now.Sub(sh.lastSweep) >= s.idleTTL {
+		sh.evictIdle(now, s.idleTTL)
+		sh.lastSweep = now
 	}
 
-	e, ok := s.entries[key]
+	e, ok := sh.entries[key]
 	if !ok {
+		if len(sh.entries) >= s.maxKeysPerShard {
+			sh.evictIdle(now, s.idleTTL)
+			if len(sh.entries) >= s.maxKeysPerShard {
+				sh.evictLeastRecentlySeen()
+			}
+		}
 		e = &rateLimitEntry{limiter: rate.NewLimiter(s.limit, s.burst)}
-		s.entries[key] = e
+		sh.entries[key] = e
 	}
 	e.lastSeen = now
 
@@ -114,20 +167,37 @@ func (s *memoryRateLimitStore) Take(_ context.Context, key string) (bool, time.D
 	return true, 0, nil
 }
 
-// evictIdleLocked drops buckets unused for idleTTL. s.mu must be held.
-func (s *memoryRateLimitStore) evictIdleLocked(now time.Time) {
-	for key, e := range s.entries {
-		if now.Sub(e.lastSeen) >= s.idleTTL {
-			delete(s.entries, key)
+// evictIdle drops buckets unused for ttl. sh.mu must be held.
+func (sh *rateLimitShard) evictIdle(now time.Time, ttl time.Duration) {
+	for key, e := range sh.entries {
+		if now.Sub(e.lastSeen) >= ttl {
+			delete(sh.entries, key)
 		}
 	}
 }
 
+// evictLeastRecentlySeen drops the bucket used longest ago. Only reached when
+// the shard is full of active buckets. sh.mu must be held.
+func (sh *rateLimitShard) evictLeastRecentlySeen() {
+	var oldestKey string
+	var oldest time.Time
+	for key, e := range sh.entries {
+		if oldestKey == "" || e.lastSeen.Before(oldest) {
+			oldestKey, oldest = key, e.lastSeen
+		}
+	}
+	delete(sh.entries, oldestKey)
+}
+
 // len reports how many keys are tracked (tests).
 func (s *memoryRateLimitStore) len() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return len(s.entries)
+	n := 0
+	for _, sh := range s.shards {
+		sh.mu.Lock()
+		n += len(sh.entries)
+		sh.mu.Unlock()
+	}
+	return n
 }
 
 // rateLimiter applies one limit. A nil *rateLimiter is a disabled limit:
@@ -165,18 +235,43 @@ func (l *rateLimiter) allow(c *gin.Context, key string) bool {
 	return true
 }
 
-// perIP returns middleware limiting each client IP. exempt client IPs skip it.
+// perIP returns middleware limiting each client (clientKey). exempt client
+// IPs skip it.
 func (l *rateLimiter) perIP(exempt ...netip.Prefix) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if l == nil || ipInPrefixes(c.ClientIP(), exempt) {
+		if l == nil {
 			c.Next()
 			return
 		}
-		if !l.allow(c, c.ClientIP()) {
+		ip := c.ClientIP()
+		if ipInPrefixes(ip, exempt) {
+			c.Next()
+			return
+		}
+		if !l.allow(c, clientKey(ip)) {
 			return
 		}
 		c.Next()
 	}
+}
+
+// clientKey is the rate-limit identity of a client IP: the address itself for
+// IPv4 (including IPv4-mapped IPv6), and the /64 for IPv6, which one host or
+// subscriber usually holds in full. Unparsable input is returned unchanged.
+func clientKey(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return ip
+	}
+	addr = addr.Unmap()
+	if addr.Is4() {
+		return addr.String()
+	}
+	prefix, err := addr.WithZone("").Prefix(64)
+	if err != nil {
+		return ip
+	}
+	return prefix.String()
 }
 
 // abortRateLimited responds 429 with Retry-After (whole seconds, at least 1)
@@ -192,7 +287,10 @@ func abortRateLimited(c *gin.Context, retryAfter time.Duration) {
 
 // rateLimits holds the server's limiters (nil fields are disabled).
 type rateLimits struct {
-	general        *rateLimiter
+	general *rateLimiter
+	// loginIP limits each client's login attempts across usernames; login
+	// limits each client and username pair.
+	loginIP        *rateLimiter
 	login          *rateLimiter
 	register       *rateLimiter
 	refresh        *rateLimiter
@@ -210,6 +308,7 @@ func newRateLimits(config util.Config) (rateLimits, error) {
 	}
 	return rateLimits{
 		general:        newRateLimiter("general", config.RateLimitGeneralPerMinute),
+		loginIP:        newRateLimiter("login-ip", config.RateLimitLoginIPPerMinute),
 		login:          newRateLimiter("login", config.RateLimitLoginPerMinute),
 		register:       newRateLimiter("register", config.RateLimitLoginPerMinute),
 		refresh:        newRateLimiter("refresh", config.RateLimitRefreshPerMinute),
@@ -227,7 +326,7 @@ func parsePrefixes(values []string) ([]netip.Prefix, error) {
 			continue
 		}
 		addr, err := netip.ParseAddr(v)
-		if err != nil {
+		if err != nil || addr.Zone() != "" {
 			return nil, fmt.Errorf("%q is not an IP or CIDR", v)
 		}
 		prefixes = append(prefixes, netip.PrefixFrom(addr, addr.BitLen()))

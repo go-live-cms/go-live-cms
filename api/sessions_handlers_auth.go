@@ -82,6 +82,13 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
+	// Per client and username, before any DB or bcrypt work: holds brute
+	// force on one account down without letting one client's bad guesses lock
+	// out others sharing its IP (see ratelimit.go).
+	if !server.rateLimits.login.allow(ctx, clientKey(ctx.ClientIP())+"|"+req.Username) {
+		return
+	}
+
 	// Look up user by username
 	user, err := server.store.GetUserByUsername(ctx.Request.Context(), req.Username)
 	if err != nil {
