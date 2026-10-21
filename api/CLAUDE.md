@@ -65,8 +65,9 @@ server.
   before committing, so it can't slip a token past a concurrent change. Don't
   set `password_changed_at` in a handler.
 - **Self password change** (`PUT /users/:id` with `password`) requires
-  `current_password` (403 if missing/wrong). The refresh cookie is scoped to
-  `/api/v1/auth`, so the request can't tell which session sent it. Instead the
+  `current_password` (403 if missing/wrong). The non-Secure dev refresh cookie
+  is scoped to `/api/v1/auth`, so the handler can't rely on seeing it and can't
+  tell which session sent the request. Instead the
   response sets a fresh refresh cookie and returns a new `access_token` (the
   admin UI adopts it). An admin resetting someone else's password needs no
   current password.
@@ -109,6 +110,23 @@ server.
   (`applyCookieSecurity` in `sessions_cookies.go`). Only in debug does
   `COOKIE_SECURE` (default false) decide it, so local HTTP works. There is no
   separate `IS_DEVELOPMENT` switch any more (#236): debug mode *is* development.
+- **Refresh cookie name (#159):** when Secure it is `__Host-refresh_token`,
+  Path=/, no Domain (`COOKIE_DOMAIN` ignored). Only the non-Secure dev cookie is
+  `refresh_token`, Path=`/api/v1/auth`. Never use the name constants directly:
+  set/clear/read with `setRefreshCookie` / `clearRefreshCookie` /
+  `readRefreshCookie`, which pick the name from the mode. With the `__Host-`
+  cookie in use they also expire a pre-#159 `refresh_token` cookie, but only
+  when the request carries one. A non-localhost `COOKIE_DOMAIN` is ignored
+  then, and `NewServer` prints a warning. The admin
+  reaches the API through the web origin's `/api` proxy, so the cookie belongs
+  to the web host and (Path=/) is sent with every request to it.
+- **Security headers (#157):** `securityHeadersMiddleware` (first in
+  `setupRoutes`) sets nosniff, `X-Frame-Options: DENY`,
+  `Referrer-Policy: no-referrer` and a `default-src 'none'` CSP on every
+  response, `/uploads` included. HSTS only outside debug mode, and without
+  `includeSubDomains` (it reaches the site's host through the `/api` proxy,
+  which may be the apex domain). Don't add a
+  `Cross-Origin-Resource-Policy`: the web app loads `/uploads` cross-origin.
 ## Collaboration integration (WS role lookup, #223)
 
 - `GET /internal/users/:id/role?issued_at=<unix>` (`internal_routes.go`,

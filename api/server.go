@@ -83,6 +83,10 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		}
 	}
 
+	if warning := server.ignoredCookieDomainWarning(); warning != "" {
+		fmt.Printf("Warning: %s\n", warning)
+	}
+
 	server.setupRoutes()
 
 	// Sync themes from filesystem on startup (skip in test mode)
@@ -167,6 +171,8 @@ func corsOrigins(config util.Config) []string {
 
 // setupRoutes configures the Gin engine:
 //
+//   - Security headers on every response (securityHeadersMiddleware); HSTS
+//     outside debug mode only
 //   - CORS:
 //   - Origins from CORS_ALLOWED_ORIGINS, plus the localhost :4321 origins in
 //     debug mode (corsOrigins); credentials allowed
@@ -190,6 +196,10 @@ func corsOrigins(config util.Config) []string {
 //     (Bearer scheme). Payload is available under context key "authorization_payload".
 func (server *Server) setupRoutes() {
 	router := gin.Default()
+
+	// First, so CORS preflights (answered by the CORS middleware without
+	// calling Next) get the headers too.
+	router.Use(securityHeadersMiddleware(server.config))
 
 	// No origins configured (release without CORS_ALLOWED_ORIGINS) means
 	// same-origin only: skip the middleware rather than send CORS headers.
