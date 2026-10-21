@@ -6,6 +6,7 @@ import { ThemeSettingsImpl } from "../lib/theme-settings"
 import { ThemeAPIClientImpl } from "../lib/theme-api-client"
 import { safeExecute } from "../lib/theme-api"
 import type { ThemeFunctions, ThemeFunctionsContext } from "../lib/theme-api"
+import { applyAdminCsp, isAdminPath } from "./csp"
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url)
@@ -112,6 +113,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
         },
       })
     }
+  }
+
+  if (isAdminPath(url.pathname)) {
+    return applyAdminCsp(await next(), {
+      pageOrigin: url.origin,
+      apiUrl: process.env.PUBLIC_API_URL || import.meta.env.PUBLIC_API_URL,
+      dev: import.meta.env.DEV,
+      // Escape hatch for rolling out to a new deployment: ADMIN_CSP_REPORT_ONLY=1.
+      reportOnly: process.env.ADMIN_CSP_REPORT_ONLY === "1",
+    })
   }
 
   return next()
