@@ -75,6 +75,7 @@ Flow to create an issue on the board: `gh issue create --repo go-live-cms/go-liv
 # Go (run from repo root)
 go build ./...
 go test ./...                 # or: make test
+make coverage-check           # what CI runs: tests + total-coverage floor (COVERAGE_MIN)
 
 # Web (run from web/)
 npm test                      # vitest run (headless editor/collab tests)

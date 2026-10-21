@@ -34,6 +34,19 @@ test-api:
 test-token:
 	go test -v -cover ./token/...
 
+# Total statement coverage of ./... (includes the generated db/mock and the
+# untested main packages, so it reads lower than the per-package numbers).
+COVERAGE_MIN ?= 54.0
+
+test-coverage:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out | grep total
+
+# CI gate: fails when total coverage drops below COVERAGE_MIN. Raise the floor
+# when coverage goes up; don't lower it to get a change through.
+coverage-check: test-coverage
+	@go tool cover -func=coverage.out | awk -v min=$(COVERAGE_MIN) '/^total:/ { sub("%", "", $$3); if ($$3 + 0 < min + 0) { printf "FAIL: total coverage %s%% is below the %s%% floor\n", $$3, min; exit 1 } printf "OK: total coverage %s%% (floor %s%%)\n", $$3, min }'
+
 mock:
 	mockgen -package mockdb -destination db/mock/store.go github.com/go-live-cms/go-live-cms/db/sqlc Store
 
@@ -76,4 +89,4 @@ proddown:
 prodlogs:
 	docker compose -f compose.yaml logs -f
 
-.PHONY: createdb dropdb postgres migrateup migratedown sqlc test test-db test-api test-token mock dev devdown devlogs devlogs-api devlogs-web devrebuild prod proddown prodlogs docs install-godoc
+.PHONY: createdb dropdb postgres migrateup migratedown sqlc test test-db test-api test-token test-coverage coverage-check mock dev devdown devlogs devlogs-api devlogs-web devrebuild prod proddown prodlogs docs install-godoc
