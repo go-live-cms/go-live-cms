@@ -333,7 +333,7 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 				require.Equal(t, http.StatusUnauthorized, recorder.Code)
 				require.Contains(t, recorder.Body.String(), ErrSessionBlocked)
 				for _, c := range recorder.Result().Cookies() {
-					require.NotEqual(t, RefreshCookieName, c.Name, "no new refresh cookie on a lost rotation")
+					require.NotEqual(t, HostRefreshCookieName, c.Name, "no new refresh cookie on a lost rotation")
 				}
 			},
 		},
@@ -366,9 +366,9 @@ func TestRenewAccessTokenAPI(t *testing.T) {
 			request.Header.Set("User-Agent", session.UserAgent)
 
 			if tc.name == "InvalidRefreshToken" {
-				request.AddCookie(&http.Cookie{Name: RefreshCookieName, Value: "invalid-token"})
+				request.AddCookie(&http.Cookie{Name: HostRefreshCookieName, Value: "invalid-token"})
 			} else if refreshToken != "" {
-				request.AddCookie(&http.Cookie{Name: RefreshCookieName, Value: refreshToken})
+				request.AddCookie(&http.Cookie{Name: HostRefreshCookieName, Value: refreshToken})
 			}
 
 			server.router.ServeHTTP(recorder, request)
@@ -671,7 +671,7 @@ func TestLogoutUserAPI(t *testing.T) {
 			require.NoError(t, err)
 
 			if refreshToken != "" {
-				request.AddCookie(&http.Cookie{Name: RefreshCookieName, Value: refreshToken})
+				request.AddCookie(&http.Cookie{Name: HostRefreshCookieName, Value: refreshToken})
 			}
 
 			tc.setupAuth(t, request, server.tokenMaker)

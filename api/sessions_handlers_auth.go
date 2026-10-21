@@ -200,7 +200,7 @@ func (server *Server) startSession(ctx *gin.Context, v4Maker *token.PasetoV4Make
 		return db.Session{}, fmt.Errorf("failed to create session")
 	}
 
-	server.setSecureCookie(ctx, RefreshCookieName, refreshToken, now.Add(server.config.RefreshTokenDuration))
+	server.setRefreshCookie(ctx, refreshToken, now.Add(server.config.RefreshTokenDuration))
 
 	logSecurityEvent(LogSessionCreated, session.ID.String(), user.ID, fmt.Sprintf("IP: %s, UA: %s", clientIP, userAgent))
 
@@ -232,13 +232,11 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	now := time.Now() // Single time base for consistency
 
 	// Extract refresh token from cookie
-	cookie, err := ctx.Request.Cookie(RefreshCookieName)
-	if err != nil || cookie.Value == "" {
+	refreshToken := server.readRefreshCookie(ctx)
+	if refreshToken == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "refresh token required in cookie"})
 		return
 	}
-
-	refreshToken := cookie.Value
 
 	// Parse refresh token
 	v4Maker, ok := server.tokenMaker.(*token.PasetoV4Maker)
@@ -446,7 +444,7 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	}
 
 	// Set new refresh cookie
-	server.setSecureCookie(ctx, RefreshCookieName, newRefreshToken, now.Add(server.config.RefreshTokenDuration))
+	server.setRefreshCookie(ctx, newRefreshToken, now.Add(server.config.RefreshTokenDuration))
 
 	// Log successful refresh
 	logSecurityEvent(LogSessionRefreshed, newSessionID.String(), userID, fmt.Sprintf("Old session: %s", session.ID.String()))
@@ -478,15 +476,14 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 //   - Always clears cookie to prevent client-side token persistence
 func (server *Server) logoutUser(ctx *gin.Context) {
 	// Check for refresh token cookie
-	cookie, err := ctx.Request.Cookie(RefreshCookieName)
-	if err != nil || cookie.Value == "" {
+	refreshToken := server.readRefreshCookie(ctx)
+	if refreshToken == "" {
 		// No cookie present - clear any residual cookie and succeed
-		server.clearSecureCookie(ctx, RefreshCookieName)
+		server.clearRefreshCookie(ctx)
 		ctx.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 		return
 	}
 
-	refreshToken := cookie.Value
 	refreshHash := token.HashRefresh(refreshToken)
 
 	// Look up session by refresh hash
@@ -494,7 +491,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// Session not found - clear cookie and succeed
-			server.clearSecureCookie(ctx, RefreshCookieName)
+			server.clearRefreshCookie(ctx)
 			ctx.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 			return
 		}
@@ -510,7 +507,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 	}
 
 	// Clear refresh cookie
-	server.clearSecureCookie(ctx, RefreshCookieName)
+	server.clearRefreshCookie(ctx)
 
 	// Log successful logout
 	logSecurityEvent(LogSessionBlocked, session.ID.String(), session.UserID, "User logout")

@@ -817,7 +817,7 @@ func TestUpdateUserPasswordAPI(t *testing.T) {
 
 	refreshCookie := func(recorder *httptest.ResponseRecorder) *http.Cookie {
 		for _, c := range recorder.Result().Cookies() {
-			if c.Name == RefreshCookieName {
+			if c.Name == HostRefreshCookieName {
 				return c
 			}
 		}

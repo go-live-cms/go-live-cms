@@ -1,11 +1,9 @@
 // Package token provides secure token generation and validation for Go Live CMS.
 //
 // This package implements PASETO (Platform-Agnostic SEcurity TOkens) for secure
-// authentication and authorization. It supports both PASETO v2 (legacy) and v4
-// implementations, with v4 being the recommended approach for new applications.
+// authentication and authorization via PasetoV4Maker.
 //
-// Which should I use?
-//   - Use PasetoV4Maker unless you're maintaining legacy v2 tokens
+// Token types:
 //   - Access tokens = v4.public (verify with public key across services)
 //   - Refresh tokens = v4.local (private to auth service, stored/rotated via cookies)
 //
@@ -66,7 +64,7 @@ import (
 // Maker defines the interface for token creation and verification.
 //
 // This interface is the stable surface for the auth subsystem; concrete
-// implementations (v2/v4) are behind it.
+// implementations (currently PASETO v4) are behind it.
 //
 // Implementations should support both access and refresh tokens with different
 // expiration durations. The interface is designed to be agnostic to the underlying
@@ -252,7 +250,6 @@ func ExampleMaker_VerifyToken() {
 //   - ExampleMaker_CreateToken: Access token creation
 //   - ExampleMaker_CreateRefreshToken: Refresh token creation
 //   - ExampleMaker_VerifyToken: Token verification with error handling
-//   - ExampleNewPasetoMaker: PASETO v2 maker (legacy)
 //   - ExamplePasetoV4Maker_CreateToken: PASETO v4 access tokens
 //   - ExamplePasetoV4Maker_CreateRefreshToken: PASETO v4 refresh tokens
 //   - ExamplePasetoV4Maker_VerifyToken: PASETO v4 verification

@@ -6,27 +6,32 @@
 //   - **httpOnly**: Prevents JavaScript access, mitigating XSS token theft
 //   - **SameSite=Strict**: Blocks cross-site requests, preventing CSRF attacks
 //   - **Secure**: Requires HTTPS in production, ensuring encrypted transport
-//   - **Path restriction**: Limits scope to /api/v1/auth, reducing exposure surface
-//   - **Domain configuration**: Supports development and production domain settings
+//   - **__Host- prefix**: Whenever the cookie is Secure, it is named
+//     __Host-refresh_token. Browsers only accept that name with Secure, Path=/
+//     and no Domain, so a sibling subdomain or a plain-HTTP response can't
+//     plant or shadow it (#159)
 //
 // # Development vs Production
 //
 // Cookie behavior adapts to environment:
-//   - **Development** (GIN_MODE=debug only): Secure follows COOKIE_SECURE so
-//     local HTTP works
-//   - **Production** (every other mode, including the release default):
-//     Secure is always set
-//   - **Domain handling**: localhost exemptions for local development
+//   - **Production** (every mode except GIN_MODE=debug, including the release
+//     default): Secure is always set, so the cookie is
+//     __Host-refresh_token, host-only, Path=/. COOKIE_DOMAIN is ignored.
+//   - **Development** (GIN_MODE=debug): Secure follows COOKIE_SECURE. With
+//     COOKIE_SECURE=false (compose.dev.yaml) the cookie can't use the prefix, so
+//     it keeps the plain refresh_token name, Path=/api/v1/auth, and
+//     COOKIE_DOMAIN (except "localhost", which is dropped). With
+//     COOKIE_SECURE=true it is __Host-refresh_token, like production.
 //
-// # Constants and Configuration
+// # Legacy cookie
 //
-// Centralized cookie configuration prevents magic string errors:
-//   - RefreshCookieName for consistent cookie identification
-//   - CookiePath for proper scope restriction
-//   - Environment-specific security flag handling
+// Before #159 production set refresh_token (Path=/api/v1/auth, Domain from
+// COOKIE_DOMAIN). It is never read when the __Host- cookie is in use; login,
+// refresh and logout expire it so it doesn't linger in browsers.
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -34,81 +39,133 @@ import (
 )
 
 const (
-	// RefreshCookieName is the standardized name for refresh token cookies
+	// RefreshCookieName is the refresh cookie's name when it is not Secure
+	// (plain-HTTP development), and the pre-#159 production name.
 	RefreshCookieName = "refresh_token"
 
-	// CookiePath restricts refresh cookies to authentication endpoints only
+	// HostRefreshCookieName is the refresh cookie's name whenever it is Secure.
+	HostRefreshCookieName = "__Host-" + RefreshCookieName
+
+	// CookiePath restricts the non-Secure refresh cookie to authentication
+	// endpoints. The __Host- cookie must use Path=/.
 	CookiePath = "/api/v1/auth"
+
+	// hostCookiePath is the only Path the __Host- prefix allows.
+	hostCookiePath = "/"
 )
 
-// setSecureCookie creates and sets an httpOnly, secure cookie with environment-appropriate settings.
-//
-// Security features:
-//   - httpOnly prevents JavaScript access
-//   - SameSite=Strict blocks cross-site requests
-//   - Secure flag enforced outside GIN_MODE=debug
-//   - Path restriction limits cookie scope
-//   - Domain configuration supports dev/prod environments
-//
-// Parameters:
-//   - ctx: Gin context for response writing
-//   - name: Cookie name (typically RefreshCookieName)
-//   - value: Cookie value (typically encrypted refresh token)
-//   - expiration: Cookie expiration time
-func (server *Server) setSecureCookie(ctx *gin.Context, name, value string, expiration time.Time) {
-	cookie := &http.Cookie{
-		Name:     name,
-		Value:    value,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		Path:     CookiePath,
-		Expires:  expiration,
-	}
-
-	server.applyCookieSecurity(cookie)
-	http.SetCookie(ctx.Writer, cookie)
+// refreshCookieSecure reports whether the refresh cookie gets the Secure flag:
+// always outside GIN_MODE=debug, otherwise COOKIE_SECURE decides. Development
+// is the same switch that gates dev seeding and dev CORS (#236).
+func (server *Server) refreshCookieSecure() bool {
+	return !server.config.IsDebugMode() || server.config.CookieSecure
 }
 
-// clearSecureCookie removes a cookie by setting it to expire immediately.
-//
-// Cookie clearing strategy:
-//   - Sets MaxAge=-1 for immediate expiration
-//   - Maintains same path/domain as original cookie
-//   - Uses empty value to clear content
-//   - Preserves security flags for consistency
-//
-// Parameters:
-//   - ctx: Gin context for response writing
-//   - name: Cookie name to clear (typically RefreshCookieName)
-func (server *Server) clearSecureCookie(ctx *gin.Context, name string) {
-	cookie := &http.Cookie{
-		Name:     name,
-		Value:    "",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-		Path:     CookiePath,
-		MaxAge:   -1,
+// refreshCookieName is the name the refresh cookie is set, read and cleared
+// under: HostRefreshCookieName when Secure, RefreshCookieName otherwise.
+func (server *Server) refreshCookieName() string {
+	if server.refreshCookieSecure() {
+		return HostRefreshCookieName
 	}
-
-	// Same Secure/Domain as setSecureCookie, or the browser won't replace it
-	server.applyCookieSecurity(cookie)
-	http.SetCookie(ctx.Writer, cookie)
+	return RefreshCookieName
 }
 
-// applyCookieSecurity sets Secure and Domain for the environment. Development
-// means GIN_MODE=debug (config.IsDebugMode), the same switch that gates dev
-// seeding and dev CORS, so a deployment that sets nothing gets Secure cookies.
-func (server *Server) applyCookieSecurity(cookie *http.Cookie) {
-	if server.config.IsDebugMode() {
-		cookie.Secure = server.config.CookieSecure
-		if server.config.CookieDomain != "localhost" && server.config.CookieDomain != "" {
-			cookie.Domain = server.config.CookieDomain
-		}
-		return
+// ignoredCookieDomainWarning returns a warning when COOKIE_DOMAIN is set but
+// the refresh cookie is __Host- (which can't have a Domain), or "" if not.
+// Before #159 release honoured COOKIE_DOMAIN, so a deployment relying on a
+// cross-subdomain cookie would otherwise lose it without any hint. "localhost"
+// (example.app.env's value) never had a useful effect, so it doesn't warn.
+func (server *Server) ignoredCookieDomainWarning() string {
+	domain := server.config.CookieDomain
+	if !server.refreshCookieSecure() || domain == "" || domain == "localhost" {
+		return ""
+	}
+	return fmt.Sprintf("COOKIE_DOMAIN=%q is ignored: the refresh cookie is %s, which browsers only accept "+
+		"host-only (no Domain), so it is sent back only to the host that set it", domain, HostRefreshCookieName)
+}
+
+// newRefreshCookie returns the refresh cookie with every attribute except its
+// value and lifetime. Set and clear both use it, so the clearing cookie always
+// matches the one it replaces (same name, Path, Domain and Secure).
+func (server *Server) newRefreshCookie() *http.Cookie {
+	cookie := &http.Cookie{
+		Name:     server.refreshCookieName(),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
 	}
 
-	cookie.Secure = true
-	if server.config.CookieDomain != "" {
+	if server.refreshCookieSecure() {
+		// __Host- requirements: Secure, Path=/, no Domain.
+		cookie.Secure = true
+		cookie.Path = hostCookiePath
+		return cookie
+	}
+
+	cookie.Path = CookiePath
+	if server.config.CookieDomain != "localhost" && server.config.CookieDomain != "" {
 		cookie.Domain = server.config.CookieDomain
 	}
+	return cookie
+}
+
+// setRefreshCookie sets the refresh cookie to value, expiring at expiration,
+// and expires any pre-#159 legacy cookie.
+func (server *Server) setRefreshCookie(ctx *gin.Context, value string, expiration time.Time) {
+	cookie := server.newRefreshCookie()
+	cookie.Value = value
+	cookie.Expires = expiration
+	http.SetCookie(ctx.Writer, cookie)
+
+	server.clearLegacyRefreshCookie(ctx)
+}
+
+// clearRefreshCookie expires the refresh cookie (and any legacy one).
+func (server *Server) clearRefreshCookie(ctx *gin.Context) {
+	cookie := server.newRefreshCookie()
+	cookie.MaxAge = -1
+	http.SetCookie(ctx.Writer, cookie)
+
+	server.clearLegacyRefreshCookie(ctx)
+}
+
+// readRefreshCookie returns the refresh token from the request's refresh
+// cookie, or "" if there is none. A legacy refresh_token cookie is ignored
+// when the __Host- cookie is in use.
+func (server *Server) readRefreshCookie(ctx *gin.Context) string {
+	cookie, err := ctx.Request.Cookie(server.refreshCookieName())
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+// clearLegacyRefreshCookie expires the refresh_token cookie that production
+// set before #159 (Secure, Path=/api/v1/auth, Domain from COOKIE_DOMAIN).
+// Only needed when the current cookie is the __Host- one (otherwise the
+// current cookie has the plain name and clearing it is enough), and only when
+// the request actually carries a legacy cookie, so normal responses don't
+// carry an extra Set-Cookie.
+//
+// The legacy cookie is scoped to /api/v1/auth, so only login, refresh and
+// logout requests can see it; the password-change re-issue never does.
+func (server *Server) clearLegacyRefreshCookie(ctx *gin.Context) {
+	if !server.refreshCookieSecure() || ctx.Request == nil {
+		return
+	}
+	if _, err := ctx.Request.Cookie(RefreshCookieName); err != nil {
+		return
+	}
+	domain := server.config.CookieDomain
+	if server.config.IsDebugMode() && domain == "localhost" {
+		domain = "" // debug mode always dropped a localhost domain
+	}
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     RefreshCookieName,
+		Path:     CookiePath,
+		Domain:   domain,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
 }

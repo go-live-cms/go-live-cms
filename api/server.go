@@ -91,6 +91,10 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		}
 	}
 
+	if warning := server.ignoredCookieDomainWarning(); warning != "" {
+		fmt.Printf("Warning: %s\n", warning)
+	}
+
 	if err := server.setupRoutes(); err != nil {
 		return nil, err
 	}
@@ -177,6 +181,8 @@ func corsOrigins(config util.Config) []string {
 
 // setupRoutes configures the Gin engine:
 //
+//   - Security headers on every response (securityHeadersMiddleware); HSTS
+//     outside debug mode only
 //   - CORS:
 //   - Origins from CORS_ALLOWED_ORIGINS, plus the localhost :4321 origins in
 //     debug mode (corsOrigins); credentials allowed
@@ -210,6 +216,10 @@ func (server *Server) setupRoutes() error {
 	if err := router.SetTrustedProxies(server.config.TrustedProxyList()); err != nil {
 		return fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
 	}
+
+	// First, so CORS preflights (answered by the CORS middleware without
+	// calling Next) and rate-limited 429s get the headers too.
+	router.Use(securityHeadersMiddleware(server.config))
 
 	// No origins configured (release without CORS_ALLOWED_ORIGINS) means
 	// same-origin only: skip the middleware rather than send CORS headers.
