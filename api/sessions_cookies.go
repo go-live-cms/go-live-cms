@@ -31,6 +31,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -67,6 +68,20 @@ func (server *Server) refreshCookieName() string {
 		return HostRefreshCookieName
 	}
 	return RefreshCookieName
+}
+
+// ignoredCookieDomainWarning returns a warning when COOKIE_DOMAIN is set but
+// the refresh cookie is __Host- (which can't have a Domain), or "" if not.
+// Before #159 release honoured COOKIE_DOMAIN, so a deployment relying on a
+// cross-subdomain cookie would otherwise lose it without any hint. "localhost"
+// (example.app.env's value) never had a useful effect, so it doesn't warn.
+func (server *Server) ignoredCookieDomainWarning() string {
+	domain := server.config.CookieDomain
+	if !server.refreshCookieSecure() || domain == "" || domain == "localhost" {
+		return ""
+	}
+	return fmt.Sprintf("COOKIE_DOMAIN=%q is ignored: the refresh cookie is %s, which browsers only accept "+
+		"host-only (no Domain), so it is sent back only to the host that set it", domain, HostRefreshCookieName)
 }
 
 // newRefreshCookie returns the refresh cookie with every attribute except its
@@ -126,10 +141,18 @@ func (server *Server) readRefreshCookie(ctx *gin.Context) string {
 
 // clearLegacyRefreshCookie expires the refresh_token cookie that production
 // set before #159 (Secure, Path=/api/v1/auth, Domain from COOKIE_DOMAIN).
-// Only needed when the current cookie is the __Host- one; otherwise the
-// current cookie has the plain name and clearing it is enough.
+// Only needed when the current cookie is the __Host- one (otherwise the
+// current cookie has the plain name and clearing it is enough), and only when
+// the request actually carries a legacy cookie, so normal responses don't
+// carry an extra Set-Cookie.
+//
+// The legacy cookie is scoped to /api/v1/auth, so only login, refresh and
+// logout requests can see it; the password-change re-issue never does.
 func (server *Server) clearLegacyRefreshCookie(ctx *gin.Context) {
-	if !server.refreshCookieSecure() {
+	if !server.refreshCookieSecure() || ctx.Request == nil {
+		return
+	}
+	if _, err := ctx.Request.Cookie(RefreshCookieName); err != nil {
 		return
 	}
 	domain := server.config.CookieDomain

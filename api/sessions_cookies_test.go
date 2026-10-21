@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -101,6 +102,9 @@ func TestLoginRefreshCookieSecure(t *testing.T) {
 			request, err := http.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(data))
 			require.NoError(t, err)
 			request.Header.Set("Content-Type", "application/json")
+			// The browser still holds a pre-#159 cookie (or, in debug, the
+			// current non-Secure one).
+			request.AddCookie(&http.Cookie{Name: RefreshCookieName, Value: "old-token"})
 
 			recorder := httptest.NewRecorder()
 			server.router.ServeHTTP(recorder, request)
@@ -146,12 +150,12 @@ func TestRefreshCookieHelpers(t *testing.T) {
 		// nil means no legacy clear is sent.
 		wantLegacyDomain *string
 	}{
-		{name: "release default", ginMode: util.GinModeRelease, wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: ptr("")},
-		{name: "release drops localhost domain", ginMode: util.GinModeRelease, domain: "localhost", wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: ptr("localhost")},
-		{name: "release drops domain", ginMode: util.GinModeRelease, domain: "example.com", wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: ptr("example.com")},
+		{name: "release default", ginMode: util.GinModeRelease, wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: strPtr("")},
+		{name: "release drops localhost domain", ginMode: util.GinModeRelease, domain: "localhost", wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: strPtr("localhost")},
+		{name: "release drops domain", ginMode: util.GinModeRelease, domain: "example.com", wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: strPtr("example.com")},
 		{name: "debug insecure", ginMode: util.GinModeDebug, wantName: RefreshCookieName, wantPath: CookiePath, wantSecure: false},
-		{name: "debug secure", ginMode: util.GinModeDebug, cookieSecure: true, wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: ptr("")},
-		{name: "debug secure, localhost domain", ginMode: util.GinModeDebug, cookieSecure: true, domain: "localhost", wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: ptr("")},
+		{name: "debug secure", ginMode: util.GinModeDebug, cookieSecure: true, wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: strPtr("")},
+		{name: "debug secure, localhost domain", ginMode: util.GinModeDebug, cookieSecure: true, domain: "localhost", wantName: HostRefreshCookieName, wantPath: "/", wantSecure: true, wantLegacyDomain: strPtr("")},
 		{name: "debug drops localhost domain", ginMode: util.GinModeDebug, domain: "localhost", wantName: RefreshCookieName, wantPath: CookiePath, wantSecure: false},
 		{name: "debug with domain", ginMode: util.GinModeDebug, domain: "dev.example.com", wantName: RefreshCookieName, wantPath: CookiePath, wantSecure: false, wantDomain: "dev.example.com"},
 	}
@@ -176,24 +180,33 @@ func TestRefreshCookieHelpers(t *testing.T) {
 					server.clearRefreshCookie(ctx)
 				}},
 			} {
-				recorder := httptest.NewRecorder()
-				ctx, _ := gin.CreateTestContext(recorder)
-				op.run(ctx)
+				for _, sendsLegacy := range []bool{false, true} {
+					name := fmt.Sprintf("%s, request has refresh_token=%v", op.name, sendsLegacy)
+					recorder := httptest.NewRecorder()
+					ctx, _ := gin.CreateTestContext(recorder)
+					ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+					if sendsLegacy {
+						ctx.Request.AddCookie(&http.Cookie{Name: RefreshCookieName, Value: "old-token"})
+					}
+					op.run(ctx)
 
-				cookie := findRefreshCookie(t, recorder, tc.wantName)
-				require.Equal(t, tc.wantSecure, cookie.Secure, op.name)
-				require.Equal(t, tc.wantPath, cookie.Path, op.name)
-				require.Equal(t, tc.wantDomain, cookie.Domain, op.name)
-				require.True(t, cookie.HttpOnly, op.name)
-				require.Equal(t, http.SameSiteStrictMode, cookie.SameSite, op.name)
-				if op.name == "clear" {
-					require.Equal(t, -1, cookie.MaxAge)
-				}
+					cookie := findRefreshCookie(t, recorder, tc.wantName)
+					require.Equal(t, tc.wantSecure, cookie.Secure, name)
+					require.Equal(t, tc.wantPath, cookie.Path, name)
+					require.Equal(t, tc.wantDomain, cookie.Domain, name)
+					require.True(t, cookie.HttpOnly, name)
+					require.Equal(t, http.SameSiteStrictMode, cookie.SameSite, name)
+					if op.name == "clear" {
+						require.Equal(t, -1, cookie.MaxAge, name)
+					}
 
-				if tc.wantLegacyDomain != nil {
-					requireLegacyCookieCleared(t, recorder, *tc.wantLegacyDomain)
-				} else {
-					require.Len(t, recorder.Result().Cookies(), 1, op.name)
+					// The legacy clear is only sent with the __Host- cookie,
+					// and only when the request carries a legacy cookie.
+					if tc.wantLegacyDomain != nil && sendsLegacy {
+						requireLegacyCookieCleared(t, recorder, *tc.wantLegacyDomain)
+					} else {
+						require.Len(t, recorder.Result().Cookies(), 1, name)
+					}
 				}
 			}
 		})
@@ -246,4 +259,39 @@ func TestRefreshCookieNameOnRead(t *testing.T) {
 	}
 }
 
-func ptr(s string) *string { return &s }
+// TestIgnoredCookieDomainWarning: COOKIE_DOMAIN warns only when the
+// __Host- cookie is in use and the domain would have had an effect.
+func TestIgnoredCookieDomainWarning(t *testing.T) {
+	testCases := []struct {
+		name         string
+		ginMode      string
+		cookieSecure bool
+		domain       string
+		wantWarning  bool
+	}{
+		{name: "release, no domain", ginMode: util.GinModeRelease},
+		{name: "release, localhost", ginMode: util.GinModeRelease, domain: "localhost"},
+		{name: "release, real domain", ginMode: util.GinModeRelease, domain: "example.com", wantWarning: true},
+		{name: "debug secure, real domain", ginMode: util.GinModeDebug, cookieSecure: true, domain: "example.com", wantWarning: true},
+		{name: "debug insecure uses the domain", ginMode: util.GinModeDebug, domain: "dev.example.com"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			server := &Server{config: util.Config{
+				GinMode:      tc.ginMode,
+				CookieSecure: tc.cookieSecure,
+				CookieDomain: tc.domain,
+			}}
+			warning := server.ignoredCookieDomainWarning()
+			if tc.wantWarning {
+				require.Contains(t, warning, tc.domain)
+				require.Contains(t, warning, HostRefreshCookieName)
+			} else {
+				require.Empty(t, warning)
+			}
+		})
+	}
+}
+
+func strPtr(s string) *string { return &s }

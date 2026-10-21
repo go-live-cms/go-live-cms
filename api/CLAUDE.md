@@ -113,14 +113,18 @@ server.
   Path=/, no Domain (`COOKIE_DOMAIN` ignored). Only the non-Secure dev cookie is
   `refresh_token`, Path=`/api/v1/auth`. Never use the name constants directly:
   set/clear/read with `setRefreshCookie` / `clearRefreshCookie` /
-  `readRefreshCookie`, which pick the name from the mode. They also expire the
-  pre-#159 `refresh_token` cookie when the `__Host-` one is in use. The admin
+  `readRefreshCookie`, which pick the name from the mode. With the `__Host-`
+  cookie in use they also expire a pre-#159 `refresh_token` cookie, but only
+  when the request carries one. A non-localhost `COOKIE_DOMAIN` is ignored
+  then, and `NewServer` prints a warning. The admin
   reaches the API through the web origin's `/api` proxy, so the cookie belongs
   to the web host and (Path=/) is sent with every request to it.
 - **Security headers (#157):** `securityHeadersMiddleware` (first in
   `setupRoutes`) sets nosniff, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer` and a `default-src 'none'` CSP on every
-  response, `/uploads` included. HSTS only outside debug mode. Don't add a
+  response, `/uploads` included. HSTS only outside debug mode, and without
+  `includeSubDomains` (it reaches the site's host through the `/api` proxy,
+  which may be the apex domain). Don't add a
   `Cross-Origin-Resource-Policy`: the web app loads `/uploads` cross-origin.
 ## Collaboration integration (WS role lookup, #223)
 

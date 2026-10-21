@@ -14,7 +14,10 @@ const (
 
 	// hstsHeaderValue is one year. Browsers ignore HSTS received over plain
 	// HTTP, so it only takes effect once the API is served over HTTPS.
-	hstsHeaderValue = "max-age=31536000; includeSubDomains"
+	// No includeSubDomains: the admin reaches the API through the web
+	// origin's /api proxy, so this header lands on the site's host, which may
+	// be the apex domain, and would force HTTPS on every subdomain under it.
+	hstsHeaderValue = "max-age=31536000"
 )
 
 // securityHeadersMiddleware sets baseline security headers on every response,

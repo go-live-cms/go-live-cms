@@ -83,6 +83,10 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		}
 	}
 
+	if warning := server.ignoredCookieDomainWarning(); warning != "" {
+		fmt.Printf("Warning: %s\n", warning)
+	}
+
 	server.setupRoutes()
 
 	// Sync themes from filesystem on startup (skip in test mode)

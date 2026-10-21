@@ -100,6 +100,17 @@ func TestSecurityHeaders(t *testing.T) {
 				require.Equal(t, "true", recorder.Header().Get("Access-Control-Allow-Credentials"))
 				requireBaselineSecurityHeaders(t, recorder.Header(), tc.wantHSTS)
 			})
+
+			// The CORS middleware aborts disallowed origins without calling
+			// Next, so this pins the security headers ahead of it.
+			t.Run("cors rejected origin", func(t *testing.T) {
+				request := httptest.NewRequest(http.MethodGet, "/health", nil)
+				request.Header.Set("Origin", "https://evil.example.net")
+				recorder := serve(request)
+				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Empty(t, recorder.Header().Get("Access-Control-Allow-Origin"))
+				requireBaselineSecurityHeaders(t, recorder.Header(), tc.wantHSTS)
+			})
 		})
 	}
 }
