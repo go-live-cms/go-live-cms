@@ -57,4 +57,53 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   (dual ESM/CJS instance) before touching any yjs-family dependency.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
+
+## TipTap version pin (#193)
+
+Known-good set, last reviewed 2026-10 (web test suite + two-user collab test):
+
+- **Every `@tiptap/*` package is pinned exact (no `^`/`~`) to `3.4.2`.** TipTap expects
+  all its packages on one version, and its packages depend on each other with caret
+  ranges, so the transitive ones that StarterKit and friends pull in (`@tiptap/core`,
+  `@tiptap/extensions`, `@tiptap/extension-list`, the StarterKit children, …) are
+  forced to the same version by the **`overrides` block in `package.json`**. Without
+  it, `npm install` resolves them to the newest 3.x, whose exact peer ranges then
+  conflict with the pinned `@tiptap/pm` (ERESOLVE).
+- Two exceptions on their own release lines (no `3.4.2` exists): `@tiptap/y-tiptap`
+  `3.0.0` and `@tiptap/extension-collaboration-cursor` `3.0.0` (v3 renamed it to
+  `extension-collaboration-caret`; the package is declared but not imported).
+- `y-prosemirror` `1.3.7` and `prosemirror-utils` `1.2.2` are pinned exact too.
+
+### Upgrading TipTap
+
+Upgrades are a deliberate, standalone PR — never part of an unrelated change.
+
+1. **Bump all `@tiptap/*` packages together** to one version: every direct dependency
+   *and* every entry in `overrides`. Check `npm view @tiptap/<pkg>@<ver>
+   dependencies peerDependencies` for new transitive `@tiptap/*` packages and add them
+   to `overrides`. Re-check whether `y-tiptap` needs a bump (its peer range on
+   `@tiptap/core`/`@tiptap/pm`).
+2. **Regenerate the lockfile in the web container** (`docker compose -f
+   compose.dev.yaml exec -T web npm install`; local `node_modules` is incomplete on
+   Windows), then confirm the lockfile diff is only `@tiptap/*` packages and that every
+   `node_modules/@tiptap/*` entry resolves to the new version.
+3. **Read the TipTap v3 changelog/release notes** for every version skipped, looking
+   for: schema/node attribute changes (they change the ProseMirror JSON that flows into
+   `blockBridge.ts` and stored `block_doc`s), `setContent`/command option changes
+   (v3 takes `{ emitUpdate }`, not a boolean), Collaboration / `y-tiptap` changes
+   (`isChangeOrigin`, sync plugin meta, undo/redo — StarterKit's `undoRedo` must stay
+   disabled when collaborating), and drag-handle/node-range changes (block reordering).
+4. **Run the web test suite**: `docker compose -f compose.dev.yaml exec -T web npx
+   vitest run` (blockBridge round-trips, BlockId, persistence manager).
+5. **Manual editor pass**: create, edit, save and reload every block type; drag a block
+   to reorder; slash menu, bubble menu, character count.
+6. **Two-user collab test**: log in as two users in separate browser contexts on the
+   same post; type in both and check both see each other's edits and cursors; reload
+   both and confirm nothing was lost or duplicated; publish and check the public page.
+   Watch the websocket container logs for errors while doing it.
+7. **Keep `yjs` / `y-websocket` / `y-protocols` in lockstep with `websocket/`** — never
+   change them as a side effect of a TipTap bump (see rule 8 in
+   `gl-admin/lib/collaboration/CLAUDE.md`). If a new `y-tiptap` needs a newer `yjs`,
+   bump `web/` and `websocket/` together in the same PR.
+8. Update the version and review date at the top of this section.
 </content>
