@@ -20,7 +20,8 @@ is split into consistently-named files in `api/`:
 `authorization_payload` (`getAuthPayload(c)`).
 
 Some domains also keep a docs-only module entry file (`posts.go`, `users.go`,
-`media.go`, `taxonomies.go`, `sessions.go`) holding package-level docs and no code.
+`media.go`, `taxonomies.go`, `sessions.go`, `themes.go`) holding package-level docs
+and no code. `post_types.go` is not one of them: it contains code.
 
 ## Database / sqlc workflow
 

@@ -6,8 +6,9 @@
 //
 // # Auth (short)
 // Writes (POST/PUT/DELETE) require a Bearer access token and the editor-or-admin
-// role (requireContentEditor); PUT/DELETE also check ownership (canWriteMedia).
-// Reads (GET) are public.
+// role (requireContentEditor). Admins and editors may update/delete any media;
+// any other role admitted later only its own (canWriteMedia; see the ownership
+// policy in media_handlers_write.go). Reads (GET) are public.
 //
 // # Formats
 // Uploads: multipart/form-data. Updates: JSON.
@@ -43,7 +44,7 @@
 // - MaxUploadSize: string like "10MB" (binary, 1024-based).
 //
 // # Errors (common)
-// 400 invalid file/params | 401 no/invalid token | 403 not owner | 404 not found | 413 too large.
+// 400 invalid file/params | 401 no/invalid token | 403 role not editor/admin, or not owner | 404 not found | 413 too large.
 //
 // # Future work
 // - Virus scanning integration
