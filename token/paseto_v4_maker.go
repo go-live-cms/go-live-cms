@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -223,16 +222,17 @@ func (m *PasetoV4Maker) CreateRefreshToken(userID int64, username string, dur ti
 	return t.V4Encrypt(m.keys.LocalKey, nil), nil
 }
 
-// Token verification errors specific to PASETO v4 implementation.
+// Token verification errors returned by the PASETO v4 implementation.
 //
-// Error Mapping: Higher-level code should map these to the canonical
-// ErrInvalidToken/ErrExpiredToken when exposed to callers to keep API uniform.
+// These are aliases of the canonical ErrInvalidToken/ErrExpiredToken, so
+// errors.Is works against either name and callers stay implementation-agnostic
+// as the Maker contract requires.
 var (
 	// ErrInvalidTokenV4 indicates the token is malformed or verification failed.
-	ErrInvalidTokenV4 = errors.New("token is invalid")
+	ErrInvalidTokenV4 = ErrInvalidToken
 
 	// ErrExpiredTokenV4 indicates the token has passed its expiration time.
-	ErrExpiredTokenV4 = errors.New("token has expired")
+	ErrExpiredTokenV4 = ErrExpiredToken
 )
 
 // VerifyToken validates and parses a PASETO v4.public access token.
@@ -260,9 +260,11 @@ var (
 //
 // Returns:
 //   - *Payload: Decoded token payload if valid
-//   - error: ErrInvalidTokenV4, ErrExpiredTokenV4, or parsing errors
+//   - error: ErrInvalidToken or ErrExpiredToken
 func (m *PasetoV4Maker) VerifyToken(tok string) (*Payload, error) {
-	parser := p.NewParser()
+	// The default parser's NotExpired rule would report an expired token as a
+	// generic parse failure; expiry is checked below so it maps to ErrExpiredToken.
+	parser := p.NewParserWithoutExpiryCheck()
 	parser.AddRule(p.IssuedBy(m.keys.Issuer))
 	parser.AddRule(p.ForAudience(m.keys.Audience))
 
@@ -273,7 +275,9 @@ func (m *PasetoV4Maker) VerifyToken(tok string) (*Payload, error) {
 
 	var out Payload
 	out.IssuedAt, _ = pt.GetIssuedAt()
-	out.ExpiredAt, _ = pt.GetExpiration()
+	if out.ExpiredAt, err = pt.GetExpiration(); err != nil {
+		return nil, ErrInvalidTokenV4
+	}
 	out.Username, _ = pt.GetString("username")
 	out.TokenType, _ = pt.GetString("token_type")
 	// Informational only; absent on renewal-issued and pre-#187 tokens.

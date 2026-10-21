@@ -1,10 +1,9 @@
 // Package token provides secure token generation and validation for Go Live CMS.
 //
 // This package implements PASETO (Platform-Agnostic SEcurity TOkens) for secure
-// authentication and authorization. Tokens are PASETO v4.
+// authentication and authorization via PasetoV4Maker.
 //
-// Which should I use?
-//   - Use PasetoV4Maker
+// Token types:
 //   - Access tokens = v4.public (verify with public key across services)
 //   - Refresh tokens = v4.local (private to auth service, stored/rotated via cookies)
 //
