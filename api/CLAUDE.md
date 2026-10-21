@@ -19,8 +19,8 @@ is split into consistently-named files in `api/`:
 `authMiddleware(server.tokenMaker, server.store)`; the payload is under context key
 `authorization_payload` (`getAuthPayload(c)`).
 
-> Note: `media` is the one domain whose handler split is incomplete (some handlers
-> still in `api/media.go`). Tracked in a GitHub issue.
+Some domains also keep a docs-only module entry file (`posts.go`, `users.go`,
+`media.go`, `taxonomies.go`, `sessions.go`) holding package-level docs and no code.
 
 ## Database / sqlc workflow
 

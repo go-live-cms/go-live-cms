@@ -5,7 +5,9 @@
 // post-linking. Files land in util.Config.UploadPath and are served via /uploads/*.
 //
 // # Auth (short)
-// Writes (POST/PUT/DELETE) require Bearer access tokens; reads (GET) are public.
+// Writes (POST/PUT/DELETE) require a Bearer access token and the editor-or-admin
+// role (requireContentEditor); PUT/DELETE also check ownership (canWriteMedia).
+// Reads (GET) are public.
 //
 // # Formats
 // Uploads: multipart/form-data. Updates: JSON.
@@ -43,15 +45,15 @@
 // # Errors (common)
 // 400 invalid file/params | 401 no/invalid token | 403 not owner | 404 not found | 413 too large.
 //
-// # See also
-// - media_utils.go: MIME, filename, dimensions
-// - media_handlers_*: GET/POST/PUT/DELETE handlers
-// - media_presenters.go: response shapes
-//
 // # Future work
 // - Virus scanning integration
 // - S3/cloud storage backend
 // - Automatic thumbnail generation
 //
-// TODO: keep migrating handlers to media_handlers_read.go and media_handlers_write.go.
+// This file intentionally contains only documentation.
+// See: media_routes.go (route registration), media_bindings.go (request structs),
+//
+//	media_handlers_read.go (GET handlers), media_handlers_write.go (POST/PUT/DELETE),
+//	media_presenters.go (response shapes), media_utils.go (MIME, filenames, dimensions,
+//	file storage/removal).
 package api
