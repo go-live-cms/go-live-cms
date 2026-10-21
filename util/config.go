@@ -45,9 +45,6 @@ type Config struct {
 	// ServerAddress is the full bind address (e.g. ":8080")
 	APIPort string `mapstructure:"API_PORT"`
 
-	// Deprecated: Use PASETO v4 keys instead. Kept for legacy JWT paths.
-	TokenSymmetricKey string `mapstructure:"TOKEN_SYMMETRIC_KEY"`
-
 	// AccessTokenDuration is the validity period for access tokens (e.g. "15m")
 	// Accepts time.ParseDuration formats: 10s, 15m, 24h, etc.
 	AccessTokenDuration time.Duration `mapstructure:"ACCESS_TOKEN_DURATION"`
@@ -191,9 +188,6 @@ func LoadConfig(path string) (config Config, err error) {
 	// opens the dev CORS allowlist unless debug is set explicitly.
 	viper.SetDefault("GIN_MODE", GinModeRelease)
 	viper.SetDefault("CORS_ALLOWED_ORIGINS", "")
-
-	// Legacy JWT key default (deprecated)
-	viper.SetDefault("TOKEN_SYMMETRIC_KEY", "12345678901234567890123456789012")
 
 	// Collaborative editing server (optional — squash silently skipped if either is unset).
 	// Both default to empty so the feature is truly opt-in: setting only one would

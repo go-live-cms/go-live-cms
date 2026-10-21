@@ -57,7 +57,7 @@ type Payload struct {
 // This function generates a unique token ID and sets the issued/expiration
 // times based on the current time and provided duration.
 //
-// Usually you don't build Payload directly in v4 flows; it's useful in v2 or for tests.
+// Usually you don't build Payload directly in v4 flows; it's useful for tests.
 //
 // Parameters:
 //   - userID: The database ID of the user this token represents

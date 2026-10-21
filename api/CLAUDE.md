@@ -134,5 +134,4 @@ server.
 - `block_doc` (jsonb on `posts`) is the **working copy** the editor loads;
   `published_block_doc` is the published snapshot the public frontend reads. They can
   diverge (a bug can wipe the working copy while the published one stays intact).
-- `TOKEN_SYMMETRIC_KEY` is legacy/unused (pre-PASETO); slated for removal.
 </content>
