@@ -33,6 +33,9 @@ type Server struct {
 
 	// Collab (WebSocket) ticket minting; see collab_routes.go.
 	collabTickets collabTicketMaker
+
+	// Per-client request limits; see ratelimit.go.
+	rateLimits rateLimits
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -68,6 +71,14 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if config.RoleLookupSecret == "" {
 		return nil, errors.New("ROLE_LOOKUP_SECRET is required (shared with the collab WebSocket server)")
 	}
+	// Validated here so setupRoutes' SetTrustedProxies can't fail.
+	if _, err := parsePrefixes(config.TrustedProxyList()); err != nil {
+		return nil, fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
+	}
+	limits, err := newRateLimits(config)
+	if err != nil {
+		return nil, err
+	}
 	server := &Server{
 		store:      store,
 		config:     config,
@@ -75,6 +86,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		ctx:        context.Background(),
 
 		collabTickets: tokenMaker,
+		rateLimits:    limits,
 	}
 
 	if shouldCheckSeededAccounts(config) {
@@ -173,6 +185,8 @@ func corsOrigins(config util.Config) []string {
 //   - None configured (release without CORS_ALLOWED_ORIGINS): no CORS
 //     middleware, same-origin only
 //   - /health (public): liveness endpoint
+//   - Rate limits (ratelimit.go): general per-IP limit on /api/v1 and /public,
+//     stricter ones on login/register/refresh and self password changes
 //   - /api/v1/auth: register, login, refresh, logout (logout requires auth)
 //   - /api/v1/sessions: list/block (auth required)
 //   - /api/v1/users: CRUD; some endpoints require auth (see handlers)
@@ -191,6 +205,13 @@ func corsOrigins(config util.Config) []string {
 func (server *Server) setupRoutes() {
 	router := gin.Default()
 
+	// Only believe X-Forwarded-For / X-Real-IP from TRUSTED_PROXIES (none by
+	// default), so a client can't pick its own ClientIP and dodge rate limits.
+	// NewServer has already validated the list.
+	if err := router.SetTrustedProxies(server.config.TrustedProxyList()); err != nil {
+		panic(fmt.Sprintf("invalid TRUSTED_PROXIES: %v", err))
+	}
+
 	// No origins configured (release without CORS_ALLOWED_ORIGINS) means
 	// same-origin only: skip the middleware rather than send CORS headers.
 	if origins := corsOrigins(server.config); len(origins) > 0 {
@@ -202,8 +223,12 @@ func (server *Server) setupRoutes() {
 		}))
 	}
 
-	v1 := router.Group("/api/v1")
-	public := router.Group("/public") // Public API group for SSR/public content
+	// The general per-IP limit runs after CORS (so preflights aren't counted
+	// and 429s carry CORS headers) and before any route's own middleware.
+	// /health and /uploads are left unlimited.
+	generalLimit := server.rateLimits.general.perIP(server.rateLimits.generalExempt...)
+	v1 := router.Group("/api/v1", generalLimit)
+	public := router.Group("/public", generalLimit) // Public API group for SSR/public content
 
 	router.GET("/health", server.healthCheck)
 

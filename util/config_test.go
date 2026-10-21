@@ -59,3 +59,26 @@ func TestLoadConfigReadsRoleLookupSecretFromEnv(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "from-env", config.RoleLookupSecret)
 }
+
+func TestLoadConfigRateLimitDefaults(t *testing.T) {
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, 600, config.RateLimitGeneralPerMinute)
+	require.Equal(t, 10, config.RateLimitLoginPerMinute)
+	require.Equal(t, 30, config.RateLimitRefreshPerMinute)
+	require.Equal(t, 5, config.RateLimitPasswordChangePerMinute)
+	require.Empty(t, config.TrustedProxyList(), "no proxy is trusted by default")
+}
+
+func TestLoadConfigRejectsNegativeRateLimit(t *testing.T) {
+	t.Setenv("RATE_LIMIT_LOGIN_PER_MINUTE", "-1")
+	_, err := LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "RATE_LIMIT_LOGIN_PER_MINUTE")
+}
+
+func TestTrustedProxyList(t *testing.T) {
+	require.Equal(t,
+		[]string{"10.0.0.0/8", "192.0.2.1"},
+		Config{TrustedProxies: " 10.0.0.0/8, ,192.0.2.1"}.TrustedProxyList(),
+	)
+}
