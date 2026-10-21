@@ -104,8 +104,10 @@ type Config struct {
 	// Verifiers accept tokens by matching KID to select the correct verification key
 	PasetoRefreshKID string `mapstructure:"PASETO_REFRESH_KID"`
 
-	// CookieDomain specifies the Domain attribute for HTTP cookies
-	// Leave empty in development to avoid cross-port cookie issues
+	// CookieDomain specifies the Domain attribute for the non-Secure refresh
+	// cookie (debug mode with COOKIE_SECURE=false; "localhost" is dropped).
+	// A Secure refresh cookie is __Host-refresh_token, which must not have a
+	// Domain, so it ignores this (#159).
 	CookieDomain string `mapstructure:"COOKIE_DOMAIN"`
 
 	// CookieSecure sets the Secure flag on auth cookies, but is only read in
