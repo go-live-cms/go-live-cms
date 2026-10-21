@@ -64,24 +64,27 @@ Known-good set, last reviewed 2026-10 (web test suite + two-user collab test):
 
 - **Every `@tiptap/*` package is pinned exact (no `^`/`~`) to `3.4.2`.** TipTap expects
   all its packages on one version, and its packages depend on each other with caret
-  ranges, so the transitive ones that StarterKit and friends pull in (`@tiptap/core`,
-  `@tiptap/extensions`, `@tiptap/extension-list`, the StarterKit children, …) are
-  forced to the same version by the **`overrides` block in `package.json`**. Without
-  it, `npm install` resolves them to the newest 3.x, whose exact peer ranges then
-  conflict with the pinned `@tiptap/pm` (ERESOLVE).
-- Two exceptions on their own release lines (no `3.4.2` exists): `@tiptap/y-tiptap`
-  `3.0.0` and `@tiptap/extension-collaboration-cursor` `3.0.0` (v3 renamed it to
-  `extension-collaboration-caret`; the package is declared but not imported).
-- `y-prosemirror` `1.3.7` and `prosemirror-utils` `1.2.2` are pinned exact too.
+  ranges, so the transitive ones that StarterKit and friends pull in (`@tiptap/extensions`,
+  `@tiptap/extension-list`, the StarterKit children, …) are forced to the same version
+  by the **`overrides` block in `package.json`**. Without it, `npm install` resolves them
+  to the newest 3.x, whose exact peer ranges then conflict with the pinned `@tiptap/pm`
+  (ERESOLVE). `@tiptap/core` is imported directly, so it's a declared dependency and its
+  override is `"$@tiptap/core"`.
+- **`src/tiptapPin.test.ts`** fails if any `@tiptap/*` entry in `package-lock.json`
+  resolves to a version other than the declared `@tiptap/core` — e.g. a new transitive
+  package a bump added but `overrides` doesn't list.
+- One exception on its own release line (no `3.4.2` exists): `@tiptap/y-tiptap` `3.0.0`.
+- `prosemirror-utils` `1.2.2` is pinned exact too. `y-websocket` `2.1.0` and
+  `y-protocols` `1.0.7` are pinned exact here and `y-websocket` in `websocket/` (rule 8).
 
 ### Upgrading TipTap
 
 Upgrades are a deliberate, standalone PR — never part of an unrelated change.
 
-1. **Bump all `@tiptap/*` packages together** to one version: every direct dependency
-   *and* every entry in `overrides`. Check `npm view @tiptap/<pkg>@<ver>
-   dependencies peerDependencies` for new transitive `@tiptap/*` packages and add them
-   to `overrides`. Re-check whether `y-tiptap` needs a bump (its peer range on
+1. **Bump all `@tiptap/*` packages together** with `node scripts/bump-tiptap.mjs <ver>`
+   (from `web/`): it sets every direct `@tiptap/*` dependency and literal override to
+   `<ver>`. If `tiptapPin.test.ts` then fails, a bump added a transitive `@tiptap/*`
+   package: add it to `overrides` and re-run. Re-check whether `y-tiptap` needs a bump (its peer range on
    `@tiptap/core`/`@tiptap/pm`).
 2. **Regenerate the lockfile in the web container** (`docker compose -f
    compose.dev.yaml exec -T web npm install`; local `node_modules` is incomplete on
