@@ -254,7 +254,9 @@ func TestPostPermissionsMissingPost(t *testing.T) {
 
 	server := newTestServer(t, store)
 	recorder := servePostPermRequest(t, server, contributor, http.MethodPut, "/api/v1/posts/404/blocks",
-		func(db.Post) any { return gin.H{"doc": json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)} },
+		func(db.Post) any {
+			return gin.H{"doc": json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)}
+		},
 		db.Post{}, map[string]string{"If-Match": "1"})
 	require.Equal(t, http.StatusNotFound, recorder.Code)
 }
