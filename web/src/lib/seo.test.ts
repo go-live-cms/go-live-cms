@@ -4,6 +4,7 @@ import {
   MAX_SITEMAP_URLS,
   buildRobotsTxt,
   buildSitemapXml,
+  cacheControl,
   collectSitemapEntries,
   metaDescription,
   postPath,
@@ -49,6 +50,14 @@ describe("resolveSiteUrl", () => {
   })
 })
 
+describe("cacheControl", () => {
+  it("is public only when SITE_URL is set (no Host-header URLs in shared caches)", () => {
+    expect(cacheControl(600, { SITE_URL: "https://example.org" })).toBe("public, max-age=600")
+    expect(cacheControl(600, {})).toBe("private, no-store")
+    expect(cacheControl(600, { SITE_URL: "not a url" })).toBe("private, no-store")
+  })
+})
+
 describe("postPath", () => {
   it("uses the id unless the site uses slug URLs", () => {
     expect(postPath(post({ id: 7, slug: "hello-world" }), "id")).toBe("/post/7")
@@ -57,6 +66,11 @@ describe("postPath", () => {
 
   it("falls back to the id for a post without a slug", () => {
     expect(postPath(post({ id: 7, slug: "" }), "slug")).toBe("/post/7")
+  })
+
+  it("uses the id for an all-digit slug, which the route would read as an id", () => {
+    expect(postPath(post({ id: 7, slug: "2026" }), "slug")).toBe("/post/7")
+    expect(postPath(post({ id: 7, slug: "post-2026" }), "slug")).toBe("/post/post-2026")
   })
 
   it("encodes the slug as one path segment", () => {
@@ -74,8 +88,21 @@ describe("publicImageUrl", () => {
     )
   })
 
-  it("keeps other absolute URLs and rejects non-http ones", () => {
-    expect(publicImageUrl("https://example.org", "https://cdn.example.net/a.jpg")).toBe("https://cdn.example.net/a.jpg")
+  it("rewrites the configured API hosts too", () => {
+    expect(
+      publicImageUrl("https://example.org", "https://api.example.org/uploads/media/a.jpg", {
+        PUBLIC_API_URL: "https://api.example.org/api/v1",
+      }),
+    ).toBe("https://example.org/uploads/media/a.jpg")
+  })
+
+  it("keeps other absolute URLs, even with an /uploads/ path, and rejects non-http ones", () => {
+    expect(publicImageUrl("https://example.org", "https://cdn.example.net/a.jpg", {})).toBe(
+      "https://cdn.example.net/a.jpg",
+    )
+    expect(publicImageUrl("https://example.org", "https://cdn.example.net/uploads/a.jpg", {})).toBe(
+      "https://cdn.example.net/uploads/a.jpg",
+    )
     expect(publicImageUrl("https://example.org", "javascript:alert(1)")).toBeUndefined()
     expect(publicImageUrl("https://example.org", null)).toBeUndefined()
   })
@@ -84,6 +111,10 @@ describe("publicImageUrl", () => {
 describe("metaDescription", () => {
   it("strips HTML and collapses whitespace", () => {
     expect(metaDescription("<p>Hello <strong>world</strong> &amp; friends</p>\n\n")).toBe("Hello world & friends")
+  })
+
+  it("decodes numeric entities", () => {
+    expect(metaDescription("It&#8217;s here &#x2014; now &#39;quoted&#39;")).toBe("It’s here — now 'quoted'")
   })
 
   it("cuts long text at a word boundary", () => {

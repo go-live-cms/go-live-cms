@@ -14,6 +14,9 @@ func TestNormalizePostSlug(t *testing.T) {
 		"a/b#c":                    "abc",
 		"--Leading and trailing--": "leading-and-trailing",
 		"São Paulo":                "são-paulo",
+		"2026":                     "post-2026",
+		"2026!":                    "post-2026",
+		"2026 recap":               "2026-recap",
 		"!!!":                      postSlugFallback,
 		"":                         postSlugFallback,
 	}

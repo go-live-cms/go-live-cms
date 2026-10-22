@@ -2378,6 +2378,21 @@ func (mr *MockStoreMockRecorder) UpdatePostType(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostType", reflect.TypeOf((*MockStore)(nil).UpdatePostType), arg0, arg1)
 }
 
+// UpdatePostWithSlugTx mocks base method.
+func (m *MockStore) UpdatePostWithSlugTx(arg0 context.Context, arg1 db.UpdatePostWithSlugTxParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostWithSlugTx", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostWithSlugTx indicates an expected call of UpdatePostWithSlugTx.
+func (mr *MockStoreMockRecorder) UpdatePostWithSlugTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostWithSlugTx", reflect.TypeOf((*MockStore)(nil).UpdatePostWithSlugTx), arg0, arg1)
+}
+
 // UpdatePostsUsername mocks base method.
 func (m *MockStore) UpdatePostsUsername(arg0 context.Context, arg1 db.UpdatePostsUsernameParams) error {
 	m.ctrl.T.Helper()

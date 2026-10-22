@@ -72,8 +72,11 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   `post_url_structure` gives (`postPath`, same rule as `[id].astro`), lastmod =
   `changed_at`. Heads go through `src/components/SeoHead.astro`; the post route passes
   a `seo` prop that theme layouts forward to their base layout. `.astro` components
-  are testable with the Container API because `vitest.config.ts` uses Astro's
-  `getViteConfig` (`SeoHead.test.ts`, `// @vitest-environment node`).
+  are testable with the Container API in files named `*.astro.test.ts`: they run as
+  a separate vitest project (`vitest.astro.config.ts`, Astro's `getViteConfig`, node
+  env); the other tests stay in the plain `unit` project. Without `SITE_URL`,
+  robots/sitemap are sent `private, no-store` (the URL came from the Host header);
+  the sitemap is cached in memory for 10 minutes.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

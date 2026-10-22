@@ -22,26 +22,45 @@ export interface SitemapEntry {
   lastmod?: string
 }
 
+type Env = Record<string, string | undefined>
+const processEnv = (): Env => (typeof process !== "undefined" ? process.env : {})
+
+// SITE_URL as a normalized origin (+ optional base path), or undefined when
+// unset or not an http(s) URL.
+function configuredSiteUrl(env: Env): string | undefined {
+  const configured = env.SITE_URL?.trim()
+  if (!configured) return undefined
+  try {
+    const url = new URL(configured)
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return `${url.origin}${url.pathname}`.replace(/\/+$/, "")
+    }
+  } catch {
+    // Invalid SITE_URL: treated as unset.
+  }
+  return undefined
+}
+
+// Whether SITE_URL is set. Without it the site URL comes from the request's
+// Host header, which the client controls, so responses that embed it must not
+// go into shared caches (see cacheControl).
+export function isSiteUrlConfigured(env: Env = processEnv()): boolean {
+  return configuredSiteUrl(env) !== undefined
+}
+
 // Public origin of the site, without a trailing slash. SITE_URL (read from
 // process.env at runtime, like SERVER_API_URL, so the value set in compose
 // applies to a prebuilt image) wins; behind a proxy the request origin can be
 // an internal host. Without it, fall back to the request's own origin.
-export function resolveSiteUrl(
-  requestUrl: URL | string,
-  env: Record<string, string | undefined> = typeof process !== "undefined" ? process.env : {},
-): string {
-  const configured = env.SITE_URL?.trim()
-  if (configured) {
-    try {
-      const url = new URL(configured)
-      if (url.protocol === "http:" || url.protocol === "https:") {
-        return `${url.origin}${url.pathname}`.replace(/\/+$/, "")
-      }
-    } catch {
-      // Invalid SITE_URL: fall through to the request origin.
-    }
-  }
-  return new URL(requestUrl).origin
+export function resolveSiteUrl(requestUrl: URL | string, env: Env = processEnv()): string {
+  return configuredSiteUrl(env) ?? new URL(requestUrl).origin
+}
+
+// Cache-Control for responses whose body contains the site URL (robots.txt,
+// sitemap.xml): public only when that URL is SITE_URL, never one taken from a
+// spoofable Host header (cache poisoning).
+export function cacheControl(maxAgeSeconds: number, env: Env = processEnv()): string {
+  return isSiteUrlConfigured(env) ? `public, max-age=${maxAgeSeconds}` : "private, no-store"
 }
 
 export function normalizeUrlStructure(value: unknown): UrlStructure {
@@ -49,10 +68,13 @@ export function normalizeUrlStructure(value: unknown): UrlStructure {
 }
 
 // Public path of a post, matching src/pages/[post_type]/[id].astro: the slug
-// when the site uses slug URLs and the post has one, else the id.
+// when the site uses slug URLs and the post has one, else the id. An all-digit
+// slug (older rows; the API no longer makes them) would be read as an id there,
+// so it falls back to the id too.
 export function postPath(post: Pick<Post, "id" | "slug" | "post_type">, structure: UrlStructure): string {
   const type = post.post_type || "post"
-  const segment = structure === "slug" && post.slug ? post.slug : String(post.id)
+  const useSlug = structure === "slug" && !!post.slug && !/^\d+$/.test(post.slug)
+  const segment = useSlug ? post.slug! : String(post.id)
   return `/${encodeURIComponent(type)}/${encodeURIComponent(segment)}`
 }
 
@@ -60,15 +82,35 @@ export function absoluteUrl(siteUrl: string, path: string): string {
   return new URL(path, `${siteUrl}/`).toString()
 }
 
+// Hosts an admin-stored media URL may point at that are really this site's own
+// /uploads: local dev hosts, the compose `api` service, and the API URLs.
+function ownMediaHosts(env: Env): Set<string> {
+  const hosts = new Set(["localhost", "127.0.0.1", "[::1]", "api"])
+  for (const value of [env.PUBLIC_API_URL, env.SERVER_API_URL]) {
+    try {
+      if (value) hosts.add(new URL(value).hostname)
+    } catch {
+      // Not a URL: nothing to add.
+    }
+  }
+  return hosts
+}
+
 // Featured images are stored as whatever URL the admin had (often
 // http://localhost:8080/uploads/... or http://api:8080/uploads/...). The web
 // origin serves /uploads itself (Vite proxy in dev, apiProxy.ts in prod), so
-// rewrite those onto the public site URL; leave other absolute URLs (a CDN) alone.
-export function publicImageUrl(siteUrl: string, image: string | null | undefined): string | undefined {
+// rewrite relative URLs and those hosts onto the public site URL; leave other
+// absolute URLs (a CDN, even one with an /uploads/ path) alone.
+export function publicImageUrl(
+  siteUrl: string,
+  image: string | null | undefined,
+  env: Env = processEnv(),
+): string | undefined {
   if (!image) return undefined
   try {
     const url = new URL(image, `${siteUrl}/`)
-    if (url.pathname.startsWith("/uploads/")) {
+    const ownHost = !/^[a-z][a-z\d+.-]*:/i.test(image) || ownMediaHosts(env).has(url.hostname)
+    if (ownHost && url.pathname.startsWith("/uploads/")) {
       return absoluteUrl(siteUrl, `${url.pathname}${url.search}`)
     }
     return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : undefined
@@ -84,7 +126,11 @@ const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"'
 export function metaDescription(text: string | null | undefined, maxLength = 160): string {
   const plain = (text || "")
     .replace(/<[^>]*>/g, " ")
-    .replace(/&(amp|lt|gt|quot|#39|apos|nbsp);/g, (_, name: string) => ENTITIES[name])
+    .replace(/&(?:#(\d+)|#x([\da-f]+)|(amp|lt|gt|quot|#39|apos|nbsp));/gi, (match, dec, hex, name) => {
+      if (name) return ENTITIES[name.toLowerCase()] ?? match
+      const code = dec ? Number(dec) : parseInt(hex, 16)
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match
+    })
     .replace(/\s+/g, " ")
     .trim()
   if (plain.length <= maxLength) return plain
@@ -163,7 +209,8 @@ export function buildSitemapXml(entries: SitemapEntry[]): string {
 export interface SitemapSource {
   getPublicPostTypeNames(): Promise<string[]>
   getUrlStructure(): Promise<UrlStructure>
-  // One page of published posts of a type, newest first.
+  // One page of published posts of a type, in a stable order (id ascending)
+  // so offsets don't shift when a post is published mid-walk.
   getPublishedPosts(type: string, limit: number, offset: number): Promise<Post[]>
 }
 
@@ -179,25 +226,27 @@ export const MAX_SITEMAP_URLS = 50_000
 // skipped even if the API returned them).
 export async function collectSitemapEntries(siteUrl: string, source: SitemapSource): Promise<SitemapEntry[]> {
   const [types, structure] = await Promise.all([source.getPublicPostTypeNames(), source.getUrlStructure()])
-  const entries: SitemapEntry[] = [{ loc: absoluteUrl(siteUrl, "/") }]
-
-  for (const type of types) {
-    const postEntries: SitemapEntry[] = []
-    let newest: string | undefined
-    for (let offset = 0; entries.length + postEntries.length < MAX_SITEMAP_URLS; offset += PAGE_SIZE) {
-      const page = await source.getPublishedPosts(type, PAGE_SIZE, offset)
-      for (const post of page) {
-        if (post.post_status !== "published" || (post.post_type && post.post_type !== type)) continue
-        const lastmod = postLastmod(post)
-        if (lastmod && (!newest || lastmod > newest)) newest = lastmod
-        postEntries.push({ loc: absoluteUrl(siteUrl, postPath({ ...post, post_type: type }, structure)), lastmod })
+  // Types are fetched in parallel (each still pages sequentially), then joined
+  // in the API's type order.
+  const perType = await Promise.all(
+    types.map(async (type) => {
+      const postEntries: SitemapEntry[] = []
+      let newest: string | undefined
+      for (let offset = 0; postEntries.length < MAX_SITEMAP_URLS; offset += PAGE_SIZE) {
+        const page = await source.getPublishedPosts(type, PAGE_SIZE, offset)
+        for (const post of page) {
+          if (post.post_status !== "published" || (post.post_type && post.post_type !== type)) continue
+          const lastmod = postLastmod(post)
+          if (lastmod && (!newest || lastmod > newest)) newest = lastmod
+          postEntries.push({ loc: absoluteUrl(siteUrl, postPath({ ...post, post_type: type }, structure)), lastmod })
+        }
+        if (page.length < PAGE_SIZE) break
       }
-      if (page.length < PAGE_SIZE) break
-    }
-    if (postEntries.length > 0) {
-      entries.push({ loc: absoluteUrl(siteUrl, `/${encodeURIComponent(type)}`), lastmod: newest }, ...postEntries)
-    }
-  }
+      return postEntries.length > 0
+        ? [{ loc: absoluteUrl(siteUrl, `/${encodeURIComponent(type)}`), lastmod: newest }, ...postEntries]
+        : []
+    }),
+  )
 
-  return entries.slice(0, MAX_SITEMAP_URLS)
+  return [{ loc: absoluteUrl(siteUrl, "/") }, ...perType.flat()].slice(0, MAX_SITEMAP_URLS)
 }

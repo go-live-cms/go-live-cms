@@ -19,7 +19,8 @@ const postSlugFallback = "post"
 // normalizePostSlug turns a title or user-supplied slug into a URL path segment:
 // generateSlug's lowercase/hyphen rules, then anything that is not a letter,
 // digit or hyphen is dropped (so "/", "?", "#" can't break the post URL) and
-// leading/trailing hyphens are trimmed. Unicode letters are kept.
+// leading/trailing hyphens are trimmed. Unicode letters are kept. An all-digit
+// result gets a "post-" prefix.
 func normalizePostSlug(s string) string {
 	s = generateSlug(s)
 	s = strings.Map(func(r rune) rune {
@@ -34,6 +35,11 @@ func normalizePostSlug(s string) string {
 	s = strings.Trim(s, "-")
 	if s == "" {
 		return postSlugFallback
+	}
+	// The public route reads an all-digit segment as a post id, so /post/2026
+	// could never reach a post whose slug is "2026".
+	if strings.IndexFunc(s, func(r rune) bool { return !unicode.IsDigit(r) }) == -1 {
+		return postSlugFallback + "-" + s
 	}
 	return s
 }

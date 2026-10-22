@@ -1,4 +1,3 @@
-// @vitest-environment node
 // Renders SeoHead.astro and a theme post layout with Astro's Container API and
 // checks the <head> a crawler would see (#137).
 import { experimental_AstroContainer as AstroContainer } from "astro/container"

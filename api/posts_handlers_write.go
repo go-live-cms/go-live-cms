@@ -72,6 +72,16 @@ func (server *Server) generateUniqueSlug(ctx context.Context, baseSlug string, e
 	return "", fmt.Errorf("unable to generate unique slug for %q", baseSlug)
 }
 
+// uniqueViolationMessage names the posts unique index a write tripped over.
+// The slug and URL are both checked up front, so this is a concurrent writer
+// taking the same value in between.
+func uniqueViolationMessage(err error) string {
+	if containsString(err.Error(), "idx_posts_slug") {
+		return "slug already exists"
+	}
+	return "URL already exists"
+}
+
 // createPost handles POST /posts with author validation and conditional transactions
 func (server *Server) createPost(c *gin.Context) {
 	var req CreatePostRequest
@@ -152,6 +162,10 @@ func (server *Server) createPost(c *gin.Context) {
 			AuthorIDs:         req.AuthorIDs,
 		})
 		if err != nil {
+			if isUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": uniqueViolationMessage(err)})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post"})
 			return
 		}
@@ -163,6 +177,10 @@ func (server *Server) createPost(c *gin.Context) {
 			MediaIDs:          req.MediaIDs,
 		})
 		if err != nil {
+			if isUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": uniqueViolationMessage(err)})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post with media"})
 			return
 		}
@@ -174,6 +192,10 @@ func (server *Server) createPost(c *gin.Context) {
 			TaxonomyTermIDs:   req.TaxonomyIDs,
 		})
 		if err != nil {
+			if isUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": uniqueViolationMessage(err)})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post with taxonomy terms"})
 			return
 		}
@@ -184,6 +206,10 @@ func (server *Server) createPost(c *gin.Context) {
 			AuthorIDs:         req.AuthorIDs,
 		})
 		if err != nil {
+			if isUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": uniqueViolationMessage(err)})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create post"})
 			return
 		}
@@ -286,26 +312,24 @@ func (server *Server) updatePost(c *gin.Context) {
 		}
 	}
 
-	updatedPost, err := server.store.UpdatePost(c.Request.Context(), updateParams)
+	// A slug change is written in the same transaction as the other fields, so
+	// losing a race for the slug (unique index) rolls the whole update back.
+	var updatedPost db.Post
+	if newSlug != "" && newSlug != existingPost.Slug {
+		updatedPost, err = server.store.UpdatePostWithSlugTx(c.Request.Context(), db.UpdatePostWithSlugTxParams{
+			UpdatePostParams: updateParams,
+			Slug:             newSlug,
+		})
+	} else {
+		updatedPost, err = server.store.UpdatePost(c.Request.Context(), updateParams)
+	}
 	if err != nil {
 		if isUniqueViolation(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "URL already exists"})
+			c.JSON(http.StatusConflict, gin.H{"error": uniqueViolationMessage(err)})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post"})
 		return
-	}
-
-	if newSlug != "" && newSlug != updatedPost.Slug {
-		updatedPost, err = server.store.UpdatePostSlug(c.Request.Context(), db.UpdatePostSlugParams{ID: id, Slug: newSlug})
-		if err != nil {
-			if isUniqueViolation(err) {
-				c.JSON(http.StatusConflict, gin.H{"error": "slug already exists"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post slug"})
-			return
-		}
 	}
 
 	if req.MediaIDs != nil {
