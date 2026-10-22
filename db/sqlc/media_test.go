@@ -937,3 +937,17 @@ func TestSearchMediaByNameEmptyTerm(t *testing.T) {
 
 	require.Len(t, results2, 0)
 }
+
+func TestListMediaPathsIn(t *testing.T) {
+	_, media := createTestMedia(t)
+	// createTestMedia reseeds gofakeit, so use a real random name here.
+	missing := fmt.Sprintf("/uploads/media/missing-%d.jpg", time.Now().UnixNano())
+
+	paths, err := testQueries.ListMediaPathsIn(context.Background(), []string{media.MediaPath, missing})
+	require.NoError(t, err)
+	require.Equal(t, []string{media.MediaPath}, paths)
+
+	paths, err = testQueries.ListMediaPathsIn(context.Background(), []string{})
+	require.NoError(t, err)
+	require.Empty(t, paths)
+}

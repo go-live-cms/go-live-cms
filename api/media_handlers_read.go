@@ -74,7 +74,7 @@ func (server *Server) getMediaByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"media": toMediaResponse(media),
+		"media": server.mediaResponse(media),
 	})
 }
 
@@ -145,7 +145,7 @@ func (server *Server) getMedia(c *gin.Context) {
 
 	mediaResponses := make([]MediaResponse, len(media))
 	for i, m := range media {
-		mediaResponses[i] = toMediaFromListRow(m)
+		mediaResponses[i] = server.withPublicMediaPath(toMediaFromListRow(m))
 	}
 
 	total, err := server.store.CountTotalMedia(c.Request.Context())
@@ -197,6 +197,7 @@ func (server *Server) getPopularMedia(c *gin.Context) {
 	mediaResponses := make([]PopularMediaResponse, len(media))
 	for i, m := range media {
 		mediaResponses[i] = toPopularMediaResponse(m)
+		mediaResponses[i].MediaPath = publicMediaPath(server.config.UploadPath, m.MediaPath)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -273,7 +274,7 @@ func (server *Server) searchMedia(c *gin.Context) {
 
 	mediaResponses := make([]MediaResponse, len(media))
 	for i, m := range media {
-		mediaResponses[i] = toMediaFromSearchRow(m)
+		mediaResponses[i] = server.withPublicMediaPath(toMediaFromSearchRow(m))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -363,7 +364,7 @@ func (server *Server) getMediaByUser(c *gin.Context) {
 
 	mediaResponses := make([]MediaResponse, len(media))
 	for i, m := range media {
-		mediaResponses[i] = toMediaFromUserRow(m)
+		mediaResponses[i] = server.withPublicMediaPath(toMediaFromUserRow(m))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -412,7 +413,7 @@ func (server *Server) getMediaByPost(c *gin.Context) {
 
 	mediaResponses := make([]MediaResponse, len(media))
 	for i, m := range media {
-		mediaResponses[i] = toMediaResponse(m)
+		mediaResponses[i] = server.mediaResponse(m)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -459,7 +460,7 @@ func (server *Server) getMediaPosts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"media": toMediaResponse(media),
+		"media": server.mediaResponse(media),
 		"posts": postResponses,
 		"meta": gin.H{
 			"media_id": mediaID,

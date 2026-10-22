@@ -195,7 +195,8 @@ step "API (release mode) starts on the restored data and serves the media"
 compose up -d --wait api
 served=$(compose exec -T api sh -c 'wget -qO- http://127.0.0.1:8080/uploads/media/restore-test.bin | sha256sum' | cut -d' ' -f1)
 [ "$served" = "$expected_sha" ] || fail "API served media sha256 $served, expected $expected_sha"
-compose exec -T api wget -qO- "http://127.0.0.1:8080/api/v1/media/$media_id" | grep -q '/app/uploads/media/restore-test.bin' ||
+# The row stores the filesystem path; the API returns the URL it serves it at.
+compose exec -T api wget -qO- "http://127.0.0.1:8080/api/v1/media/$media_id" | grep -q '"media_path":"/uploads/media/restore-test.bin"' ||
 	fail "GET /api/v1/media/$media_id does not return the restored row"
 compose exec -T api wget -qO- "http://127.0.0.1:8080/api/v1/posts/$post_id" | grep -q '"Post 42"' ||
 	fail "GET /api/v1/posts/$post_id does not return the restored post"

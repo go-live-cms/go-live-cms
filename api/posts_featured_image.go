@@ -85,8 +85,9 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 		}
 
 		// Store thumbnail URL meta, always from the media row (req.MediaPath is
-		// ignored, see SetFeaturedImageRequest).
-		mediaPath := media.MediaPath
+		// ignored, see SetFeaturedImageRequest). The row holds a filesystem
+		// path; store the URL /uploads serves it at.
+		mediaPath := publicMediaPath(server.config.UploadPath, media.MediaPath)
 		_, err = q.UpsertPostMeta(c.Request.Context(), db.UpsertPostMetaParams{
 			PostID:    postID,
 			MetaKey:   "_thumbnail_url",
@@ -107,7 +108,7 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "featured image set successfully",
-		"media":   toMediaResponse(media),
+		"media":   server.mediaResponse(media),
 	})
 }
 
@@ -133,9 +134,10 @@ func (server *Server) getFeaturedImageQuick(c *gin.Context) {
 		return
 	}
 
+	// Rows set before #201 may hold the filesystem path.
 	c.JSON(http.StatusOK, gin.H{
 		"featured_image": gin.H{
-			"url": thumbnailMeta.MetaValue.String,
+			"url": publicMediaPath(server.config.UploadPath, thumbnailMeta.MetaValue.String),
 		},
 	})
 }
@@ -164,7 +166,7 @@ func (server *Server) getFeaturedImageFull(c *gin.Context) {
 		"name":              featuredImage.Name,
 		"description":       featuredImage.Description,
 		"alt":               featuredImage.Alt,
-		"media_path":        featuredImage.MediaPath,
+		"media_path":        publicMediaPath(server.config.UploadPath, featuredImage.MediaPath),
 		"file_size":         featuredImage.FileSize,
 		"mime_type":         featuredImage.MimeType,
 		"original_filename": featuredImage.OriginalFilename,

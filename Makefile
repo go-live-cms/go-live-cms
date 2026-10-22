@@ -22,6 +22,15 @@ sqlc:
 server:
 	go run main.go
 
+# Dev seed (admin, dummy users, content, media files) into the DB in app.env.
+# Idempotent; refuses unless GIN_MODE=debug (pass ARGS=-force to override).
+seed:
+	go run ./cmd/seed $(ARGS)
+
+# Same, inside the running dev stack's api container.
+devseed:
+	docker compose --env-file app.env -f compose.dev.yaml exec api go run ./cmd/seed $(ARGS)
+
 test:
 	go test -v -cover ./...
 
@@ -89,4 +98,4 @@ proddown:
 prodlogs:
 	docker compose -f compose.yaml logs -f
 
-.PHONY: createdb dropdb postgres migrateup migratedown sqlc test test-db test-api test-token test-coverage coverage-check mock dev devdown devlogs devlogs-api devlogs-web devrebuild prod proddown prodlogs docs install-godoc
+.PHONY: createdb dropdb postgres migrateup migratedown sqlc server seed devseed test test-db test-api test-token test-coverage coverage-check mock dev devdown devlogs devlogs-api devlogs-web devrebuild prod proddown prodlogs docs install-godoc

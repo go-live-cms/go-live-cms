@@ -147,6 +147,9 @@ type Querier interface {
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
+	// Which of the given media_path values some media row uses (the dev seed
+	// restores only sample files a row still references).
+	ListMediaPathsIn(ctx context.Context, paths []string) ([]string, error)
 	// What the admin Users page shows. Invitations that expired over 30 days ago
 	// are dropped (nobody is waiting on them any more), and the list is capped.
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
