@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest"
 import * as Y from "yjs"
 import { BlockDocManager } from "./BlockDocManager"
 import type { Block, BlockDocV1 } from "../blocks-spec"
+import { textOf } from "./testHelpers"
 
 let counter = 0
 const id = () => `blk-${(counter++).toString().padStart(4, "0")}-0000000000`
@@ -143,7 +144,7 @@ describe("BlockDocManager — setBlockDocV1 (destructive replace)", () => {
     expect(result.blocks_order).toEqual([n1.id])
     expect(result.blocks[old1.id]).toBeUndefined()
     expect(result.blocks[old2.id]).toBeUndefined()
-    expect(result.blocks[n1.id].attrs.text).toBe("new1")
+    expect(textOf(result.blocks[n1.id])).toBe("new1")
   })
 
   it("setting an empty doc wipes everything (documents the destructive behavior)", () => {
@@ -191,8 +192,8 @@ describe("BlockDocManager — setBlockDocV1 is incremental (no churn)", () => {
       blocks_order: [a.id, b.id],
       blocks: { [a.id]: { ...a, attrs: { text: "ONE" } }, [b.id]: b },
     })
-    expect(m.getBlock(a.id)?.attrs.text).toBe("ONE")
-    expect(m.getBlock(b.id)?.attrs.text).toBe("two")
+    expect(textOf(m.getBlock(a.id))).toBe("ONE")
+    expect(textOf(m.getBlock(b.id))).toBe("two")
   })
 
   it("a pure reorder keeps the same block contents", () => {
@@ -202,7 +203,7 @@ describe("BlockDocManager — setBlockDocV1 is incremental (no churn)", () => {
     m.setBlockDocV1({ doc_version: 1, blocks_order: [a.id, b.id], blocks: { [a.id]: a, [b.id]: b } })
     m.setBlockDocV1({ doc_version: 1, blocks_order: [b.id, a.id], blocks: { [a.id]: a, [b.id]: b } })
     expect(m.getBlockDocV1().blocks_order).toEqual([b.id, a.id])
-    expect(m.getBlock(a.id)?.attrs.text).toBe("a")
+    expect(textOf(m.getBlock(a.id))).toBe("a")
   })
 })
 

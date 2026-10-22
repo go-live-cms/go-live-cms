@@ -1,6 +1,5 @@
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { useSelect } from "@gl-admin/utils/select"
-import { logout } from "@gl-admin/lib/api/sessions"
 import { authManager } from "@gl-admin/lib/auth"
 import UserProfile from "@gl-admin/components/ui/user-profile/UserProfile"
 import Icon from "@gl-admin/components/ui/Icon"
@@ -14,8 +13,8 @@ export default function SidebarUserProfile() {
   const navIconColor = isDark ? "#FFFFFF" : "#46484A"
 
   const handleLogout = async () => {
-    authManager.logout()
-    await logout({ refresh_token: auth.refreshToken })
+    // Calls POST /auth/logout and clears local auth.
+    await authManager.logout()
     setOpen(false)
     window.location.href = "/login"
   }

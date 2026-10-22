@@ -50,7 +50,7 @@ export const Icon: React.FC<Props> = ({
     }
   }, [name, color, className, width, height])
 
-  const transforms = []
+  const transforms: string[] = []
   if (mirror_horizontally) transforms.push("rotate(180deg)")
   if (mirror_vertically) transforms.push("rotate(180deg)")
 

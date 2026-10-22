@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import { getTurnIntoCommandOptions } from "../blocks"
-import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
+import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/TurnInto"
 import CommandSelect, { type CommandSelectOption } from "../ui/CommandSelect"
 
 /** Safely check if editor view is mounted (TipTap v3 throws on .view access) */

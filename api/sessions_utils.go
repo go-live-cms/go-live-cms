@@ -34,7 +34,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/go-live-cms/go-live-cms/token"
 	"github.com/google/uuid"
 )
 
@@ -61,20 +60,6 @@ const (
 const (
 	LogUAIPChanges = true // Enable user agent and IP change logging
 )
-
-// extractJTI safely extracts the JTI (JWT ID) from a token payload.
-// Returns the session UUID if present, or an error if extraction fails.
-func extractJTI(payload *token.Payload) (uuid.UUID, error) {
-	if payload == nil {
-		return uuid.Nil, fmt.Errorf("payload is nil")
-	}
-
-	if payload.ID == uuid.Nil {
-		return uuid.Nil, fmt.Errorf("JTI not found in payload")
-	}
-
-	return payload.ID, nil
-}
 
 // logSecurityEvent logs session security events with consistent formatting.
 // Includes session ID, user ID, and event context for audit trails.

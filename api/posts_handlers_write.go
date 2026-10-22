@@ -16,17 +16,11 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/sqlc-dev/pqtype"
 )
-
-// isDuplicateURLError checks if the error is a duplicate URL constraint violation
-func isDuplicateURLError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "posts_url_key")
-}
 
 // generateUniqueURL generates a unique URL by appending -2, -3, etc. like WordPress
 func (server *Server) generateUniqueURL(ctx context.Context, baseURL string) (string, error) {

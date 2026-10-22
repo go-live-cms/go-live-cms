@@ -40,7 +40,6 @@
 package api
 
 import (
-	"encoding/json"
 	"time"
 
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -301,7 +300,7 @@ func toPostResponseFromUserMediaRow(row db.GetPostsByUserWithMediaRow) PostRespo
 
 	var publishedBlocks map[string]interface{}
 	if row.PublishedBlockDoc.Valid {
-		json.Unmarshal(row.PublishedBlockDoc.RawMessage, &publishedBlocks)
+		decodeJSONBestEffort(row.PublishedBlockDoc.RawMessage, &publishedBlocks)
 	}
 
 	return PostResponse{

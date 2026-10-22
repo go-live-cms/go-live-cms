@@ -60,6 +60,20 @@ func TestLoadConfigReadsRoleLookupSecretFromEnv(t *testing.T) {
 	require.Equal(t, "from-env", config.RoleLookupSecret)
 }
 
+// The PASETO keys have no defaults either. The API image has no app.env, so a
+// deployment can only pass them as env vars; they must not be dropped.
+func TestLoadConfigReadsPasetoKeysFromEnv(t *testing.T) {
+	t.Setenv("PASETO_V4_PUBLIC_KEY_HEX", "pub-from-env")
+	t.Setenv("PASETO_V4_PRIVATE_KEY_HEX", "priv-from-env")
+	t.Setenv("PASETO_V4_LOCAL_KEY_HEX", "local-from-env")
+
+	config, err := LoadConfig(t.TempDir()) // no app.env here
+	require.NoError(t, err)
+	require.Equal(t, "pub-from-env", config.PasetoV4PublicKeyHex)
+	require.Equal(t, "priv-from-env", config.PasetoV4PrivateKeyHex)
+	require.Equal(t, "local-from-env", config.PasetoV4LocalKeyHex)
+}
+
 func TestLoadConfigRateLimitDefaults(t *testing.T) {
 	config, err := LoadConfig(t.TempDir())
 	require.NoError(t, err)

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
+import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/TurnInto"
 import CommandSelect, { type CommandSelectOption } from "./CommandSelect"
 
 /**

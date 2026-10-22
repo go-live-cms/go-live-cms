@@ -213,22 +213,17 @@ func (server *Server) removeFeaturedImage(c *gin.Context) {
 			return fmt.Errorf("failed to remove featured image association: %w", err)
 		}
 
-		// Remove thumbnail ID meta
-		err = q.DeletePostMeta(c.Request.Context(), db.DeletePostMetaParams{
-			PostID:  postID,
-			MetaKey: "_thumbnail_id",
-		})
-		if err != nil && err != sql.ErrNoRows {
-			// Ignore error if meta doesn't exist
-		}
-
-		// Remove thumbnail URL meta
-		err = q.DeletePostMeta(c.Request.Context(), db.DeletePostMetaParams{
-			PostID:  postID,
-			MetaKey: "_thumbnail_url",
-		})
-		if err != nil && err != sql.ErrNoRows {
-			// Ignore error if meta doesn't exist
+		// Remove the thumbnail meta. A missing row is not an error (DELETE affects
+		// zero rows), so any error here is real; and a failed statement aborts the
+		// transaction, so it can't be ignored and committed anyway.
+		for _, key := range []string{"_thumbnail_id", "_thumbnail_url"} {
+			err = q.DeletePostMeta(c.Request.Context(), db.DeletePostMetaParams{
+				PostID:  postID,
+				MetaKey: key,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to remove %s meta: %w", key, err)
+			}
 		}
 
 		return nil

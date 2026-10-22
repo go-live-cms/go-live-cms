@@ -118,7 +118,7 @@ if (post) {
     
     if (postResponse && postResponse.post) {
       fullPost = postResponse.post
-      console.log(`Successfully fetched fresh ${postType} data:`, fullPost.title)
+      console.log(`Successfully fetched fresh ${postType} data:`, fullPost?.title)
     }
   } catch (error) {
     console.warn(`Could not fetch fresh ${postType} data for ID/slug:`, id, 'Error:', error.message)
