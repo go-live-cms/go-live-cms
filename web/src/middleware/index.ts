@@ -10,6 +10,11 @@ import { applyAdminCsp, isAdminPath } from "./csp"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 
+// The error Vite's dynamic-import helper throws in a build for a path it didn't bundle.
+function isUnbundledTheme(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("Unknown variable dynamic import")
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url)
 
@@ -45,7 +50,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
           context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
         }
       } catch (error) {
-        console.error(`Failed to load theme config for ${theme.slug}:`, error)
+        // Themes are bundled at build time (#272): Vite resolves these dynamic imports
+        // when the image is built, so a theme copied in later can't load here.
+        if (isUnbundledTheme(error)) {
+          console.error(
+            `Theme "${theme.slug}" is not in this build. Themes are bundled at build time: ` +
+              `add it to web/themes and rebuild the web and api images. Using its CSS only.`,
+          )
+        } else {
+          console.error(`Failed to load theme config for ${theme.slug}:`, error)
+        }
         // Fallback to default CSS path
         context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
       }
@@ -88,8 +102,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
           context.locals.themeContext = themeContext
         }
       } catch (error) {
-        // functions.ts is optional - silently continue if not found
-        if (error.code !== "ERR_MODULE_NOT_FOUND") {
+        // functions.ts is optional - silently continue if not found (or, in a build,
+        // not bundled: the config branch above already reported an unbundled theme)
+        if (error.code !== "ERR_MODULE_NOT_FOUND" && !isUnbundledTheme(error)) {
           console.error(`Failed to load theme functions for ${theme.slug}:`, error)
         }
       }

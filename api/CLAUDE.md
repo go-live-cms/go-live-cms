@@ -209,6 +209,11 @@ server.
 
 ## Gotchas
 
+- **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,
+  needs `theme.config.ts` + `layouts/{post,page}/default.astro`). The production image
+  ships `web/themes` for that (`Dockerfile`, a `.dockerignore` exception); without it a
+  fresh database has no themes.
+
 - `block_doc` (jsonb on `posts`) is the **working copy** the editor loads;
   `published_block_doc` is the published snapshot the public frontend reads. They can
   diverge (a bug can wipe the working copy while the published one stays intact).

@@ -1,0 +1,189 @@
+name: cd
+
+# Continuous delivery (#267): single VM running compose.yaml, images on GHCR.
+#
+#   main, after `ci-test` passes -> push ghcr.io/<owner>/{api,web,websocket}:<sha> + :latest,
+#                                   then deploy <sha> to the `production` environment
+#   tag v*                       -> push :<sha> + :<version> (release images, no deploy)
+#   manual (workflow_dispatch)   -> deploy an existing <sha>: redeploy or ROLLBACK
+#
+# The deploy job only runs when the repository variable DEPLOY_ENABLED is "true", so
+# merges don't fail before the VM exists. Setup, secrets and rollback:
+# docs/operations/deploy.md.
+#
+# Secrets live in the `production` environment (give it required reviewers) and are
+# only read in the steps that need them, via `env:`; never echo them.
+
+on:
+  workflow_run:
+    workflows: ["ci-test"]
+    types: [completed]
+    branches: ["main"]
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy (a commit sha that CD already pushed)"
+        required: true
+      allow_down_migrations:
+        description: "Rolling back past a release that added migrations: migrate DOWN (lossy; a backup is taken first)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  images:
+    name: Push image (${{ matrix.image }})
+    # Only a green CI run for a push to main in THIS repo (workflow_run's branch filter
+    # alone also matches a fork PR whose branch is named main), or a version tag.
+    # Manual runs deploy existing images.
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository) ||
+      github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: api
+            context: .
+            file: Dockerfile
+          - image: web
+            context: ./web
+            file: ./web/Dockerfile
+          - image: websocket
+            context: ./websocket
+            file: ./websocket/Dockerfile
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # workflow_run checks out the default branch otherwise; build exactly what CI tested.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ github.event.workflow_run.head_sha || github.sha }}
+            type=raw,value=latest,enable=${{ github.event_name == 'workflow_run' }}
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'push' }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Same cache scopes as ci.yml's build-only job, so CD reuses its layers.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: Deploy to production
+    needs: images
+    # Main merges (after images) and manual runs (images already exist), never tags.
+    if: >-
+      always() && vars.DEPLOY_ENABLED == 'true' &&
+      ((github.event_name == 'workflow_run' && needs.images.result == 'success') ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.SITE_ADDRESS }}
+    # One deploy at a time, and never cancel one half way (it may be migrating).
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    env:
+      TAG: ${{ inputs.tag || github.event.workflow_run.head_sha }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/golive' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The deploy files (compose.yaml, Caddyfile, scripts) of the release being deployed.
+          ref: ${{ inputs.tag || github.event.workflow_run.head_sha }}
+
+      - name: Check the tag
+        run: |
+          case "$TAG" in
+            *[!0-9a-f]*|"") echo "::error::tag must be a commit sha that CD pushed, got '$TAG'"; exit 1 ;;
+          esac
+
+      - name: Write .env and SSH config
+        env:
+          SITE_ADDRESS: ${{ vars.SITE_ADDRESS }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          PASETO_V4_PUBLIC_KEY_HEX: ${{ secrets.PASETO_V4_PUBLIC_KEY_HEX }}
+          PASETO_V4_PRIVATE_KEY_HEX: ${{ secrets.PASETO_V4_PRIVATE_KEY_HEX }}
+          PASETO_V4_LOCAL_KEY_HEX: ${{ secrets.PASETO_V4_LOCAL_KEY_HEX }}
+          ROLE_LOOKUP_SECRET: ${{ secrets.ROLE_LOOKUP_SECRET }}
+          COLLAB_SQUASH_SECRET: ${{ secrets.COLLAB_SQUASH_SECRET }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          for v in SITE_ADDRESS POSTGRES_PASSWORD PASETO_V4_PUBLIC_KEY_HEX PASETO_V4_PRIVATE_KEY_HEX \
+                   PASETO_V4_LOCAL_KEY_HEX ROLE_LOOKUP_SECRET COLLAB_SQUASH_SECRET; do
+            eval "val=\${$v}"
+            [ -n "$val" ] || { echo "::error::$v is not set in the production environment"; exit 1; }
+            printf '%s=%s\n' "$v" "$val" >> deploy.env
+          done
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          # Pinned host key: never trust-on-first-use from a runner.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Copy the deploy files
+        env:
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          ssh_() { ssh -i ~/.ssh/deploy_key -o BatchMode=yes "$DEPLOY_TARGET" "$@"; }
+          ssh_ "mkdir -p '$DEPLOY_PATH/deploy/caddy' '$DEPLOY_PATH/scripts/backup' '$DEPLOY_PATH/scripts/deploy'"
+          scp -i ~/.ssh/deploy_key -o BatchMode=yes compose.yaml "$DEPLOY_TARGET:$DEPLOY_PATH/"
+          scp -i ~/.ssh/deploy_key -o BatchMode=yes deploy/caddy/Caddyfile "$DEPLOY_TARGET:$DEPLOY_PATH/deploy/caddy/"
+          scp -i ~/.ssh/deploy_key -o BatchMode=yes scripts/backup/backup.sh scripts/backup/restore.sh "$DEPLOY_TARGET:$DEPLOY_PATH/scripts/backup/"
+          scp -i ~/.ssh/deploy_key -o BatchMode=yes scripts/deploy/deploy.sh "$DEPLOY_TARGET:$DEPLOY_PATH/scripts/deploy/"
+          # Secrets: written 0600 on the host, never in an image or the repo.
+          ssh_ "umask 077 && cat > '$DEPLOY_PATH/.env'" < deploy.env
+          rm -f deploy.env
+
+      - name: Deploy
+        env:
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALLOW_DOWN: ${{ inputs.allow_down_migrations && '1' || '' }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          ssh_() { ssh -i ~/.ssh/deploy_key -o BatchMode=yes "$DEPLOY_TARGET" "$@"; }
+          # The job's token can pull the (private) images and expires when the job ends.
+          # It goes over stdin, never on a command line, and the host logs out afterwards.
+          printf '%s' "$GHCR_TOKEN" | ssh_ "docker login ghcr.io -u '$ACTOR' --password-stdin >/dev/null"
+          status=0
+          ssh_ "cd '$DEPLOY_PATH' && GOLIVE_IMAGE_REGISTRY='$REGISTRY' ALLOW_DOWN_MIGRATIONS='$ALLOW_DOWN' sh scripts/deploy/deploy.sh '$TAG'" || status=$?
+          ssh_ "docker logout ghcr.io >/dev/null" || true
+          exit $status

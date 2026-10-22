@@ -64,6 +64,16 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   dev). It appends the client IP to `X-Forwarded-For`, so the API must list the web
   container in `TRUSTED_PROXIES` (prod `compose.yaml` does). Astro's own `/api/theme` and
   `/api/posts-reload` routes are not under `/api/v1`.
+- **Server-side API calls use `SERVER_API_URL`, read at runtime** (#272): import
+  `SERVER_API_URL` (with `/api/v1`) or `SERVER_MEDIA_URL` (the API origin, e.g. for
+  `/public/*` and `/uploads`) from `gl-admin/lib/server-api-url.ts`. Never
+  `import.meta.env.PUBLIC_API_URL` or `import.meta.env.SERVER_API_URL` in SSR code:
+  Astro inlines them at build time. `PUBLIC_API_URL` is only the browser-facing origin for
+  the admin CSP, unset in production.
+- **Themes are build-time** (#272): the middleware's template `import()`s of
+  `themes/${slug}/theme.config.ts` / `functions.ts` and the layout `import.meta.glob`s are
+  resolved by Vite when the image is built. A theme added later can't load (logged as
+  "not in this build"). The API image ships `web/themes` too, for its startup scan.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 
