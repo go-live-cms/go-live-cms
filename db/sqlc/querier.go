@@ -198,6 +198,8 @@ type Querier interface {
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
 	UpdateSessionsUsername(ctx context.Context, arg UpdateSessionsUsernameParams) ([]Session, error)
 	UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error)
+	// parent_id is assigned as is (no COALESCE) so a NULL moves the term to the top
+	// level; the handler passes the current parent when it isn't changing.
 	UpdateTaxonomyTerm(ctx context.Context, arg UpdateTaxonomyTermParams) (TaxonomyTerm, error)
 	UpdateTaxonomyType(ctx context.Context, arg UpdateTaxonomyTypeParams) (TaxonomyType, error)
 	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)

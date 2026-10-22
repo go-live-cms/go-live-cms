@@ -742,7 +742,8 @@ func (q *Queries) GetTermParents(ctx context.Context, id int64) ([]TaxonomyTerm,
 }
 
 const listTaxonomyTermsByType = `-- name: ListTaxonomyTermsByType :many
-SELECT tt.id, tt.name, tt.slug, tt.description, tt.parent_id, tt.taxonomy_type_id, tt.sort_order, tt.meta, tt.created_at, ttype.name as taxonomy_type_name, ttype.hierarchical
+SELECT tt.id, tt.name, tt.slug, tt.description, tt.parent_id, tt.taxonomy_type_id, tt.sort_order, tt.meta, tt.created_at, ttype.name as taxonomy_type_name, ttype.hierarchical,
+    (SELECT COUNT(*) FROM post_taxonomy_relationships ptr WHERE ptr.taxonomy_term_id = tt.id) AS post_count
 FROM taxonomy_terms tt
 JOIN taxonomy_types ttype ON tt.taxonomy_type_id = ttype.id
 WHERE ttype.name = $1
@@ -776,6 +777,7 @@ type ListTaxonomyTermsByTypeRow struct {
 	CreatedAt        time.Time             `json:"created_at"`
 	TaxonomyTypeName string                `json:"taxonomy_type_name"`
 	Hierarchical     bool                  `json:"hierarchical"`
+	PostCount        int64                 `json:"post_count"`
 }
 
 func (q *Queries) ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error) {
@@ -804,6 +806,7 @@ func (q *Queries) ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyT
 			&i.CreatedAt,
 			&i.TaxonomyTypeName,
 			&i.Hierarchical,
+			&i.PostCount,
 		); err != nil {
 			return nil, err
 		}
@@ -963,7 +966,7 @@ UPDATE taxonomy_terms
 SET name = COALESCE($2, name),
     slug = COALESCE($3, slug),
     description = COALESCE($4, description),
-    parent_id = COALESCE($5, parent_id),
+    parent_id = $5,
     sort_order = COALESCE($6, sort_order),
     meta = COALESCE($7, meta)
 WHERE id = $1
@@ -980,6 +983,8 @@ type UpdateTaxonomyTermParams struct {
 	Meta        pqtype.NullRawMessage `json:"meta"`
 }
 
+// parent_id is assigned as is (no COALESCE) so a NULL moves the term to the top
+// level; the handler passes the current parent when it isn't changing.
 func (q *Queries) UpdateTaxonomyTerm(ctx context.Context, arg UpdateTaxonomyTermParams) (TaxonomyTerm, error) {
 	row := q.db.QueryRowContext(ctx, updateTaxonomyTerm,
 		arg.ID,

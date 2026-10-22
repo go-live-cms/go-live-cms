@@ -68,6 +68,7 @@ const topSection: Section[] = [
 const bottomSections: Section[][] = [
   [
     { icon: "media" as IconPath, name: "Media", link: "/media/" },
+    { icon: "options" as IconPath, name: "Taxonomies", link: "/taxonomies/" },
     { icon: "plugins" as IconPath, name: "Plugins", link: "/plugins/" },
     { icon: "paintbrush" as IconPath, name: "Themes", link: "/themes/" },
   ],

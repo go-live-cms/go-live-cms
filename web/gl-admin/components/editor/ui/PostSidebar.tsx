@@ -5,6 +5,7 @@ import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { getSettings, type Settings } from "@gl-admin/lib/api/settings"
 import type { PostVersion } from "@gl-admin/lib/api/blockAPI"
 import RevisionsPanel from "./RevisionsPanel"
+import PostTaxonomies from "./PostTaxonomies"
 import Button from "@gl-admin/components/ui/Button"
 import "@gl-admin/assets/styles/components/editor/post-sidebar.scss"
 
@@ -306,6 +307,17 @@ export default function PostSidebar({
             <div className="post-settings__section">
               <FeaturedImage value={featuredImage} onChange={setFeaturedImage} postId={post.id} disabled={!post.id || readOnly} />
               {featuredImageError && <small className="post-settings__field-error">Error: {featuredImageError}</small>}
+            </div>
+
+            <div className="post-settings__section">
+              <h4>Categories & Tags</h4>
+              {mode === "edit" && post.id ? (
+                <PostTaxonomies postId={post.id} readOnly={readOnly} />
+              ) : (
+                <small className="post-settings__field-description">
+                  Save the post first, then assign categories and tags here.
+                </small>
+              )}
             </div>
           </>
         )}
