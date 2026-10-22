@@ -4,18 +4,17 @@ import { describe, it, expect } from "vitest"
 import * as Y from "yjs"
 import type { BlockDocV1 } from "../blocks-spec"
 import { validateBlockDoc } from "../blocks-spec"
-import { blockDocToPM, pmToBlockDoc } from "./blockBridge"
-import { getCoreSchema, schemaWithStandIns } from "./schema"
-import { EDITOR_FRAGMENT, fragmentToBlockDoc, seedFragment } from "./fragmentBridge"
-import { ids, richDoc } from "./fragmentBridge.fixtures"
+import { getCoreSchema } from "./schema"
+import {
+  EDITOR_FRAGMENT,
+  fragmentToBlockDoc,
+  seedFragment,
+  stampFragmentBlockIds,
+  type UnconvertibleBlock,
+} from "./fragmentBridge"
+import { canonical, ids, richDoc } from "./fragmentBridge.fixtures"
 
 const base = getCoreSchema()
-
-/** What the editor would save for `doc`: one load + save through the bridge. */
-function canonical(doc: BlockDocV1): BlockDocV1 {
-  const roots = Object.values(doc.blocks).map((block) => (block.attrs as any)?.pm).filter(Boolean)
-  return pmToBlockDoc(blockDocToPM(doc, schemaWithStandIns(base, roots)))
-}
 
 function seeded(doc: BlockDocV1) {
   const ydoc = new Y.Doc()
@@ -36,7 +35,7 @@ describe("seed → store round trip (#206)", () => {
     const doc = canonical(richDoc())
     const { fragment, dropped } = seeded(doc)
     expect(dropped.entries).toEqual([])
-    expect(fragmentToBlockDoc(fragment, base, dropped)).toEqual(doc)
+    expect(fragmentToBlockDoc(fragment, base, { dropped })).toEqual(doc)
   })
 
   it("keeps every block id, list item ids included", () => {
@@ -157,19 +156,134 @@ describe("blocks the editor can't show (#213) on the server", () => {
   it("every store puts them back where they were", () => {
     const source = docWithBadBlocks()
     const { fragment, dropped } = seeded(source)
-    expect(fragmentToBlockDoc(fragment, base, dropped)).toEqual(source)
+    expect(fragmentToBlockDoc(fragment, base, { dropped })).toEqual(source)
   })
 
   it("restoring needs only the dropped trees, not the whole source doc", () => {
     const { ydoc, dropped } = seeded(docWithBadBlocks())
     // What the server keeps between loads: the Yjs state and the dropped blocks.
     const kept = JSON.parse(JSON.stringify(dropped))
-    expect(fragmentToBlockDoc(reloaded(ydoc), base, kept)).toEqual(docWithBadBlocks())
+    expect(fragmentToBlockDoc(reloaded(ydoc), base, { dropped: kept })).toEqual(docWithBadBlocks())
   })
 
   it("without the dropped record, a store would lose them (why the server must keep it)", () => {
     const { fragment } = seeded(docWithBadBlocks())
     const out = fragmentToBlockDoc(fragment, base)
     expect(out.blocks["blk-badcode-001"]).toBeUndefined()
+  })
+})
+
+describe("a node the store can't convert (#206)", () => {
+  // Stand-ins cover unknown node and mark types, but a malformed element from a buggy or
+  // newer peer can still make Node.fromJSON throw. Here: the intro paragraph replaced by
+  // an element named "text" with no text ("Invalid text node in JSON"), keeping its id.
+  // That must cost one block, not the whole store.
+  function withMalformedIntro() {
+    const doc = canonical(richDoc())
+    const { ydoc, fragment } = seeded(doc)
+    ydoc.transact(() => {
+      fragment.delete(0, 1)
+      const malformed = new Y.XmlElement("text")
+      fragment.insert(0, [malformed])
+      malformed.setAttribute("data-block-id", ids.intro)
+    })
+    return { doc, fragment }
+  }
+
+  it("converts every other block and reports it", () => {
+    const { doc, fragment } = withMalformedIntro()
+    const reported: UnconvertibleBlock[] = []
+    const out = fragmentToBlockDoc(fragment, base, { onUnconvertible: (block) => reported.push(block) })
+    expect(reported.map(({ id, type }) => ({ id, type }))).toEqual([{ id: ids.intro, type: "text" }])
+    expect(out.blocks_order).toEqual(doc.blocks_order.filter((id) => id !== ids.intro))
+  })
+
+  it("keeps the block's last stored version, in place, when given the previous doc", () => {
+    const { doc, fragment } = withMalformedIntro()
+    expect(fragmentToBlockDoc(fragment, base, { previous: doc })).toEqual(doc)
+  })
+})
+
+describe("theme marks on the server (#206)", () => {
+  it("stores text carrying a mark the core schema doesn't know", () => {
+    const doc = canonical(richDoc())
+    const { ydoc, fragment } = seeded(doc)
+    const outro = (fragment.get(fragment.length - 1) as Y.XmlElement).get(0) as Y.XmlText
+    ydoc.transact(() => outro.format(0, 3, { highlight: { color: "yellow" } }))
+    const out = fragmentToBlockDoc(fragment, base)
+    const marks = (out.blocks[ids.outro].attrs as any).pm.content[0].marks
+    expect(marks).toEqual([{ type: "highlight", attrs: { color: "yellow" } }])
+    // ...and it seeds back unchanged.
+    expect(fragmentToBlockDoc(seeded(out).fragment, base)).toEqual(out)
+  })
+})
+
+describe("stampFragmentBlockIds (#206)", () => {
+  let counter = 0
+  const newId = () => `blk-stamped-${String(++counter).padStart(4, "0")}`
+
+  function unstampedDoc() {
+    const ydoc = new Y.Doc()
+    const fragment = ydoc.getXmlFragment(EDITOR_FRAGMENT)
+    const paragraph = (id?: string) => {
+      const el = new Y.XmlElement("paragraph")
+      if (id) el.setAttribute("data-block-id", id)
+      return el
+    }
+    const item = (id?: string) => {
+      const el = new Y.XmlElement("listItem")
+      if (id) el.setAttribute("data-block-id", id)
+      el.insert(0, [paragraph()])
+      return el
+    }
+    ydoc.transact(() => {
+      const list = new Y.XmlElement("bulletList")
+      list.setAttribute("data-block-id", "blk-list-000001")
+      fragment.insert(0, [paragraph("blk-first-00001"), paragraph(), paragraph("blk-first-00001"), paragraph("short"), list])
+      const nested = new Y.XmlElement("bulletList")
+      const outer = item("blk-item-000001")
+      list.insert(0, [outer, item()])
+      outer.insert(1, [nested])
+      nested.insert(0, [item("blk-item-000001")])
+    })
+    return { ydoc, fragment }
+  }
+
+  it("stamps missing, short and duplicate ids (top level and list items at any depth), keeping the first", () => {
+    const { fragment } = unstampedDoc()
+    expect(stampFragmentBlockIds(fragment, newId)).toBe(5)
+    const top = fragment.toArray() as Y.XmlElement[]
+    const topIds = top.map((el) => el.getAttribute("data-block-id"))
+    expect(topIds[0]).toBe("blk-first-00001")
+    expect(new Set(topIds).size).toBe(topIds.length)
+    const [outer, second] = top[4].toArray() as Y.XmlElement[]
+    expect(outer.getAttribute("data-block-id")).toBe("blk-item-000001")
+    expect(second.getAttribute("data-block-id")).toMatch(/^blk-stamped-/)
+    const nestedItem = ((outer.get(1) as Y.XmlElement).get(0) as Y.XmlElement).getAttribute("data-block-id")
+    expect(nestedItem).toMatch(/^blk-stamped-/)
+    // Paragraphs inside list items are not blocks: never stamped.
+    expect((outer.get(0) as Y.XmlElement).getAttribute("data-block-id")).toBeUndefined()
+  })
+
+  it("makes stores stable: two stores give the same ids", () => {
+    const { fragment } = unstampedDoc()
+    stampFragmentBlockIds(fragment, newId)
+    expect(fragmentToBlockDoc(fragment, base)).toEqual(fragmentToBlockDoc(fragment, base))
+  })
+
+  it("writes nothing when every id is already fine", () => {
+    const { ydoc, fragment } = seeded(richDoc())
+    let updates = 0
+    ydoc.on("update", () => updates++)
+    expect(stampFragmentBlockIds(fragment, newId)).toBe(0)
+    expect(updates).toBe(0)
+  })
+
+  it("stamps everything in one transaction", () => {
+    const { ydoc, fragment } = unstampedDoc()
+    let updates = 0
+    ydoc.on("update", () => updates++)
+    stampFragmentBlockIds(fragment, newId)
+    expect(updates).toBe(1)
   })
 })

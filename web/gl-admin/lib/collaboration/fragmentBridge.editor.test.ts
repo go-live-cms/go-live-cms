@@ -3,10 +3,10 @@ import * as Y from "yjs"
 import { Editor, Node } from "@tiptap/core"
 import Collaboration, { isChangeOrigin } from "@tiptap/extension-collaboration"
 import type { BlockDocV1 } from "../blocks-spec"
-import { blockDocToPM, pmToBlockDoc } from "./blockBridge"
-import { getCoreSchema, schemaExtensions, schemaWithStandIns } from "./schema"
+import { blockDocToPM } from "./blockBridge"
+import { getCoreSchema, schemaExtensions } from "./schema"
 import { EDITOR_FRAGMENT, fragmentToBlockDoc, seedFragment } from "./fragmentBridge"
-import { ids, richDoc } from "./fragmentBridge.fixtures"
+import { canonical, ids, richDoc } from "./fragmentBridge.fixtures"
 
 // The client side of server seeding (#206): editors bound to a doc the server seeded
 // must show the block doc, must not rewrite it (no id re-stamping, no churn), and
@@ -62,10 +62,6 @@ function connect(server: Y.Doc, client: Y.Doc) {
 }
 
 const base = getCoreSchema()
-const canonical = (doc: BlockDocV1) => {
-  const roots = Object.values(doc.blocks).map((block) => (block.attrs as any)?.pm).filter(Boolean)
-  return pmToBlockDoc(blockDocToPM(doc, schemaWithStandIns(base, roots)))
-}
 
 function serverSeeded(doc: BlockDocV1) {
   const server = new Y.Doc()

@@ -233,7 +233,9 @@ export const zBlockDocV1 = z
   })
   .superRefine((doc, ctx) => {
     for (const [key, block] of Object.entries(doc.blocks)) {
-      if (block.id !== key) {
+      // This runs even when a block already failed its own schema, so it may be null.
+      const blockId = (block as { id?: unknown } | null)?.id
+      if (blockId !== undefined && blockId !== key) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["blocks", key, "id"], message: "block id must equal its map key" })
       }
     }

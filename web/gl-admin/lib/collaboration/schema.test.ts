@@ -88,6 +88,32 @@ describe("schemaWithStandIns", () => {
     expect(() => schema.nodeFromJSON(paragraph).check()).not.toThrow()
   })
 
+  it("makes a theme node that is a textblock's only child inline (the parent decides, not its siblings)", () => {
+    const paragraph = { type: "paragraph", attrs: { "data-block-id": "blk-mention-001" }, content: [{ type: "mention", attrs: { userId: 7 } }] }
+    const schema = schemaWithStandIns(base, [paragraph])
+    expect(schema.nodes.mention.isInline).toBe(true)
+    expect(() => schema.nodeFromJSON(paragraph).check()).not.toThrow()
+  })
+
+  it("adds a mark stand-in for a theme mark, keeping its attributes", () => {
+    const paragraph = {
+      type: "paragraph",
+      // In schema rank order (stand-ins come last), since toJSON() writes marks that way.
+      content: [{ type: "text", text: "hi", marks: [{ type: "bold" }, { type: "highlight", attrs: { color: "yellow" } }] }],
+    }
+    const schema = schemaWithStandIns(base, [paragraph])
+    expect(schema.marks.highlight).toBeDefined()
+    expect(schema.nodes.paragraph).toBeDefined()
+    expect(schema.nodeFromJSON(paragraph).toJSON()).toMatchObject(paragraph)
+  })
+
+  it("reuses the schema for the same stand-ins and builds a new one when they change", () => {
+    const callout = (attrs: Record<string, unknown>) => ({ type: "callout", attrs, content: [{ type: "text", text: "x" }] })
+    const first = schemaWithStandIns(base, [callout({ variant: "a" })])
+    expect(schemaWithStandIns(base, [callout({ variant: "b" })])).toBe(first)
+    expect(schemaWithStandIns(base, [callout({ variant: "a", icon: "i" })])).not.toBe(first)
+  })
+
   it("finds theme nodes nested inside core nodes and other theme nodes", () => {
     const tabs = {
       type: "tabs",

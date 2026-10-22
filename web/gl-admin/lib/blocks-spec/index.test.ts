@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { ZodError } from "zod"
 import {
   validateBlock,
   validateBlockDoc,
@@ -153,6 +154,15 @@ describe("validateBlockDoc", () => {
       blocks: { [id("1")]: { id: id("1"), type: "heading", version: 1, attrs: { level: 9 } } },
     }
     expect(() => validateBlockDoc(bad)).toThrow()
+  })
+
+  it("rejects a null block with a ZodError, not a TypeError", () => {
+    const bad = { doc_version: 1, blocks_order: [], blocks: { [id("1")]: null } }
+    expect(() => validateBlockDoc(bad)).toThrow(ZodError)
+  })
+
+  it("rejects a string mediaId (the API's media sync only reads numbers)", () => {
+    expect(() => validateBlock({ id: id(), type: "image", version: 1, attrs: { mediaId: "42" } })).toThrow()
   })
 
   it("returns the same document object", () => {

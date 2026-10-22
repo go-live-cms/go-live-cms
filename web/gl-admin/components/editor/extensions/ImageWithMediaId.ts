@@ -10,7 +10,12 @@ export const ImageWithMediaId = Image.extend({
       ...this.parent?.(),
       mediaId: {
         default: null,
-        parseHTML: (element) => element.getAttribute("data-media-id"),
+        // A number, like the attr the media picker sets: Block Spec v1 and the API's
+        // media sync only accept numeric ids.
+        parseHTML: (element) => {
+          const value = element.getAttribute("data-media-id")
+          return value && /^\d+$/.test(value) ? Number(value) : null
+        },
         renderHTML: (attributes) => {
           if (!attributes.mediaId) {
             return {}

@@ -1,7 +1,15 @@
 import type { BlockDocV1 } from "../blocks-spec"
+import { blockDocToPM, pmToBlockDoc } from "./blockBridge"
+import { getCoreSchema, schemaWithStandIns } from "./schema"
+import { pmRoots } from "./fragmentBridge"
 
 // Block docs shared by the fragmentBridge tests (#206). Ids are fixed (and >= 10
 // characters, the bridge's minimum) so assertions can name them.
+
+/** What the editor would save for `doc`: one load + save through the bridge, as the server converts it. */
+export function canonical(doc: BlockDocV1, base = getCoreSchema()): BlockDocV1 {
+  return pmToBlockDoc(blockDocToPM(doc, schemaWithStandIns(base, pmRoots(doc))))
+}
 
 export const ids = {
   intro: "blk-intro-000001",
