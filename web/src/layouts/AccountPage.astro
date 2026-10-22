@@ -22,9 +22,9 @@ Astro.response.headers.set("Cache-Control", "no-store")
 <!doctype html>
 <html lang="en">
 <head>
-<Head title={`${title} - ${SITE_TITLE}`} description={subtitle}>
+<!-- noindex: Head then emits robots noindex and no canonical/og:url (#137). -->
+<Head title={`${title} - ${SITE_TITLE}`} description={subtitle} noindex>
   <meta name="referrer" content="no-referrer" />
-  <meta name="robots" content="noindex" />
 </Head>
 </head>
 <body>

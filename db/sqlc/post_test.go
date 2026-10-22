@@ -556,6 +556,35 @@ func TestUpdatePostWithNewFields(t *testing.T) {
 	require.True(t, updatedPost.ChangedAt.After(result.Post.CreatedAt))
 }
 
+// TestUpdatePostWithSlugTx: the slug and the other fields are written together,
+// and a slug clash rolls the field changes back too.
+func TestUpdatePostWithSlugTx(t *testing.T) {
+	ctx := context.Background()
+	a := createPostWithTransaction(t).Post
+	b := createPostWithTransaction(t).Post
+	params := func(p Post, title string) UpdatePostParams {
+		return UpdatePostParams{
+			ID: p.ID, Title: title, Description: p.Description, UserID: p.UserID, Username: p.Username,
+			Url: p.Url, PostType: p.PostType, PostStatus: p.PostStatus, PostParent: p.PostParent, MenuOrder: p.MenuOrder,
+		}
+	}
+
+	newSlug := fmt.Sprintf("slug-tx-%d", time.Now().UnixNano())
+	updated, err := testStore.UpdatePostWithSlugTx(ctx, UpdatePostWithSlugTxParams{UpdatePostParams: params(b, "Renamed"), Slug: newSlug})
+	require.NoError(t, err)
+	require.Equal(t, "Renamed", updated.Title)
+	require.Equal(t, newSlug, updated.Slug)
+
+	_, err = testStore.UpdatePostWithSlugTx(ctx, UpdatePostWithSlugTxParams{UpdatePostParams: params(b, "Lost race"), Slug: a.Slug})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "idx_posts_slug")
+
+	after, err := testQueries.GetPost(ctx, b.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Renamed", after.Title)
+	require.Equal(t, newSlug, after.Slug)
+}
+
 func TestListPostsWithMeta(t *testing.T) {
 	user := createTestUser(t)
 	ts := time.Now().UnixNano()

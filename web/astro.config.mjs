@@ -2,7 +2,6 @@
 
 import mdx from "@astrojs/mdx"
 import node from "@astrojs/node"
-import sitemap from "@astrojs/sitemap"
 import path from "path"
 import { defineConfig } from "astro/config"
 
@@ -14,8 +13,11 @@ const serverApiUrl = (process.env.SERVER_API_URL || "http://api:8080/api/v1").re
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://example.com",
-  integrations: [mdx(), sitemap(), react()],
+  // Public origin for Astro.site. Pages use resolveSiteUrl (src/lib/seo.ts), which
+  // reads SITE_URL at runtime. /sitemap.xml and /robots.txt are server routes, so
+  // there is no @astrojs/sitemap (it only lists prebuilt pages, not SSR posts).
+  site: process.env.SITE_URL || "http://localhost:4321",
+  integrations: [mdx(), react()],
   publicDir: "public",
   vite: {
     plugins: [tailwindcss()],

@@ -74,6 +74,19 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   `functions.ts` through `import.meta.glob` maps (`THEME_CONFIGS`, `THEME_FUNCTIONS`), and
   layouts through globs too, all resolved by Vite when the image is built. A theme added
   later has no entry (logged as "not in this build"). The API image ships `web/themes` too, for its startup scan.
+- **SEO (#137):** `src/lib/seo.ts` holds the pure helpers (tested in `seo.test.ts`).
+  The site URL is `SITE_URL`, read from `process.env` at runtime (`resolveSiteUrl`;
+  unset → request origin, wrong behind a proxy, so prod must set it). `/robots.txt`
+  and `/sitemap.xml` are server routes (no `@astrojs/sitemap`: it only sees prebuilt
+  pages). The sitemap lists only public types and `published` posts, at the URL
+  `post_url_structure` gives (`postPath`, same rule as `[id].astro`), lastmod =
+  `changed_at`. Heads go through `src/components/SeoHead.astro`; the post route passes
+  a `seo` prop that theme layouts forward to their base layout. `.astro` components
+  are testable with the Container API in files named `*.astro.test.ts`: they run as
+  a separate vitest project (`vitest.astro.config.ts`, Astro's `getViteConfig`, node
+  env); the other tests stay in the plain `unit` project. Without `SITE_URL`,
+  robots/sitemap are sent `private, no-store` (the URL came from the Host header);
+  the sitemap is cached in memory for 10 minutes.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

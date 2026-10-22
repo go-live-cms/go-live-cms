@@ -5,6 +5,10 @@ import path from "node:path"
 // Aliases mirror astro.config.mjs + tsconfig.json so test imports resolve the
 // same `@gl-admin/*` / `@/*` / `@themes` paths the app uses. Resolved relative to
 // the web/ directory (where `npm run test` runs), matching astro.config.mjs.
+//
+// Tests that render .astro components (`*.astro.test.ts`) run as a separate
+// project with Astro's Vite plugins (vitest.astro.config.ts), so the rest
+// don't load astro.config.mjs.
 export default defineConfig({
   resolve: {
     alias: {
@@ -14,15 +18,24 @@ export default defineConfig({
     },
   },
   test: {
-    globals: true,
-    // jsdom (not node) because some TipTap extensions touch `window`/`document`
-    // at import time when we build a schema via getSchema(extensions).
-    environment: "jsdom",
-    include: [
-      "gl-admin/**/*.{test,spec}.{ts,tsx}",
-      "src/**/*.{test,spec}.{ts,tsx}",
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          globals: true,
+          // jsdom (not node) because some TipTap extensions touch `window`/`document`
+          // at import time when we build a schema via getSchema(extensions).
+          environment: "jsdom",
+          include: [
+            "gl-admin/**/*.{test,spec}.{ts,tsx}",
+            "src/**/*.{test,spec}.{ts,tsx}",
+          ],
+          // Keep test runs from scanning node_modules / build output.
+          exclude: ["node_modules/**", "dist/**", ".astro/**", "**/*.astro.test.ts"],
+        },
+      },
+      "./vitest.astro.config.ts",
     ],
-    // Keep test runs from scanning node_modules / build output.
-    exclude: ["node_modules/**", "dist/**", ".astro/**"],
   },
 })

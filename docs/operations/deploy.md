@@ -42,6 +42,7 @@ browser ──https──▶ caddy :443 ──/collab/*──▶ websocket:1234 
 |---|---|---|---|
 | `SERVER_API_URL` | at **runtime** (`process.env`) | `http://api:8080/api/v1` | every SSR fetch: `gl-admin/lib/server-api-url.ts` and everything that imports it (`src/lib/api.ts`, `theme-api-client.ts`, `theme-settings.ts`, `Blog/Post.astro`, `/api/posts-reload`), and the `/api/v1` + `/uploads` forwarder |
 | `PUBLIC_API_URL` | at runtime by the middleware | unset | the browser-facing API origin, only for the admin CSP (`connect-src`/`img-src`). Leave it unset: the browser calls `/api/v1` and `/uploads` same-origin. Set it only if media is served from another origin. |
+| `SITE_URL` | at **runtime** (`process.env`) | `https://$SITE_ADDRESS` unless `SITE_URL` is set | the public origin in canonical/`og:url` tags, `/robots.txt` and `/sitemap.xml` (`src/lib/seo.ts`, #137). Set it yourself if `SITE_ADDRESS` carries a scheme or port. Empty, it falls back to the request's Host header, and robots/sitemap are sent `private, no-store` so a spoofed host can't be cached. |
 
 No server-side code reads `PUBLIC_API_URL` any more, and nothing API-related is baked in at
 build time, so one web image works for any domain.

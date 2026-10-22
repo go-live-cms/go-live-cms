@@ -376,7 +376,8 @@ Every layout receives these props from the route handler:
 interface Props {
   post: Post // The full post object
   title: string // Post title (for <title> tag)
-  description: string // Post description (for meta tag)
+  description: string // Plain-text excerpt (for meta tag)
+  seo?: SeoMeta // Canonical URL, featured image, og:type... (see SEO tags below)
 }
 ```
 
@@ -401,6 +402,10 @@ interface Post {
 ```
 
 > **Important:** Content is stored as `published_blocks` (a structured block document), **not** as an HTML string. Always use `<BlockRenderer>` to render it.
+
+### SEO tags
+
+Render `src/components/SeoHead.astro` in your `<head>` instead of your own `<title>` and description meta, and pass it the `seo` prop the post route gives every layout. It adds the canonical URL (on `SITE_URL`, following the id/slug URL setting), `og:*`/`twitter:*` tags with the featured image, and `robots: noindex` when `seo.noindex` is set (use that in `layouts/error/*.astro`). Error responses and `/gl-admin` also get an `X-Robots-Tag: noindex` header from the middleware, whatever the layout emits. `/robots.txt` and `/sitemap.xml` are built by the core, not by themes.
 
 ### Layout Variants
 
@@ -436,13 +441,16 @@ For themes with shared HTML structure (header, footer, meta tags), create a `bas
 ---
 // layouts/base.astro
 import themeConfig from '../theme.config'
+import SeoHead from '@/components/SeoHead.astro'
+import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
   title: string
   description: string
+  seo?: SeoMeta
 }
 
-const { title, description } = Astro.props
+const { title, description, seo = {} } = Astro.props
 const themeAssets = Astro.locals.themeAssets || {}
 ---
 
@@ -451,8 +459,8 @@ const themeAssets = Astro.locals.themeAssets || {}
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="description" content={description} />
-    <title>{title}</title>
+    <!-- <title>, description, canonical, robots, Open Graph, Twitter -->
+    <SeoHead title={title} description={description} {...seo} />
 
     <!-- Theme-registered stylesheets -->
     {themeAssets.styles?.map((style: any) => (
@@ -485,12 +493,13 @@ interface Props {
   post: Post
   title: string
   description: string
+  seo?: SeoMeta
 }
 
-const { post, title, description } = Astro.props
+const { post, title, description, seo } = Astro.props
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} seo={seo}>
   <main>
     <article>
       <h1>{post.title}</h1>

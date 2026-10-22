@@ -110,6 +110,21 @@ func (mr *MockStoreMockRecorder) BlockSession(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockSession", reflect.TypeOf((*MockStore)(nil).BlockSession), arg0, arg1)
 }
 
+// CheckSlugExists mocks base method.
+func (m *MockStore) CheckSlugExists(arg0 context.Context, arg1 db.CheckSlugExistsParams) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckSlugExists", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckSlugExists indicates an expected call of CheckSlugExists.
+func (mr *MockStoreMockRecorder) CheckSlugExists(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckSlugExists", reflect.TypeOf((*MockStore)(nil).CheckSlugExists), arg0, arg1)
+}
+
 // CheckURLExists mocks base method.
 func (m *MockStore) CheckURLExists(arg0 context.Context, arg1 string) (bool, error) {
 	m.ctrl.T.Helper()
@@ -2526,6 +2541,21 @@ func (mr *MockStoreMockRecorder) UpdatePostMeta(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostMeta", reflect.TypeOf((*MockStore)(nil).UpdatePostMeta), arg0, arg1)
 }
 
+// UpdatePostSlug mocks base method.
+func (m *MockStore) UpdatePostSlug(arg0 context.Context, arg1 db.UpdatePostSlugParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostSlug", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostSlug indicates an expected call of UpdatePostSlug.
+func (mr *MockStoreMockRecorder) UpdatePostSlug(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostSlug", reflect.TypeOf((*MockStore)(nil).UpdatePostSlug), arg0, arg1)
+}
+
 // UpdatePostTaxonomyTermsTx mocks base method.
 func (m *MockStore) UpdatePostTaxonomyTermsTx(arg0 context.Context, arg1 db.UpdatePostTaxonomyTermsTxParams) error {
 	m.ctrl.T.Helper()
@@ -2553,6 +2583,21 @@ func (m *MockStore) UpdatePostType(arg0 context.Context, arg1 db.UpdatePostTypeP
 func (mr *MockStoreMockRecorder) UpdatePostType(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostType", reflect.TypeOf((*MockStore)(nil).UpdatePostType), arg0, arg1)
+}
+
+// UpdatePostWithSlugTx mocks base method.
+func (m *MockStore) UpdatePostWithSlugTx(arg0 context.Context, arg1 db.UpdatePostWithSlugTxParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostWithSlugTx", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostWithSlugTx indicates an expected call of UpdatePostWithSlugTx.
+func (mr *MockStoreMockRecorder) UpdatePostWithSlugTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostWithSlugTx", reflect.TypeOf((*MockStore)(nil).UpdatePostWithSlugTx), arg0, arg1)
 }
 
 // UpdatePostsUsername mocks base method.

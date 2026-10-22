@@ -10,18 +10,20 @@ import FormattedDate from '@/components/FormattedDate.astro'
 import BlockRenderer from '@/components/BlockRenderer'
 import PostTerms from '../../components/PostTerms.astro'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
   post: Post
   title: string
   description: string
+  seo?: SeoMeta
   terms?: TaxonomyTerm[]
 }
 
-const { post, title, description, terms } = Astro.props
+const { post, title, description, seo, terms } = Astro.props
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} seo={seo}>
   <Header />
   
   <main class="post-layout-wide">
