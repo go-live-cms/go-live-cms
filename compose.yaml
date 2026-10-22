@@ -9,6 +9,10 @@ services:
       POSTGRES_DB: golive_cms
     ports:
       - "5432:5432"
+    volumes:
+      # Without a named volume the data lives in an anonymous one that a
+      # `down -v` or a fresh host silently drops. Back it up: docs/operations/backups.md
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U root -d golive_cms"]
       interval: 10s
@@ -47,6 +51,11 @@ services:
       # Behind a reverse proxy, list its IPs/CIDRs so rate limits key on the real
       # client (X-Forwarded-For). Empty trusts no proxy. See readme "Rate limiting".
       TRUSTED_PROXIES: ""
+      # Uploaded media. Media rows store absolute paths under it, so keep it the
+      # same across deploys and restores. Served at /uploads/media/*.
+      UPLOAD_PATH: "/app/uploads/media"
+    volumes:
+      - uploads:/app/uploads
     entrypoint: ["/app/wait-for.sh", "postgres:5432", "--", "/app/start.sh"]
     command: ["/app/main"]
 
@@ -63,3 +72,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads:
