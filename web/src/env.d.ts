@@ -1,6 +1,8 @@
 /// <reference types="astro/client" />
 
-import type { ThemeFunctions, ThemeFunctionsContext } from "./lib/theme-api"
+// No top-level import/export here: that would turn this file into a module and
+// scope `App` to it, so Astro.locals would silently lose these fields. Use inline
+// import() types instead.
 
 declare namespace App {
   interface Locals {
@@ -13,8 +15,8 @@ declare namespace App {
     themeCssPath?: string
 
     // Phase 2: Theme functions
-    themeFunctions?: ThemeFunctions
-    themeContext?: ThemeFunctionsContext
+    themeFunctions?: import("./lib/theme-api").ThemeFunctions
+    themeContext?: import("./lib/theme-api").ThemeFunctionsContext
     themeSetupComplete?: boolean
 
     // Custom theme-injected data

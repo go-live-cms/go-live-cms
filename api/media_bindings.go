@@ -41,13 +41,14 @@ import "encoding/json"
 //   - order: Display order when linked to post (default: 0)
 //
 // # Example Usage
-//   curl -X POST /api/v1/media \
-//     -F "file=@image.jpg" \
-//     -F "name=Hero Image" \
-//     -F "description=Homepage banner image" \
-//     -F "alt=Company logo on blue background" \
-//     -F "post_id=123" \
-//     -F "order=1"
+//
+//	curl -X POST /api/v1/media \
+//	  -F "file=@image.jpg" \
+//	  -F "name=Hero Image" \
+//	  -F "description=Homepage banner image" \
+//	  -F "alt=Company logo on blue background" \
+//	  -F "post_id=123" \
+//	  -F "order=1"
 type CreateMediaRequest struct {
 	Name        string `form:"name" binding:"required,min=2,max=255"`
 	Description string `form:"description" binding:"required,min=5,max=500"`
@@ -76,9 +77,10 @@ type CreateMediaRequest struct {
 //   - Empty/null values are ignored (no update performed)
 //
 // # Example Usage
-//   curl -X PUT /api/v1/media/123 \
-//     -H "Content-Type: application/json" \
-//     -d '{"name": "Updated Hero Image", "alt": "New description"}'
+//
+//	curl -X PUT /api/v1/media/123 \
+//	  -H "Content-Type: application/json" \
+//	  -d '{"name": "Updated Hero Image", "alt": "New description"}'
 type UpdateMediaRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=2,max=255"`
 	Description string `json:"description" binding:"omitempty,min=5,max=500"`

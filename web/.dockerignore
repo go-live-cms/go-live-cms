@@ -1,6 +1,4 @@
-# Keep host builds (often Windows) out of the Linux image: `COPY . .` would
-# otherwise overwrite the container's `npm ci` node_modules. web/.env is kept:
-# astro build reads it (build args and env still take precedence).
 node_modules
 dist
 .astro
+.env

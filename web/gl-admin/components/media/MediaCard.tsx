@@ -1,5 +1,5 @@
 import React from "react"
-import { getMediaURL } from "@gl-admin/lib/api"
+import { getMediaPreviewURL } from "@gl-admin/lib/api/media"
 import type { Media } from "@gl-admin/lib/types"
 import "@gl-admin/assets/styles/components/media/media-card.scss"
 import MediaTypeBadge from "@gl-admin/components/media/MediaTypeBadge"
@@ -23,7 +23,7 @@ function isImage(mediaPath: string): boolean {
 }
 
 const MediaCard: React.FC<Props> = ({ media, onClick }) => {
-  const mediaURL = getMediaURL(media.media_path)
+  const mediaURL = getMediaPreviewURL(media)
   const fileName = media.name
   const fileSize = media.file_size ? formatFileSize(media.file_size) : "Unknown size"
   const postCount = media.post_count || 0

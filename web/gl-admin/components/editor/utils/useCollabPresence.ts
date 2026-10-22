@@ -38,15 +38,11 @@ export function useCollabPresence(postId?: number, enabled = true) {
     onUsers()
 
     provider.provider.on("status", onStatus)
-    provider.provider.on("connect", onStatus)
-    provider.provider.on("disconnect", onStatus)
     provider.provider.awareness.on("change", onUsers)
 
     return () => {
       cancelAnimationFrame(raf)
       provider.provider.off("status", onStatus)
-      provider.provider.off("connect", onStatus)
-      provider.provider.off("disconnect", onStatus)
       provider.provider.awareness.off("change", onUsers)
       // do not release here; Editor owns lifecycle
     }

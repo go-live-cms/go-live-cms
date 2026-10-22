@@ -287,7 +287,7 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 				// Block all sessions for this user
 				_ = server.store.BlockAllSessionsForUser(ctx.Request.Context(), s2.UserID)
 
-				logSecurityEvent(ctx, LogSessionReuse, "unknown", s2.UserID, fmt.Sprintf("Token reuse detected - all sessions blocked"))
+				logSecurityEvent(ctx, LogSessionReuse, "unknown", s2.UserID, "Token reuse detected - all sessions blocked")
 				ctx.JSON(http.StatusConflict, gin.H{"error": "refresh token reuse detected"})
 				return
 			}

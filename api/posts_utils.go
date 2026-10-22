@@ -6,7 +6,6 @@
 // Functions
 //   - isValidPostSortOption: Validates sort parameter values
 //   - containsString: Case-sensitive substring check
-//   - indexOf: String index search helper
 package api
 
 import "strings"
@@ -35,9 +34,4 @@ func isValidPostSortOption(sort string) bool {
 // containsString performs case-sensitive substring search
 func containsString(s, substring string) bool {
 	return strings.Contains(s, substring)
-}
-
-// indexOf returns the index of first occurrence of substring in s, or -1 if not found
-func indexOf(s, sub string) int {
-	return strings.Index(s, sub)
 }

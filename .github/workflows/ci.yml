@@ -1,10 +1,31 @@
 name: ci-test
 
+# Secrets: this workflow needs NO repository secrets. Every credential below
+# (the Postgres user/password, the DB URL) belongs to a throwaway service
+# container that only lives for the job. Never echo `secrets.*` or env dumps
+# in a step; if a future job (e.g. a deploy) needs a real secret, pass it via
+# `env:` from `secrets.*` on that one step only. See readme "CI".
+
 on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+
+# Read-only token: no job pushes, comments or publishes anything.
+permissions:
+  contents: read
+
+# A newer push to the same PR supersedes its running checks. Pushes to main are
+# never cancelled, so every merged commit gets a complete result.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Matches the Makefile's migrateup/migratedown and the CI Postgres service.
+  DB_URL: postgresql://root:secret@localhost:5432/golive_cms?sslmode=disable
+  MIGRATE_VERSION: v4.16.2
 
 jobs:
   test:
@@ -27,20 +48,19 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
-          go-version: "1.22"
-        id: go
+          go-version-file: go.mod
 
       - name: Build
         run: go build -v ./...
 
       - name: Install golang-migrate
         run: |
-          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz | tar xvz
+          curl -fsSL https://github.com/golang-migrate/migrate/releases/download/${MIGRATE_VERSION}/migrate.linux-amd64.tar.gz | tar xz migrate
           sudo mv migrate /usr/bin/
           which migrate
 
@@ -48,7 +68,7 @@ jobs:
         run: |
           cat > app.env << EOF
           DB_DRIVER=postgres
-          DB_SOURCE=postgresql://root:secret@localhost:5432/golive_cms?sslmode=disable
+          DB_SOURCE=${DB_URL}
           SERVER_ADDRESS=0.0.0.0:8080
           API_PORT=8080
           EOF
@@ -59,7 +79,7 @@ jobs:
       - name: Test
         env:
           DB_DRIVER: postgres
-          DB_SOURCE: postgresql://root:secret@localhost:5432/golive_cms?sslmode=disable
+          DB_SOURCE: ${{ env.DB_URL }}
           SERVER_ADDRESS: 0.0.0.0:8080
           API_PORT: :8080
         run: make coverage-check
@@ -69,26 +89,149 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Own compose project (golive_restore_test): migrations up/down/up, backup,
       # wipe, restore, verify, and the API serving the restored media.
       - name: Run restore test
         run: sh scripts/backup/test-restore.sh
 
+  go-lint:
+    name: Go lint (vet, gofmt, golangci-lint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted (run 'gofmt -w .'):"
+            echo "$unformatted"
+            gofmt -d $unformatted
+            exit 1
+          fi
+
+      # Runs even when vet/gofmt failed, so one run reports every finding.
+      - name: golangci-lint
+        if: ${{ !cancelled() }}
+        uses: golangci/golangci-lint-action@v8
+        with:
+          # Config: .golangci.yml. Bump deliberately; new versions add findings.
+          version: v2.1.6
+
+  sqlc:
+    name: sqlc in sync
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up sqlc
+        uses: sqlc-dev/setup-sqlc@v4
+        with:
+          # Must match the "sqlc vX" header in db/sqlc/*.go.
+          sqlc-version: "1.29.0"
+
+      # Fails when db/sqlc differs from what db/query + db/migration generate.
+      - name: sqlc diff
+        run: sqlc diff
+
+  migrations:
+    name: Migrations up/down/up
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:12
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: golive_cms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # The `job` context isn't available in job-level env, so export it here.
+      - name: Locate the Postgres container
+        run: echo "PG_CONTAINER=${{ job.services.postgres.id }}" >> "$GITHUB_ENV"
+
+      - name: Install golang-migrate
+        run: |
+          curl -fsSL https://github.com/golang-migrate/migrate/releases/download/${MIGRATE_VERSION}/migrate.linux-amd64.tar.gz | tar xz migrate
+          sudo mv migrate /usr/bin/
+
+      - name: Migrate up
+        run: |
+          migrate -path db/migration -database "$DB_URL" -verbose up
+          # pg_dump from the service container, so client and server versions match.
+          docker exec "$PG_CONTAINER" pg_dump -U root --schema-only --no-owner golive_cms > schema-first-up.sql
+
+      - name: Migrate down (all)
+        run: |
+          migrate -path db/migration -database "$DB_URL" -verbose down -all
+          # Every down migration together must remove everything the ups created.
+          # pg_class covers tables, views, materialized views, sequences, indexes and
+          # composite types (relkind is listed with each leftover).
+          leftovers=$(docker exec "$PG_CONTAINER" psql -U root -d golive_cms -tAc "
+            SELECT 'relation (' || c.relkind || ') ' || c.relname FROM pg_class c
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE n.nspname = 'public'
+                AND c.relname NOT IN ('schema_migrations', 'schema_migrations_pkey')
+            UNION ALL
+            SELECT 'type ' || t.typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace
+              WHERE n.nspname = 'public' AND t.typtype IN ('e', 'd')
+            UNION ALL
+            SELECT 'function ' || p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+              WHERE n.nspname = 'public'
+            UNION ALL
+            SELECT 'extension ' || extname FROM pg_extension WHERE extname <> 'plpgsql'")
+          if [ -n "$leftovers" ]; then
+            echo "Objects left behind after migrating all the way down:"
+            echo "$leftovers"
+            exit 1
+          fi
+
+      - name: Migrate up again
+        run: |
+          migrate -path db/migration -database "$DB_URL" -verbose up
+          docker exec "$PG_CONTAINER" pg_dump -U root --schema-only --no-owner golive_cms > schema-second-up.sql
+          # The rebuilt schema must be identical to the first one.
+          diff -u schema-first-up.sql schema-second-up.sql
+
   web-tests:
     name: Web tests (editor/collaboration)
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # 22 (LTS) — satisfies jsdom@29's engines (>=20.19) without relying on
           # how the "20" alias happens to resolve on the runner.
           node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            websocket/package-lock.json
 
       - name: Install web deps
         working-directory: web
@@ -99,11 +242,10 @@ jobs:
         run: npm test
 
       # Catches imports that only resolve on case-insensitive filesystems
-      # (#259): on this Linux runner a wrong-case import is TS2307, reported
-      # by file (the build below fails too, but less legibly). A full
-      # typecheck still has pre-existing type errors, so gate only on
-      # module-resolution (TS2307/TS1149/TS1261) and config (TS5xxx/TS6xxx)
-      # errors, the latter so a broken tsc run can't pass silently.
+      # (#259): on this Linux runner a wrong-case import is TS2307. Gates only
+      # on module-resolution (TS2307/TS1149/TS1261) and config (TS5xxx/TS6xxx)
+      # errors. The "Web type check and build" job's full `astro check` now
+      # covers these too (#143), so this is a fast, focused early signal.
       - name: Check web imports resolve (case-sensitive)
         working-directory: web
         run: |
@@ -113,12 +255,6 @@ jobs:
             exit 1
           fi
 
-      # The production image (web/Dockerfile) runs this; catches a missing SSR
-      # adapter or anything else that only breaks the production build.
-      - name: Build web
-        working-directory: web
-        run: npm run build
-
       - name: Install websocket deps
         working-directory: websocket
         run: npm ci
@@ -126,3 +262,64 @@ jobs:
       - name: Run websocket tests
         working-directory: websocket
         run: npm test
+
+  web-check:
+    name: Web type check and build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web deps
+        working-directory: web
+        run: npm ci
+
+      # astro check = astro sync + TypeScript over .ts/.tsx/.astro.
+      - name: Type check
+        working-directory: web
+        run: npm run check
+
+      - name: Build
+        working-directory: web
+        run: npm run build
+
+  docker:
+    name: Docker image (${{ matrix.image }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            context: .
+            file: Dockerfile
+          - image: web
+            context: web
+            file: web/Dockerfile
+          - image: websocket
+            context: websocket
+            file: websocket/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Build only: catches Dockerfile breakage. Nothing is pushed anywhere.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: false
+          tags: golive-${{ matrix.image }}:ci
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

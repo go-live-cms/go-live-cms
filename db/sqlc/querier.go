@@ -158,6 +158,10 @@ type Querier interface {
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
+	// File-only update used by POST /media/:id/replace: swaps the columns that
+	// describe the stored file and leaves name, description and alt alone, so a
+	// concurrent metadata edit is never overwritten by a stale read.
+	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// Search and filtering

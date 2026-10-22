@@ -13,7 +13,8 @@
 //
 // Single upload: POST /media with multipart form, optional post linking.
 // Bulk upload: POST /media/batch (original) or POST /media/bulk (alias) with multiple files, batch processing with error collection.
-// File validation: Extension checking, MIME type verification, size limits.
+// Replace: POST /media/:id/replace swaps the stored file in place, keeping the id and metadata.
+// File validation: extension allowlist, content sniffing, size limit (validateMediaUpload).
 //
 // # Update Operations
 //
@@ -27,16 +28,16 @@
 // in one transaction, then removes the stored file from the upload directory
 // (best effort, and only for paths inside UploadPath; see removeMediaFile).
 //
-// # Ownership Policy (PUT and DELETE /media/:id)
+// # Ownership Policy (PUT, DELETE and POST /media/:id/replace)
 //
-// Both routes sit behind requireContentEditor, so only admins and editors
+// All three routes sit behind requireContentEditor, so only admins and editors
 // reach these handlers today. Within them:
 //   - admin:  may update/delete any media (moderation)
 //   - editor: may update/delete any media (moderation; editors can already
 //     delete any post)
 //   - any other role admitted later: own media only (403 otherwise)
 //
-// Both handlers decide through canWriteMedia (auth_roles.go). Media is
+// All three handlers decide through canWriteMedia (auth_roles.go). Media is
 // publicly readable, so answering 403 (not 404) for someone else's media
 // reveals nothing.
 //
@@ -57,6 +58,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -73,24 +75,21 @@ import (
 // createMedia handles POST /media - single file upload with metadata.
 // Accepts multipart form with required file + optional name, description, alt text.
 // Can optionally link to existing post via post_id parameter.
+// The file must be an allowed type whose bytes match its extension (400
+// otherwise) and at most MaxUploadSize (413 otherwise); see validateMediaUpload.
 // Auth: Requires Bearer token. Returns 201 with media JSON or error.
 func (server *Server) createMedia(c *gin.Context) {
+	limitUploadBody(c, server.maxUploadBytes, 1)
+
 	// Validate request fields BEFORE saving the file to avoid orphaned uploads.
+	// Binding also parses the multipart form.
 	var req CreateMediaRequest
 	if err := c.ShouldBind(&req); err != nil {
+		if isBodyTooLarge(err) {
+			server.respondUploadTooLarge(c)
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Parse multipart form with size limit
-	maxUploadSize, err := parseFileSize(server.config.MaxUploadSize)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid upload size configuration"})
-		return
-	}
-
-	if err := c.Request.ParseMultipartForm(maxUploadSize); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("file too large. Maximum size is %s", server.config.MaxUploadSize)})
 		return
 	}
 
@@ -101,13 +100,9 @@ func (server *Server) createMedia(c *gin.Context) {
 	}
 	defer file.Close()
 
-	if !isValidMediaType(header.Filename) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid file type"})
-		return
-	}
-
-	if header.Size > maxUploadSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("file too large. Maximum size is %s", server.config.MaxUploadSize)})
+	mimeType, err := validateMediaUpload(file, header, server.maxUploadBytes)
+	if err != nil {
+		server.respondUploadError(c, err)
 		return
 	}
 
@@ -116,8 +111,6 @@ func (server *Server) createMedia(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
 		return
 	}
-
-	mimeType := getFileMimeType(actualFilename)
 
 	var width, height int32
 	if isImageFile(actualFilename) {
@@ -201,19 +194,25 @@ func (server *Server) createMedia(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"media": toMediaResponse(media)})
 }
 
+// maxBulkFiles is the most files one bulk upload may carry.
+const maxBulkFiles = 20
+
 // createMediaBulk handles POST /media/bulk - multiple file upload with error collection.
 // Accepts multipart form with multiple files, processes each independently.
+// Each file is validated like a single upload (validateMediaUpload); a bad
+// one is reported in errors without sinking the batch. A body larger than
+// maxBulkFiles maximum-size files gets 413.
 // Returns partial success: {success: [], errors: [], meta: {total, successful, failed}}.
 // Auth: Requires Bearer token. Individual file failures don't abort batch.
 func (server *Server) createMediaBulk(c *gin.Context) {
-	maxUploadSize, err := parseFileSize(server.config.MaxUploadSize)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid upload size configuration"})
-		return
-	}
+	limitUploadBody(c, server.maxUploadBytes, maxBulkFiles)
 
-	if err := c.Request.ParseMultipartForm(maxUploadSize); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "request too large"})
+	if err := c.Request.ParseMultipartForm(server.maxUploadBytes); err != nil {
+		if isBodyTooLarge(err) {
+			server.respondUploadTooLarge(c)
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid multipart form"})
 		return
 	}
 
@@ -225,8 +224,8 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 		return
 	}
 
-	if len(files) > 20 { // Limit bulk uploads
-		c.JSON(http.StatusBadRequest, gin.H{"error": "too many files. Maximum 20 files per batch"})
+	if len(files) > maxBulkFiles {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("too many files. Maximum %d files per batch", maxBulkFiles)})
 		return
 	}
 
@@ -237,58 +236,11 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 	var errors []string
 
 	for _, fileHeader := range files {
-		file, err := fileHeader.Open()
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("failed to open file %s: %v", fileHeader.Filename, err))
+		media, errMsg := server.createBulkMediaItem(c, fileHeader, userID)
+		if errMsg != "" {
+			errors = append(errors, errMsg)
 			continue
 		}
-		defer file.Close()
-
-		if !isValidMediaType(fileHeader.Filename) {
-			errors = append(errors, fmt.Sprintf("invalid file type for %s", fileHeader.Filename))
-			continue
-		}
-
-		if fileHeader.Size > maxUploadSize {
-			errors = append(errors, fmt.Sprintf("file %s too large", fileHeader.Filename))
-			continue
-		}
-
-		mediaPath, actualFilename, err := saveUploadedFileWithOriginalName(file, fileHeader, server.config.UploadPath)
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("failed to save %s: %v", fileHeader.Filename, err))
-			continue
-		}
-
-		mimeType := getFileMimeType(actualFilename)
-
-		var width, height int32
-		if isImageFile(actualFilename) {
-			w, h, err := getImageDimensions(mediaPath)
-			if err == nil {
-				width, height = w, h
-			}
-		}
-
-		media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
-			Name:             strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename)),
-			Description:      fmt.Sprintf("Uploaded file: %s", fileHeader.Filename),
-			Alt:              strings.TrimSuffix(fileHeader.Filename, filepath.Ext(fileHeader.Filename)),
-			MediaPath:        mediaPath,
-			FileSize:         fileHeader.Size,
-			MimeType:         mimeType,
-			Width:            width,
-			Height:           height,
-			Duration:         0, // Set to 0 for non-video files
-			UserID:           userID,
-			OriginalFilename: actualFilename,
-		})
-		if err != nil {
-			os.Remove(mediaPath)
-			errors = append(errors, fmt.Sprintf("failed to create media record for %s: %v", fileHeader.Filename, err))
-			continue
-		}
-
 		successfulMedia = append(successfulMedia, toMediaResponse(media))
 	}
 
@@ -301,6 +253,202 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 			"failed":     len(errors),
 		},
 	})
+}
+
+// createBulkMediaItem validates, stores and records one file of a bulk
+// upload. It returns the created row, or a client-facing error message.
+func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.FileHeader, userID int64) (db.Medium, string) {
+	file, err := fileHeader.Open()
+	if err != nil {
+		return db.Medium{}, fmt.Sprintf("failed to open file %s: %v", fileHeader.Filename, err)
+	}
+	defer file.Close()
+
+	mimeType, err := validateMediaUpload(file, fileHeader, server.maxUploadBytes)
+	switch {
+	case err == nil:
+	case errors.Is(err, errUnsupportedMediaType):
+		return db.Medium{}, fmt.Sprintf("invalid file type for %s", fileHeader.Filename)
+	case errors.Is(err, errMediaContentMismatch):
+		return db.Medium{}, fmt.Sprintf("file content of %s does not match its extension", fileHeader.Filename)
+	case errors.Is(err, errMediaTooLarge):
+		return db.Medium{}, fmt.Sprintf("file %s too large. Maximum size is %s", fileHeader.Filename, server.config.MaxUploadSize)
+	default:
+		return db.Medium{}, fmt.Sprintf("failed to read %s", fileHeader.Filename)
+	}
+
+	mediaPath, actualFilename, err := saveUploadedFileWithOriginalName(file, fileHeader, server.config.UploadPath)
+	if err != nil {
+		return db.Medium{}, fmt.Sprintf("failed to save %s: %v", fileHeader.Filename, err)
+	}
+
+	var width, height int32
+	if isImageFile(actualFilename) {
+		w, h, err := getImageDimensions(mediaPath)
+		if err == nil {
+			width, height = w, h
+		}
+	}
+
+	media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
+		Name:             strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename)),
+		Description:      fmt.Sprintf("Uploaded file: %s", fileHeader.Filename),
+		Alt:              strings.TrimSuffix(fileHeader.Filename, filepath.Ext(fileHeader.Filename)),
+		MediaPath:        mediaPath,
+		FileSize:         fileHeader.Size,
+		MimeType:         mimeType,
+		Width:            width,
+		Height:           height,
+		Duration:         0, // Set to 0 for non-video files
+		UserID:           userID,
+		OriginalFilename: actualFilename,
+	})
+	if err != nil {
+		os.Remove(mediaPath)
+		return db.Medium{}, fmt.Sprintf("failed to create media record for %s: %v", fileHeader.Filename, err)
+	}
+	return media, ""
+}
+
+// replaceMedia handles POST /media/:id/replace - swaps the stored file of an
+// existing media row for a new upload (multipart field "file").
+//
+// The row keeps its id, so every reference (post_media, _thumbnail_id, image
+// blocks' mediaId) still points at it, and keeps name, description and alt.
+// The file is validated like any upload and must be the same type as the
+// current one (400 otherwise). It is written over the stored file at the
+// same media_path, so the URL that posts and block docs already embed shows
+// the new file (/uploads is served with Cache-Control: no-cache, so
+// browsers revalidate rather than show a cached copy). Size, dimensions and
+// original_filename are updated.
+//
+// The original is moved aside rather than deleted until the database update
+// succeeds, and put back if it fails, so a failed replace loses nothing. A
+// row whose media_path isn't inside UploadPath (seeded or legacy data) gets
+// the new file stored as a fresh upload instead, and the old path is left
+// alone.
+//
+// Auth: same as PUT /media/:id (editor-or-admin route; admins and editors may
+// replace any media, other roles only their own). Returns 200 with the
+// updated media JSON.
+func (server *Server) replaceMedia(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid media ID"})
+		return
+	}
+
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
+
+	limitUploadBody(c, server.maxUploadBytes, 1)
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		if isBodyTooLarge(err) {
+			server.respondUploadTooLarge(c)
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+	defer file.Close()
+
+	mimeType, err := validateMediaUpload(file, header, server.maxUploadBytes)
+	if err != nil {
+		server.respondUploadError(c, err)
+		return
+	}
+
+	server.mediaReplaceMu.Lock()
+	defer server.mediaReplaceMu.Unlock()
+
+	// Read under the lock: the path and type checked below must be the ones
+	// the swap acts on.
+	media, err := server.store.GetMedia(c.Request.Context(), id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get media"})
+		return
+	}
+	if !canWriteMedia(caller, media) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "you can only replace your own media"})
+		return
+	}
+	if mimeType != media.MimeType {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("replacement must be the same file type as the original (%s, got %s); upload a different type as new media", media.MimeType, mimeType),
+		})
+		return
+	}
+
+	ext := filepath.Ext(header.Filename)
+	params := db.ReplaceMediaFileParams{
+		ID:               id,
+		MediaPath:        media.MediaPath,
+		FileSize:         header.Size,
+		MimeType:         mimeType,
+		Duration:         media.Duration,
+		OriginalFilename: cleanFilename(strings.TrimSuffix(header.Filename, ext)) + ext,
+	}
+
+	// In place when the current file is ours, else as a new upload.
+	var swap *fileSwap
+	storedPath := media.MediaPath
+	if target, err := resolveInUploadDir(server.config.UploadPath, media.MediaPath); err == nil {
+		swap, err = swapInFile(target, file)
+		if err != nil {
+			server.requestLog(c).Error("media replace: writing file failed", "media_id", id, "media_path", media.MediaPath, "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
+			return
+		}
+	} else {
+		newPath, actualFilename, err := saveUploadedFileWithOriginalName(file, header, server.config.UploadPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
+			return
+		}
+		params.MediaPath = newPath
+		params.OriginalFilename = actualFilename
+		storedPath = newPath
+	}
+
+	if isImageFile(storedPath) {
+		if w, h, err := getImageDimensions(storedPath); err == nil {
+			params.Width, params.Height = w, h
+		}
+	}
+
+	updated, err := server.store.ReplaceMediaFile(c.Request.Context(), params)
+	if err != nil {
+		var undoErr error
+		if swap != nil {
+			undoErr = swap.rollback()
+		} else {
+			undoErr = os.Remove(storedPath)
+		}
+		if undoErr != nil {
+			server.requestLog(c).Error("media replace: undoing file swap after failed update", "media_id", id, "media_path", storedPath, "error", undoErr)
+		}
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})
+		return
+	}
+
+	if swap != nil {
+		if err := swap.commit(); err != nil {
+			server.requestLog(c).Warn("media replaced but old file not removed", "media_id", id, "media_path", storedPath, "error", err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"media": toMediaResponse(updated)})
 }
 
 // updateMedia handles PUT /media/:id - metadata updates for existing media.

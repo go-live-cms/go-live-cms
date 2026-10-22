@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -43,6 +44,12 @@ type Server struct {
 	errorReporter ErrorReporter
 	// pingDB backs /readyz: store.Ping, a field so tests can stub it.
 	pingDB func(ctx context.Context) error
+
+	// maxUploadBytes is config.MaxUploadSize parsed once (media uploads).
+	maxUploadBytes int64
+	// mediaReplaceMu serializes POST /media/:id/replace, so two replaces of
+	// one row can't interleave their file swaps and database writes.
+	mediaReplaceMu sync.Mutex
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -82,6 +89,10 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	maxUploadBytes, err := config.MaxUploadBytes()
+	if err != nil {
+		return nil, err
+	}
 	server := &Server{
 		store:      store,
 		config:     config,
@@ -96,6 +107,8 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		errorReporter: noopErrorReporter{},
 		// A closure, not the method value store.Ping, which would panic here on a nil store.
 		pingDB: func(ctx context.Context) error { return store.Ping(ctx) },
+
+		maxUploadBytes: maxUploadBytes,
 	}
 
 	if shouldCheckSeededAccounts(config) {
@@ -310,7 +323,13 @@ func (server *Server) setupRoutes() error {
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 
-	router.Static("/uploads", filepath.Dir(server.config.UploadPath))
+	// no-cache: browsers may keep uploads but must revalidate (a cheap 304),
+	// because POST /media/:id/replace swaps a file in place at the same URL
+	// that posts already embed.
+	uploads := router.Group("/uploads", func(ctx *gin.Context) {
+		ctx.Header("Cache-Control", "no-cache")
+	})
+	uploads.Static("/", filepath.Dir(server.config.UploadPath))
 
 	//v1.GET("/test-log", server.testLog) // Temporary log endpoint for testing
 

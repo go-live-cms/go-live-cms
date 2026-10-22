@@ -1,0 +1,23 @@
+# golangci-lint v2 config, run in CI (.github/workflows/ci.yml, go-lint job).
+# Deliberately conservative: the "standard" set (errcheck, govet, ineffassign,
+# staticcheck, unused). Fix new findings rather than adding exclusions; any
+# exclusion below says why it exists.
+version: "2"
+
+run:
+  timeout: 5m
+
+issues:
+  # Report everything; the defaults hide repeats of the same finding.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+linters:
+  default: standard
+
+  exclusions:
+    # Skip files with a "Code generated ... DO NOT EDIT." header (db/sqlc, db/mock).
+    generated: lax
+    presets:
+      # Unchecked Close/Flush/os.Remove etc. on the usual paths.
+      - std-error-handling

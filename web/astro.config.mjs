@@ -54,7 +54,7 @@ export default defineConfig({
     },
   },
   output: "server",
-  // Standalone: `npm run build` emits dist/server/entry.mjs, a self-contained
-  // Node server (HOST/PORT env) that also serves dist/client. See web/Dockerfile.
+  // SSR needs an adapter for `astro build`; the production image runs the
+  // standalone Node server it emits (dist/server/entry.mjs, see web/Dockerfile).
   adapter: node({ mode: "standalone" }),
 })

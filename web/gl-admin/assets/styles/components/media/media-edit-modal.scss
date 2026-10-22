@@ -72,6 +72,25 @@
     color: #6c757d;
   }
 
+  &__replace {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  &__replace-hint {
+    color: #6c757d;
+    font-size: 0.85rem;
+  }
+
+  &__replace-progress {
+    width: 100%;
+  }
+
+  &__replace-error {
+    color: #dc3545;
+    font-size: 0.9rem;
+  }
   &__details {
     display: flex;
     flex-direction: column;

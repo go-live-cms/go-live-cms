@@ -60,6 +60,20 @@ func TestLoadConfigReadsRoleLookupSecretFromEnv(t *testing.T) {
 	require.Equal(t, "from-env", config.RoleLookupSecret)
 }
 
+// The PASETO keys have no defaults either. The API image has no app.env, so a
+// deployment can only pass them as env vars; they must not be dropped.
+func TestLoadConfigReadsPasetoKeysFromEnv(t *testing.T) {
+	t.Setenv("PASETO_V4_PUBLIC_KEY_HEX", "pub-from-env")
+	t.Setenv("PASETO_V4_PRIVATE_KEY_HEX", "priv-from-env")
+	t.Setenv("PASETO_V4_LOCAL_KEY_HEX", "local-from-env")
+
+	config, err := LoadConfig(t.TempDir()) // no app.env here
+	require.NoError(t, err)
+	require.Equal(t, "pub-from-env", config.PasetoV4PublicKeyHex)
+	require.Equal(t, "priv-from-env", config.PasetoV4PrivateKeyHex)
+	require.Equal(t, "local-from-env", config.PasetoV4LocalKeyHex)
+}
+
 func TestLoadConfigRateLimitDefaults(t *testing.T) {
 	config, err := LoadConfig(t.TempDir())
 	require.NoError(t, err)
@@ -82,4 +96,42 @@ func TestTrustedProxyList(t *testing.T) {
 		[]string{"10.0.0.0/8", "192.0.2.1"},
 		Config{TrustedProxies: " 10.0.0.0/8, ,192.0.2.1"}.TrustedProxyList(),
 	)
+}
+
+func TestMaxUploadBytes(t *testing.T) {
+	testCases := []struct {
+		in      string
+		want    int64
+		wantErr bool
+	}{
+		{in: "", want: DefaultMaxUploadBytes},
+		{in: "10MB", want: 10 << 20},
+		{in: " 512kb ", want: 512 << 10},
+		{in: "1GB", want: 1 << 30},
+		{in: "2048", want: 2048},
+		{in: "100B", want: 100},
+		{in: "0MB", wantErr: true},
+		{in: "-1MB", wantErr: true},
+		{in: "ten", wantErr: true},
+		{in: "10TB", wantErr: true},
+		{in: "99999999999GB", wantErr: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.in, func(t *testing.T) {
+			got, err := Config{MaxUploadSize: tc.in}.MaxUploadBytes()
+			if tc.wantErr {
+				require.ErrorContains(t, err, "MAX_UPLOAD_SIZE")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestLoadConfigRejectsInvalidMaxUploadSize(t *testing.T) {
+	t.Setenv("MAX_UPLOAD_SIZE", "lots")
+	_, err := LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "MAX_UPLOAD_SIZE")
 }

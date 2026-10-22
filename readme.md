@@ -77,6 +77,11 @@ make proddown      # Stop production environment
 make prodlogs      # View production logs
 ```
 
+The API image contains no `app.env`. `compose.yaml` takes its secrets from the
+environment (or a `.env` file next to it, never committed): `ROLE_LOOKUP_SECRET`,
+`PASETO_V4_PUBLIC_KEY_HEX`, `PASETO_V4_PRIVATE_KEY_HEX` and `PASETO_V4_LOCAL_KEY_HEX`.
+Generate fresh keys for a real deployment; don't reuse the ones in `example.app.env`.
+
 #### Seeded dev accounts in production
 
 Versions before #228 always ran the API in debug mode, so every deployment got the
@@ -159,7 +164,9 @@ IP. On a busy site, add that address or its Docker network to
 `RATE_LIMIT_EXEMPT_CIDRS`. If browser API calls also pass through the web tier, it
 must forward the client IP in `X-Forwarded-For` and be listed in `TRUSTED_PROXIES`.
 In development the Vite proxy does that (`xfwd`), and `compose.dev.yaml` trusts the
-private Docker ranges.
+private Docker ranges. In production the web server forwards `/api/v1` and `/uploads` itself
+(`web/src/middleware/apiProxy.ts`), and `compose.yaml` pins the web container to
+`172.28.0.10` and trusts and exempts only that address.
 
 #### Health checks, logs and metrics
 
@@ -482,6 +489,41 @@ go test -v -cover -coverprofile=coverage.out ./...
 # View coverage in browser
 go tool cover -html=coverage.out
 ```
+
+### CI
+
+`.github/workflows/ci.yml` runs on every PR to `main` and every push to `main`. The
+jobs run in parallel:
+
+| Job | What it checks |
+|-----|----------------|
+| Test | `go build`, migrations, `make coverage-check` against Postgres 12 |
+| Go lint | `go vet`, `gofmt -l` (fails on unformatted files), golangci-lint (`.golangci.yml`) |
+| sqlc in sync | `sqlc diff`: `db/sqlc` must match `db/query` + `db/migration` (regenerate with `make sqlc`) |
+| Migrations up/down/up | every up, then every down (nothing may be left behind), then up again with an identical schema dump |
+| Web tests | `web` vitest and `websocket` `node --test` |
+| Web type check and build | `astro check` and `astro build` |
+| Docker image | builds the api, web and websocket production images (no push) |
+
+To reproduce locally before pushing:
+
+```bash
+gofmt -l .                      # must print nothing
+go vet ./...
+golangci-lint run               # v2, see the version in ci.yml
+sqlc diff
+cd web && npm run check && npm run build
+```
+
+**Secrets.** CI needs no repository secrets. The Postgres credentials in the workflow
+belong to a throwaway service container, and the token is read-only
+(`permissions: contents: read`). Nothing is pushed or deployed. Don't print secrets or
+env dumps in a step. A future deploy job should take its credentials from GitHub
+Actions secrets (`secrets.*`) on the step that uses them, and from a protected
+environment. Runtime secrets (`ROLE_LOOKUP_SECRET`, `COLLAB_SQUASH_SECRET`, the
+`PASETO_V4_*` keys, the DB password) come from the deployment's environment. They are
+never baked into images: the API image no longer copies `app.env`, and `.dockerignore`
+keeps it out of the build context.
 
 ## 🐛 Troubleshooting
 

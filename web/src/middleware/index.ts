@@ -7,9 +7,22 @@ import { ThemeAPIClientImpl } from "../lib/theme-api-client"
 import { safeExecute } from "../lib/theme-api"
 import type { ThemeFunctions, ThemeFunctionsContext } from "../lib/theme-api"
 import { applyAdminCsp, isAdminPath } from "./csp"
+import { isApiProxyPath, proxyToApi } from "./apiProxy"
+import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url)
+
+  // Production only: in dev the Vite proxy handles these before Astro (apiProxy.ts).
+  if (!import.meta.env.DEV && isApiProxyPath(url.pathname)) {
+    let clientAddress: string | undefined
+    try {
+      clientAddress = context.clientAddress
+    } catch {
+      // Not available for prerendered routes; forward without it.
+    }
+    return proxyToApi(context.request, clientAddress, SERVER_MEDIA_URL)
+  }
 
   // Inject active theme metadata and assets into locals
   if (!context.locals.activeTheme) {
