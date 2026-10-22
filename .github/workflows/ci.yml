@@ -242,11 +242,10 @@ jobs:
         run: npm test
 
       # Catches imports that only resolve on case-insensitive filesystems
-      # (#259): on this Linux runner a wrong-case import is TS2307. A full
-      # typecheck still has pre-existing type errors and `astro build` needs
-      # an adapter, so gate only on module-resolution (TS2307/TS1149/TS1261)
-      # and config (TS5xxx/TS6xxx) errors, the latter so a broken tsc run
-      # can't pass silently.
+      # (#259): on this Linux runner a wrong-case import is TS2307. Gates only
+      # on module-resolution (TS2307/TS1149/TS1261) and config (TS5xxx/TS6xxx)
+      # errors. The "Web type check and build" job's full `astro check` now
+      # covers these too (#143), so this is a fast, focused early signal.
       - name: Check web imports resolve (case-sensitive)
         working-directory: web
         run: |
