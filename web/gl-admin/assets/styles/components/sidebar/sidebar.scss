@@ -115,6 +115,8 @@
       margin-top: auto;
     }
 
+    // Collapsed rail is desktop-only; the mobile drawer always shows labels
+    @media (width > 768px) {
     &.closed {
       width: 4.25rem!important;
 
@@ -163,6 +165,7 @@
         }
       }
     }
+    }
 
     &__close {
       display: none;
@@ -173,6 +176,23 @@
 .admin-mobile-bar,
 .admin-sidebar-backdrop {
   display: none;
+}
+
+@mixin icon-button {
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 0.25rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  height: 2.5rem;
+  justify-content: center;
+  width: 2.5rem;
+
+  &:hover {
+    background: var(--sidebar-background-hover);
+  }
 }
 
 @media (width <= 768px) {
@@ -187,27 +207,22 @@
     padding: 0 0.5rem;
 
     &__toggle {
-      align-items: center;
-      background: none;
-      border: none;
-      border-radius: 0.25rem;
-      color: var(--text-primary);
-      cursor: pointer;
-      display: flex;
-      height: 2.5rem;
-      justify-content: center;
-      width: 2.5rem;
-
-      &:hover {
-        background: var(--sidebar-background-hover);
-      }
+      @include icon-button;
     }
 
     &__logo {
+      align-items: center;
       color: var(--text-primary);
+      display: flex;
       font-size: 1.125rem;
       font-weight: 600;
+      gap: 0.5rem;
       text-decoration: none;
+
+      .logo {
+        height: 1.75rem;
+        width: 1.75rem;
+      }
     }
   }
 
@@ -227,9 +242,8 @@
     }
   }
 
-  // Beats the inline resize width and the desktop collapsed state
-  .admin-sidebar,
-  .admin-sidebar.closed {
+  // !important beats the inline resize width
+  .admin-sidebar {
     height: 100dvh;
     left: 0;
     max-width: 85vw;
@@ -255,22 +269,11 @@
     }
 
     .admin-sidebar__close {
-      align-items: center;
-      background: none;
-      border: none;
-      border-radius: 0.25rem;
-      cursor: pointer;
-      display: flex;
-      height: 2.5rem;
-      justify-content: center;
+      @include icon-button;
+
       position: absolute;
       right: 0.5rem;
       top: 0.5rem;
-      width: 2.5rem;
-
-      &:hover {
-        background: var(--sidebar-background-hover);
-      }
     }
 
     // The user menu opens beside the sidebar on desktop; inside the drawer it
