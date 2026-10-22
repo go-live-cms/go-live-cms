@@ -209,6 +209,20 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 		return
 	}
 
+	// Contributors get their post row loaded for the owner check; reused below.
+	post, loaded, ok := server.authorizeLoadPost(c, postID, canEditPost)
+	if !ok {
+		return
+	}
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
+	// The title and post_media links are live fields: a contributor can't
+	// change them once the post is published (canEditPostDetails). Moderators
+	// pass without a post row.
+	liveFieldsAllowed := !loaded || canEditPostDetails(caller, post)
+
 	// Check If-Match header for optimistic concurrency
 	ifMatch := c.GetHeader("If-Match")
 	if ifMatch == "" {
@@ -257,6 +271,14 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 		}
 	}
 
+	// Refuse a title change the caller may not make before saving anything, so
+	// the editor sees the error instead of a 200 that dropped the title. An
+	// unchanged title (every autosave sends it) is fine.
+	if !liveFieldsAllowed && req.Title != nil && *req.Title != "" && *req.Title != post.Title {
+		c.JSON(http.StatusForbidden, gin.H{"error": "the title of a published post can only be changed by an editor"})
+		return
+	}
+
 	// Marshal to JSONB
 	contentBytes, err := json.Marshal(req.Doc)
 	if err != nil {
@@ -281,10 +303,12 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 		return
 	}
 
-	// Update title if provided
-	if req.Title != nil && *req.Title != "" {
-		// Get current post to preserve other fields
-		post, err := server.store.GetPost(c, postID)
+	// Update title if provided (refused above when it isn't allowed)
+	if req.Title != nil && *req.Title != "" && liveFieldsAllowed {
+		// Get current post to preserve other fields (contributors' is loaded)
+		if !loaded {
+			post, err = server.store.GetPost(c, postID)
+		}
 		if err == nil {
 			_, err = server.store.UpdatePost(c, db.UpdatePostParams{
 				ID:          postID,
@@ -312,10 +336,14 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 		return
 	}
 
-	// Sync post_media associations for images in content
-	if err := server.syncPostMediaAssociations(c, postID, &updatedDoc); err != nil {
-		// Log error but don't fail the request - blocks were already saved
-		server.requestLog(c).Warn("failed to sync media associations", "post_id", postID, "error", err)
+	// Sync post_media associations for images in content. Skipped when the
+	// caller may not change a published post's links; publishPost syncs them
+	// from the published doc anyway.
+	if liveFieldsAllowed {
+		if err := server.syncPostMediaAssociations(c, postID, &updatedDoc); err != nil {
+			// Log error but don't fail the request - blocks were already saved
+			server.requestLog(c).Warn("failed to sync media associations", "post_id", postID, "error", err)
+		}
 	}
 
 	// Set new revision header

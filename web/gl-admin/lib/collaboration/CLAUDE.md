@@ -80,15 +80,18 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
 - `debug.ts` — gated logging. Enable in browser: `localStorage.setItem("GL_DEBUG_COLLAB","1")`.
   Server side: `COLLAB_DEBUG=1`. Both are timestamped (`t=…`) so client+server logs align.
 
-**Read-only editor (`readOnly` prop, used for contributors since #216):** creates no
+**Read-only editor (`readOnly` prop, for posts the user can't edit: `postEditorAccess` in
+`lib/roles.ts`, #216/#135):** creates no
 `CollaborationProvider` and no `BlockPersistenceManager`. A dedicated effect in
 `Editor.tsx` loads the REST working copy (`getPostBlocks` → `setEditorBlockDoc`, the
 render helper in `blockBridge.ts` shared with `BlockPersistenceManager.initialize`). The
 loaded guard is keyed by editor instance + postId, and a failed load (e.g. 401) retries
 when `authManager` notifies about a refreshed token. No Yjs is involved, so the seeding
-rules below don't apply to it. `PostForm` re-reads the role from `/users/me` before
+rules below don't apply to it. `PostForm` re-reads the user from `/users/me` before
 mounting the editor, because the role cached at login can be stale. The WS server rejects
-non-editors anyway (see `websocket/CLAUDE.md` → Auth).
+anyone the API says can't edit that post anyway (see `websocket/CLAUDE.md` → Auth). A
+contributor editing their own **published** post gets the live collab editor (the working
+copy) but no Publish button, and a locked title/sidebar.
 
 ## Hard rules (violating these reintroduces shipped bugs)
 

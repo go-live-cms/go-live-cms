@@ -36,13 +36,13 @@ and no code. `post_types.go` is not one of them: it contains code.
 PASETO v4: asymmetric (`PASETO_V4_PUBLIC/PRIVATE_KEY_HEX`) for access tokens, local
 symmetric (`PASETO_V4_LOCAL_KEY_HEX`) for refresh. Issuer/audience/KIDs in `util/config.go`.
 The WebSocket server never sees access tokens (#233). The editor exchanges its access
-token for a **collab ticket** at `POST /collab/tickets` (admin/editor): v4.public, signed
+token for a **collab ticket** at `POST /collab/tickets` (`canEditPost` on the doc's post): v4.public, signed
 with the access key, audience `golive.admin-ws`, `token_type: ws_ticket`, `doc` claim,
 30s TTL (`token/ws_ticket.go`, `collab_*.go`). `VerifyToken` rejects tickets, so they're
 not bearer tokens. The API never accepts a ticket back: the WS server verifies it
-locally, burns its jti (single use, in the WS process), and gets the user's current
-role from the internal role endpoint below (#223). The ticket never leaves the WS
-server.
+locally, burns its jti (single use, in the WS process), and asks the internal access
+endpoint below whether the user may edit that doc (#223, #135). The ticket never leaves
+the WS server.
 
 - **`authMiddleware` loads the caller's DB row on every authenticated request** and
   caches it under `authorization_user`. Get it with `server.callerUser(c)`; don't
@@ -51,8 +51,30 @@ server.
   `isSiteAdmin`/`hasRole` for inline self-or-admin checks, and
   `canModerateMedia`/`canWriteMedia` for media ownership). Never compare
   role strings elsewhere; the token's `role` claim is informational only.
+- **Document permissions (#135)** live only in `auth_posts.go`, the per-post sibling
+  of `auth_roles.go`. Model: **ownership** (`posts.user_id` is the owner).
+  - Admins/editors (`canModeratePosts`) may do anything to any post.
+  - Contributors may create posts, but only drafts authored by themselves
+    (`canCreatePost`). They may edit their own posts' **working copy** (`PUT
+    /blocks`, the collab socket: `canEditPost`) at any status.
+  - The **live** fields (PUT `/posts/:id`, meta, featured image, media links, DELETE)
+    only while their post isn't published (`canEditPostDetails`). Otherwise they could
+    change or remove published content without the publish permission. For the same
+    reason a blocks PUT on their published post refuses a changed title (403, nothing
+    saved; the unchanged title every autosave sends is fine) and doesn't sync
+    `post_media` (publish does), and PUT `/posts/:id` refuses a `post_status` change
+    (403) from anyone who can't publish. A `post_parent` must be a post the caller can
+    edit (`canEditPost`).
+  - Publish/unpublish/revisions stay `requireContentEditor`.
+  - Per-post write routes use `requireContentAuthor` (any content role) plus, in the
+    handler, `server.authorizePost(c, id, rule)` (skips the post lookup for moderators;
+    404 for a missing post, 403 when refused). Use `server.checkPost` when the handler
+    already loaded the post, and `authorizeLoadPost` to reuse the row it loads.
+  - Never compare `post.UserID` or roles in a handler. Block-level permissions and
+    org/site scoping are out of scope.
 - **Media ownership:** admins and editors may update/delete any media; any other
   role only its own (`canWriteMedia`, used by both PUT and DELETE `/media/:id`).
+  Every content role may upload (`requireContentAuthor`, #135).
   DELETE removes the stored file after the transaction commits, but only when
   `media_path` resolves inside `UploadPath` (`removeMediaFile`). PUT rejects
   `media_path`, but old/seeded rows may hold anything, so keep that check.
@@ -221,10 +243,14 @@ server.
   Dev compose trusts the private Docker ranges because the Vite proxy sets XFF.
 - The internal listener is not limited on purpose (see the `ratelimit.go` header).
 
-## Collaboration integration (WS role lookup, #223)
+## Collaboration integration (WS access lookup, #223, #135)
 
-- `GET /internal/users/:id/role?issued_at=<unix>` (`internal_routes.go`,
-  `internal_handlers_read.go`) is the WS server's per-connection role check.
+- `GET /internal/users/:id/access?doc=post-<id>&issued_at=<unix>` (`internal_routes.go`,
+  `internal_handlers_read.go`) is the WS server's per-connection check. It answers
+  `{role, can_edit}`, where `can_edit` is `canEditPost` for that post (moderators skip
+  the post lookup). 404 if the user, or for a contributor the post, is gone. It replaced
+  the role-only `/internal/users/:id/role`; Hocuspocus's `onAuthenticate` (#206) should
+  call this same endpoint.
 - **It is on a separate listener, not under `/api/v1`.** `newInternalRouter` builds its
   own Gin engine and `main.go` serves it with `StartInternal(INTERNAL_SERVER_ADDRESS)`
   (default `0.0.0.0:8081`). Never publish that port (compose doesn't). The public
@@ -234,8 +260,8 @@ server.
   authenticated with `Authorization: Bearer <ROLE_LOOKUP_SECRET>` (constant-time
   compare), **not** `authMiddleware`, so it works with WS-only tickets
   (`golive.admin-ws`, `token_type: ws_ticket`, #233). The WS server passes the
-  ticket's `user_id` and `iat`. It reads the role from the DB and refuses (403) tickets
-  issued before the user's latest password change. 404 means the user is gone.
+  ticket's `user_id`, `iat` and `doc`. It reads the role (and owner) from the DB and
+  refuses (403) tickets issued before the user's latest password change.
 - `ROLE_LOOKUP_SECRET` is **required**: `NewServer` errors without it. It has no
   default, so `LoadConfig` binds it with `viper.BindEnv`. Without that, viper's
   `Unmarshal` drops env-only keys it doesn't know (see `util/config_test.go`).

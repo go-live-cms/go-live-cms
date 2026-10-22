@@ -12,7 +12,7 @@ import DeleteTermModal from "@gl-admin/components/taxonomies/DeleteTermModal"
 import { getAllTaxonomyTerms, getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
 import type { TaxonomyTerm, TaxonomyType } from "@gl-admin/lib/api/types"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { canEditContent } from "@gl-admin/lib/roles"
+import { isContentModerator } from "@gl-admin/lib/roles"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
 import { childCount, flattenTermTree } from "@gl-admin/lib/taxonomy/terms"
 import "@gl-admin/assets/styles/pages/taxonomies.scss"
@@ -24,7 +24,7 @@ type TermRow = TaxonomyTerm & { depth: number; parent_name: string; actions?: nu
 // (requireContentEditor in the API).
 const Taxonomies: React.FC = () => {
   const { baseTitle } = useGoLive()
-  const canEdit = canEditContent(useCurrentRole())
+  const canEdit = isContentModerator(useCurrentRole())
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [types, setTypes] = useState<TaxonomyType[]>([])

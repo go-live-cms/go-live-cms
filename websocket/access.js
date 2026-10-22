@@ -1,4 +1,6 @@
-// Ticket auth + role-based access control for collab connections (#216, #220, #223, #233).
+// Ticket auth + per-document access control for collab connections (#216, #220, #223,
+// #233, #135).
+
 //
 // The editor never puts its access token in the socket URL: proxy and load balancer
 // access logs record that URL. Before each connect it asks the API for a ticket, a
@@ -7,13 +9,14 @@
 //   1. verifyTicket: checks signature, issuer, audience, type, expiry and doc locally;
 //   2. a TicketReplayGuard burns the jti, so a ticket that leaked (e.g. into a proxy
 //      access log) can never open a second socket;
-//   3. fetchCurrentRole: reads the user's CURRENT role from the API's internal listener
-//      (GET /internal/users/:id/role, a separate port that isn't published),
+//   3. fetchDocAccess: asks the API's internal listener (GET /internal/users/:id/access,
+//      a separate port that isn't published) whether the user may edit this doc,
 //      authenticated with the shared ROLE_LOOKUP_SECRET, NOT with the ticket (#223).
 //      The ticket never leaves this process.
-// A PASETO `role` claim (tickets carry none) is never used to authorize: it goes stale on
-// demotion. The API reads the role from the DB, the same way api/auth_roles.go's
-// requireRole does for REST requests.
+// The decision is the API's (canEditPost in api/auth_posts.go, #135): admins and editors
+// may edit any post, contributors only their own. It reads the role and the post's owner
+// from the DB; a PASETO `role` claim (tickets carry none) is never used to authorize.
+// This process keeps no role list of its own.
 //
 // Pure + dependency-injected (fetchImpl, keys, clock) so it's unit tested in
 // access.test.js. Must NOT import yjs — see the single-yjs-instance gotcha in
@@ -41,16 +44,6 @@ export const TICKET_TYPE = "ws_ticket";
 // jti for at least this long past `exp`, or a burned ticket would verify again.
 export const TICKET_CLOCK_TOLERANCE_MS = 5_000;
 
-// Roles allowed to edit post content. Mirrors requireContentEditor in
-// api/auth_roles.go, which is the source of truth — keep the two in sync.
-export const CONTENT_EDITOR_ROLES = ["admin", "editor"];
-
-// Case-insensitive, matching the API's strings.EqualFold role comparison.
-export function canEditContent(role) {
-  if (typeof role !== "string" || !role) return false;
-  const normalized = role.toLowerCase();
-  return CONTENT_EDITOR_ROLES.includes(normalized);
-}
 
 // The only doc names the editor opens (`post-${postId}` in CollaborationProvider.ts).
 // Anything else is rejected before auth, so a client can't make the server create and
@@ -129,7 +122,7 @@ export class TicketReplayGuard {
   }
 }
 
-// Extracts what the role lookup needs from a VERIFIED ticket payload: the user's DB id
+// Extracts what the access lookup needs from a VERIFIED ticket payload: the user's DB id
 // (`user_id`, a decimal string set by token/ws_ticket.go) and `iat` as Unix seconds
 // (so the API can refuse tickets issued before the user's latest password change).
 // Returns null when either is missing or malformed → caller denies (403).
@@ -144,24 +137,26 @@ export function ticketIdentity(payload) {
   return { userId, issuedAt: Math.floor(issuedAtMs / 1000) };
 }
 
-// Fetches the user's current role from the API's internal endpoint.
+// Asks the API's internal endpoint whether the user may edit the document.
 //
 // Returns:
-//   - the role string on 200
-//   - null on 403/404 (ticket predates a password change, or user deleted) → caller denies (403)
+//   - { role, canEdit } on 200 (canEdit is true only for a literal `true`)
+//   - null on 403/404 (ticket predates a password change, user deleted, or the post is
+//     gone) → caller denies (403)
 // Throws on any other status (including 401 = ROLE_LOOKUP_SECRET mismatch, a config
 // error rather than a user error), a network error or a timeout → caller answers 503.
-// Either way the connection is never allowed without a verified editor role.
+// Either way the connection is never allowed without the API's explicit yes.
 // requestId (the upgrade's) is sent as X-Request-ID so the API logs the lookup under it.
-export async function fetchCurrentRole(
+export async function fetchDocAccess(
   apiUrl,
   { userId, issuedAt },
+  docName,
   secret,
   { fetchImpl = fetch, timeoutMs = 3000, requestId } = {},
 ) {
   const url =
-    `${apiUrl.replace(/\/+$/, "")}/internal/users/${encodeURIComponent(userId)}/role` +
-    `?issued_at=${encodeURIComponent(issuedAt)}`;
+    `${apiUrl.replace(/\/+$/, "")}/internal/users/${encodeURIComponent(userId)}/access` +
+    `?doc=${encodeURIComponent(docName)}&issued_at=${encodeURIComponent(issuedAt)}`;
   const headers = { Authorization: `Bearer ${secret}`, Accept: "application/json" };
   if (requestId) headers["X-Request-ID"] = requestId;
   const res = await fetchImpl(url, {
@@ -171,10 +166,12 @@ export async function fetchCurrentRole(
   });
 
   if (res.status === 403 || res.status === 404) return null;
-  if (res.status === 401) throw new Error("role lookup failed: API rejected ROLE_LOOKUP_SECRET (401)");
-  if (!res.ok) throw new Error(`role lookup failed: API responded ${res.status}`);
+  if (res.status === 401) throw new Error("access lookup failed: API rejected ROLE_LOOKUP_SECRET (401)");
+  if (!res.ok) throw new Error(`access lookup failed: API responded ${res.status}`);
 
   const body = await res.json();
-  const role = body?.role;
-  return typeof role === "string" ? role : null;
+  return {
+    role: typeof body?.role === "string" ? body.role : null,
+    canEdit: body?.can_edit === true,
+  };
 }

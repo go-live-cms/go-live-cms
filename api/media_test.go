@@ -776,7 +776,8 @@ func TestUpdateMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			name:    "ContributorBlockedByMiddleware",
+			// The route admits contributors (#135); ownership refuses others' media.
+			name:    "ContributorCannotUpdateOthersMedia",
 			mediaID: othersMedia.ID,
 			caller:  contributor,
 			body:    gin.H{"name": newName},
@@ -785,8 +786,9 @@ func TestUpdateMediaAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Any()).
-					Times(0)
+					GetMedia(gomock.Any(), gomock.Eq(othersMedia.ID)).
+					Times(1).
+					Return(othersMedia, nil)
 				noStoreWrites(store)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -1112,7 +1114,8 @@ func TestDeleteMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			name:    "ContributorBlockedByMiddleware",
+			// The route admits contributors (#135); ownership refuses others' media.
+			name:    "ContributorCannotDeleteOthersMedia",
 			mediaID: ownedMedia.ID,
 			caller:  contributor,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
@@ -1120,8 +1123,9 @@ func TestDeleteMediaAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetMedia(gomock.Any(), gomock.Any()).
-					Times(0)
+					GetMedia(gomock.Any(), gomock.Eq(ownedMedia.ID)).
+					Times(1).
+					Return(ownedMedia, nil)
 				store.EXPECT().
 					DeleteMediaTx(gomock.Any(), gomock.Any()).
 					Times(0)
