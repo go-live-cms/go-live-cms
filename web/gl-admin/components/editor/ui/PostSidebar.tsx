@@ -3,6 +3,9 @@ import FeaturedImage from "./FeaturedImage"
 import { useFeaturedImage } from "@gl-admin/lib/hooks/useFeaturedImage"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { getSettings, type Settings } from "@gl-admin/lib/api/settings"
+import type { PostVersion } from "@gl-admin/lib/api/blockAPI"
+import RevisionsPanel from "./RevisionsPanel"
+import Button from "@gl-admin/components/ui/Button"
 import "@gl-admin/assets/styles/components/editor/post-sidebar.scss"
 
 interface PostSidebarProps {
@@ -18,6 +21,10 @@ interface PostSidebarProps {
   onSlugChange?: (slug: string) => void
   // Disables every field for users who can't write content (contributors, #216)
   readOnly?: boolean
+  // Draft/publish + revisions (#136); edit mode only, never for read-only users
+  onUnpublish?: () => Promise<void>
+  onRestoreVersion?: (version: PostVersion) => Promise<void>
+  revisionsKey?: number
 }
 
 export default function PostSidebar({
@@ -32,8 +39,24 @@ export default function PostSidebar({
   mode = "create",
   onSlugChange,
   readOnly = false,
+  onUnpublish,
+  onRestoreVersion,
+  revisionsKey,
 }: PostSidebarProps) {
-  const [activeTab, setActiveTab] = useState<"general" | "advanced">("general")
+  const [activeTab, setActiveTab] = useState<"general" | "advanced" | "revisions">("general")
+  const [isUnpublishing, setIsUnpublishing] = useState(false)
+  const showRevisions = mode === "edit" && !!post.id && !readOnly && !!onRestoreVersion
+
+  const handleUnpublish = async () => {
+    if (!onUnpublish) return
+    if (!window.confirm("Unpublish? The page will no longer be public. Its revisions are kept.")) return
+    setIsUnpublishing(true)
+    try {
+      await onUnpublish()
+    } finally {
+      setIsUnpublishing(false)
+    }
+  }
   const [urlStructure, setUrlStructure] = useState<"id" | "slug">("id")
 
   const {
@@ -131,6 +154,14 @@ export default function PostSidebar({
         >
           Advanced
         </button>
+        {showRevisions && (
+          <button
+            className={`post-settings__tab ${activeTab === "revisions" ? "active" : ""}`}
+            onClick={() => setActiveTab("revisions")}
+          >
+            Revisions
+          </button>
+        )}
       </div>
 
       <fieldset className="post-settings__content post-settings__fieldset" disabled={readOnly}>
@@ -154,6 +185,16 @@ export default function PostSidebar({
                 <small className="post-settings__field-description">
                   {statusOptions.find((opt) => opt.value === (post.post_status || "draft"))?.description}
                 </small>
+                {mode === "edit" && post.id && post.post_status === "published" && onUnpublish && (
+                  <Button
+                    variation="secondary"
+                    className="post-settings__unpublish"
+                    onClick={handleUnpublish}
+                    disabled={isUnpublishing}
+                  >
+                    {isUnpublishing ? "Unpublishing…" : "Unpublish"}
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -262,6 +303,12 @@ export default function PostSidebar({
               {featuredImageError && <small className="post-settings__field-error">Error: {featuredImageError}</small>}
             </div>
           </>
+        )}
+
+        {activeTab === "revisions" && showRevisions && (
+          <div className="post-settings__section">
+            <RevisionsPanel postId={post.id} refreshKey={revisionsKey} onRestore={onRestoreVersion!} />
+          </div>
         )}
 
         {activeTab === "advanced" && (

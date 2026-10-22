@@ -467,6 +467,55 @@ export class BlockPersistenceManager {
   }
 
   /**
+   * Replace the working copy with a stored version's block doc (#136).
+   *
+   * Goes through the editor, never around it: setEditorBlockDoc → setContent, which
+   * the collaboration ySyncPlugin mirrors into the shared Yjs fragment, so connected
+   * peers receive the restore as an ordinary edit. Writing posts.block_doc directly
+   * would leave the live Yjs doc on the old content, and the next autosave from any
+   * open editor would silently revert the restore. Only after the WS sync has loaded
+   * (hasInitialized), so the replace lands on the server's state, not a stale one.
+   *
+   * Returns whether the restored doc reached the working copy now. `false` means a
+   * save was already in flight; the restore stays marked unsaved and that save's
+   * follow-up persists it (save errors go through onSaveError as usual).
+   */
+  async restoreVersion(doc: BlockDocV1): Promise<{ saved: boolean }> {
+    if (!this.hasInitialized) {
+      throw new Error("The document hasn't finished loading yet")
+    }
+    if (!this.editor || this.editor.isDestroyed) {
+      throw new Error("No editor to restore into")
+    }
+
+    // Convert first and only adopt the dropped-block record once the editor really
+    // holds the version; otherwise saves would merge the version's hidden blocks
+    // into the old content.
+    const { node, dropped } = blockDocToPMWithReport(doc, this.editor.schema)
+    if (!setEditorBlockDoc(this.editor, node)) {
+      throw new Error("Failed to load the version into the editor")
+    }
+    this.dropped = dropped.length > 0 ? { source: doc, blocks: dropped } : null
+    if (dropped.length > 0) {
+      collabDebug("blocks dropped on restore", { ids: dropped.map((d) => d.id) })
+      this.onSaveError?.(
+        new Error(
+          `${dropped.length} block(s) of the restored version could not be shown in the editor (${dropped
+            .map((d) => d.id)
+            .join(", ")}). They are kept in the saved document.`
+        )
+      )
+    }
+
+    // setEditorBlockDoc suppresses the editor's update event, so record the change
+    // ourselves (it is an explicit user action, not a seed).
+    this.editChangeSeq++
+    this.hasUnsavedChanges = true
+    await this.forceSave()
+    return { saved: !this.hasUnsavedChanges }
+  }
+
+  /**
    * Get current revision number
    */
   getCurrentRevision(): number {

@@ -12,7 +12,6 @@ import (
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	gomock "github.com/golang/mock/gomock"
 	uuid "github.com/google/uuid"
-	pqtype "github.com/sqlc-dev/pqtype"
 )
 
 // MockStore is a mock of Store interface.
@@ -1267,6 +1266,21 @@ func (mr *MockStoreMockRecorder) GetPostTypeByID(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostTypeByID", reflect.TypeOf((*MockStore)(nil).GetPostTypeByID), arg0, arg1)
 }
 
+// GetPostVersion mocks base method.
+func (m *MockStore) GetPostVersion(arg0 context.Context, arg1 db.GetPostVersionParams) (db.GetPostVersionRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostVersion", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPostVersionRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostVersion indicates an expected call of GetPostVersion.
+func (mr *MockStoreMockRecorder) GetPostVersion(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostVersion", reflect.TypeOf((*MockStore)(nil).GetPostVersion), arg0, arg1)
+}
+
 // GetPostVersions mocks base method.
 func (m *MockStore) GetPostVersions(arg0 context.Context, arg1 int64) ([]db.GetPostVersionsRow, error) {
 	m.ctrl.T.Helper()
@@ -1373,10 +1387,10 @@ func (mr *MockStoreMockRecorder) GetPostsByUserWithMedia(arg0, arg1 interface{})
 }
 
 // GetPublishedPostBlocks mocks base method.
-func (m *MockStore) GetPublishedPostBlocks(arg0 context.Context, arg1 int64) (pqtype.NullRawMessage, error) {
+func (m *MockStore) GetPublishedPostBlocks(arg0 context.Context, arg1 int64) (db.GetPublishedPostBlocksRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPublishedPostBlocks", arg0, arg1)
-	ret0, _ := ret[0].(pqtype.NullRawMessage)
+	ret0, _ := ret[0].(db.GetPublishedPostBlocksRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -2170,6 +2184,21 @@ func (m *MockStore) TransferPostsToAdmin(arg0 context.Context, arg1 db.TransferP
 func (mr *MockStoreMockRecorder) TransferPostsToAdmin(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferPostsToAdmin", reflect.TypeOf((*MockStore)(nil).TransferPostsToAdmin), arg0, arg1)
+}
+
+// UnpublishPost mocks base method.
+func (m *MockStore) UnpublishPost(arg0 context.Context, arg1 int64) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnpublishPost", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UnpublishPost indicates an expected call of UnpublishPost.
+func (mr *MockStoreMockRecorder) UnpublishPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnpublishPost", reflect.TypeOf((*MockStore)(nil).UnpublishPost), arg0, arg1)
 }
 
 // UpdateMedia mocks base method.

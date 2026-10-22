@@ -462,8 +462,14 @@ func (server *Server) getPublicPostBlocks(c *gin.Context) {
 		return
 	}
 
+	// Drafts (including unpublished posts) and archived posts aren't public (#136)
+	if result.PostStatus != "published" {
+		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+		return
+	}
+
 	// Check if published content exists
-	if !result.Valid {
+	if !result.Content.Valid {
 		// Return empty Block Spec v1 document
 		emptyDoc := BlockDocV1{
 			DocVersion:  1,
@@ -476,7 +482,7 @@ func (server *Server) getPublicPostBlocks(c *gin.Context) {
 
 	// Parse the JSONB content
 	var blockDoc BlockDocV1
-	if err := json.Unmarshal(result.RawMessage, &blockDoc); err != nil {
+	if err := json.Unmarshal(result.Content.RawMessage, &blockDoc); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse published document"})
 		return
 	}

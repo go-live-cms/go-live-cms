@@ -63,21 +63,67 @@ func (q *Queries) GetNextVersionNoForPost(ctx context.Context, postID int64) (in
 	return next_no, err
 }
 
+const getPostVersion = `-- name: GetPostVersion :one
+SELECT v.id, v.version_no, v.status, v.label, v.message, v.block_doc, v.created_at, v.created_by,
+       u.username AS created_by_username
+FROM post_versions v
+LEFT JOIN users u ON u.id = v.created_by
+WHERE v.post_id = $1
+  AND v.version_no = $2
+`
+
+type GetPostVersionParams struct {
+	PostID    int64 `json:"post_id"`
+	VersionNo int32 `json:"version_no"`
+}
+
+type GetPostVersionRow struct {
+	ID                int64           `json:"id"`
+	VersionNo         int32           `json:"version_no"`
+	Status            string          `json:"status"`
+	Label             sql.NullString  `json:"label"`
+	Message           sql.NullString  `json:"message"`
+	BlockDoc          json.RawMessage `json:"block_doc"`
+	CreatedAt         time.Time       `json:"created_at"`
+	CreatedBy         sql.NullInt64   `json:"created_by"`
+	CreatedByUsername sql.NullString  `json:"created_by_username"`
+}
+
+func (q *Queries) GetPostVersion(ctx context.Context, arg GetPostVersionParams) (GetPostVersionRow, error) {
+	row := q.db.QueryRowContext(ctx, getPostVersion, arg.PostID, arg.VersionNo)
+	var i GetPostVersionRow
+	err := row.Scan(
+		&i.ID,
+		&i.VersionNo,
+		&i.Status,
+		&i.Label,
+		&i.Message,
+		&i.BlockDoc,
+		&i.CreatedAt,
+		&i.CreatedBy,
+		&i.CreatedByUsername,
+	)
+	return i, err
+}
+
 const getPostVersions = `-- name: GetPostVersions :many
-SELECT id, version_no, status, label, message, created_at, created_by
-FROM post_versions
-WHERE post_id = $1
-ORDER BY version_no DESC
+SELECT v.id, v.version_no, v.status, v.label, v.message, v.created_at, v.created_by,
+       u.username AS created_by_username
+FROM post_versions v
+LEFT JOIN users u ON u.id = v.created_by
+WHERE v.post_id = $1
+ORDER BY v.version_no DESC
 `
 
 type GetPostVersionsRow struct {
-	ID        int64          `json:"id"`
-	VersionNo int32          `json:"version_no"`
-	Status    string         `json:"status"`
-	Label     sql.NullString `json:"label"`
-	Message   sql.NullString `json:"message"`
-	CreatedAt time.Time      `json:"created_at"`
-	CreatedBy sql.NullInt64  `json:"created_by"`
+	ID                int64          `json:"id"`
+	VersionNo         int32          `json:"version_no"`
+	Status            string         `json:"status"`
+	Label             sql.NullString `json:"label"`
+	Message           sql.NullString `json:"message"`
+	CreatedAt         time.Time      `json:"created_at"`
+	CreatedBy         sql.NullInt64  `json:"created_by"`
+	CreatedByUsername sql.NullString `json:"created_by_username"`
 }
 
 func (q *Queries) GetPostVersions(ctx context.Context, postID int64) ([]GetPostVersionsRow, error) {
@@ -97,6 +143,7 @@ func (q *Queries) GetPostVersions(ctx context.Context, postID int64) ([]GetPostV
 			&i.Message,
 			&i.CreatedAt,
 			&i.CreatedBy,
+			&i.CreatedByUsername,
 		); err != nil {
 			return nil, err
 		}
@@ -148,7 +195,8 @@ func (q *Queries) InsertPostVersion(ctx context.Context, arg InsertPostVersionPa
 const setPublishedVersionOnPost = `-- name: SetPublishedVersionOnPost :exec
 UPDATE posts
 SET published_version_id = $2,
-    published_block_doc = $3
+    published_block_doc = $3,
+    post_status = 'published'
 WHERE id = $1
 `
 
@@ -158,7 +206,45 @@ type SetPublishedVersionOnPostParams struct {
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 }
 
+// Publishing also makes the post public: post_status follows the snapshot, so a
+// post published from the editor is not left as 'draft' in the database.
 func (q *Queries) SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error {
 	_, err := q.db.ExecContext(ctx, setPublishedVersionOnPost, arg.ID, arg.PublishedVersionID, arg.PublishedBlockDoc)
 	return err
+}
+
+const unpublishPost = `-- name: UnpublishPost :one
+UPDATE posts
+SET post_status = 'draft',
+    published_version_id = NULL,
+    published_block_doc = NULL
+WHERE id = $1
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug
+`
+
+// Back to draft and drop the public snapshot (#136). The snapshot stays in
+// post_versions, so it can still be viewed and restored.
+func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
+	row := q.db.QueryRowContext(ctx, unpublishPost, id)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
+		&i.Slug,
+	)
+	return i, err
 }

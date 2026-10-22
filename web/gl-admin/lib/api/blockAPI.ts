@@ -1,5 +1,28 @@
 import type { BlockDocV1 } from "../blocks-spec"
 
+// A published snapshot from post_versions (#136)
+export interface PostVersionSummary {
+  id: number
+  version_no: number
+  status: string
+  label: string | null
+  message: string | null
+  created_at: string
+  created_by: number | null
+  created_by_username: string | null
+  is_published?: boolean
+}
+
+export interface PostVersionList {
+  post_status: string
+  published_version_id: number | null
+  versions: PostVersionSummary[]
+}
+
+export interface PostVersion extends PostVersionSummary {
+  doc: BlockDocV1
+}
+
 // API client for Block Spec v1 operations
 export class BlockAPIClient {
   private baseURL: string
@@ -128,6 +151,65 @@ export class BlockAPIClient {
       versionId: data.version_id,
       versionNo: data.version_no,
     }
+  }
+
+  // Back to draft: the public snapshot is removed, versions are kept (#136)
+  async unpublishPost(postId: number): Promise<void> {
+    const response = await fetch(
+      `${this.baseURL}/posts/${postId}/unpublish`,
+      this.buildInit({
+        method: "POST",
+        headers: this.getHeaders(),
+      })
+    )
+
+    if (response.status === 401) {
+      throw new UnauthorizedError()
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to unpublish post: ${response.statusText}`)
+    }
+  }
+
+  // List published versions, newest first (no docs)
+  async listVersions(postId: number): Promise<PostVersionList> {
+    const response = await fetch(
+      `${this.baseURL}/posts/${postId}/versions`,
+      this.buildInit({
+        headers: this.getHeaders(),
+      })
+    )
+
+    if (response.status === 401) {
+      throw new UnauthorizedError()
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to list versions: ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
+  // Get one version, including its Block Spec v1 doc
+  async getVersion(postId: number, versionNo: number): Promise<PostVersion> {
+    const response = await fetch(
+      `${this.baseURL}/posts/${postId}/versions/${versionNo}`,
+      this.buildInit({
+        headers: this.getHeaders(),
+      })
+    )
+
+    if (response.status === 401) {
+      throw new UnauthorizedError()
+    }
+
+    if (!response.ok) {
+      throw new Error(`Failed to get version ${versionNo}: ${response.statusText}`)
+    }
+
+    return response.json()
   }
 
   // Get published blocks (for preview/SSR)

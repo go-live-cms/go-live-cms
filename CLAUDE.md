@@ -100,6 +100,6 @@ docker compose -f compose.dev.yaml restart websocket   # e.g. to test reconnects
   websocket server** — `npm ls` showed one deduped copy, but the ESM `import` and
   y-websocket's CJS `require` each evaluated their own build, and cross-instance
   `Y.applyUpdate` corrupted live docs. Details + guards: `websocket/CLAUDE.md` (top
-  gotcha) and `web/gl-admin/lib/collaboration/CLAUDE.md` (hard rules 0–8). `yjs` is
+  gotcha) and `web/gl-admin/lib/collaboration/CLAUDE.md` (hard rules 0–9). `yjs` is
   pinned `13.6.31` exact in BOTH `web/` and `websocket/` — keep them in lockstep.
 </content>
