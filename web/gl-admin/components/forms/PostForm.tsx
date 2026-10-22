@@ -128,7 +128,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   useEffect(() => {
     if (mode === "edit" && initialData) {
       const urlParts = initialData.url.split("/")
-      const slug = urlParts[urlParts.length - 1] || ""
+      const slug = initialData.slug || urlParts[urlParts.length - 1] || ""
 
       setFormData({
         title: initialData.title,
@@ -331,6 +331,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         const postData: CreatePostRequest = {
           title: formData.title,
           url: fullUrl,
+          slug: formData.slug || undefined,
           content: formData.content,
           description: description,
           author_ids: [authState.user.id],
@@ -404,12 +405,18 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         const updateData = {
           title: formData.title,
           url: fullUrl,
+          slug: formData.slug || undefined,
           content: formData.content,
           description: description,
           post_status: isPublish ? "published" : formData.post_status,
         }
 
         const result = await updatePost(initialData.id, updateData)
+        // The API normalizes the slug and suffixes it (-2, -3, ...) if another
+        // post has it; show what was actually stored.
+        if (result?.post?.slug && result.post.slug !== formData.slug) {
+          setFormData((prev) => ({ ...prev, slug: result.post.slug }))
+        }
         const successMessage = `${getContentTypeName()} ${isPublish ? "published" : "saved"} successfully!`
         showSuccess(successMessage)
         setSaveStatusState("saved")

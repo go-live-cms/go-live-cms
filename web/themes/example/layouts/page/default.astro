@@ -3,14 +3,17 @@
  * Example Theme - Default Page Layout
  */
 import BlockRenderer from '@/components/BlockRenderer'
+import SeoHead from '@/components/SeoHead.astro'
+import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
   post: any;
   title: string;
   description: string;
+  seo?: SeoMeta;
 }
 
-const { post, title, description } = Astro.props;
+const { post, title, description, seo = {} } = Astro.props;
 ---
 
 <!DOCTYPE html>
@@ -18,8 +21,7 @@ const { post, title, description } = Astro.props;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title}</title>
-    <meta name="description" content={description} />
+    <SeoHead title={title} description={description} {...seo} />
     
     <!-- Theme Assets (registered in theme.config.ts) -->
     {Astro.locals.themeAssets?.styles?.map((style: any) => (

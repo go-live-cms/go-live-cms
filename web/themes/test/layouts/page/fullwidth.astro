@@ -8,17 +8,19 @@ import Header from '@/layouts/Header.astro'
 import Footer from '@/layouts/Footer.astro'
 import BlockRenderer from '@/components/BlockRenderer'
 import type { Post } from '@gl-admin/lib/api/types'
+import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
   post: Post
   title: string
   description: string
+  seo?: SeoMeta
 }
 
-const { post, title, description } = Astro.props
+const { post, title, description, seo } = Astro.props
 ---
 
-<BaseLayout title={title} description={description}>
+<BaseLayout title={title} description={description} seo={seo}>
   <Header />
   
   <main class="page-layout-fullwidth">

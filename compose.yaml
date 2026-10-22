@@ -93,6 +93,9 @@ services:
       PUBLIC_API_URL: http://api:8080/api/v1
       # SSR-side API base (gl-admin/lib/server-api-url.ts).
       SERVER_API_URL: http://api:8080/api/v1
+      # Public origin (https://example.org) for canonical/OG URLs, robots.txt and
+      # sitemap.xml. Set it in production; unset falls back to the request origin.
+      SITE_URL: ${SITE_URL:-}
     depends_on:
       # Every SSR request calls the API (active theme), so wait for /readyz.
       api:

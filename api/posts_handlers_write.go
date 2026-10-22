@@ -54,6 +54,24 @@ func (server *Server) generateUniqueURL(ctx context.Context, baseURL string) (st
 	return "", fmt.Errorf("unable to generate unique URL after %d attempts", counter)
 }
 
+// generateUniqueSlug returns baseSlug, or baseSlug-2, -3, ... if another post
+// already uses it (the posts.slug unique index would otherwise reject the
+// write). excludeID is the post being edited; pass 0 when creating.
+func (server *Server) generateUniqueSlug(ctx context.Context, baseSlug string, excludeID int64) (string, error) {
+	candidate := baseSlug
+	for counter := 2; counter < 100; counter++ { // Safety limit to prevent infinite loop
+		exists, err := server.store.CheckSlugExists(ctx, db.CheckSlugExistsParams{Slug: candidate, ExcludeID: excludeID})
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
+		candidate = fmt.Sprintf("%s-%d", baseSlug, counter)
+	}
+	return "", fmt.Errorf("unable to generate unique slug for %q", baseSlug)
+}
+
 // createPost handles POST /posts with author validation and conditional transactions
 func (server *Server) createPost(c *gin.Context) {
 	var req CreatePostRequest
@@ -86,7 +104,6 @@ func (server *Server) createPost(c *gin.Context) {
 		PostType:    req.PostType,
 		PostStatus:  req.PostStatus,
 		MenuOrder:   req.MenuOrder,
-		Slug:        generateSlug(req.Title),
 		BlockDoc:    []byte(`{"doc_version":1,"blocks_order":[],"blocks":{}}`),
 	}
 
@@ -113,6 +130,19 @@ func (server *Server) createPost(c *gin.Context) {
 		return
 	}
 	createParams.Url = uniqueURL
+
+	// Slug from the request if given, else from the title; suffixed -2, -3, ...
+	// on a clash so the unique index never rejects the create.
+	slugSource := req.Title
+	if req.Slug != "" {
+		slugSource = req.Slug
+	}
+	uniqueSlug, err := server.generateUniqueSlug(c.Request.Context(), normalizePostSlug(slugSource), 0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate unique slug"})
+		return
+	}
+	createParams.Slug = uniqueSlug
 
 	// Create the post
 	var createdPost db.Post
@@ -244,14 +274,38 @@ func (server *Server) updatePost(c *gin.Context) {
 		updateParams.MenuOrder = req.MenuOrder
 	}
 
+	// A slug edit gets the same uniqueness rule as create: normalized, then
+	// suffixed -2, -3, ... if another post has it. The response carries the
+	// slug actually stored.
+	newSlug := ""
+	if req.Slug != "" {
+		newSlug, err = server.generateUniqueSlug(c.Request.Context(), normalizePostSlug(req.Slug), id)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate unique slug"})
+			return
+		}
+	}
+
 	updatedPost, err := server.store.UpdatePost(c.Request.Context(), updateParams)
 	if err != nil {
-		if containsString(err.Error(), "duplicate key value") || containsString(err.Error(), "unique constraint") {
+		if isUniqueViolation(err) {
 			c.JSON(http.StatusConflict, gin.H{"error": "URL already exists"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post"})
 		return
+	}
+
+	if newSlug != "" && newSlug != updatedPost.Slug {
+		updatedPost, err = server.store.UpdatePostSlug(c.Request.Context(), db.UpdatePostSlugParams{ID: id, Slug: newSlug})
+		if err != nil {
+			if isUniqueViolation(err) {
+				c.JSON(http.StatusConflict, gin.H{"error": "slug already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post slug"})
+			return
+		}
 	}
 
 	if req.MediaIDs != nil {

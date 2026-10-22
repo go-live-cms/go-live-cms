@@ -8,6 +8,7 @@
 import Header from '@/layouts/Header.astro'
 import Footer from '@/layouts/Footer.astro'
 import ErrorContent from '@/components/ErrorContent.astro'
+import SeoHead from '@/components/SeoHead.astro'
 import { SITE_TITLE } from '@/consts'
 import '@/assets/styles/global.css'
 
@@ -27,10 +28,10 @@ const legacyCssPath = Astro.locals.themeCssPath
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="description" content={message} />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>{`${title} | ${SITE_TITLE}`}</title>
+    <SeoHead title={`${title} | ${SITE_TITLE}`} description={message} noindex />
+
     {themeAssets.styles?.map((style: any) => (
       <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
     ))}

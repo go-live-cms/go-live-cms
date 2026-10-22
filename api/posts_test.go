@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -77,6 +78,11 @@ func TestCreatePostAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					CheckURLExists(gomock.Any(), gomock.Eq(post.Url)).
+					Times(1).
+					Return(false, nil)
+
+				store.EXPECT().
+					CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: normalizePostSlug(post.Title), ExcludeID: 0})).
 					Times(1).
 					Return(false, nil)
 
@@ -230,6 +236,11 @@ func TestCreatePostAPI(t *testing.T) {
 					Return(false, nil)
 
 				store.EXPECT().
+					CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: normalizePostSlug(post.Title), ExcludeID: 0})).
+					Times(1).
+					Return(false, nil)
+
+				store.EXPECT().
 					GetUser(gomock.Any(), gomock.Eq(user.ID)).
 					Times(1).
 					Return(user, nil)
@@ -251,6 +262,97 @@ func TestCreatePostAPI(t *testing.T) {
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusCreated, recorder.Code)
 				requireBodyMatchPost(t, recorder.Body.String(), post)
+			},
+		},
+		{
+			// The slug taken by another post gets -2, -3, ... instead of the
+			// unique index rejecting the create.
+			name: "DuplicateSlugSuffixed",
+			body: gin.H{
+				"title":       "Hello World",
+				"description": post.Description,
+				"url":         post.Url,
+				"author_ids":  []int64{user.ID},
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().CheckURLExists(gomock.Any(), gomock.Eq(post.Url)).Return(false, nil)
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Return(user, nil)
+				gomock.InOrder(
+					store.EXPECT().
+						CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: "hello-world"})).
+						Return(true, nil),
+					store.EXPECT().
+						CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: "hello-world-2"})).
+						Return(true, nil),
+					store.EXPECT().
+						CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: "hello-world-3"})).
+						Return(false, nil),
+				)
+				store.EXPECT().
+					CreatePostTx(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, arg db.CreatePostTxParams) (db.CreatePostTxResult, error) {
+						require.Equal(t, "hello-world-3", arg.Slug)
+						created := post
+						created.Slug = arg.Slug
+						return db.CreatePostTxResult{Post: created}, nil
+					})
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusCreated, recorder.Code)
+				require.Contains(t, recorder.Body.String(), `"slug":"hello-world-3"`)
+			},
+		},
+		{
+			name: "ExplicitSlugNormalized",
+			body: gin.H{
+				"title":       post.Title,
+				"slug":        " My/Custom Slug? ",
+				"description": post.Description,
+				"url":         post.Url,
+				"author_ids":  []int64{user.ID},
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().CheckURLExists(gomock.Any(), gomock.Eq(post.Url)).Return(false, nil)
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Return(user, nil)
+				store.EXPECT().
+					CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: "mycustom-slug"})).
+					Return(false, nil)
+				store.EXPECT().
+					CreatePostTx(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, arg db.CreatePostTxParams) (db.CreatePostTxResult, error) {
+						require.Equal(t, "mycustom-slug", arg.Slug)
+						return db.CreatePostTxResult{Post: post}, nil
+					})
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusCreated, recorder.Code)
+			},
+		},
+		{
+			name: "SlugLookupError",
+			body: gin.H{
+				"title":       post.Title,
+				"description": post.Description,
+				"url":         post.Url,
+				"author_ids":  []int64{user.ID},
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().CheckURLExists(gomock.Any(), gomock.Eq(post.Url)).Return(false, nil)
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Return(user, nil)
+				store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).Return(false, sql.ErrConnDone)
+				store.EXPECT().CreatePostTx(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
 			},
 		},
 	}
@@ -587,6 +689,101 @@ func TestUpdatePostAPI(t *testing.T) {
 				require.Equal(t, http.StatusConflict, recorder.Code)
 			},
 		},
+		{
+			// An edited slug another post already uses is suffixed, the same as on create.
+			name:   "SlugEditSuffixed",
+			postID: post.ID,
+			body: gin.H{
+				"slug": "About Us",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), gomock.Eq(post.ID)).Return(post, nil)
+				gomock.InOrder(
+					store.EXPECT().
+						CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: "about-us", ExcludeID: post.ID})).
+						Return(true, nil),
+					store.EXPECT().
+						CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: "about-us-2", ExcludeID: post.ID})).
+						Return(false, nil),
+				)
+				store.EXPECT().UpdatePost(gomock.Any(), gomock.Any()).Return(post, nil)
+				renamed := post
+				renamed.Slug = "about-us-2"
+				store.EXPECT().
+					UpdatePostSlug(gomock.Any(), gomock.Eq(db.UpdatePostSlugParams{ID: post.ID, Slug: "about-us-2"})).
+					Return(renamed, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.Contains(t, recorder.Body.String(), `"slug":"about-us-2"`)
+			},
+		},
+		{
+			// Re-sending the post's own slug is not a clash (ExcludeID) and writes nothing extra.
+			name:   "SlugEditUnchanged",
+			postID: post.ID,
+			body: gin.H{
+				"slug": post.Slug,
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), gomock.Eq(post.ID)).Return(post, nil)
+				store.EXPECT().
+					CheckSlugExists(gomock.Any(), gomock.Eq(db.CheckSlugExistsParams{Slug: post.Slug, ExcludeID: post.ID})).
+					Return(false, nil)
+				store.EXPECT().UpdatePost(gomock.Any(), gomock.Any()).Return(post, nil)
+				store.EXPECT().UpdatePostSlug(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			// Lost a race with another writer: the unique index still answers 409.
+			name:   "SlugEditConflict",
+			postID: post.ID,
+			body: gin.H{
+				"slug": "taken",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), gomock.Eq(post.ID)).Return(post, nil)
+				store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).Return(false, nil)
+				store.EXPECT().UpdatePost(gomock.Any(), gomock.Any()).Return(post, nil)
+				store.EXPECT().
+					UpdatePostSlug(gomock.Any(), gomock.Any()).
+					Return(db.Post{}, fmt.Errorf("pq: duplicate key value violates unique constraint \"posts_slug_key\""))
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusConflict, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "slug already exists")
+			},
+		},
+		{
+			name:   "SlugLookupError",
+			postID: post.ID,
+			body: gin.H{
+				"slug": "anything",
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), gomock.Eq(post.ID)).Return(post, nil)
+				store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).Return(false, sql.ErrConnDone)
+				store.EXPECT().UpdatePost(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
 	}
 
 	for i := range testCases {
@@ -837,6 +1034,7 @@ func requireBodyMatchPost(t *testing.T, body string, post db.Post) {
 	require.Equal(t, post.UserID, response.Post.UserID)
 	require.Equal(t, post.Username, response.Post.Username)
 	require.Equal(t, post.Url, response.Post.Url)
+	require.Equal(t, post.Slug, response.Post.Slug)
 }
 
 func TestGetPostBySlugAPI(t *testing.T) {

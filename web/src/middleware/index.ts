@@ -8,6 +8,7 @@ import { safeExecute } from "../lib/theme-api"
 import type { ThemeFunctions, ThemeFunctionsContext } from "../lib/theme-api"
 import { applyAdminCsp, isAdminPath } from "./csp"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
+import { shouldNoindex } from "../lib/seo"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 
 export const onRequest = defineMiddleware(async (context, next) => {
@@ -133,7 +134,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   if (isAdminPath(url.pathname)) {
-    return applyAdminCsp(await next(), {
+    return applyAdminCsp(withRobotsHeader(await next(), url.pathname), {
       pageOrigin: url.origin,
       apiUrl: process.env.PUBLIC_API_URL || import.meta.env.PUBLIC_API_URL,
       dev: import.meta.env.DEV,
@@ -142,5 +143,18 @@ export const onRequest = defineMiddleware(async (context, next) => {
     })
   }
 
-  return next()
+  return withRobotsHeader(await next(), url.pathname)
 })
+
+// X-Robots-Tag: noindex on error responses (404/500, whatever the theme's
+// error layout emits) and non-public pages such as /gl-admin and /login (#137).
+function withRobotsHeader(response: Response, pathname: string): Response {
+  if (shouldNoindex(pathname, response.status)) {
+    try {
+      response.headers.set("X-Robots-Tag", "noindex, nofollow")
+    } catch {
+      // Immutable headers (e.g. a fetched Response passed through): leave them.
+    }
+  }
+  return response
+}

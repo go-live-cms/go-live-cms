@@ -1,11 +1,15 @@
-import { defineConfig } from "vitest/config"
+/// <reference types="vitest/config" />
+import { getViteConfig } from "astro/config"
 import path from "node:path"
 
-// Standalone Vitest config for the headless editor/collaboration logic tests.
-// Aliases mirror astro.config.mjs + tsconfig.json so test imports resolve the
-// same `@gl-admin/*` / `@/*` / `@themes` paths the app uses. Resolved relative to
-// the web/ directory (where `npm run test` runs), matching astro.config.mjs.
-export default defineConfig({
+// Vitest config for the headless editor/collaboration logic tests and the
+// public-site tests. getViteConfig adds Astro's Vite plugins so tests can
+// import .astro components and render them with the Container API
+// (src/components/SeoHead.test.ts). Aliases mirror astro.config.mjs +
+// tsconfig.json so test imports resolve the same `@gl-admin/*` / `@/*` /
+// `@themes` paths the app uses. Resolved relative to the web/ directory (where
+// `npm run test` runs), matching astro.config.mjs.
+export default getViteConfig({
   resolve: {
     alias: {
       "@": path.resolve("./src"),
@@ -16,7 +20,8 @@ export default defineConfig({
   test: {
     globals: true,
     // jsdom (not node) because some TipTap extensions touch `window`/`document`
-    // at import time when we build a schema via getSchema(extensions).
+    // at import time when we build a schema via getSchema(extensions). Astro
+    // component tests opt into node with `// @vitest-environment node`.
     environment: "jsdom",
     include: [
       "gl-admin/**/*.{test,spec}.{ts,tsx}",

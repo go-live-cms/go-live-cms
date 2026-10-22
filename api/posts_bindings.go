@@ -17,6 +17,7 @@ type CreatePostRequest struct {
 	Title       string  `json:"title" binding:"required,min=3,max=255"`
 	Description string  `json:"description" binding:"required,min=10,max=500"`
 	Url         string  `json:"url" binding:"required,url"`
+	Slug        string  `json:"slug" binding:"omitempty,max=255"`
 	PostType    string  `json:"post_type" binding:"omitempty"`
 	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published archived"`
 	PostParent  *int64  `json:"post_parent" binding:"omitempty"`
@@ -31,6 +32,7 @@ type UpdatePostRequest struct {
 	Title       string  `json:"title" binding:"omitempty,min=3,max=255"`
 	Description string  `json:"description" binding:"omitempty,min=10,max=500"`
 	Url         string  `json:"url" binding:"omitempty,url"`
+	Slug        string  `json:"slug" binding:"omitempty,max=255"`
 	PostType    string  `json:"post_type" binding:"omitempty"`
 	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published archived"`
 	PostParent  *int64  `json:"post_parent" binding:"omitempty"`

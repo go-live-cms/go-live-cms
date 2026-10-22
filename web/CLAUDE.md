@@ -64,6 +64,16 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   dev). It appends the client IP to `X-Forwarded-For`, so the API must list the web
   container in `TRUSTED_PROXIES` (prod `compose.yaml` does). Astro's own `/api/theme` and
   `/api/posts-reload` routes are not under `/api/v1`.
+- **SEO (#137):** `src/lib/seo.ts` holds the pure helpers (tested in `seo.test.ts`).
+  The site URL is `SITE_URL`, read from `process.env` at runtime (`resolveSiteUrl`;
+  unset → request origin, wrong behind a proxy, so prod must set it). `/robots.txt`
+  and `/sitemap.xml` are server routes (no `@astrojs/sitemap`: it only sees prebuilt
+  pages). The sitemap lists only public types and `published` posts, at the URL
+  `post_url_structure` gives (`postPath`, same rule as `[id].astro`), lastmod =
+  `changed_at`. Heads go through `src/components/SeoHead.astro`; the post route passes
+  a `seo` prop that theme layouts forward to their base layout. `.astro` components
+  are testable with the Container API because `vitest.config.ts` uses Astro's
+  `getViteConfig` (`SeoHead.test.ts`, `// @vitest-environment node`).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

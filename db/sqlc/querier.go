@@ -18,6 +18,8 @@ type Querier interface {
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockAllSessionsForUser(ctx context.Context, userID int64) error
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	// exclude_id skips the post being edited; pass 0 when creating.
+	CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error)
 	CheckURLExists(ctx context.Context, url string) (bool, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
@@ -184,6 +186,7 @@ type Querier interface {
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdatePostBlocksIfRevisionMatches(ctx context.Context, arg UpdatePostBlocksIfRevisionMatchesParams) (UpdatePostBlocksIfRevisionMatchesRow, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
+	UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) (Post, error)
 	UpdatePostType(ctx context.Context, arg UpdatePostTypeParams) (PostType, error)
 	UpdatePostsUsername(ctx context.Context, arg UpdatePostsUsernameParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)

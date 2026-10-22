@@ -8,7 +8,35 @@
 //   - containsString: Case-sensitive substring check
 package api
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
+
+// postSlugFallback is used when a title or requested slug has no usable characters.
+const postSlugFallback = "post"
+
+// normalizePostSlug turns a title or user-supplied slug into a URL path segment:
+// generateSlug's lowercase/hyphen rules, then anything that is not a letter,
+// digit or hyphen is dropped (so "/", "?", "#" can't break the post URL) and
+// leading/trailing hyphens are trimmed. Unicode letters are kept.
+func normalizePostSlug(s string) string {
+	s = generateSlug(s)
+	s = strings.Map(func(r rune) rune {
+		if r == '-' || unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return r
+		}
+		return -1
+	}, s)
+	for strings.Contains(s, "--") {
+		s = strings.ReplaceAll(s, "--", "-")
+	}
+	s = strings.Trim(s, "-")
+	if s == "" {
+		return postSlugFallback
+	}
+	return s
+}
 
 // isValidPostSortOption validates sort query parameter values
 func isValidPostSortOption(sort string) bool {

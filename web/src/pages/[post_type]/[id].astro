@@ -1,6 +1,8 @@
 ---
-import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
+import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
+import { metaDescription, normalizeUrlStructure, postLastmod, postPath, toW3cDate, type SeoMeta } from '../../lib/seo'
+import { SITE_TITLE } from '../../consts'
 import type { Post } from '@gl-admin/lib/api/types'
 
 // WordPress-style: Auto-discover all theme layouts using glob imports
@@ -233,13 +235,35 @@ if (!LayoutComponent) {
   })
 }
 
+// SEO (#137): the canonical URL follows the site's id/slug setting, so the
+// same post reached by id and by slug points crawlers at one URL.
+const [settings, featuredImage] = await Promise.all([
+  getSettings().catch((error) => {
+    console.warn('Could not fetch settings for SEO tags:', error)
+    return null
+  }),
+  fullPost.featured_image
+    ? Promise.resolve(fullPost.featured_image)
+    : getFeaturedImageUrl(fullPost.id).catch(() => null),
+])
+const urlStructure = normalizeUrlStructure(settings?.post_url_structure)
+
 const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
 const title = `${fullPost.title} | ${displayType}`
-const description = fullPost.description || `Read ${fullPost.title}`
+const description = metaDescription(fullPost.description) || `Read ${fullPost.title}`
+const seo: SeoMeta = {
+  canonical: postPath({ ...fullPost, post_type: postType }, urlStructure),
+  image: featuredImage,
+  type: 'article',
+  siteName: settings?.site_title || SITE_TITLE,
+  publishedTime: toW3cDate(fullPost.created_at),
+  modifiedTime: postLastmod(fullPost),
+}
 ---
 
-<LayoutComponent 
+<LayoutComponent
   post={fullPost}
   title={title}
   description={description}
+  seo={seo}
 />

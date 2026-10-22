@@ -94,6 +94,12 @@ export async function getPostBySlug(slug: string): Promise<{ post: Post }> {
   return apiCall(`/posts/slug/${slug}`)
 }
 
+// URL of a post's featured image (stored as post meta), or null if it has none.
+export async function getFeaturedImageUrl(postId: string | number): Promise<string | null> {
+  const response = await apiCall(`/posts/${postId}/featured-image`)
+  return response?.featured_image?.url || null
+}
+
 export async function getSettings(): Promise<any> {
   return apiCall("/settings")
 }

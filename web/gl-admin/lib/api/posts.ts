@@ -8,6 +8,8 @@ export interface CreatePostRequest {
   content: string
   description: string
   url: string
+  // Omitted → the API derives it from the title. Either way a clash gets -2, -3, ...
+  slug?: string
   post_type?: string
   post_status?: string
   post_parent?: number | null
