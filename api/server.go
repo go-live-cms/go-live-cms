@@ -41,7 +41,7 @@ type Server struct {
 	logger        *slog.Logger
 	metrics       *httpMetrics
 	errorReporter ErrorReporter
-	// pingDB backs /readyz; set from the store when it is a db.SQLStore.
+	// pingDB backs /readyz: store.Ping, a field so tests can stub it.
 	pingDB func(ctx context.Context) error
 }
 
@@ -94,9 +94,8 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		logger:        slog.Default(),
 		metrics:       newHTTPMetrics(),
 		errorReporter: noopErrorReporter{},
-	}
-	if pinger, ok := store.(dbPinger); ok {
-		server.pingDB = pinger.Ping
+		// A closure, not the method value store.Ping, which would panic here on a nil store.
+		pingDB: func(ctx context.Context) error { return store.Ping(ctx) },
 	}
 
 	if shouldCheckSeededAccounts(config) {
@@ -233,10 +232,16 @@ func (server *Server) setupRoutes() error {
 		return fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
 	}
 
+	// Same list, as prefixes: an incoming X-Request-ID is kept only from these peers.
+	trustedProxies, err := parsePrefixes(server.config.TrustedProxyList())
+	if err != nil {
+		return fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
+	}
+
 	// Request id, access log and recovery come first, so every response
 	// (preflights, 429s, panics) is logged and carries an X-Request-ID.
 	router.Use(
-		requestIDMiddleware(),
+		requestIDMiddleware(requestIDsFromProxies(trustedProxies)),
 		server.requestLogger(server.logger, server.metrics),
 		server.recoveryMiddleware(server.logger),
 	)

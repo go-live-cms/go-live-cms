@@ -6,8 +6,9 @@
 // # Request IDs
 //
 // requestIDMiddleware runs first on every router. It keeps a well-formed
-// incoming X-Request-ID (a proxy's or the collab WS server's) and otherwise
-// generates one, stores it in the context (requestIDFromContext) and echoes it
+// incoming X-Request-ID only from a sender allowed to set one (a peer in
+// TRUSTED_PROXIES on the public router; the collab WS server on the internal
+// one) and otherwise generates one, stores it in the context (requestIDFromContext) and echoes it
 // in the X-Request-ID response header. JSON error responses (status >= 400)
 // also get a "request_id" field, so users can report it; that is done by a
 // response-writer wrapper rather than in each handler's gin.H.
@@ -26,13 +27,17 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -64,10 +69,16 @@ func validRequestID(id string) bool {
 }
 
 // requestIDMiddleware assigns every request an id (see the file comment) and
-// wraps the writer so JSON error bodies carry it.
-func requestIDMiddleware() gin.HandlerFunc {
+// wraps the writer so JSON error bodies carry it. An incoming X-Request-ID is
+// only considered when trustIncoming(c) says the sender may set it; otherwise
+// any client could pick an id (e.g. one another user reported) and muddy the
+// logs.
+func requestIDMiddleware(trustIncoming func(c *gin.Context) bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.GetHeader(requestIDHeader)
+		id := ""
+		if trustIncoming(c) {
+			id = c.GetHeader(requestIDHeader)
+		}
 		if !validRequestID(id) {
 			id = uuid.NewString()
 		}
@@ -77,6 +88,19 @@ func requestIDMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// requestIDsFromProxies trusts an incoming X-Request-ID only when the TCP peer
+// is one of TRUSTED_PROXIES (the same list gin uses for X-Forwarded-For), so a
+// reverse proxy's id is kept but a direct client's is replaced.
+func requestIDsFromProxies(trustedProxies []netip.Prefix) func(c *gin.Context) bool {
+	return func(c *gin.Context) bool {
+		return ipInPrefixes(c.RemoteIP(), trustedProxies)
+	}
+}
+
+// trustRequestIDs keeps every incoming X-Request-ID. Only for the internal
+// listener, whose only callers are other GoLive processes.
+func trustRequestIDs(*gin.Context) bool { return true }
 
 // requestIDFromContext returns the request id requestIDMiddleware assigned, or "".
 func requestIDFromContext(c *gin.Context) string {
@@ -183,7 +207,7 @@ func (server *Server) requestLogger(logger *slog.Logger, m *httpMetrics) gin.Han
 			slog.String("route", route),
 			slog.Int("status", status),
 			slog.Float64("latency_ms", float64(latency.Microseconds())/1000),
-			slog.Int("bytes", c.Writer.Size()),
+			slog.Int("bytes", max(c.Writer.Size(), 0)), // Size is -1 when no body was written
 		}
 		userID, authenticated := callerUserID(c)
 		if authenticated {
@@ -230,6 +254,19 @@ func (server *Server) recoveryMiddleware(logger *slog.Logger) gin.HandlerFunc {
 			if rec == http.ErrAbortHandler {
 				panic(rec) // net/http's sentinel for aborting a response; let it through
 			}
+			if err, ok := rec.(error); ok && isClientDisconnect(err) {
+				// The client went away mid-response (as gin.Recovery special-cases):
+				// not a server bug, so no stack, no report, and nothing to write.
+				logger.LogAttrs(c.Request.Context(), slog.LevelWarn, "client_disconnected",
+					slog.String(requestIDKey, requestIDFromContext(c)),
+					slog.String("method", c.Request.Method),
+					slog.String("route", routeForLog(c)),
+					slog.String("error", err.Error()),
+				)
+				c.Set(panicReportedKey, true)
+				c.Abort()
+				return
+			}
 			stack := debug.Stack()
 			err := fmt.Errorf("panic: %v", rec)
 			logger.LogAttrs(c.Request.Context(), slog.LevelError, "panic_recovered",
@@ -258,6 +295,20 @@ func (server *Server) recoveryMiddleware(logger *slog.Logger) gin.HandlerFunc {
 		}()
 		c.Next()
 	}
+}
+
+// isClientDisconnect reports whether a panic value is a write to a connection
+// the client already closed (broken pipe / connection reset).
+func isClientDisconnect(err error) bool {
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		msg := strings.ToLower(opErr.Error())
+		return strings.Contains(msg, "broken pipe") || strings.Contains(msg, "connection reset by peer")
+	}
+	return false
 }
 
 // ErrorEvent is what the API hands an ErrorReporter: a recovered panic or a

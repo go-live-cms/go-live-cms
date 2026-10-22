@@ -31,10 +31,10 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 
+	"github.com/gin-gonic/gin"
 	"github.com/go-live-cms/go-live-cms/token"
 	"github.com/google/uuid"
 )
@@ -80,8 +80,9 @@ func extractJTI(payload *token.Payload) (uuid.UUID, error) {
 // logSecurityEvent writes a structured session security event (event, session
 // id, user id, details) for audit trails. Reuse and blocks are warnings.
 // details must not contain IPs, user agents, usernames or tokens (#155); the
-// user id is the identifier.
-func logSecurityEvent(eventType, sessionID string, userID int64, details string) {
+// user id is the identifier. The request id from c ties the event to the
+// request's access-log line and to the id the client got back.
+func logSecurityEvent(c *gin.Context, eventType, sessionID string, userID int64, details string) {
 	if !LogUAIPChanges && eventType != LogSessionReuse && eventType != LogSessionBlocked {
 		return
 	}
@@ -89,7 +90,8 @@ func logSecurityEvent(eventType, sessionID string, userID int64, details string)
 	if eventType == LogSessionReuse || eventType == LogSessionBlocked {
 		level = slog.LevelWarn
 	}
-	slog.Default().LogAttrs(context.Background(), level, "session_security_event",
+	slog.Default().LogAttrs(c.Request.Context(), level, "session_security_event",
+		slog.String(requestIDKey, requestIDFromContext(c)),
 		slog.String("event", eventType),
 		slog.String("session_id", sessionID),
 		slog.Int64("user_id", userID),
@@ -101,11 +103,11 @@ func logSecurityEvent(eventType, sessionID string, userID int64, details string)
 // differs from the one it was created with, to help spot hijacked sessions.
 // Only whether each changed is logged, never the values (low-PII, #155); the
 // sessions table keeps the current ones.
-func logUserAgentIPChange(sessionID uuid.UUID, userID int64, oldUA, newUA, oldIP, newIP string) {
+func logUserAgentIPChange(c *gin.Context, sessionID uuid.UUID, userID int64, oldUA, newUA, oldIP, newIP string) {
 	if !LogUAIPChanges {
 		return
 	}
 
 	details := fmt.Sprintf("user_agent_changed=%t ip_changed=%t", oldUA != newUA, oldIP != newIP)
-	logSecurityEvent(LogUAIPChange, sessionID.String(), userID, details)
+	logSecurityEvent(c, LogUAIPChange, sessionID.String(), userID, details)
 }

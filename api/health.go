@@ -25,12 +25,6 @@ import (
 // instead of hanging the healthcheck.
 const readinessTimeout = 2 * time.Second
 
-// dbPinger is implemented by db.SQLStore. It is not part of db.Store, so the
-// generated MockStore doesn't need it; tests set Server.pingDB directly.
-type dbPinger interface {
-	Ping(ctx context.Context) error
-}
-
 // healthCheck returns basic liveness info and API version.
 func (server *Server) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{

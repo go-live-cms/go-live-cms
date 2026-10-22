@@ -181,7 +181,8 @@ server.
   `recoveryMiddleware`, before security headers/CORS, so preflights, 429s and panics
   are logged and carry `X-Request-ID`. `gin.Default()`/`gin.Logger()` are not used.
 - **Request id:** a well-formed incoming `X-Request-ID` (`[A-Za-z0-9._:-]{8,128}`) is
-  kept, else a UUID. Read it with `requestIDFromContext(c)`. `requestIDErrorWriter`
+  kept only from a peer in `TRUSTED_PROXIES` (public router) or on the internal
+  listener; anything else gets a UUID, so clients can't choose their ids. Read it with `requestIDFromContext(c)`. `requestIDErrorWriter`
   splices `"request_id"` into every JSON error body (status ≥ 400), so handlers keep
   returning plain `gin.H{"error": ...}`. It's forwarded on the collab squash call; the
   WS server sends its own on the internal role lookup.
@@ -195,8 +196,11 @@ server.
   attributes whose key contains authorization/cookie/password/secret/token/ticket/hash,
   as a backstop only.
 - **Health:** `/health` + `/api/v1/health` = liveness; `/readyz` = readiness
-  (`SQLStore.Ping`, 2s timeout, 503 when down). Compose healthchecks use `/readyz`.
-  `Ping` isn't on `db.Store` (no mock regen); tests set `server.pingDB`.
+  (`db.Store.Ping`, 2s timeout, 503 when down). Compose healthchecks use `/readyz`.
+  Tests mock it with `store.EXPECT().Ping(...)`.
+- **Recovery** treats a broken pipe / connection reset (client hung up) as a warning
+  (`client_disconnected`), not a reported 500.
+- Session security events (`logSecurityEvent(c, ...)`) carry the request id.
 - **Metrics:** `metrics.go`, hand-rolled Prometheus text at `GET /metrics` on the
   **internal** listener (unauthenticated; the unpublished port is the restriction).
   Labels are bounded: route template or `(unmatched)`, unknown methods → `OTHER`.

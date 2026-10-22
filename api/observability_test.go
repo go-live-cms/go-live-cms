@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -45,7 +48,7 @@ func newObservedEngine(t *testing.T, config util.Config) (*gin.Engine, *Server, 
 
 	engine := gin.New()
 	engine.Use(
-		requestIDMiddleware(),
+		requestIDMiddleware(trustRequestIDs), // the trust rule has its own tests below
 		server.requestLogger(logger, server.metrics),
 		server.recoveryMiddleware(logger),
 	)
@@ -289,16 +292,88 @@ func TestSetErrorReporterNilRestoresNoop(t *testing.T) {
 	require.NotPanics(t, func() { server.reportError(context.Background(), ErrorEvent{}) })
 }
 
-func TestReadinessReflectsDatabase(t *testing.T) {
+func TestRequestIDOnlyTrustedFromProxies(t *testing.T) {
+	const incoming = "proxy-assigned-id-123"
+	// httptest requests come from 192.0.2.1.
+	for _, tc := range []struct {
+		name           string
+		trustedProxies string
+		kept           bool
+	}{
+		{"no trusted proxies: a direct client can't pick its id", "", false},
+		{"peer not in TRUSTED_PROXIES", "10.0.0.0/8", false},
+		{"peer in TRUSTED_PROXIES (CIDR)", "10.0.0.0/8,192.0.2.0/24", true},
+		{"peer in TRUSTED_PROXIES (bare IP)", "192.0.2.1", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			config := newTestConfig(t)
+			config.TrustedProxies = tc.trustedProxies
+			server, err := NewServer(config, mockdb.NewMockStore(ctrl))
+			require.NoError(t, err)
+
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			req.Header.Set(requestIDHeader, incoming)
+			got := serve(server.router, req).Header().Get(requestIDHeader)
+			if tc.kept {
+				require.Equal(t, incoming, got)
+			} else {
+				require.NotEqual(t, incoming, got)
+				_, err := uuid.Parse(got)
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestInternalListenerKeepsForwardedRequestID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	server := newTestServer(t, mockdb.NewMockStore(ctrl))
 
-	// The mock store has no Ping, so there is nothing to check yet.
-	rec := serve(server.router, httptest.NewRequest(http.MethodGet, "/readyz", nil))
-	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set(requestIDHeader, "ws-upgrade-id-12345")
+	rec := serve(server.internalRouter, req)
+	require.Equal(t, "ws-upgrade-id-12345", rec.Header().Get(requestIDHeader))
+}
 
-	server.pingDB = func(context.Context) error { return errors.New("dial tcp postgres:5432: connection refused") }
-	rec = serve(server.router, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+func TestRecoveryTreatsClientDisconnectAsWarning(t *testing.T) {
+	engine, _, logs, reporter := newObservedEngine(t, util.Config{})
+	engine.GET("/download", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+		panic(&net.OpError{Op: "write", Net: "tcp", Err: os.NewSyscallError("write", syscall.EPIPE)})
+	})
+
+	rec := serve(engine, httptest.NewRequest(http.MethodGet, "/download", nil))
+	require.NotContains(t, rec.Body.String(), "internal server error")
+	require.Empty(t, reporter.events, "a client hanging up is not reported as a server error")
+
+	lines := logLines(t, logs)
+	require.Equal(t, "client_disconnected", lines[0]["msg"])
+	require.Equal(t, "WARN", lines[0]["level"])
+	require.NotContains(t, lines[0], "stack")
+}
+
+func TestIsClientDisconnect(t *testing.T) {
+	require.True(t, isClientDisconnect(os.NewSyscallError("write", syscall.ECONNRESET)))
+	require.True(t, isClientDisconnect(&net.OpError{Op: "write", Err: errors.New("write: broken pipe")}))
+	require.False(t, isClientDisconnect(errors.New("nil map assignment")))
+}
+
+func TestAccessLogBytesNeverNegative(t *testing.T) {
+	engine, _, logs, _ := newObservedEngine(t, util.Config{})
+	engine.GET("/empty", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	serve(engine, httptest.NewRequest(http.MethodGet, "/empty", nil))
+	require.EqualValues(t, 0, logLines(t, logs)[0]["bytes"])
+}
+
+func TestReadinessReflectsDatabase(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	server := newTestServer(t, store)
+
+	// NewServer wires /readyz to the store's Ping.
+	store.EXPECT().Ping(gomock.Any()).Return(errors.New("dial tcp postgres:5432: connection refused"))
+	rec := serve(server.router, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	require.NotContains(t, rec.Body.String(), "connection refused", "error details are logged, not returned")
 	var body map[string]any
@@ -308,10 +383,10 @@ func TestReadinessReflectsDatabase(t *testing.T) {
 	require.NotEmpty(t, body["request_id"])
 
 	var gotDeadline bool
-	server.pingDB = func(ctx context.Context) error {
+	store.EXPECT().Ping(gomock.Any()).DoAndReturn(func(ctx context.Context) error {
 		_, gotDeadline = ctx.Deadline()
 		return nil
-	}
+	})
 	rec = serve(server.router, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.JSONEq(t, `{"status":"ok","checks":{"database":"ok"}}`, rec.Body.String())

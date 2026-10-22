@@ -172,8 +172,9 @@ private Docker ranges.
 Both compose files healthcheck the API with `/readyz`. Neither health endpoint is rate
 limited or returns error details.
 
-Every API response has an `X-Request-ID` header (a well-formed incoming one is kept,
-anything else is replaced), and JSON error bodies include it as `request_id`, so a
+Every API response has an `X-Request-ID` header (a well-formed incoming one is kept
+only when it comes from a proxy in `TRUSTED_PROXIES`; otherwise a new one is made), and
+JSON error bodies include it as `request_id`, so a
 user can quote it in a bug report. The API logs one line per request: JSON in release
 mode, readable text in debug mode, with the request id, method, route template (never
 the raw path or query string), status, latency and the caller's user id. Headers,

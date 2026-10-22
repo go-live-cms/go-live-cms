@@ -44,7 +44,7 @@ func (server *Server) newInternalRouter() *gin.Engine {
 	// server forwards its connection's X-Request-ID on the role lookup), but no
 	// metrics: they describe public traffic only.
 	router.Use(
-		requestIDMiddleware(),
+		requestIDMiddleware(trustRequestIDs),
 		server.requestLogger(server.logger, nil),
 		server.recoveryMiddleware(server.logger),
 	)
