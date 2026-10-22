@@ -80,7 +80,7 @@ func main() {
 func runBackfillVariants(config util.Config, store db.Store, args []string) {
 	flags := flag.NewFlagSet("backfill-variants", flag.ExitOnError)
 	all := flags.Bool("all", false, "regenerate variants for every image, not only those without")
-	flags.Parse(args)
+	_ = flags.Parse(args) // ExitOnError: it exits on a bad flag instead of returning
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()

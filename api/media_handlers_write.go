@@ -125,7 +125,9 @@ func (server *Server) createMedia(c *gin.Context) {
 	variants := staged.commitForNewRow(server.requestLog(c))
 	removeStored := func() {
 		os.Remove(mediaPath)
-		removeMediaVariants(server.config.UploadPath, mediaPath)
+		if err := removeMediaVariants(server.config.UploadPath, mediaPath); err != nil {
+			server.requestLog(c).Warn("media not created but variants not removed", "media_path", mediaPath, "error", err)
+		}
 	}
 
 	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
@@ -318,7 +320,9 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 	})
 	if err != nil {
 		os.Remove(mediaPath)
-		removeMediaVariants(server.config.UploadPath, mediaPath)
+		if rmErr := removeMediaVariants(server.config.UploadPath, mediaPath); rmErr != nil {
+			server.requestLog(c).Warn("media not created but variants not removed", "media_path", mediaPath, "error", rmErr)
+		}
 		return db.Medium{}, fmt.Sprintf("failed to create media record for %s: %v", fileHeader.Filename, err)
 	}
 	return media, ""
