@@ -330,8 +330,13 @@ func publicMediaPath(uploadPath, mediaPath string) string {
 // mediaResponse is toMediaResponse with media_path as its public URL path
 // (publicMediaPath).
 func (server *Server) mediaResponse(media db.Medium) MediaResponse {
-	response := toMediaResponse(media)
-	response.MediaPath = publicMediaPath(server.config.UploadPath, media.MediaPath)
+	return server.withPublicMediaPath(toMediaResponse(media))
+}
+
+// withPublicMediaPath replaces a presented row's stored media_path with its
+// public URL path (publicMediaPath). Every handler returning media uses it.
+func (server *Server) withPublicMediaPath(response MediaResponse) MediaResponse {
+	response.MediaPath = publicMediaPath(server.config.UploadPath, response.MediaPath)
 	return response
 }
 

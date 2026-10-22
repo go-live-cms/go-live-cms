@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
@@ -71,4 +72,30 @@ func TestGetMediaReturnsServedPath(t *testing.T) {
 	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, body.Media.MediaPath, nil))
 	require.Equal(t, http.StatusOK, recorder.Code)
 	require.Equal(t, content, recorder.Body.Bytes())
+}
+
+// The media library lists through the row presenters, not toMediaResponse.
+func TestListMediaReturnsServedPaths(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	server := newTestServer(t, store)
+
+	rows := []db.ListMediaRow{
+		{ID: 1, MediaPath: server.config.UploadPath + "/a.png"},
+		{ID: 2, MediaPath: "/uploads/media/legacy.png"},
+	}
+	store.EXPECT().ListMedia(gomock.Any(), gomock.Any()).Times(1).Return(rows, nil)
+	store.EXPECT().CountTotalMedia(gomock.Any()).Times(1).Return(int64(2), nil)
+
+	recorder := httptest.NewRecorder()
+	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/media", nil))
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	var body struct {
+		Media []MediaResponse `json:"media"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.Len(t, body.Media, 2)
+	require.Equal(t, "/uploads/media/a.png", body.Media[0].MediaPath)
+	require.Equal(t, "/uploads/media/legacy.png", body.Media[1].MediaPath)
 }
