@@ -4,7 +4,7 @@ import { createPost, updatePost } from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
-import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
+import { blockAPIClient, type PostVersion } from "@gl-admin/lib/api/blockAPI"
 import { htmlToBlockDoc } from "@gl-admin/lib/utils/htmlToBlocks"
 import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import PublishBar from "@gl-admin/components/editor/ui/PublishBarNew"
@@ -38,6 +38,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
   const editorRef = useRef<EditorRef>(null)
+  // Bumped after publish/unpublish/restore so the Revisions tab reloads (#136)
+  const [revisionsKey, setRevisionsKey] = useState(0)
 
   const ORIGINAL_SIDEBAR_WIDTH = 20 * 16
   const MIN_SIDEBAR_WIDTH = ORIGINAL_SIDEBAR_WIDTH * 0.8
@@ -269,6 +271,40 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }
 
+  // Back to draft; the public page 404s and its snapshot is dropped (#136)
+  const handleUnpublish = async () => {
+    if (contentReadOnly || !initialData?.id) return
+    try {
+      const token = authManager.getAccessToken()
+      if (token) blockAPIClient.setAuthToken(token)
+      await blockAPIClient.unpublishPost(initialData.id)
+      setFormData((prev) => ({ ...prev, post_status: "draft" }))
+      setRevisionsKey((k) => k + 1)
+      showSuccess("Unpublished: the post is a draft again")
+    } catch (error) {
+      showError("Failed to unpublish")
+      console.error("Unpublish failed:", error)
+    }
+  }
+
+  // Load a version into the working copy through the live editor, so collaborators
+  // get it via Yjs. Publishing afterwards makes it live (as a new version).
+  const handleRestoreVersion = async (version: PostVersion) => {
+    if (contentReadOnly || !editorRef.current) return
+    try {
+      const { saved } = await editorRef.current.restoreVersion(version.doc)
+      showSuccess(
+        saved
+          ? `Restored version ${version.version_no} to the draft. Publish to make it live.`
+          : `Restored version ${version.version_no}; saving…`
+      )
+      setRevisionsKey((k) => k + 1)
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Failed to restore version")
+      console.error("Restore failed:", error)
+    }
+  }
+
   const savePost = async (isPublish: boolean = false) => {
     const setSavingState = isPublish ? setIsSubmitting : setIsSaving
     const setSaveStatusState = isPublish ? () => {} : setSaveStatus
@@ -481,6 +517,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               onPublishSuccess={(result) => {
                 setIsSubmitting(false)
                 setFormData((prev) => ({ ...prev, post_status: "published" }))
+                setRevisionsKey((k) => k + 1)
               }}
               onPublishError={(error) => {
                 setIsSubmitting(false)
@@ -504,6 +541,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         mode={mode}
         onSlugChange={handleSlugChange}
         readOnly={contentReadOnly}
+        onUnpublish={collabEnabled ? handleUnpublish : undefined}
+        onRestoreVersion={collabEnabled ? handleRestoreVersion : undefined}
+        revisionsKey={revisionsKey}
       />
 
       <ToastContainer toasts={toasts} onRemoveToast={removeToast} />

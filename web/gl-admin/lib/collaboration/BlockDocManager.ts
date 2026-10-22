@@ -65,6 +65,20 @@ export class BlockDocManager {
   }
 
   /**
+   * Id of the last version restore (#136). It lives in the shared doc so every peer
+   * can tell that the working copy it loaded (and its hidden-block record) was replaced.
+   */
+  getRestoreMarker(): string | null {
+    return (this.doc.getMap("meta").get("restore_id") as string | undefined) ?? null
+  }
+
+  markRestored(): string {
+    const id = generateId()
+    this.doc.getMap("meta").set("restore_id", id)
+    return id
+  }
+
+  /**
    * Initialize document with empty paragraph if empty
    */
   initializeDoc(): void {

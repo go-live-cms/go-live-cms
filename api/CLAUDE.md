@@ -212,4 +212,12 @@ server.
 - `block_doc` (jsonb on `posts`) is the **working copy** the editor loads;
   `published_block_doc` is the published snapshot the public frontend reads. They can
   diverge (a bug can wipe the working copy while the published one stays intact).
+- **Revisions (#136)** are the Block Spec v1 rows publish writes to `post_versions`
+  (not Yjs snapshots). `GET /posts/:id/versions[/:version_no]` and
+  `POST /posts/:id/unpublish` are admin/editor only. Publishing sets
+  `post_status='published'`; unpublish sets `draft` and NULLs `published_block_doc` /
+  `published_version_id` (versions stay). `/public/posts/:id/blocks` and the SSR post
+  page 404 unless the status is `published`. **There is no restore endpoint on
+  purpose:** never write `block_doc` from the server while editors may be connected;
+  the editor restores through Yjs and saves with the normal PUT.
 </content>
