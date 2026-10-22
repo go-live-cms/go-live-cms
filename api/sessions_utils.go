@@ -31,8 +31,9 @@
 package api
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/go-live-cms/go-live-cms/token"
 	"github.com/google/uuid"
@@ -47,14 +48,14 @@ const (
 	ErrSessionBlocked      = "session is blocked"
 )
 
-// Log message constants for session security events
+// Event names (the "event" field) for session security log lines
 const (
-	LogSessionReuse     = "🚨 SECURITY ALERT: Refresh token reuse detected"
-	LogSessionBlocked   = "🔒 Session blocked due to security violation"
-	LogUAIPChange       = "ℹ️  User agent or IP change detected"
-	LogSessionCreated   = "✅ New session created"
-	LogSessionRefreshed = "🔄 Session refreshed successfully"
-	LogPasswordChanged  = "🔑 Password changed - all sessions blocked"
+	LogSessionReuse     = "refresh_token_reuse"
+	LogSessionBlocked   = "session_blocked"
+	LogUAIPChange       = "session_client_changed"
+	LogSessionCreated   = "session_created"
+	LogSessionRefreshed = "session_refreshed"
+	LogPasswordChanged  = "password_changed"
 )
 
 // Feature flags for development and debugging
@@ -76,22 +77,35 @@ func extractJTI(payload *token.Payload) (uuid.UUID, error) {
 	return payload.ID, nil
 }
 
-// logSecurityEvent logs session security events with consistent formatting.
-// Includes session ID, user ID, and event context for audit trails.
+// logSecurityEvent writes a structured session security event (event, session
+// id, user id, details) for audit trails. Reuse and blocks are warnings.
+// details must not contain IPs, user agents, usernames or tokens (#155); the
+// user id is the identifier.
 func logSecurityEvent(eventType, sessionID string, userID int64, details string) {
-	if LogUAIPChanges || eventType == LogSessionReuse || eventType == LogSessionBlocked {
-		log.Printf("%s | SessionID: %s | UserID: %d | Details: %s",
-			eventType, sessionID, userID, details)
+	if !LogUAIPChanges && eventType != LogSessionReuse && eventType != LogSessionBlocked {
+		return
 	}
+	level := slog.LevelInfo
+	if eventType == LogSessionReuse || eventType == LogSessionBlocked {
+		level = slog.LevelWarn
+	}
+	slog.Default().LogAttrs(context.Background(), level, "session_security_event",
+		slog.String("event", eventType),
+		slog.String("session_id", sessionID),
+		slog.Int64("user_id", userID),
+		slog.String("details", details),
+	)
 }
 
-// logUserAgentIPChange logs user agent or IP address changes for security monitoring.
-// Helps detect potential account compromise or session hijacking attempts.
+// logUserAgentIPChange records that a refreshing session's user agent or IP
+// differs from the one it was created with, to help spot hijacked sessions.
+// Only whether each changed is logged, never the values (low-PII, #155); the
+// sessions table keeps the current ones.
 func logUserAgentIPChange(sessionID uuid.UUID, userID int64, oldUA, newUA, oldIP, newIP string) {
 	if !LogUAIPChanges {
 		return
 	}
 
-	details := fmt.Sprintf("UA: %s -> %s | IP: %s -> %s", oldUA, newUA, oldIP, newIP)
+	details := fmt.Sprintf("user_agent_changed=%t ip_changed=%t", oldUA != newUA, oldIP != newIP)
 	logSecurityEvent(LogUAIPChange, sessionID.String(), userID, details)
 }

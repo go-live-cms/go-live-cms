@@ -6,10 +6,15 @@
 //   1. the credential is taken and stripped from req.url before anything reads it,
 //   2. a bad doc name gets 400 before any auth work,
 //   3. client context (origin, UA, peer IP) is logged only on rejections.
+// Logging is structured (logEvent, #142): ws_upgrade when a request arrives, ws_deny
+// with the status and reason when it is refused. Every line carries the request id (a
+// proxy's well-formed X-Request-ID, else a new one), which is also forwarded on the role
+// lookup and handed to the connection handler as req.auth.requestId. Users are logged
+// by id, never by username (#155).
 // Dependencies are injected. Must NOT import yjs — see the single-yjs-instance gotcha
 // in websocket/CLAUDE.md.
 import { canEditContent, isCollabDocName, stripCollabPrefix, takeCredential, ticketIdentity } from "./access.js";
-import { docNameForLog, upgradeContextForLog } from "./logsafe.js";
+import { docNameForLog, logEvent, requestIdFrom, upgradeContextForLog } from "./logsafe.js";
 
 // Derive the Yjs document name (e.g. "post-2892") from the request URL, the same way
 // y-websocket's setupWSConnection does, so we can correlate connection counts.
@@ -21,19 +26,21 @@ export const docNameFromReq = (req) => (req.url || "/").slice(1).split("?")[0].s
  *   expired, not a ticket, or for another doc (→ 401).
  * - consumeTicket(claims) → false if the ticket was already used (→ 401). Burning it
  *   happens before the role lookup, so a ticket can't be retried after a failure.
- * - fetchRole(identity) → the user's CURRENT role from the API's internal listener, or
- *   null if the user is gone or the ticket predates a password change (→ 403); throws if
- *   the API can't answer (→ 503). identity is ticketIdentity(claims): { userId, issuedAt }.
+ * - fetchRole(identity, { requestId }) → the user's CURRENT role from the API's internal
+ *   listener, or null if the user is gone or the ticket predates a password change
+ *   (→ 403); throws if the API can't answer (→ 503). identity is ticketIdentity(claims):
+ *   { userId, issuedAt }.
  * - accept(req, socket, head) completes the WebSocket handshake.
  */
 export function createUpgradeHandler({ verifyTicket, consumeTicket, fetchRole, accept }) {
   return async (req, socket, head) => {
+    const requestId = requestIdFrom(req.headers?.["x-request-id"]);
     // Node's http server removes its own socket 'error' listener before emitting
     // 'upgrade'. Without this one, a client that disconnects while we await the role
     // lookup (ECONNRESET), or a write to an already-closed peer (EPIPE), is an
     // uncaught 'error' that crashes the process and every live collab session.
     socket.on("error", (err) => {
-      console.warn("⚠️  Upgrade socket error:", err.code || err.message);
+      logEvent("warn", "ws_socket_error", { request_id: requestId, error: err.code || err.message });
     });
     // The single-use ticket rides in ?ticket= (#233). takeCredential strips it from
     // req.url before anything else reads the request, so nothing below (or y-websocket)
@@ -42,14 +49,19 @@ export function createUpgradeHandler({ verifyTicket, consumeTicket, fetchRole, a
     stripCollabPrefix(req);
     const rawDocName = docNameFromReq(req);
     const docName = docNameForLog(rawDocName);
-    console.log(`📡 WebSocket upgrade request for doc: ${docName}`);
+    logEvent("info", "ws_upgrade", { request_id: requestId, doc: docName });
 
     // Rejections log the client context (origin, UA, peer IP) to make them traceable;
     // accepted upgrades don't, so we don't retain that for every editor connect.
-    const reject = (status, body, reason, { warn = false } = {}) => {
-      const line = `🚫 ${reason} | doc ${docName} | ${upgradeContextForLog(req)}`;
-      if (warn) console.warn(line);
-      else console.error(line);
+    const reject = (status, body, reason, { warn = false, userId } = {}) => {
+      logEvent(warn ? "warn" : "error", "ws_deny", {
+        request_id: requestId,
+        doc: docName,
+        status: Number.parseInt(status, 10),
+        reason,
+        user_id: userId,
+        client: upgradeContextForLog(req),
+      });
       socket.write(`HTTP/1.1 ${status}\r\n\r\n${body}\r\n`);
       socket.destroy();
     };
@@ -74,13 +86,14 @@ export function createUpgradeHandler({ verifyTicket, consumeTicket, fetchRole, a
       );
       return;
     }
-    const who = claims.username || claims.sub;
+    // The verified ticket's user_id (a string claim); identity below validates it.
+    const userId = claims.user_id == null ? undefined : String(claims.user_id);
 
     // Single use: a ticket that leaked (e.g. into a proxy access log) can't open a second
     // socket. Burned before the role lookup, so a failed lookup can't be retried with it;
     // the editor fetches a fresh ticket on every reconnect.
     if (!consumeTicket(claims)) {
-      reject("401 Unauthorized", "Invalid or expired ticket", `Ticket already used by user ${who}`, { warn: true });
+      reject("401 Unauthorized", "Invalid or expired ticket", "Ticket already used", { warn: true, userId });
       return;
     }
 
@@ -88,37 +101,37 @@ export function createUpgradeHandler({ verifyTicket, consumeTicket, fetchRole, a
     // API's internal listener with the shared secret. The ticket never leaves this process.
     const identity = ticketIdentity(claims);
     if (!identity) {
-      reject("403 Forbidden", "Insufficient role for collaborative editing", `Ticket for ${who} has no valid user_id/iat`);
+      reject("403 Forbidden", "Insufficient role for collaborative editing", "Ticket has no valid user_id/iat", { userId });
       return;
     }
     let role;
     try {
-      role = await fetchRole(identity);
+      role = await fetchRole(identity, { requestId });
     } catch (err) {
-      reject("503 Service Unavailable", "Could not verify user role", `Role lookup failed for user ${who}: ${err.message}`);
+      reject("503 Service Unavailable", "Could not verify user role", `Role lookup failed: ${err.message}`, { userId });
       return;
     }
     if (!canEditContent(role)) {
       reject(
         "403 Forbidden",
         "Insufficient role for collaborative editing",
-        `Forbidden: user ${who} (role: ${role || "none"}) cannot edit`,
-        { warn: true },
+        `Forbidden: role ${role || "none"} cannot edit`,
+        { warn: true, userId },
       );
       return;
     }
-    console.log(`👤 Ticket accepted for user ${who} (role: ${role}), doc ${docName}`);
 
     req.auth = {
       sub: claims.sub,
       userId: identity.userId,
       username: claims.username,
       role,
+      requestId,
     };
     try {
       accept(req, socket, head);
     } catch (error) {
-      reject("500 Internal Server Error", "Upgrade failed", `WebSocket handshake failed: ${error.message}`);
+      reject("500 Internal Server Error", "Upgrade failed", `WebSocket handshake failed: ${error.message}`, { userId });
     }
   };
 }

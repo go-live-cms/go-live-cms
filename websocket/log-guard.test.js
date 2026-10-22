@@ -1,7 +1,7 @@
 // Regression guard for #220: no module may log the raw upgrade request or the
 // credential, because the access token rides in the upgrade URL. server.js boots the
 // server on import, so this scans source instead of running it. Every log call
-// (console.* / console[level] / collabDebug / process.std{out,err}.write) in every
+// (console.* / console[level] / collabDebug / logEvent / process.std{out,err}.write) in every
 // non-test .js file here must not reference the request URL, headers, query params or
 // credential, and console methods may not be aliased or passed around (which would hide
 // a log call from this scan).
@@ -34,7 +34,7 @@ const FORBIDDEN = [
 // The logsafe.js views may take req; their output is what's allowed in logs.
 const SANITIZER_CALL = /\b(upgradeContextForLog|docNameForLog)\s*\([^()]*\)/g;
 
-const LOG_CALL = /\b(console\s*(\.\s*\w+|\[[^\]]*\])|collabDebug|process\.std(out|err)\.write)\s*\(/g;
+const LOG_CALL = /\b(console\s*(\.\s*\w+|\[[^\]]*\])|collabDebug|logEvent|process\.std(out|err)\.write)\s*\(/g;
 // `console` used as anything but an immediate method call: `const log = console.log`,
 // `.forEach(console.log)`, `.bind(console)`, `const c = console`.
 const CONSOLE_ALIAS = /\bconsole\b(?!\s*(\.\s*\w+|\[[^\]]*\])\s*\()/g;
@@ -197,6 +197,12 @@ test("scanner covers console[level], other console methods and stdout writes", (
   assert.equal(offenders("console[level](`x ${req.url}`);").length, 1);
   assert.equal(offenders("console.dir(url.searchParams);").length, 1);
   assert.equal(offenders("process.stderr.write(credential);").length, 1);
+});
+
+test("scanner covers structured logEvent calls", () => {
+  assert.equal(offenders('logEvent("info", "x", { headers: req.headers });').length, 1);
+  assert.equal(offenders('logEvent("warn", "x", { ticket: credential });').length, 1);
+  assert.deepEqual(offenders('logEvent("warn", "ws_deny", { user_id: req.auth.userId, client: upgradeContextForLog(req) });'), []);
 });
 
 test("scanner reports console aliasing", () => {

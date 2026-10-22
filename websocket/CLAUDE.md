@@ -97,12 +97,22 @@ If Hocuspocus (#206) lands, keep this lookup and call it from `onAuthenticate`.
     `upgradeContextForLog`, both in `logsafe.js`. The context is logged **only on
     rejected upgrades**, to avoid retaining IPs for every connect.
   - `log-guard.test.js` scans every log call (`console.*`, `console[level]`,
-    `collabDebug`, `process.std{out,err}.write`) in every non-test module. It fails on
+    `collabDebug`, `logEvent`, `process.std{out,err}.write`) in every non-test module. It fails on
     `req` (anything but `req.auth`, including the whole object), `socket`,
     `searchParams`, `credential`, `token`, `params` and `url`, and on aliasing `console`
     methods. Arguments passed to `docNameForLog`/`upgradeContextForLog` are exempt. A
     value renamed through another variable still slips past it; the `takeCredential`
     strip is the real guarantee.
+- **Structured lifecycle logs (#142, #155).** Connection events go through `logEvent`
+  (`logsafe.js`): one JSON object per line with `time`, `level`, `event` and fields.
+  Events: `ws_upgrade`, `ws_deny` (`status`, `reason`, `client` context), `ws_connect` /
+  `ws_close` (`user_id`, `role`, `live_connections`, close `code`, `duration_ms`),
+  `ws_socket_error`, `ws_squash` / `ws_squash_failed`. Every one carries `request_id`:
+  `requestIdFrom` keeps a well-formed proxy `X-Request-ID` (same rule as the API), else
+  makes a UUID. It is forwarded as `X-Request-ID` on the role lookup (so the API's log
+  line shares it) and handed to the connection handler as `req.auth.requestId`. Users
+  are logged by `user_id` only, never username. Startup/persistence messages are still
+  plain `console.*`.
 - **Doc names must be `post-<id>`** (`isCollabDocName`). The upgrade answers anything
   else with **400** before auth, and so does the squash endpoint, which also answers 400
   to a malformed `%` escape instead of throwing. So every doc name this process logs or

@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
+	"log/slog"
 	"path/filepath"
 	"strings"
 	"time"
@@ -36,6 +36,13 @@ type Server struct {
 
 	// Per-client request limits; see ratelimit.go.
 	rateLimits rateLimits
+
+	// Observability (observability.go, metrics.go, health.go).
+	logger        *slog.Logger
+	metrics       *httpMetrics
+	errorReporter ErrorReporter
+	// pingDB backs /readyz; set from the store when it is a db.SQLStore.
+	pingDB func(ctx context.Context) error
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -83,6 +90,13 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 
 		collabTickets: tokenMaker,
 		rateLimits:    limits,
+
+		logger:        slog.Default(),
+		metrics:       newHTTPMetrics(),
+		errorReporter: noopErrorReporter{},
+	}
+	if pinger, ok := store.(dbPinger); ok {
+		server.pingDB = pinger.Ping
 	}
 
 	if shouldCheckSeededAccounts(config) {
@@ -92,7 +106,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	}
 
 	if warning := server.ignoredCookieDomainWarning(); warning != "" {
-		fmt.Printf("Warning: %s\n", warning)
+		server.logger.Warn(warning)
 	}
 
 	if err := server.setupRoutes(); err != nil {
@@ -101,15 +115,14 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 
 	// Sync themes from filesystem on startup (skip in test mode)
 	if !config.IsTestMode {
-		fmt.Println("🎨 Scanning themes directory...")
 		themesPath := filepath.Join("web", "themes")
 		discoveredThemes, err := ScanThemesDirectory(themesPath)
 		if err != nil {
-			fmt.Printf("Warning: Failed to scan themes directory: %v\n", err)
+			server.logger.Warn("failed to scan themes directory", "path", themesPath, "error", err)
 		} else {
-			fmt.Printf("Found %d theme(s)\n", len(discoveredThemes))
+			server.logger.Info("scanned themes directory", "path", themesPath, "themes", len(discoveredThemes))
 			if err := server.SyncThemesToDatabase(discoveredThemes); err != nil {
-				fmt.Printf("Warning: Failed to sync themes: %v\n", err)
+				server.logger.Warn("failed to sync themes", "error", err)
 			}
 		}
 	}
@@ -181,6 +194,8 @@ func corsOrigins(config util.Config) []string {
 
 // setupRoutes configures the Gin engine:
 //
+//   - Request ID, structured access log + metrics, panic recovery
+//     (observability.go); gin's text logger is not used
 //   - Security headers on every response (securityHeadersMiddleware); HSTS
 //     outside debug mode only
 //   - CORS:
@@ -188,7 +203,8 @@ func corsOrigins(config util.Config) []string {
 //     debug mode (corsOrigins); credentials allowed
 //   - None configured (release without CORS_ALLOWED_ORIGINS): no CORS
 //     middleware, same-origin only
-//   - /health (public): liveness endpoint
+//   - /health, /api/v1/health (public): liveness; /readyz: readiness (DB
+//     ping). See health.go for which one healthchecks should use.
 //   - Rate limits (ratelimit.go): general per-IP limit on /api/v1 and /public,
 //     stricter ones on login/register/refresh and self password changes
 //   - /api/v1/auth: register, login, refresh, logout (logout requires auth)
@@ -209,7 +225,7 @@ func corsOrigins(config util.Config) []string {
 //
 // It fails only on an invalid TRUSTED_PROXIES list.
 func (server *Server) setupRoutes() error {
-	router := gin.Default()
+	router := gin.New()
 
 	// Only believe X-Forwarded-For / X-Real-IP from TRUSTED_PROXIES (none by
 	// default), so a client can't pick its own ClientIP and dodge rate limits.
@@ -217,7 +233,15 @@ func (server *Server) setupRoutes() error {
 		return fmt.Errorf("invalid TRUSTED_PROXIES: %w", err)
 	}
 
-	// First, so CORS preflights (answered by the CORS middleware without
+	// Request id, access log and recovery come first, so every response
+	// (preflights, 429s, panics) is logged and carries an X-Request-ID.
+	router.Use(
+		requestIDMiddleware(),
+		server.requestLogger(server.logger, server.metrics),
+		server.recoveryMiddleware(server.logger),
+	)
+
+	// Next, so CORS preflights (answered by the CORS middleware without
 	// calling Next) and rate-limited 429s get the headers too.
 	router.Use(securityHeadersMiddleware(server.config))
 
@@ -227,19 +251,22 @@ func (server *Server) setupRoutes() error {
 		router.Use(cors.New(cors.Config{
 			AllowOrigins:     origins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "If-Match", "ETag", "X-Revision"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "If-Match", "ETag", "X-Revision", requestIDHeader},
+			ExposeHeaders:    []string{requestIDHeader},
 			AllowCredentials: true,
 		}))
 	}
 
 	// The general per-IP limit runs after CORS (so preflights aren't counted
 	// and 429s carry CORS headers) and before any route's own middleware.
-	// /health and /uploads are left unlimited.
+	// /health, /readyz and /uploads are left unlimited.
 	generalLimit := server.rateLimits.general.perIP(server.rateLimits.generalExempt...)
 	v1 := router.Group("/api/v1", generalLimit)
 	public := router.Group("/public", generalLimit) // Public API group for SSR/public content
 
 	router.GET("/health", server.healthCheck)
+	router.GET("/api/v1/health", server.healthCheck) // same liveness check, reachable through the web /api proxy
+	router.GET("/readyz", server.readinessCheck)
 
 	// Session and authentication module routes (see sessions_routes.go for complete definitions)
 	server.RegisterSessionRoutes(v1)
@@ -288,16 +315,6 @@ func (server *Server) setupRoutes() error {
 	// /api/v1, so they never share the public port (see internal_routes.go).
 	server.internalRouter = server.newInternalRouter()
 	return nil
-}
-
-// healthCheck returns basic liveness info and API version.
-// Intended for load balancers and uptime checks.
-func (server *Server) healthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "ok",
-		"message": "Gin CMS API is running",
-		"version": "v0.0.1",
-	})
 }
 
 // temp log to test server reload

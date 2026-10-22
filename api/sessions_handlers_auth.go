@@ -202,7 +202,7 @@ func (server *Server) startSession(ctx *gin.Context, v4Maker *token.PasetoV4Make
 
 	server.setRefreshCookie(ctx, refreshToken, now.Add(server.config.RefreshTokenDuration))
 
-	logSecurityEvent(LogSessionCreated, session.ID.String(), user.ID, fmt.Sprintf("IP: %s, UA: %s", clientIP, userAgent))
+	logSecurityEvent(LogSessionCreated, session.ID.String(), user.ID, "")
 
 	return session, nil
 }

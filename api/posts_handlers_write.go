@@ -176,7 +176,7 @@ func (server *Server) createPost(c *gin.Context) {
 		})
 		if err != nil {
 			// Log error but don't fail - post was already created
-			fmt.Printf("Warning: failed to initialize published_block_doc for new post %d: %v\n", createdPost.ID, err)
+			server.requestLog(c).Warn("failed to initialize published_block_doc for new post", "post_id", createdPost.ID, "error", err)
 		}
 		// Update local copy for response
 		createdPost.PublishedBlockDoc = pqtype.NullRawMessage{RawMessage: emptyBlockDoc, Valid: true}

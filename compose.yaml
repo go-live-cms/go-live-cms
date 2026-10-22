@@ -49,6 +49,14 @@ services:
       TRUSTED_PROXIES: ""
     entrypoint: ["/app/wait-for.sh", "postgres:5432", "--", "/app/start.sh"]
     command: ["/app/main"]
+    # Readiness (/readyz pings Postgres), not liveness (/health); see api/health.go.
+    # The runtime image is plain alpine, so this uses busybox wget.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
 
   web:
     build:

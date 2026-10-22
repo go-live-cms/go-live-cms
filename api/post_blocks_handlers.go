@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -294,7 +295,7 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 			})
 			if err != nil {
 				// Log error but don't fail the request - blocks were already saved
-				fmt.Printf("Warning: failed to update title: %v\n", err)
+				server.requestLog(c).Warn("failed to update post title from blocks", "post_id", postID, "error", err)
 			}
 		}
 	}
@@ -309,7 +310,7 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 	// Sync post_media associations for images in content
 	if err := server.syncPostMediaAssociations(c, postID, &updatedDoc); err != nil {
 		// Log error but don't fail the request - blocks were already saved
-		fmt.Printf("Warning: failed to sync media associations: %v\n", err)
+		server.requestLog(c).Warn("failed to sync media associations", "post_id", postID, "error", err)
 	}
 
 	// Set new revision header
@@ -387,13 +388,13 @@ func (server *Server) publishPost(c *gin.Context) {
 	if err := json.Unmarshal(currentBlocks.Content, &publishedDoc); err == nil {
 		if err := server.syncPostMediaAssociations(c, postID, &publishedDoc); err != nil {
 			// Log error but don't fail the request - version was already published
-			fmt.Printf("Warning: failed to sync media associations on publish: %v\n", err)
+			server.requestLog(c).Warn("failed to sync media associations on publish", "post_id", postID, "error", err)
 		}
 	}
 
 	// Best-effort: compact the LevelDB collaboration log for this document.
 	// Squash failure is non-fatal and does not affect the publish response.
-	server.triggerCollabSquash(postID)
+	server.triggerCollabSquash(postID, requestIDFromContext(c))
 
 	c.JSON(http.StatusOK, PublishResponse{
 		VersionID: version.ID,
@@ -407,7 +408,9 @@ func (server *Server) publishPost(c *gin.Context) {
 // document into a single snapshot, preventing unbounded log growth.
 //
 // Silently skips if CollabServerURL or CollabSquashSecret are not configured.
-func (server *Server) triggerCollabSquash(postID int64) {
+// requestID (the publish request's) is forwarded as X-Request-ID so the WS
+// server's squash log line can be matched to it.
+func (server *Server) triggerCollabSquash(postID int64, requestID string) {
 	// Trim trailing slashes so URLs like "http://websocket:1234/" don't produce
 	// "//_internal/..." (which the WS server's route regex would not match,
 	// silently breaking squash-on-publish).
@@ -417,30 +420,38 @@ func (server *Server) triggerCollabSquash(postID int64) {
 		return
 	}
 
+	logger := slog.Default()
+	if server.logger != nil {
+		logger = server.logger
+	}
 	go func() {
 		docName := fmt.Sprintf("post-%d", postID)
 		url := fmt.Sprintf("%s/_internal/documents/%s/squash", collabURL, docName)
+		log := logger.With(requestIDKey, requestID, "doc", docName)
 
 		req, err := http.NewRequest(http.MethodPost, url, nil)
 		if err != nil {
-			fmt.Printf("Warning: failed to build squash request for %s: %v\n", docName, err)
+			log.Warn("collab squash: failed to build request", "error", err)
 			return
 		}
 		req.Header.Set("Authorization", "Bearer "+secret)
+		if requestID != "" {
+			req.Header.Set(requestIDHeader, requestID)
+		}
 
 		client := &http.Client{Timeout: 10 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf("Warning: squash request failed for %s: %v\n", docName, err)
+			log.Warn("collab squash: request failed", "error", err)
 			return
 		}
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
-			fmt.Printf("Warning: squash returned HTTP %d for %s\n", resp.StatusCode, docName)
+			log.Warn("collab squash: unexpected status", "status", resp.StatusCode)
 			return
 		}
-		fmt.Printf("✅ Squash complete for collab doc: %s\n", docName)
+		log.Info("collab squash complete")
 	}()
 }
 

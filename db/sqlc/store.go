@@ -86,6 +86,12 @@ func NewStore(db *sql.DB) Store {
 	}
 }
 
+// Ping checks that the database is reachable (the API's /readyz). It is not
+// part of Store, so the generated MockStore doesn't need regenerating.
+func (store *SQLStore) Ping(ctx context.Context) error {
+	return store.db.PingContext(ctx)
+}
+
 func (store *SQLStore) execTx(ctx context.Context, fn func(*Queries) error) error {
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
