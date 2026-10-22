@@ -60,14 +60,16 @@ the WS server.
   - The **live** fields (PUT `/posts/:id`, meta, featured image, media links, DELETE)
     only while their post isn't published (`canEditPostDetails`). Otherwise they could
     change or remove published content without the publish permission. For the same
-    reason a blocks PUT on their published post saves the blocks but skips the title,
-    and PUT `/posts/:id` refuses a `post_status` change (403) from anyone who can't
-    publish.
+    reason a blocks PUT on their published post refuses a changed title (403, nothing
+    saved; the unchanged title every autosave sends is fine) and doesn't sync
+    `post_media` (publish does), and PUT `/posts/:id` refuses a `post_status` change
+    (403) from anyone who can't publish. A `post_parent` must be a post the caller can
+    edit (`canEditPost`).
   - Publish/unpublish/revisions stay `requireContentEditor`.
   - Per-post write routes use `requireContentAuthor` (any content role) plus, in the
     handler, `server.authorizePost(c, id, rule)` (skips the post lookup for moderators;
     404 for a missing post, 403 when refused). Use `server.checkPost` when the handler
-    already loaded the post.
+    already loaded the post, and `authorizeLoadPost` to reuse the row it loads.
   - Never compare `post.UserID` or roles in a handler. Block-level permissions and
     org/site scoping are out of scope.
 - **Media ownership:** admins and editors may update/delete any media; any other

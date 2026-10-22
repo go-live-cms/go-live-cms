@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { createPost, updatePost } from "@gl-admin/lib/api/posts"
+import { createPost, getPostById, updatePost } from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
@@ -56,7 +56,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     slug: "",
     content: "",
     excerpt: "",
-    post_status: "draft",
+    // From the post right away: the per-post locks below depend on it (#135)
+    post_status: (initialData?.post_status as "draft" | "published") || "draft",
   })
 
   let mockPostType: PostType
@@ -528,6 +529,20 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                 setIsSaving(false)
                 setSaveStatus("error")
                 showError("Auto-save failed")
+                // A save can be refused because an editor published the post meanwhile,
+                // which locks its title for a contributor (#135). Re-read the status and
+                // title so the locks catch up and later saves stop sending the refused title.
+                if (!canPublish && initialData?.id) {
+                  getPostById(initialData.id)
+                    .then(({ post }) =>
+                      setFormData((prev) =>
+                        post.post_status === prev.post_status
+                          ? prev
+                          : { ...prev, post_status: post.post_status as "draft" | "published", title: post.title }
+                      )
+                    )
+                    .catch(() => {})
+                }
               }}
               onPublishStart={() => {
                 setIsSubmitting(true)

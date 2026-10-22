@@ -75,6 +75,11 @@ func (server *Server) createPost(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "contributors can only create drafts authored by themselves"})
 		return
 	}
+	// Nesting under a post files it into that post's hierarchy: a contributor
+	// may only use a parent they can edit.
+	if req.PostParent != nil && !server.authorizePost(c, *req.PostParent, canEditPost) {
+		return
+	}
 
 	primaryAuthor, err := server.store.GetUser(c.Request.Context(), req.AuthorIDs[0])
 	if err != nil {
@@ -219,8 +224,13 @@ func (server *Server) updatePost(c *gin.Context) {
 		return
 	}
 	// Setting the status here is publishing/unpublishing by another route.
-	if req.PostStatus != "" && !strings.EqualFold(req.PostStatus, existingPost.PostStatus) && !canPublishPost(caller) {
+	if req.PostStatus != "" && !strings.EqualFold(req.PostStatus, existingPost.PostStatus) && !canModeratePosts(caller) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "changing the post status requires the editor role"})
+		return
+	}
+	// Same parent rule as createPost, for a changed parent only.
+	parentChanged := req.PostParent != nil && (!existingPost.PostParent.Valid || existingPost.PostParent.Int64 != *req.PostParent)
+	if parentChanged && !server.authorizePost(c, *req.PostParent, canEditPost) {
 		return
 	}
 

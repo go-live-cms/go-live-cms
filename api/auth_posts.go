@@ -47,11 +47,6 @@ func canModeratePosts(user db.User) bool {
 	return hasRole(user, RoleAdmin, RoleEditor)
 }
 
-// isPostOwner reports whether the user owns the post (posts.user_id).
-func isPostOwner(user db.User, post db.Post) bool {
-	return post.UserID == user.ID
-}
-
 // canCreatePost reports whether the user may create a post with the given
 // authors and status. Moderators may create anything; a contributor only a
 // draft whose sole author is themselves (so they own it).
@@ -69,7 +64,7 @@ func canCreatePost(user db.User, authorIDs []int64, status string) bool {
 // canEditPost reports whether the user may edit the post's working copy: PUT
 // /posts/:id/blocks and the collab socket. The working copy is not public.
 func canEditPost(user db.User, post db.Post) bool {
-	return canModeratePosts(user) || (hasRole(user, RoleContributor) && isPostOwner(user, post))
+	return canModeratePosts(user) || (hasRole(user, RoleContributor) && post.UserID == user.ID)
 }
 
 // canEditPostDetails reports whether the user may change the post's live
@@ -82,36 +77,37 @@ func canEditPostDetails(user db.User, post db.Post) bool {
 	return canEditPost(user, post) && !strings.EqualFold(post.PostStatus, postStatusPublished)
 }
 
-// canPublishPost reports whether the user may publish/unpublish posts or set
-// a post's status. Mirrors requireContentEditor on those routes.
-func canPublishPost(user db.User) bool {
-	return canModeratePosts(user)
-}
-
 // authorizePost checks a per-post permission for the caller and writes the
 // error response when it fails. Moderators pass without loading the post
 // (the handler reports a missing post itself, as before #135); anyone else
 // needs the post row, so a missing post is 404 and a refused one 403.
 // Returns ok=false when the caller must just return.
 func (server *Server) authorizePost(c *gin.Context, postID int64, allowed func(db.User, db.Post) bool) bool {
+	_, _, ok := server.authorizeLoadPost(c, postID, allowed)
+	return ok
+}
+
+// authorizeLoadPost is authorizePost that also hands back the post row when it
+// had to load one (loaded=false for moderators), so the handler can reuse it.
+func (server *Server) authorizeLoadPost(c *gin.Context, postID int64, allowed func(db.User, db.Post) bool) (post db.Post, loaded bool, ok bool) {
 	user, ok := server.callerUser(c)
 	if !ok {
-		return false
+		return db.Post{}, false, false
 	}
 	if canModeratePosts(user) {
-		return true
+		return db.Post{}, false, true
 	}
 
 	post, err := server.store.GetPost(c.Request.Context(), postID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-			return false
+			return db.Post{}, false, false
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
-		return false
+		return db.Post{}, false, false
 	}
-	return server.checkPost(c, user, post, allowed)
+	return post, true, server.checkPost(c, user, post, allowed)
 }
 
 // checkPost is authorizePost for a handler that already loaded the post.
