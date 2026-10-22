@@ -108,6 +108,17 @@ body:has(.gl-admin-login) {
     }
   }
 
+  // Visually hidden but kept in the accessibility tree; absolutely positioned so
+  // it doesn't take a slot in the card's flex gap.
+  &__announcer {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
   &__submit {
     color: #ffffff;
     min-height: 2.75rem;

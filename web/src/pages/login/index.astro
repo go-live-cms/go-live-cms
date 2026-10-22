@@ -16,7 +16,9 @@ import "@gl-admin/assets/styles/pages/login.scss"
       <p class="gl-admin-login__subtitle">Access the GoLive admin dashboard</p>
     </header>
 
-    <p id="errorMessage" class="gl-admin-login__error" role="alert" hidden></p>
+    <p id="errorMessage" class="gl-admin-login__error" hidden></p>
+    <!-- Always rendered so screen readers announce every new error (see announce()). -->
+    <div id="errorAnnouncer" class="gl-admin-login__announcer" role="alert" aria-atomic="true"></div>
 
     <div class="gl-admin-login__fields">
       <div class="gl-input">
@@ -61,15 +63,31 @@ import "@gl-admin/assets/styles/pages/login.scss"
 
     const form = document.getElementById("loginForm") as HTMLFormElement
     const errorMessage = document.getElementById("errorMessage") as HTMLParagraphElement
+    const errorAnnouncer = document.getElementById("errorAnnouncer") as HTMLDivElement
     const loginButton = document.getElementById("loginButton") as HTMLButtonElement
     const buttonText = document.getElementById("buttonText") as HTMLSpanElement
     const buttonLoading = document.getElementById("buttonLoading") as HTMLSpanElement
     const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input"))
 
+    // ?redirect= comes from AuthGuard (the page the user was on), but anyone can
+    // craft a login link with it. Only follow same-origin paths, so the page can't
+    // be used to bounce a freshly signed-in user to another site or a javascript: URL.
+    function redirectTarget(): string {
+      const fallback = "/gl-admin"
+      const raw = new URLSearchParams(window.location.search).get("redirect")
+      if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return fallback
+      try {
+        const url = new URL(raw, window.location.origin)
+        if (url.origin !== window.location.origin) return fallback
+        return url.pathname + url.search + url.hash
+      } catch {
+        return fallback
+      }
+    }
+
     const authState = authManager.getState()
     if (authState.isAuthenticated) {
-      const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/gl-admin"
-      window.location.href = redirectTo
+      window.location.href = redirectTarget()
     }
 
     function setInvalid(invalid: boolean) {
@@ -85,10 +103,22 @@ import "@gl-admin/assets/styles/pages/login.scss"
       }
     }
 
+    // A live region only speaks when its content changes, so a second identical
+    // error would be silent. Clear it, then set the text on a later frame.
+    let announceTimer: number | undefined
+    function announce(message: string) {
+      window.clearTimeout(announceTimer)
+      errorAnnouncer.textContent = ""
+      announceTimer = window.setTimeout(() => {
+        errorAnnouncer.textContent = message
+      }, 100)
+    }
+
     function showError(message: string) {
       errorMessage.textContent = message
       errorMessage.hidden = false
       setInvalid(true)
+      announce(message)
     }
 
     function hideError() {
@@ -97,14 +127,15 @@ import "@gl-admin/assets/styles/pages/login.scss"
       setInvalid(false)
     }
 
-    // authManager.login surfaces raw API errors ("HTTP 401: {...}"); show people
-    // something they can act on instead.
+    // authManager.login returns raw messages: "HTTP 401: {...}" from the API, or
+    // the browser's fetch error when the API can't be reached. Never show those.
     function friendlyError(error?: string): string {
-      if (!error) return "Sign in failed. Please try again."
-      if (/\b401\b/.test(error)) return "Incorrect username or password."
-      if (/\b429\b/.test(error)) return "Too many sign-in attempts. Wait a moment and try again."
-      if (/^HTTP \d{3}/.test(error)) return "Sign in failed. Please try again."
-      return error
+      if (error && /\b401\b/.test(error)) return "Incorrect username or password."
+      if (error && /\b429\b/.test(error)) return "Too many sign-in attempts. Wait a moment and try again."
+      if (error && /failed to fetch|networkerror|load failed|network request failed/i.test(error)) {
+        return "Can't reach the server. Check your connection and try again."
+      }
+      return "Sign in failed. Please try again."
     }
 
     function setLoading(loading: boolean) {
@@ -113,6 +144,12 @@ import "@gl-admin/assets/styles/pages/login.scss"
       buttonLoading.hidden = !loading
       buttonText.textContent = loading ? "Signing in…" : "Sign in"
     }
+
+    // Coming Back from the admin restores this page from the bfcache with the
+    // loading state still set; reset it so the form is usable again.
+    window.addEventListener("pageshow", (e) => {
+      if (e.persisted) setLoading(false)
+    })
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault()
@@ -130,20 +167,22 @@ import "@gl-admin/assets/styles/pages/login.scss"
 
       setLoading(true)
 
+      let result: { success: boolean; error?: string }
       try {
-        const result = await authManager.login(username, password)
-
-        if (result.success) {
-          const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/gl-admin"
-          window.location.href = redirectTo
-        } else {
-          showError(friendlyError(result.error))
-        }
+        result = await authManager.login(username, password)
       } catch (error) {
-        showError("An unexpected error occurred")
-      } finally {
-        setLoading(false)
+        result = { success: false, error: error instanceof Error ? error.message : undefined }
       }
+
+      if (result.success) {
+        // Stay in the loading state while the admin loads, so the button
+        // can't be clicked again and send a second login.
+        window.location.href = redirectTarget()
+        return
+      }
+
+      setLoading(false)
+      showError(friendlyError(result.error))
     })
   </script>
 </Foot>
