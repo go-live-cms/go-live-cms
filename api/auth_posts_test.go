@@ -335,6 +335,7 @@ func TestCreatePostAsContributor(t *testing.T) {
 			created := tc.want == http.StatusCreated
 			store := mockdb.NewMockStore(ctrl)
 			store.EXPECT().CheckURLExists(gomock.Any(), gomock.Any()).Times(timesIf(created)).Return(false, nil)
+			store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).AnyTimes().Return(false, nil)
 			store.EXPECT().CreatePostTx(gomock.Any(), gomock.Any()).Times(timesIf(created)).
 				DoAndReturn(func(_ any, arg db.CreatePostTxParams) (db.CreatePostTxResult, error) {
 					return db.CreatePostTxResult{Post: db.Post{ID: 9, UserID: arg.UserID, PostStatus: arg.PostStatus}}, nil
@@ -493,6 +494,7 @@ func TestPostParentAsContributor(t *testing.T) {
 			store.EXPECT().GetPost(gomock.Any(), int64(999)).Return(db.Post{}, sql.ErrNoRows).AnyTimes()
 			store.EXPECT().GetPost(gomock.Any(), child.ID).Return(child, nil).AnyTimes()
 			store.EXPECT().CheckURLExists(gomock.Any(), gomock.Any()).AnyTimes().Return(false, nil)
+			store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).AnyTimes().Return(false, nil)
 			store.EXPECT().CreatePostTx(gomock.Any(), gomock.Any()).Times(timesIf(ok && tc.method == http.MethodPost)).
 				Return(db.CreatePostTxResult{Post: child}, nil)
 			store.EXPECT().UpdatePost(gomock.Any(), gomock.Any()).Times(timesIf(ok && tc.method == http.MethodPut)).Return(child, nil)
