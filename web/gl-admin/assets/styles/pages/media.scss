@@ -3,12 +3,17 @@
 
 .gl-admin {
   &-media {
+    // Wraps so the bulk-select count or a narrow viewport can't push the
+    // buttons off-screen.
     &-header {
       display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
       justify-content: space-between;
 
       &-right {
         display: flex;
+        flex-wrap: wrap;
         gap: 1rem;
       }
 
@@ -276,10 +281,15 @@
       }
     }
 
+    // Cards keep a minimum width and the grid drops columns as space shrinks,
+    // instead of a fixed column count that squashes cards at narrow widths.
+    // min() lets a single card shrink below the minimum on very narrow screens.
     &__grid {
+      --media-card-min-width: 12.5rem;
+
       display: grid;
       gap: 1rem;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--media-card-min-width)), 1fr));
       padding: 1rem;
     }
 
@@ -325,41 +335,59 @@
   }
 }
 
+// admin-main's fixed 6.25rem side padding leaves the grid no room on narrow
+// screens; scale it down on the media route so cards keep a usable width.
 @media (width <= 1200px) {
-  .gl-admin-media__grid {
-    grid-template-columns: repeat(3, 1fr);
+  section.admin-main.admin-main--media {
+    padding: 2rem;
+  }
+
+  .gl-admin-media-header {
+    &__filters,
+    &__button-wrapper {
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
   }
 }
 
 @media (width <= 768px) {
+  section.admin-main.admin-main--media {
+    padding: 1.5rem 0.75rem;
+  }
+
+  // Keep room for the bulk-select checkbox, which sits 8px outside the card.
   .gl-admin-media__grid {
-    grid-template-columns: repeat(2, 1fr);
+    padding: 1rem 0.5rem;
   }
 
   .gl-admin-media-header {
     flex-direction: column;
-    gap: 1rem;
 
     &-right {
+      align-items: flex-start;
       flex-direction: column;
       width: 100%;
     }
 
-    &__filters {
-      flex-wrap: wrap;
-      gap: 1rem;
+    &__filters,
+    &__filter-wrapper,
+    &__sort-wrapper,
+    &__button-wrapper {
+      max-width: 100%;
+      min-width: 0;
+    }
+
+    &__filter {
+      max-width: 100%;
+      min-width: 0;
+      width: 100%;
     }
   }
 
   .gl-admin-media__upload-area-button-wrapper {
     flex-direction: column;
     width: 100%;
-  }
-}
-
-@media (width <= 480px) {
-  .gl-admin-media__grid {
-    grid-template-columns: 1fr;
   }
 }
 
