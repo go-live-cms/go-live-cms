@@ -54,8 +54,7 @@ import (
 //   - 500 Internal Server Error: Password hashing or database failure
 func (server *Server) createUser(c *gin.Context) {
 	var req CreateUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -150,8 +149,7 @@ func (server *Server) updateUser(c *gin.Context) {
 	}
 
 	var req UpdateUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -210,6 +208,15 @@ func (server *Server) updateUser(c *gin.Context) {
 	// Apply updates only for provided fields
 	if req.Username != "" {
 		updateParams.Username = normUsername(req.Username)
+		// Login only accepts letters and digits, so a new username must too.
+		// An unchanged legacy one is let through: the admin form resends it.
+		if updateParams.Username != existingUser.Username && !isAlphanumeric(updateParams.Username) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":  "username must contain only letters and digits",
+				"fields": gin.H{"username": "must contain only letters and digits"},
+			})
+			return
+		}
 	}
 	if req.FullName != "" {
 		updateParams.FullName = req.FullName
@@ -335,10 +342,10 @@ func (server *Server) deleteUser(c *gin.Context) {
 		return
 	}
 
+	// The body is optional (simple deletion); one that is sent must be valid.
 	var req DeleteUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Allow empty request body for simple deletion
-		req = DeleteUserRequest{}
+	if !bindOptionalJSON(c, &req) {
+		return
 	}
 
 	// Verify user exists before attempting deletion

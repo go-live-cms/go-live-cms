@@ -91,3 +91,15 @@ func isUniqueViolation(err error) bool {
 	return containsString(err.Error(), "duplicate key value") ||
 		containsString(err.Error(), "unique constraint")
 }
+
+// isAlphanumeric reports whether s is only ASCII letters and digits, the
+// characters loginUser's username binding (alphanum) accepts.
+func isAlphanumeric(s string) bool {
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') {
+			return false
+		}
+	}
+	return s != ""
+}

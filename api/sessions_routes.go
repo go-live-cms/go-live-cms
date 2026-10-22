@@ -60,10 +60,12 @@ func (server *Server) RegisterSessionRoutes(v1 *gin.RouterGroup) {
 	auth := v1.Group("/auth")
 	// Credential and token endpoints get their own, stricter per-IP limits on
 	// top of the general one (brute force, token hammering; see ratelimit.go).
-	auth.POST("/register", server.rateLimits.register.perIP(), server.register)              // POST /api/v1/auth/register
-	auth.POST("/login", server.rateLimits.loginIP.perIP(), server.loginUser)                 // POST /api/v1/auth/login (+ per-username limit in the handler)
-	auth.POST("/refresh", server.rateLimits.refresh.perIP(), server.renewAccessToken)        // POST /api/v1/auth/refresh
-	auth.POST("/logout", authMiddleware(server.tokenMaker, server.store), server.logoutUser) // POST /api/v1/auth/logout
+	// Login, refresh and logout set or use the refresh cookie, so they also
+	// refuse cross-origin browser requests (origin_guard.go).
+	auth.POST("/register", server.rateLimits.register.perIP(), server.register)                                        // POST /api/v1/auth/register
+	auth.POST("/login", server.rateLimits.loginIP.perIP(), server.cookieOriginGuard, server.loginUser)                 // POST /api/v1/auth/login (+ per-username limit in the handler)
+	auth.POST("/refresh", server.rateLimits.refresh.perIP(), server.cookieOriginGuard, server.renewAccessToken)        // POST /api/v1/auth/refresh
+	auth.POST("/logout", server.cookieOriginGuard, authMiddleware(server.tokenMaker, server.store), server.logoutUser) // POST /api/v1/auth/logout
 
 	// Session management endpoints - uniformly protected
 	sessions := v1.Group("/sessions")
