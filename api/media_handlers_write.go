@@ -58,7 +58,6 @@ package api
 import (
 	"errors"
 	"fmt"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -403,7 +402,7 @@ func (server *Server) replaceMedia(c *gin.Context) {
 	if target, err := resolveInUploadDir(server.config.UploadPath, media.MediaPath); err == nil {
 		swap, err = swapInFile(target, file)
 		if err != nil {
-			log.Printf("replaceMedia: media %d: writing %q failed: %v", id, media.MediaPath, err)
+			server.requestLog(c).Error("media replace: writing file failed", "media_id", id, "media_path", media.MediaPath, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
 			return
 		}
@@ -433,7 +432,7 @@ func (server *Server) replaceMedia(c *gin.Context) {
 			undoErr = os.Remove(storedPath)
 		}
 		if undoErr != nil {
-			log.Printf("replaceMedia: media %d: undoing file swap after failed update: %v", id, undoErr)
+			server.requestLog(c).Error("media replace: undoing file swap after failed update", "media_id", id, "media_path", storedPath, "error", undoErr)
 		}
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
@@ -445,7 +444,7 @@ func (server *Server) replaceMedia(c *gin.Context) {
 
 	if swap != nil {
 		if err := swap.commit(); err != nil {
-			log.Printf("replaceMedia: media %d replaced but the old file was not removed: %v", id, err)
+			server.requestLog(c).Warn("media replaced but old file not removed", "media_id", id, "media_path", storedPath, "error", err)
 		}
 	}
 
@@ -587,7 +586,7 @@ func (server *Server) deleteMedia(c *gin.Context) {
 	// Best effort: the row is gone either way. A leftover file is logged, not
 	// surfaced, because the delete itself succeeded and cannot be retried.
 	if err := removeMediaFile(server.config.UploadPath, media.MediaPath); err != nil {
-		log.Printf("deleteMedia: media %d deleted but file %q not removed: %v", id, media.MediaPath, err)
+		server.requestLog(c).Warn("media deleted but file not removed", "media_id", id, "media_path", media.MediaPath, "error", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -64,6 +64,18 @@ jobs:
           API_PORT: :8080
         run: make coverage-check
 
+  backup-restore:
+    name: Backup/restore + migrations up/down/up
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Own compose project (golive_restore_test): migrations up/down/up, backup,
+      # wipe, restore, verify, and the API serving the restored media.
+      - name: Run restore test
+        run: sh scripts/backup/test-restore.sh
+
   web-tests:
     name: Web tests (editor/collaboration)
     runs-on: ubuntu-latest

@@ -61,6 +61,20 @@ export default function AuthGuard({
     checkAuth()
   }, [redirectTo, hasRedirected])
 
+  // Auth can also be cleared after mount (a failed refresh after a 401, a
+  // logout). Send the user to log in then, saying why, instead of leaving a
+  // page whose every request now fails.
+  useEffect(() => {
+    return authManager.subscribe((state) => {
+      if (state.isAuthenticated) return
+      setHasRedirected(true)
+      const params = new URLSearchParams({ redirect: window.location.pathname })
+      const reason = authManager.getSignOutReason()
+      if (reason && reason !== "signed-out") params.set("reason", reason)
+      window.location.href = `${redirectTo}?${params}`
+    })
+  }, [redirectTo])
+
   if (isLoading) {
     return (
       <div
