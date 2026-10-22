@@ -1,5 +1,6 @@
 import { login, logout, RefreshError, renewAccessToken } from "./api/sessions"
 import { getMe } from "./api/users"
+import { ApiError } from "./api"
 
 export interface AuthState {
   isAuthenticated: boolean
@@ -104,7 +105,9 @@ export class AuthManager {
     return this.isTokenExpired()
   }
 
-  async login(username: string, password: string): Promise<{ success: boolean; error?: string }> {
+  // On failure, status is the API's HTTP status when it answered (absent when
+  // the request never got there, e.g. the API is unreachable).
+  async login(username: string, password: string): Promise<{ success: boolean; error?: string; status?: number }> {
     try {
       const response = await login({ username, password })
 
@@ -137,6 +140,7 @@ export class AuthManager {
       return {
         success: false,
         error: error instanceof Error ? error.message : "Login failed",
+        status: error instanceof ApiError ? error.status : undefined,
       }
     }
   }

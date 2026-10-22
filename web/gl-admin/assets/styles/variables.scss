@@ -44,6 +44,7 @@
     --input-invalid-color: #a33a33;
     --input-invalid-border-color: #d93025;
     --input-invalid-box-shadow: 0 0 0 3px #d9302514;
+    --input-invalid-background: #fce8e6;
 
     // Select
     --select-disabled-background: #f5f5f5;
@@ -107,8 +108,10 @@
     --user-role-background-editor: linear-gradient(138deg, rgb(0 0 0 / 0%) 5.49%, rgb(0 0 0 / 15%) 95.27%), rgb(124 58 237 / 30%);
 }
 
-:root[data-theme="dark"] {
-    // ------------- Dark mode -------------
+// ------------- Dark mode -------------
+// A mixin so pages outside the admin SPA (e.g. /login, which has no data-theme
+// toggle) can apply the same tokens under prefers-color-scheme.
+@mixin dark-tokens {
     --background: #13181C;
     --border-color: #343C3F;
     --box-shadow: 0 0 8px 0 #1d2227;
@@ -158,6 +161,13 @@
     --input-label-color: #d8d9da;
     --input-color: #d8d9da;
     --input-active-color: #c8cacb;
+    --input-invalid-color: #f28b82;
+    --input-invalid-border-color: #e46962;
+    --input-invalid-background: #2c1b1b;
+}
+
+:root[data-theme="dark"] {
+    @include dark-tokens;
 
     .admin-sidebar {
         border-right: 1px solid var(--border-color)!important;

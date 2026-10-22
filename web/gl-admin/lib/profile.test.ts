@@ -48,6 +48,19 @@ describe("buildProfileUpdate", () => {
   })
 })
 
+describe("authManager.login", () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  // The login page maps these to "Incorrect username or password." and the
+  // rate-limit message; ApiError's message no longer contains the status.
+  it("returns the API's status on failure", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(429, { error: "too many requests, try again later" })))
+    await expect(authManager.login("u", "p")).resolves.toMatchObject({ success: false, status: 429 })
+    vi.stubGlobal("fetch", vi.fn(async () => json(401, { error: "invalid credentials" })))
+    await expect(authManager.login("u", "p")).resolves.toMatchObject({ success: false, status: 401 })
+  })
+})
+
 describe("authManager.setUser", () => {
   it("stores the user and notifies subscribers without another request", () => {
     const fetchMock = vi.fn()

@@ -171,6 +171,9 @@ make migrateup     # Run all migrations
 make migratedown   # Rollback all migrations
 ```
 
+Backups, restore, and running migrations in production:
+[docs/operations/backups.md](docs/operations/backups.md).
+
 ### Code Generation & Testing
 
 ```bash
