@@ -83,7 +83,6 @@ cleanup() {
 		rm -rf -- "$work"
 		log "removed incomplete $work"
 	fi
-	[ -z "${ws_copy:-}" ] || rm -rf -- "$ws_copy"
 	exit "$status"
 }
 trap cleanup EXIT
@@ -100,9 +99,16 @@ pg pg_dump --format=custom --compress=6 --file="$work/db.dump" ||
 # A dump pg_restore can't list is useless; catch truncation now, not at restore.
 pg_restore --list "$work/db.dump" >/dev/null || die "db.dump is not readable by pg_restore"
 
-migration=$(pg psql -X -A -t -v ON_ERROR_STOP=1 \
-	-c "SELECT version || ' dirty=' || dirty FROM schema_migrations" 2>/dev/null) ||
-	migration="unknown (no schema_migrations table)"
+if migration=$(pg psql -X -A -t -v ON_ERROR_STOP=1 \
+	-c "SELECT version || ' dirty=' || dirty FROM schema_migrations"); then
+	[ -n "$migration" ] || {
+		migration="none (schema_migrations is empty)"
+		log "WARNING: schema_migrations is empty; this set records no schema version"
+	}
+else
+	migration="unknown (schema_migrations unreadable)"
+	log "WARNING: cannot read schema_migrations; this set records no schema version"
+fi
 server_version=$(pg psql -X -A -t -v ON_ERROR_STOP=1 -c "SHOW server_version") ||
 	die "cannot query the server version"
 case $migration in
@@ -118,17 +124,19 @@ else
 fi
 
 # 3. Collab LevelDB (optional). It is only a safety net for in-flight Yjs state;
-# Postgres block_doc is canonical. Copy first to shrink the window in which the
-# live server can change files mid-archive. A snapshot that is still torn is
-# detected and cleared by the server on load (evaluatePersistedState).
+# Postgres block_doc is canonical. The live server may change files while tar
+# reads them; a torn snapshot is detected and cleared by the server on load
+# (evaluatePersistedState). GNU tar exits 1 for "file changed as we read it",
+# which is expected here; 2 is a real failure.
 if [ -n "$WS_DATA_DIR" ]; then
 	log "snapshotting LevelDB from $WS_DATA_DIR"
-	ws_copy="$work/.leveldb-copy"
-	mkdir "$ws_copy"
-	cp -R "$WS_DATA_DIR"/. "$ws_copy"/ || die "copying $WS_DATA_DIR failed"
-	tar -C "$ws_copy" -czf "$work/leveldb.tar.gz" . || die "LevelDB archive failed"
-	rm -rf -- "$ws_copy"
-	ws_copy=
+	rc=0
+	tar -C "$WS_DATA_DIR" -czf "$work/leveldb.tar.gz" . || rc=$?
+	case $rc in
+		0) ;;
+		1) log "WARNING: LevelDB changed while archiving; the snapshot may be torn" ;;
+		*) die "LevelDB archive failed" ;;
+	esac
 fi
 
 {

@@ -107,9 +107,11 @@ losing the host. After each run, copy the new set off-host:
    `WS_DATA_DIR` has any file. `--force` replaces them instead: it drops the `public`
    schema and empties the directories. Prefer a new database.
 
-The database restore runs in one transaction (`pg_restore --single-transaction`), so
-it either completes or leaves the database empty. Ownership and grants are not
-restored; objects belong to the `DB_SOURCE` user.
+The dump is first rendered to SQL in `$TMPDIR` (needs about the uncompressed size of
+the database), then the `--force` schema reset and the whole restore run in **one**
+transaction: any error rolls back to the database exactly as it was. Ownership and
+grants are not restored; objects belong to the `DB_SOURCE` user, which does not need
+to be a superuser (it must own the database).
 
 LevelDB: by default `WS_DATA_DIR` (if set) is left **empty**, so every document reseeds
 from the restored `block_doc`. That is the safe choice. `--with-leveldb` restores the
@@ -178,7 +180,9 @@ LevelDB file); takes three backups with `RETAIN=2`; checks that failed backups e
 non-zero and leave nothing behind; checks that restore refuses a non-empty database and
 a damaged set; drops the database and deletes the media; restores; and compares every
 table's row count, a hash of all `block_doc`s, one post's `block_doc` and the media
-file's sha256. Finally it starts the real API in release mode on the restored data and
+file's sha256. It also restores as a non-superuser into its own database, and checks
+that a `--force` restore which fails after dropping the schema rolls back to the old
+data. Finally it starts the real API in release mode on the restored data and
 checks that it serves the media file byte for byte and the restored post and media rows.
 CI runs it in the `backup-restore` job.
 

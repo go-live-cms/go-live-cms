@@ -12,7 +12,9 @@
 #   3. restore.sh refuses to overwrite a non-empty database without --force;
 #   4. after wiping the database and media, restore.sh brings back identical
 #      row counts, an identical post block_doc and the same schema version;
-#   5. --force --with-leveldb replaces existing data and restores LevelDB;
+#   5. --force --with-leveldb replaces existing data and restores LevelDB; a
+#      least-privilege user can restore; a --force restore that fails midway
+#      rolls back to the old data;
 #   6. the real API (release mode, so the seeded-account guard runs) starts on
 #      the restored data and serves the restored media file byte for byte.
 
@@ -29,6 +31,13 @@ step() { printf '\n==> %s\n' "$*"; }
 fail() { printf '\nFAIL: %s\n' "$*" >&2; exit 1; }
 psql_q() { compose exec -T postgres psql -U root -d golive_cms -X -A -t -v ON_ERROR_STOP=1 -c "$1"; }
 in_tools() { compose run --rm -T tools -c "$1"; }
+# expect_fail <what> <message the script must print> <tools command>: the command
+# must fail AND say why, so a crash or a docker error can't pass as a refusal.
+expect_fail() {
+	if out=$(in_tools "$3" 2>&1); then fail "$1 succeeded"; fi
+	printf '%s\n' "$out" | grep -q -- "$2" || fail "$1 failed without '$2':
+$out"
+}
 
 teardown() {
 	status=$?
@@ -61,6 +70,9 @@ media_sha() { in_tools 'sha256sum /app/uploads/media/restore-test.bin' | cut -d'
 
 step "fresh scratch stack"
 compose down -v --remove-orphans >/dev/null 2>&1 || true
+# Go caches are external so `down -v` keeps them between runs.
+docker volume create golive_restore_test_gomod >/dev/null
+docker volume create golive_restore_test_gocache >/dev/null
 compose up -d --wait postgres
 
 step "migrations: up, down -all, up"
@@ -114,10 +126,9 @@ sets=$(in_tools 'ls -d /backups/golive-*Z | wc -l' | tr -d ' \r')
 in_tools 'ls -l /backups/$(ls /backups | tail -n 1) && cat /backups/$(ls /backups | tail -n 1)/backup.info'
 
 step "backup: failures exit non-zero and leave no set behind"
-if in_tools 'MEDIA_DIR= sh /scripts/backup.sh' 2>/dev/null; then fail "backup without MEDIA_DIR succeeded"; fi
-if in_tools 'DB_SOURCE=postgresql://root:wrong@postgres:5432/golive_cms?sslmode=disable sh /scripts/backup.sh' 2>/dev/null; then
-	fail "backup with a bad password succeeded"
-fi
+expect_fail "backup without MEDIA_DIR" "MEDIA_DIR is not set" 'MEDIA_DIR= sh /scripts/backup.sh'
+expect_fail "backup with a bad password" "pg_dump failed" \
+	'DB_SOURCE=postgresql://root:wrong@postgres:5432/golive_cms?sslmode=disable sh /scripts/backup.sh'
 leftover=$(in_tools 'ls -d /backups/*.partial 2>/dev/null | wc -l' | tr -d ' \r')
 [ "$leftover" = 0 ] || fail "a failed backup left $leftover .partial set(s)"
 sets=$(in_tools 'ls -d /backups/golive-*Z | wc -l' | tr -d ' \r')
@@ -126,12 +137,12 @@ sets=$(in_tools 'ls -d /backups/golive-*Z | wc -l' | tr -d ' \r')
 latest='/backups/$(ls /backups | tail -n 1)'
 
 step "restore: refuses a non-empty database without --force"
-if in_tools "sh /scripts/restore.sh $latest" 2>/dev/null; then fail "restore overwrote a non-empty database without --force"; fi
+expect_fail "restore into a non-empty database" "refusing to overwrite existing data" "sh /scripts/restore.sh $latest"
 [ "$(psql_q 'SELECT count(*) FROM posts')" = 250 ] || fail "the refused restore changed the database"
 
 step "restore: refuses a damaged set"
 in_tools "cp -R $latest /backups/damaged && printf x >> /backups/damaged/db.dump"
-if in_tools 'sh /scripts/restore.sh /backups/damaged' 2>/dev/null; then fail "restore accepted a set with a bad checksum"; fi
+expect_fail "restore of a damaged set" "checksum mismatch" 'sh /scripts/restore.sh /backups/damaged'
 in_tools 'rm -rf /backups/damaged'
 
 step "wipe: drop the database, delete media and LevelDB"
@@ -155,6 +166,25 @@ $actual"
 [ "$(media_sha)" = "$expected_sha" ] || fail "restored media file differs"
 [ -z "$(in_tools 'ls -A /data/yjs' | tr -d '\r')" ] || fail "LevelDB dir should stay empty without --with-leveldb"
 echo "identical: $(echo "$actual" | wc -l | tr -d ' ') fingerprint lines, post block_doc, media sha256 $expected_sha"
+
+step "restore as a least-privilege user (owns its database, not schema public)"
+psql_q "CREATE ROLE restorer LOGIN PASSWORD 'restorer'" >/dev/null
+compose exec -T postgres createdb -U root -O restorer golive_np
+in_tools "DB_SOURCE='postgresql://restorer:restorer@postgres:5432/golive_np?sslmode=disable' SKIP_MEDIA=1 WS_DATA_DIR= sh /scripts/restore.sh $latest"
+[ "$(compose exec -T postgres psql -U root -d golive_np -X -A -t -c 'SELECT count(*) FROM posts' | tr -d '\r')" = 250 ] ||
+	fail "least-privilege restore is incomplete"
+
+step "restore --force that fails rolls back to the old data"
+# An event trigger (its function outside schema public, so DROP SCHEMA public
+# CASCADE keeps it) fails the first CREATE TABLE, i.e. after the DROP SCHEMA
+# already ran in the restore transaction.
+psql_q "CREATE SCHEMA blocker;
+	CREATE FUNCTION blocker.fail() RETURNS event_trigger LANGUAGE plpgsql AS \$\$ BEGIN RAISE EXCEPTION 'blocked by test-restore'; END \$\$;
+	CREATE EVENT TRIGGER block_create_table ON ddl_command_start WHEN TAG IN ('CREATE TABLE') EXECUTE FUNCTION blocker.fail();" >/dev/null
+expect_fail "restore --force that fails midway" "rolled back" "sh /scripts/restore.sh --force $latest"
+psql_q "DROP EVENT TRIGGER block_create_table; DROP SCHEMA blocker CASCADE;" >/dev/null
+[ "$(fingerprint)" = "$expected" ] || fail "a failed --force restore changed the database"
+[ "$(media_sha)" = "$expected_sha" ] || fail "a failed --force restore touched the media"
 
 step "restore --force --with-leveldb over the restored data"
 in_tools "sh /scripts/restore.sh --force --with-leveldb $latest"

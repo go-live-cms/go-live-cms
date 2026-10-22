@@ -1,5 +1,10 @@
 name: golive_cms
 
+# UPGRADING a deployment that used this file before #141: Postgres data and
+# uploads now live in the named volumes postgres_data and uploads. They start
+# EMPTY, and the API will happily run on an empty database. Move your data
+# first: docs/operations/backups.md, "Upgrading a compose.yaml deployment".
+
 services:
   postgres:
     image: postgres:12-alpine

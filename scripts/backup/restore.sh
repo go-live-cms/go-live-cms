@@ -117,15 +117,29 @@ Restore into a new database / empty directories, or pass --force to DELETE it fi
 fi
 
 # --- 3. Database --------------------------------------------------------------
-if [ "$tables" -ne 0 ]; then
-	log "--force: dropping and recreating schema public"
-	sql "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" >/dev/null || die "cannot reset schema public"
-fi
+# Render the dump to SQL first, then run the --force schema reset AND the
+# restore in one psql transaction: on any error the database is left exactly
+# as it was, old data included. Ownership/grants are not restored, so objects
+# belong to the DB_SOURCE user. The public schema's own entries are skipped:
+# only its owner (the bootstrap superuser on PG 12) may comment on it, which
+# would abort a restore by a least-privilege user.
+sql_file=$(mktemp "${TMPDIR:-/tmp}/golive-restore.XXXXXX") || die "cannot create a temp file"
+toc_file="$sql_file.toc"
+trap 'rm -f -- "$sql_file" "$toc_file"' EXIT
+pg_restore --list "$SET_DIR/db.dump" | grep -v -E '^[0-9]+; [0-9]+ [0-9]+ (SCHEMA - public|COMMENT - SCHEMA public) ' >"$toc_file" ||
+	die "cannot read the dump's table of contents"
+{
+	if [ "$tables" -ne 0 ]; then
+		echo "DROP SCHEMA public CASCADE;"
+		echo "CREATE SCHEMA public;"
+	fi
+	pg_restore --no-owner --no-privileges --use-list="$toc_file" --file=- "$SET_DIR/db.dump" ||
+		die "cannot render db.dump to SQL (nothing was changed)"
+} >"$sql_file" || die "cannot render db.dump to SQL (nothing was changed)"
+[ "$tables" -eq 0 ] || log "--force: dropping and recreating schema public in the restore transaction"
 log "restoring database"
-# One transaction: the database ends up either fully restored or untouched.
-# Ownership/grants are not restored, so objects belong to the DB_SOURCE user.
-pg pg_restore --exit-on-error --single-transaction --no-owner --no-privileges "$SET_DIR/db.dump" ||
-	die "pg_restore failed; the target database was left without the restored data"
+pg psql -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$sql_file" >/dev/null ||
+	die "restore failed and was rolled back; the target database is unchanged"
 
 migration=$(sql "SELECT version || ' dirty=' || dirty FROM schema_migrations") ||
 	die "restored database has no schema_migrations table"

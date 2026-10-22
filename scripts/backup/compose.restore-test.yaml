@@ -81,5 +81,10 @@ volumes:
   uploads:
   ws_data:
   backups:
+  # External so the script's `down -v` keeps them (it creates them first).
   gomod:
+    external: true
+    name: golive_restore_test_gomod
   gocache:
+    external: true
+    name: golive_restore_test_gocache
