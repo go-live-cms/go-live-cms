@@ -134,7 +134,23 @@ jobs:
             *[!0-9a-f]*|"") echo "::error::tag must be a commit sha that CD pushed, got '$TAG'"; exit 1 ;;
           esac
 
+      # The concurrency group serializes deploys but doesn't order them: an older merge
+      # whose images finished later would deploy after a newer one and roll production
+      # back. An automatic deploy only proceeds while its commit is still main's tip;
+      # otherwise the newer commit's own run deploys. Manual runs deploy what they're told.
+      - name: Skip if superseded
+        id: current
+        run: |
+          tip="$(git ls-remote origin refs/heads/main | cut -f1)"
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "$tip" != "$TAG" ]; then
+            echo "::notice::$TAG is no longer main's tip ($tip); its run deploys instead"
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Write .env and SSH config
+        if: steps.current.outputs.deploy == 'true'
         env:
           SITE_ADDRESS: ${{ vars.SITE_ADDRESS }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -159,6 +175,7 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
       - name: Copy the deploy files
+        if: steps.current.outputs.deploy == 'true'
         env:
           DEPLOY_TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
         run: |
@@ -173,6 +190,7 @@ jobs:
           rm -f deploy.env
 
       - name: Deploy
+        if: steps.current.outputs.deploy == 'true'
         env:
           DEPLOY_TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

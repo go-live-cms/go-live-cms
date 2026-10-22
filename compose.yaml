@@ -118,10 +118,11 @@ services:
       # Every SSR request calls the API (active theme), so wait for /readyz.
       api:
         condition: service_healthy
-    # /login renders through the middleware, which fetches the active theme, so this
-    # is healthy only when SSR works end to end. busybox wget (node:22-alpine).
+    # A static file, served by the Node server without SSR: a page would run the
+    # middleware (and an API call) every 10s. API readiness is the api healthcheck's job,
+    # and depends_on above already waits for it. busybox wget (node:22-alpine).
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4321/login"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4321/favicon.ico"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -154,7 +155,7 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    # GET / answers 200 once the server listens (same check as the image's HEALTHCHECK).
+    # GET / answers 200 once the server listens (server.js). busybox wget.
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:1234/"]
       interval: 10s

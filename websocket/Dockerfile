@@ -23,8 +23,5 @@ USER node
 
 EXPOSE 1234
 
-# GET / is the server's liveness answer (server.js). busybox wget, no curl in alpine.
-HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
-  CMD wget -q -O /dev/null http://127.0.0.1:1234/ || exit 1
-
+# The healthcheck lives in compose.yaml, like the api's and web's.
 CMD ["node", "server.js"]

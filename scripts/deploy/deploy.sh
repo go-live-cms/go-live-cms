@@ -7,10 +7,10 @@
 #
 # Order, so the new API never runs against an unmigrated schema:
 #   1. pull the three app images for <tag>
-#   2. back up the database + media (scripts/backup/backup.sh), unless SKIP_BACKUP=1
-#   3. refuse if the database is AHEAD of <tag>'s migrations (a rollback past a release
+#   2. refuse if the database is AHEAD of <tag>'s migrations (a rollback past a release
 #      that added migrations), unless ALLOW_DOWN_MIGRATIONS=1, which migrates down with
 #      the currently running API image (the only one that has those down files)
+#   3. back up the database + media (scripts/backup/backup.sh), unless SKIP_BACKUP=1
 #   4. run `migrate up` with the NEW api image as a one-shot container
 #   5. recreate the services and wait until every healthcheck passes
 #
@@ -58,12 +58,34 @@ dc up -d --wait postgres
 
 DB_VERSION="$(psql_q "SELECT version FROM schema_migrations" || true)"
 DB_DIRTY="$(psql_q "SELECT dirty FROM schema_migrations" || true)"
-TARGET_VERSION="$(image_migration_version "$API_IMAGE")"
+TARGET_VERSION="$(image_migration_version "$API_IMAGE" || true)"
+# Fail loudly instead of letting a non-number skip the rollback guard below.
+case "$TARGET_VERSION" in
+  ''|*[!0-9]*) echo "deploy: can't read the migration version of $API_IMAGE (image missing or no /app/migration)" >&2; exit 1 ;;
+esac
+case "$DB_VERSION" in
+  *[!0-9]*) echo "deploy: unexpected schema_migrations version '$DB_VERSION'" >&2; exit 1 ;;
+esac
 log "database at migration ${DB_VERSION:-none}, $TAG ships up to $TARGET_VERSION"
 
 if [ "$DB_DIRTY" = "t" ]; then
   echo "deploy: schema_migrations is dirty (a migration failed half way). Fix it by hand first: docs/operations/deploy.md, \"Failed migration\"." >&2
   exit 1
+fi
+
+MIGRATE_DOWN=""
+if [ -n "$DB_VERSION" ] && [ "$DB_VERSION" -gt "$TARGET_VERSION" ]; then
+  # Checked before the backup, so refused attempts don't rotate older backup sets out.
+  if [ "${ALLOW_DOWN_MIGRATIONS:-}" != "1" ]; then
+    echo "deploy: the database (migration $DB_VERSION) is ahead of $TAG (up to $TARGET_VERSION)." >&2
+    echo "deploy: the older API would fail its startup 'migrate up'. Down migrations can drop data," >&2
+    echo "deploy: so re-run with ALLOW_DOWN_MIGRATIONS=1 if that's intended (a backup is taken first)," >&2
+    echo "deploy: or restore the pre-release backup instead. See docs/operations/deploy.md, \"Rollback\"." >&2
+    exit 1
+  fi
+  RUNNING_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$(dc ps -q api)" 2>/dev/null || true)"
+  [ -n "$RUNNING_IMAGE" ] || { echo "deploy: no running api container to migrate down with" >&2; exit 1; }
+  MIGRATE_DOWN=1
 fi
 
 if [ -n "$DB_VERSION" ] && [ "${SKIP_BACKUP:-}" != "1" ]; then
@@ -72,23 +94,20 @@ if [ -n "$DB_VERSION" ] && [ "${SKIP_BACKUP:-}" != "1" ]; then
   docker run --rm --network "${PROJECT}_default" \
     -e DB_SOURCE="$DB_SOURCE" -e BACKUP_DIR=/backups -e MEDIA_DIR=/app/uploads/media \
     -e RETAIN="${BACKUP_RETAIN:-20}" \
-    -v "${PROJECT}_uploads:/app/uploads:ro" \
+    -v "${PROJECT}_uploads:/app/uploads" \
     -v "$BACKUP_DIR:/backups" \
     -v "$(pwd)/scripts/backup:/scripts:ro" \
-    postgres:12-alpine sh /scripts/backup.sh
+    postgres:12-alpine sh -c 'mkdir -p "$MEDIA_DIR" && exec sh /scripts/backup.sh'
+    # (The media dir only exists after the first upload, and backup.sh rightly refuses a
+    # missing MEDIA_DIR, so create it; that's the volume's only write.)
 fi
 
-if [ -n "$DB_VERSION" ] && [ "$DB_VERSION" -gt "$TARGET_VERSION" ]; then
-  if [ "${ALLOW_DOWN_MIGRATIONS:-}" != "1" ]; then
-    echo "deploy: the database (migration $DB_VERSION) is ahead of $TAG (up to $TARGET_VERSION)." >&2
-    echo "deploy: the older API would fail its startup 'migrate up'. Down migrations can drop data," >&2
-    echo "deploy: so re-run with ALLOW_DOWN_MIGRATIONS=1 if that's intended (a backup was just taken)," >&2
-    echo "deploy: or restore the pre-release backup instead. See docs/operations/deploy.md, \"Rollback\"." >&2
-    exit 1
-  fi
-  RUNNING_IMAGE="$(docker inspect --format '{{.Config.Image}}' "$(dc ps -q api)" 2>/dev/null || true)"
-  [ -n "$RUNNING_IMAGE" ] || { echo "deploy: no running api container to migrate down with" >&2; exit 1; }
+if [ -n "$MIGRATE_DOWN" ]; then
   log "migrating DOWN to $TARGET_VERSION with $RUNNING_IMAGE"
+  # If anything below fails, bring the stopped API back rather than leave /api down.
+  # (Its startup `migrate up` re-applies a completed down; a dirty schema needs a human.)
+  trap 'if [ -n "${API_STOPPED:-}" ]; then echo "deploy: failed, restarting the previous api" >&2; dc start api || true; fi' EXIT
+  API_STOPPED=1
   dc stop api
   migrate_with "$RUNNING_IMAGE" goto "$TARGET_VERSION"
 fi
@@ -98,6 +117,7 @@ migrate_with "$API_IMAGE" up
 
 log "starting $TAG"
 dc up -d --no-build --remove-orphans --wait --wait-timeout 240
+API_STOPPED=""
 
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $TAG" >> .deploy-history
 log "done: $TAG is live (history in .deploy-history)"

@@ -70,10 +70,10 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   `import.meta.env.PUBLIC_API_URL` or `import.meta.env.SERVER_API_URL` in SSR code:
   Astro inlines them at build time. `PUBLIC_API_URL` is only the browser-facing origin for
   the admin CSP, unset in production.
-- **Themes are build-time** (#272): the middleware's template `import()`s of
-  `themes/${slug}/theme.config.ts` / `functions.ts` and the layout `import.meta.glob`s are
-  resolved by Vite when the image is built. A theme added later can't load (logged as
-  "not in this build"). The API image ships `web/themes` too, for its startup scan.
+- **Themes are build-time** (#272): the middleware loads `theme.config.ts` /
+  `functions.ts` through `import.meta.glob` maps (`THEME_CONFIGS`, `THEME_FUNCTIONS`), and
+  layouts through globs too, all resolved by Vite when the image is built. A theme added
+  later has no entry (logged as "not in this build"). The API image ships `web/themes` too, for its startup scan.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

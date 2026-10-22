@@ -50,8 +50,8 @@ build time, so one web image works for any domain.
 
 Decision (#272): themes are part of the build, not loaded at runtime.
 
-- Vite resolves the middleware's `import(\`../../themes/${slug}/theme.config.ts\`)`,
-  `functions.ts` and the theme `.astro` layouts (`import.meta.glob`) when the web image
+- Vite resolves the middleware's theme globs (`themes/*/theme.config.ts`,
+  `functions.ts`) and the theme `.astro` layouts (`import.meta.glob`) when the web image
   is built. A theme copied into a running container can't load: the server logs
   `Theme "<slug>" is not in this build` and falls back to the theme's CSS only. Don't
   mount a volume over `/app/themes`.
@@ -121,16 +121,20 @@ Caddyfile, the scripts and `.env` to `DEPLOY_PATH`:
 
 1. `docker compose pull` the three images for `<sha>` (GHCR login with the job's
    short-lived token, logged out afterwards).
-2. Back up the database and media to `BACKUP_DIR` (`/srv/golive-backups`, keeps 20 sets).
-3. Check the schema version. A dirty `schema_migrations` stops the deploy. So does a
-   database newer than `<sha>`'s migrations (see Rollback).
+2. Check the schema version. A dirty `schema_migrations` stops the deploy. So does a
+   database newer than `<sha>`'s migrations (see Rollback). Both stop before the backup,
+   so refused attempts don't rotate older backup sets out.
+3. Back up the database and media to `BACKUP_DIR` (`/srv/golive-backups`, keeps 20 sets).
 4. **Migrations run before the new API starts:** a one-shot `migrate up` with the new api
    image. The old API keeps serving meanwhile, so a migration must stay compatible with the
    previous release (add columns/tables first, drop them a release later). `start.sh` still
    runs `migrate up` on boot, which is then a no-op.
 5. `docker compose up -d --wait`: recreates what changed and fails the job unless every
-   healthcheck passes (api `/readyz`, web `/login`, websocket `/`) within 4 minutes.
+   healthcheck passes (api `/readyz`, web `/favicon.ico`, websocket `/`) within 4 minutes.
 6. Appends `<time> <sha>` to `/opt/golive/.deploy-history`.
+
+Deploys run one at a time. An automatic deploy is skipped when its commit is no longer
+`main`'s tip by the time it runs, so a slow older run can't roll back a newer one.
 
 Expect a few seconds of downtime while containers are recreated. Open editors show
 "Reconnecting" and resync by themselves: LevelDB and the editor's 2s autosave cover the gap.
@@ -145,7 +149,7 @@ the **cd** workflow manually (Actions → cd → Run workflow) with that sha.
   startup `migrate up` would fail. The deploy stops and says so. Choose one:
   - Tick **allow_down_migrations**. The script takes a backup, then migrates down to the
     old release's version with the *current* api image (the only one with those down
-    files). Down migrations can drop data (e.g. `000004` drops `block_doc`), so read them
+    files). If that fails, it starts the previous API again before exiting. Down migrations can drop data (e.g. `000004` drops `block_doc`), so read them
     first.
   - Or restore the backup taken just before the bad deploy ([backups.md](backups.md),
     "Restoring"), then deploy the old sha.
@@ -179,7 +183,10 @@ browsers accept the `Secure` refresh cookie on `localhost`, and the editor then 
 The old `compose.yaml` had no proxy or collab server, a fixed Postgres password `secret`,
 and published 5432, 8080 and 4321.
 
-1. Back up first ([backups.md](backups.md)).
+1. Back up first ([backups.md](backups.md)). Then stop the old stack with
+   `docker compose down` (**without** `-v`: the volumes hold your data). The default
+   network's address config changed (a fixed `ip_range`), and Compose won't change an
+   existing network in place; `down` removes it, and the first deploy recreates it.
 2. Postgres only reads `POSTGRES_PASSWORD` when it initialises an empty volume. With
    existing data, either set `POSTGRES_PASSWORD=secret` in `.env` for the first start,
    or change the password before switching:
