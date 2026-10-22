@@ -165,7 +165,7 @@ describe("AuthManager session restore", () => {
   })
 
   it("logout revokes the server session and clears memory and storage", async () => {
-    const fetchMock = vi.fn(async (url: string) =>
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
       url === "/api/v1/auth/logout"
         ? json(200, { message: "logged out successfully" })
         : json(200, { access_token: "login-token", expires_at: expiresAt(), user: USER })
@@ -239,7 +239,7 @@ describe("AuthManager across tabs", () => {
     expect(b.getState().isAuthenticated).toBe(true)
 
     // b now holds a valid token: restoring needs no refresh.
-    const fetchMock = vi.fn(async () => json(200, { user: USER }))
+    const fetchMock = vi.fn(async (_url: string) => json(200, { user: USER }))
     vi.stubGlobal("fetch", fetchMock)
     await expect(b.restoreSession()).resolves.toBe(true)
     expect(fetchMock.mock.calls.some((c) => c[0] === "/api/v1/auth/refresh")).toBe(false)
