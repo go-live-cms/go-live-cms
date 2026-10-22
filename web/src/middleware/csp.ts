@@ -91,6 +91,15 @@ export function isAdminPath(pathname: string): boolean {
   return pathname === "/gl-admin" || pathname.startsWith("/gl-admin/")
 }
 
+// The signed-out pages that handle credentials and emailed tokens (#148). Same
+// policy as the admin: their only scripts are our bundled modules.
+const ACCOUNT_PAGES = ["/login", "/forgot-password", "/reset-password", "/accept-invite"]
+
+export function isAccountPagePath(pathname: string): boolean {
+  const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname
+  return ACCOUNT_PAGES.includes(path)
+}
+
 // Wraps an admin HTML response: nonces its scripts and sets the CSP header. Non-HTML
 // responses (e.g. /gl-admin/assets/*) pass through untouched.
 export async function applyAdminCsp(

@@ -31,13 +31,14 @@ export function isValidEmail(email: string): boolean {
 }
 
 // A new password and its confirmation, as typed (the API doesn't trim them
-// either). Shared with UserForm so every form applies the API's min=6.
-export function validateNewPassword(password: string, confirm: string): string | null {
+// either). Shared with UserForm and the account pages so every form applies
+// the API's min=6. label names the field in the messages.
+export function validateNewPassword(password: string, confirm: string, label = "New password"): string | null {
   if (runeLength(password) < PASSWORD_MIN) {
-    return `New password must be at least ${PASSWORD_MIN} characters.`
+    return `${label} must be at least ${PASSWORD_MIN} characters.`
   }
   if (password !== confirm) {
-    return "New passwords do not match."
+    return `${label}s do not match.`
   }
   return null
 }
@@ -85,7 +86,8 @@ export function validatePasswordChange(fields: PasswordFields): string | null {
   return null
 }
 
-function retryHint(err: ApiError): string {
+// The "try again" half of a 429 message, from Retry-After.
+export function retryHint(err: ApiError): string {
   const seconds = err.retryAfterSeconds
   if (seconds == null) return "Please wait a minute and try again."
   if (seconds === 0) return "Please try again."

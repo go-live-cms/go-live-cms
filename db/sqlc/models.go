@@ -43,6 +43,15 @@ type Medium struct {
 	FocalY           sql.NullFloat64 `json:"focal_y"`
 }
 
+type PasswordResetToken struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	TokenHash []byte       `json:"token_hash"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	UsedAt    sql.NullTime `json:"used_at"`
+	CreatedAt time.Time    `json:"created_at"`
+}
+
 type Post struct {
 	ID                 int64                 `json:"id"`
 	Title              string                `json:"title"`
@@ -190,6 +199,19 @@ type User struct {
 	PasswordChangedAt time.Time `json:"password_changed_at"`
 	CreatedAt         time.Time `json:"created_at"`
 	Role              string    `json:"role"`
+}
+
+type UserInvitation struct {
+	ID             int64         `json:"id"`
+	Email          string        `json:"email"`
+	Role           string        `json:"role"`
+	TokenHash      []byte        `json:"token_hash"`
+	InvitedBy      sql.NullInt64 `json:"invited_by"`
+	ExpiresAt      time.Time     `json:"expires_at"`
+	AcceptedAt     sql.NullTime  `json:"accepted_at"`
+	AcceptedUserID sql.NullInt64 `json:"accepted_user_id"`
+	RevokedAt      sql.NullTime  `json:"revoked_at"`
+	CreatedAt      time.Time     `json:"created_at"`
 }
 
 type UserPost struct {

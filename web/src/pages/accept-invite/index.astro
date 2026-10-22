@@ -1,0 +1,86 @@
+---
+import AccountPage from "@/layouts/AccountPage.astro"
+---
+
+<AccountPage title="Accept invitation" heading="Set up your account" subtitle="You've been invited to the GoLive admin">
+  <form class="gl-admin-login__form" id="acceptForm" novalidate>
+    <p class="gl-admin-login__text" id="inviteSummary" role="status"></p>
+
+    <div class="gl-admin-login__fields">
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="text"
+          id="username"
+          name="username"
+          placeholder=" "
+          required
+          minlength="3"
+          maxlength="50"
+          autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
+        />
+        <label class="gl-input__label" for="username">Username</label>
+      </div>
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="text"
+          id="full_name"
+          name="full_name"
+          placeholder=" "
+          required
+          minlength="2"
+          maxlength="100"
+          autocomplete="name"
+        />
+        <label class="gl-input__label" for="full_name">Full name</label>
+      </div>
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="password"
+          id="password"
+          name="password"
+          placeholder=" "
+          required
+          minlength="6"
+          autocomplete="new-password"
+        />
+        <label class="gl-input__label" for="password">Password</label>
+      </div>
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="password"
+          id="confirm_password"
+          name="confirm_password"
+          placeholder=" "
+          required
+          minlength="6"
+          autocomplete="new-password"
+        />
+        <label class="gl-input__label" for="confirm_password">Confirm password</label>
+      </div>
+    </div>
+
+    <button type="submit" class="button primary gl-admin-login__submit">
+      <span class="gl-admin-login__spinner" data-spinner aria-hidden="true" hidden></span>
+      <span data-label>Create account</span>
+    </button>
+  </form>
+
+  <div class="gl-admin-login__panel" id="linkInvalid" role="status" hidden>
+    <p class="gl-admin-login__text">
+      This invitation link is invalid, has expired, or was already used. Ask an administrator to send you a new one.
+    </p>
+    <p class="gl-admin-login__footer"><a class="gl-admin-login__link" href="/login">Sign in</a></p>
+  </div>
+</AccountPage>
+
+<script>
+  import { mountAcceptInvitePage } from "@gl-admin/lib/accountPages"
+
+  void mountAcceptInvitePage()
+</script>

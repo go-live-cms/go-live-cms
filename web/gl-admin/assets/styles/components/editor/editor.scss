@@ -558,3 +558,14 @@
     min-width: 120px;
   }
 }
+
+// Shown when the shared doc holds block types the editor can't build and the editor
+// is opened read-only instead of binding collaboration (#206/#274).
+.editor-blocked-notice {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--warning);
+  border-radius: 6px;
+  background: rgba(var(--warning-rgb), 0.1);
+  font-size: 0.875rem;
+}

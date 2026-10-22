@@ -52,6 +52,14 @@ SET
 WHERE id = $1
 RETURNING *;
 
+-- name: SetUserPassword :one
+UPDATE users
+SET
+    hashed_password = $2,
+    password_changed_at = $3
+WHERE id = $1
+RETURNING *;
+
 -- name: DeleteUser :exec
 DELETE FROM users
 WHERE id = $1;
