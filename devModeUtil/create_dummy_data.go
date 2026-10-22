@@ -78,6 +78,7 @@ package devModeUtil
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -169,7 +170,7 @@ func CreateDummyData(store db.Store, config util.Config) {
 	log.Printf("✅ Created %d dummy users", len(users))
 
 	taxonomyTypes, taxonomyTerms := createDummyTaxonomies(store)
-	log.Printf("✅ Created %d taxonomy types and %d taxonomy terms", len(taxonomyTypes), len(taxonomyTerms))
+	log.Printf("✅ Using %d taxonomy types, created %d taxonomy terms", len(taxonomyTypes), len(taxonomyTerms))
 
 	media := createDummyMedia(store, users, config)
 	log.Printf("✅ Created %d dummy media files", len(media))
@@ -257,11 +258,17 @@ func createDummyUsers(store db.Store) []db.User {
 // taxonomy types and their associated terms. This provides a realistic content
 // classification system for theme development and CMS demonstrations.
 //
-// # Taxonomy Types Created
+// # Taxonomy Types Used
 //
 //   - category: Hierarchical categories (Technology, Design, Lifestyle, Business)
-//   - post_tag: Flat tags for content labeling (tutorial, guide, tips, frameworks, etc.)
-//   - page_category: Page-specific categories (Company, Legal, Support, Marketing)
+//   - tag: Flat tags for content labeling (tutorial, guide, tips, frameworks, etc.)
+//   - page_category: Page-specific categories (Company, Legal, Support, Campaigns)
+//
+// The init migration already inserts all three, so each type is looked up by
+// name and only created if missing (ensureTaxonomyType). Terms are attached
+// to the type with the matching name, never by position: when the seeder
+// created the types itself and two of them already existed, the remaining
+// one shifted into slot 0 and the categories were filed under Tags.
 //
 // # Category Structure (Hierarchical)
 //
@@ -274,19 +281,21 @@ func createDummyUsers(store db.Store) []db.User {
 // # Tags Created (Flat)
 //
 // Popular development and content tags including: tutorial, guide, tips,
-// best-practices, review, news, beginner, advanced, coding, design, productivity,
+// best-practices, review, news, beginner, advanced, coding, ui-design, productivity,
 // tools, framework, library, api, database, security, performance, and various
 // technology-specific tags (javascript, react, vue, angular, nodejs, python, golang, etc.)
 //
 // # Page Categories (Hierarchical)
 //
-// Organizational categories for static pages: Company, Legal, Support, Marketing
+// Organizational categories for static pages: Company, Legal, Support, Campaigns
 //
 // # Slugging Strategy
 //
-// All terms receive URL-friendly slugs via generateSlug() which converts to
-// lowercase and replaces spaces with hyphens. Sort order is populated for
-// predictable listing in admin interfaces.
+// All terms receive URL-safe slugs via seedSlug() ("UI/UX" -> "ui-ux").
+// taxonomy_terms.slug is unique across all types, so no two seeded terms may
+// share a slug (hence the "ui-design" tag and the "Campaigns" page category,
+// which would otherwise clash with the Design and Marketing categories).
+// Sort order is populated for predictable listing in admin interfaces.
 //
 // # Deterministic Creation
 //
@@ -306,10 +315,11 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		hierarchical bool
 	}{
 		{"category", "Categories", "Hierarchical categories for organizing content", true},
-		{"post_tag", "Tags", "Non-hierarchical tags for content", false},
+		{"tag", "Tags", "Post tags for labeling content", false},
 		{"page_category", "Page Categories", "Categories specifically for pages", true},
 	}
 
+	typesByName := map[string]db.TaxonomyType{}
 	for _, typeDef := range typeDefinitions {
 		typeParams := db.CreateTaxonomyTypeParams{
 			Name:         typeDef.name,
@@ -321,18 +331,16 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 			ShowInMenu:   true,
 		}
 
-		createdType, err := store.CreateTaxonomyType(context.TODO(), typeParams)
+		taxonomyType, err := ensureTaxonomyType(store, typeParams)
 		if err != nil {
-			log.Printf("❌ Failed to create taxonomy type %s: %v", typeDef.name, err)
+			log.Printf("❌ Failed to get or create taxonomy type %s: %v", typeDef.name, err)
 			continue
 		}
 
-		taxonomyTypes = append(taxonomyTypes, createdType)
-		log.Printf("✅ Created taxonomy type: %s", typeDef.label)
+		taxonomyTypes = append(taxonomyTypes, taxonomyType)
+		typesByName[typeDef.name] = taxonomyType
 	}
-
-	if len(taxonomyTypes) > 0 {
-		categoryType := taxonomyTypes[0]
+	if categoryType, ok := typesByName["category"]; ok {
 
 		parentCategories := []struct {
 			name        string
@@ -348,7 +356,7 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		for _, cat := range parentCategories {
 			termParams := db.CreateTaxonomyTermParams{
 				Name:           cat.name,
-				Slug:           generateSlug(cat.name),
+				Slug:           seedSlug(cat.name),
 				Description:    sql.NullString{String: cat.description, Valid: true},
 				TaxonomyTypeID: categoryType.ID,
 				SortOrder:      sql.NullInt32{Int32: int32(len(parentTerms) + 1), Valid: true},
@@ -395,7 +403,7 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 				for _, child := range children {
 					childParams := db.CreateTaxonomyTermParams{
 						Name:           child.name,
-						Slug:           generateSlug(child.name),
+						Slug:           seedSlug(child.name),
 						Description:    sql.NullString{String: child.description, Valid: true},
 						ParentID:       sql.NullInt64{Int64: parentTerm.ID, Valid: true},
 						TaxonomyTypeID: categoryType.ID,
@@ -414,12 +422,11 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		}
 	}
 
-	if len(taxonomyTypes) > 1 {
-		tagType := taxonomyTypes[1]
+	if tagType, ok := typesByName["tag"]; ok {
 
 		tags := []string{
 			"tutorial", "guide", "tips", "best-practices", "review", "news",
-			"beginner", "advanced", "coding", "design", "productivity", "tools",
+			"beginner", "advanced", "coding", "ui-design", "productivity", "tools",
 			"framework", "library", "api", "database", "security", "performance",
 			"mobile", "responsive", "javascript", "react", "vue", "angular",
 			"nodejs", "python", "golang", "java", "css", "html",
@@ -428,7 +435,7 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		for i, tagName := range tags {
 			tagParams := db.CreateTaxonomyTermParams{
 				Name:           tagName,
-				Slug:           generateSlug(tagName),
+				Slug:           seedSlug(tagName),
 				Description:    sql.NullString{String: fmt.Sprintf("Posts tagged with %s", tagName), Valid: true},
 				TaxonomyTypeID: tagType.ID,
 				SortOrder:      sql.NullInt32{Int32: int32(i + 1), Valid: true},
@@ -444,8 +451,7 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		}
 	}
 
-	if len(taxonomyTypes) > 2 {
-		pageCategoryType := taxonomyTypes[2]
+	if pageCategoryType, ok := typesByName["page_category"]; ok {
 
 		pageCategories := []struct {
 			name        string
@@ -454,13 +460,13 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 			{"Company", "Company information and about pages"},
 			{"Legal", "Legal documents and policies"},
 			{"Support", "Help and support documentation"},
-			{"Marketing", "Marketing and promotional pages"},
+			{"Campaigns", "Marketing and promotional pages"},
 		}
 
 		for i, cat := range pageCategories {
 			pageCatParams := db.CreateTaxonomyTermParams{
 				Name:           cat.name,
-				Slug:           generateSlug(cat.name),
+				Slug:           seedSlug(cat.name),
 				Description:    sql.NullString{String: cat.description, Valid: true},
 				TaxonomyTypeID: pageCategoryType.ID,
 				SortOrder:      sql.NullInt32{Int32: int32(i + 1), Valid: true},
@@ -477,6 +483,26 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 	}
 
 	return taxonomyTypes, taxonomyTerms
+}
+
+// ensureTaxonomyType returns the taxonomy type named params.Name, creating it
+// from params only if it doesn't exist yet.
+func ensureTaxonomyType(store db.Store, params db.CreateTaxonomyTypeParams) (db.TaxonomyType, error) {
+	existing, err := store.GetTaxonomyType(context.TODO(), params.Name)
+	if err == nil {
+		log.Printf("ℹ️  Using existing taxonomy type: %s", existing.Label)
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return db.TaxonomyType{}, err
+	}
+
+	created, err := store.CreateTaxonomyType(context.TODO(), params)
+	if err != nil {
+		return db.TaxonomyType{}, err
+	}
+	log.Printf("✅ Created taxonomy type: %s", created.Label)
+	return created, nil
 }
 
 // createDummyMedia stores the sample images (embedded, see sampleimages/) in
