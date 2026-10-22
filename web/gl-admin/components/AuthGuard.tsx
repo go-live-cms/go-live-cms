@@ -25,19 +25,13 @@ export default function AuthGuard({
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // First check if we have valid auth without forcing refresh
-        if (authManager.isValidAuth()) {
-          setAuthState(authManager.getState())
-          setIsLoading(false)
-          return
-        }
-
-        // If not valid, try to refresh (we use cookie-based refresh)
+        // The access token only lives in memory, so after every page load
+        // this restores the session from the refresh cookie (and loads the
+        // user) before anything authenticated renders.
         if (!hasRedirected) {
-          console.log("🔍 Attempting token refresh in AuthGuard...")
-          const refreshed = await authManager.refreshAccessToken()
+          const restored = await authManager.restoreSession()
 
-          if (refreshed) {
+          if (restored) {
             setAuthState(authManager.getState())
             setIsLoading(false)
             return

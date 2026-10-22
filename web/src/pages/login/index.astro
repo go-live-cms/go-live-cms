@@ -89,9 +89,13 @@ import "@gl-admin/assets/styles/pages/login.scss"
       }
     }
 
-    const authState = authManager.getState()
-    if (authState.isAuthenticated) {
-      window.location.href = redirectTarget()
+    // The access token isn't stored, so "already signed in?" means a refresh
+    // cookie that still works. Only try when the last session left its display
+    // user behind; a failed restore clears it, so this can't loop with AuthGuard.
+    if (authManager.getDisplayUser()) {
+      authManager.restoreSession().then((restored) => {
+        if (restored) window.location.href = redirectTarget()
+      })
     }
 
     // Set by the admin's AuthGuard when it signs the user out (lib/auth.ts
