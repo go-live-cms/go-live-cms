@@ -74,14 +74,36 @@ describe("validateBlock — custom/theme catch-all", () => {
     expect(validateBlock(block).type).toBe("alert")
   })
 
-  // Documents a known quirk: because zBlock is a union with a permissive custom
-  // catch-all (type: string, attrs: record), a KNOWN type that fails its strict
-  // schema (e.g. heading missing `level`) still validates as a custom block
-  // rather than throwing. This test pins that behavior so a future tightening of
-  // the union is a conscious, visible change.
-  it("accepts a malformed known type via the custom fallback (documented quirk)", () => {
-    const headingNoLevel = { id: id(), type: "heading", version: 1, attrs: {} }
-    expect(() => validateBlock(headingNoLevel)).not.toThrow()
+  // zBlock used to be a union whose custom catch-all also accepted a KNOWN type that
+  // failed its own schema. The collab server validates at its store boundary (#206),
+  // where that would let a broken heading through, so known types are strict now (#214).
+  it("rejects a malformed known type instead of accepting it as custom", () => {
+    expect(() => validateBlock({ id: id(), type: "heading", version: 1, attrs: {} })).toThrow()
+    expect(() => validateBlock({ id: id(), type: "heading", version: 1, attrs: { level: 7 } })).toThrow()
+    expect(() => validateBlock({ id: id(), type: "code_block", version: 1, attrs: {} })).toThrow()
+  })
+
+  it("accepts every heading level from 1 to 6 through validateBlock", () => {
+    for (const level of [1, 2, 3, 4, 5, 6]) {
+      expect(() => validateBlock({ id: id(), type: "heading", version: 1, attrs: { level } })).not.toThrow()
+    }
+  })
+
+  it("does not treat inherited object keys as known types", () => {
+    const block = { id: id(), type: "toString", version: 1, attrs: {} }
+    expect(validateBlock(block).type).toBe("toString")
+  })
+})
+
+describe("validateBlock — returns the input unchanged", () => {
+  it("keeps list children and keys the schemas don't list", () => {
+    const block = { id: id(), type: "bullet_list", version: 1, attrs: {}, children: [id("1")], extra: true }
+    expect(validateBlock(block)).toBe(block)
+    expect(validateBlock(block)).toEqual(block)
+  })
+
+  it("rejects list children that aren't block ids", () => {
+    expect(() => validateBlock({ id: id(), type: "ordered_list", version: 1, attrs: {}, children: ["x"] })).toThrow()
   })
 })
 
@@ -113,5 +135,28 @@ describe("validateBlockDoc", () => {
       blocks: { short: { id: "short", type: "paragraph", version: 1, attrs: {} } },
     }
     expect(() => validateBlockDoc(bad)).toThrow()
+  })
+
+  it("rejects a block stored under another block's id", () => {
+    const bad = {
+      doc_version: 1,
+      blocks_order: [id("1")],
+      blocks: { [id("1")]: { id: id("2"), type: "paragraph", version: 1, attrs: {} } },
+    }
+    expect(() => validateBlockDoc(bad)).toThrow(/map key/)
+  })
+
+  it("rejects a document containing a malformed known block", () => {
+    const bad = {
+      doc_version: 1,
+      blocks_order: [id("1")],
+      blocks: { [id("1")]: { id: id("1"), type: "heading", version: 1, attrs: { level: 9 } } },
+    }
+    expect(() => validateBlockDoc(bad)).toThrow()
+  })
+
+  it("returns the same document object", () => {
+    const doc = { doc_version: 1, blocks_order: [], blocks: {} }
+    expect(validateBlockDoc(doc)).toBe(doc)
   })
 })
