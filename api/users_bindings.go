@@ -23,7 +23,8 @@ package api
 // All fields are required to ensure complete account setup.
 //
 // Validation rules:
-//   - Username: 3-50 ASCII letters/digits (what login accepts), trimmed by handlers
+//   - Username: 3-50 characters; after trimming, ASCII letters/digits only
+//     (what login accepts, checked by the handler)
 //   - Email: Valid email format (max 254), will be normalized to lowercase
 //   - FullName: 2-100 characters for display purposes
 //   - Password: 6 characters to 72 bytes (bcrypt reads only 72), hashed before storage
@@ -32,7 +33,7 @@ package api
 // Security note: This endpoint is admin-only, and role values are restricted
 // to the fixed list above (custom roles will replace this with a roles table).
 type CreateUserRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=50,alphanum"`
+	Username string `json:"username" binding:"required,min=3,max=50"`
 	Email    string `json:"email" binding:"required,max=254,email"`
 	FullName string `json:"full_name" binding:"required,min=2,max=100"`
 	Password string `json:"password" binding:"required,min=6,max_bytes=72"`

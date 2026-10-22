@@ -7,7 +7,8 @@
 //   - Title: 3-255 chars, required for create
 //   - Description: 10-500 chars, required for create
 //   - URL: absolute http(s) URL up to 2048 chars, required for create
-//   - PostType: a post type name (identifier pattern, max 50)
+//   - PostType: a post type name, max 50, no slashes (existing types may
+//     predate the identifier pattern createPostType enforces)
 //   - PostStatus: draft|published|archived enum
 //   - AuthorIDs: 1-20 ids, required for create
 //   - MediaIDs/TaxonomyIDs: up to 500 ids
@@ -25,7 +26,7 @@ type CreatePostRequest struct {
 	Title       string  `json:"title" binding:"required,min=3,max=255"`
 	Description string  `json:"description" binding:"required,min=10,max=500"`
 	Url         string  `json:"url" binding:"required,max=2048,http_url"`
-	PostType    string  `json:"post_type" binding:"omitempty,max=50,identifier"`
+	PostType    string  `json:"post_type" binding:"omitempty,max=50,excludesall=/\\"`
 	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published archived"`
 	PostParent  *int64  `json:"post_parent" binding:"omitempty"`
 	MenuOrder   int32   `json:"menu_order" binding:"omitempty"`
@@ -42,7 +43,7 @@ type UpdatePostRequest struct {
 	Title       string  `json:"title" binding:"omitempty,min=3,max=255"`
 	Description string  `json:"description" binding:"omitempty,min=10,max=500"`
 	Url         string  `json:"url" binding:"omitempty,max=2048,http_url"`
-	PostType    string  `json:"post_type" binding:"omitempty,max=50,identifier"`
+	PostType    string  `json:"post_type" binding:"omitempty,max=50,excludesall=/\\"`
 	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published archived"`
 	PostParent  *int64  `json:"post_parent" binding:"omitempty"`
 	MenuOrder   int32   `json:"menu_order" binding:"omitempty"`

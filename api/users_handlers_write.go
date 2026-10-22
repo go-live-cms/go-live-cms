@@ -57,6 +57,10 @@ func (server *Server) createUser(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
+	// Checked after trimming, as stored (normUsername below).
+	if !checkUsernameFormat(c, normUsername(req.Username)) {
+		return
+	}
 
 	// Hash password before storage
 	hashedPassword, err := util.HashPassword(req.Password)
@@ -210,11 +214,7 @@ func (server *Server) updateUser(c *gin.Context) {
 		updateParams.Username = normUsername(req.Username)
 		// Login only accepts letters and digits, so a new username must too.
 		// An unchanged legacy one is let through: the admin form resends it.
-		if updateParams.Username != existingUser.Username && !isAlphanumeric(updateParams.Username) {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":  "username must contain only letters and digits",
-				"fields": gin.H{"username": "must contain only letters and digits"},
-			})
+		if updateParams.Username != existingUser.Username && !checkUsernameFormat(c, updateParams.Username) {
 			return
 		}
 	}

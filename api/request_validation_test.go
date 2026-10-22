@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
+	"github.com/go-playground/validator/v10"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
@@ -412,4 +415,60 @@ func TestBindOptionalJSONAllowsEmptyBody(t *testing.T) {
 	var r PublishRequest
 	require.True(t, bindOptionalJSON(c, &r))
 	require.Nil(t, r.Label)
+}
+
+// Slugs the server generates must be accepted back as-is, and post_type only
+// refuses path separators, so post types that predate the identifier rule
+// keep working.
+func TestSlugAndPostTypeRules(t *testing.T) {
+	v := binding.Validator.Engine().(*validator.Validate)
+
+	for _, name := range []string{"R&D", "C++ tips", "Café Noir", "hello_world"} {
+		require.NoError(t, v.Var(generateSlug(name), "slug"), name)
+	}
+	for _, slug := range []string{"Bad", "a b", "a_b", "a--b", ""} {
+		require.Error(t, v.Var(slug, "slug"), slug)
+	}
+
+	tag := "omitempty,max=50,excludesall=/\\"
+	for _, postType := range []string{"post", "Product", "case.study"} {
+		require.NoError(t, v.Var(postType, tag), postType)
+	}
+	for _, postType := range []string{"../etc", `a\b`} {
+		require.Error(t, v.Var(postType, tag), postType)
+	}
+}
+
+// A username with surrounding spaces is trimmed, then checked, as before #139.
+func TestCreateUserTrimsUsernameBeforeFormatCheck(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	store := mockdb.NewMockStore(ctrl)
+	admin := validationTestUser("admin")
+	stubRoleLookup(store, admin)
+	store.EXPECT().CreateUser(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ any, arg db.CreateUserParams) (db.User, error) {
+			require.Equal(t, "johndoe", arg.Username)
+			return db.User{ID: 9, Username: arg.Username, Email: arg.Email, Role: arg.Role}, nil
+		})
+
+	server := newTestServer(t, store)
+	recorder := sendAs(t, server, &admin, http.MethodPost, "/api/v1/users",
+		[]byte(`{"username":" johndoe ","email":"j@example.com","full_name":"John","password":"secret1","role":"editor"}`))
+	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+}
+
+func TestRespondBindErrorNamesBadFormNumber(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	_, err := strconv.ParseInt("abc", 10, 64)
+	respondBindError(c, err)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	var body errorBody
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.Equal(t, `invalid number "abc" in form field`, body.Error)
 }

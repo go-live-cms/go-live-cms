@@ -74,18 +74,6 @@ func originMatchesHost(c *gin.Context, origin string, trustedProxies []netip.Pre
 		return true
 	}
 	forwarded := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Host"), ",")[0])
-	if forwarded == "" || !strings.EqualFold(u.Host, forwarded) {
-		return false
-	}
-	peer, err := netip.ParseAddr(c.RemoteIP())
-	if err != nil {
-		return false
-	}
-	peer = peer.Unmap()
-	for _, p := range trustedProxies {
-		if p.Contains(peer) {
-			return true
-		}
-	}
-	return false
+	return forwarded != "" && strings.EqualFold(u.Host, forwarded) &&
+		ipInPrefixes(c.RemoteIP(), trustedProxies)
 }

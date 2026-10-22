@@ -19,7 +19,12 @@
 package api
 
 import (
+	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 )
 
 // normEmail normalizes email addresses for consistent storage and lookup.
@@ -92,14 +97,16 @@ func isUniqueViolation(err error) bool {
 		containsString(err.Error(), "unique constraint")
 }
 
-// isAlphanumeric reports whether s is only ASCII letters and digits, the
-// characters loginUser's username binding (alphanum) accepts.
-func isAlphanumeric(s string) bool {
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') {
-			return false
-		}
+// checkUsernameFormat answers 400 and returns false unless username (already
+// trimmed) passes the same `alphanum` rule as loginUser's binding, so every
+// account a handler creates or renames can log in.
+func checkUsernameFormat(c *gin.Context, username string) bool {
+	if binding.Validator.Engine().(*validator.Validate).Var(username, "alphanum") == nil {
+		return true
 	}
-	return s != ""
+	c.JSON(http.StatusBadRequest, gin.H{
+		"error":  "username must contain only letters and digits",
+		"fields": gin.H{"username": "must contain only letters and digits"},
+	})
+	return false
 }

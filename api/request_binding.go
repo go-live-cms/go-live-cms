@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -34,10 +35,6 @@ var (
 	errInvalidJSON    = errors.New("request body is not valid JSON")
 	unknownFieldRegex = regexp.MustCompile(`^json: unknown field "(.+)"$`)
 )
-
-// slugRe matches a URL slug: lowercase letters (any script) and digits in
-// hyphen-separated runs, e.g. "hello-world" or "café-2".
-var slugRe = regexp.MustCompile(`^[\p{Ll}\p{Lo}\p{N}]+(?:-[\p{Ll}\p{Lo}\p{N}]+)*$`)
 
 // identifierRe matches machine names used in URLs and theme file lookups
 // (post type names, extension ids): lowercase ASCII, digits, '-' and '_',
@@ -66,8 +63,12 @@ func init() {
 		}
 		return f.Name
 	})
+	// slug: already in generateSlug's normal form (lowercase, no whitespace,
+	// underscores or repeated hyphens), so a client can always send back a
+	// slug the server generated.
 	mustRegister(v, "slug", func(fl validator.FieldLevel) bool {
-		return slugRe.MatchString(fl.Field().String())
+		s := fl.Field().String()
+		return s != "" && s == generateSlug(s)
 	})
 	mustRegister(v, "identifier", func(fl validator.FieldLevel) bool {
 		return identifierRe.MatchString(fl.Field().String())
@@ -78,9 +79,9 @@ func init() {
 	// max_bytes=N limits a string's UTF-8 byte length (max counts runes).
 	// bcrypt only reads 72 bytes, so passwords use it.
 	mustRegister(v, "max_bytes", func(fl validator.FieldLevel) bool {
-		var limit int
-		if _, err := fmt.Sscan(fl.Param(), &limit); err != nil {
-			return false
+		limit, err := strconv.Atoi(fl.Param())
+		if err != nil {
+			panic(fmt.Sprintf("max_bytes: invalid limit %q", fl.Param()))
 		}
 		return len(fl.Field().String()) <= limit
 	})
@@ -95,11 +96,7 @@ func mustRegister(v *validator.Validate, tag string, fn validator.Func) {
 // bindJSON strictly decodes the request body into obj and validates it.
 // On failure it writes the error response and returns false.
 func bindJSON(c *gin.Context, obj any) bool {
-	if err := decodeJSONBody(c.Request.Body, obj); err != nil {
-		respondBindError(c, err)
-		return false
-	}
-	if err := binding.Validator.ValidateStruct(obj); err != nil {
+	if err := decodeAndValidate(c, obj); err != nil {
 		respondBindError(c, err)
 		return false
 	}
@@ -110,19 +107,19 @@ func bindJSON(c *gin.Context, obj any) bool {
 // empty body leaves obj at its zero value. A body that is present must still
 // be valid.
 func bindOptionalJSON(c *gin.Context, obj any) bool {
-	err := decodeJSONBody(c.Request.Body, obj)
-	if errors.Is(err, errEmptyBody) {
-		return true
-	}
-	if err != nil {
-		respondBindError(c, err)
-		return false
-	}
-	if err := binding.Validator.ValidateStruct(obj); err != nil {
+	if err := decodeAndValidate(c, obj); err != nil && !errors.Is(err, errEmptyBody) {
 		respondBindError(c, err)
 		return false
 	}
 	return true
+}
+
+// decodeAndValidate decodes the request body into obj and validates it.
+func decodeAndValidate(c *gin.Context, obj any) error {
+	if err := decodeJSONBody(c.Request.Body, obj); err != nil {
+		return err
+	}
+	return binding.Validator.ValidateStruct(obj)
 }
 
 // decodeJSONBody decodes exactly one JSON value, rejecting unknown fields.
@@ -155,6 +152,7 @@ func respondBindError(c *gin.Context, err error) {
 		syntaxErr   *json.SyntaxError
 		typeErr     *json.UnmarshalTypeError
 		validateErr validator.ValidationErrors
+		numErr      *strconv.NumError
 	)
 	switch {
 	case errors.As(err, &maxErr) || isBodyTooLarge(err):
@@ -193,8 +191,12 @@ func respondBindError(c *gin.Context, err error) {
 		})
 	case errors.As(err, &syntaxErr), errors.Is(err, io.ErrUnexpectedEOF):
 		c.JSON(http.StatusBadRequest, gin.H{"error": errInvalidJSON.Error()})
+	case errors.As(err, &numErr):
+		// Form binding (multipart) of a numeric field. Gin doesn't say which
+		// field, so name the rejected value instead.
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid number %q in form field", numErr.Num)})
 	default:
-		// Form binding (multipart) and anything unexpected: don't echo it.
+		// Anything unexpected: don't echo it.
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 	}
 }
@@ -245,7 +247,9 @@ func fieldErrorMessage(fe validator.FieldError) string {
 	case "alphanum":
 		return "must contain only letters and digits"
 	case "slug":
-		return "must be lowercase letters and digits separated by single hyphens"
+		return "must be lowercase, with single hyphens instead of spaces or underscores"
+	case "excludesall":
+		return "must not contain any of " + strconv.Quote(fe.Param())
 	case "identifier":
 		return "must be lowercase letters, digits, '-' or '_'"
 	case "setting_key":

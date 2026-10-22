@@ -90,6 +90,12 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if err := tokenMaker.SetPreviousKeys(config.PasetoV4PreviousPublicKeyHex, config.PasetoV4PreviousLocalKeyHex, previousUntil); err != nil {
 		return nil, fmt.Errorf("invalid previous PASETO key: %w", err)
 	}
+	// A cutoff already in the past (e.g. a typo'd year) silently accepts no
+	// old-key token at all, so say so: every old-key session is signed out.
+	if !previousUntil.IsZero() && !time.Now().Before(previousUntil) {
+		slog.Warn("PASETO_PREVIOUS_KEYS_VALID_UNTIL is in the past: previous PASETO keys are ignored",
+			"valid_until", previousUntil.Format(time.RFC3339))
+	}
 	// The collab WS server can't authorize any connection without the internal
 	// role lookup, so refuse to start rather than silently lock every editor out.
 	// Trimmed once here (the WS server trims its copy too), so stray whitespace in
@@ -225,7 +231,7 @@ func corsOrigins(config util.Config) []string {
 func validateCORSOrigins(origins []string) error {
 	for _, origin := range origins {
 		u, err := url.Parse(origin)
-		if err != nil || origin == "*" || strings.Contains(origin, "*") ||
+		if err != nil || strings.Contains(origin, "*") ||
 			(u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
 			u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
 			return fmt.Errorf("invalid CORS_ALLOWED_ORIGINS entry %q: want an exact origin such as https://admin.example.com (no wildcard or path)", origin)
