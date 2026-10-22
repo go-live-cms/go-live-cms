@@ -162,7 +162,8 @@ describe("reset password page", () => {
     const form = renderPage("resetForm", ["password", "confirm_password"])
     const navigate = vi.fn()
     mountResetPasswordPage(document, navigate)
-    expect(window.location.hash).toBe("", "the token leaves the address bar at once")
+    // The token leaves the address bar at once.
+    expect(window.location.hash).toBe("")
     fetchMock.mockResolvedValue(json(200, { message: "ok" }))
 
     fill({ password: "new-secret", confirm_password: "new-secret" })
