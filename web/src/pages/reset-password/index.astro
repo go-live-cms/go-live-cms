@@ -1,0 +1,55 @@
+---
+import AccountPage from "@/layouts/AccountPage.astro"
+---
+
+<AccountPage title="Reset password" heading="Choose a new password" subtitle="This signs you out on every device">
+  <form class="gl-admin-login__form" id="resetForm" novalidate>
+    <div class="gl-admin-login__fields">
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="password"
+          id="password"
+          name="password"
+          placeholder=" "
+          required
+          minlength="6"
+          autocomplete="new-password"
+        />
+        <label class="gl-input__label" for="password">New password</label>
+      </div>
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="password"
+          id="confirm_password"
+          name="confirm_password"
+          placeholder=" "
+          required
+          minlength="6"
+          autocomplete="new-password"
+        />
+        <label class="gl-input__label" for="confirm_password">Confirm new password</label>
+      </div>
+    </div>
+
+    <button type="submit" class="button primary gl-admin-login__submit">
+      <span class="gl-admin-login__spinner" data-spinner aria-hidden="true" hidden></span>
+      <span data-label>Set new password</span>
+    </button>
+  </form>
+
+  <div class="gl-admin-login__panel" id="linkInvalid" role="status" hidden>
+    <p class="gl-admin-login__text">This reset link is invalid or has expired. Links work once and only for a short time.</p>
+    <p class="gl-admin-login__footer">
+      <a class="gl-admin-login__link" href="/forgot-password">Request a new link</a>
+      · <a class="gl-admin-login__link" href="/login">Sign in</a>
+    </p>
+  </div>
+</AccountPage>
+
+<script>
+  import { mountResetPasswordPage } from "@gl-admin/lib/accountPages"
+
+  mountResetPasswordPage()
+</script>

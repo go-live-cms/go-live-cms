@@ -2,6 +2,7 @@ package util
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -134,4 +135,68 @@ func TestLoadConfigRejectsInvalidMaxUploadSize(t *testing.T) {
 	t.Setenv("MAX_UPLOAD_SIZE", "lots")
 	_, err := LoadConfig(t.TempDir())
 	require.ErrorContains(t, err, "MAX_UPLOAD_SIZE")
+}
+
+// Mail settings (#148) are passed as env vars in deployments; SMTP_PASS has no
+// default, so it must be bound explicitly or viper drops it.
+func TestLoadConfigReadsMailSettingsFromEnv(t *testing.T) {
+	t.Setenv("SMTP_HOST", "smtp.example.com")
+	t.Setenv("SMTP_PORT", "465")
+	t.Setenv("SMTP_USER", "mailer")
+	t.Setenv("SMTP_PASS", "pass-from-env")
+	t.Setenv("MAIL_FROM", "CMS <no-reply@example.com>")
+	t.Setenv("PUBLIC_BASE_URL", "https://cms.example.com/")
+
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, "smtp.example.com", config.SMTPHost)
+	require.Equal(t, 465, config.SMTPPort)
+	require.Equal(t, "mailer", config.SMTPUser)
+	require.Equal(t, "pass-from-env", config.SMTPPass)
+	require.Equal(t, "CMS <no-reply@example.com>", config.MailFrom)
+	require.Equal(t, 72*time.Hour, config.InvitationTTL)
+	require.Equal(t, time.Hour, config.PasswordResetTTL)
+	require.Equal(t, 5, config.RateLimitPasswordForgotPerMinute)
+	require.Equal(t, 10, config.RateLimitAccountTokenPerMinute)
+
+	url, err := config.PublicSiteURL()
+	require.NoError(t, err)
+	require.Equal(t, "https://cms.example.com", url, "trailing slash trimmed")
+}
+
+func TestLoadConfigRejectsNonPositiveLinkTTL(t *testing.T) {
+	t.Setenv("PASSWORD_RESET_TTL", "0s")
+	_, err := LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "PASSWORD_RESET_TTL")
+}
+
+func TestMailDriverName(t *testing.T) {
+	require.Equal(t, MailDriverFile, Config{GinMode: GinModeDebug}.MailDriverName())
+	require.Equal(t, MailDriverLog, Config{IsTestMode: true}.MailDriverName())
+	require.Equal(t, MailDriverSMTP, Config{GinMode: GinModeRelease}.MailDriverName())
+	require.Equal(t, MailDriverSMTP, Config{GinMode: GinModeDebug, MailDriver: " SMTP "}.MailDriverName())
+}
+
+func TestPublicSiteURL(t *testing.T) {
+	url, err := Config{GinMode: GinModeDebug}.PublicSiteURL()
+	require.NoError(t, err)
+	require.Equal(t, "http://localhost:4321", url)
+
+	_, err = Config{GinMode: GinModeRelease}.PublicSiteURL()
+	require.ErrorContains(t, err, "PUBLIC_BASE_URL is required")
+
+	for _, bad := range []string{"cms.example.com", "ftp://cms.example.com", "https://", "https://u:p@cms.example.com", "https://cms.example.com#x"} {
+		_, err = Config{GinMode: GinModeRelease, PublicBaseURL: bad}.PublicSiteURL()
+		require.Error(t, err, bad)
+	}
+
+	url, err = Config{PublicBaseURL: "https://example.com/cms/"}.PublicSiteURL()
+	require.NoError(t, err)
+	require.Equal(t, "https://example.com/cms", url)
+}
+
+func TestLinkTTLDefaults(t *testing.T) {
+	require.Equal(t, DefaultInvitationTTL, Config{}.InvitationLinkTTL())
+	require.Equal(t, DefaultPasswordResetTTL, Config{}.PasswordResetLinkTTL())
+	require.Equal(t, time.Minute, Config{PasswordResetTTL: time.Minute}.PasswordResetLinkTTL())
 }

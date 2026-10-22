@@ -1,0 +1,11 @@
+Hi,
+
+You've been invited to join {{.SiteTitle}} as {{.RoleA}}.
+
+Accept the invitation and set up your account here:
+
+{{.Link}}
+
+The link works once and expires in {{.ExpiresIn}}. If you weren't expecting this invitation, you can ignore this email.
+
+{{.SiteTitle}}

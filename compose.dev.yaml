@@ -53,6 +53,17 @@ services:
       # Docker ranges so rate limits key on the browser, not the proxy. Never use
       # ranges this broad in production; list your real proxy instead.
       TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      # Email (#148). Dev never talks to a real SMTP server: by default each
+      # invitation/reset email is written to ./dev-mail/*.eml (gitignored). To
+      # see them in a web inbox instead, start Mailpit and point the API at it:
+      #   MAIL_DRIVER=smtp docker compose -f compose.dev.yaml --profile mail up -d
+      # then open http://localhost:8025.
+      MAIL_DRIVER: "${MAIL_DRIVER:-file}"
+      MAIL_FILE_DIR: "/app/dev-mail"
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAIL_FROM: "GoLive CMS (dev) <no-reply@golive.localhost>"
+      PUBLIC_BASE_URL: "http://localhost:4321"
     volumes:
       - .:/app
       - /app/tmp
@@ -121,6 +132,14 @@ services:
       retries: 5
     depends_on:
       - api
+
+  # Optional dev mail catcher (#148): `--profile mail`, with MAIL_DRIVER=smtp.
+  # SMTP on 1025 (compose network only), inbox UI on http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    profiles: ["mail"]
+    ports:
+      - "127.0.0.1:8025:8025"
 
 volumes:
   postgres_data:

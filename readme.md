@@ -127,6 +127,30 @@ UPDATE sessions SET is_blocked = true
 Then start the API again. If an account was used while it had the known password,
 review what it changed.
 
+#### Email: invitations and password reset
+
+The alpha is invite-only: admins invite people from **Users → Invite user**, and
+anyone can reset a forgotten password from the sign-in page. Both send an email,
+so outside `GIN_MODE=debug` the API **refuses to start** without:
+
+| Variable | Meaning |
+|----------|---------|
+| `PUBLIC_BASE_URL` | Site origin the links point at, e.g. `https://cms.example.com` (never taken from the request's Host header) |
+| `SMTP_HOST`, `SMTP_PORT` | SMTP server; port 465 is implicit TLS, others use STARTTLS when offered (default 587) |
+| `SMTP_USER`, `SMTP_PASS` | Optional, set together; only sent over TLS |
+| `MAIL_FROM` | Sender, e.g. `GoLive CMS <no-reply@example.com>` |
+
+Optional: `INVITATION_TTL` (default `72h`), `PASSWORD_RESET_TTL` (default `1h`),
+`RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE` (5) and `RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE`
+(10, reset/accept). Links are single-use, only their SHA-256 is stored, and a
+reset signs the user out everywhere. Forgot-password always answers the same way,
+whether or not the email has an account.
+
+In development (`compose.dev.yaml`) nothing is sent: each email is written to
+`dev-mail/*.eml`. For a web inbox, run Mailpit:
+`MAIL_DRIVER=smtp docker compose -f compose.dev.yaml --profile mail up -d` and open
+http://localhost:8025.
+
 #### Rate limiting and client IPs
 
 The API limits requests per client IP and answers `429 Too Many Requests` with a

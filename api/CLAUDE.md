@@ -133,6 +133,30 @@ server.
   which may be the apex domain). Don't add a
   `Cross-Origin-Resource-Policy`: the web app loads `/uploads` cross-origin.
 
+## Invitations, password reset, mail (#148)
+
+- **Invite-only.** Admins create invitations (`/invitations`, `invitations_handlers.go`);
+  `POST /auth/invitations/accept` creates the user with the invitation's email and
+  role. `/auth/register` is still a placeholder (self-registration is Post-MVP, #191).
+- **Tokens** (`account_tokens_utils.go`): 32 random bytes, base64url; only the
+  SHA-256 is stored (`user_invitations`, `password_reset_tokens`). Redeeming is one
+  `UPDATE ... RETURNING` claim (`ClaimUserInvitation`, `ClaimPasswordResetToken`),
+  so single use holds under concurrency. Every bad-token case answers the same
+  400 `invalid_token`. Links put the token in the `#fragment`; the web pages POST it.
+  **Never log tokens or message bodies.**
+- **Reset = password change.** `ResetPasswordTx` locks the user row (user → token
+  rows, same order as `UpdateUserTx`), stamps `password_changed_at`, blocks every
+  session and burns the user's other reset tokens. `UpdateUserTx` with
+  `PasswordChanged` burns outstanding reset tokens too.
+- **Forgot never enumerates:** same 200 for any address, and the lookup/token/email
+  run after the response (`server.runInBackground`, inline in tests). One email per
+  user per minute (silent cooldown).
+- **Mailer** (`mailer/`): `smtp` | `file` (debug default, `dev-mail/*.eml`) | `log`
+  (test default). Outside debug/test `NewServer` fails without `SMTP_HOST`,
+  `MAIL_FROM` and `PUBLIC_BASE_URL`, and refuses `file`/`log`. Links are built from
+  `PUBLIC_BASE_URL`, never the Host header. Templates in `mailer/templates/`
+  (text + HTML, site title from settings).
+
 ## Rate limiting and client IP (#190, #156)
 
 - `ratelimit.go`: a general per-IP limit on the `/api/v1` and `/public` groups, plus

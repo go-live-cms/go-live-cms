@@ -59,6 +59,16 @@ services:
       PASETO_V4_LOCAL_KEY_HEX: "${PASETO_V4_LOCAL_KEY_HEX}"
       # Server-to-server listener (/internal/*). Never add it to `ports:`.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
+      # Required (#148): the site is invite-only, so invitations and password
+      # resets must be able to go out. The API refuses to start without
+      # SMTP_HOST, MAIL_FROM and PUBLIC_BASE_URL (the origin email links point
+      # at). Port 465 is implicit TLS; others use STARTTLS when offered.
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL}"
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      MAIL_FROM: "${MAIL_FROM}"
       # The web container forwards the admin's /api/v1 and /uploads calls here and
       # appends the browser IP to X-Forwarded-For (web/src/middleware/apiProxy.ts).
       # Trust only its fixed address so rate limits key on the browser; add your

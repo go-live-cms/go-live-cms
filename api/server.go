@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/devModeUtil"
+	"github.com/go-live-cms/go-live-cms/mailer"
 	"github.com/go-live-cms/go-live-cms/token"
 	"github.com/go-live-cms/go-live-cms/util"
 )
@@ -37,6 +38,14 @@ type Server struct {
 
 	// Per-client request limits; see ratelimit.go.
 	rateLimits rateLimits
+
+	// Invitation and password reset email (account_tokens_utils.go).
+	mailer mailer.Mailer
+	// publicURL is config.PublicSiteURL(): the origin email links point at.
+	publicURL string
+	// runInBackground runs work that must outlive the request (the forgot
+	// password flow). A field so tests can run it synchronously.
+	runInBackground func(func())
 
 	// Observability (observability.go, metrics.go, health.go).
 	logger        *slog.Logger
@@ -93,6 +102,17 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Invitations and password resets are the only way into an invite-only
+	// site, so outside debug mode a missing SMTP setup or site URL is a
+	// startup error, not a silent drop of every email (#148).
+	publicURL, err := config.PublicSiteURL()
+	if err != nil {
+		return nil, err
+	}
+	mail, err := mailer.New(config, slog.Default())
+	if err != nil {
+		return nil, err
+	}
 	server := &Server{
 		store:      store,
 		config:     config,
@@ -101,6 +121,10 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 
 		collabTickets: tokenMaker,
 		rateLimits:    limits,
+
+		mailer:          mail,
+		publicURL:       publicURL,
+		runInBackground: func(f func()) { go f() },
 
 		logger:        slog.Default(),
 		metrics:       newHTTPMetrics(),
@@ -220,6 +244,9 @@ func corsOrigins(config util.Config) []string {
 //   - Rate limits (ratelimit.go): general per-IP limit on /api/v1 and /public,
 //     stricter ones on login/register/refresh and self password changes
 //   - /api/v1/auth: register, login, refresh, logout (logout requires auth)
+//   - /api/v1/auth/password/{forgot,reset}, /api/v1/auth/invitations/{preview,accept}:
+//     emailed-token flows (public, rate limited)
+//   - /api/v1/invitations: list/create/resend/revoke invitations (admin)
 //   - /api/v1/sessions: list/block (auth required)
 //   - /api/v1/users: CRUD; some endpoints require auth (see handlers)
 //   - /api/v1/posts: CRUD, meta, media links, featured image helpers
@@ -291,6 +318,9 @@ func (server *Server) setupRoutes() error {
 
 	// User management module routes (see users_routes.go for complete definitions)
 	server.RegisterUserRoutes(v1)
+
+	// Invitations and password reset (see account_routes.go)
+	server.registerAccountRoutes(v1)
 
 	// Posts module routes (see posts_routes.go for complete definitions)
 	server.RegisterPostRoutes(v1)

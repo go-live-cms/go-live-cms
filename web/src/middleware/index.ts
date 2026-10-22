@@ -6,7 +6,7 @@ import { ThemeSettingsImpl } from "../lib/theme-settings"
 import { ThemeAPIClientImpl } from "../lib/theme-api-client"
 import { safeExecute } from "../lib/theme-api"
 import type { ThemeFunctions, ThemeFunctionsContext } from "../lib/theme-api"
-import { applyAdminCsp, isAdminPath } from "./csp"
+import { applyAdminCsp, isAccountPagePath, isAdminPath } from "./csp"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 
@@ -132,7 +132,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  if (isAdminPath(url.pathname)) {
+  if (isAdminPath(url.pathname) || isAccountPagePath(url.pathname)) {
     return applyAdminCsp(await next(), {
       pageOrigin: url.origin,
       apiUrl: process.env.PUBLIC_API_URL || import.meta.env.PUBLIC_API_URL,

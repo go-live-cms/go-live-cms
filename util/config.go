@@ -6,6 +6,7 @@ package util
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -163,6 +164,43 @@ type Config struct {
 	// token's guesses can't block the owner's own password change.
 	RateLimitPasswordChangePerMinute int `mapstructure:"RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE"`
 
+	// RateLimitPasswordForgotPerMinute applies to POST /auth/password/forgot
+	// per client IP (each allowed request may send an email).
+	RateLimitPasswordForgotPerMinute int `mapstructure:"RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE"`
+	// RateLimitAccountTokenPerMinute applies per client IP to the endpoints
+	// that redeem an emailed token: POST /auth/password/reset and
+	// /auth/invitations/{preview,accept}.
+	RateLimitAccountTokenPerMinute int `mapstructure:"RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE"`
+
+	// Outgoing email (#148): invitations and password resets.
+	//
+	// MailDriver is "smtp", "file" or "log". Empty picks "file" in debug mode
+	// and "smtp" otherwise. "file" and "log" are refused outside debug and test
+	// mode, and "smtp" needs SMTPHost and MailFrom: the API won't start in
+	// release without a working mail setup (see mailer.New).
+	MailDriver string `mapstructure:"MAIL_DRIVER"`
+	// SMTPHost and SMTPPort locate the SMTP server. Port 465 uses implicit
+	// TLS; any other port upgrades with STARTTLS when the server offers it.
+	SMTPHost string `mapstructure:"SMTP_HOST"`
+	SMTPPort int    `mapstructure:"SMTP_PORT"`
+	// SMTPUser and SMTPPass enable PLAIN auth (only over TLS, or to localhost).
+	SMTPUser string `mapstructure:"SMTP_USER"`
+	SMTPPass string `mapstructure:"SMTP_PASS"`
+	// MailFrom is the sender, e.g. "GoLive CMS <no-reply@example.com>".
+	MailFrom string `mapstructure:"MAIL_FROM"`
+	// MailFileDir is where the "file" driver writes each email as a .eml file.
+	MailFileDir string `mapstructure:"MAIL_FILE_DIR"`
+
+	// PublicBaseURL is the site origin the admin is served from, e.g.
+	// "https://cms.example.com"; email links point at it. Required outside
+	// debug mode (where it defaults to http://localhost:4321). It is never
+	// taken from the request's Host header, which a client controls.
+	PublicBaseURL string `mapstructure:"PUBLIC_BASE_URL"`
+
+	// InvitationTTL and PasswordResetTTL are how long an emailed link works.
+	InvitationTTL    time.Duration `mapstructure:"INVITATION_TTL"`
+	PasswordResetTTL time.Duration `mapstructure:"PASSWORD_RESET_TTL"`
+
 	// RateLimitExemptCIDRs is a comma-separated list of client IPs/CIDRs that
 	// skip the general limit (the auth limits still apply). Use it for trusted
 	// server-side callers that funnel many users through one address, such as
@@ -245,7 +283,20 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("RATE_LIMIT_LOGIN_IP_PER_MINUTE", 100)
 	viper.SetDefault("RATE_LIMIT_REFRESH_PER_MINUTE", 30)
 	viper.SetDefault("RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE", 5)
+	viper.SetDefault("RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE", 5)
+	viper.SetDefault("RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE", 10)
 	viper.SetDefault("RATE_LIMIT_EXEMPT_CIDRS", "")
+
+	// Email (#148). No SMTP defaults: release mode must be configured.
+	viper.SetDefault("MAIL_DRIVER", "")
+	viper.SetDefault("SMTP_HOST", "")
+	viper.SetDefault("SMTP_PORT", 587)
+	viper.SetDefault("SMTP_USER", "")
+	viper.SetDefault("MAIL_FROM", "")
+	viper.SetDefault("MAIL_FILE_DIR", "dev-mail")
+	viper.SetDefault("PUBLIC_BASE_URL", "")
+	viper.SetDefault("INVITATION_TTL", "72h")
+	viper.SetDefault("PASSWORD_RESET_TTL", "1h")
 
 	// Required, so deliberately no default. Bind it explicitly instead: viper's
 	// Unmarshal only sees AutomaticEnv values for keys it already knows from a
@@ -258,6 +309,7 @@ func LoadConfig(path string) (config Config, err error) {
 		"PASETO_V4_PUBLIC_KEY_HEX",
 		"PASETO_V4_PRIVATE_KEY_HEX",
 		"PASETO_V4_LOCAL_KEY_HEX",
+		"SMTP_PASS",
 	} {
 		if err = viper.BindEnv(key); err != nil {
 			return config, err
@@ -291,12 +343,18 @@ func LoadConfig(path string) (config Config, err error) {
 		return config, err
 	}
 
+	if config.InvitationTTL <= 0 || config.PasswordResetTTL <= 0 {
+		return config, fmt.Errorf("INVITATION_TTL and PASSWORD_RESET_TTL must be positive durations")
+	}
+
 	for name, v := range map[string]int{
 		"RATE_LIMIT_GENERAL_PER_MINUTE":         config.RateLimitGeneralPerMinute,
 		"RATE_LIMIT_LOGIN_PER_MINUTE":           config.RateLimitLoginPerMinute,
 		"RATE_LIMIT_LOGIN_IP_PER_MINUTE":        config.RateLimitLoginIPPerMinute,
 		"RATE_LIMIT_REFRESH_PER_MINUTE":         config.RateLimitRefreshPerMinute,
 		"RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE": config.RateLimitPasswordChangePerMinute,
+		"RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE": config.RateLimitPasswordForgotPerMinute,
+		"RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE":   config.RateLimitAccountTokenPerMinute,
 	} {
 		if v < 0 {
 			return config, fmt.Errorf("invalid %s %d: must be >= 0 (0 disables the limit)", name, v)
@@ -373,6 +431,75 @@ const (
 // Secure flag from auth cookies.
 func (c Config) IsDebugMode() bool {
 	return c.GinMode == GinModeDebug
+}
+
+// Mail drivers accepted by MAIL_DRIVER (see Config.MailDriver).
+const (
+	MailDriverSMTP = "smtp"
+	MailDriverFile = "file"
+	MailDriverLog  = "log"
+)
+
+// MailDriverName returns the mail driver to use: MailDriver lowercased, or
+// when it is empty "file" in debug mode, "log" in test mode and "smtp"
+// otherwise. mailer.New validates the result.
+func (c Config) MailDriverName() string {
+	if d := strings.ToLower(strings.TrimSpace(c.MailDriver)); d != "" {
+		return d
+	}
+	switch {
+	case c.IsDebugMode():
+		return MailDriverFile
+	case c.IsTestMode:
+		return MailDriverLog
+	default:
+		return MailDriverSMTP
+	}
+}
+
+// devPublicBaseURL is the web dev server, used for links in debug mode when
+// PUBLIC_BASE_URL is unset.
+const devPublicBaseURL = "http://localhost:4321"
+
+// PublicSiteURL returns PublicBaseURL without a trailing slash. In debug and
+// test mode an empty value means the local web dev server; otherwise it is
+// required. It must be an absolute http(s) URL with no query or fragment.
+func (c Config) PublicSiteURL() (string, error) {
+	raw := strings.TrimRight(strings.TrimSpace(c.PublicBaseURL), "/")
+	if raw == "" {
+		if c.IsDebugMode() || c.IsTestMode {
+			return devPublicBaseURL, nil
+		}
+		return "", fmt.Errorf("PUBLIC_BASE_URL is required outside debug mode (the site URL used in invitation and password reset emails)")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		return "", fmt.Errorf("invalid PUBLIC_BASE_URL %q: want an absolute http(s) URL such as https://cms.example.com", c.PublicBaseURL)
+	}
+	return raw, nil
+}
+
+// Default link lifetimes, used when the TTLs are zero (a zero Config in tests).
+const (
+	DefaultInvitationTTL    = 72 * time.Hour
+	DefaultPasswordResetTTL = time.Hour
+)
+
+// InvitationLinkTTL returns InvitationTTL, or DefaultInvitationTTL when unset.
+func (c Config) InvitationLinkTTL() time.Duration {
+	if c.InvitationTTL > 0 {
+		return c.InvitationTTL
+	}
+	return DefaultInvitationTTL
+}
+
+// PasswordResetLinkTTL returns PasswordResetTTL, or DefaultPasswordResetTTL
+// when unset.
+func (c Config) PasswordResetLinkTTL() time.Duration {
+	if c.PasswordResetTTL > 0 {
+		return c.PasswordResetTTL
+	}
+	return DefaultPasswordResetTTL
 }
 
 // AllowedOrigins returns CORSAllowedOrigins split on commas, trimmed, with
