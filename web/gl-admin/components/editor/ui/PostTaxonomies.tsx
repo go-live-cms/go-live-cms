@@ -35,7 +35,7 @@ async function findOrCreateTerm(type: TaxonomyType, name: string): Promise<Taxon
     // The search is a capped substring match, so the term may exist after all
     const { taxonomy_term: taken } = await getTaxonomyTermBySlug(slugify(name))
     if (taken.taxonomy_type_id === type.id) return taken
-    const slug = `${slugify(name)}-${slugify(type.name)}`
+    const slug = slugify(`${slugify(name)}-${type.name}`)
     return (await createTaxonomyTerm({ name, slug, taxonomy_type_id: type.id })).taxonomy_term
   }
 }

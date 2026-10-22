@@ -63,14 +63,15 @@ export default function TermFormModal({ isOpen, type, terms, term, onClose, onSa
       const result = term
         ? await updateTaxonomyTerm(term.id, {
             name: name.trim(),
-            slug: slug.trim() || slugify(name),
+            slug: slugify(slug) || slugify(name),
             description,
             // 0 moves the term to the top level
             parent_id: parent,
           })
         : await createTaxonomyTerm({
             name: name.trim(),
-            slug: slug.trim() || undefined,
+            // The API only accepts slugs already in this normal form
+            slug: slugify(slug) || undefined,
             description: description || undefined,
             taxonomy_type_id: type.id,
             parent_id: parent || undefined,

@@ -81,8 +81,7 @@ import (
 //   - 500 Internal Server Error: Database or system error
 func (server *Server) createTaxonomyType(c *gin.Context) {
 	var req CreateTaxonomyTypeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 

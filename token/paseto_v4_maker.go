@@ -54,6 +54,18 @@ type V4Keys struct {
 // while keeping refresh tokens private to the authentication service.
 type PasetoV4Maker struct {
 	keys V4Keys
+
+	// previous holds the keys being rotated out (SetPreviousKeys): tokens they
+	// signed/encrypted still verify until previous.until. nil when not rotating.
+	previous *previousKeys
+}
+
+// previousKeys are the retired verification keys accepted during a rotation
+// grace window. Either key may be unset (only one of them rotated).
+type previousKeys struct {
+	publicKey *p.V4AsymmetricPublicKey
+	localKey  *p.V4SymmetricKey
+	until     time.Time
 }
 
 // NewPasetoV4Maker creates a new PASETO v4 token maker with the provided keys and claims.
@@ -269,6 +281,9 @@ func (m *PasetoV4Maker) VerifyToken(tok string) (*Payload, error) {
 	parser.AddRule(p.ForAudience(m.keys.Audience))
 
 	pt, err := parser.ParseV4Public(m.keys.PublicKey, tok, nil)
+	if err != nil && m.inGraceWindow() && m.previous.publicKey != nil {
+		pt, err = parser.ParseV4Public(*m.previous.publicKey, tok, nil)
+	}
 	if err != nil {
 		return nil, ErrInvalidTokenV4
 	}
@@ -338,7 +353,11 @@ func (m *PasetoV4Maker) ParseRefresh(tok string) (*p.Token, error) {
 	parser := p.NewParser()
 	parser.AddRule(p.IssuedBy(m.keys.Issuer))
 	parser.AddRule(p.ForAudience(m.keys.Audience))
-	return parser.ParseV4Local(m.keys.LocalKey, tok, nil)
+	pt, err := parser.ParseV4Local(m.keys.LocalKey, tok, nil)
+	if err != nil && m.inGraceWindow() && m.previous.localKey != nil {
+		return parser.ParseV4Local(*m.previous.localKey, tok, nil)
+	}
+	return pt, err
 }
 
 // HashRefresh creates a SHA-256 hash of a refresh token for secure storage.

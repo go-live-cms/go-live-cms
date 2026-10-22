@@ -36,8 +36,7 @@ func (server *Server) getSettings(c *gin.Context) {
 // updateSettings handles PUT /settings - update settings
 func (server *Server) updateSettings(c *gin.Context) {
 	var req UpdateSettingsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -147,8 +146,7 @@ func (server *Server) listExtensionSettings(c *gin.Context) {
 // upsertExtensionSetting handles PUT /extension-settings
 func (server *Server) upsertExtensionSetting(c *gin.Context) {
 	var req ExtensionSettingRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 

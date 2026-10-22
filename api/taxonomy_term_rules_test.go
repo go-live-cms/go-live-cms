@@ -21,7 +21,7 @@ import (
 
 // Parent and slug rules the admin's Taxonomies screen relies on (#167): a
 // parent must be in the same hierarchical type and can't create a cycle,
-// parent_id 0 moves a term to the top level, slugs are normalized, and a
+// parent_id 0 moves a term to the top level, a blank slug is refused, and a
 // duplicate slug answers 409 with code "slug_taken".
 func TestTaxonomyTermParentAndSlugRules(t *testing.T) {
 	category := db.TaxonomyType{ID: 1, Name: "category", Label: "Categories", Hierarchical: true}
@@ -117,16 +117,13 @@ func TestTaxonomyTermParentAndSlugRules(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:   "UpdateNormalizesSlug",
-			method: http.MethodPut,
-			path:   "/api/v1/taxonomy/terms/13",
-			body:   gin.H{"name": "Sport", "slug": "  Team_Sports  News "},
-			buildStubs: func(t *testing.T, store *mockdb.MockStore) {
-				echoUpdate(store, func(arg db.UpdateTaxonomyTermParams) {
-					require.Equal(t, "team-sports-news", arg.Slug)
-				})
-			},
-			wantStatus: http.StatusOK,
+			// The slug validator (#139) only takes slugs already in generateSlug form
+			name:       "UpdateRejectsUnnormalizedSlug",
+			method:     http.MethodPut,
+			path:       "/api/v1/taxonomy/terms/13",
+			body:       gin.H{"name": "Sport", "slug": "  Team_Sports  News "},
+			buildStubs: func(t *testing.T, store *mockdb.MockStore) { noUpdate(store) },
+			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:   "UpdateEmptyDescriptionClearsIt",
@@ -189,7 +186,7 @@ func TestTaxonomyTermParentAndSlugRules(t *testing.T) {
 			name:       "UpdateBlankSlug",
 			method:     http.MethodPut,
 			path:       "/api/v1/taxonomy/terms/13",
-			body:       gin.H{"name": "  ", "slug": "   "},
+			body:       gin.H{"name": "  "},
 			buildStubs: func(t *testing.T, store *mockdb.MockStore) { noUpdate(store) },
 			wantStatus: http.StatusBadRequest,
 			wantError:  "slug can't be empty",

@@ -23,19 +23,20 @@ package api
 // All fields are required to ensure complete account setup.
 //
 // Validation rules:
-//   - Username: 3-50 characters, will be normalized by handlers
-//   - Email: Valid email format, will be normalized to lowercase
+//   - Username: 3-50 characters; after trimming, ASCII letters/digits only
+//     (what login accepts, checked by the handler)
+//   - Email: Valid email format (max 254), will be normalized to lowercase
 //   - FullName: 2-100 characters for display purposes
-//   - Password: Minimum 6 characters, will be hashed before storage
+//   - Password: 6 characters to 72 bytes (bcrypt reads only 72), hashed before storage
 //   - Role: Must be one of: admin, editor, contributor
 //
 // Security note: This endpoint is admin-only, and role values are restricted
 // to the fixed list above (custom roles will replace this with a roles table).
 type CreateUserRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
-	Email    string `json:"email" binding:"required,email"`
+	Email    string `json:"email" binding:"required,max=254,email"`
 	FullName string `json:"full_name" binding:"required,min=2,max=100"`
-	Password string `json:"password" binding:"required,min=6"`
+	Password string `json:"password" binding:"required,min=6,max_bytes=72"`
 	Role     string `json:"role" binding:"required,oneof=admin editor contributor"`
 }
 
@@ -45,10 +46,10 @@ type CreateUserRequest struct {
 // and administrators (manage any user).
 //
 // Validation rules:
-//   - Username: 3-50 characters if provided
+//   - Username: 3-50 characters if provided; a changed one must be ASCII letters/digits
 //   - Email: Valid email format if provided
 //   - FullName: 2-100 characters if provided
-//   - Password: Minimum 6 characters if provided. The handler blocks every
+//   - Password: 6 characters to 72 bytes if provided. The handler blocks every
 //     session the user holds in the same transaction as the change.
 //   - CurrentPassword: The caller's existing password. The handler requires it
 //     (and checks it) when a user changes their own password; it is ignored
@@ -58,10 +59,10 @@ type CreateUserRequest struct {
 // Access control: Users can update all fields except role. Admins can update any field.
 type UpdateUserRequest struct {
 	Username        string `json:"username" binding:"omitempty,min=3,max=50"`
-	Email           string `json:"email" binding:"omitempty,email"`
+	Email           string `json:"email" binding:"omitempty,max=254,email"`
 	FullName        string `json:"full_name" binding:"omitempty,min=2,max=100"`
-	Password        string `json:"password" binding:"omitempty,min=6"`
-	CurrentPassword string `json:"current_password"`
+	Password        string `json:"password" binding:"omitempty,min=6,max_bytes=72"`
+	CurrentPassword string `json:"current_password" binding:"max_bytes=72"`
 	Role            string `json:"role" binding:"omitempty,oneof=admin editor contributor"`
 }
 
