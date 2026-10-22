@@ -149,7 +149,6 @@ export function describeAccountError(err: unknown): string {
     if (err.code === "invalid_token") return "This link is invalid or has expired."
     if (err.code === "username_taken") return "That username is taken. Choose another one."
     if (err.code === "email_registered") return "An account with this email already exists. Sign in, or reset its password."
-    if (err.code === "password_too_long") return "Password is too long."
     if (err.status >= 500) return "Something went wrong on the server. Please try again in a moment."
     return err.message
   }

@@ -54,8 +54,7 @@ func (server *Server) emailInvitation(c *gin.Context, inv db.UserInvitation, tok
 //   - 409 Conflict: a user with this email already exists
 func (server *Server) createInvitation(c *gin.Context) {
 	var req CreateInvitationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 	caller, ok := server.callerUser(c)
@@ -184,12 +183,7 @@ func (server *Server) revokeInvitation(c *gin.Context) {
 //   - 429 Too Many Requests: per-IP limit
 func (server *Server) acceptInvite(c *gin.Context) {
 	var req AcceptInvitationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if len(req.Password) > maxPasswordBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "password must be at most 72 bytes", "code": "password_too_long"})
+	if !bindJSON(c, &req) {
 		return
 	}
 	username := normUsername(req.Username)

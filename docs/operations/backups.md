@@ -202,6 +202,9 @@ CI runs it in the `backup-restore` job.
 
 ### Deploying a release that adds migrations
 
+CD does steps 2–4 for you (`scripts/deploy/deploy.sh`: backup, `migrate up` with the new
+image before the new API starts, health wait); see [deploy.md](deploy.md). By hand:
+
 1. See what's new: `git diff --stat <deployed-tag>..<new-tag> -- db/migration`.
 2. **Take a backup right before deploying** (run `backup.sh` by hand). Down migrations
    are schema-only and lossy: `000004` down drops `block_doc` and every post version,

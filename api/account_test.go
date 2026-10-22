@@ -568,9 +568,7 @@ func (e eqAcceptInvitationTx) String() string { return "accept params" }
 func TestAcceptInvitationAPI(t *testing.T) {
 	token, _, err := newAccountToken()
 	require.NoError(t, err)
-	valid := gin.H{"token": token, "username": " newbie ", "full_name": "New Person", "password": "secret-123",
-		// Ignored: the invitation decides these.
-		"role": "admin", "email": "attacker@example.com"}
+	valid := gin.H{"token": token, "username": " newbie ", "full_name": "New Person", "password": "secret-123"}
 
 	t.Run("creates the user with the invited role", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -627,6 +625,9 @@ func TestAcceptInvitationAPI(t *testing.T) {
 		"blank username":    {"token": token, "username": "    ", "full_name": "New Person", "password": "secret-123"},
 		"missing full name": {"token": token, "username": "newbie", "password": "secret-123"},
 		"malformed token":   {"token": "nope", "username": "newbie", "full_name": "New Person", "password": "secret-123"},
+		// The invitation decides these; a request can't even send them (#139 bindJSON).
+		"role field":  {"token": token, "username": "newbie", "full_name": "New Person", "password": "secret-123", "role": "admin"},
+		"email field": {"token": token, "username": "newbie", "full_name": "New Person", "password": "secret-123", "email": "x@example.com"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)

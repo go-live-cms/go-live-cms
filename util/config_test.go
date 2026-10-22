@@ -200,3 +200,36 @@ func TestLinkTTLDefaults(t *testing.T) {
 	require.Equal(t, DefaultPasswordResetTTL, Config{}.PasswordResetLinkTTL())
 	require.Equal(t, time.Minute, Config{PasswordResetTTL: time.Minute}.PasswordResetLinkTTL())
 }
+
+// Previous PASETO keys (key rotation, #139) are env-only like the current ones,
+// and need an end of grace window.
+func TestLoadConfigReadsPreviousPasetoKeysFromEnv(t *testing.T) {
+	t.Setenv("PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX", "old-pub")
+	t.Setenv("PASETO_V4_PREVIOUS_LOCAL_KEY_HEX", "old-local")
+	t.Setenv("PASETO_PREVIOUS_KEYS_VALID_UNTIL", "2026-11-01T00:00:00Z")
+
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, "old-pub", config.PasetoV4PreviousPublicKeyHex)
+	require.Equal(t, "old-local", config.PasetoV4PreviousLocalKeyHex)
+	until, err := config.PasetoPreviousKeysUntil()
+	require.NoError(t, err)
+	require.Equal(t, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), until.UTC())
+}
+
+func TestPasetoPreviousKeysUntil(t *testing.T) {
+	until, err := Config{}.PasetoPreviousKeysUntil()
+	require.NoError(t, err)
+	require.True(t, until.IsZero(), "no previous key, no window")
+
+	for _, value := range []string{"", "tomorrow", "2026-11-01"} {
+		_, err := Config{PasetoV4PreviousPublicKeyHex: "k", PasetoPreviousKeysValidUntil: value}.PasetoPreviousKeysUntil()
+		require.ErrorContains(t, err, "PASETO_PREVIOUS_KEYS_VALID_UNTIL", value)
+	}
+}
+
+func TestLoadConfigRejectsPreviousKeyWithoutWindow(t *testing.T) {
+	t.Setenv("PASETO_V4_PREVIOUS_LOCAL_KEY_HEX", "old-local")
+	_, err := LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "PASETO_PREVIOUS_KEYS_VALID_UNTIL")
+}

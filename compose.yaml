@@ -1,19 +1,30 @@
 name: golive_cms
 
+# Production stack (#272). Only `caddy` publishes ports (80/443): it terminates TLS,
+# sends /collab/* to the websocket service and everything else to web, which forwards
+# /api/v1 and /uploads to the API. Postgres, the API and the collab server are reachable
+# only on the compose network.
+#
+# Secrets come from a `.env` next to this file (never committed). Generate one with
+#   go run ./cmd/gen-prod-env -site cms.example.com > .env
+# Full guide, first admin account and upgrade notes: docs/operations/deploy.md.
+#
 # UPGRADING a deployment that used this file before #141: Postgres data and
 # uploads now live in the named volumes postgres_data and uploads. They start
 # EMPTY, and the API will happily run on an empty database. Move your data
 # first: docs/operations/backups.md, "Upgrading a compose.yaml deployment".
+# Before #272 the Postgres password was the fixed `secret` and ports 5432/8080/4321
+# were published: see docs/operations/deploy.md, "Upgrading from before #272".
 
 services:
   postgres:
     image: postgres:12-alpine
     environment:
       POSTGRES_USER: root
-      POSTGRES_PASSWORD: secret
+      # Required. Hex (cmd/gen-prod-env), because DB_SOURCE below embeds it in a URL
+      # unescaped. Only used when the data volume is first initialised.
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
       POSTGRES_DB: golive_cms
-    ports:
-      - "5432:5432"
     volumes:
       # Without a named volume the data lives in an anonymous one that a
       # `down -v` or a fresh host silently drops. Back it up: docs/operations/backups.md
@@ -23,26 +34,29 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   api:
+    # Built locally (tagged golive/api:local); a deployment pulls the CD image instead
+    # (GOLIVE_IMAGE_REGISTRY=ghcr.io/go-live-cms, GOLIVE_IMAGE_TAG=<commit sha>), see
+    # scripts/deploy/deploy.sh. Same for web and websocket.
+    image: "${GOLIVE_IMAGE_REGISTRY:-golive}/api:${GOLIVE_IMAGE_TAG:-local}"
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DB_SOURCE: postgresql://root:secret@postgres:5432/golive_cms?sslmode=disable
+      DB_SOURCE: "postgresql://root:${POSTGRES_PASSWORD}@postgres:5432/golive_cms?sslmode=disable"
       DB_DRIVER: postgres
       # Explicit so a GIN_MODE=debug in a copied app.env can't enable dev seeding,
-      # dev CORS or a non-Secure refresh cookie here. Release always sets Secure
-      # (browsers accept Secure cookies on http://localhost; use HTTPS elsewhere).
+      # dev CORS or a non-Secure refresh cookie here. Release always sets Secure,
+      # which is why the stack is served over HTTPS by caddy.
       GIN_MODE: release
-      # The web app (and admin SPA) is served from :4321, a different origin than
-      # the API, so release mode needs it allowed explicitly. Set your real domain.
-      CORS_ALLOWED_ORIGINS: "http://localhost:4321"
+      # The browser reaches the API same-origin (through caddy and web), so no CORS.
+      # Set it only if another origin calls the API with credentials.
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-}"
       SERVER_ADDRESS: "0.0.0.0:8080"
       API_PORT: ":8080"
       ACCESS_TOKEN_DURATION: "15m"
@@ -57,6 +71,10 @@ services:
       PASETO_V4_PUBLIC_KEY_HEX: "${PASETO_V4_PUBLIC_KEY_HEX}"
       PASETO_V4_PRIVATE_KEY_HEX: "${PASETO_V4_PRIVATE_KEY_HEX}"
       PASETO_V4_LOCAL_KEY_HEX: "${PASETO_V4_LOCAL_KEY_HEX}"
+      # Optional, only during a key rotation (docs/operations/key-rotation.md).
+      PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX: "${PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX:-}"
+      PASETO_V4_PREVIOUS_LOCAL_KEY_HEX: "${PASETO_V4_PREVIOUS_LOCAL_KEY_HEX:-}"
+      PASETO_PREVIOUS_KEYS_VALID_UNTIL: "${PASETO_PREVIOUS_KEYS_VALID_UNTIL:-}"
       # Server-to-server listener (/internal/*). Never add it to `ports:`.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
       # Required (#148): the site is invite-only, so invitations and password
@@ -71,13 +89,16 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       MAIL_FROM: "${MAIL_FROM}"
-      # The web container forwards the admin's /api/v1 and /uploads calls here and
-      # appends the browser IP to X-Forwarded-For (web/src/middleware/apiProxy.ts).
-      # Trust only its fixed address so rate limits key on the browser; add your
-      # reverse proxy's address if one sits in front of the API. See readme
-      # "Rate limiting". SSR requests from web carry no client IP, so exempt them
-      # from the general limit (auth limits still apply).
-      TRUSTED_PROXIES: "172.28.0.10"
+      # Squash-on-publish (best effort): compacts the collab server's LevelDB log
+      # after a publish. Same value as the websocket service's SQUASH_SECRET.
+      COLLAB_SERVER_URL: "http://websocket:1234"
+      COLLAB_SQUASH_SECRET: "${COLLAB_SQUASH_SECRET}"
+      # Browser requests reach the API as caddy -> web -> api. web appends its peer
+      # (caddy) to X-Forwarded-For (web/src/middleware/apiProxy.ts), and caddy sets it
+      # to the browser's IP. Trust exactly those two fixed addresses, so rate limits
+      # key on the browser. See readme "Rate limiting". SSR requests from web carry no
+      # client IP, so exempt web from the general limit (auth limits still apply).
+      TRUSTED_PROXIES: "172.28.0.10,172.28.0.11"
       RATE_LIMIT_EXEMPT_CIDRS: "172.28.0.10"
       # Uploaded media. Media rows store absolute paths under it, so keep it the
       # same across deploys and restores. Served at /uploads/media/*.
@@ -94,32 +115,113 @@ services:
       timeout: 3s
       retries: 5
       start_period: 30s
+    restart: unless-stopped
 
   web:
+    image: "${GOLIVE_IMAGE_REGISTRY:-golive}/web:${GOLIVE_IMAGE_TAG:-local}"
     build:
       context: ./web
       dockerfile: Dockerfile
-    ports:
-      - "4321:4321"
     environment:
-      PUBLIC_API_URL: http://api:8080/api/v1
-      # SSR-side API base (gl-admin/lib/server-api-url.ts).
+      # SSR-side API base on the compose network, read at runtime
+      # (gl-admin/lib/server-api-url.ts). Every server-side fetch uses it.
       SERVER_API_URL: http://api:8080/api/v1
+      # PUBLIC_API_URL is the browser-facing API URL. Leave it unset: the browser
+      # calls /api/v1 and /uploads same-origin. Set it (e.g. https://api.example.com/api/v1)
+      # only if media URLs point at another origin; the admin CSP then allows it.
+      PUBLIC_API_URL: "${PUBLIC_API_URL:-}"
     depends_on:
       # Every SSR request calls the API (active theme), so wait for /readyz.
       api:
         condition: service_healthy
+    # A static file, served by the Node server without SSR: a page would run the
+    # middleware (and an API call) every 10s. API readiness is the api healthcheck's job,
+    # and depends_on above already waits for it. busybox wget (node:22-alpine).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:4321/favicon.ico"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
     networks:
       default:
         # Fixed so the API can trust exactly this address (TRUSTED_PROXIES above).
         ipv4_address: 172.28.0.10
+
+  websocket:
+    image: "${GOLIVE_IMAGE_REGISTRY:-golive}/websocket:${GOLIVE_IMAGE_TAG:-local}"
+    build:
+      context: ./websocket
+      dockerfile: Dockerfile
+    environment:
+      # Verifies collab tickets with the API's public key (same variable as the API),
+      # and must use the API's issuer (PASETO_ISSUER, default golive.auth).
+      PASETO_V4_PUBLIC_KEY_HEX: "${PASETO_V4_PUBLIC_KEY_HEX}"
+      PASETO_ISSUER: golive.auth
+      # Per-connection role check (#216, #223) on the API's unpublished internal
+      # listener. Required: the server exits at startup without either.
+      INTERNAL_API_URL: http://api:8081
+      ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
+      SQUASH_SECRET: "${COLLAB_SQUASH_SECRET}"
+      DATA_PATH: /data/yjs
+    volumes:
+      # LevelDB: in-flight Yjs state across restarts (Postgres block_doc is canonical).
+      - ws_data:/data/yjs
+    depends_on:
+      api:
+        condition: service_healthy
+    # GET / answers 200 once the server listens (server.js). busybox wget.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:1234/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    # Exactly ONE collab process: live docs and the ticket replay guard are in
+    # memory (websocket/CLAUDE.md). Never scale this service.
+    deploy:
+      replicas: 1
+
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Your domain (automatic HTTPS) or localhost (Caddy's local CA, for testing).
+      SITE_ADDRESS: "${SITE_ADDRESS:-localhost}"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates and ACME account. Keep it: re-issuing on every deploy hits
+      # Let's Encrypt rate limits.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      websocket:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      default:
+        # Fixed so the API can trust it (TRUSTED_PROXIES above).
+        ipv4_address: 172.28.0.11
 
 networks:
   default:
     ipam:
       config:
         - subnet: 172.28.0.0/24
+          # Dynamic addresses come from the upper half only, so no other container can
+          # take the fixed .10 (web) / .11 (caddy) that the API trusts.
+          ip_range: 172.28.0.128/25
 
 volumes:
   postgres_data:
   uploads:
+  ws_data:
+  caddy_data:
+  caddy_config:

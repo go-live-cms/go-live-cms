@@ -1955,51 +1955,6 @@ func (mr *MockStoreMockRecorder) ListPosts(arg0, arg1 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPosts", reflect.TypeOf((*MockStore)(nil).ListPosts), arg0, arg1)
 }
 
-// ListPostsByType mocks base method.
-func (m *MockStore) ListPostsByType(arg0 context.Context, arg1 db.ListPostsByTypeParams) ([]db.Post, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListPostsByType", arg0, arg1)
-	ret0, _ := ret[0].([]db.Post)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListPostsByType indicates an expected call of ListPostsByType.
-func (mr *MockStoreMockRecorder) ListPostsByType(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByType", reflect.TypeOf((*MockStore)(nil).ListPostsByType), arg0, arg1)
-}
-
-// ListPostsByTypeWithAllMeta mocks base method.
-func (m *MockStore) ListPostsByTypeWithAllMeta(arg0 context.Context, arg1 db.ListPostsByTypeWithAllMetaParams) ([]db.ListPostsByTypeWithAllMetaRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListPostsByTypeWithAllMeta", arg0, arg1)
-	ret0, _ := ret[0].([]db.ListPostsByTypeWithAllMetaRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListPostsByTypeWithAllMeta indicates an expected call of ListPostsByTypeWithAllMeta.
-func (mr *MockStoreMockRecorder) ListPostsByTypeWithAllMeta(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByTypeWithAllMeta", reflect.TypeOf((*MockStore)(nil).ListPostsByTypeWithAllMeta), arg0, arg1)
-}
-
-// ListPostsByTypeWithMeta mocks base method.
-func (m *MockStore) ListPostsByTypeWithMeta(arg0 context.Context, arg1 db.ListPostsByTypeWithMetaParams) ([]db.ListPostsByTypeWithMetaRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListPostsByTypeWithMeta", arg0, arg1)
-	ret0, _ := ret[0].([]db.ListPostsByTypeWithMetaRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ListPostsByTypeWithMeta indicates an expected call of ListPostsByTypeWithMeta.
-func (mr *MockStoreMockRecorder) ListPostsByTypeWithMeta(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByTypeWithMeta", reflect.TypeOf((*MockStore)(nil).ListPostsByTypeWithMeta), arg0, arg1)
-}
-
 // ListPostsWithAllMeta mocks base method.
 func (m *MockStore) ListPostsWithAllMeta(arg0 context.Context, arg1 db.ListPostsWithAllMetaParams) ([]db.ListPostsWithAllMetaRow, error) {
 	m.ctrl.T.Helper()

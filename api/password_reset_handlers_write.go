@@ -27,10 +27,6 @@ const forgotPasswordMessage = "If an account uses that email, we've sent it a li
 // used to flood someone's inbox from many IPs.
 const passwordResetCooldown = time.Minute
 
-// maxPasswordBytes is bcrypt's input limit (util.HashPassword enforces it);
-// checked up front for a 400 instead of a hashing failure.
-const maxPasswordBytes = 72
-
 // forgotPassword emails a password reset link to the account with this email,
 // if there is one.
 //
@@ -42,8 +38,7 @@ const maxPasswordBytes = 72
 //   - 429 Too Many Requests: per-IP limit
 func (server *Server) forgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "a valid email is required"})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -129,12 +124,7 @@ func (server *Server) sendPasswordResetEmail(logger *slog.Logger, email string) 
 //   - 429 Too Many Requests: per-IP limit
 func (server *Server) resetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "token and a password of at least 6 characters are required"})
-		return
-	}
-	if len(req.Password) > maxPasswordBytes {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "password must be at most 72 bytes", "code": "password_too_long"})
+	if !bindJSON(c, &req) {
 		return
 	}
 	hash, ok := parseAccountToken(req.Token)

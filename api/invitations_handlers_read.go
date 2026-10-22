@@ -40,8 +40,7 @@ func (server *Server) listInvitations(c *gin.Context) {
 //   - 400 Bad Request: code "invalid_token" for a link that doesn't work
 func (server *Server) previewInvite(c *gin.Context) {
 	var req PreviewInvitationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondInvalidAccountToken(c)
+	if !bindJSON(c, &req) {
 		return
 	}
 	hash, ok := parseAccountToken(req.Token)
