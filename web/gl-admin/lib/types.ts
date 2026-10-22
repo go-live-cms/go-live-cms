@@ -95,13 +95,7 @@ export interface Media {
 }
 
 // API Query Types
-export type PostSortOption =
-  | "created_at_asc"
-  | "created_at_desc"
-  | "title_asc"
-  | "title_desc"
-  | "author_asc"
-  | "author_desc"
+export type { PostSortOption, PostSortField, SortOrder } from "./api/types"
 export type MediaSortOption =
   | "date_asc"
   | "date_desc"

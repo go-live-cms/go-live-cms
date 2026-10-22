@@ -27,6 +27,11 @@ RUN chmod +x wait-for.sh
 # Copy database migrations
 COPY db/migration ./migration
 
+# Themes only (.dockerignore keeps the rest of web/ out). The startup sync scans
+# web/themes relative to the working directory. Themes are build-time: the web
+# image bundles the same themes, so both images must come from the same commit.
+COPY web/themes ./web/themes
+
 EXPOSE 8080
 CMD ["/app/main"]
 ENTRYPOINT [ "/app/start.sh" ]

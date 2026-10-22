@@ -5,8 +5,10 @@
  */
 
 import type { ThemeAPIClient } from "./theme-api"
+import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 
-const API_BASE_URL = import.meta.env.SERVER_API_URL || "http://localhost:8080"
+// API origin (no /api/v1), from the runtime SERVER_API_URL. The paths below add /api/v1.
+const API_BASE_URL = SERVER_MEDIA_URL
 
 export class ThemeAPIClientImpl implements ThemeAPIClient {
   private authToken: string | null

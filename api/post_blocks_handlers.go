@@ -140,13 +140,13 @@ func (server *Server) syncPostMediaAssociations(ctx *gin.Context, postID int64, 
 // BlockDocResponse wraps the block document for API responses
 type BlockDocResponse struct {
 	Doc   BlockDocV1 `json:"doc"`
-	Title *string    `json:"title,omitempty"` // Optional title to update alongside blocks
+	Title *string    `json:"title,omitempty" binding:"omitempty,max=255"` // Optional title to update alongside blocks
 }
 
 // PublishRequest represents the request to publish a version
 type PublishRequest struct {
-	Label   *string `json:"label"`
-	Message *string `json:"message"`
+	Label   *string `json:"label" binding:"omitempty,max=255"`
+	Message *string `json:"message" binding:"omitempty,max=2000"`
 }
 
 // PublishResponse represents the response from publishing
@@ -173,7 +173,7 @@ func stringToNullString(s *string) sql.NullString {
 func (server *Server) getPostBlocks(c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
 		return
 	}
 
@@ -205,7 +205,7 @@ func (server *Server) getPostBlocks(c *gin.Context) {
 func (server *Server) updatePostBlocks(c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
 		return
 	}
 
@@ -224,7 +224,12 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 
 	// Parse request body
 	var req BlockDocResponse
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	// Size/depth limits before any walk over the tree (#139).
+	if err := req.Doc.checkLimits(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -323,7 +328,7 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 func (server *Server) publishPost(c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
 		return
 	}
 
@@ -332,10 +337,10 @@ func (server *Server) publishPost(c *gin.Context) {
 	userID := authPayload.UserID
 
 	// Parse request body
+	// The body is optional; one that is sent must be valid.
 	var req PublishRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Allow empty body
-		req = PublishRequest{}
+	if !bindOptionalJSON(c, &req) {
+		return
 	}
 
 	// Get current working copy
@@ -459,7 +464,7 @@ func (server *Server) triggerCollabSquash(postID int64, requestID string) {
 func (server *Server) getPublicPostBlocks(c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
 		return
 	}
 

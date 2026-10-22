@@ -89,7 +89,7 @@ func (server *Server) createMedia(c *gin.Context) {
 			server.respondUploadTooLarge(c)
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		respondBindError(c, err)
 		return
 	}
 
@@ -496,8 +496,7 @@ func (server *Server) updateMedia(c *gin.Context) {
 	}
 
 	var req UpdateMediaRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 	if fields := req.serverOwnedFields(); len(fields) > 0 {
