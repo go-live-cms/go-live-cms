@@ -87,28 +87,32 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  // Serve theme assets (CSS, thumbnails, etc.)
+  // Serve theme assets (CSS, thumbnails, etc.). Only these extensions: themes/
+  // also holds source (theme.config.ts, functions.ts, .astro layouts).
   if (url.pathname.startsWith("/themes/")) {
     const themePath = path.join(process.cwd(), url.pathname)
+    const ext = path.extname(themePath).toLowerCase()
 
-    if (fs.existsSync(themePath)) {
+    const contentTypes: Record<string, string> = {
+      ".css": "text/css",
+      ".js": "text/javascript",
+      ".svg": "image/svg+xml",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".png": "image/png",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+      ".woff": "font/woff",
+      ".woff2": "font/woff2",
+    }
+
+    if (contentTypes[ext] && fs.existsSync(themePath)) {
       const fileContent = fs.readFileSync(themePath)
-      const ext = path.extname(themePath).toLowerCase()
-
-      const contentTypes: Record<string, string> = {
-        ".css": "text/css",
-        ".svg": "image/svg+xml",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".gif": "image/gif",
-        ".webp": "image/webp",
-      }
 
       return new Response(fileContent, {
         status: 200,
         headers: {
-          "Content-Type": contentTypes[ext] || "application/octet-stream",
+          "Content-Type": contentTypes[ext],
           "Cache-Control": ext === ".css" ? "public, max-age=3600" : "public, max-age=86400",
         },
       })
