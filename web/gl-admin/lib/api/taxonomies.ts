@@ -148,7 +148,12 @@ export async function getPostTaxonomyTerms(postId: string | number): Promise<Tax
   return response.taxonomy_terms || []
 }
 
-// Replaces the post's full set of terms (all types at once).
-export async function setPostTaxonomyTerms(postId: string | number, termIds: number[]): Promise<void> {
-  await apiCall(`/posts/${postId}`, { method: "PUT", body: { taxonomy_ids: termIds } })
+// One term at a time (idempotent), so editors changing different terms of the
+// same post don't overwrite each other.
+export async function addPostTaxonomyTerm(postId: string | number, termId: number): Promise<void> {
+  await apiCall(`/posts/${postId}/taxonomy-terms/${termId}`, { method: "PUT" })
+}
+
+export async function removePostTaxonomyTerm(postId: string | number, termId: number): Promise<void> {
+  await apiCall(`/posts/${postId}/taxonomy-terms/${termId}`, { method: "DELETE" })
 }

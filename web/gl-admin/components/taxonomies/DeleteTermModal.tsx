@@ -20,7 +20,9 @@ export default function DeleteTermModal({ term, childCount, onClose, onDeleted, 
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => setError(null), [term])
+  // Reset only for a different term: the reload after a 409 hands in a new
+  // object for the same one, and its explanation must stay visible.
+  useEffect(() => setError(null), [term?.id])
 
   if (!term) return null
 

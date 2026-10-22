@@ -106,11 +106,6 @@ export function parseTagNames(input: string): string[] {
   return names
 }
 
-export function toggleId(ids: number[], id: number, on: boolean): number[] {
-  const without = ids.filter((x) => x !== id)
-  return on ? [...without, id] : without
-}
-
 // Mirrors generateSlug in api/taxonomy_utils.go, which normalizes whatever the
 // form sends; used only to preview the slug while typing a new term's name.
 export function slugify(name: string): string {

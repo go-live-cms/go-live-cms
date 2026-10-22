@@ -1,4 +1,4 @@
-import type { Post, PostSortOption, PaginationParams, ApiResponse, TaxonomyTerm } from "../../gl-admin/lib/api/types"
+import type { Post, PostSortOption, PaginationParams, ApiResponse, TaxonomyTerm, TaxonomyType } from "../../gl-admin/lib/api/types"
 import { SERVER_API_URL } from "../../gl-admin/lib/server-api-url"
 
 const API_BASE = typeof window === "undefined" ? SERVER_API_URL : "/api/v1"
@@ -92,6 +92,11 @@ export async function getPostById(id: string | number): Promise<{ post: Post }> 
 
 export async function getPostBySlug(slug: string): Promise<{ post: Post }> {
   return apiCall(`/posts/slug/${slug}`)
+}
+
+export async function getTaxonomyTypes(): Promise<TaxonomyType[]> {
+  const response = await apiCall("/taxonomy/types")
+  return response.taxonomy_types || []
 }
 
 // Categories, tags, ... assigned to a post (all taxonomy types).

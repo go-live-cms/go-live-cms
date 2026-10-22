@@ -106,4 +106,9 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	// Post-taxonomy term associations for bidirectional relationships
 	// Note: This could alternatively live in posts_routes.go for module cohesion
 	v1.GET("/posts/:id/taxonomy-terms", server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomy-terms
+
+	// One term at a time (editor-or-admin role), so concurrent editors don't
+	// overwrite each other's assignments
+	v1.PUT("/posts/:id/taxonomy-terms/:term_id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.addPostTaxonomyTerm)       // PUT /api/v1/posts/:id/taxonomy-terms/:term_id
+	v1.DELETE("/posts/:id/taxonomy-terms/:term_id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.removePostTaxonomyTerm) // DELETE /api/v1/posts/:id/taxonomy-terms/:term_id
 }

@@ -455,6 +455,7 @@ func TestCreateTaxonomyTermAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				hierarchicalType := taxonomyType
+				hierarchicalType.ID = taxonomyTerm.TaxonomyTypeID
 				hierarchicalType.Hierarchical = true
 				store.EXPECT().
 					GetTaxonomyTypeByID(gomock.Any(), gomock.Eq(taxonomyTerm.TaxonomyTypeID)).

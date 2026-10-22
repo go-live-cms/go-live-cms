@@ -293,6 +293,116 @@ func TestTaxonomyTermParentAndSlugRules(t *testing.T) {
 	}
 }
 
+// PUT/DELETE /posts/:id/taxonomy-terms/:term_id change one assignment and never
+// touch the post row or its other terms (the mock fails on any other call).
+func TestPostTaxonomyTermAssignment(t *testing.T) {
+	post := db.Post{ID: 251, Title: "A post"}
+	term := db.TaxonomyTerm{ID: 7, Name: "News", Slug: "news", TaxonomyTypeID: 1}
+	duplicate := errors.New(`pq: duplicate key value violates unique constraint "unique_post_taxonomy_term"`)
+	link := db.AddPostToTaxonomyTermParams{PostID: post.ID, TaxonomyTermID: term.ID}
+
+	testCases := []struct {
+		name       string
+		method     string
+		path       string
+		role       string
+		buildStubs func(store *mockdb.MockStore)
+		wantStatus int
+	}{
+		{
+			name:   "AddOK",
+			method: http.MethodPut,
+			path:   "/api/v1/posts/251/taxonomy-terms/7",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil)
+				store.EXPECT().GetTaxonomyTerm(gomock.Any(), term.ID).Return(term, nil)
+				store.EXPECT().AddPostToTaxonomyTerm(gomock.Any(), link).Return(db.PostTaxonomyRelationship{}, nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:   "AddAlreadyAssigned",
+			method: http.MethodPut,
+			path:   "/api/v1/posts/251/taxonomy-terms/7",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil)
+				store.EXPECT().GetTaxonomyTerm(gomock.Any(), term.ID).Return(term, nil)
+				store.EXPECT().AddPostToTaxonomyTerm(gomock.Any(), link).Return(db.PostTaxonomyRelationship{}, duplicate)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:   "AddPostNotFound",
+			method: http.MethodPut,
+			path:   "/api/v1/posts/251/taxonomy-terms/7",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), post.ID).Return(db.Post{}, sql.ErrNoRows)
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:   "AddTermNotFound",
+			method: http.MethodPut,
+			path:   "/api/v1/posts/251/taxonomy-terms/7",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil)
+				store.EXPECT().GetTaxonomyTerm(gomock.Any(), term.ID).Return(db.TaxonomyTerm{}, sql.ErrNoRows)
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "AddInvalidTermID",
+			method:     http.MethodPut,
+			path:       "/api/v1/posts/251/taxonomy-terms/abc",
+			buildStubs: func(store *mockdb.MockStore) {},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "RemoveOK",
+			method: http.MethodDelete,
+			path:   "/api/v1/posts/251/taxonomy-terms/7",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil)
+				store.EXPECT().RemovePostFromTaxonomyTerm(gomock.Any(), db.RemovePostFromTaxonomyTermParams(link)).Return(nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "ContributorForbidden",
+			method:     http.MethodPut,
+			path:       "/api/v1/posts/251/taxonomy-terms/7",
+			role:       RoleContributor,
+			buildStubs: func(store *mockdb.MockStore) {},
+			wantStatus: http.StatusForbidden,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			tc.buildStubs(store)
+			caller := randomUserNew()
+			caller.Role = RoleEditor
+			if tc.role != "" {
+				caller.Role = tc.role
+			}
+			stubRoleLookup(store, caller)
+
+			server := newTestServer(t, store)
+			recorder := httptest.NewRecorder()
+			request, err := http.NewRequest(tc.method, tc.path, nil)
+			require.NoError(t, err)
+			addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, caller.ID, caller.Username, time.Minute)
+
+			server.router.ServeHTTP(recorder, request)
+			require.Equal(t, tc.wantStatus, recorder.Code, recorder.Body.String())
+		})
+	}
+}
+
 // A contributor can read terms but not write them.
 func TestTaxonomyTermWritesRequireContentEditor(t *testing.T) {
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {

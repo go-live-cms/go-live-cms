@@ -4,11 +4,12 @@ vi.mock("../api", () => ({ apiCall: vi.fn() }))
 
 import { apiCall } from "../api"
 import {
+  addPostTaxonomyTerm,
   deleteTaxonomyTerm,
   getAllTaxonomyTerms,
   getPostTaxonomyTerms,
   getTaxonomyTypes,
-  setPostTaxonomyTerms,
+  removePostTaxonomyTerm,
   updateTaxonomyTerm,
 } from "./taxonomies"
 
@@ -61,14 +62,16 @@ describe("taxonomies API client", () => {
     ])
   })
 
-  it("reads and replaces a post's terms", async () => {
-    mockedApiCall.mockResolvedValueOnce({ taxonomy_terms: terms(1, 2) }).mockResolvedValueOnce({})
+  it("reads a post's terms and changes them one at a time", async () => {
+    mockedApiCall.mockResolvedValueOnce({ taxonomy_terms: terms(1, 2) }).mockResolvedValue({})
     expect(await getPostTaxonomyTerms(42)).toHaveLength(2)
-    await setPostTaxonomyTerms(42, [])
+    await addPostTaxonomyTerm(42, 7)
+    await removePostTaxonomyTerm(42, 8)
+    // Never the whole set: a concurrent editor's other terms stay untouched
     expect(mockedApiCall.mock.calls).toEqual([
       ["/posts/42/taxonomy-terms"],
-      // An empty list is sent as is: it clears every term
-      ["/posts/42", { method: "PUT", body: { taxonomy_ids: [] } }],
+      ["/posts/42/taxonomy-terms/7", { method: "PUT" }],
+      ["/posts/42/taxonomy-terms/8", { method: "DELETE" }],
     ])
   })
 })

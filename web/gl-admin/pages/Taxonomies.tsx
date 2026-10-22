@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Listing from "@gl-admin/layouts/Listing"
@@ -58,15 +58,20 @@ const Taxonomies: React.FC = () => {
     }
   }, [])
 
+  // Only the latest request may update the list: switching types quickly must
+  // not let a slower response for the previous type land afterwards.
+  const termsRequest = useRef(0)
   const loadTerms = useCallback(async (typeName: string) => {
+    const request = ++termsRequest.current
     setTermsLoading(true)
     setTermsError(null)
     try {
-      setTerms(await getAllTaxonomyTerms(typeName))
+      const result = await getAllTaxonomyTerms(typeName)
+      if (request === termsRequest.current) setTerms(result)
     } catch (error) {
-      setTermsError(error)
+      if (request === termsRequest.current) setTermsError(error)
     } finally {
-      setTermsLoading(false)
+      if (request === termsRequest.current) setTermsLoading(false)
     }
   }, [])
 

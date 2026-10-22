@@ -4,6 +4,7 @@
  * Renders nothing when the post has no terms.
  */
 import type { TaxonomyTerm } from '@gl-admin/lib/api/types'
+import { getTaxonomyTypes } from '@/lib/api'
 
 interface Props {
   terms?: TaxonomyTerm[]
@@ -18,8 +19,16 @@ for (const term of terms) {
   groups.set(type, [...(groups.get(type) ?? []), term])
 }
 
-const LABELS: Record<string, string> = { category: 'Categories', tag: 'Tags' }
-const label = (type: string) => LABELS[type] ?? type.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+// Headings use each type's configured label; its name if the lookup fails
+const labels = new Map<string, string>()
+if (groups.size > 0) {
+  try {
+    for (const type of await getTaxonomyTypes()) labels.set(type.name, type.label)
+  } catch (error) {
+    console.warn('[PostTerms] Could not fetch taxonomy types:', error)
+  }
+}
+const label = (type: string) => labels.get(type) ?? type
 ---
 
 {groups.size > 0 && (

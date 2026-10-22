@@ -9,7 +9,6 @@ import {
   parseTagNames,
   slugify,
   subtreeIds,
-  toggleId,
 } from "./terms"
 
 const term = (id: number, name: string, parent_id?: number, post_count = 0): TaxonomyTerm => ({
@@ -101,12 +100,6 @@ describe("tag input helpers", () => {
   it("finds an existing term by name ignoring case and spaces", () => {
     expect(findTermByName(all, "  europe ")).toBe(europe)
     expect(findTermByName(all, "Asia")).toBeUndefined()
-  })
-
-  it("toggles ids without duplicating them", () => {
-    expect(toggleId([1, 2], 3, true)).toEqual([1, 2, 3])
-    expect(toggleId([1, 2], 2, true)).toEqual([1, 2])
-    expect(toggleId([1, 2], 1, false)).toEqual([2])
   })
 })
 
