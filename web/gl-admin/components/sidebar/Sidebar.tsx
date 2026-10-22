@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { Link, useLocation } from "react-router-dom"
 import { extractSvgPath, Icon } from "@gl-admin/components/ui/Icon"
@@ -15,6 +15,49 @@ import type { PostType } from "@gl-admin/lib/api/types"
 const ORIGINAL_WIDTH = 26 * 16
 const MIN_WIDTH = ORIGINAL_WIDTH * 0.8
 const MAX_WIDTH = ORIGINAL_WIDTH * 1.2
+// Must match the drawer breakpoint in sidebar.scss
+const MOBILE_QUERY = "(width <= 768px)"
+const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+// Keeps Tab / Shift+Tab cycling inside the open drawer
+function trapFocus(e: KeyboardEvent, container: HTMLElement) {
+  const items = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (el) => el.getClientRects().length > 0
+  )
+  if (items.length === 0) return
+
+  const first = items[0]
+  const last = items[items.length - 1]
+  const active = document.activeElement
+
+  if (!container.contains(active)) {
+    e.preventDefault()
+    first.focus()
+  } else if (e.shiftKey && active === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && active === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+function BrandLink({ className, headingTag: Heading = "h1" }: { className: string; headingTag?: "h1" | "span" }) {
+  return (
+    <Link to="/" className={className}>
+      <svg
+        width="35"
+        height="35"
+        viewBox="0 0 35 35"
+        className="logo"
+        dangerouslySetInnerHTML={{ __html: extractSvgPath(GLIcon) }}
+      />
+      <Heading>
+        <b>Go</b>Live
+      </Heading>
+    </Link>
+  )
+}
 
 // Static sections that don't change
 const topSection: Section[] = [
@@ -77,7 +120,12 @@ const Sidebar: React.FC = () => {
   const [sidebarWidth, setSidebarWidth] = useState(`${initialWidth}px`)
   const [isClosed, setIsClosed] = useState(localStorage.getItem("sidebarState") === "true" || false)
   const [contentSection, setContentSection] = useState<Section[]>(defaultContentSection)
+  // Off-canvas drawer state, only used below the mobile breakpoint (sidebar.scss)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
   const resizing = useRef(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const navRef = useRef<HTMLElement>(null)
 
   // Fetch post types to build dynamic content section
   useEffect(() => {
@@ -101,6 +149,47 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     localStorage.setItem("sidebarState", isClosed.toString())
   }, [isClosed])
+
+  const closeMobileMenu = useCallback(() => {
+    setIsMobileOpen(false)
+    menuButtonRef.current?.focus()
+  }, [])
+
+  // Close the drawer after back/forward navigation
+  useEffect(() => {
+    setIsMobileOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!isMobileOpen) return
+
+    closeButtonRef.current?.focus()
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const nav = navRef.current
+      if (!nav) return
+      // While the user menu is open, Escape closes that instead (SidebarUserProfile)
+      if (e.key === "Escape" && !nav.querySelector(".sidebar-popup.open")) closeMobileMenu()
+      if (e.key === "Tab") trapFocus(e, nav)
+    }
+    // The drawer only exists below the breakpoint; drop it if the viewport grows
+    const mobileQuery = window.matchMedia(MOBILE_QUERY)
+    const onQueryChange = () => {
+      if (!mobileQuery.matches) setIsMobileOpen(false)
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    mobileQuery.addEventListener("change", onQueryChange)
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+      mobileQuery.removeEventListener("change", onQueryChange)
+    }
+  }, [isMobileOpen, closeMobileMenu])
+
+  // Links to the current page don't change location, so close on any link click
+  const handleNavClick = (e: React.MouseEvent) => {
+    if (isMobileOpen && (e.target as Element).closest("a")) closeMobileMenu()
+  }
 
   const handleResizeStart = (e: React.MouseEvent) => {
     resizing.current = true
@@ -148,25 +237,54 @@ const Sidebar: React.FC = () => {
   }
 
   return (
-    <nav className={`admin-sidebar${isClosed ? "closed" : ""}`} style={{ width: sidebarWidth }}>
-      <Link to="/" className="admin-sidebar__head">
-        <svg
-          width="35"
-          height="35"
-          viewBox="0 0 35 35"
-          className="logo"
-          dangerouslySetInnerHTML={{ __html: extractSvgPath(GLIcon) }}
-        />
-        <h1>
-          <b>Go</b>Live
-        </h1>
-      </Link>
+    <>
+    <header className="admin-mobile-bar">
+      <button
+        type="button"
+        ref={menuButtonRef}
+        className="admin-mobile-bar__toggle"
+        aria-label="Open menu"
+        aria-controls="admin-sidebar"
+        aria-expanded={isMobileOpen}
+        onClick={() => setIsMobileOpen(true)}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+      <BrandLink className="admin-mobile-bar__logo" headingTag="span" />
+    </header>
+    <div
+      className={`admin-sidebar-backdrop${isMobileOpen ? " open" : ""}`}
+      onClick={closeMobileMenu}
+      aria-hidden="true"
+    />
+    <nav
+      id="admin-sidebar"
+      ref={navRef}
+      className={`admin-sidebar${isClosed ? " closed" : ""}${isMobileOpen ? " mobile-open" : ""}`}
+      style={{ width: sidebarWidth }}
+      role={isMobileOpen ? "dialog" : undefined}
+      aria-modal={isMobileOpen || undefined}
+      aria-label="Admin navigation"
+      onClick={handleNavClick}
+    >
+      <button
+        type="button"
+        ref={closeButtonRef}
+        className="admin-sidebar__close"
+        aria-label="Close menu"
+        onClick={closeMobileMenu}
+      >
+        <Icon name="close" color={navIconColor} width="20px" height="20px" />
+      </button>
+      <BrandLink className="admin-sidebar__head" />
       <div className="admin-sidebar__nav">
         {navigation.map((section, i) => (
           <React.Fragment key={`sidebar-section-wrapper-${i}`}>
             <div className="admin-sidebar__nav_section" key={`sidebar-section-${i}`}>
               {section.map((item, j) => (
-                <Tooltip content={item.name} key={`sidebar-item-${j}`} enabled={isClosed}>
+                <Tooltip content={item.name} key={`sidebar-item-${j}`} enabled={isClosed && !isMobileOpen}>
                   <SidebarItem
                     iconPath={item.icon}
                     name={item.name}
@@ -190,6 +308,7 @@ const Sidebar: React.FC = () => {
       </div>
       <div className="admin-sidebar__resize-handle" onMouseDown={handleResizeStart}></div>
     </nav>
+    </>
   )
 }
 

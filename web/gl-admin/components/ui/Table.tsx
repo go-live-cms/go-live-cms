@@ -66,20 +66,22 @@ export default function Table<T extends Record<string, any>>({
     </tbody>
   )
   return (
-    <table className={`gl-table ${className}`}>
-      <thead>
-        <tr>
-          {columns.map((col) => (
-            <th
-              key={String(col.key)}
-              style={col.width ? { width: typeof col.width === "number" ? `${col.width}` : col.width } : undefined}
-            >
-              {col.name}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      {loading ? dataSkeleton : dataRender}
-    </table>
+    <div className="gl-table-scroll">
+      <table className={`gl-table ${className}`}>
+        <thead>
+          <tr>
+            {columns.map((col) => (
+              <th
+                key={String(col.key)}
+                style={col.width ? { width: typeof col.width === "number" ? `${col.width}` : col.width } : undefined}
+              >
+                {col.name}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        {loading ? dataSkeleton : dataRender}
+      </table>
+    </div>
   )
 }

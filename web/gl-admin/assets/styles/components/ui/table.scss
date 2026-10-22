@@ -42,6 +42,12 @@ caption {
 
 /* Actual g-table styles */
 
+// Wide tables scroll inside this box instead of widening the page
+.gl-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .gl-table {
   background: var(--background);
   border-collapse: collapse;

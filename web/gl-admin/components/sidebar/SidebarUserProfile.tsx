@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { useSelect } from "@gl-admin/utils/select"
@@ -14,6 +15,16 @@ export default function SidebarUserProfile() {
   const { open, setOpen, ref, handleSelectClick } = useSelect()
   const isDark = useGoLive()
   const navIconColor = isDark ? "#FFFFFF" : "#46484A"
+
+  // Escape closes the popup (the mobile drawer leaves Escape to us while it's open)
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [open, setOpen])
 
   const handleProfile = () => {
     setOpen(false)

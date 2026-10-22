@@ -37,3 +37,22 @@
         }
     }
 }
+
+@media (width <= 768px) {
+    .gl-listing {
+        &__heading {
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 2rem;
+
+            h1 {
+                margin-left: 0;
+            }
+        }
+
+        &__actions {
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+    }
+}
