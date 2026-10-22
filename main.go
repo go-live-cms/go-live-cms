@@ -2,7 +2,8 @@ package main
 
 import (
 	"database/sql"
-	"log"
+	"log/slog"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-live-cms/go-live-cms/api"
@@ -12,43 +13,50 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// fatal logs at error level and exits; slog has no Fatal.
+func fatal(msg string, err error) {
+	slog.Error(msg, "error", err)
+	os.Exit(1)
+}
+
 func main() {
+	// JSON until the config says otherwise, so even a config error is structured.
+	slog.SetDefault(api.NewLogger(os.Stdout, util.GinModeRelease))
+
 	config, err := util.LoadConfig(".")
 	if err != nil {
-		log.Fatal("❌ Cannot load config:", err)
+		fatal("cannot load config", err)
 	}
 
-	log.Println("🚀 Starting Go Live CMS...")
+	// Text in debug, JSON otherwise (api.NewLogger). SetDefault also routes the
+	// standard log package (e.g. the dev seeders) through it.
+	slog.SetDefault(api.NewLogger(os.Stdout, config.GinMode))
 
 	// GIN_MODE defaults to release; debug (dev seeding, dev CORS) must be opted into.
 	gin.SetMode(config.GinMode)
-	log.Println("⚙️  Gin mode:", gin.Mode())
+	slog.Info("starting Go Live CMS", "gin_mode", gin.Mode())
 
-	log.Println("📊 Connecting to database...")
 	conn, err := sql.Open(config.DBDriver, config.DBSource)
 	if err != nil {
-		log.Fatal("❌ Cannot connect to db:", err)
+		fatal("cannot open db", err)
 	}
-	log.Println("✅ Database connected successfully")
 
-	log.Println("🔧 Setting up server...")
 	server, err := api.NewServer(config, db.NewStore(conn))
 	if err != nil {
-		log.Fatal("❌ Cannot set up server:", err)
+		fatal("cannot set up server", err)
 	}
 
-	log.Println("🌐 Starting Go Live CMS API on port", config.ServerAddress)
-	// Server-to-server routes (collab WS role lookup) run on their own listener,
-	// which must not be published to the internet.
+	// Server-to-server routes (collab WS role lookup, metrics) run on their own
+	// listener, which must not be published to the internet.
 	go func() {
-		log.Println("Starting internal API on", config.InternalServerAddress)
+		slog.Info("starting internal API", "address", config.InternalServerAddress)
 		if err := server.StartInternal(config.InternalServerAddress); err != nil {
-			log.Fatal("cannot start internal server:", err)
+			fatal("cannot start internal server", err)
 		}
 	}()
 
-	err = server.Start(config.ServerAddress)
-	if err != nil {
-		log.Fatal("cannot start server:", err)
+	slog.Info("starting API", "address", config.ServerAddress)
+	if err := server.Start(config.ServerAddress); err != nil {
+		fatal("cannot start server", err)
 	}
 }

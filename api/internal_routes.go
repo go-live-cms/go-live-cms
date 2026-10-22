@@ -31,13 +31,25 @@ import (
 //
 // Route Structure:
 //   - GET /internal/users/:id/role?issued_at=<unix seconds> (WS role lookup)
+//   - GET /metrics (Prometheus text, public router's request counts and
+//     latency; metrics.go). Unauthenticated: the listener being unreachable
+//     from the internet is what restricts it.
 func (server *Server) newInternalRouter() *gin.Engine {
 	router := gin.New()
 	// Nothing proxies this listener; log the real peer, not a header.
 	if err := router.SetTrustedProxies(nil); err != nil {
 		panic(err) // nil can't fail to parse
 	}
-	router.Use(gin.Logger(), gin.Recovery())
+	// Same request id / structured log / recovery as the public router (the WS
+	// server forwards its connection's X-Request-ID on the role lookup), but no
+	// metrics: they describe public traffic only.
+	router.Use(
+		requestIDMiddleware(trustRequestIDs),
+		server.requestLogger(server.logger, nil),
+		server.recoveryMiddleware(server.logger),
+	)
+
+	router.GET("/metrics", server.metrics.handler)
 
 	internal := router.Group("/internal")
 	internal.Use(requireInternalSecret(server.config.RoleLookupSecret))

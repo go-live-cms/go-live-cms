@@ -194,19 +194,6 @@ func TestRenewAccessTokenRejections(t *testing.T) {
 			},
 		},
 		{
-			name:   "SessionUsernameMismatch",
-			cookie: validRefresh,
-			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
-				s := activeSession(refreshToken)
-				s.Username = user.Username + "-other"
-				store.EXPECT().GetSessionByRefreshTokenHash(gomock.Any(), gomock.Any()).Times(1).Return(s, nil)
-				noRotation(store)
-			},
-			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusUnauthorized, recorder.Code)
-			},
-		},
-		{
 			name:   "RotationFails",
 			cookie: validRefresh,
 			buildStubs: func(store *mockdb.MockStore, refreshToken string) {
@@ -294,6 +281,44 @@ func TestRenewAccessTokenIssuesUsableTokens(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, user.ID, payload.UserID)
 	require.Equal(t, user.Username, payload.Username)
+}
+
+// TestRenewAccessTokenAfterRename: a user who renamed themselves still holds
+// a refresh token whose username claim is the old name, while the sessions
+// row (ON UPDATE CASCADE) has the new one. The refresh must succeed and mint
+// tokens for the current name, not sign the user out.
+func TestRenewAccessTokenAfterRename(t *testing.T) {
+	user := randomUserForSessions()
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	store := mockdb.NewMockStore(ctrl)
+	server := newTestServer(t, store)
+
+	refreshToken, err := server.tokenMaker.CreateRefreshToken(user.ID, user.Username, time.Hour)
+	require.NoError(t, err)
+	session := randomSession(user)
+	session.RefreshTokenHash = token.HashRefresh(refreshToken)
+	session.Username = user.Username + "-renamed"
+
+	store.EXPECT().GetSessionByRefreshTokenHash(gomock.Any(), gomock.Any()).Times(1).Return(session, nil)
+	store.EXPECT().ExecTx(gomock.Any(), gomock.Any()).Times(1).Return(nil)
+
+	request, err := http.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
+	require.NoError(t, err)
+	request.AddCookie(&http.Cookie{Name: HostRefreshCookieName, Value: refreshToken})
+
+	recorder := httptest.NewRecorder()
+	server.router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+
+	var rsp RenewAccessTokenResponse
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
+	payload, err := server.tokenMaker.VerifyToken(rsp.AccessToken)
+	require.NoError(t, err)
+	require.Equal(t, user.ID, payload.UserID)
+	require.Equal(t, session.Username, payload.Username)
 }
 
 // TestLogoutUserEdgeCases covers logout beyond the happy paths: an unknown

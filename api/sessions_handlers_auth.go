@@ -202,7 +202,7 @@ func (server *Server) startSession(ctx *gin.Context, v4Maker *token.PasetoV4Make
 
 	server.setRefreshCookie(ctx, refreshToken, now.Add(server.config.RefreshTokenDuration))
 
-	logSecurityEvent(LogSessionCreated, session.ID.String(), user.ID, fmt.Sprintf("IP: %s, UA: %s", clientIP, userAgent))
+	logSecurityEvent(ctx, LogSessionCreated, session.ID.String(), user.ID, "")
 
 	return session, nil
 }
@@ -251,8 +251,9 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
-	// Extract claims from token
-	username, _ := refreshParsed.GetString("username")
+	// Extract claims from token. The username claim is not trusted: it is
+	// fixed at login, and the user may have renamed themselves since (the
+	// sessions row follows the rename via ON UPDATE CASCADE).
 	userIDStr, _ := refreshParsed.GetString("user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
@@ -286,7 +287,7 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 				// Block all sessions for this user
 				_ = server.store.BlockAllSessionsForUser(ctx.Request.Context(), s2.UserID)
 
-				logSecurityEvent(LogSessionReuse, "unknown", s2.UserID, "Token reuse detected - all sessions blocked")
+				logSecurityEvent(ctx, LogSessionReuse, "unknown", s2.UserID, "Token reuse detected - all sessions blocked")
 				ctx.JSON(http.StatusConflict, gin.H{"error": "refresh token reuse detected"})
 				return
 			}
@@ -307,10 +308,10 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	if session.ReplacedBy.Valid {
 		err := server.store.BlockAllSessionsForUser(ctx.Request.Context(), userID)
 		if err != nil {
-			logSecurityEvent(LogSessionReuse, session.ID.String(), userID, fmt.Sprintf("Failed to block sessions after reuse: %v", err))
+			logSecurityEvent(ctx, LogSessionReuse, session.ID.String(), userID, fmt.Sprintf("Failed to block sessions after reuse: %v", err))
 		}
 
-		logSecurityEvent(LogSessionReuse, session.ID.String(), userID, "Session already replaced - token reuse detected")
+		logSecurityEvent(ctx, LogSessionReuse, session.ID.String(), userID, "Session already replaced - token reuse detected")
 		ctx.JSON(http.StatusConflict, gin.H{"error": "token reuse detected - all sessions blocked"})
 		return
 	}
@@ -321,17 +322,19 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
-	// Validate session matches token claims
-	if session.Username != username || session.UserID != userID {
+	// Validate session matches token claims. Match on the user id only and
+	// mint the new tokens with the session's (current) username.
+	if session.UserID != userID {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "token/session mismatch"})
 		return
 	}
+	username := session.Username
 
 	// Monitor for IP/UA changes
 	currentUserAgent := ctx.GetHeader("User-Agent")
 	currentIP := ctx.ClientIP()
 	if currentUserAgent != session.UserAgent || currentIP != session.ClientIp {
-		logUserAgentIPChange(session.ID, userID, session.UserAgent, currentUserAgent, session.ClientIp, currentIP)
+		logUserAgentIPChange(ctx, session.ID, userID, session.UserAgent, currentUserAgent, session.ClientIp, currentIP)
 	}
 
 	// Generate new tokens
@@ -447,7 +450,7 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	server.setRefreshCookie(ctx, newRefreshToken, now.Add(server.config.RefreshTokenDuration))
 
 	// Log successful refresh
-	logSecurityEvent(LogSessionRefreshed, newSessionID.String(), userID, fmt.Sprintf("Old session: %s", session.ID.String()))
+	logSecurityEvent(ctx, LogSessionRefreshed, newSessionID.String(), userID, fmt.Sprintf("Old session: %s", session.ID.String()))
 
 	// Return new access token
 	accessExpiresAt := now.Add(server.config.AccessTokenDuration)
@@ -510,7 +513,7 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 	server.clearRefreshCookie(ctx)
 
 	// Log successful logout
-	logSecurityEvent(LogSessionBlocked, session.ID.String(), session.UserID, "User logout")
+	logSecurityEvent(ctx, LogSessionBlocked, session.ID.String(), session.UserID, "User logout")
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "logged out successfully",

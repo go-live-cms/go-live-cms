@@ -143,7 +143,7 @@ refills evenly. `0` turns a limit off.
 | `RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE` | 5 | changing your own password (`PUT /users/:id`), per user and IP |
 | `RATE_LIMIT_EXEMPT_CIDRS` | empty | IPs/CIDRs that skip the general limit (auth limits still apply) |
 
-`/health`, `/uploads` and the internal listener aren't limited. IPv6 clients are
+`/health`, `/readyz`, `/uploads` and the internal listener aren't limited. IPv6 clients are
 counted per /64, since one host usually holds the whole block. Login is limited per IP
 and username, so a few bad guesses against one account can't lock out everyone else
 behind the same IP; the looser per-IP cap limits guessing across usernames. Counters
@@ -167,6 +167,32 @@ In development the Vite proxy does that (`xfwd`), and `compose.dev.yaml` trusts 
 private Docker ranges. In production the web server forwards `/api/v1` and `/uploads` itself
 (`web/src/middleware/apiProxy.ts`), and `compose.yaml` pins the web container to
 `172.28.0.10` and trusts and exempts only that address.
+
+#### Health checks, logs and metrics
+
+| Endpoint | Listener | Meaning | Use it for |
+|----------|----------|---------|------------|
+| `GET /health` (also `/api/v1/health`) | public | liveness: the process serves HTTP | probes that *restart* the container |
+| `GET /readyz` | public | readiness: also pings Postgres (2s timeout), 503 if it can't | Docker/compose `healthcheck` (what `depends_on: service_healthy` waits on), load-balancer target checks |
+| `GET /metrics` | internal (`:8081`, never published) | Prometheus text: request counts and latency per method, route template and status | scraping from inside the Docker network |
+
+Both compose files healthcheck the API with `/readyz`. Neither health endpoint is rate
+limited or returns error details.
+
+Every API response has an `X-Request-ID` header (a well-formed incoming one is kept
+only when it comes from a proxy in `TRUSTED_PROXIES`; otherwise a new one is made), and
+JSON error bodies include it as `request_id`, so a
+user can quote it in a bug report. The API logs one line per request: JSON in release
+mode, readable text in debug mode, with the request id, method, route template (never
+the raw path or query string), status, latency and the caller's user id. Headers,
+cookies, tokens, passwords and request bodies are never logged, and client IPs only in
+debug mode. The collab WebSocket server logs `ws_upgrade` / `ws_connect` / `ws_deny` /
+`ws_close` as JSON lines, and forwards its request id to the API's role lookup, so both
+sides of a connection can be found by one id.
+
+Error tracking (Sentry and the like) plugs in through `api.ErrorReporter`
+(`server.SetErrorReporter`). It receives recovered panics and 5xx responses. The
+default does nothing.
 
 ### Database Management
 

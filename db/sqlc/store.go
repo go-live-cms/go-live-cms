@@ -53,6 +53,9 @@ type Store interface {
 	CreateMediaAndLinkTx(ctx context.Context, arg CreateMediaAndLinkTxParams) (CreateMediaAndLinkTxResult, error)
 
 	ExecTx(ctx context.Context, fn func(*Queries) error) error
+
+	// Ping checks that the database is reachable (the API's /readyz).
+	Ping(ctx context.Context) error
 }
 
 func (store *SQLStore) ExecTx(ctx context.Context, fn func(*Queries) error) error {
@@ -84,6 +87,11 @@ func NewStore(db *sql.DB) Store {
 		db:      db,
 		Queries: New(db),
 	}
+}
+
+// Ping checks that the database is reachable (the API's /readyz).
+func (store *SQLStore) Ping(ctx context.Context) error {
+	return store.db.PingContext(ctx)
 }
 
 func (store *SQLStore) execTx(ctx context.Context, fn func(*Queries) error) error {

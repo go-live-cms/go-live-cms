@@ -57,7 +57,6 @@ package api
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -439,7 +438,7 @@ func (server *Server) deleteMedia(c *gin.Context) {
 	// Best effort: the row is gone either way. A leftover file is logged, not
 	// surfaced, because the delete itself succeeded and cannot be retried.
 	if err := removeMediaFile(server.config.UploadPath, media.MediaPath); err != nil {
-		log.Printf("deleteMedia: media %d deleted but file %q not removed: %v", id, media.MediaPath, err)
+		server.requestLog(c).Warn("media deleted but file not removed", "media_id", id, "media_path", media.MediaPath, "error", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
