@@ -1,4 +1,4 @@
-// Package api — Post versions (revisions) and unpublish handlers (#136)
+// Package api — Post versions (revisions) read handlers (#136)
 //
 // Revisions are the Block Spec v1 snapshots publishPost stores in post_versions,
 // not Yjs snapshots, so they don't depend on the collaboration server's storage.
@@ -70,35 +70,34 @@ func (server *Server) listPostVersions(c *gin.Context) {
 		return
 	}
 
-	post, err := server.store.GetPost(c, postID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
-		return
-	}
-
+	// One statement: post status, live version and history read consistently.
 	rows, err := server.store.GetPostVersions(c, postID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list versions"})
 		return
 	}
+	if len(rows) == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+		return
+	}
 
-	versions := make([]PostVersionSummary, len(rows))
-	for i, row := range rows {
-		versions[i] = PostVersionSummary{
-			ID:                row.ID,
-			VersionNo:         row.VersionNo,
-			Status:            row.Status,
+	post := rows[0]
+	versions := make([]PostVersionSummary, 0, len(rows))
+	for _, row := range rows {
+		if !row.VersionID.Valid {
+			continue // the post has no versions (LEFT JOIN placeholder row)
+		}
+		versions = append(versions, PostVersionSummary{
+			ID:                row.VersionID.Int64,
+			VersionNo:         row.VersionNo.Int32,
+			Status:            row.Status.String,
 			Label:             nullStringPtr(row.Label),
 			Message:           nullStringPtr(row.Message),
-			CreatedAt:         row.CreatedAt,
+			CreatedAt:         row.CreatedAt.Time,
 			CreatedBy:         nullInt64Ptr(row.CreatedBy),
 			CreatedByUsername: nullStringPtr(row.CreatedByUsername),
-			IsPublished:       post.PublishedVersionID.Valid && post.PublishedVersionID.Int64 == row.ID,
-		}
+			IsPublished:       post.PublishedVersionID.Valid && post.PublishedVersionID.Int64 == row.VersionID.Int64,
+		})
 	}
 
 	c.JSON(http.StatusOK, PostVersionsResponse{
@@ -153,26 +152,4 @@ func (server *Server) getPostVersion(c *gin.Context) {
 		},
 		Doc: doc,
 	})
-}
-
-// unpublishPost handles POST /posts/:id/unpublish - back to draft, public snapshot removed.
-// The working copy and the version history are untouched.
-func (server *Server) unpublishPost(c *gin.Context) {
-	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
-		return
-	}
-
-	post, err := server.store.UnpublishPost(c, postID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unpublish post"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(post)})
 }

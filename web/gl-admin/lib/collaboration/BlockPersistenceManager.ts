@@ -43,6 +43,10 @@ export class BlockPersistenceManager {
   // editor mirror never contains them; performSave merges them back into every save
   // so they are hidden, never deleted. Recomputed on every load and conflict reload.
   private dropped: { source: BlockDocV1; blocks: DroppedBlock[] } | null = null
+  // Restore marker (BlockDocManager.getRestoreMarker) current when `dropped` was
+  // recorded. A peer's restore changes the shared marker, and our record then
+  // describes a working copy that no longer exists, so it must not be merged back.
+  private droppedRestoreMarker: string | null = null
 
   // Configuration
   private readonly SAVE_DEBOUNCE_MS = 1500 // 1.5 seconds idle time
@@ -232,6 +236,7 @@ export class BlockPersistenceManager {
     }
     const { node, dropped } = blockDocToPMWithReport(doc, this.editor.schema)
     this.dropped = dropped.length > 0 ? { source: doc, blocks: dropped } : null
+    this.droppedRestoreMarker = this.blockDocManager.getRestoreMarker()
     if (dropped.length > 0) {
       collabDebug("blocks dropped on load", { ids: dropped.map((d) => d.id) })
       if (notify) {
@@ -342,6 +347,13 @@ export class BlockPersistenceManager {
         console.warn("[autosave] skipping empty document — would overwrite working copy")
         collabDebug("performSave SKIP empty doc")
         return // outer finally clears isSaving
+      }
+
+      // A collaborator restored a version since our record was made: the hidden
+      // blocks belonged to the replaced working copy, so don't resurrect them.
+      if (this.dropped && this.blockDocManager.getRestoreMarker() !== this.droppedRestoreMarker) {
+        collabDebug("dropping stale hidden-block record after a peer restore")
+        this.dropped = null
       }
 
       // Put back the blocks the editor couldn't show, so saving never deletes them.
@@ -495,6 +507,8 @@ export class BlockPersistenceManager {
     if (!setEditorBlockDoc(this.editor, node)) {
       throw new Error("Failed to load the version into the editor")
     }
+    // Tell peers (through Yjs) that their hidden-block records are now stale.
+    this.droppedRestoreMarker = this.blockDocManager.markRestored()
     this.dropped = dropped.length > 0 ? { source: doc, blocks: dropped } : null
     if (dropped.length > 0) {
       collabDebug("blocks dropped on restore", { ids: dropped.map((d) => d.id) })

@@ -28,12 +28,17 @@ WHERE id = $1
 RETURNING *;
 
 -- name: GetPostVersions :many
-SELECT v.id, v.version_no, v.status, v.label, v.message, v.created_at, v.created_by,
+-- One statement, so the post's status/published version and its versions are read
+-- consistently. Starts from posts: no rows = no post; a single row with a NULL
+-- version id = a post without versions.
+SELECT p.post_status, p.published_version_id,
+       v.id AS version_id, v.version_no, v.status, v.label, v.message, v.created_at, v.created_by,
        u.username AS created_by_username
-FROM post_versions v
+FROM posts p
+LEFT JOIN post_versions v ON v.post_id = p.id
 LEFT JOIN users u ON u.id = v.created_by
-WHERE v.post_id = $1
-ORDER BY v.version_no DESC;
+WHERE p.id = $1
+ORDER BY v.version_no DESC NULLS LAST;
 
 -- name: GetPostVersion :one
 SELECT v.id, v.version_no, v.status, v.label, v.message, v.block_doc, v.created_at, v.created_by,

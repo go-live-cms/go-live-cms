@@ -462,21 +462,12 @@ func (server *Server) getPublicPostBlocks(c *gin.Context) {
 		return
 	}
 
-	// Drafts (including unpublished posts) and archived posts aren't public (#136)
-	if result.PostStatus != "published" {
+	// Drafts (including unpublished posts) and archived posts aren't public, and
+	// neither is a post marked published without a snapshot, e.g. its status set
+	// through PUT /posts/:id after an unpublish cleared it (#136). Only publishPost
+	// (and createPost for published posts) write the snapshot.
+	if result.PostStatus != "published" || !result.Content.Valid {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-		return
-	}
-
-	// Check if published content exists
-	if !result.Content.Valid {
-		// Return empty Block Spec v1 document
-		emptyDoc := BlockDocV1{
-			DocVersion:  1,
-			BlocksOrder: []string{},
-			Blocks:      make(map[string]interface{}),
-		}
-		c.JSON(http.StatusOK, BlockDocResponse{Doc: emptyDoc})
 		return
 	}
 

@@ -93,7 +93,10 @@ type Querier interface {
 	GetPostType(ctx context.Context, name string) (PostType, error)
 	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
 	GetPostVersion(ctx context.Context, arg GetPostVersionParams) (GetPostVersionRow, error)
-	GetPostVersions(ctx context.Context, postID int64) ([]GetPostVersionsRow, error)
+	// One statement, so the post's status/published version and its versions are read
+	// consistently. Starts from posts: no rows = no post; a single row with a NULL
+	// version id = a post without versions.
+	GetPostVersions(ctx context.Context, id int64) ([]GetPostVersionsRow, error)
 	GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error)
 	GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMetaRow, error)
 	GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPostsByMediaRow, error)

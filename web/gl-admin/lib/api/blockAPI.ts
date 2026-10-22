@@ -52,22 +52,26 @@ export class BlockAPIClient {
     return { credentials: "include", ...init }
   }
 
-  // Get working copy of post blocks
-  async getPostBlocks(postId: number): Promise<{ doc: BlockDocV1; revision: number }> {
-    const response = await fetch(
-      `${this.baseURL}/posts/${postId}/blocks`,
-      this.buildInit({
-        headers: this.getHeaders(),
-      })
-    )
+  // fetch with auth headers + cookies. A 401 becomes UnauthorizedError (the collab
+  // persistence layer suspends on it); any other non-2xx becomes
+  // Error("Failed to <what>: <statusText>").
+  private async request(path: string, what: string, init: RequestInit = {}): Promise<Response> {
+    const response = await fetch(`${this.baseURL}${path}`, this.buildInit({ headers: this.getHeaders(), ...init }))
 
     if (response.status === 401) {
       throw new UnauthorizedError()
     }
 
     if (!response.ok) {
-      throw new Error(`Failed to get post blocks: ${response.statusText}`)
+      throw new Error(`Failed to ${what}: ${response.statusText}`)
     }
+
+    return response
+  }
+
+  // Get working copy of post blocks
+  async getPostBlocks(postId: number): Promise<{ doc: BlockDocV1; revision: number }> {
+    const response = await this.request(`/posts/${postId}/blocks`, "get post blocks")
 
     const data = await response.json()
     const revision = parseInt(response.headers.get("X-Revision") || "0")
@@ -76,9 +80,7 @@ export class BlockAPIClient {
       doc: data.doc,
       revision,
     }
-  }
-
-  // Update working copy with optimistic concurrency
+  }  // Update working copy with optimistic concurrency
   async updatePostBlocks(
     postId: number,
     doc: BlockDocV1,
@@ -129,22 +131,10 @@ export class BlockAPIClient {
     label?: string,
     message?: string
   ): Promise<{ versionId: number; versionNo: number }> {
-    const response = await fetch(
-      `${this.baseURL}/posts/${postId}/publish`,
-      this.buildInit({
-        method: "POST",
-        headers: this.getHeaders(),
-        body: JSON.stringify({ label, message }),
-      })
-    )
-
-    if (response.status === 401) {
-      throw new UnauthorizedError()
-    }
-
-    if (!response.ok) {
-      throw new Error(`Failed to publish post: ${response.statusText}`)
-    }
+    const response = await this.request(`/posts/${postId}/publish`, "publish post", {
+      method: "POST",
+      body: JSON.stringify({ label, message }),
+    })
 
     const data = await response.json()
     return {
@@ -155,64 +145,20 @@ export class BlockAPIClient {
 
   // Back to draft: the public snapshot is removed, versions are kept (#136)
   async unpublishPost(postId: number): Promise<void> {
-    const response = await fetch(
-      `${this.baseURL}/posts/${postId}/unpublish`,
-      this.buildInit({
-        method: "POST",
-        headers: this.getHeaders(),
-      })
-    )
-
-    if (response.status === 401) {
-      throw new UnauthorizedError()
-    }
-
-    if (!response.ok) {
-      throw new Error(`Failed to unpublish post: ${response.statusText}`)
-    }
+    await this.request(`/posts/${postId}/unpublish`, "unpublish post", { method: "POST" })
   }
 
   // List published versions, newest first (no docs)
   async listVersions(postId: number): Promise<PostVersionList> {
-    const response = await fetch(
-      `${this.baseURL}/posts/${postId}/versions`,
-      this.buildInit({
-        headers: this.getHeaders(),
-      })
-    )
-
-    if (response.status === 401) {
-      throw new UnauthorizedError()
-    }
-
-    if (!response.ok) {
-      throw new Error(`Failed to list versions: ${response.statusText}`)
-    }
-
+    const response = await this.request(`/posts/${postId}/versions`, "list versions")
     return response.json()
   }
 
   // Get one version, including its Block Spec v1 doc
   async getVersion(postId: number, versionNo: number): Promise<PostVersion> {
-    const response = await fetch(
-      `${this.baseURL}/posts/${postId}/versions/${versionNo}`,
-      this.buildInit({
-        headers: this.getHeaders(),
-      })
-    )
-
-    if (response.status === 401) {
-      throw new UnauthorizedError()
-    }
-
-    if (!response.ok) {
-      throw new Error(`Failed to get version ${versionNo}: ${response.statusText}`)
-    }
-
+    const response = await this.request(`/posts/${postId}/versions/${versionNo}`, `get version ${versionNo}`)
     return response.json()
-  }
-
-  // Get published blocks (for preview/SSR)
+  }  // Get published blocks (for preview/SSR)
   async getPublishedPostBlocks(postId: number): Promise<{ doc: BlockDocV1 }> {
     const response = await fetch(`/public/posts/${postId}/blocks`)
 

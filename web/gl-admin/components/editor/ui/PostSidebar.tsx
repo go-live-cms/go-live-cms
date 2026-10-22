@@ -171,10 +171,13 @@ export default function PostSidebar({
               <h4>Status & Visibility</h4>
               <div className="post-settings__field">
                 <label htmlFor="post-status">Status</label>
+                {/* In edit mode the editor's Save only persists blocks, so a status picked
+                    here would never be saved: Publish / Unpublish change it instead (#136). */}
                 <select
                   id="post-status"
                   value={post.post_status || "draft"}
                   onChange={(e) => handleFieldUpdate("post_status", e.target.value)}
+                  disabled={mode === "edit"}
                 >
                   {statusOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -184,8 +187,10 @@ export default function PostSidebar({
                 </select>
                 <small className="post-settings__field-description">
                   {statusOptions.find((opt) => opt.value === (post.post_status || "draft"))?.description}
+                  {mode === "edit" && " · Use Publish or Unpublish to change it."}
                 </small>
-                {mode === "edit" && post.id && post.post_status === "published" && onUnpublish && (
+                {/* Any non-draft post may still hold a public snapshot (archived ones too) */}
+                {mode === "edit" && post.id && post.post_status !== "draft" && onUnpublish && (
                   <Button
                     variation="secondary"
                     className="post-settings__unpublish"

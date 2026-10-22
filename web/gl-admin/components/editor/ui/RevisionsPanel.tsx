@@ -43,41 +43,42 @@ export default function RevisionsPanel({ postId, refreshKey = 0, onRestore }: Re
     load()
   }, [load, refreshKey])
 
-  const fetchVersion = async (versionNo: number) => {
-    setBusyVersion(versionNo)
+  const loadVersion = async (versionNo: number) => {
     try {
       return await blockAPIClient.getVersion(postId, versionNo)
     } catch (e) {
       setError(e instanceof Error ? e.message : `Failed to load version ${versionNo}`)
       return null
+    }
+  }
+
+  const handleView = async (versionNo: number) => {
+    setBusyVersion(versionNo)
+    try {
+      const version = await loadVersion(versionNo)
+      if (version) setViewing(version)
     } finally {
       setBusyVersion(null)
     }
   }
 
-  const handleView = async (versionNo: number) => {
-    const version = await fetchVersion(versionNo)
-    if (version) setViewing(version)
-  }
-
-  const handleRestore = async (version: PostVersion) => {
+  // Confirm before downloading anything, then hold the busy latch across fetch +
+  // restore. `loaded` is passed when the version is already open in the preview.
+  const handleRestore = async (versionNo: number, loaded?: PostVersion) => {
     const ok = window.confirm(
-      `Replace the current draft with version ${version.version_no}? ` +
+      `Replace the current draft with version ${versionNo}? ` +
         "Anyone editing this post will see the change. The live page stays as it is until you publish."
     )
     if (!ok) return
-    setBusyVersion(version.version_no)
+    setBusyVersion(versionNo)
     try {
+      const version = loaded ?? (await loadVersion(versionNo))
+      if (!version) return
       await onRestore(version)
       setViewing(null)
     } finally {
       setBusyVersion(null)
     }
-  }
-
-  const restoreByNumber = async (versionNo: number) => {
-    const version = await fetchVersion(versionNo)
-    if (version) await handleRestore(version)
   }
 
   return (
@@ -114,7 +115,7 @@ export default function RevisionsPanel({ postId, refreshKey = 0, onRestore }: Re
               <Button variation="secondary" onClick={() => handleView(v.version_no)} disabled={busyVersion !== null}>
                 View
               </Button>
-              <Button variation="secondary" onClick={() => restoreByNumber(v.version_no)} disabled={busyVersion !== null}>
+              <Button variation="secondary" onClick={() => handleRestore(v.version_no)} disabled={busyVersion !== null}>
                 {busyVersion === v.version_no ? "Working…" : "Restore"}
               </Button>
             </div>
@@ -133,7 +134,7 @@ export default function RevisionsPanel({ postId, refreshKey = 0, onRestore }: Re
               <Button variation="flat" onClick={() => setViewing(null)}>
                 Close
               </Button>
-              <Button variation="primary" onClick={() => handleRestore(viewing)} disabled={busyVersion !== null}>
+              <Button variation="primary" onClick={() => handleRestore(viewing.version_no, viewing)} disabled={busyVersion !== null}>
                 Restore this version
               </Button>
             </div>

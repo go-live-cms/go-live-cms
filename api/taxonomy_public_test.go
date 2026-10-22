@@ -375,13 +375,9 @@ func TestGetPublicPostBlocksAPI(t *testing.T) {
 					Times(1).
 					Return(db.GetPublishedPostBlocksRow{Content: pqtype.NullRawMessage{Valid: false}, PostStatus: "published"}, nil)
 			},
+			// Published status without a snapshot is not public (#136)
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-				var resp BlockDocResponse
-				err := json.Unmarshal(recorder.Body.Bytes(), &resp)
-				require.NoError(t, err)
-				require.Equal(t, 1, resp.Doc.DocVersion)
-				require.Empty(t, resp.Doc.BlocksOrder)
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{

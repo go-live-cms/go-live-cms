@@ -95,7 +95,8 @@ func TestPublishCreatesVersionsAndSnapshot(t *testing.T) {
 	versions, err := testQueries.GetPostVersions(ctx, post.ID)
 	require.NoError(t, err)
 	require.Len(t, versions, 2)
-	require.Equal(t, int32(2), versions[0].VersionNo, "newest first")
+	require.Equal(t, int32(2), versions[0].VersionNo.Int32, "newest first")
+	require.Equal(t, v2.ID, versions[0].PublishedVersionID.Int64, "post columns ride along")
 	require.Equal(t, "launch", versions[1].Label.String)
 
 	gotPost, err := testQueries.GetPost(ctx, post.ID)
@@ -160,7 +161,19 @@ func TestUnpublishKeepsHistory(t *testing.T) {
 	versions, err := testQueries.GetPostVersions(ctx, post.ID)
 	require.NoError(t, err)
 	require.Len(t, versions, 1)
-	require.Equal(t, v1.ID, versions[0].ID)
+	require.Equal(t, v1.ID, versions[0].VersionID.Int64)
+	require.Equal(t, "draft", versions[0].PostStatus)
+	require.False(t, versions[0].PublishedVersionID.Valid)
+
+	// A post without versions yields one placeholder row; a missing post none.
+	fresh := createPostWithTransaction(t).Post
+	placeholder, err := testQueries.GetPostVersions(ctx, fresh.ID)
+	require.NoError(t, err)
+	require.Len(t, placeholder, 1)
+	require.False(t, placeholder[0].VersionID.Valid)
+	missing, err := testQueries.GetPostVersions(ctx, -1)
+	require.NoError(t, err)
+	require.Empty(t, missing)
 
 	// Republishing continues the numbering and makes the post public again.
 	v2 := publishPost(t, post.ID, post.UserID, "")

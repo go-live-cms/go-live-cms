@@ -466,6 +466,20 @@ describe("blocks dropped on load", () => {
     // The Yjs maps keep mirroring the editor; only the PUT payload carries the block.
     expect(blockDocManager.getBlockDocV1().blocks[bad]).toBeUndefined()
   })
+
+  it("stops merging them back once a collaborator restores a version (#136)", async () => {
+    const { manager, blockDocManager } = setup()
+    await activate(manager)
+
+    // A peer's restoreVersion bumps the shared marker (same Y.Doc via sync)
+    blockDocManager.markRestored()
+    manager.notifyEditorChange()
+    await vi.advanceTimersByTimeAsync(1500)
+
+    const sent: BlockDocV1 = api.updatePostBlocks.mock.calls[0][1]
+    expect(sent.blocks_order).not.toContain(bad)
+    expect(sent.blocks[bad]).toBeUndefined()
+  })
 })
 
 // #136: restoring a stored version goes through the editor (→ Yjs → peers), then

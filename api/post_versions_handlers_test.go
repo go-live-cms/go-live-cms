@@ -58,23 +58,35 @@ func expectStatus(code int) func(t *testing.T, recorder *httptest.ResponseRecord
 }
 
 func TestListPostVersionsAPI(t *testing.T) {
-	createdAt := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	createdAt := sql.NullTime{Time: time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC), Valid: true}
+	live := sql.NullInt64{Int64: 12, Valid: true}
 	rows := []db.GetPostVersionsRow{
 		{
-			ID: 12, VersionNo: 2, Status: "published", CreatedAt: createdAt,
+			PostStatus: "published", PublishedVersionID: live,
+			VersionID: sql.NullInt64{Int64: 12, Valid: true}, VersionNo: sql.NullInt32{Int32: 2, Valid: true},
+			Status: sql.NullString{String: "published", Valid: true}, CreatedAt: createdAt,
 			Message:           sql.NullString{String: "second", Valid: true},
 			CreatedBy:         sql.NullInt64{Int64: 1, Valid: true},
 			CreatedByUsername: sql.NullString{String: "testuser", Valid: true},
 		},
-		{ID: 11, VersionNo: 1, Status: "published", CreatedAt: createdAt},
+		{
+			PostStatus: "published", PublishedVersionID: live,
+			VersionID: sql.NullInt64{Int64: 11, Valid: true}, VersionNo: sql.NullInt32{Int32: 1, Valid: true},
+			Status: sql.NullString{String: "published", Valid: true}, CreatedAt: createdAt,
+		},
 	}
-	published := db.Post{ID: 1, PostStatus: "published", PublishedVersionID: sql.NullInt64{Int64: 12, Valid: true}}
+	// After unpublish the same history comes back with no live version
+	draftRows := make([]db.GetPostVersionsRow, len(rows))
+	for i, r := range rows {
+		r.PostStatus = "draft"
+		r.PublishedVersionID = sql.NullInt64{}
+		draftRows[i] = r
+	}
 
 	runVersionsTestCases(t, []versionsTestCase{
 		{
 			name: "OK", role: RoleEditor, method: http.MethodGet, url: "/api/v1/posts/1/versions",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(1)).Times(1).Return(published, nil)
 				store.EXPECT().GetPostVersions(gomock.Any(), int64(1)).Times(1).Return(rows, nil)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
@@ -95,11 +107,9 @@ func TestListPostVersionsAPI(t *testing.T) {
 			},
 		},
 		{
-			// After unpublish the history is still listed, but nothing is live
 			name: "UnpublishedPostKeepsHistory", role: RoleAdmin, method: http.MethodGet, url: "/api/v1/posts/1/versions",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(1)).Times(1).Return(db.Post{ID: 1, PostStatus: "draft"}, nil)
-				store.EXPECT().GetPostVersions(gomock.Any(), int64(1)).Times(1).Return(rows, nil)
+				store.EXPECT().GetPostVersions(gomock.Any(), int64(1)).Times(1).Return(draftRows, nil)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -114,10 +124,11 @@ func TestListPostVersionsAPI(t *testing.T) {
 			},
 		},
 		{
+			// LEFT JOIN placeholder: the post exists but has no versions
 			name: "EmptyList", role: RoleEditor, method: http.MethodGet, url: "/api/v1/posts/1/versions",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(1)).Times(1).Return(db.Post{ID: 1, PostStatus: "draft"}, nil)
-				store.EXPECT().GetPostVersions(gomock.Any(), int64(1)).Times(1).Return(nil, nil)
+				store.EXPECT().GetPostVersions(gomock.Any(), int64(1)).Times(1).
+					Return([]db.GetPostVersionsRow{{PostStatus: "draft"}}, nil)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -127,15 +138,13 @@ func TestListPostVersionsAPI(t *testing.T) {
 		{
 			name: "PostNotFound", role: RoleEditor, method: http.MethodGet, url: "/api/v1/posts/9/versions",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(9)).Times(1).Return(db.Post{}, sql.ErrNoRows)
-				store.EXPECT().GetPostVersions(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().GetPostVersions(gomock.Any(), int64(9)).Times(1).Return(nil, nil)
 			},
 			checkResponse: expectStatus(http.StatusNotFound),
 		},
 		{
 			name: "ListError", role: RoleEditor, method: http.MethodGet, url: "/api/v1/posts/1/versions",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(1)).Times(1).Return(published, nil)
 				store.EXPECT().GetPostVersions(gomock.Any(), int64(1)).Times(1).Return(nil, fmt.Errorf("db down"))
 			},
 			checkResponse: expectStatus(http.StatusInternalServerError),
@@ -143,14 +152,13 @@ func TestListPostVersionsAPI(t *testing.T) {
 		{
 			name: "InvalidID", role: RoleEditor, method: http.MethodGet, url: "/api/v1/posts/abc/versions",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().GetPostVersions(gomock.Any(), gomock.Any()).Times(0)
 			},
 			checkResponse: expectStatus(http.StatusBadRequest),
 		},
 		{
 			name: "ContributorForbidden", role: RoleContributor, method: http.MethodGet, url: "/api/v1/posts/1/versions",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), gomock.Any()).Times(0)
 				store.EXPECT().GetPostVersions(gomock.Any(), gomock.Any()).Times(0)
 			},
 			checkResponse: expectStatus(http.StatusForbidden),

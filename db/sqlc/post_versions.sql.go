@@ -107,27 +107,34 @@ func (q *Queries) GetPostVersion(ctx context.Context, arg GetPostVersionParams) 
 }
 
 const getPostVersions = `-- name: GetPostVersions :many
-SELECT v.id, v.version_no, v.status, v.label, v.message, v.created_at, v.created_by,
+SELECT p.post_status, p.published_version_id,
+       v.id AS version_id, v.version_no, v.status, v.label, v.message, v.created_at, v.created_by,
        u.username AS created_by_username
-FROM post_versions v
+FROM posts p
+LEFT JOIN post_versions v ON v.post_id = p.id
 LEFT JOIN users u ON u.id = v.created_by
-WHERE v.post_id = $1
-ORDER BY v.version_no DESC
+WHERE p.id = $1
+ORDER BY v.version_no DESC NULLS LAST
 `
 
 type GetPostVersionsRow struct {
-	ID                int64          `json:"id"`
-	VersionNo         int32          `json:"version_no"`
-	Status            string         `json:"status"`
-	Label             sql.NullString `json:"label"`
-	Message           sql.NullString `json:"message"`
-	CreatedAt         time.Time      `json:"created_at"`
-	CreatedBy         sql.NullInt64  `json:"created_by"`
-	CreatedByUsername sql.NullString `json:"created_by_username"`
+	PostStatus         string         `json:"post_status"`
+	PublishedVersionID sql.NullInt64  `json:"published_version_id"`
+	VersionID          sql.NullInt64  `json:"version_id"`
+	VersionNo          sql.NullInt32  `json:"version_no"`
+	Status             sql.NullString `json:"status"`
+	Label              sql.NullString `json:"label"`
+	Message            sql.NullString `json:"message"`
+	CreatedAt          sql.NullTime   `json:"created_at"`
+	CreatedBy          sql.NullInt64  `json:"created_by"`
+	CreatedByUsername  sql.NullString `json:"created_by_username"`
 }
 
-func (q *Queries) GetPostVersions(ctx context.Context, postID int64) ([]GetPostVersionsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getPostVersions, postID)
+// One statement, so the post's status/published version and its versions are read
+// consistently. Starts from posts: no rows = no post; a single row with a NULL
+// version id = a post without versions.
+func (q *Queries) GetPostVersions(ctx context.Context, id int64) ([]GetPostVersionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPostVersions, id)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +143,9 @@ func (q *Queries) GetPostVersions(ctx context.Context, postID int64) ([]GetPostV
 	for rows.Next() {
 		var i GetPostVersionsRow
 		if err := rows.Scan(
-			&i.ID,
+			&i.PostStatus,
+			&i.PublishedVersionID,
+			&i.VersionID,
 			&i.VersionNo,
 			&i.Status,
 			&i.Label,
