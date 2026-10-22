@@ -13,6 +13,7 @@ import type {
   ApiResponse,
 } from "./types"
 import { SERVER_API_URL, SERVER_MEDIA_URL } from "./server-api-url"
+import { apiErrorFromResponse } from "./api/errors"
 
 const isServer = typeof window === "undefined"
 const API_BASE = isServer ? SERVER_API_URL : "/api/v1"
@@ -53,13 +54,7 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}) {
   const response = await fetch(url, config)
 
   if (!response.ok) {
-    const error = await response.text()
-    try {
-      const errorObj = JSON.parse(error)
-      throw new Error(errorObj.error || `HTTP ${response.status}`)
-    } catch {
-      throw new Error(`HTTP ${response.status}: ${error}`)
-    }
+    throw await apiErrorFromResponse(response)
   }
 
   // If the response has no content, return an empty object

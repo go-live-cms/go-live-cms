@@ -150,7 +150,16 @@ export interface PostTypeInfo {
 }
 
 export async function getPostTypes(): Promise<PostTypeInfo[]> {
-  return apiCall("/post-types")
+  // The API wraps the list: {"post_types": [...]}.
+  const response = await apiCall("/post-types")
+  return Array.isArray(response) ? response : response.post_types || []
+}
+
+// Names of the post types the public site serves: registered, active and
+// public. Anything else 404s on /[post_type] and /[post_type]/[id].
+export async function getPublicPostTypeNames(): Promise<string[]> {
+  const types = await getPostTypes()
+  return types.filter((t) => t.is_active !== false && t.public !== false).map((t) => t.name)
 }
 
 export async function getPostsByType(type: string, params: PostQueryParams = {}): Promise<ApiResponse<Post>> {

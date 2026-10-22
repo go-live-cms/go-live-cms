@@ -11,7 +11,8 @@ type PaginationProps<T, Q> = {
   token?: string
   limitOptions?: number[]
   pageWindow?: number
-  children: (args: { data: T[], total: number, loading: boolean }) => React.ReactNode
+  // error is what the last fetch threw (null on success); retry re-runs it.
+  children: (args: { data: T[]; total: number; loading: boolean; error: unknown; retry: () => void }) => React.ReactNode
 }
 
 function Pagination<T, Q>({
@@ -27,6 +28,8 @@ function Pagination<T, Q>({
   const [data, setData] = useState<T[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<unknown>(null)
+  const [attempt, setAttempt] = useState(0)
   const { isDark } = useGoLive()
   const navIconColor = isDark ? "#FFFFFF" : "#46484A";
   const navIconDisabledColor = isDark ? "#6B7175" : "#B8BCBF"
@@ -40,6 +43,8 @@ function Pagination<T, Q>({
   useEffect(() => {
     let isMounted = true
     setLoading(true)
+    // Clear a previous failure so a retry shows the loading state, not the old error.
+    setError(null)
     fetchData({ limit, offset, ...query }, token)
       .then((res) => {
         if (isMounted) {
@@ -47,10 +52,11 @@ function Pagination<T, Q>({
           setTotal(res.total)
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (isMounted) {
           setData([])
           setTotal(0)
+          setError(err)
         }
       })
       .finally(() => {
@@ -59,7 +65,9 @@ function Pagination<T, Q>({
     return () => {
       isMounted = false
     }
-  }, [fetchData, query, limit, offset])
+  }, [fetchData, query, limit, offset, attempt])
+
+  const retry = () => setAttempt((a) => a + 1)
 
   const totalPages = Math.ceil(total / limit)
   const currentPage = Math.floor(offset / limit)
@@ -83,8 +91,9 @@ function Pagination<T, Q>({
 
   return (
     <div className="gl-pagination">
-      {children({ data, total, loading })}
-      {!loading &&
+      {children({ data, total, loading, error, retry })}
+      {/* data.length too: an endpoint without meta.total reports total 0 */}
+      {!loading && !error && (total > 0 || data.length > 0) &&
         <div className="gl-pagination__controls">
           {/* Go to first page */}
           <button onClick={() => setOffset(0)} disabled={currentPage === 0}>

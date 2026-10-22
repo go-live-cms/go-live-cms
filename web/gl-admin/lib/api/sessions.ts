@@ -1,5 +1,6 @@
 import type { Session, ApiResponse } from "./types"
 import { apiCall } from "../api"
+import { apiErrorFromResponse } from "./errors"
 
 // Authentication functions
 export async function login(credentials: { username: string; password: string }): Promise<any> {
@@ -23,13 +24,7 @@ export async function logout(token?: string): Promise<any> {
   })
 
   if (!response.ok) {
-    const error = await response.text()
-    try {
-      const errorObj = JSON.parse(error)
-      throw new Error(errorObj.error || `HTTP ${response.status}`)
-    } catch {
-      throw new Error(`HTTP ${response.status}: ${error}`)
-    }
+    throw await apiErrorFromResponse(response, { authEndpoint: true })
   }
 
   return response.json()

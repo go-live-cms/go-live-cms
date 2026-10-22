@@ -14,6 +14,11 @@ import PostType from "@gl-admin/components/ui/PostType"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
 import Button from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
+import EmptyState from "@gl-admin/components/ui/EmptyState"
+import NotFound from "@gl-admin/pages/NotFound"
+import { errorMessage } from "@gl-admin/lib/api/errors"
+import { canEditContent } from "@gl-admin/lib/roles"
+import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
 import type { Post, ApiMeta, PostType as PostTypeInfo } from "@gl-admin/lib/api/types"
 import type { PostQueryParams } from "@gl-admin/lib/api/posts"
 
@@ -27,6 +32,9 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   const { typeName } = useParams<{ typeName?: string }>()
   const { isDark, baseTitle } = useGoLive()
   const [postTypesList, setPostTypesList] = useState<PostTypeInfo[]>([])
+  const [postTypesLoaded, setPostTypesLoaded] = useState(false)
+  // Contributors can't create posts (requireContentEditor in the API).
+  const canCreate = canEditContent(useCurrentRole())
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([
     { label: "All authors", value: "" },
@@ -156,6 +164,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     getPostTypes()
       .then(({ data }) => {
         if (data && data.length > 0) setPostTypesList(data)
+        setPostTypesLoaded(true)
       })
       .catch(() => {})
   }, [typeName])
@@ -209,9 +218,11 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
         onChange={(value) => setSelectedFilters({ ...selectedFilters, sort: value })}
         prefix="Sort by:"
       />
-      <Button onClick={handleNewPost} className="gl-admin-media__new-media-btn">
-        <Icon name="add" color={iconColor} width="14" height="14" /> {getAddButtonName()}
-      </Button>
+      {canCreate && (
+        <Button onClick={handleNewPost} className="gl-admin-media__new-media-btn">
+          <Icon name="add" color={iconColor} width="14" height="14" /> {getAddButtonName()}
+        </Button>
+      )}
     </>
   )
 
@@ -220,12 +231,67 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
       typeName.charAt(0).toUpperCase() + typeName.slice(1) + "s"
     : title || "Content"
 
+  // /content/<something that isn't a post type>
+  if (typeName && postTypesLoaded && postTypesList.length > 0 && !postTypesList.some((p) => p.name === typeName)) {
+    return <NotFound />
+  }
+
+  const hasFilters = Boolean(selectedFilters.user_id || selectedFilters.status || (!typeName && selectedFilters.type))
+  const singularName = getAddButtonName().replace(/^New /, "")
+  const emptyIcon = (typeName || queryProp?.type) === "page" ? "page" : "post"
+
+  const emptyState = hasFilters ? (
+    <EmptyState
+      icon="search"
+      title="Nothing matches these filters"
+      description="Try a different author, status or type."
+      action={
+        <Button variation="flat" onClick={clearFilters}>
+          Clear filters
+        </Button>
+      }
+    />
+  ) : (
+    <EmptyState
+      icon={emptyIcon}
+      title={`No ${displayTitle.toLowerCase()} yet`}
+      description={
+        canCreate
+          ? `Create your first ${singularName.toLowerCase()} to get started.`
+          : "Nothing has been created here yet. Contributors can't create content; ask an editor or administrator."
+      }
+      action={
+        canCreate && (
+          <Button variation="primary" onClick={handleNewPost}>
+            <Icon name="add" color="white" width="14" height="14" /> Create your first {singularName.toLowerCase()}
+          </Button>
+        )
+      }
+    />
+  )
+
   return (
     <Listing title={displayTitle} actions={filters}>
       <Pagination fetchData={fetchData} query={selectedFilters || {}}>
-        {({ data, loading }) => (
-          <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
-        )}
+        {({ data, loading, error, retry }) => {
+          if (error) {
+            return (
+              <EmptyState
+                variant="error"
+                icon="close"
+                title={`Couldn't load ${displayTitle.toLowerCase()}`}
+                description={errorMessage(error)}
+                action={
+                  <Button variation="primary" onClick={retry}>
+                    Try again
+                  </Button>
+                }
+              />
+            )
+          }
+          if (!loading && data.length === 0) return emptyState
+          return <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
+        }}
       </Pagination>
     </Listing>
   )
