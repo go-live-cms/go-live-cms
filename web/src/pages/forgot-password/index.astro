@@ -1,0 +1,43 @@
+---
+import AccountPage from "@/layouts/AccountPage.astro"
+---
+
+<AccountPage title="Forgot password" heading="Forgot your password?" subtitle="We'll email you a link to choose a new one">
+  <form class="gl-admin-login__form" id="forgotForm" novalidate>
+    <div class="gl-admin-login__fields">
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="email"
+          id="email"
+          name="email"
+          placeholder=" "
+          required
+          autocomplete="email"
+          autocapitalize="none"
+          spellcheck="false"
+        />
+        <label class="gl-input__label" for="email">Email</label>
+      </div>
+    </div>
+
+    <button type="submit" class="button primary gl-admin-login__submit">
+      <span class="gl-admin-login__spinner" data-spinner aria-hidden="true" hidden></span>
+      <span data-label>Send reset link</span>
+    </button>
+    <p class="gl-admin-login__footer"><a class="gl-admin-login__link" href="/login">Back to sign in</a></p>
+  </form>
+
+  <div class="gl-admin-login__panel" id="resetSent" role="status" hidden>
+    <p class="gl-admin-login__text">
+      If an account uses that email, we've sent it a link to reset the password. Check your inbox; the link expires soon and works once.
+    </p>
+    <p class="gl-admin-login__footer"><a class="gl-admin-login__link" href="/login">Back to sign in</a></p>
+  </div>
+</AccountPage>
+
+<script>
+  import { mountForgotPasswordPage } from "@gl-admin/lib/accountPages"
+
+  mountForgotPasswordPage()
+</script>

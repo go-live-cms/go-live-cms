@@ -41,7 +41,8 @@ JOIN taxonomy_types ttype ON tt.taxonomy_type_id = ttype.id
 WHERE tt.slug = $1 LIMIT 1;
 
 -- name: ListTaxonomyTermsByType :many
-SELECT tt.*, ttype.name as taxonomy_type_name, ttype.hierarchical
+SELECT tt.*, ttype.name as taxonomy_type_name, ttype.hierarchical,
+    (SELECT COUNT(*) FROM post_taxonomy_relationships ptr WHERE ptr.taxonomy_term_id = tt.id) AS post_count
 FROM taxonomy_terms tt
 JOIN taxonomy_types ttype ON tt.taxonomy_type_id = ttype.id
 WHERE ttype.name = $1
@@ -101,11 +102,13 @@ WITH RECURSIVE term_tree AS (
 SELECT * FROM term_tree ORDER BY level, sort_order, name;
 
 -- name: UpdateTaxonomyTerm :one
+-- parent_id is assigned as is (no COALESCE) so a NULL moves the term to the top
+-- level; the handler passes the current parent when it isn't changing.
 UPDATE taxonomy_terms
 SET name = COALESCE($2, name),
     slug = COALESCE($3, slug),
     description = COALESCE($4, description),
-    parent_id = COALESCE($5, parent_id),
+    parent_id = $5,
     sort_order = COALESCE($6, sort_order),
     meta = COALESCE($7, meta)
 WHERE id = $1

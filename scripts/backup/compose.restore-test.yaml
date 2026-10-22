@@ -60,6 +60,11 @@ services:
       SERVER_ADDRESS: 0.0.0.0:8080
       INTERNAL_SERVER_ADDRESS: 0.0.0.0:8081
       ROLE_LOOKUP_SECRET: restore-test-secret
+      # Release mode requires mail config (#148). Nothing is sent in this test,
+      # and SMTP is only dialled when an email goes out.
+      PUBLIC_BASE_URL: http://localhost:4321
+      SMTP_HOST: smtp.invalid
+      MAIL_FROM: GoLive CMS <no-reply@restore-test.invalid>
     volumes:
       - ../..:/src:ro
       - uploads:/app/uploads

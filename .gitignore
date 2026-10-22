@@ -30,3 +30,5 @@ websocket/node_modules/
 /api/tmp
 
 .DS_Store
+# Dev mail driver output (#148): emails with working links
+/dev-mail/

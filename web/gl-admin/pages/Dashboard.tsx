@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Button from "@gl-admin/components/ui/Button"
 import { getPosts } from "@gl-admin/lib/api/posts"
@@ -82,9 +83,9 @@ const Dashboard: React.FC = () => {
         <div className="stat-card">
           <div className="stat-number">{totalTaxonomies}</div>
           <div className="stat-label">Taxonomies</div>
-          <a href="/taxonomies" className="stat-link">
-            Manage Tags
-          </a>
+          <Link to="/taxonomies" className="stat-link">
+            Manage Taxonomies
+          </Link>
         </div>
         <div className="stat-card">
           <div className="stat-number">{totalMedia}</div>

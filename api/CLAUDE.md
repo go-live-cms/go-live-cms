@@ -148,6 +148,33 @@ server.
   which may be the apex domain). Don't add a
   `Cross-Origin-Resource-Policy`: the web app loads `/uploads` cross-origin.
 
+## Invitations, password reset, mail (#148)
+
+- **Invite-only.** Admins create invitations (`/invitations`, `invitations_handlers_{read,write}.go`);
+  `POST /auth/invitations/accept` creates the user with the invitation's email and
+  role. `/auth/register` is still a placeholder (self-registration is Post-MVP, #191).
+- **Tokens** (`account_tokens_utils.go`): 32 random bytes, base64url; only the
+  SHA-256 is stored (`user_invitations`, `password_reset_tokens`). Redeeming is one
+  `UPDATE ... RETURNING` claim (`ClaimUserInvitation`, `ClaimPasswordResetToken`),
+  so single use holds under concurrency. Every bad-token case answers the same
+  400 `invalid_token`. Links put the token in the `#fragment`; the web pages POST it.
+  **Never log tokens or message bodies.**
+- **Reset = password change.** `ResetPasswordTx` locks the user row (user → token
+  rows, same order as `UpdateUserTx`), stamps `password_changed_at`, blocks every
+  session and burns the user's other reset tokens. `UpdateUserTx` with
+  `PasswordChanged` burns outstanding reset tokens too.
+- **Forgot never enumerates:** same 200 for any address, and the lookup/token/email
+  run after the response (`server.runInBackground` → `runDetached`, which recovers
+  and reports panics; inline in tests). One email per
+  user per minute (silent cooldown).
+- **Mailer** (`mailer/`): `smtp` | `file` (debug default, `dev-mail/*.eml`) | `log`
+  (test default). Outside debug/test `NewServer` fails without `SMTP_HOST`,
+  `MAIL_FROM` and `PUBLIC_BASE_URL`, and refuses `file`/`log`. SMTP requires TLS
+  (`SMTP_TLS`: STARTTLS by default, a server without it is an error; `none` only in
+  debug/test or to a loopback relay). Links are built from
+  `PUBLIC_BASE_URL`, never the Host header. Templates in `mailer/templates/`
+  (text + HTML, site title from settings).
+
 ## Request validation and hardening (#139)
 
 - **Bind JSON with `bindJSON(c, &req)`** (`request_binding.go`), never `ShouldBindJSON`.
@@ -248,6 +275,11 @@ server.
   recovered panics (with stack) and 5xx responses, once each.
 
 ## Gotchas
+
+- **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,
+  needs `theme.config.ts` + `layouts/{post,page}/default.astro`). The production image
+  ships `web/themes` for that (`Dockerfile`, a `.dockerignore` exception); without it a
+  fresh database has no themes.
 
 - `block_doc` (jsonb on `posts`) is the **working copy** the editor loads;
   `published_block_doc` is the published snapshot the public frontend reads. They can

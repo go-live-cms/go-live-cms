@@ -37,6 +37,21 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 	return m.recorder
 }
 
+// AcceptInvitationTx mocks base method.
+func (m *MockStore) AcceptInvitationTx(arg0 context.Context, arg1 db.AcceptInvitationTxParams) (db.AcceptInvitationTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AcceptInvitationTx", arg0, arg1)
+	ret0, _ := ret[0].(db.AcceptInvitationTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AcceptInvitationTx indicates an expected call of AcceptInvitationTx.
+func (mr *MockStoreMockRecorder) AcceptInvitationTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AcceptInvitationTx", reflect.TypeOf((*MockStore)(nil).AcceptInvitationTx), arg0, arg1)
+}
+
 // ActivateTheme mocks base method.
 func (m *MockStore) ActivateTheme(arg0 context.Context, arg1 int64) (db.Theme, error) {
 	m.ctrl.T.Helper()
@@ -110,6 +125,36 @@ func (mr *MockStoreMockRecorder) CheckURLExists(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckURLExists", reflect.TypeOf((*MockStore)(nil).CheckURLExists), arg0, arg1)
 }
 
+// ClaimPasswordResetToken mocks base method.
+func (m *MockStore) ClaimPasswordResetToken(arg0 context.Context, arg1 []byte) (db.PasswordResetToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimPasswordResetToken", arg0, arg1)
+	ret0, _ := ret[0].(db.PasswordResetToken)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimPasswordResetToken indicates an expected call of ClaimPasswordResetToken.
+func (mr *MockStoreMockRecorder) ClaimPasswordResetToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimPasswordResetToken", reflect.TypeOf((*MockStore)(nil).ClaimPasswordResetToken), arg0, arg1)
+}
+
+// ClaimUserInvitation mocks base method.
+func (m *MockStore) ClaimUserInvitation(arg0 context.Context, arg1 []byte) (db.UserInvitation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimUserInvitation", arg0, arg1)
+	ret0, _ := ret[0].(db.UserInvitation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimUserInvitation indicates an expected call of ClaimUserInvitation.
+func (mr *MockStoreMockRecorder) ClaimUserInvitation(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimUserInvitation", reflect.TypeOf((*MockStore)(nil).ClaimUserInvitation), arg0, arg1)
+}
+
 // CountFilteredPosts mocks base method.
 func (m *MockStore) CountFilteredPosts(arg0 context.Context, arg1 db.CountFilteredPostsParams) (int64, error) {
 	m.ctrl.T.Helper()
@@ -123,6 +168,21 @@ func (m *MockStore) CountFilteredPosts(arg0 context.Context, arg1 db.CountFilter
 func (mr *MockStoreMockRecorder) CountFilteredPosts(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountFilteredPosts", reflect.TypeOf((*MockStore)(nil).CountFilteredPosts), arg0, arg1)
+}
+
+// CountPasswordResetTokensSince mocks base method.
+func (m *MockStore) CountPasswordResetTokensSince(arg0 context.Context, arg1 db.CountPasswordResetTokensSinceParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountPasswordResetTokensSince", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountPasswordResetTokensSince indicates an expected call of CountPasswordResetTokensSince.
+func (mr *MockStoreMockRecorder) CountPasswordResetTokensSince(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPasswordResetTokensSince", reflect.TypeOf((*MockStore)(nil).CountPasswordResetTokensSince), arg0, arg1)
 }
 
 // CountPostsByTaxonomyTerm mocks base method.
@@ -273,6 +333,21 @@ func (m *MockStore) CreateMediaAndLinkTx(arg0 context.Context, arg1 db.CreateMed
 func (mr *MockStoreMockRecorder) CreateMediaAndLinkTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMediaAndLinkTx", reflect.TypeOf((*MockStore)(nil).CreateMediaAndLinkTx), arg0, arg1)
+}
+
+// CreatePasswordResetToken mocks base method.
+func (m *MockStore) CreatePasswordResetToken(arg0 context.Context, arg1 db.CreatePasswordResetTokenParams) (db.PasswordResetToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePasswordResetToken", arg0, arg1)
+	ret0, _ := ret[0].(db.PasswordResetToken)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePasswordResetToken indicates an expected call of CreatePasswordResetToken.
+func (mr *MockStoreMockRecorder) CreatePasswordResetToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePasswordResetToken", reflect.TypeOf((*MockStore)(nil).CreatePasswordResetToken), arg0, arg1)
 }
 
 // CreatePostMedia mocks base method.
@@ -468,6 +543,36 @@ func (m *MockStore) CreateUser(arg0 context.Context, arg1 db.CreateUserParams) (
 func (mr *MockStoreMockRecorder) CreateUser(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockStore)(nil).CreateUser), arg0, arg1)
+}
+
+// CreateUserInvitation mocks base method.
+func (m *MockStore) CreateUserInvitation(arg0 context.Context, arg1 db.CreateUserInvitationParams) (db.UserInvitation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateUserInvitation", arg0, arg1)
+	ret0, _ := ret[0].(db.UserInvitation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateUserInvitation indicates an expected call of CreateUserInvitation.
+func (mr *MockStoreMockRecorder) CreateUserInvitation(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUserInvitation", reflect.TypeOf((*MockStore)(nil).CreateUserInvitation), arg0, arg1)
+}
+
+// CreateUserInvitationTx mocks base method.
+func (m *MockStore) CreateUserInvitationTx(arg0 context.Context, arg1 db.CreateUserInvitationParams) (db.UserInvitation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateUserInvitationTx", arg0, arg1)
+	ret0, _ := ret[0].(db.UserInvitation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateUserInvitationTx indicates an expected call of CreateUserInvitationTx.
+func (mr *MockStoreMockRecorder) CreateUserInvitationTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUserInvitationTx", reflect.TypeOf((*MockStore)(nil).CreateUserInvitationTx), arg0, arg1)
 }
 
 // CreateUserPost mocks base method.
@@ -1686,6 +1791,36 @@ func (mr *MockStoreMockRecorder) GetUserMediaCount(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMediaCount", reflect.TypeOf((*MockStore)(nil).GetUserMediaCount), arg0, arg1)
 }
 
+// GetValidPasswordResetTokenByHash mocks base method.
+func (m *MockStore) GetValidPasswordResetTokenByHash(arg0 context.Context, arg1 []byte) (db.PasswordResetToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValidPasswordResetTokenByHash", arg0, arg1)
+	ret0, _ := ret[0].(db.PasswordResetToken)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetValidPasswordResetTokenByHash indicates an expected call of GetValidPasswordResetTokenByHash.
+func (mr *MockStoreMockRecorder) GetValidPasswordResetTokenByHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidPasswordResetTokenByHash", reflect.TypeOf((*MockStore)(nil).GetValidPasswordResetTokenByHash), arg0, arg1)
+}
+
+// GetValidUserInvitationByTokenHash mocks base method.
+func (m *MockStore) GetValidUserInvitationByTokenHash(arg0 context.Context, arg1 []byte) (db.UserInvitation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValidUserInvitationByTokenHash", arg0, arg1)
+	ret0, _ := ret[0].(db.UserInvitation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetValidUserInvitationByTokenHash indicates an expected call of GetValidUserInvitationByTokenHash.
+func (mr *MockStoreMockRecorder) GetValidUserInvitationByTokenHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidUserInvitationByTokenHash", reflect.TypeOf((*MockStore)(nil).GetValidUserInvitationByTokenHash), arg0, arg1)
+}
+
 // InsertPostVersion mocks base method.
 func (m *MockStore) InsertPostVersion(arg0 context.Context, arg1 db.InsertPostVersionParams) (db.InsertPostVersionRow, error) {
 	m.ctrl.T.Helper()
@@ -1699,6 +1834,20 @@ func (m *MockStore) InsertPostVersion(arg0 context.Context, arg1 db.InsertPostVe
 func (mr *MockStoreMockRecorder) InsertPostVersion(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPostVersion", reflect.TypeOf((*MockStore)(nil).InsertPostVersion), arg0, arg1)
+}
+
+// InvalidatePasswordResetTokensForUser mocks base method.
+func (m *MockStore) InvalidatePasswordResetTokensForUser(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InvalidatePasswordResetTokensForUser", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InvalidatePasswordResetTokensForUser indicates an expected call of InvalidatePasswordResetTokensForUser.
+func (mr *MockStoreMockRecorder) InvalidatePasswordResetTokensForUser(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidatePasswordResetTokensForUser", reflect.TypeOf((*MockStore)(nil).InvalidatePasswordResetTokensForUser), arg0, arg1)
 }
 
 // ListActivePostTypes mocks base method.
@@ -1774,6 +1923,21 @@ func (m *MockStore) ListMediaPathsIn(arg0 context.Context, arg1 []string) ([]str
 func (mr *MockStoreMockRecorder) ListMediaPathsIn(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMediaPathsIn", reflect.TypeOf((*MockStore)(nil).ListMediaPathsIn), arg0, arg1)
+}
+
+// ListOpenUserInvitations mocks base method.
+func (m *MockStore) ListOpenUserInvitations(arg0 context.Context) ([]db.UserInvitation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOpenUserInvitations", arg0)
+	ret0, _ := ret[0].([]db.UserInvitation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOpenUserInvitations indicates an expected call of ListOpenUserInvitations.
+func (mr *MockStoreMockRecorder) ListOpenUserInvitations(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOpenUserInvitations", reflect.TypeOf((*MockStore)(nil).ListOpenUserInvitations), arg0)
 }
 
 // ListPostTypes mocks base method.
@@ -2055,6 +2219,21 @@ func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostFromTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).RemovePostFromTaxonomyTerm), arg0, arg1)
 }
 
+// RenewUserInvitation mocks base method.
+func (m *MockStore) RenewUserInvitation(arg0 context.Context, arg1 db.RenewUserInvitationParams) (db.UserInvitation, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RenewUserInvitation", arg0, arg1)
+	ret0, _ := ret[0].(db.UserInvitation)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RenewUserInvitation indicates an expected call of RenewUserInvitation.
+func (mr *MockStoreMockRecorder) RenewUserInvitation(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenewUserInvitation", reflect.TypeOf((*MockStore)(nil).RenewUserInvitation), arg0, arg1)
+}
+
 // ReplaceMediaFile mocks base method.
 func (m *MockStore) ReplaceMediaFile(arg0 context.Context, arg1 db.ReplaceMediaFileParams) (db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -2068,6 +2247,50 @@ func (m *MockStore) ReplaceMediaFile(arg0 context.Context, arg1 db.ReplaceMediaF
 func (mr *MockStoreMockRecorder) ReplaceMediaFile(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceMediaFile", reflect.TypeOf((*MockStore)(nil).ReplaceMediaFile), arg0, arg1)
+}
+
+// ResetPasswordTx mocks base method.
+func (m *MockStore) ResetPasswordTx(arg0 context.Context, arg1 db.ResetPasswordTxParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetPasswordTx", arg0, arg1)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResetPasswordTx indicates an expected call of ResetPasswordTx.
+func (mr *MockStoreMockRecorder) ResetPasswordTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPasswordTx", reflect.TypeOf((*MockStore)(nil).ResetPasswordTx), arg0, arg1)
+}
+
+// RevokeOpenUserInvitationsByEmail mocks base method.
+func (m *MockStore) RevokeOpenUserInvitationsByEmail(arg0 context.Context, arg1 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevokeOpenUserInvitationsByEmail", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RevokeOpenUserInvitationsByEmail indicates an expected call of RevokeOpenUserInvitationsByEmail.
+func (mr *MockStoreMockRecorder) RevokeOpenUserInvitationsByEmail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeOpenUserInvitationsByEmail", reflect.TypeOf((*MockStore)(nil).RevokeOpenUserInvitationsByEmail), arg0, arg1)
+}
+
+// RevokeUserInvitation mocks base method.
+func (m *MockStore) RevokeUserInvitation(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevokeUserInvitation", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RevokeUserInvitation indicates an expected call of RevokeUserInvitation.
+func (mr *MockStoreMockRecorder) RevokeUserInvitation(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeUserInvitation", reflect.TypeOf((*MockStore)(nil).RevokeUserInvitation), arg0, arg1)
 }
 
 // RotateToNewSession mocks base method.
@@ -2155,6 +2378,35 @@ func (m *MockStore) SetPublishedVersionOnPost(arg0 context.Context, arg1 db.SetP
 func (mr *MockStoreMockRecorder) SetPublishedVersionOnPost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPublishedVersionOnPost", reflect.TypeOf((*MockStore)(nil).SetPublishedVersionOnPost), arg0, arg1)
+}
+
+// SetUserInvitationAcceptedUser mocks base method.
+func (m *MockStore) SetUserInvitationAcceptedUser(arg0 context.Context, arg1 db.SetUserInvitationAcceptedUserParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetUserInvitationAcceptedUser", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetUserInvitationAcceptedUser indicates an expected call of SetUserInvitationAcceptedUser.
+func (mr *MockStoreMockRecorder) SetUserInvitationAcceptedUser(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserInvitationAcceptedUser", reflect.TypeOf((*MockStore)(nil).SetUserInvitationAcceptedUser), arg0, arg1)
+}
+
+// SetUserPassword mocks base method.
+func (m *MockStore) SetUserPassword(arg0 context.Context, arg1 db.SetUserPasswordParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetUserPassword", arg0, arg1)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetUserPassword indicates an expected call of SetUserPassword.
+func (mr *MockStoreMockRecorder) SetUserPassword(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserPassword", reflect.TypeOf((*MockStore)(nil).SetUserPassword), arg0, arg1)
 }
 
 // TransferMediaToUser mocks base method.

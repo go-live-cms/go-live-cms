@@ -107,10 +107,18 @@ make proddown      # Stop production environment
 make prodlogs      # View production logs
 ```
 
-The API image contains no `app.env`. `compose.yaml` takes its secrets from the
-environment (or a `.env` file next to it, never committed): `ROLE_LOOKUP_SECRET`,
-`PASETO_V4_PUBLIC_KEY_HEX`, `PASETO_V4_PRIVATE_KEY_HEX` and `PASETO_V4_LOCAL_KEY_HEX`.
-Generate fresh keys for a real deployment; don't reuse the ones in `example.app.env`.
+`compose.yaml` is the production stack: Caddy (TLS, the only published service, routes
+`/collab` to the collab server and everything else to web), web, the collab WebSocket
+server, the API and Postgres. CD deploys it to a single VM from GHCR images. Setup,
+secrets, the first admin account, deploys, rollback and the build-time theme rule:
+**[docs/operations/deploy.md](docs/operations/deploy.md)**.
+
+The images contain no `app.env`. `compose.yaml` takes its secrets from a `.env` file next
+to it (never committed). Generate one with fresh keys, never `example.app.env`'s:
+
+```bash
+go run ./cmd/gen-prod-env -site cms.example.com > .env
+```
 
 #### Seeded dev accounts in production
 
@@ -157,6 +165,31 @@ UPDATE sessions SET is_blocked = true
 Then start the API again. If an account was used while it had the known password,
 review what it changed.
 
+#### Email: invitations and password reset
+
+The alpha is invite-only: admins invite people from **Users → Invite user**, and
+anyone can reset a forgotten password from the sign-in page. Both send an email,
+so outside `GIN_MODE=debug` the API **refuses to start** without:
+
+| Variable | Meaning |
+|----------|---------|
+| `PUBLIC_BASE_URL` | Site origin the links point at, e.g. `https://cms.example.com` (never taken from the request's Host header) |
+| `SMTP_HOST`, `SMTP_PORT` | SMTP server (default port 587) |
+| `SMTP_TLS` | Optional. TLS is required: implicit on port 465, STARTTLS otherwise (a server without STARTTLS is an error). `tls` or `starttls` to choose; `none` only for a loopback relay |
+| `SMTP_USER`, `SMTP_PASS` | Optional, set together; only sent over TLS |
+| `MAIL_FROM` | Sender, e.g. `GoLive CMS <no-reply@example.com>` |
+
+Optional: `INVITATION_TTL` (default `72h`), `PASSWORD_RESET_TTL` (default `1h`),
+`RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE` (5) and `RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE`
+(10, reset/accept). Links are single-use, only their SHA-256 is stored, and a
+reset signs the user out everywhere. Forgot-password always answers the same way,
+whether or not the email has an account.
+
+In development (`compose.dev.yaml`) nothing is sent: each email is written to
+`dev-mail/*.eml`. For a web inbox, run Mailpit:
+`MAIL_DRIVER=smtp docker compose -f compose.dev.yaml --profile mail up -d` and open
+http://localhost:8025.
+
 #### Rate limiting and client IPs
 
 The API limits requests per client IP and answers `429 Too Many Requests` with a
@@ -194,9 +227,11 @@ IP. On a busy site, add that address or its Docker network to
 `RATE_LIMIT_EXEMPT_CIDRS`. If browser API calls also pass through the web tier, it
 must forward the client IP in `X-Forwarded-For` and be listed in `TRUSTED_PROXIES`.
 In development the Vite proxy does that (`xfwd`), and `compose.dev.yaml` trusts the
-private Docker ranges. In production the web server forwards `/api/v1` and `/uploads` itself
-(`web/src/middleware/apiProxy.ts`), and `compose.yaml` pins the web container to
-`172.28.0.10` and trusts and exempts only that address.
+private Docker ranges. In production browser requests pass Caddy, then the web server,
+which forwards `/api/v1` and `/uploads` itself (`web/src/middleware/apiProxy.ts`).
+`compose.yaml` pins web to `172.28.0.10` and Caddy to `172.28.0.11`, trusts exactly those
+two, and exempts only web (SSR) from the general limit. Caddy discards any
+`X-Forwarded-For` the client sends.
 
 #### Health checks, logs and metrics
 
@@ -504,7 +539,11 @@ const posts = await apiClient.get("/posts");
 
 ### Environment Variables
 
-- `PUBLIC_API_URL`: API base URL (automatically set in Docker)
+- `SERVER_API_URL`: the API base the **server** (SSR) calls, read at runtime, e.g.
+  `http://api:8080/api/v1` (set in both compose files)
+- `PUBLIC_API_URL`: the **browser-facing** API URL, only used for the admin CSP. Leave it
+  unset in production: the browser calls `/api/v1` same-origin. See
+  `docs/operations/deploy.md`.
 - Add more in `astro.config.mjs` or `.env` files
 
 ## 🧪 Testing

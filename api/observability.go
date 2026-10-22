@@ -383,3 +383,39 @@ func NewLogger(w io.Writer, ginMode string) *slog.Logger {
 		ReplaceAttr: redactSensitiveAttr,
 	}))
 }
+
+// runDetached runs f on its own goroutine, for work that must outlive the
+// request (e.g. the forgot-password email). recoveryMiddleware only guards
+// request goroutines, so a panic here would crash the process: it is
+// recovered, logged and reported instead. route names the work for the
+// report (a route template, never a raw path).
+func (server *Server) runDetached(requestID, route string, f func()) {
+	go func() {
+		defer func() {
+			rec := recover()
+			if rec == nil {
+				return
+			}
+			stack := debug.Stack()
+			err := fmt.Errorf("panic: %v", rec)
+			logger := server.logger
+			if logger == nil {
+				logger = slog.Default()
+			}
+			logger.LogAttrs(context.Background(), slog.LevelError, "background_panic_recovered",
+				slog.String(requestIDKey, requestID),
+				slog.String("route", route),
+				slog.String("error", err.Error()),
+				slog.String("stack", string(stack)),
+			)
+			server.reportError(context.Background(), ErrorEvent{
+				RequestID: requestID,
+				Route:     route,
+				Status:    http.StatusInternalServerError,
+				Err:       err,
+				Stack:     stack,
+			})
+		}()
+		f()
+	}()
+}

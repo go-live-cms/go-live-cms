@@ -454,13 +454,17 @@ func TestCreateTaxonomyTermAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				hierarchicalType := taxonomyType
+				hierarchicalType.ID = taxonomyTerm.TaxonomyTypeID
+				hierarchicalType.Hierarchical = true
 				store.EXPECT().
 					GetTaxonomyTypeByID(gomock.Any(), gomock.Eq(taxonomyTerm.TaxonomyTypeID)).
 					Times(1).
-					Return(taxonomyType, nil)
+					Return(hierarchicalType, nil)
 
 				parentTerm := randomTaxonomyTerm()
 				parentTerm.ID = 123
+				parentTerm.TaxonomyTypeID = taxonomyTerm.TaxonomyTypeID
 				store.EXPECT().
 					GetTaxonomyTerm(gomock.Any(), gomock.Eq(int64(123))).
 					Times(1).
@@ -488,10 +492,12 @@ func TestCreateTaxonomyTermAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
+				hierarchicalType := taxonomyType
+				hierarchicalType.Hierarchical = true
 				store.EXPECT().
 					GetTaxonomyTypeByID(gomock.Any(), gomock.Eq(taxonomyTerm.TaxonomyTypeID)).
 					Times(1).
-					Return(taxonomyType, nil)
+					Return(hierarchicalType, nil)
 
 				store.EXPECT().
 					GetTaxonomyTerm(gomock.Any(), gomock.Eq(int64(999))).
@@ -643,6 +649,7 @@ func TestGetTaxonomyTermsByTypeAPI(t *testing.T) {
 			SortOrder:        term.SortOrder,
 			Meta:             term.Meta,
 			CreatedAt:        term.CreatedAt,
+			PostCount:        int64(i),
 		}
 	}
 
@@ -1276,6 +1283,9 @@ func requireBodyMatchTaxonomyTermsByType(t *testing.T, body string, taxonomyTerm
 		require.Equal(t, term.Name, response.TaxonomyTerms[i].Name)
 		require.Equal(t, term.Slug, response.TaxonomyTerms[i].Slug)
 		require.Equal(t, term.TaxonomyTypeName, response.TaxonomyTerms[i].TaxonomyTypeName)
+		// The admin's delete warning relies on post_count being present, even when 0
+		require.NotNil(t, response.TaxonomyTerms[i].PostCount)
+		require.Equal(t, term.PostCount, *response.TaxonomyTerms[i].PostCount)
 	}
 }
 

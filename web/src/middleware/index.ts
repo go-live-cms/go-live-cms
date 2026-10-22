@@ -6,9 +6,15 @@ import { ThemeSettingsImpl } from "../lib/theme-settings"
 import { ThemeAPIClientImpl } from "../lib/theme-api-client"
 import { safeExecute } from "../lib/theme-api"
 import type { ThemeFunctions, ThemeFunctionsContext } from "../lib/theme-api"
-import { applyAdminCsp, isAdminPath } from "./csp"
+import { applyAdminCsp, isAccountPagePath, isAdminPath } from "./csp"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
+
+// Themes are bundled at build time (#272): Vite resolves these globs when the image is
+// built (lazily: nothing loads until called), so a theme copied in later has no entry.
+// Keyed by path, e.g. "../../themes/default/theme.config.ts".
+const THEME_CONFIGS = import.meta.glob<Record<string, any>>("../../themes/*/theme.config.ts")
+const THEME_FUNCTIONS = import.meta.glob<Record<string, any>>("../../themes/*/functions.ts")
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const url = new URL(context.request.url)
@@ -32,17 +38,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
       // WordPress-style: Load theme config to get registered assets
       try {
-        const configPath = path.join(process.cwd(), "themes", theme.slug, "theme.config.ts")
-        // Dynamic import of theme config
-        const configModule = await import(`../../themes/${theme.slug}/theme.config.ts`)
-        const themeConfig = configModule.themeConfig || configModule.default
-
-        // Inject theme assets (styles and scripts)
-        context.locals.themeAssets = themeConfig.assets || {}
-
-        // Backward compatibility: fallback CSS path if no assets registered
-        if (!themeConfig.assets?.styles?.length) {
+        const loadConfig = THEME_CONFIGS[`../../themes/${theme.slug}/theme.config.ts`]
+        if (!loadConfig) {
+          console.error(
+            `Theme "${theme.slug}" is not in this build. Themes are bundled at build time: ` +
+              `add it to web/themes and rebuild the web and api images. Using its CSS only.`,
+          )
           context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
+        } else {
+          const configModule = await loadConfig()
+          const themeConfig = configModule.themeConfig || configModule.default
+
+          // Inject theme assets (styles and scripts)
+          context.locals.themeAssets = themeConfig.assets || {}
+
+          // Backward compatibility: fallback CSS path if no assets registered
+          if (!themeConfig.assets?.styles?.length) {
+            context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
+          }
         }
       } catch (error) {
         console.error(`Failed to load theme config for ${theme.slug}:`, error)
@@ -52,7 +65,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
       // Phase 2: Load and execute theme functions.ts
       try {
-        const functionsModule = await import(`../../themes/${theme.slug}/functions.ts`)
+        // functions.ts is optional: no glob entry means the theme has none.
+        const loadFunctions = THEME_FUNCTIONS[`../../themes/${theme.slug}/functions.ts`]
+        const functionsModule = loadFunctions ? await loadFunctions() : {}
         const themeFunctions: ThemeFunctions = functionsModule.default || functionsModule.themeFunctions
 
         if (themeFunctions) {
@@ -132,7 +147,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
     }
   }
 
-  if (isAdminPath(url.pathname)) {
+  if (isAdminPath(url.pathname) || isAccountPagePath(url.pathname)) {
     return applyAdminCsp(await next(), {
       pageOrigin: url.origin,
       apiUrl: process.env.PUBLIC_API_URL || import.meta.env.PUBLIC_API_URL,
