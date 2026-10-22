@@ -13,9 +13,9 @@ import (
 )
 
 // registerCollabRoutes configures:
-//   - POST /collab/tickets (admin/editor access token): mint a ticket
+//   - POST /collab/tickets (access token; canEditPost on the doc's post): mint a ticket
 func (server *Server) registerCollabRoutes(v1 *gin.RouterGroup) {
 	collab := v1.Group("/collab")
 
-	collab.POST("/tickets", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createCollabTicket)
+	collab.POST("/tickets", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createCollabTicket)
 }

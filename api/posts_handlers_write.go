@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -64,6 +65,15 @@ func (server *Server) createPost(c *gin.Context) {
 
 	if len(req.AuthorIDs) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one author is required"})
+		return
+	}
+
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
+	if !canCreatePost(caller, req.AuthorIDs, req.PostStatus) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "contributors can only create drafts authored by themselves"})
 		return
 	}
 
@@ -206,6 +216,16 @@ func (server *Server) updatePost(c *gin.Context) {
 		return
 	}
 
+	caller, ok := server.callerUser(c)
+	if !ok || !server.checkPost(c, caller, existingPost, canEditPostDetails) {
+		return
+	}
+	// Setting the status here is publishing/unpublishing by another route.
+	if req.PostStatus != "" && !strings.EqualFold(req.PostStatus, existingPost.PostStatus) && !canPublishPost(caller) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "changing the post status requires the editor role"})
+		return
+	}
+
 	updateParams := db.UpdatePostParams{
 		ID:          id,
 		Title:       existingPost.Title,
@@ -290,13 +310,18 @@ func (server *Server) deletePost(c *gin.Context) {
 		return
 	}
 
-	_, err = server.store.GetPost(c.Request.Context(), id)
+	post, err := server.store.GetPost(c.Request.Context(), id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+
+	caller, ok := server.callerUser(c)
+	if !ok || !server.checkPost(c, caller, post, canEditPostDetails) {
 		return
 	}
 

@@ -103,7 +103,7 @@ services:
       - CHOKIDAR_INTERVAL=300
       - DATA_PATH=/data/yjs
       - SQUASH_SECRET=dev-squash-secret
-      # Per-connection role check (#216, #223): GET ${INTERNAL_API_URL}/internal/users/:id/role
+      # Per-connection access check (#216, #223, #135): GET ${INTERNAL_API_URL}/internal/users/:id/access
       # on the API's unpublished internal listener, with ROLE_LOOKUP_SECRET (must match the
       # api service's value). Tickets (#233) are verified and burned in the WS process.
       - INTERNAL_API_URL=http://api:8081

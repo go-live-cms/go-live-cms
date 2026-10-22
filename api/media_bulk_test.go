@@ -190,15 +190,23 @@ func TestCreateMediaBulkAPI(t *testing.T) {
 			},
 		},
 		{
-			name:   "ContributorForbidden",
+			// Contributors may upload images for their own posts (#135); they own
+			// what they upload.
+			name:   "ContributorUploads",
 			caller: &contributor,
 			files:  []string{"photo.png"},
 			buildStubs: func(t *testing.T, server *Server, store *mockdb.MockStore) {
-				store.EXPECT().CreateMedia(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().
+					CreateMedia(gomock.Any(), gomock.Any()).
+					Times(1).
+					DoAndReturn(func(ctx any, arg db.CreateMediaParams) (db.Medium, error) {
+						require.Equal(t, contributor.ID, arg.UserID)
+						return echoCreate(ctx, arg)
+					})
 			},
 			checkResponse: func(t *testing.T, server *Server, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusForbidden, recorder.Code)
-				require.Empty(t, uploadedFiles(t, server))
+				require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+				require.Len(t, uploadedFiles(t, server), 1)
 			},
 		},
 		{

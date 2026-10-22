@@ -21,6 +21,8 @@ interface PostSidebarProps {
   onSlugChange?: (slug: string) => void
   // Disables every field for users who can't write content (contributors, #216)
   readOnly?: boolean
+  // false for contributors: they create drafts only, so the status stays "draft" (#135)
+  canPublish?: boolean
   // Draft/publish + revisions (#136); edit mode only, never for read-only users
   onUnpublish?: () => Promise<void>
   onRestoreVersion?: (version: PostVersion) => Promise<void>
@@ -39,6 +41,7 @@ export default function PostSidebar({
   mode = "create",
   onSlugChange,
   readOnly = false,
+  canPublish = true,
   onUnpublish,
   onRestoreVersion,
   revisionsKey,
@@ -177,7 +180,7 @@ export default function PostSidebar({
                   id="post-status"
                   value={post.post_status || "draft"}
                   onChange={(e) => handleFieldUpdate("post_status", e.target.value)}
-                  disabled={mode === "edit"}
+                  disabled={mode === "edit" || !canPublish}
                 >
                   {statusOptions.map((option) => (
                     <option key={option.value} value={option.value}>

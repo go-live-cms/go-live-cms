@@ -11,7 +11,7 @@ import PublishBar from "@gl-admin/components/editor/ui/PublishBarNew"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { useCollabPresence } from "@gl-admin/components/editor/utils/useCollabPresence"
-import { canEditContent } from "@gl-admin/lib/roles"
+import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 import "@gl-admin/assets/styles/components/Toast.scss"
 
@@ -75,19 +75,23 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     changed_at: initialData?.changed_at || new Date().toISOString(),
   }
 
-  // Contributors can't edit content: the WS server rejects their collab connection and
-  // the API rejects their writes (#216), so open the editor read-only and don't connect
-  // at all. The role cached at login can be stale (demotion/promotion since), so in edit
-  // mode the current role is re-read from /users/me before the editor mounts. Otherwise
-  // a demoted editor would get an editable editor whose socket is rejected in a loop.
-  const [role, setRole] = useState<string | undefined>(() => authManager.getState().user?.role)
+  // Per-post permissions (#135, mirroring api/auth_posts.go): admins and editors may edit
+  // and publish any post; contributors may write their own posts but never publish, and
+  // once their post is published only its working copy (the editor body, live after an
+  // editor publishes), not its title or settings. Anyone else's post is view-only: the WS
+  // server rejects that collab connection and the API rejects the writes, so the editor
+  // opens read-only and doesn't connect at all. The user cached at login can be stale
+  // (demotion/promotion since), so in edit mode it is re-read from /users/me before the
+  // editor mounts. Otherwise a demoted editor would get an editable editor whose socket is
+  // rejected in a loop.
+  const [me, setMe] = useState<PermissionUser | undefined>(() => authManager.getState().user ?? undefined)
   const [roleVerified, setRoleVerified] = useState(mode !== "edit")
   useEffect(() => {
     if (mode !== "edit") return
     let cancelled = false
     authManager.refreshUser().then((user) => {
       if (cancelled) return
-      setRole(user?.role)
+      setMe(user ?? undefined)
       setRoleVerified(true)
     })
     return () => {
@@ -95,7 +99,14 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [mode])
 
-  const contentReadOnly = !canEditContent(role)
+  const access = postEditorAccess(
+    me,
+    mode,
+    mode === "edit" && initialData ? { user_id: initialData.user_id, post_status: formData.post_status } : undefined
+  )
+  const contentReadOnly = !access.content
+  const detailsReadOnly = !access.details
+  const canPublish = access.publish
   const collabEnabled = mode === "edit" && roleVerified && !contentReadOnly
 
   const { status: collabStatus, users: collabUsers } = useCollabPresence(initialData?.id, collabEnabled)
@@ -252,7 +263,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   }
 
   const handlePublish = async () => {
-    if (contentReadOnly) return
+    if (contentReadOnly || !canPublish) return
     // Use Block Spec v1 publishing for edit mode, fallback to traditional publish for create mode
     if (mode === "edit" && editorRef.current && initialData?.id) {
       try {
@@ -273,7 +284,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
   // Back to draft; the public page 404s and its snapshot is dropped (#136)
   const handleUnpublish = async () => {
-    if (contentReadOnly || !initialData?.id) return
+    if (!canPublish || !initialData?.id) return
     try {
       const token = authManager.getAccessToken()
       if (token) blockAPIClient.setAuthToken(token)
@@ -290,7 +301,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   // Load a version into the working copy through the live editor, so collaborators
   // get it via Yjs. Publishing afterwards makes it live (as a new version).
   const handleRestoreVersion = async (version: PostVersion) => {
-    if (contentReadOnly || !editorRef.current) return
+    if (contentReadOnly || !canPublish || !editorRef.current) return
     try {
       const { saved } = await editorRef.current.restoreVersion(version.doc)
       showSuccess(
@@ -455,6 +466,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         collabStatus={collabStatus}
         collabUsers={collabUsers}
         readOnly={contentReadOnly}
+        canPublish={canPublish}
       />
 
       <div
@@ -471,14 +483,20 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               className="post-editor__title-input"
               id="post-title"
               name="post-title"
-              readOnly={contentReadOnly}
+              readOnly={detailsReadOnly}
             />
           </div>
 
           <div className="post-editor__content">
             {roleVerified && contentReadOnly && (
               <p className="post-editor__readonly-notice" role="status">
-                View-only: contributors can't edit post content.
+                View-only: you can only edit posts you wrote.
+              </p>
+            )}
+            {roleVerified && !contentReadOnly && detailsReadOnly && (
+              <p className="post-editor__readonly-notice" role="status">
+                This post is published. Your changes are saved as a draft and go live when an
+                editor publishes them. The title and settings are locked.
               </p>
             )}
             {/* Mount only once the current role is known, so a stale cached role never
@@ -496,7 +514,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               }}
               placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
               postId={initialData?.id}
-              enableCollaboration={collabEnabled} // Only in edit mode, and only for editors/admins
+              enableCollaboration={collabEnabled} // Edit mode, for users who may edit this post
               // Block Spec v1 persistence callbacks
               onSaveStart={() => {
                 setIsSaving(true)
@@ -540,9 +558,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         slug={formData.slug}
         mode={mode}
         onSlugChange={handleSlugChange}
-        readOnly={contentReadOnly}
-        onUnpublish={collabEnabled ? handleUnpublish : undefined}
-        onRestoreVersion={collabEnabled ? handleRestoreVersion : undefined}
+        readOnly={detailsReadOnly}
+        canPublish={canPublish}
+        onUnpublish={collabEnabled && canPublish ? handleUnpublish : undefined}
+        onRestoreVersion={collabEnabled && canPublish ? handleRestoreVersion : undefined}
         revisionsKey={revisionsKey}
       />
 

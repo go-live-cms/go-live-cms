@@ -209,6 +209,10 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 		return
 	}
 
+	if !server.authorizePost(c, postID, canEditPost) {
+		return
+	}
+
 	// Check If-Match header for optimistic concurrency
 	ifMatch := c.GetHeader("If-Match")
 	if ifMatch == "" {
@@ -279,8 +283,11 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 	// Update title if provided
 	if req.Title != nil && *req.Title != "" {
 		// Get current post to preserve other fields
+		// The title is live: a contributor can't change it once the post is
+		// published (canEditPostDetails), though the blocks above were saved.
 		post, err := server.store.GetPost(c, postID)
-		if err == nil {
+		caller, ok := server.callerUser(c)
+		if err == nil && ok && canEditPostDetails(caller, post) {
 			_, err = server.store.UpdatePost(c, db.UpdatePostParams{
 				ID:          postID,
 				Title:       *req.Title,

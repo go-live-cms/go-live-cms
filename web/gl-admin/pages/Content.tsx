@@ -17,7 +17,7 @@ import Icon from "@gl-admin/components/ui/Icon"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import NotFound from "@gl-admin/pages/NotFound"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { canEditContent } from "@gl-admin/lib/roles"
+import { canCreateContent } from "@gl-admin/lib/roles"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
 import type { Post, ApiMeta, PostType as PostTypeInfo } from "@gl-admin/lib/api/types"
 import type { PostQueryParams } from "@gl-admin/lib/api/posts"
@@ -33,8 +33,8 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   const { isDark, baseTitle } = useGoLive()
   const [postTypesList, setPostTypesList] = useState<PostTypeInfo[]>([])
   const [postTypesLoaded, setPostTypesLoaded] = useState(false)
-  // Contributors can't create posts (requireContentEditor in the API).
-  const canCreate = canEditContent(useCurrentRole())
+  // Every content role may create posts; contributors get drafts they own (#135).
+  const canCreate = canCreateContent(useCurrentRole())
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([
     { label: "All authors", value: "" },
@@ -258,7 +258,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
       description={
         canCreate
           ? `Create your first ${singularName.toLowerCase()} to get started.`
-          : "Nothing has been created here yet. Contributors can't create content; ask an editor or administrator."
+          : "Nothing has been created here yet. Your role can't create content; ask an administrator."
       }
       action={
         canCreate && (

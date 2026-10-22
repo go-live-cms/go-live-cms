@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -68,11 +69,35 @@ func TestCreateCollabTicket(t *testing.T) {
 			},
 		},
 		{
-			name:   "ContributorForbidden",
+			name:   "ContributorForbiddenOnOthersPost",
 			body:   gin.H{"doc": "post-12"},
 			caller: &contributor,
 			checkResponse: func(t *testing.T, _ *Server, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
+			},
+		},
+		{
+			name:   "ContributorGetsTicketForOwnPost",
+			body:   gin.H{"doc": "post-13"},
+			caller: &contributor,
+			checkResponse: func(t *testing.T, server *Server, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				var res struct {
+					Ticket string `json:"ticket"`
+				}
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &res))
+				payload, err := server.collabTickets.VerifyWSTicket(res.Ticket)
+				require.NoError(t, err)
+				require.Equal(t, contributor.ID, payload.UserID)
+				require.Equal(t, "post-13", payload.Doc)
+			},
+		},
+		{
+			name:   "ContributorMissingPost",
+			body:   gin.H{"doc": "post-14"},
+			caller: &contributor,
+			checkResponse: func(t *testing.T, _ *Server, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
@@ -115,6 +140,10 @@ func TestCreateCollabTicket(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			stubRoleLookup(store, editor)
 			stubRoleLookup(store, contributor)
+			// Only contributors' tickets look the post up (editors may edit any).
+			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(db.Post{ID: 12, UserID: editor.ID}, nil).AnyTimes()
+			store.EXPECT().GetPost(gomock.Any(), int64(13)).Return(db.Post{ID: 13, UserID: contributor.ID}, nil).AnyTimes()
+			store.EXPECT().GetPost(gomock.Any(), int64(14)).Return(db.Post{}, sql.ErrNoRows).AnyTimes()
 
 			server := newTestServer(t, store)
 			recorder := postCollabTicket(t, server, tc.body, tc.caller)

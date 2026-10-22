@@ -130,8 +130,8 @@ type Config struct {
 	InternalServerAddress string `mapstructure:"INTERNAL_SERVER_ADDRESS"`
 
 	// RoleLookupSecret is the shared secret the collab WebSocket server sends as
-	// "Authorization: Bearer <secret>" to GET /internal/users/:id/role, its
-	// per-connection role check. Must match ROLE_LOOKUP_SECRET in websocket/.env.
+	// "Authorization: Bearer <secret>" to GET /internal/users/:id/access, its
+	// per-connection access check. Must match ROLE_LOOKUP_SECRET in websocket/.env.
 	// Required: NewServer refuses to start without it (no default).
 	RoleLookupSecret string `mapstructure:"ROLE_LOOKUP_SECRET"`
 

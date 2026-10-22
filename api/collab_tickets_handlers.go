@@ -17,21 +17,29 @@ type collabTicketMaker interface {
 
 // createCollabTicket mints a collab ticket for the caller and one document.
 //
-// Authentication: Bearer access token, admin or editor (contributors open
-// the editor read-only and never connect to the collab server).
+// Authentication: Bearer access token. Admins and editors may get a ticket
+// for any post, contributors only for their own (canEditPost, #135).
 //
 // Returns:
 //   - 200 OK: { "ticket": "v4.public…", "expires_at": "…" }
 //   - 400 Bad Request: missing or malformed doc name
-//   - 401/403: see authMiddleware and requireContentEditor
+//   - 401/403: see authMiddleware, requireContentAuthor and canEditPost
+//   - 404 Not Found: a contributor asked for a post that doesn't exist
 func (server *Server) createCollabTicket(c *gin.Context) {
 	var req createCollabTicketRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "doc is required"})
 		return
 	}
-	if !collabDocNamePattern.MatchString(req.Doc) {
+	postID, ok := postIDFromCollabDoc(req.Doc)
+	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid doc name"})
+		return
+	}
+
+	// Same per-post rule the WS server re-checks on connect (internal access
+	// endpoint); failing early here saves the editor a doomed connect.
+	if !server.authorizePost(c, postID, canEditPost) {
 		return
 	}
 

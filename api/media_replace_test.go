@@ -486,12 +486,13 @@ func TestReplaceMediaAPI(t *testing.T) {
 			},
 		},
 		{
-			name:     "ContributorForbiddenByRoute",
+			// The route admits contributors (#135); ownership refuses others' media.
+			name:     "ContributorForbiddenOnOthersMedia",
 			caller:   &contributor,
 			filename: "new.png",
 			content:  func(t *testing.T) []byte { return testPNG(t, 2, 2) },
 			buildStubs: func(t *testing.T, server *Server, store *mockdb.MockStore, fx fixture) {
-				store.EXPECT().GetMedia(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().GetMedia(gomock.Any(), gomock.Any()).Times(1).Return(db.Medium{ID: 701, UserID: contributor.ID + 1}, nil)
 				store.EXPECT().ReplaceMediaFile(gomock.Any(), gomock.Any()).Times(0)
 			},
 			check: func(t *testing.T, server *Server, recorder *httptest.ResponseRecorder, fx fixture) {

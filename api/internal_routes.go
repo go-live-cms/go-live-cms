@@ -30,7 +30,8 @@ import (
 // newInternalRouter builds the internal engine.
 //
 // Route Structure:
-//   - GET /internal/users/:id/role?issued_at=<unix seconds> (WS role lookup)
+//   - GET /internal/users/:id/access?doc=post-<id>&issued_at=<unix seconds>
+//     (WS per-connection document access check, #135)
 //   - GET /metrics (Prometheus text, public router's request counts and
 //     latency; metrics.go). Unauthenticated: the listener being unreachable
 //     from the internet is what restricts it.
@@ -53,7 +54,7 @@ func (server *Server) newInternalRouter() *gin.Engine {
 
 	internal := router.Group("/internal")
 	internal.Use(requireInternalSecret(server.config.RoleLookupSecret))
-	internal.GET("/users/:id/role", server.getInternalUserRole) // GET /internal/users/123/role?issued_at=1760000000
+	internal.GET("/users/:id/access", server.getInternalDocAccess) // GET /internal/users/123/access?doc=post-7&issued_at=1760000000
 
 	return router
 }

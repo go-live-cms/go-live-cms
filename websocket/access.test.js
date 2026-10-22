@@ -4,8 +4,7 @@ import { createPublicKey } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { V4 } from "paseto";
 import {
-  canEditContent,
-  fetchCurrentRole,
+  fetchDocAccess,
   isCollabDocName,
   stripCollabPrefix,
   takeCredential,
@@ -43,21 +42,6 @@ function sign(claims = {}, { audience = TICKET_AUDIENCE, expiresIn = "30s", key 
     { issuer: ISSUER, audience, expiresIn, jti: randomUUID() },
   );
 }
-
-test("canEditContent allows admin and editor, case-insensitively", () => {
-  assert.equal(canEditContent("admin"), true);
-  assert.equal(canEditContent("editor"), true);
-  assert.equal(canEditContent("Editor"), true);
-  assert.equal(canEditContent("ADMIN"), true);
-});
-
-test("canEditContent denies contributors and missing roles", () => {
-  assert.equal(canEditContent("contributor"), false);
-  assert.equal(canEditContent(""), false);
-  assert.equal(canEditContent(undefined), false);
-  assert.equal(canEditContent(null), false);
-  assert.equal(canEditContent(["admin"]), false);
-});
 
 test("isCollabDocName accepts only post-<positive id>", () => {
   for (const ok of ["post-1", "post-2892", "post-9223372036854775807"]) {
@@ -150,7 +134,7 @@ test("verifyTicket rejects expired, foreign-key and wrong-issuer tickets", async
   await assert.rejects(verifyTicket(await sign(), publicKey, { ...opts, issuer: "someone.else" }));
 });
 
-/** Identity as ticketIdentity returns it, for the role-lookup tests. */
+/** Identity as ticketIdentity returns it, for the access-lookup tests. */
 const identity = { userId: "7", issuedAt: 1760000000 };
 
 test("ticketIdentity extracts user_id and iat (as Unix seconds)", () => {
@@ -181,55 +165,63 @@ test("ticketIdentity rejects missing or malformed claims", () => {
   }
 });
 
-test("fetchCurrentRole calls the internal endpoint with the shared secret, not a user token", async () => {
-  const { impl, calls } = fakeFetch(200, { role: "editor" });
-  const role = await fetchCurrentRole("http://api:8080/api/v1/", identity, "s3cret", { fetchImpl: impl });
+test("fetchDocAccess calls the internal endpoint with the shared secret, not a user token", async () => {
+  const { impl, calls } = fakeFetch(200, { role: "contributor", can_edit: true });
+  const access = await fetchDocAccess("http://api:8080/api/v1/", identity, "post-12", "s3cret", { fetchImpl: impl });
 
-  assert.equal(role, "editor");
+  assert.deepEqual(access, { role: "contributor", canEdit: true });
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].url, "http://api:8080/api/v1/internal/users/7/role?issued_at=1760000000");
+  assert.equal(calls[0].url, "http://api:8080/api/v1/internal/users/7/access?doc=post-12&issued_at=1760000000");
   assert.equal(calls[0].init.headers.Authorization, "Bearer s3cret");
 });
 
-test("fetchCurrentRole forwards the request id as X-Request-ID when given one", async () => {
+test("fetchDocAccess forwards the request id as X-Request-ID when given one", async () => {
   const { impl, calls } = fakeFetch(200, { role: "editor" });
-  await fetchCurrentRole("http://api:8081", identity, "s", { fetchImpl: impl, requestId: "req-12345678" });
+  await fetchDocAccess("http://api:8081", identity, "post-12", "s", { fetchImpl: impl, requestId: "req-12345678" });
   assert.equal(calls[0].init.headers["X-Request-ID"], "req-12345678");
 
-  await fetchCurrentRole("http://api:8081", identity, "s", { fetchImpl: impl });
+  await fetchDocAccess("http://api:8081", identity, "post-12", "s", { fetchImpl: impl });
   assert.ok(!("X-Request-ID" in calls[1].init.headers));
 });
 
-test("fetchCurrentRole returns null when the user is gone or the ticket predates a password change", async () => {
+test("fetchDocAccess returns null when the user or post is gone or the ticket predates a password change", async () => {
   for (const status of [403, 404]) {
     const { impl } = fakeFetch(status, { error: "nope" });
-    assert.equal(await fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl }), null, `status ${status}`);
+    assert.equal(await fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: impl }), null, `status ${status}`);
   }
 });
 
-test("fetchCurrentRole throws when the API rejects the shared secret (config error → 503, not 403)", async () => {
+test("fetchDocAccess throws when the API rejects the shared secret (config error → 503, not 403)", async () => {
   const { impl } = fakeFetch(401, { error: "unauthorized" });
-  await assert.rejects(fetchCurrentRole("http://api", identity, "wrong", { fetchImpl: impl }), /ROLE_LOOKUP_SECRET/);
+  await assert.rejects(fetchDocAccess("http://api", identity, "post-12", "wrong", { fetchImpl: impl }), /ROLE_LOOKUP_SECRET/);
 });
 
-test("fetchCurrentRole returns null when the body has no role", async () => {
-  const { impl } = fakeFetch(200, {});
-  assert.equal(await fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl }), null);
+test("fetchDocAccess grants nothing unless the API says can_edit: true", async () => {
+  for (const body of [{}, { role: "editor" }, { role: "editor", can_edit: "true" }, { role: "admin", can_edit: 1 }]) {
+    const { impl } = fakeFetch(200, body);
+    const access = await fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: impl });
+    assert.equal(access.canEdit, false, JSON.stringify(body));
+  }
+  const { impl } = fakeFetch(200, { role: "contributor", can_edit: false });
+  assert.deepEqual(await fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: impl }), {
+    role: "contributor",
+    canEdit: false,
+  });
 });
 
-test("fetchCurrentRole throws on server errors", async () => {
+test("fetchDocAccess throws on server errors", async () => {
   const { impl } = fakeFetch(500);
-  await assert.rejects(fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl }), /500/);
+  await assert.rejects(fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: impl }), /500/);
 });
 
-test("fetchCurrentRole throws on network errors", async () => {
+test("fetchDocAccess throws on network errors", async () => {
   const impl = async () => {
     throw new TypeError("fetch failed");
   };
-  await assert.rejects(fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl }), /fetch failed/);
+  await assert.rejects(fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: impl }), /fetch failed/);
 });
 
-test("fetchCurrentRole throws when the API doesn't answer in time", async () => {
+test("fetchDocAccess throws when the API doesn't answer in time", async () => {
   // Never resolves on its own; only the abort signal can end it. AbortSignal.timeout's
   // timer is unref'd, so hold a ref'd timer open (a real fetch would hold a socket);
   // otherwise Node can see an empty event loop and cancel the test before the abort.
@@ -241,7 +233,7 @@ test("fetchCurrentRole throws when the API doesn't answer in time", async () => 
         reject(init.signal.reason);
       });
     });
-  await assert.rejects(fetchCurrentRole("http://api", identity, "s", { fetchImpl: impl, timeoutMs: 20 }), {
+  await assert.rejects(fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: impl, timeoutMs: 20 }), {
     name: "TimeoutError",
   });
 });
