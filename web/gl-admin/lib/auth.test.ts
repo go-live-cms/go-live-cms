@@ -164,6 +164,48 @@ describe("AuthManager session restore", () => {
     expect(localStorage.getItem("gl-auth-user")).not.toContain("example.com")
   })
 
+  it("waits out a rate-limited refresh on load instead of reporting signed out", async () => {
+    let refreshCalls = 0
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/v1/auth/refresh") {
+          if (++refreshCalls === 1) {
+            return new Response(JSON.stringify({ error: "too many requests" }), {
+              status: 429,
+              headers: { "content-type": "application/json", "Retry-After": "1" },
+            })
+          }
+          return json(200, { access_token: "fresh-token", expires_at: expiresAt() })
+        }
+        return json(200, { user: USER })
+      })
+    )
+    const tab = newTab()
+
+    await expect(tab.restoreSession()).resolves.toBe(true)
+
+    expect(refreshCalls).toBe(2)
+    expect(tab.getAccessToken()).toBe("fresh-token")
+  })
+
+  it("falls back to the stored display user when /users/me fails after a restore", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    localStorage.setItem("gl-auth-user", JSON.stringify({ id: 7, username: "editor", full_name: "Ed Itor" }))
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === "/api/v1/auth/refresh"
+          ? json(200, { access_token: "fresh-token", expires_at: expiresAt() })
+          : json(500, { error: "boom" })
+      )
+    )
+    const tab = newTab()
+
+    await expect(tab.restoreSession()).resolves.toBe(true)
+    expect(tab.getState().user).toEqual({ id: 7, username: "editor", full_name: "Ed Itor" })
+  })
+
   it("logout revokes the server session and clears memory and storage", async () => {
     const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
       url === "/api/v1/auth/logout"
@@ -254,6 +296,48 @@ describe("AuthManager across tabs", () => {
     await vi.waitFor(() => expect(a.getAccessToken()).toBe("newer"))
     await new Promise((r) => setTimeout(r, 20))
     expect(b.getAccessToken()).toBe("newer")
+  })
+
+  it("refreshes without the lock when the lock can't be acquired", async () => {
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      value: { request: () => Promise.reject(new DOMException("denied", "SecurityError")) },
+    })
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === "/api/v1/auth/refresh"
+          ? json(200, { access_token: "fresh-token", expires_at: expiresAt() })
+          : json(200, { user: USER })
+      )
+    )
+    const tab = newTab()
+
+    await expect(tab.restoreSession()).resolves.toBe(true)
+    expect(tab.getAccessToken()).toBe("fresh-token")
+  })
+
+  it("signs out instead of adopting a token another tab got for a different user", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(200, { access_token: "admin-token", expires_at: expiresAt() + 60, user: { id: 1, username: "admin" } })
+      )
+    )
+    const editorTab = newTab()
+    editorTab.setUser(USER)
+    editorTab.adoptAccessToken({ access_token: "editor-token", expires_at: expiresAt() })
+    const loginTab = newTab()
+    const seen: boolean[] = []
+    editorTab.subscribe((s) => seen.push(s.isAuthenticated))
+
+    await loginTab.login("admin", "pw")
+
+    await vi.waitFor(() => expect(editorTab.getState().isAuthenticated).toBe(false))
+    expect(editorTab.getAccessToken()).toBeNull()
+    expect(seen).toEqual([false])
+    // The new user's display hint survives, so /login restores their session.
+    expect(editorTab.getDisplayUser()).toMatchObject({ id: 1, username: "admin" })
   })
 
   it("logging out in one tab signs the others out", async () => {

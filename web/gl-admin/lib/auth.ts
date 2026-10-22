@@ -43,7 +43,7 @@ const REFRESH_LOCK = "gl-auth-refresh"
 const AUTH_CHANNEL = "gl-auth"
 
 type ChannelMessage =
-  | { type: "token"; access_token: string; tokenExpiry: number }
+  | { type: "token"; access_token: string; tokenExpiry: number; userId: number | null }
   | { type: "signed-out"; reason: SignOutReason }
 
 const EMPTY_STATE: AuthState = {
@@ -66,6 +66,8 @@ export class AuthManager {
   private listeners: ((state: AuthState) => void)[] = []
   private signOutReason: SignOutReason | null = null
   private channel: BroadcastChannel | null = null
+  // Set while the last refresh was rate limited: how long it asked us to wait.
+  private rateLimitDelayMs: number | null = null
 
   private constructor() {
     if (typeof window === "undefined") return
@@ -93,6 +95,16 @@ export class AuthManager {
 
   private onChannelMessage(message: ChannelMessage): void {
     if (message?.type === "token") {
+      const myId = this.state.user?.id ?? null
+      if (myId !== null && message.userId !== null && message.userId !== myId) {
+        // Another tab signed in as someone else, replacing the shared refresh
+        // cookie. Don't let this tab act as that user under the old one's UI:
+        // sign it out (AuthGuard sends it to /login, which restores the new
+        // session) instead of adopting the token.
+        // The display user in storage is already the new one's; keep it.
+        this.clearAuth("signed-out", false)
+        return
+      }
       // Ignore a token older than the one we hold (messages can cross).
       if (this.state.tokenExpiry && message.tokenExpiry < this.state.tokenExpiry) return
       this.setToken(message.access_token, message.tokenExpiry, false)
@@ -174,7 +186,7 @@ export class AuthManager {
     return this.signOutReason
   }
 
-  private clearAuth(reason: SignOutReason = "session-expired"): void {
+  private clearAuth(reason: SignOutReason = "session-expired", clearDisplayUser = true): void {
     this.signOutReason = reason
     const wasAuthenticated = this.state.isAuthenticated
 
@@ -188,7 +200,7 @@ export class AuthManager {
     this.refreshPromise = null
     this.lastRefreshAttempt = 0
 
-    this.storeDisplayUser(null)
+    if (clearDisplayUser) this.storeDisplayUser(null)
 
     // A failed session restore leaves a signed-out tab signed out: nothing
     // changed, and subscribers (AuthGuard) would read it as a session that
@@ -198,15 +210,24 @@ export class AuthManager {
 
   // Signs this tab in from the refresh cookie when it holds no usable access
   // token (every page load: the token is never stored), then loads the user.
-  // Concurrent callers share one restore. Resolves false when there is no
-  // session to restore (or the refresh was rate limited; a retry is scheduled).
+  // Concurrent callers share one restore. A rate-limited refresh (429) is
+  // retried after Retry-After, a few times, rather than reported as signed
+  // out: the session is fine. Resolves false when there is no session.
   async restoreSession(): Promise<boolean> {
     if (this.isValidAuth()) return true
     if (!this.restorePromise) {
       this.restorePromise = (async () => {
-        const refreshed = await this.forceRefresh()
+        let refreshed = await this.forceRefresh()
+        for (let attempt = 0; !refreshed && this.rateLimitDelayMs !== null && attempt < 3; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, this.rateLimitDelayMs!))
+          // The scheduled retry (or another tab) may have got a token meanwhile.
+          refreshed = this.isValidAuth() || (await this.forceRefresh())
+        }
         if (refreshed && this.state.isAuthenticated && !this.state.user) {
           await this.refreshUser()
+          // /users/me failed: fall back to the last session's display data so
+          // the UI isn't anonymous. It has no role; PostForm re-reads that.
+          if (!this.state.user) this.state.user = this.getDisplayUser()
         }
         return refreshed && this.state.isAuthenticated
       })().finally(() => {
@@ -253,6 +274,7 @@ export class AuthManager {
 
   private async performRefresh(): Promise<boolean> {
     const tokenAtStart = this.state.accessToken
+    this.rateLimitDelayMs = null
     // Another tab handed us a token since this refresh began (it refreshed
     // while we waited for the lock): use it instead of rotating again.
     const gotNewerToken = () =>
@@ -293,11 +315,23 @@ export class AuthManager {
 
   // Runs fn while holding the cross-tab refresh lock. Web Locks need a secure
   // context (https or localhost); without them refreshes are only serialized
-  // within this tab.
-  private withRefreshLock(fn: (crossTab: boolean) => Promise<void>): Promise<void> {
+  // within this tab. If the lock itself can't be had (request rejects before
+  // running fn, e.g. a SecurityError), refresh without it rather than treating
+  // that as a dead session.
+  private async withRefreshLock(fn: (crossTab: boolean) => Promise<void>): Promise<void> {
     const locks = typeof navigator !== "undefined" ? (navigator as any).locks : undefined
     if (!locks?.request) return fn(false)
-    return locks.request(REFRESH_LOCK, () => fn(true))
+    let ran = false
+    try {
+      await locks.request(REFRESH_LOCK, () => {
+        ran = true
+        return fn(true)
+      })
+    } catch (error) {
+      if (ran) throw error
+      console.warn("Refresh lock unavailable; refreshing without it:", error)
+      await fn(false)
+    }
   }
 
   private scheduleRefreshRetry(retryAfterSeconds: number | null): void {
@@ -307,6 +341,7 @@ export class AuthManager {
     if (typeof window === "undefined") return
 
     const delay = Math.max(1, retryAfterSeconds ?? 30) * 1000
+    this.rateLimitDelayMs = delay
     this.refreshTimer = setTimeout(() => {
       void this.forceRefresh()
     }, delay)
@@ -319,8 +354,12 @@ export class AuthManager {
 
     if (!this.state.tokenExpiry || typeof window === "undefined") return
 
+    // Tabs share one token (and so one expiry). Jitter keeps their timers from
+    // firing together: the first refresh is broadcast and reschedules the
+    // rest, which matters where there are no Web Locks to serialize them.
     const timeUntilExpiry = this.state.tokenExpiry - Date.now()
-    const refreshTime = Math.max(30000, timeUntilExpiry - 2 * 60 * 1000)
+    const jitter = Math.random() * 30000
+    const refreshTime = Math.max(30000, timeUntilExpiry - 2 * 60 * 1000 - jitter)
 
     console.log(`⏰ Token refresh scheduled in ${Math.round(refreshTime / 1000)}s`)
 
@@ -333,14 +372,6 @@ export class AuthManager {
   // check if authentication is valid without forcing refresh
   isValidAuth(): boolean {
     return this.state.isAuthenticated && !this.isTokenExpired()
-  }
-
-  // get auth state with automatic refresh if needed
-  async getValidState(): Promise<AuthState> {
-    if (this.state.isAuthenticated && this.isTokenExpired()) {
-      await this.refreshAccessToken()
-    }
-    return { ...this.state }
   }
 
   // Re-reads the user from GET /users/me so role changes since login (demotion or
@@ -410,7 +441,9 @@ export class AuthManager {
     this.state.tokenExpiry = tokenExpiry
     this.state.isAuthenticated = true
 
-    if (broadcast) this.broadcast({ type: "token", access_token: accessToken, tokenExpiry })
+    if (broadcast) {
+      this.broadcast({ type: "token", access_token: accessToken, tokenExpiry, userId: this.state.user?.id ?? null })
+    }
 
     this.scheduleTokenRefresh()
     this.notifyListeners()
