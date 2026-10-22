@@ -130,6 +130,9 @@ type Querier interface {
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
+	// Which of the given media_path values some media row uses (the dev seed
+	// restores only sample files a row still references).
+	ListMediaPathsIn(ctx context.Context, paths []string) ([]string, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
 	ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error)

@@ -30,8 +30,9 @@
 //
 // Functions use simple guards to prevent duplicate data:
 //   - CreateDefaultAdminUser: Checks if the admin username exists
-//   - CreateDummyData: Skips if CountTotalUsers > 1, but still restores any
-//     missing sample media file (EnsureSampleMediaFiles)
+//   - CreateDummyData: Skips if CountTotalUsers > 1
+//   - RestoreSampleMediaFiles (cmd/seed only): writes back missing sample
+//     files that a media row still references
 //
 // Re-running these functions is generally safe but may result in mixed content
 // states. For clean results, use a fresh database.
@@ -82,6 +83,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -122,9 +124,9 @@ func generateSlug(name string) string {
 //
 // Skips execution if CountTotalUsers > 1, assuming demo data already exists.
 // This simple guard prevents duplicate content but doesn't handle partial failures.
-// For clean results after partial runs, use a fresh database. Even when it
-// skips, it writes any sample image missing from UploadPath, so media rows
-// seeded earlier get their files back.
+// For clean results after partial runs, use a fresh database. Restoring the
+// files of media rows seeded earlier is cmd/seed's job (RestoreSampleMediaFiles),
+// not this function's, so a debug-mode restart never writes files.
 //
 // # Error Handling
 //
@@ -160,9 +162,6 @@ func CreateDummyData(store db.Store, config util.Config) {
 	userCount, err := store.CountTotalUsers(context.TODO())
 	if err == nil && userCount > 1 {
 		log.Println("ℹ️  Dummy data already exists, skipping creation")
-		if _, err := EnsureSampleMediaFiles(config.UploadPath); err != nil {
-			log.Printf("❌ Failed to restore sample media files: %v", err)
-		}
 		return
 	}
 
@@ -175,10 +174,11 @@ func CreateDummyData(store db.Store, config util.Config) {
 	media := createDummyMedia(store, users, config)
 	log.Printf("✅ Created %d dummy media files", len(media))
 
-	posts := createDummyPosts(store, users, taxonomyTerms, config.UploadPath)
+	imageURLs := seededImageURLs(config.UploadPath, media)
+	posts := createDummyPosts(store, users, taxonomyTerms, imageURLs)
 	log.Printf("✅ Created %d dummy posts", len(posts))
 
-	pages := createDummyPages(store, users, config.UploadPath)
+	pages := createDummyPages(store, users, imageURLs)
 	log.Printf("✅ Created %d dummy pages", len(pages))
 
 	linkMediaToPosts(store, append(posts, pages...), media)
@@ -511,8 +511,9 @@ func ensureTaxonomyType(store db.Store, params db.CreateTaxonomyTypeParams) (db.
 // # File System Operations
 //
 //   - Creates UploadPath (0755) if needed and writes sample-image-1.jpg
-//     through sample-image-12.jpg into it, keeping a file that is already
-//     there
+//     through sample-image-12.jpg into it (storeSampleImage). A file that
+//     already holds the same image is reused; a different file with that
+//     name is left alone and the image goes to sample-image-N_1.jpg etc.
 //   - media_path has the same form as a real upload's: UploadPath + "/" +
 //     filename, so /uploads serves it and media DELETE/replace treat it as
 //     inside the upload directory
@@ -536,19 +537,18 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 
 	for i := 0; i < sampleImageCount; i++ {
 		n := i + 1
-		filename := sampleImageName(n)
 
 		_, imgConfig, err := sampleImage(n)
 		if err != nil {
 			log.Printf("❌ Failed to read sample image %d: %v", n, err)
 			continue
 		}
-		filePath, err := writeSampleImage(config.UploadPath, n)
+		filename, err := storeSampleImage(config.UploadPath, n)
 		if err != nil {
 			log.Printf("❌ Failed to store sample image %d: %v", n, err)
 			continue
 		}
-		fileInfo, err := os.Stat(filePath)
+		fileInfo, err := os.Stat(filepath.Join(config.UploadPath, filename))
 		if err != nil {
 			log.Printf("❌ Failed to get file info for image %d: %v", n, err)
 			continue
@@ -578,6 +578,24 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 	}
 
 	return media
+}
+
+// seededImageURLs returns the public URLs of the seeded media, in order, for
+// post and page meta (featured_image, header_image).
+func seededImageURLs(uploadPath string, media []db.Medium) []string {
+	urls := make([]string, 0, len(media))
+	for _, m := range media {
+		urls = append(urls, sampleMediaURL(uploadPath, filepath.Base(m.MediaPath)))
+	}
+	return urls
+}
+
+// pickImageURL returns urls[i], wrapping around, or "" if there are none.
+func pickImageURL(urls []string, i int) string {
+	if len(urls) == 0 {
+		return ""
+	}
+	return urls[i%len(urls)]
 }
 
 // createDummyPosts generates a collection of sample blog posts with realistic
@@ -636,7 +654,7 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 //
 //   - users: Requires at least one user for authorship assignment
 //   - taxonomyTerms: Optional but recommended for realistic content classification
-func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.TaxonomyTerm, uploadPath string) []db.Post {
+func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.TaxonomyTerm, imageURLs []string) []db.Post {
 	var posts []db.Post
 	gofakeit.Seed(0)
 
@@ -684,12 +702,12 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 		}
 
 		blogMeta := map[string]string{
-			"featured_image":   sampleMediaURL(uploadPath, sampleImageName((i%sampleImageCount)+1)),
+			"featured_image":   pickImageURL(imageURLs, i),
 			"reading_time":     fmt.Sprintf("%d", gofakeit.Number(2, 15)),
 			"seo_title":        title + " - Complete Guide",
 			"seo_description":  gofakeit.Sentence(20),
 			"author_bio":       gofakeit.Sentence(25),
-			"social_image":     sampleMediaURL(uploadPath, sampleImageName((i%sampleImageCount)+1)),
+			"social_image":     pickImageURL(imageURLs, i),
 			"enable_comments":  "true",
 			"post_views":       fmt.Sprintf("%d", gofakeit.Number(100, 5000)),
 			"difficulty_level": []string{"beginner", "intermediate", "advanced"}[i%3],
@@ -697,6 +715,9 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 		}
 
 		for key, value := range blogMeta {
+			if value == "" { // no seeded media to point at
+				continue
+			}
 			_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
 				PostID:    createdPost.ID,
 				MetaKey:   key,
@@ -801,7 +822,7 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 // # Dependencies
 //
 //   - users: Requires at least one user for page ownership
-func createDummyPages(store db.Store, users []db.User, uploadPath string) []db.Post {
+func createDummyPages(store db.Store, users []db.User, imageURLs []string) []db.Post {
 	var pages []db.Post
 	gofakeit.Seed(0)
 
@@ -820,7 +841,7 @@ func createDummyPages(store db.Store, users []db.User, uploadPath string) []db.P
 			content: "# About Our Company\n\nWe are a leading technology company...",
 			meta: map[string]string{
 				"page_template":      "about-template",
-				"header_image":       sampleMediaURL(uploadPath, sampleImageName(1)),
+				"header_image":       pickImageURL(imageURLs, 0),
 				"show_in_navigation": "true",
 				"navigation_order":   "1",
 				"page_layout":        "full-width",
@@ -833,7 +854,7 @@ func createDummyPages(store db.Store, users []db.User, uploadPath string) []db.P
 			content: "# Our Services\n\nWe offer a wide range of services...",
 			meta: map[string]string{
 				"page_template":      "services-template",
-				"header_image":       sampleMediaURL(uploadPath, sampleImageName(2)),
+				"header_image":       pickImageURL(imageURLs, 1),
 				"show_in_navigation": "true",
 				"navigation_order":   "2",
 				"page_layout":        "sidebar-right",
@@ -881,6 +902,9 @@ func createDummyPages(store db.Store, users []db.User, uploadPath string) []db.P
 		}
 
 		for key, value := range pageData.meta {
+			if value == "" { // no seeded media to point at
+				continue
+			}
 			_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
 				PostID:    createdPage.ID,
 				MetaKey:   key,

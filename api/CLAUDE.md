@@ -111,7 +111,10 @@ server.
 - **Seeded media (#201)** are the embedded `devModeUtil/sampleimages/*.jpg`, written
   into `UPLOAD_PATH` as given (never `filepath.Join(".", …)`: that turned compose's
   absolute `/app/uploads/media` relative) with `media_path` in the same
-  `<UPLOAD_PATH>/<file>` form as uploads. Every seed run restores missing files. Gate dev-only behaviour on
+  `<UPLOAD_PATH>/<file>` form as uploads. A same-named file that isn't the seed's
+  is never reused or overwritten (`sample-image-N_1.jpg` instead). Only `cmd/seed`
+  restores missing files, and only ones a media row references
+  (`RestoreSampleMediaFiles` via `ListMediaPathsIn`); startup never writes them. Gate dev-only behaviour on
   `config.IsDebugMode()`, **not** `gin.Mode()` (global state, and tests set it).
 - **Outside debug mode, `NewServer` refuses to start** if a seeded account
   (`admin`/`123456`, or the dummy `editor`/`author`/`contributor`/`moderator` with

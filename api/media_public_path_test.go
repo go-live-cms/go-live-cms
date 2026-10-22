@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -98,4 +99,41 @@ func TestListMediaReturnsServedPaths(t *testing.T) {
 	require.Len(t, body.Media, 2)
 	require.Equal(t, "/uploads/media/a.png", body.Media[0].MediaPath)
 	require.Equal(t, "/uploads/media/legacy.png", body.Media[1].MediaPath)
+}
+
+func TestThumbnailURL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	server := newTestServer(t, mockdb.NewMockStore(ctrl))
+	stored := server.config.UploadPath + "/hero.png"
+
+	// No media_path from the client: the row's filesystem path, as a URL.
+	require.Equal(t, "/uploads/media/hero.png", server.thumbnailURL("", stored))
+	// A pre-#201 admin echoed the filesystem path back.
+	require.Equal(t, "/uploads/media/hero.png", server.thumbnailURL(stored, stored))
+	// A URL from the client is kept.
+	require.Equal(t, "/uploads/media/other.png", server.thumbnailURL("/uploads/media/other.png", stored))
+}
+
+// _thumbnail_url rows written before #201 may hold the filesystem path.
+func TestGetFeaturedImageQuickMapsStoredPath(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	server := newTestServer(t, store)
+
+	store.EXPECT().
+		GetPostMetaByKey(gomock.Any(), gomock.Any()).
+		Times(1).
+		Return(db.PostMetum{MetaKey: "_thumbnail_url", MetaValue: sql.NullString{String: server.config.UploadPath + "/hero.png", Valid: true}}, nil)
+
+	recorder := httptest.NewRecorder()
+	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/posts/5/featured-image", nil))
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	var body struct {
+		FeaturedImage struct {
+			URL string `json:"url"`
+		} `json:"featured_image"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	require.Equal(t, "/uploads/media/hero.png", body.FeaturedImage.URL)
 }

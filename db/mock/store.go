@@ -1761,6 +1761,21 @@ func (mr *MockStoreMockRecorder) ListMedia(arg0, arg1 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMedia", reflect.TypeOf((*MockStore)(nil).ListMedia), arg0, arg1)
 }
 
+// ListMediaPathsIn mocks base method.
+func (m *MockStore) ListMediaPathsIn(arg0 context.Context, arg1 []string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListMediaPathsIn", arg0, arg1)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListMediaPathsIn indicates an expected call of ListMediaPathsIn.
+func (mr *MockStoreMockRecorder) ListMediaPathsIn(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMediaPathsIn", reflect.TypeOf((*MockStore)(nil).ListMediaPathsIn), arg0, arg1)
+}
+
 // ListPostTypes mocks base method.
 func (m *MockStore) ListPostTypes(arg0 context.Context) ([]db.PostType, error) {
 	m.ctrl.T.Helper()

@@ -15,7 +15,8 @@
 //
 // It is safe to run more than once: the admin is skipped if it exists, the
 // dummy data is skipped if the database has more than one user, and only
-// sample image files missing from UPLOAD_PATH are written.
+// sample image files that a media row references but that are missing from
+// UPLOAD_PATH are written back (never overwritten).
 //
 // The seed creates accounts with public passwords, so it refuses to run
 // unless GIN_MODE=debug, or -force is given. Even when forced, a release-mode
@@ -71,7 +72,7 @@ func main() {
 		fail("cannot reach db", err)
 	}
 
-	seed(db.NewStore(conn), config)
+	seed(context.Background(), db.NewStore(conn), config)
 }
 
 // checkMode refuses to seed outside GIN_MODE=debug unless forced.
@@ -89,11 +90,16 @@ func checkMode(config util.Config, force bool) error {
 		"Set GIN_MODE=debug for a development database, or pass -force", errNotDebugMode, config.GinMode)
 }
 
-// seed runs the same seeders as debug-mode API startup.
-func seed(store db.Store, config util.Config) {
+// seed runs the same seeders as debug-mode API startup, then writes back the
+// sample image files that seeded media rows reference but that are missing
+// (which startup never does).
+func seed(ctx context.Context, store db.Store, config util.Config) {
 	slog.Info("seeding", "upload_path", config.UploadPath)
 	devModeUtil.CreateDefaultAdminUser(store, devModeUtil.AdminAccount(config))
 	devModeUtil.CreateDummyData(store, config)
+	if _, err := devModeUtil.RestoreSampleMediaFiles(ctx, store, config.UploadPath); err != nil {
+		slog.Error("cannot restore sample media files", "error", err)
+	}
 }
 
 func fail(msg string, err error) {

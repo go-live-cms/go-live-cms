@@ -85,9 +85,11 @@ make seed          # with Go installed locally, against DB_SOURCE in app.env
 Both run `go run ./cmd/seed`. Notes:
 
 - **Safe to rerun.** The admin is skipped if it exists, and the dummy content is
-  skipped if the database has more than one user. Sample image files missing from
-  `UPLOAD_PATH` are written again on every run, so rerunning it fixes broken images
-  in a database seeded by an older version.
+  skipped if the database has more than one user. The command also writes back
+  sample image files that a media row still references but that are missing from
+  `UPLOAD_PATH`, so rerunning it fixes broken images in a database seeded by an
+  older version. It never overwrites a file and never recreates one whose media
+  was deleted. Startup seeding doesn't restore files.
 - **Admin credentials** default to `admin` / `123456`. Set `SEED_ADMIN_USER` and
   `SEED_ADMIN_PASS` (in `app.env` or the environment) to use others.
 - **Dev only.** It refuses to run unless `GIN_MODE=debug`. `make seed ARGS=-force`

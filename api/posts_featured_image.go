@@ -86,10 +86,7 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 		}
 
 		// Store thumbnail URL meta
-		mediaPath := req.MediaPath
-		if mediaPath == "" {
-			mediaPath = media.MediaPath
-		}
+		mediaPath := server.thumbnailURL(req.MediaPath, media.MediaPath)
 		_, err = q.UpsertPostMeta(c.Request.Context(), db.UpsertPostMetaParams{
 			PostID:    postID,
 			MetaKey:   "_thumbnail_url",
@@ -111,6 +108,18 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 		"message": "featured image set successfully",
 		"media":   server.mediaResponse(media),
 	})
+}
+
+// thumbnailURL is the _thumbnail_url stored for a featured image: the
+// client's media_path, or the media row's when the client sent none, as the
+// URL /uploads serves it at. The row holds a filesystem path, and admins
+// before #201 sent that same path back, so both go through publicMediaPath.
+func (server *Server) thumbnailURL(requested, stored string) string {
+	path := requested
+	if path == "" {
+		path = stored
+	}
+	return publicMediaPath(server.config.UploadPath, path)
 }
 
 // getFeaturedImageQuick handles GET /posts/:id/featured-image (URL only)
@@ -135,9 +144,10 @@ func (server *Server) getFeaturedImageQuick(c *gin.Context) {
 		return
 	}
 
+	// Rows set before #201 may hold the filesystem path.
 	c.JSON(http.StatusOK, gin.H{
 		"featured_image": gin.H{
-			"url": thumbnailMeta.MetaValue.String,
+			"url": publicMediaPath(server.config.UploadPath, thumbnailMeta.MetaValue.String),
 		},
 	})
 }

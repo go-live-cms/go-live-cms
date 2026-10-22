@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,42 +36,92 @@ func TestSampleMediaPathAndURL(t *testing.T) {
 	}
 }
 
-func TestEnsureSampleMediaFiles(t *testing.T) {
+func TestStoreSampleImage(t *testing.T) {
 	// An absolute path, as in compose (/app/uploads/media): before #201 the
 	// seed joined it onto "." and wrote somewhere else.
 	uploadPath := filepath.Join(t.TempDir(), "uploads", "media")
 	require.True(t, filepath.IsAbs(uploadPath))
-
-	written, err := EnsureSampleMediaFiles(uploadPath)
+	want, _, err := sampleImage(1)
 	require.NoError(t, err)
-	require.Equal(t, sampleImageCount, written)
-	for n := 1; n <= sampleImageCount; n++ {
-		got, err := os.ReadFile(filepath.Join(uploadPath, sampleImageName(n)))
-		require.NoError(t, err)
-		want, _, err := sampleImage(n)
-		require.NoError(t, err)
-		require.True(t, bytes.Equal(want, got), sampleImageName(n))
-	}
 
-	// Second run: nothing to do. A missing file is restored, an existing
-	// (e.g. replaced) one is kept.
-	written, err = EnsureSampleMediaFiles(uploadPath)
+	name, err := storeSampleImage(uploadPath, 1)
 	require.NoError(t, err)
-	require.Zero(t, written)
+	require.Equal(t, "sample-image-1.jpg", name)
+	got, err := os.ReadFile(filepath.Join(uploadPath, name))
+	require.NoError(t, err)
+	require.True(t, bytes.Equal(want, got))
 
-	replaced := filepath.Join(uploadPath, sampleImageName(1))
-	require.NoError(t, os.WriteFile(replaced, []byte("replaced"), 0644))
-	require.NoError(t, os.Remove(filepath.Join(uploadPath, sampleImageName(2))))
+	// The same image already there (an earlier seed): reused.
+	name, err = storeSampleImage(uploadPath, 1)
+	require.NoError(t, err)
+	require.Equal(t, "sample-image-1.jpg", name)
 
-	written, err = EnsureSampleMediaFiles(uploadPath)
+	// A different file with that name (someone's upload) is left alone.
+	other := filepath.Join(uploadPath, "sample-image-2.jpg")
+	require.NoError(t, os.WriteFile(other, []byte("not ours"), 0644))
+	name, err = storeSampleImage(uploadPath, 2)
 	require.NoError(t, err)
-	require.Equal(t, 1, written)
-	got, err := os.ReadFile(replaced)
+	require.Equal(t, "sample-image-2_1.jpg", name)
+	got, err = os.ReadFile(other)
 	require.NoError(t, err)
-	require.Equal(t, "replaced", string(got))
-	require.FileExists(t, filepath.Join(uploadPath, sampleImageName(2)))
+	require.Equal(t, "not ours", string(got))
+	require.FileExists(t, filepath.Join(uploadPath, "sample-image-2_1.jpg"))
+
+	// And the next run finds its own copy under the alternative name.
+	name, err = storeSampleImage(uploadPath, 2)
+	require.NoError(t, err)
+	require.Equal(t, "sample-image-2_1.jpg", name)
 }
 
+func TestRestoreSampleMediaFiles(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	uploadPath := filepath.Join(t.TempDir(), "uploads", "media")
+	require.NoError(t, os.MkdirAll(uploadPath, 0755))
+
+	// Rows reference images 1, 2 and 3. 1 is missing, 2 was replaced by
+	// another file, 3 is intact; 4..12 have no row (deleted in the admin).
+	intact, _, err := sampleImage(3)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(uploadPath, sampleImageName(2)), []byte("replaced"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(uploadPath, sampleImageName(3)), intact, 0644))
+
+	store.EXPECT().
+		ListMediaPathsIn(gomock.Any(), gomock.Any()).
+		Times(1).
+		DoAndReturn(func(_ context.Context, paths []string) ([]string, error) {
+			require.Len(t, paths, sampleImageCount)
+			require.Contains(t, paths, uploadPath+"/sample-image-1.jpg")
+			return []string{
+				uploadPath + "/sample-image-1.jpg",
+				uploadPath + "/sample-image-2.jpg",
+				uploadPath + "/sample-image-3.jpg",
+			}, nil
+		})
+
+	written, err := RestoreSampleMediaFiles(context.Background(), store, uploadPath)
+	require.NoError(t, err)
+	require.Equal(t, 1, written)
+
+	require.FileExists(t, filepath.Join(uploadPath, sampleImageName(1)))
+	got, err := os.ReadFile(filepath.Join(uploadPath, sampleImageName(2)))
+	require.NoError(t, err)
+	require.Equal(t, "replaced", string(got))
+	for n := 4; n <= sampleImageCount; n++ {
+		require.NoFileExists(t, filepath.Join(uploadPath, sampleImageName(n)))
+	}
+}
+
+func TestRestoreSampleMediaFilesStoreError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	uploadPath := filepath.Join(t.TempDir(), "media")
+	store.EXPECT().ListMediaPathsIn(gomock.Any(), gomock.Any()).Times(1).Return(nil, errors.New("down"))
+
+	_, err := RestoreSampleMediaFiles(context.Background(), store, uploadPath)
+	require.Error(t, err)
+	require.NoDirExists(t, uploadPath)
+}
 func TestCreateDummyMediaStoresFiles(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
@@ -104,21 +155,30 @@ func TestCreateDummyMediaStoresFiles(t *testing.T) {
 	}
 }
 
-func TestCreateDummyDataSkipRestoresFiles(t *testing.T) {
+// A debug-mode restart on a seeded database writes nothing: no store writes
+// and no files (deleted sample media must not come back as orphans).
+func TestCreateDummyDataSkipWritesNoFiles(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
 	uploadPath := filepath.Join(t.TempDir(), "media")
 
-	// Already seeded: no writes to the store, but the files come back.
 	store.EXPECT().CountTotalUsers(gomock.Any()).Times(1).Return(int64(5), nil)
 
 	CreateDummyData(store, util.Config{UploadPath: uploadPath})
 
-	for n := 1; n <= sampleImageCount; n++ {
-		require.FileExists(t, filepath.Join(uploadPath, sampleImageName(n)))
-	}
+	require.NoDirExists(t, uploadPath)
 }
 
+func TestSeededImageURLs(t *testing.T) {
+	media := []db.Medium{
+		{MediaPath: "/app/uploads/media/sample-image-1.jpg"},
+		{MediaPath: "/app/uploads/media/sample-image-2_1.jpg"},
+	}
+	urls := seededImageURLs("/app/uploads/media", media)
+	require.Equal(t, []string{"/uploads/media/sample-image-1.jpg", "/uploads/media/sample-image-2_1.jpg"}, urls)
+	require.Equal(t, urls[1], pickImageURL(urls, 3))
+	require.Equal(t, "", pickImageURL(nil, 0))
+}
 func TestAdminAccount(t *testing.T) {
 	require.Equal(t, SeededAccount{Username: "admin", Password: "123456"}, AdminAccount(util.Config{}))
 	require.Equal(t,

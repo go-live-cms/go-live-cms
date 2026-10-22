@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"path/filepath"
 	"testing"
@@ -40,7 +41,7 @@ func TestCheckMode(t *testing.T) {
 }
 
 // An already-seeded database: the admin and dummy data are skipped (no
-// writes), and the sample files are still put in place.
+// writes), and only the sample files a media row still references come back.
 func TestSeedAlreadySeeded(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
@@ -48,11 +49,13 @@ func TestSeedAlreadySeeded(t *testing.T) {
 
 	store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Eq("admin")).Times(1).Return(db.User{Username: "admin"}, nil)
 	store.EXPECT().CountTotalUsers(gomock.Any()).Times(1).Return(int64(5), nil)
+	store.EXPECT().ListMediaPathsIn(gomock.Any(), gomock.Any()).Times(1).
+		Return([]string{uploadPath + "/sample-image-1.jpg"}, nil)
 
-	seed(store, util.Config{UploadPath: uploadPath})
+	seed(context.Background(), store, util.Config{UploadPath: uploadPath})
 
 	require.FileExists(t, filepath.Join(uploadPath, "sample-image-1.jpg"))
-	require.FileExists(t, filepath.Join(uploadPath, "sample-image-12.jpg"))
+	require.NoFileExists(t, filepath.Join(uploadPath, "sample-image-12.jpg"))
 }
 
 func TestSeedUsesConfiguredAdmin(t *testing.T) {
@@ -62,8 +65,9 @@ func TestSeedUsesConfiguredAdmin(t *testing.T) {
 	store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Eq("root")).Times(1).Return(db.User{}, sql.ErrNoRows)
 	store.EXPECT().CreateUser(gomock.Any(), gomock.Any()).Times(1).Return(db.User{Username: "root"}, nil)
 	store.EXPECT().CountTotalUsers(gomock.Any()).Times(1).Return(int64(2), nil)
+	store.EXPECT().ListMediaPathsIn(gomock.Any(), gomock.Any()).Times(1).Return([]string{}, nil)
 
-	seed(store, util.Config{
+	seed(context.Background(), store, util.Config{
 		UploadPath:        filepath.Join(t.TempDir(), "media"),
 		SeedAdminUsername: "root",
 		SeedAdminPassword: "s3cret-pass",
