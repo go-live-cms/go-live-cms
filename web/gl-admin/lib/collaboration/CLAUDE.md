@@ -141,6 +141,15 @@ non-editors anyway (see `websocket/CLAUDE.md` → Auth).
    one version). Related but distinct: the **server-side dual ESM/CJS instance** hazard —
    see `websocket/CLAUDE.md`, it's the top gotcha there.
 
+9. **Restoring a version (#136) goes through the editor, never around it.**
+   `BlockPersistenceManager.restoreVersion(doc)` (only after `hasInitialized`, i.e.
+   after WS sync) applies the doc with `setEditorBlockDoc`, which the ySyncPlugin
+   mirrors to peers, then `forceSave`s through the normal PUT. Overwriting
+   `posts.block_doc` behind the live Yjs doc would be reverted by the next autosave
+   of any open editor. It adopts the version's dropped-block record only after the
+   editor accepted the doc. Returns `{ saved: false }` when a save was in flight (the
+   follow-up save persists it).
+
 ## State machine flags (BlockPersistenceManager)
 
 `isInitializing` (load latch, cleared 500ms after init in `finally`) · `isSaving`

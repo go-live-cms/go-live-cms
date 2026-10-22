@@ -31,16 +31,21 @@ func (q *Queries) GetPostBlocks(ctx context.Context, id int64) (GetPostBlocksRow
 }
 
 const getPublishedPostBlocks = `-- name: GetPublishedPostBlocks :one
-SELECT published_block_doc AS content
+SELECT published_block_doc AS content, post_status
 FROM posts
 WHERE id = $1
 `
 
-func (q *Queries) GetPublishedPostBlocks(ctx context.Context, id int64) (pqtype.NullRawMessage, error) {
+type GetPublishedPostBlocksRow struct {
+	Content    pqtype.NullRawMessage `json:"content"`
+	PostStatus string                `json:"post_status"`
+}
+
+func (q *Queries) GetPublishedPostBlocks(ctx context.Context, id int64) (GetPublishedPostBlocksRow, error) {
 	row := q.db.QueryRowContext(ctx, getPublishedPostBlocks, id)
-	var content pqtype.NullRawMessage
-	err := row.Scan(&content)
-	return content, err
+	var i GetPublishedPostBlocksRow
+	err := row.Scan(&i.Content, &i.PostStatus)
+	return i, err
 }
 
 const updatePostBlocksIfRevisionMatches = `-- name: UpdatePostBlocksIfRevisionMatches :one
