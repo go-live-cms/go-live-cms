@@ -153,6 +153,14 @@ if (!fullPost || !fullPost.title) {
   })
 }
 
+// Drafts (including unpublished posts) and archived posts are not public (#136)
+if (fullPost.post_status !== 'published') {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Post Not Found'
+  })
+}
+
 // Phase 2: Apply theme content filter if available
 if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
   try {

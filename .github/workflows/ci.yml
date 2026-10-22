@@ -241,6 +241,21 @@ jobs:
         working-directory: web
         run: npm test
 
+      # Catches imports that only resolve on case-insensitive filesystems
+      # (#259): on this Linux runner a wrong-case import is TS2307. A full
+      # typecheck still has pre-existing type errors and `astro build` needs
+      # an adapter, so gate only on module-resolution (TS2307/TS1149/TS1261)
+      # and config (TS5xxx/TS6xxx) errors, the latter so a broken tsc run
+      # can't pass silently.
+      - name: Check web imports resolve (case-sensitive)
+        working-directory: web
+        run: |
+          npx --no-install tsc --noEmit -p . > "$RUNNER_TEMP/tsc.log" 2>&1 || true
+          if grep -E "error TS(2307|1149|1261|5[0-9]{3}|6[0-9]{3}):" "$RUNNER_TEMP/tsc.log"; then
+            echo "::error::Unresolvable or case-mismatched imports in web/ (see above)"
+            exit 1
+          fi
+
       - name: Install websocket deps
         working-directory: websocket
         run: npm ci

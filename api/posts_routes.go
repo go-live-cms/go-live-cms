@@ -54,6 +54,11 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/:id/blocks", authMiddleware(server.tokenMaker, server.store), server.getPostBlocks)
 		posts.PUT("/:id/blocks", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updatePostBlocks)
 		posts.POST("/:id/publish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.publishPost)
+		posts.POST("/:id/unpublish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.unpublishPost)
+
+		// Revisions (#136): published snapshots; restoring happens in the editor
+		posts.GET("/:id/versions", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.listPostVersions)
+		posts.GET("/:id/versions/:version_no", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.getPostVersion)
 
 	}
 }
