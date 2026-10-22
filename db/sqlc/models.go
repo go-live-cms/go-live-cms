@@ -38,6 +38,9 @@ type Medium struct {
 	Duration         int32           `json:"duration"`
 	OriginalFilename string          `json:"original_filename"`
 	Metadata         json.RawMessage `json:"metadata"`
+	Variants         json.RawMessage `json:"variants"`
+	FocalX           sql.NullFloat64 `json:"focal_x"`
+	FocalY           sql.NullFloat64 `json:"focal_y"`
 }
 
 type Post struct {

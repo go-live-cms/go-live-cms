@@ -40,6 +40,8 @@
 package api
 
 import (
+	"database/sql"
+	"encoding/json"
 	"time"
 
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -67,6 +69,10 @@ type MediaResponse struct {
 	Height           *int32    `json:"height,omitempty"`
 	Duration         *int32    `json:"duration,omitempty"`
 	OriginalFilename string    `json:"original_filename"`
+	// Variants are the resized copies of an image (#255), keyed thumb/medium/large;
+	// {} when there are none. FocalPoint is null when unset.
+	Variants   MediaVariants `json:"variants"`
+	FocalPoint *FocalPoint   `json:"focal_point"`
 }
 
 // PopularMediaResponse extends MediaResponse with guaranteed post_count field.
@@ -88,6 +94,10 @@ type PopularMediaResponse struct {
 	Height           *int32    `json:"height,omitempty"`
 	Duration         *int32    `json:"duration,omitempty"`
 	OriginalFilename string    `json:"original_filename"`
+	// Variants are the resized copies of an image (#255), keyed thumb/medium/large;
+	// {} when there are none. FocalPoint is null when unset.
+	Variants   MediaVariants `json:"variants"`
+	FocalPoint *FocalPoint   `json:"focal_point"`
 }
 
 // PostWithMediaOrderResponse combines post data with media relationship metadata.
@@ -128,6 +138,8 @@ func toMediaResponse(media db.Medium) MediaResponse {
 		Height:           height,
 		Duration:         duration,
 		OriginalFilename: media.OriginalFilename,
+		Variants:         variantsResponse(media.Variants),
+		FocalPoint:       focalPointFrom(media.FocalX, media.FocalY),
 	}
 }
 
@@ -161,6 +173,8 @@ func toMediaFromListRow(row db.ListMediaRow) MediaResponse {
 		Height:           height,
 		Duration:         duration,
 		OriginalFilename: row.OriginalFilename,
+		Variants:         variantsResponse(row.Variants),
+		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 	}
 }
 
@@ -194,6 +208,8 @@ func toMediaFromUserRow(row db.GetMediaByUserRow) MediaResponse {
 		Height:           height,
 		Duration:         duration,
 		OriginalFilename: row.OriginalFilename,
+		Variants:         variantsResponse(row.Variants),
+		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 	}
 }
 
@@ -227,6 +243,8 @@ func toMediaFromSearchRow(row db.SearchMediaByNameRow) MediaResponse {
 		Height:           height,
 		Duration:         duration,
 		OriginalFilename: row.OriginalFilename,
+		Variants:         variantsResponse(row.Variants),
+		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 	}
 }
 
@@ -260,6 +278,8 @@ func toPopularMediaResponse(row db.GetPopularMediaRow) PopularMediaResponse {
 		Height:           height,
 		Duration:         duration,
 		OriginalFilename: row.OriginalFilename,
+		Variants:         variantsResponse(row.Variants),
+		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
 	}
 }
 
@@ -318,4 +338,21 @@ func toPostResponseFromUserMediaRow(row db.GetPostsByUserWithMediaRow) PostRespo
 		CreatedAt:       row.CreatedAt,
 		ChangedAt:       row.ChangedAt,
 	}
+}
+
+// variantsResponse is the variants column for a response: always an object,
+// {} when the media has none.
+func variantsResponse(raw json.RawMessage) MediaVariants {
+	if variants := parseMediaVariants(raw); variants != nil {
+		return variants
+	}
+	return MediaVariants{}
+}
+
+// focalPointFrom is the focal point for a response, nil when unset.
+func focalPointFrom(x, y sql.NullFloat64) *FocalPoint {
+	if !x.Valid || !y.Valid {
+		return nil
+	}
+	return &FocalPoint{X: x.Float64, Y: y.Float64}
 }

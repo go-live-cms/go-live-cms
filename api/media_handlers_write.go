@@ -120,6 +120,14 @@ func (server *Server) createMedia(c *gin.Context) {
 		}
 	}
 
+	// Strip the original's metadata and generate its variants (#255).
+	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, header.Size)
+	variants := staged.commitForNewRow(server.requestLog(c))
+	removeStored := func() {
+		os.Remove(mediaPath)
+		removeMediaVariants(server.config.UploadPath, mediaPath)
+	}
+
 	authPayload := c.MustGet(authorizationPayloadKey).(*token.Payload)
 	userID := authPayload.UserID
 
@@ -141,13 +149,14 @@ func (server *Server) createMedia(c *gin.Context) {
 		Description:      description,
 		Alt:              alt,
 		MediaPath:        mediaPath,
-		FileSize:         header.Size,
+		FileSize:         fileSize,
 		MimeType:         mimeType,
 		Width:            width,
 		Height:           height,
 		Duration:         0,
 		UserID:           userID,
 		OriginalFilename: actualFilename,
+		Variants:         variants,
 	}
 
 	// If post_id is provided, create media and link to post atomically.
@@ -170,9 +179,10 @@ func (server *Server) createMedia(c *gin.Context) {
 			OriginalFilename: mediaParams.OriginalFilename,
 			PostID:           *req.PostID,
 			Order:            order,
+			Variants:         mediaParams.Variants,
 		})
 		if txErr != nil {
-			os.Remove(mediaPath)
+			removeStored()
 			if strings.Contains(txErr.Error(), "post not found") || strings.Contains(txErr.Error(), "no rows") {
 				c.JSON(http.StatusBadRequest, gin.H{"error": txErr.Error()})
 				return
@@ -186,7 +196,7 @@ func (server *Server) createMedia(c *gin.Context) {
 
 	media, err := server.store.CreateMedia(c.Request.Context(), mediaParams)
 	if err != nil {
-		os.Remove(mediaPath)
+		removeStored()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create media record"})
 		return
 	}
@@ -290,21 +300,25 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 		}
 	}
 
+	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, fileHeader.Size)
+
 	media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
 		Name:             strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename)),
 		Description:      fmt.Sprintf("Uploaded file: %s", fileHeader.Filename),
 		Alt:              strings.TrimSuffix(fileHeader.Filename, filepath.Ext(fileHeader.Filename)),
 		MediaPath:        mediaPath,
-		FileSize:         fileHeader.Size,
+		FileSize:         fileSize,
 		MimeType:         mimeType,
 		Width:            width,
 		Height:           height,
 		Duration:         0, // Set to 0 for non-video files
 		UserID:           userID,
 		OriginalFilename: actualFilename,
+		Variants:         staged.commitForNewRow(server.requestLog(c)),
 	})
 	if err != nil {
 		os.Remove(mediaPath)
+		removeMediaVariants(server.config.UploadPath, mediaPath)
 		return db.Medium{}, fmt.Sprintf("failed to create media record for %s: %v", fileHeader.Filename, err)
 	}
 	return media, ""
@@ -423,8 +437,15 @@ func (server *Server) replaceMedia(c *gin.Context) {
 		}
 	}
 
+	// New variants are staged aside; the old ones stay until the row is
+	// updated, so a failed replace leaves the original and its variants.
+	var staged *stagedVariants
+	params.FileSize, staged = prepareStoredImage(server.requestLog(c), server.config.UploadPath, storedPath, mimeType, header.Size)
+	params.Variants = staged.column()
+
 	updated, err := server.store.ReplaceMediaFile(c.Request.Context(), params)
 	if err != nil {
+		staged.discard()
 		var undoErr error
 		if swap != nil {
 			undoErr = swap.rollback()
@@ -447,15 +468,21 @@ func (server *Server) replaceMedia(c *gin.Context) {
 			server.requestLog(c).Warn("media replaced but old file not removed", "media_id", id, "media_path", storedPath, "error", err)
 		}
 	}
+	// Swaps the old variants for the new ones (or removes them if the new
+	// file has none).
+	if err := staged.commit(); err != nil {
+		server.requestLog(c).Warn("media replaced but variants not moved into place", "media_id", id, "media_path", storedPath, "error", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"media": toMediaResponse(updated)})
 }
 
 // updateMedia handles PUT /media/:id - metadata updates for existing media.
-// Accepts JSON with optional name, description and alt. The file fields
+// Accepts JSON with optional name, description, alt and focal_point
+// ({"x", "y"} in 0..1; null clears it, absent keeps it). The file fields
 // (media_path, file_size, mime_type, width, height, duration,
-// original_filename) are server-owned: a request that sets any of them gets
-// 400 and nothing is written.
+// original_filename, variants) are server-owned: a request that sets any of
+// them gets 400 and nothing is written.
 // Only updates provided fields, preserves existing values for omitted fields.
 // Auth: Requires Bearer token + editor-or-admin role. Admins and editors may
 // update any media; other roles only their own (see Ownership Policy above).
@@ -477,6 +504,11 @@ func (server *Server) updateMedia(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": fmt.Sprintf("%s cannot be updated: file fields are set on upload", strings.Join(fields, ", ")),
 		})
+		return
+	}
+	setFocal, focal, err := req.focalPointUpdate()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -507,12 +539,18 @@ func (server *Server) updateMedia(c *gin.Context) {
 	// can't be written through this path, and concurrent partial updates
 	// don't overwrite each other's fields with a stale read. Empty strings
 	// are passed as NULL, which keeps the current value.
-	updatedMedia, err := server.store.UpdateMediaMetadata(c.Request.Context(), db.UpdateMediaMetadataParams{
-		ID:          id,
-		Name:        sql.NullString{String: req.Name, Valid: req.Name != ""},
-		Description: sql.NullString{String: req.Description, Valid: req.Description != ""},
-		Alt:         sql.NullString{String: req.Alt, Valid: req.Alt != ""},
-	})
+	params := db.UpdateMediaMetadataParams{
+		ID:            id,
+		Name:          sql.NullString{String: req.Name, Valid: req.Name != ""},
+		Description:   sql.NullString{String: req.Description, Valid: req.Description != ""},
+		Alt:           sql.NullString{String: req.Alt, Valid: req.Alt != ""},
+		SetFocalPoint: setFocal,
+	}
+	if focal != nil {
+		params.FocalX = sql.NullFloat64{Float64: focal.X, Valid: true}
+		params.FocalY = sql.NullFloat64{Float64: focal.Y, Valid: true}
+	}
+	updatedMedia, err := server.store.UpdateMediaMetadata(c.Request.Context(), params)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "media not found"})
@@ -587,6 +625,8 @@ func (server *Server) deleteMedia(c *gin.Context) {
 	// surfaced, because the delete itself succeeded and cannot be retried.
 	if err := removeMediaFile(server.config.UploadPath, media.MediaPath); err != nil {
 		server.requestLog(c).Warn("media deleted but file not removed", "media_id", id, "media_path", media.MediaPath, "error", err)
+	} else if err := removeMediaVariants(server.config.UploadPath, media.MediaPath); err != nil {
+		server.requestLog(c).Warn("media deleted but variants not removed", "media_id", id, "media_path", media.MediaPath, "error", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

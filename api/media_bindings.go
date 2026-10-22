@@ -25,7 +25,12 @@
 //   - Invalid data types or formats
 package api
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"math"
+)
 
 // CreateMediaRequest defines the multipart form data structure for media uploads.
 // Used with POST /media for single file uploads with optional post linking.
@@ -62,11 +67,13 @@ type CreateMediaRequest struct {
 //
 // # Supported Updates
 //   - Metadata: name, description, alt text
+//   - focal_point: {"x", "y"} in 0..1, or null to clear it
 //
 // # Server-Owned Fields
 //
-// media_path, file_size, mime_type, width, height, duration and
-// original_filename describe the stored file and are set on upload. They are
+// media_path, file_size, mime_type, width, height, duration,
+// original_filename and variants describe the stored file and are set on
+// upload. They are
 // decoded here only so a request that sets them can be rejected with 400
 // (see serverOwnedFields): pointing one row's media_path at another row's file
 // would let deleting the first row remove the shared file, and the rest could
@@ -86,6 +93,10 @@ type UpdateMediaRequest struct {
 	Description string `json:"description" binding:"omitempty,min=5,max=500"`
 	Alt         string `json:"alt" binding:"omitempty,min=2,max=255"`
 
+	// FocalPoint is {"x": 0..1, "y": 0..1} to set it, null to clear it, or
+	// absent to keep it (see focalPointUpdate).
+	FocalPoint json.RawMessage `json:"focal_point"`
+
 	MediaPath        json.RawMessage `json:"media_path"`
 	FileSize         json.RawMessage `json:"file_size"`
 	MimeType         json.RawMessage `json:"mime_type"`
@@ -93,6 +104,44 @@ type UpdateMediaRequest struct {
 	Height           json.RawMessage `json:"height"`
 	Duration         json.RawMessage `json:"duration"`
 	OriginalFilename json.RawMessage `json:"original_filename"`
+	Variants         json.RawMessage `json:"variants"`
+}
+
+// FocalPoint is a point of interest in an image, as fractions of its width
+// and height from the top-left corner (0..1).
+type FocalPoint struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+var errInvalidFocalPoint = errors.New(`focal_point must be {"x": 0..1, "y": 0..1} or null`)
+
+// focalPointUpdate interprets the focal_point field: set reports whether the
+// request changes it, and point is the new value (nil clears it).
+func (req UpdateMediaRequest) focalPointUpdate() (set bool, point *FocalPoint, err error) {
+	if len(req.FocalPoint) == 0 {
+		return false, nil, nil
+	}
+	if string(req.FocalPoint) == "null" {
+		return true, nil, nil
+	}
+	var raw struct {
+		X *float64 `json:"x"`
+		Y *float64 `json:"y"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(req.FocalPoint))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&raw); err != nil || raw.X == nil || raw.Y == nil {
+		return false, nil, errInvalidFocalPoint
+	}
+	if !validFocalCoordinate(*raw.X) || !validFocalCoordinate(*raw.Y) {
+		return false, nil, errInvalidFocalPoint
+	}
+	return true, &FocalPoint{X: *raw.X, Y: *raw.Y}, nil
+}
+
+func validFocalCoordinate(v float64) bool {
+	return !math.IsNaN(v) && v >= 0 && v <= 1
 }
 
 // serverOwnedFields returns the JSON names of the server-owned file fields the
@@ -109,6 +158,7 @@ func (req UpdateMediaRequest) serverOwnedFields() []string {
 		{"height", req.Height},
 		{"duration", req.Duration},
 		{"original_filename", req.OriginalFilename},
+		{"variants", req.Variants},
 	}
 
 	var set []string

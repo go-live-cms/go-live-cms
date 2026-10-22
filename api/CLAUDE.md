@@ -56,6 +56,20 @@ server.
   DELETE removes the stored file after the transaction commits, but only when
   `media_path` resolves inside `UploadPath` (`removeMediaFile`). PUT rejects
   `media_path`, but old/seeded rows may hold anything, so keep that check.
+- **Image pipeline (#255, `media_variants.go`, `media_metadata.go`):** upload and
+  Replace strip the original's EXIF/GPS/XMP/text metadata losslessly (a JPEG keeps
+  only its orientation) and generate `thumb`/`medium`/`large` variants (320/800/1600
+  long edge, never upscaled, pure Go via `golang.org/x/image`, JPEG or PNG if
+  transparent) in `<dir>/_variants/<file>/`. They're **staged** and only moved into
+  place once the DB agrees (`stagedVariants.commit`), so a failed Replace keeps the
+  old set; Delete removes the directory (`removeMediaVariants`). The `variants`
+  column (jsonb, `{}` = none) and `focal_x`/`focal_y` (0..1, both or neither; CHECK
+  constraint) are returned as `variants` / `focal_point`. `variants` is
+  server-owned (PUT → 400); `focal_point` is set by PUT (`null` clears, absent
+  keeps). Existing media: `main backfill-variants [-all]` (debug startup runs it
+  after seeding). Published docs served by `GET /posts/:id`, `/posts/slug/:slug`
+  and `/public/posts/:id/blocks` get a derived `media` map for image blocks
+  (`post_block_media.go`) so the renderer can emit `srcset` and `object-position`.
 - **Password change revokes everything.** `UpdateUserTx{PasswordChanged: true}`
   locks the user row, stamps `password_changed_at` itself, and blocks every
   session. `authMiddleware` then rejects access tokens whose `iat` is before

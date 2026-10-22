@@ -996,6 +996,21 @@ func (mr *MockStoreMockRecorder) GetMedia(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMedia", reflect.TypeOf((*MockStore)(nil).GetMedia), arg0, arg1)
 }
 
+// GetMediaByIDs mocks base method.
+func (m *MockStore) GetMediaByIDs(arg0 context.Context, arg1 []int64) ([]db.Medium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMediaByIDs", arg0, arg1)
+	ret0, _ := ret[0].([]db.Medium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMediaByIDs indicates an expected call of GetMediaByIDs.
+func (mr *MockStoreMockRecorder) GetMediaByIDs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMediaByIDs", reflect.TypeOf((*MockStore)(nil).GetMediaByIDs), arg0, arg1)
+}
+
 // GetMediaByPost mocks base method.
 func (m *MockStore) GetMediaByPost(arg0 context.Context, arg1 int64) ([]db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -1746,6 +1761,21 @@ func (mr *MockStoreMockRecorder) ListExtensionSettingsByExtension(arg0, arg1 int
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListExtensionSettingsByExtension", reflect.TypeOf((*MockStore)(nil).ListExtensionSettingsByExtension), arg0, arg1)
 }
 
+// ListImageMediaAfter mocks base method.
+func (m *MockStore) ListImageMediaAfter(arg0 context.Context, arg1 db.ListImageMediaAfterParams) ([]db.Medium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListImageMediaAfter", arg0, arg1)
+	ret0, _ := ret[0].([]db.Medium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListImageMediaAfter indicates an expected call of ListImageMediaAfter.
+func (mr *MockStoreMockRecorder) ListImageMediaAfter(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListImageMediaAfter", reflect.TypeOf((*MockStore)(nil).ListImageMediaAfter), arg0, arg1)
+}
+
 // ListMedia mocks base method.
 func (m *MockStore) ListMedia(arg0 context.Context, arg1 db.ListMediaParams) ([]db.ListMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -2143,6 +2173,21 @@ func (m *MockStore) SearchTaxonomyTerms(arg0 context.Context, arg1 db.SearchTaxo
 func (mr *MockStoreMockRecorder) SearchTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).SearchTaxonomyTerms), arg0, arg1)
+}
+
+// SetMediaVariants mocks base method.
+func (m *MockStore) SetMediaVariants(arg0 context.Context, arg1 db.SetMediaVariantsParams) (db.Medium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetMediaVariants", arg0, arg1)
+	ret0, _ := ret[0].(db.Medium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetMediaVariants indicates an expected call of SetMediaVariants.
+func (mr *MockStoreMockRecorder) SetMediaVariants(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMediaVariants", reflect.TypeOf((*MockStore)(nil).SetMediaVariants), arg0, arg1)
 }
 
 // SetPostTypeActive mocks base method.

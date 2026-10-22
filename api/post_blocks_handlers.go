@@ -489,5 +489,13 @@ func (server *Server) getPublicPostBlocks(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, BlockDocResponse{Doc: blockDoc})
+	// Image blocks get their variants and focal point (post_block_media.go),
+	// which needs the doc as a map; BlockDocV1 above is the format check.
+	var docMap map[string]interface{}
+	if err := json.Unmarshal(result.Content.RawMessage, &docMap); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse published document"})
+		return
+	}
+	server.attachBlockMedia(c.Request.Context(), docMap)
+	c.JSON(http.StatusOK, gin.H{"doc": docMap})
 }

@@ -937,3 +937,70 @@ func TestSearchMediaByNameEmptyTerm(t *testing.T) {
 
 	require.Len(t, results2, 0)
 }
+
+// TestMediaVariantsAndFocalPoint covers the #255 columns: variants default to
+// {} and round-trip through create, replace and the backfill update; the
+// focal point is kept, set and cleared by UpdateMediaMetadata, and the CHECK
+// constraint refuses values outside 0..1 or only one coordinate.
+func TestMediaVariantsAndFocalPoint(t *testing.T) {
+	ctx := context.Background()
+	_, media := createTestMedia(t)
+	require.JSONEq(t, `{}`, string(media.Variants), "no variants stored as {}")
+	require.False(t, media.FocalX.Valid)
+	require.False(t, media.FocalY.Valid)
+
+	variants := `{"thumb": {"path": "/uploads/media/_variants/x.jpg/thumb.jpg", "width": 320, "height": 200, "mime_type": "image/jpeg", "file_size": 1234}}`
+	updated, err := testQueries.SetMediaVariants(ctx, SetMediaVariantsParams{ID: media.ID, Variants: json.RawMessage(variants)})
+	require.NoError(t, err)
+	require.JSONEq(t, variants, string(updated.Variants))
+	require.Equal(t, media.ChangedAt, updated.ChangedAt, "the backfill doesn't count as an edit")
+
+	set, err := testQueries.UpdateMediaMetadata(ctx, UpdateMediaMetadataParams{
+		ID: media.ID, SetFocalPoint: true,
+		FocalX: sql.NullFloat64{Float64: 0.25, Valid: true},
+		FocalY: sql.NullFloat64{Float64: 0.75, Valid: true},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0.25, set.FocalX.Float64)
+	require.Equal(t, 0.75, set.FocalY.Float64)
+
+	kept, err := testQueries.UpdateMediaMetadata(ctx, UpdateMediaMetadataParams{
+		ID: media.ID, Alt: sql.NullString{String: "new alt", Valid: true},
+	})
+	require.NoError(t, err)
+	require.Equal(t, set.FocalX, kept.FocalX, "absent focal point is kept")
+	require.Equal(t, set.FocalY, kept.FocalY)
+
+	// Replace swaps the variants (NULL stores {}) and keeps the focal point.
+	replaced, err := testQueries.ReplaceMediaFile(ctx, ReplaceMediaFileParams{
+		ID: media.ID, MediaPath: media.MediaPath, FileSize: 10, MimeType: media.MimeType,
+		Width: 10, Height: 10, OriginalFilename: "small.jpg",
+	})
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, string(replaced.Variants))
+	require.Equal(t, set.FocalX, replaced.FocalX)
+
+	cleared, err := testQueries.UpdateMediaMetadata(ctx, UpdateMediaMetadataParams{ID: media.ID, SetFocalPoint: true})
+	require.NoError(t, err)
+	require.False(t, cleared.FocalX.Valid)
+	require.False(t, cleared.FocalY.Valid)
+
+	for name, p := range map[string]UpdateMediaMetadataParams{
+		"OutOfRange": {ID: media.ID, SetFocalPoint: true, FocalX: sql.NullFloat64{Float64: 1.5, Valid: true}, FocalY: sql.NullFloat64{Float64: 0.5, Valid: true}},
+		"OnlyX":      {ID: media.ID, SetFocalPoint: true, FocalX: sql.NullFloat64{Float64: 0.5, Valid: true}},
+	} {
+		_, err := testQueries.UpdateMediaMetadata(ctx, p)
+		require.Error(t, err, name)
+		require.Contains(t, err.Error(), "media_focal_point_check", name)
+	}
+
+	got, err := testQueries.GetMediaByIDs(ctx, []int64{media.ID, media.ID + 1_000_000})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, media.ID, got[0].ID)
+
+	page, err := testQueries.ListImageMediaAfter(ctx, ListImageMediaAfterParams{AfterID: media.ID - 1, PageSize: 1})
+	require.NoError(t, err)
+	require.Len(t, page, 1)
+	require.Equal(t, media.ID, page[0].ID)
+}

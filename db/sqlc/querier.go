@@ -29,6 +29,7 @@ type Querier interface {
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
+	// variants is NULL for media without generated variants, stored as {}.
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
@@ -74,6 +75,7 @@ type Querier interface {
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
 	GetLatestPublishedVersion(ctx context.Context, postID int64) (GetLatestPublishedVersionRow, error)
 	GetMedia(ctx context.Context, id int64) (Medium, error)
+	GetMediaByIDs(ctx context.Context, ids []int64) ([]Medium, error)
 	GetMediaByPost(ctx context.Context, postID int64) ([]Medium, error)
 	GetMediaByPostWithOrder(ctx context.Context, postID int64) ([]GetMediaByPostWithOrderRow, error)
 	GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error)
@@ -129,6 +131,8 @@ type Querier interface {
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
+	// Pages through image media by id for the variant backfill.
+	ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
@@ -159,13 +163,17 @@ type Querier interface {
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
 	// File-only update used by POST /media/:id/replace: swaps the columns that
-	// describe the stored file and leaves name, description and alt alone, so a
-	// concurrent metadata edit is never overwritten by a stale read.
+	// describe the stored file (variants included; NULL stores {}) and leaves
+	// name, description, alt and the focal point alone, so a concurrent metadata
+	// edit is never overwritten by a stale read.
 	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// Search and filtering
 	SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTermsParams) ([]SearchTaxonomyTermsRow, error)
+	// Used by the variant backfill. changed_at is left alone: nothing the user
+	// edited changed.
+	SetMediaVariants(ctx context.Context, arg SetMediaVariantsParams) (Medium, error)
 	SetPostTypeActive(ctx context.Context, arg SetPostTypeActiveParams) error
 	SetPostTypeActiveByRegisteredBy(ctx context.Context, arg SetPostTypeActiveByRegisteredByParams) error
 	// Publishing also makes the post public: post_status follows the snapshot, so a

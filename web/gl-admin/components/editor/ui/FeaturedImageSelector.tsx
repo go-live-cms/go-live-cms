@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react"
 import Modal from "@gl-admin/components/ui/Modal"
-import { getMedia } from "@gl-admin/lib/api/media"
-import { getMediaURL } from "@gl-admin/lib/api"
+import { getMedia, getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/featured-image-selector.scss"
 
@@ -99,7 +98,7 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
   }
 
   const getImageUrl = (media: Media) => {
-    return getMediaURL(media.media_path)
+    return getMediaVariantPreviewURL(media, "thumb")
   }
 
   return (

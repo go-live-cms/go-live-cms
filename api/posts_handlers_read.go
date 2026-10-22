@@ -205,8 +205,10 @@ func (server *Server) getPostByID(c *gin.Context) {
 		return
 	}
 
+	resp := toPostResponse(post)
+	server.attachBlockMedia(c.Request.Context(), resp.PublishedBlocks)
 	c.JSON(http.StatusOK, gin.H{
-		"post": toPostResponse(post),
+		"post": resp,
 	})
 }
 
@@ -228,8 +230,10 @@ func (server *Server) getPostBySlug(c *gin.Context) {
 		return
 	}
 
+	resp := toPostResponse(post)
+	server.attachBlockMedia(c.Request.Context(), resp.PublishedBlocks)
 	c.JSON(http.StatusOK, gin.H{
-		"post": toPostResponse(post),
+		"post": resp,
 	})
 }
 

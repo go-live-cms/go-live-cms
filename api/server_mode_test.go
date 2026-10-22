@@ -78,6 +78,11 @@ func TestNewServerSeedingGate(t *testing.T) {
 			CountTotalUsers(gomock.Any()).
 			Times(1).
 			Return(int64(2), nil)
+		// Then the media variant backfill (#255), here with no images.
+		store.EXPECT().
+			ListImageMediaAfter(gomock.Any(), gomock.Any()).
+			Times(1).
+			Return(nil, nil)
 
 		config := newTestConfig(t)
 		config.IsTestMode = false

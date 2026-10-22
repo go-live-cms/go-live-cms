@@ -22,6 +22,11 @@
 // while it is read; larger uploads get 413.
 // Filenames sanitized; duplicates auto-suffixed (file_2.jpg).
 //
+// # Images (#255)
+// Image metadata (EXIF/GPS/XMP) is stripped on upload and replace, and
+// thumb/medium/large variants are generated next to the original (see
+// media_variants.go). Media has an optional focal point (PUT focal_point).
+//
 // # Endpoints (index)
 // - POST   /api/v1/media           (create single)
 // - POST   /api/v1/media/batch     (create batch - original path)
@@ -53,7 +58,7 @@
 // # Future work
 // - Virus scanning integration
 // - S3/cloud storage backend
-// - Automatic thumbnail generation
+// - WebP/AVIF variant output (needs an encoder; pure-Go ones are lossless only)
 //
 // This file intentionally contains only documentation.
 // See: media_routes.go (route registration), media_bindings.go (request structs),

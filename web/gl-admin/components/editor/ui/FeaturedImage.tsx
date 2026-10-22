@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react"
 import FeaturedImageSelector from "./FeaturedImageSelector"
-import { getMediaURL } from "@gl-admin/lib/api"
+import { getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/featured-image.scss"
 
@@ -60,7 +60,7 @@ const FeaturedImage: React.FC<FeaturedImageProps> = ({
         {featuredImage ? (
           <div className="gl-featured-image__preview" onClick={openSelector}>
             <img
-              src={getMediaURL(featuredImage.media_path)}
+              src={getMediaVariantPreviewURL(featuredImage, "medium")}
               alt={featuredImage.alt || featuredImage.name}
               className="gl-featured-image__image"
             />

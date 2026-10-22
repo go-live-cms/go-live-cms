@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"flag"
 	"log/slog"
 	"os"
+	"os/signal"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-live-cms/go-live-cms/api"
@@ -41,6 +44,12 @@ func main() {
 		fatal("cannot open db", err)
 	}
 
+	// One-off maintenance commands instead of the server.
+	if len(os.Args) > 1 && os.Args[1] == "backfill-variants" {
+		runBackfillVariants(config, db.NewStore(conn), os.Args[2:])
+		return
+	}
+
 	server, err := api.NewServer(config, db.NewStore(conn))
 	if err != nil {
 		fatal("cannot set up server", err)
@@ -58,5 +67,28 @@ func main() {
 	slog.Info("starting API", "address", config.ServerAddress)
 	if err := server.Start(config.ServerAddress); err != nil {
 		fatal("cannot start server", err)
+	}
+}
+
+// runBackfillVariants implements `main backfill-variants [-all]`: generates
+// the image variants (#255) of media uploaded before variants existed. With
+// -all it regenerates every image's variants (e.g. after the sizes change).
+// Run it where the API runs, so UPLOAD_PATH points at the same files:
+//
+//	docker compose exec api /app/main backfill-variants
+//	docker compose -f compose.dev.yaml exec api go run main.go backfill-variants
+func runBackfillVariants(config util.Config, store db.Store, args []string) {
+	flags := flag.NewFlagSet("backfill-variants", flag.ExitOnError)
+	all := flags.Bool("all", false, "regenerate variants for every image, not only those without")
+	flags.Parse(args)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	stats, err := api.BackfillMediaVariants(ctx, store, config.UploadPath, *all, slog.Default())
+	slog.Info("media variant backfill finished",
+		"scanned", stats.Scanned, "generated", stats.Generated, "skipped", stats.Skipped, "failed", stats.Failed)
+	if err != nil {
+		fatal("media variant backfill failed", err)
 	}
 }

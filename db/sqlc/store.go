@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 // ErrLastAdmin is returned by user-removing transactions (delete, or an update
@@ -598,6 +600,8 @@ type CreateMediaAndLinkTxParams struct {
 	OriginalFilename string
 	PostID           int64
 	Order            int32
+	// Variants is the generated image variants (NULL stores {}).
+	Variants pqtype.NullRawMessage
 }
 
 type CreateMediaAndLinkTxResult struct {
@@ -746,6 +750,7 @@ func (store *SQLStore) CreateMediaAndLinkTx(ctx context.Context, arg CreateMedia
 			Height:           arg.Height,
 			Duration:         arg.Duration,
 			OriginalFilename: arg.OriginalFilename,
+			Variants:         arg.Variants,
 		})
 		if err != nil {
 			return err

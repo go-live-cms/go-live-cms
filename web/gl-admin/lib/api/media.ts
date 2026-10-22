@@ -1,4 +1,4 @@
-import type { Media, MediaSortOption, PaginationParams, ApiResponse } from "./types"
+import type { FocalPoint, Media, MediaSortOption, MediaVariantName, PaginationParams, ApiResponse } from "./types"
 import { apiCall, authenticatedFetch, getMediaURL } from "../api"
 import { apiErrorFromResponse, friendlyApiMessage } from "./errors"
 import { buildUrl } from "./utils"
@@ -63,7 +63,8 @@ export async function createMedia(formData: FormData, token?: string): Promise<a
 
 export async function updateMedia(
   id: number,
-  data: { name?: string; description?: string; alt?: string },
+  // focal_point: null clears it; leave it out to keep it.
+  data: { name?: string; description?: string; alt?: string; focal_point?: FocalPoint | null },
   token?: string
 ): Promise<any> {
   const response = await authenticatedFetch(`/api/v1/media/${id}`, {
@@ -169,8 +170,30 @@ export async function replaceMediaFile(
 // it has shown, so admin previews add this to pick up a replaced file. Use the
 // plain getMediaURL for anything stored or copied.
 export function getMediaPreviewURL(media: Pick<Media, "media_path" | "changed_at">): string {
-  const url = getMediaURL(media.media_path)
-  const version = Date.parse(media.changed_at)
+  return withVersion(getMediaURL(media.media_path), media.changed_at)
+}
+
+// Variant sizes from smallest to largest (#255).
+const VARIANT_ORDER: MediaVariantName[] = ["thumb", "medium", "large"]
+
+// getMediaVariantPreviewURL is getMediaPreviewURL for a resized copy: the
+// requested variant, else the next larger one, else the original (images
+// smaller than a size have no variant of it, and non-images have none). Use
+// it for grids and pickers, which don't need the full-size file.
+export function getMediaVariantPreviewURL(
+  media: Pick<Media, "media_path" | "changed_at" | "variants">,
+  size: MediaVariantName = "thumb"
+): string {
+  const variants = media.variants || {}
+  for (const name of VARIANT_ORDER.slice(VARIANT_ORDER.indexOf(size))) {
+    const variant = variants[name]
+    if (variant?.path) return withVersion(getMediaURL(variant.path), media.changed_at)
+  }
+  return getMediaPreviewURL(media)
+}
+
+function withVersion(url: string, changedAt: string): string {
+  const version = Date.parse(changedAt)
   // changed_at defaults to 0001-01-01 until a row is first updated.
   if (!Number.isFinite(version) || version <= 0) return url
   return `${url}${url.includes("?") ? "&" : "?"}v=${version}`
