@@ -1,0 +1,91 @@
+@use "@gl-admin/assets/styles/variables";
+
+// Taxonomies screen (#167). Layout only: colors and controls come from the
+// existing listing, table, modal, input and button styles.
+.gl-taxonomies {
+  &__intro {
+    color: var(--text-secondary);
+    margin: -2rem 0 1.5rem 1rem;
+  }
+
+  &__notice {
+    background: var(--background-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    margin: 0 0 1rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  &__term-name {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  &__term-depth {
+    color: var(--text-secondary);
+    margin-right: 0.25rem;
+  }
+
+  &__muted {
+    color: var(--text-secondary);
+  }
+
+  &__row-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+}
+
+.gl-term-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  &__label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+
+  &__hint {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  &__error {
+    color: #d93025;
+    font-size: 0.8125rem;
+  }
+
+  textarea {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    color: var(--text-primary);
+    font: inherit;
+    padding: 0.75rem;
+    resize: vertical;
+  }
+
+  &__warning {
+    margin: 0;
+    padding-left: 1.25rem;
+
+    li + li {
+      margin-top: 0.35rem;
+    }
+  }
+}
+
+.gl-term-form__footer {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}

@@ -69,10 +69,11 @@ type CreateTaxonomyTermRequest struct {
 
 // UpdateTaxonomyTermRequest defines the structure for updating existing taxonomy terms.
 // All fields are optional to support partial updates with omitempty tags.
+// parent_id 0 moves the term to the top level; an empty description clears it.
 type UpdateTaxonomyTermRequest struct {
 	Name        string                 `json:"name" binding:"omitempty,min=2,max=100"`
 	Slug        string                 `json:"slug"`
-	Description string                 `json:"description"`
+	Description *string                `json:"description"`
 	ParentID    *int64                 `json:"parent_id"`
 	SortOrder   *int32                 `json:"sort_order"`
 	Meta        map[string]interface{} `json:"meta"`

@@ -2,6 +2,9 @@ import type { TaxonomyType, TaxonomyTerm, TaxonomySortOption, PaginationParams, 
 import { apiCall } from "../api"
 import { buildUrl } from "./utils"
 
+// Routes live under /taxonomy/types and /taxonomy/terms (api/taxonomy_routes.go).
+// Reads are public; writes need an admin or editor (requireContentEditor).
+
 export interface TaxonomyTermQueryParams extends PaginationParams {
   sort?: TaxonomySortOption
   type?: string // taxonomy type name
@@ -10,15 +13,17 @@ export interface TaxonomyTermQueryParams extends PaginationParams {
 }
 
 export async function getTaxonomyTypes(): Promise<ApiResponse<TaxonomyType>> {
-  const response = await apiCall("/taxonomy-types")
+  const response = await apiCall("/taxonomy/types")
+  const data: TaxonomyType[] = response.taxonomy_types || []
+  // The types endpoint isn't paginated: its meta only has a count.
   return {
-    data: response.taxonomy_types || [],
-    meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
+    data,
+    meta: { count: data.length, limit: data.length, offset: 0, total: data.length },
   }
 }
 
 export async function getTaxonomyTypeByName(name: string): Promise<{ taxonomy_type: TaxonomyType }> {
-  return apiCall(`/taxonomy-types/${name}`)
+  return apiCall(`/taxonomy/types/${encodeURIComponent(name)}`)
 }
 
 export async function createTaxonomyType(
@@ -33,7 +38,7 @@ export async function createTaxonomyType(
   },
   token?: string
 ): Promise<any> {
-  return apiCall("/taxonomy-types", { method: "POST", body: data, token })
+  return apiCall("/taxonomy/types", { method: "POST", body: data, token })
 }
 
 export async function getTaxonomyTerms(params: {
@@ -41,15 +46,28 @@ export async function getTaxonomyTerms(params: {
   limit?: number
   offset?: number
   sort?: TaxonomySortOption
-  parent_id?: number | null
-  search?: string
 }): Promise<ApiResponse<TaxonomyTerm>> {
   const { type, ...queryParams } = params
-  const url = buildUrl(`/taxonomy-terms/type/${type}`, queryParams)
+  const url = buildUrl(`/taxonomy/types/${encodeURIComponent(type)}/terms`, queryParams)
   const response = await apiCall(url)
   return {
     data: response.taxonomy_terms || [],
     meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
+  }
+}
+
+// The API caps a page at 100 terms.
+const TERMS_PAGE_SIZE = 100
+
+// Every term of a type, following pages. The admin builds the parent/child tree
+// client-side, so it needs the whole list rather than one page of it.
+export async function getAllTaxonomyTerms(type: string): Promise<TaxonomyTerm[]> {
+  const terms: TaxonomyTerm[] = []
+  for (;;) {
+    const page = await getTaxonomyTerms({ type, limit: TERMS_PAGE_SIZE, offset: terms.length, sort: "name_asc" })
+    terms.push(...page.data)
+    const total = page.meta.total ?? terms.length
+    if (page.data.length === 0 || terms.length >= total) return terms
   }
 }
 
@@ -59,7 +77,7 @@ export async function searchTaxonomyTerms(params: {
   limit?: number
   offset?: number
 }): Promise<ApiResponse<TaxonomyTerm>> {
-  const url = buildUrl("/taxonomy-terms/search", params)
+  const url = buildUrl("/taxonomy/terms/search", params)
   const response = await apiCall(url)
   return {
     data: response.taxonomy_terms || [],
@@ -71,7 +89,7 @@ export async function getPopularTaxonomyTerms(params: {
   type: string
   limit?: number
 }): Promise<ApiResponse<TaxonomyTerm>> {
-  const url = buildUrl("/taxonomy-terms/popular", params)
+  const url = buildUrl("/taxonomy/terms/popular", params)
   const response = await apiCall(url)
   return {
     data: response.taxonomy_terms || [],
@@ -80,11 +98,11 @@ export async function getPopularTaxonomyTerms(params: {
 }
 
 export async function getTaxonomyTermById(id: string | number): Promise<{ taxonomy_term: TaxonomyTerm }> {
-  return apiCall(`/taxonomy-terms/${id}`)
+  return apiCall(`/taxonomy/terms/${id}`)
 }
 
 export async function getTaxonomyTermBySlug(slug: string): Promise<{ taxonomy_term: TaxonomyTerm }> {
-  return apiCall(`/taxonomy-terms/slug/${slug}`)
+  return apiCall(`/taxonomy/terms/slug/${encodeURIComponent(slug)}`)
 }
 
 export async function createTaxonomyTerm(
@@ -98,8 +116,8 @@ export async function createTaxonomyTerm(
     meta?: Record<string, any>
   },
   token?: string
-): Promise<any> {
-  return apiCall("/taxonomy-terms", { method: "POST", body: data, token })
+): Promise<{ taxonomy_term: TaxonomyTerm }> {
+  return apiCall("/taxonomy/terms", { method: "POST", body: data, token })
 }
 
 export async function updateTaxonomyTerm(
@@ -108,16 +126,29 @@ export async function updateTaxonomyTerm(
     name?: string
     slug?: string
     description?: string
+    // 0 moves the term to the top level
     parent_id?: number
     sort_order?: number
     meta?: Record<string, any>
   },
   token?: string
-): Promise<any> {
-  return apiCall(`/taxonomy-terms/${id}`, { method: "PUT", body: data, token })
+): Promise<{ taxonomy_term: TaxonomyTerm }> {
+  return apiCall(`/taxonomy/terms/${id}`, { method: "PUT", body: data, token })
 }
 
+// Without force the API answers 409 if posts use the term; with it, the term is
+// removed from those posts too. Child terms move to the top level.
 export async function deleteTaxonomyTerm(id: string | number, force?: boolean, token?: string): Promise<any> {
   const query = force ? "?force=true" : ""
-  return apiCall(`/taxonomy-terms/${id}${query}`, { method: "DELETE", token })
+  return apiCall(`/taxonomy/terms/${id}${query}`, { method: "DELETE", token })
+}
+
+export async function getPostTaxonomyTerms(postId: string | number): Promise<TaxonomyTerm[]> {
+  const response = await apiCall(`/posts/${postId}/taxonomy-terms`)
+  return response.taxonomy_terms || []
+}
+
+// Replaces the post's full set of terms (all types at once).
+export async function setPostTaxonomyTerms(postId: string | number, termIds: number[]): Promise<void> {
+  await apiCall(`/posts/${postId}`, { method: "PUT", body: { taxonomy_ids: termIds } })
 }

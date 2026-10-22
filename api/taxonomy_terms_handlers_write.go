@@ -110,7 +110,7 @@ func (server *Server) createTaxonomyTerm(c *gin.Context) {
 	}
 
 	// Validate that the taxonomy type exists
-	_, err := server.store.GetTaxonomyTypeByID(c.Request.Context(), req.TaxonomyTypeID)
+	taxonomyType, err := server.store.GetTaxonomyTypeByID(c.Request.Context(), req.TaxonomyTypeID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "taxonomy type not found"})
@@ -120,23 +120,24 @@ func (server *Server) createTaxonomyTerm(c *gin.Context) {
 		return
 	}
 
-	// Validate parent term if provided
+	// Validate parent term if provided (0 means "no parent", as on update)
+	if req.ParentID != nil && *req.ParentID == 0 {
+		req.ParentID = nil
+	}
 	if req.ParentID != nil {
-		_, err := server.store.GetTaxonomyTerm(c.Request.Context(), *req.ParentID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "parent term not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate parent term"})
+		if !server.checkTermParent(c, taxonomyType, req.TaxonomyTypeID, *req.ParentID, 0) {
 			return
 		}
 	}
 
-	// Generate SEO-friendly slug from term name
+	// Generate SEO-friendly slug from term name, or normalize the given one
 	slug := generateSlug(req.Name)
 	if req.Slug != "" {
-		slug = req.Slug
+		slug = generateSlug(req.Slug)
+	}
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "slug can't be empty"})
+		return
 	}
 
 	// Process optional JSON metadata
@@ -174,7 +175,7 @@ func (server *Server) createTaxonomyTerm(c *gin.Context) {
 	if err != nil {
 		// Handle unique constraint violations (slug conflicts)
 		if isUniqueViolation(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "taxonomy term slug already exists"})
+			c.JSON(http.StatusConflict, slugTakenResponse)
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create taxonomy term"})
@@ -262,14 +263,30 @@ func (server *Server) updateTaxonomyTerm(c *gin.Context) {
 	}
 
 	if req.Slug != "" {
-		updateParams.Slug = req.Slug
+		updateParams.Slug = generateSlug(req.Slug)
+	}
+	if updateParams.Slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "slug can't be empty"})
+		return
 	}
 
-	if req.Description != "" {
-		updateParams.Description = sql.NullString{String: req.Description, Valid: true}
+	// A present but empty description clears it
+	if req.Description != nil {
+		updateParams.Description = sql.NullString{String: *req.Description, Valid: true}
 	}
 
-	if req.ParentID != nil {
+	// parent_id 0 moves the term to the top level
+	if req.ParentID != nil && *req.ParentID == 0 {
+		updateParams.ParentID = sql.NullInt64{}
+	} else if req.ParentID != nil && (!existingTerm.ParentID.Valid || existingTerm.ParentID.Int64 != *req.ParentID) {
+		taxonomyType, err := server.store.GetTaxonomyTypeByID(c.Request.Context(), existingTerm.TaxonomyTypeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate taxonomy type"})
+			return
+		}
+		if !server.checkTermParent(c, taxonomyType, existingTerm.TaxonomyTypeID, *req.ParentID, id) {
+			return
+		}
 		updateParams.ParentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
 	}
 
@@ -292,7 +309,7 @@ func (server *Server) updateTaxonomyTerm(c *gin.Context) {
 	if err != nil {
 		// Handle unique constraint violations (slug conflicts)
 		if isUniqueViolation(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "taxonomy term slug already exists"})
+			c.JSON(http.StatusConflict, slugTakenResponse)
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update taxonomy term"})
@@ -381,4 +398,61 @@ func (server *Server) deleteTaxonomyTerm(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "taxonomy term deleted successfully",
 	})
+}
+
+// slugTakenResponse is the 409 body for a duplicate slug. Slugs are unique
+// across all taxonomy types; the admin keys its field error off the code.
+var slugTakenResponse = gin.H{"error": "taxonomy term slug already exists", "code": "slug_taken"}
+
+// maxTermDepth bounds the ancestor walk in checkTermParent, so a hierarchy
+// that is already broken can't keep a request looping.
+const maxTermDepth = 100
+
+// checkTermParent validates parentID as the parent of a term of the given type
+// and writes the error response when it isn't valid. termID is the term being
+// updated (0 on create): a term can't sit under itself or its own descendants.
+func (server *Server) checkTermParent(c *gin.Context, taxonomyType db.TaxonomyType, typeID, parentID, termID int64) bool {
+	if !taxonomyType.Hierarchical {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "terms of this taxonomy type can't have a parent"})
+		return false
+	}
+	if parentID == termID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a term can't be its own parent"})
+		return false
+	}
+
+	parent, err := server.store.GetTaxonomyTerm(c.Request.Context(), parentID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "parent term not found"})
+			return false
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate parent term"})
+		return false
+	}
+	if parent.TaxonomyTypeID != typeID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "parent term must belong to the same taxonomy type"})
+		return false
+	}
+	if termID == 0 {
+		return true
+	}
+
+	// Walk up from the new parent: meeting the term itself means a cycle.
+	for depth := 0; parent.ParentID.Valid; depth++ {
+		if parent.ParentID.Int64 == termID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a term can't be moved under one of its own children"})
+			return false
+		}
+		if depth >= maxTermDepth {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "the term hierarchy is too deep"})
+			return false
+		}
+		parent, err = server.store.GetTaxonomyTerm(c.Request.Context(), parent.ParentID.Int64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate parent term"})
+			return false
+		}
+	}
+	return true
 }

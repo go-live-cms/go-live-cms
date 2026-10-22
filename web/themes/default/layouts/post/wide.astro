@@ -8,15 +8,17 @@ import Header from '@/layouts/Header.astro'
 import Footer from '@/layouts/Footer.astro'
 import FormattedDate from '@/components/FormattedDate.astro'
 import BlockRenderer from '@/components/BlockRenderer'
-import type { Post } from '@gl-admin/lib/api/types'
+import PostTerms from '../../components/PostTerms.astro'
+import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 
 interface Props {
   post: Post
   title: string
   description: string
+  terms?: TaxonomyTerm[]
 }
 
-const { post, title, description } = Astro.props
+const { post, title, description, terms } = Astro.props
 ---
 
 <BaseLayout title={title} description={description}>
@@ -39,6 +41,7 @@ const { post, title, description } = Astro.props
             <FormattedDate date={new Date(post.created_at)} />
             <span class="author">by {post.username}</span>
           </div>
+          <PostTerms terms={terms} />
         </div>
       </header>
       
