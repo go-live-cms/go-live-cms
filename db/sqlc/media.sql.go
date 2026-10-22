@@ -1234,6 +1234,36 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMed
 	return items, nil
 }
 
+const listMediaPathsIn = `-- name: ListMediaPathsIn :many
+SELECT DISTINCT media_path FROM media
+WHERE media_path = ANY($1::text[])
+`
+
+// Which of the given media_path values some media row uses (the dev seed
+// restores only sample files a row still references).
+func (q *Queries) ListMediaPathsIn(ctx context.Context, paths []string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listMediaPathsIn, pq.Array(paths))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var media_path string
+		if err := rows.Scan(&media_path); err != nil {
+			return nil, err
+		}
+		items = append(items, media_path)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostsWithMedia = `-- name: ListPostsWithMedia :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug,

@@ -1,0 +1,60 @@
+---
+/**
+ * Shared SEO <head> tags for the public site and themes (#137): title,
+ * description, canonical, robots, Open Graph and Twitter card.
+ *
+ * Theme base layouts render it in place of their own <title>/description
+ * (`<SeoHead title={title} description={description} {...seo} />`), so a theme
+ * gets canonical/OG tags by forwarding the `seo` prop that
+ * src/pages/[post_type]/[id].astro passes to every post layout.
+ *
+ * canonical defaults to the current path on the configured site URL (SITE_URL,
+ * see src/lib/seo.ts), without the query string.
+ */
+import { SITE_TITLE } from '@/consts'
+import { absoluteUrl, publicImageUrl, resolveSiteUrl, type SeoMeta } from '@/lib/seo'
+
+interface Props extends SeoMeta {
+  title: string
+  description?: string
+}
+
+const {
+  title,
+  description,
+  canonical,
+  image,
+  type = 'website',
+  noindex = false,
+  siteName = SITE_TITLE,
+  publishedTime,
+  modifiedTime,
+} = Astro.props
+
+const siteUrl = resolveSiteUrl(Astro.url)
+const canonicalUrl = canonical ? absoluteUrl(siteUrl, canonical) : absoluteUrl(siteUrl, Astro.url.pathname)
+const imageUrl = publicImageUrl(siteUrl, image)
+---
+
+<title>{title}</title>
+{description && <meta name="description" content={description} />}
+{noindex ? (
+  <meta name="robots" content="noindex, nofollow" />
+) : (
+  <link rel="canonical" href={canonicalUrl} />
+)}
+<link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+
+<meta property="og:type" content={type} />
+<meta property="og:site_name" content={siteName} />
+<meta property="og:title" content={title} />
+{description && <meta property="og:description" content={description} />}
+{!noindex && <meta property="og:url" content={canonicalUrl} />}
+{imageUrl && <meta property="og:image" content={imageUrl} />}
+{type === 'article' && publishedTime && <meta property="article:published_time" content={publishedTime} />}
+{type === 'article' && modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+
+<meta name="twitter:card" content={imageUrl ? 'summary_large_image' : 'summary'} />
+<meta name="twitter:title" content={title} />
+{description && <meta name="twitter:description" content={description} />}
+{imageUrl && <meta name="twitter:image" content={imageUrl} />}

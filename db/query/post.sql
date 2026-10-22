@@ -35,6 +35,17 @@ WHERE slug = $1 LIMIT 1;
 -- name: CheckURLExists :one
 SELECT EXISTS(SELECT 1 FROM posts WHERE url = $1) as exists;
 
+-- name: CheckSlugExists :one
+-- exclude_id skips the post being edited; pass 0 when creating.
+SELECT EXISTS(SELECT 1 FROM posts WHERE slug = sqlc.arg(slug) AND id <> sqlc.arg(exclude_id)) as exists;
+
+-- name: UpdatePostSlug :one
+UPDATE posts
+SET slug = $2,
+    changed_at = now()
+WHERE id = $1
+RETURNING *;
+
 -- name: GetPostWithMeta :one
 SELECT 
     p.*,
@@ -51,7 +62,7 @@ WHERE p.id = $1
 GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at;
 
 -- name: ListPosts :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
     AND (@post_status::text = '' OR post_status = @post_status)
@@ -113,7 +124,7 @@ WHERE post_type = $1;
 -- name: ListPostsWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -161,7 +172,7 @@ WHERE post_type = @post_type
 -- name: ListPostsWithAllMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
     -- Post custom meta
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.

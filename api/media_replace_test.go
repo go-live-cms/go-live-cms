@@ -332,7 +332,8 @@ func TestReplaceMediaAPI(t *testing.T) {
 				require.Equal(t, fx.media.Name, rsp.Media.Name)
 				require.Equal(t, fx.media.Alt, rsp.Media.Alt)
 				require.Equal(t, fx.media.Description, rsp.Media.Description)
-				require.Equal(t, fx.media.MediaPath, rsp.Media.MediaPath)
+				// Same file, returned as the URL path /uploads serves it at.
+				require.Equal(t, "/uploads/media/hero.png", rsp.Media.MediaPath)
 
 				stored, err := os.ReadFile(fx.media.MediaPath)
 				require.NoError(t, err)

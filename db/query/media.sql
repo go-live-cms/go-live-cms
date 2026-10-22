@@ -172,6 +172,11 @@ FOR UPDATE;
 -- name: GetMediaByIDs :many
 SELECT * FROM media
 WHERE id = ANY(sqlc.arg('ids')::bigint[]);
+-- name: ListMediaPathsIn :many
+-- Which of the given media_path values some media row uses (the dev seed
+-- restores only sample files a row still references).
+SELECT DISTINCT media_path FROM media
+WHERE media_path = ANY(sqlc.arg('paths')::text[]);
 
 -- name: DeleteMedia :exec
 DELETE FROM media

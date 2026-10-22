@@ -148,10 +148,10 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 				continue
 			}
 			media[strconv.FormatInt(id, 10)] = BlockMedia{
-				MediaPath:  row.MediaPath,
+				MediaPath:  publicMediaPath(server.config.UploadPath, row.MediaPath),
 				Width:      row.Width,
 				Height:     row.Height,
-				Variants:   variantsResponse(row.Variants),
+				Variants:   publicVariants(server.config.UploadPath, variantsResponse(row.Variants)),
 				FocalPoint: focalPointFrom(row.FocalX, row.FocalY),
 			}
 		}

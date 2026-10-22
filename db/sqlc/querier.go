@@ -18,6 +18,8 @@ type Querier interface {
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockAllSessionsForUser(ctx context.Context, userID int64) error
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	// exclude_id skips the post being edited; pass 0 when creating.
+	CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error)
 	CheckURLExists(ctx context.Context, url string) (bool, error)
 	// Single-use: like ClaimUserInvitation, only one claim can match.
 	ClaimPasswordResetToken(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
@@ -155,6 +157,9 @@ type Querier interface {
 	// {} is their final state, not "not processed yet").
 	ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
+	// Which of the given media_path values some media row uses (the dev seed
+	// restores only sample files a row still references).
+	ListMediaPathsIn(ctx context.Context, paths []string) ([]string, error)
 	// What the admin Users page shows. Invitations that expired over 30 days ago
 	// are dropped (nobody is waiting on them any more), and the list is capped.
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
@@ -231,6 +236,7 @@ type Querier interface {
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdatePostBlocksIfRevisionMatches(ctx context.Context, arg UpdatePostBlocksIfRevisionMatchesParams) (UpdatePostBlocksIfRevisionMatchesRow, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
+	UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) (Post, error)
 	UpdatePostType(ctx context.Context, arg UpdatePostTypeParams) (PostType, error)
 	UpdatePostsUsername(ctx context.Context, arg UpdatePostsUsernameParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)

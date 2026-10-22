@@ -16,21 +16,73 @@ export interface AuthState {
 // a new password, "signed-out" when they asked to.
 export type SignOutReason = "signed-out" | "session-expired" | "password-changed"
 
+// The bit of the signed-in user kept in localStorage, for UI that runs without
+// a session restore (the public site's header, the login page's "already
+// signed in?" check). Display data only: never a token, and nothing to
+// authorize with. It can outlive the server session; whatever needs the
+// session restores it and clears this when that fails.
+export interface DisplayUser {
+  id: number
+  username: string
+  full_name?: string
+}
+
+// The access token lives only in memory (#13): anything in Web Storage can be
+// read by any script that runs on the origin. A page load restores the session
+// with POST /auth/refresh, which presents the httpOnly refresh cookie.
+const LEGACY_STORAGE_KEYS = ["access_token", "token_expiry", "user"]
+const DISPLAY_USER_KEY = "gl-auth-user"
+
+// The API rotates the refresh token on every refresh and treats a spent one as
+// stolen (409, every session of the user blocked). Tabs share the cookie, so
+// two tabs refreshing at once would present the same token and the slower one
+// would trip that. Refreshes therefore take a cross-tab Web Lock, and a tab
+// that gets a token tells the others over a BroadcastChannel so they use it
+// instead of rotating again.
+const REFRESH_LOCK = "gl-auth-refresh"
+const AUTH_CHANNEL = "gl-auth"
+
+type ChannelMessage =
+  | { type: "token"; access_token: string; tokenExpiry: number; userId: number | null }
+  | { type: "signed-out"; reason: SignOutReason }
+
+const EMPTY_STATE: AuthState = {
+  isAuthenticated: false,
+  user: null,
+  accessToken: null,
+  refreshToken: null,
+  tokenExpiry: null,
+}
+
 export class AuthManager {
   private static instance: AuthManager
-  private state: AuthState
+  private state: AuthState = { ...EMPTY_STATE }
   private refreshPromise: Promise<boolean> | null = null // prevent multiple simultaneous refreshes
+  private restorePromise: Promise<boolean> | null = null
   private lastRefreshAttempt: number = 0
   private refreshTimer: NodeJS.Timeout | null = null
   private readonly REFRESH_COOLDOWN = 5000
   private readonly TOKEN_BUFFER = 60000
   private listeners: ((state: AuthState) => void)[] = []
   private signOutReason: SignOutReason | null = null
+  private channel: BroadcastChannel | null = null
+  // Set while the last refresh was rate limited: how long it asked us to wait.
+  private rateLimitDelayMs: number | null = null
 
   private constructor() {
-    this.state = this.getStoredAuth()
-    if (this.state.isAuthenticated && this.state.tokenExpiry) {
-      this.scheduleTokenRefresh()
+    if (typeof window === "undefined") return
+
+    try {
+      for (const key of LEGACY_STORAGE_KEYS) localStorage.removeItem(key)
+    } catch {
+      // storage blocked; nothing was stored there either
+    }
+
+    if (typeof BroadcastChannel !== "undefined") {
+      this.channel = new BroadcastChannel(AUTH_CHANNEL)
+      this.channel.onmessage = (event: MessageEvent<ChannelMessage>) => this.onChannelMessage(event.data)
+      // Node's BroadcastChannel (tests) would otherwise keep the process alive.
+      ;(this.channel as any).unref?.()
     }
   }
 
@@ -41,41 +93,32 @@ export class AuthManager {
     return AuthManager.instance
   }
 
-  private getStoredAuth(): AuthState {
-    if (typeof window === "undefined") {
-      return {
-        isAuthenticated: false,
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        tokenExpiry: null,
+  private onChannelMessage(message: ChannelMessage): void {
+    if (message?.type === "token") {
+      const myId = this.state.user?.id ?? null
+      if (myId !== null && message.userId !== null && message.userId !== myId) {
+        // Another tab signed in as someone else, replacing the shared refresh
+        // cookie. Don't let this tab act as that user under the old one's UI:
+        // sign it out (AuthGuard sends it to /login, which restores the new
+        // session) instead of adopting the token.
+        // The display user in storage is already the new one's; keep it.
+        this.clearAuth("signed-out", false)
+        return
       }
-    }
-
-    const accessToken = localStorage.getItem("access_token")
-    const user = localStorage.getItem("user")
-    const tokenExpiry = localStorage.getItem("token_expiry")
-
-    return {
-      isAuthenticated: !!accessToken && this.isTokenValid(tokenExpiry),
-      user: user ? JSON.parse(user) : null,
-      accessToken,
-      refreshToken: null,
-      tokenExpiry: tokenExpiry ? parseInt(tokenExpiry) : null,
+      // Ignore a token older than the one we hold (messages can cross).
+      if (this.state.tokenExpiry && message.tokenExpiry < this.state.tokenExpiry) return
+      this.setToken(message.access_token, message.tokenExpiry, false)
+    } else if (message?.type === "signed-out") {
+      this.clearAuth(message.reason)
     }
   }
 
-  private isTokenValid(expiryString: string | null): boolean {
-    if (!expiryString) return false
-    const expiry = parseInt(expiryString)
-    const isValid = Date.now() < expiry - this.TOKEN_BUFFER
-
-    if (!isValid && typeof console !== "undefined") {
-      const timeUntilExpiry = expiry - Date.now()
-      console.log(`🔒 Token expires in ${Math.round(timeUntilExpiry / 1000)}s (buffer: ${this.TOKEN_BUFFER / 1000}s)`)
+  private broadcast(message: ChannelMessage): void {
+    try {
+      this.channel?.postMessage(message)
+    } catch (error) {
+      console.error("Auth broadcast failed:", error)
     }
-
-    return isValid
   }
 
   private isTokenExpired(): boolean {
@@ -111,29 +154,10 @@ export class AuthManager {
     try {
       const response = await login({ username, password })
 
-      const tokenExpiry = response.access_token_expires_at
-        ? new Date(response.access_token_expires_at).getTime()
-        : response.expires_at
-          ? response.expires_at * 1000
-          : Date.now() + 15 * 60 * 1000
-
-      this.state = {
-        isAuthenticated: true,
-        user: response.user,
-        accessToken: response.access_token,
-        refreshToken: null,
-        tokenExpiry,
-      }
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem("access_token", response.access_token)
-        localStorage.setItem("user", JSON.stringify(response.user))
-        localStorage.setItem("token_expiry", tokenExpiry.toString())
-      }
-
       this.signOutReason = null
-      this.scheduleTokenRefresh()
-      this.notifyListeners()
+      this.state.user = response.user
+      this.storeDisplayUser(response.user)
+      this.adoptAccessToken(response)
 
       return { success: true }
     } catch (error) {
@@ -145,6 +169,8 @@ export class AuthManager {
     }
   }
 
+  // Revokes the session server-side (the endpoint reads the refresh cookie)
+  // and signs every open tab out.
   async logout(reason: SignOutReason = "signed-out"): Promise<void> {
     try {
       await logout(this.state.accessToken || undefined)
@@ -152,6 +178,7 @@ export class AuthManager {
       console.error("Logout error:", error)
     } finally {
       this.clearAuth(reason)
+      this.broadcast({ type: "signed-out", reason })
     }
   }
 
@@ -159,32 +186,55 @@ export class AuthManager {
     return this.signOutReason
   }
 
-  private clearAuth(reason: SignOutReason = "session-expired"): void {
+  private clearAuth(reason: SignOutReason = "session-expired", clearDisplayUser = true): void {
     this.signOutReason = reason
+    const wasAuthenticated = this.state.isAuthenticated
 
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
 
-    this.state = {
-      isAuthenticated: false,
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      tokenExpiry: null,
-    }
+    this.state = { ...EMPTY_STATE }
 
     this.refreshPromise = null
     this.lastRefreshAttempt = 0
 
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("access_token")
-      localStorage.removeItem("user")
-      localStorage.removeItem("token_expiry")
-    }
+    if (clearDisplayUser) this.storeDisplayUser(null)
 
-    this.notifyListeners()
+    // A failed session restore leaves a signed-out tab signed out: nothing
+    // changed, and subscribers (AuthGuard) would read it as a session that
+    // just expired.
+    if (wasAuthenticated) this.notifyListeners()
+  }
+
+  // Signs this tab in from the refresh cookie when it holds no usable access
+  // token (every page load: the token is never stored), then loads the user.
+  // Concurrent callers share one restore. A rate-limited refresh (429) is
+  // retried after Retry-After, a few times, rather than reported as signed
+  // out: the session is fine. Resolves false when there is no session.
+  async restoreSession(): Promise<boolean> {
+    if (this.isValidAuth()) return true
+    if (!this.restorePromise) {
+      this.restorePromise = (async () => {
+        let refreshed = await this.forceRefresh()
+        for (let attempt = 0; !refreshed && this.rateLimitDelayMs !== null && attempt < 3; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, this.rateLimitDelayMs!))
+          // The scheduled retry (or another tab) may have got a token meanwhile.
+          refreshed = this.isValidAuth() || (await this.forceRefresh())
+        }
+        if (refreshed && this.state.isAuthenticated && !this.state.user) {
+          await this.refreshUser()
+          // /users/me failed: fall back to the last session's display data so
+          // the UI isn't anonymous. It has no role; PostForm re-reads that.
+          if (!this.state.user) this.state.user = this.getDisplayUser()
+        }
+        return refreshed && this.state.isAuthenticated
+      })().finally(() => {
+        this.restorePromise = null
+      })
+    }
+    return this.restorePromise
   }
 
   async refreshAccessToken(): Promise<boolean> {
@@ -195,7 +245,7 @@ export class AuthManager {
 
     // check if we should refresh
     if (!this.shouldRefresh()) {
-      return true // Token is still valid
+      return this.state.isAuthenticated // Token is still valid (or a refresh just ran)
     }
 
     return this.forceRefresh()
@@ -224,13 +274,24 @@ export class AuthManager {
 
   private async performRefresh(): Promise<boolean> {
     const tokenAtStart = this.state.accessToken
+    this.rateLimitDelayMs = null
+    // Another tab handed us a token since this refresh began (it refreshed
+    // while we waited for the lock): use it instead of rotating again.
+    const gotNewerToken = () =>
+      !!this.state.accessToken && this.state.accessToken !== tokenAtStart && !this.isTokenExpired()
     try {
-      console.log("refreshing access token...")
+      await this.withRefreshLock(async (crossTab) => {
+        // Let a token broadcast by the tab that held the lock arrive first.
+        if (crossTab) await new Promise((resolve) => setTimeout(resolve, 0))
+        if (gotNewerToken()) return
 
-      const response = await renewAccessToken() // No parameters - uses HttpOnly cookie
-      this.adoptAccessToken(response)
-
-      console.log("Token refreshed successfully")
+        console.log("refreshing access token...")
+        const response = await renewAccessToken() // No parameters - uses HttpOnly cookie
+        // Adopt (and broadcast) while still holding the lock, so a tab
+        // waiting on it is more likely to have the token before it runs.
+        this.adoptAccessToken(response)
+        console.log("Token refreshed successfully")
+      })
       return true
     } catch (error) {
       if (error instanceof RefreshError && error.status === 429) {
@@ -246,9 +307,30 @@ export class AuthManager {
         // presented). Its failure says nothing about the new session.
         return true
       }
-      console.error("Token refresh failed:", error)
+      if (tokenAtStart) console.error("Token refresh failed:", error)
       this.clearAuth()
       return false
+    }
+  }
+
+  // Runs fn while holding the cross-tab refresh lock. Web Locks need a secure
+  // context (https or localhost); without them refreshes are only serialized
+  // within this tab. If the lock itself can't be had (request rejects before
+  // running fn, e.g. a SecurityError), refresh without it rather than treating
+  // that as a dead session.
+  private async withRefreshLock(fn: (crossTab: boolean) => Promise<void>): Promise<void> {
+    const locks = typeof navigator !== "undefined" ? (navigator as any).locks : undefined
+    if (!locks?.request) return fn(false)
+    let ran = false
+    try {
+      await locks.request(REFRESH_LOCK, () => {
+        ran = true
+        return fn(true)
+      })
+    } catch (error) {
+      if (ran) throw error
+      console.warn("Refresh lock unavailable; refreshing without it:", error)
+      await fn(false)
     }
   }
 
@@ -259,6 +341,7 @@ export class AuthManager {
     if (typeof window === "undefined") return
 
     const delay = Math.max(1, retryAfterSeconds ?? 30) * 1000
+    this.rateLimitDelayMs = delay
     this.refreshTimer = setTimeout(() => {
       void this.forceRefresh()
     }, delay)
@@ -271,8 +354,12 @@ export class AuthManager {
 
     if (!this.state.tokenExpiry || typeof window === "undefined") return
 
+    // Tabs share one token (and so one expiry). Jitter keeps their timers from
+    // firing together: the first refresh is broadcast and reschedules the
+    // rest, which matters where there are no Web Locks to serialize them.
     const timeUntilExpiry = this.state.tokenExpiry - Date.now()
-    const refreshTime = Math.max(30000, timeUntilExpiry - 2 * 60 * 1000)
+    const jitter = Math.random() * 30000
+    const refreshTime = Math.max(30000, timeUntilExpiry - 2 * 60 * 1000 - jitter)
 
     console.log(`⏰ Token refresh scheduled in ${Math.round(refreshTime / 1000)}s`)
 
@@ -285,14 +372,6 @@ export class AuthManager {
   // check if authentication is valid without forcing refresh
   isValidAuth(): boolean {
     return this.state.isAuthenticated && !this.isTokenExpired()
-  }
-
-  // get auth state with automatic refresh if needed
-  async getValidState(): Promise<AuthState> {
-    if (this.state.isAuthenticated && this.isTokenExpired()) {
-      await this.refreshAccessToken()
-    }
-    return { ...this.state }
   }
 
   // Re-reads the user from GET /users/me so role changes since login (demotion or
@@ -314,15 +393,38 @@ export class AuthManager {
   // profile save), without another GET /users/me.
   setUser(user: any): void {
     this.state.user = user
-    if (typeof window !== "undefined") {
-      localStorage.setItem("user", JSON.stringify(user))
-    }
+    this.storeDisplayUser(user)
     this.notifyListeners()
+  }
+
+  // The signed-in user's display data without a session restore: the in-memory
+  // user once signed in, else what the last session left in storage. Only for
+  // showing who is (probably) signed in; it authorizes nothing.
+  getDisplayUser(): DisplayUser | null {
+    if (this.state.user) return toDisplayUser(this.state.user)
+    if (typeof window === "undefined") return null
+    try {
+      const stored = localStorage.getItem(DISPLAY_USER_KEY)
+      return stored ? JSON.parse(stored) : null
+    } catch {
+      return null
+    }
+  }
+
+  private storeDisplayUser(user: any | null): void {
+    if (typeof window === "undefined") return
+    try {
+      if (user) localStorage.setItem(DISPLAY_USER_KEY, JSON.stringify(toDisplayUser(user)))
+      else localStorage.removeItem(DISPLAY_USER_KEY)
+    } catch {
+      // storage blocked or full; the hint is optional
+    }
   }
 
   // Switches to an access token the API handed back outside the refresh flow
   // (e.g. after changing your own password, which invalidates the old token).
-  // Accepts the same fields as the login/refresh responses.
+  // Accepts the same fields as the login/refresh responses. Other tabs adopt
+  // it too.
   adoptAccessToken(response: { access_token: string; access_token_expires_at?: string; expires_at?: number }): void {
     // Use access_token_expires_at or expires_at field from response
     const tokenExpiry = response.access_token_expires_at
@@ -331,13 +433,16 @@ export class AuthManager {
         ? response.expires_at * 1000
         : Date.now() + 15 * 60 * 1000
 
-    this.state.accessToken = response.access_token
+    this.setToken(response.access_token, tokenExpiry, true)
+  }
+
+  private setToken(accessToken: string, tokenExpiry: number, broadcast: boolean): void {
+    this.state.accessToken = accessToken
     this.state.tokenExpiry = tokenExpiry
     this.state.isAuthenticated = true
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("access_token", response.access_token)
-      localStorage.setItem("token_expiry", tokenExpiry.toString())
+    if (broadcast) {
+      this.broadcast({ type: "token", access_token: accessToken, tokenExpiry, userId: this.state.user?.id ?? null })
     }
 
     this.scheduleTokenRefresh()
@@ -371,6 +476,10 @@ export class AuthManager {
       }
     })
   }
+}
+
+function toDisplayUser(user: any): DisplayUser {
+  return { id: user.id, username: user.username, full_name: user.full_name }
 }
 
 export const authManager = AuthManager.getInstance()

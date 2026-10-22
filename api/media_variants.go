@@ -95,6 +95,18 @@ type MediaVariant struct {
 // image smaller than a size has no variant of that size.
 type MediaVariants map[string]MediaVariant
 
+// publicVariants returns variants with each path mapped to its public URL
+// path (publicMediaPath): variant paths are stored in media_path's
+// filesystem form. Never nil, so responses always carry an object.
+func publicVariants(uploadPath string, variants MediaVariants) MediaVariants {
+	out := make(MediaVariants, len(variants))
+	for name, v := range variants {
+		v.Path = publicMediaPath(uploadPath, v.Path)
+		out[name] = v
+	}
+	return out
+}
+
 // parseMediaVariants decodes the variants column. Anything unreadable is
 // treated as no variants: they are derived data.
 func parseMediaVariants(raw json.RawMessage) MediaVariants {

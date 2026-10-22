@@ -57,6 +57,7 @@ type Store interface {
 	CreatePostWithMediaTx(ctx context.Context, arg CreatePostWithMediaTxParams) (CreatePostWithMediaTxResult, error)
 	DeleteMediaTx(ctx context.Context, arg DeleteMediaTxParams) error
 	UpdatePostMediaTx(ctx context.Context, arg UpdatePostMediaTxParams) error
+	UpdatePostWithSlugTx(ctx context.Context, arg UpdatePostWithSlugTxParams) (Post, error)
 	CreateMediaAndLinkTx(ctx context.Context, arg CreateMediaAndLinkTxParams) (CreateMediaAndLinkTxResult, error)
 	SetMediaVariantsTx(ctx context.Context, arg SetMediaVariantsTxParams) (Medium, error)
 
@@ -596,6 +597,28 @@ type DeleteMediaTxParams struct {
 type UpdatePostMediaTxParams struct {
 	PostID   int64
 	MediaIDs []int64
+}
+
+type UpdatePostWithSlugTxParams struct {
+	UpdatePostParams
+	Slug string
+}
+
+// UpdatePostWithSlugTx applies UpdatePost and the slug change in one
+// transaction, so a slug clash (unique index) doesn't leave the other field
+// changes committed. UpdatePost itself can't take the slug: it COALESCEs
+// non-null params, so its other callers would blank it.
+func (store *SQLStore) UpdatePostWithSlugTx(ctx context.Context, arg UpdatePostWithSlugTxParams) (Post, error) {
+	var post Post
+	err := store.ExecTx(ctx, func(q *Queries) error {
+		if _, err := q.UpdatePost(ctx, arg.UpdatePostParams); err != nil {
+			return err
+		}
+		var err error
+		post, err = q.UpdatePostSlug(ctx, UpdatePostSlugParams{ID: arg.ID, Slug: arg.Slug})
+		return err
+	})
+	return post, err
 }
 
 type CreateMediaAndLinkTxParams struct {

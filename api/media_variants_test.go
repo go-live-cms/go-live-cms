@@ -546,3 +546,19 @@ func TestIsBlockDocShape(t *testing.T) {
 	require.False(t, ok(`{"blocks":[]}`))
 	require.False(t, isBlockDocShape(nil))
 }
+
+// Variant paths are stored like media_path (filesystem form) and must reach
+// clients as /uploads URL paths, the same mapping media_path gets.
+func TestPublicVariants(t *testing.T) {
+	uploadPath := filepath.Join(t.TempDir(), "uploads", "media")
+	stored := MediaVariants{
+		"thumb": {Path: filepath.Join(uploadPath, "_variants", "a.jpg", "thumb.jpg"), Width: 320},
+		"large": {Path: "/somewhere/else.jpg", Width: 1600},
+	}
+	got := publicVariants(uploadPath, stored)
+	require.Equal(t, "/uploads/media/_variants/a.jpg/thumb.jpg", got["thumb"].Path)
+	require.Equal(t, int32(320), got["thumb"].Width)
+	require.Equal(t, "/somewhere/else.jpg", got["large"].Path, "paths outside UploadPath pass through")
+	require.Equal(t, filepath.Join(uploadPath, "_variants", "a.jpg", "thumb.jpg"), stored["thumb"].Path, "input not mutated")
+	require.NotNil(t, publicVariants(uploadPath, nil))
+}

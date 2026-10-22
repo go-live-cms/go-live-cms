@@ -130,6 +130,11 @@ services:
       # calls /api/v1 and /uploads same-origin. Set it (e.g. https://api.example.com/api/v1)
       # only if media URLs point at another origin; the admin CSP then allows it.
       PUBLIC_API_URL: "${PUBLIC_API_URL:-}"
+      # Public origin for canonical/OG URLs, robots.txt and sitemap.xml (#137).
+      # Defaults to Caddy's SITE_ADDRESS over https; set it to override (e.g. a
+      # SITE_ADDRESS with a scheme or port). Empty would fall back to the
+      # request's Host header, with robots/sitemap sent uncacheable.
+      SITE_URL: "${SITE_URL:-https://${SITE_ADDRESS:-localhost}}"
     depends_on:
       # Every SSR request calls the API (active theme), so wait for /readyz.
       api:

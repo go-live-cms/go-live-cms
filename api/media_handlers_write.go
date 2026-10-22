@@ -192,7 +192,7 @@ func (server *Server) createMedia(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create media record"})
 			return
 		}
-		c.JSON(http.StatusCreated, gin.H{"media": toMediaResponse(result.Media)})
+		c.JSON(http.StatusCreated, gin.H{"media": server.mediaResponse(result.Media)})
 		return
 	}
 
@@ -203,7 +203,7 @@ func (server *Server) createMedia(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"media": toMediaResponse(media)})
+	c.JSON(http.StatusCreated, gin.H{"media": server.mediaResponse(media)})
 }
 
 // maxBulkFiles is the most files one bulk upload may carry.
@@ -253,7 +253,7 @@ func (server *Server) createMediaBulk(c *gin.Context) {
 			errors = append(errors, errMsg)
 			continue
 		}
-		successfulMedia = append(successfulMedia, toMediaResponse(media))
+		successfulMedia = append(successfulMedia, server.mediaResponse(media))
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -478,7 +478,7 @@ func (server *Server) replaceMedia(c *gin.Context) {
 		server.requestLog(c).Warn("media replaced but variants not moved into place", "media_id", id, "media_path", storedPath, "error", err)
 	}
 
-	c.JSON(http.StatusOK, gin.H{"media": toMediaResponse(updated)})
+	c.JSON(http.StatusOK, gin.H{"media": server.mediaResponse(updated)})
 }
 
 // updateMedia handles PUT /media/:id - metadata updates for existing media.
@@ -564,7 +564,7 @@ func (server *Server) updateMedia(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"media": toMediaResponse(updatedMedia),
+		"media": server.mediaResponse(updatedMedia),
 	})
 }
 

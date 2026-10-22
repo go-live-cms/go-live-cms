@@ -5,14 +5,18 @@
  */
 import themeConfig from '../theme.config'
 import '@/assets/styles/global.css'
+import SeoHead from '@/components/SeoHead.astro'
+import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
   title: string
   description: string
   theme?: 'light' | 'dark' | 'system'
+  // Canonical/OG/robots tags (#137), passed by the post route through the layouts.
+  seo?: SeoMeta
 }
 
-const { title, description, theme = 'light' } = Astro.props
+const { title, description, theme = 'light', seo = {} } = Astro.props
 
 // WordPress-style: Get theme assets registered in theme.config.ts
 const themeAssets = Astro.locals.themeAssets || {}
@@ -24,11 +28,10 @@ const legacyCssPath = Astro.locals.themeCssPath
 <html lang="en" data-theme={theme}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
-    <title>{title}</title>
+    <SeoHead title={title} description={description} {...seo} />
     
     <!-- WordPress-style: Render theme-registered stylesheets (wp_enqueue_style equivalent) -->
     {themeAssets.styles?.map((style: any) => (

@@ -21,7 +21,7 @@ interface Props {
 const { title, message } = Astro.props
 ---
 
-<BaseLayout title={`${title} | ${SITE_TITLE}`} description={message}>
+<BaseLayout title={`${title} | ${SITE_TITLE}`} description={message} seo={{ noindex: true }}>
   <Header />
   <ErrorContent {...Astro.props} />
   <Footer />

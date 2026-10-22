@@ -79,6 +79,12 @@ type Config struct {
 	// in release mode, no CORS headers are sent (same-origin only).
 	CORSAllowedOrigins string `mapstructure:"CORS_ALLOWED_ORIGINS"`
 
+	// SeedAdminUsername and SeedAdminPassword are the credentials the dev seed
+	// (debug-mode startup and cmd/seed) gives the admin account it creates.
+	// Empty means the defaults, admin / 123456 (devModeUtil.AdminAccount).
+	SeedAdminUsername string `mapstructure:"SEED_ADMIN_USER"`
+	SeedAdminPassword string `mapstructure:"SEED_ADMIN_PASS"`
+
 	// PASETO v4 public key (Ed25519) for asymmetric operations (v4.public tokens)
 	// Hex-encoded: public key = 32 bytes (64 hex chars), private key = 64 bytes (128 hex chars)
 	PasetoV4PublicKeyHex string `mapstructure:"PASETO_V4_PUBLIC_KEY_HEX"`
@@ -278,6 +284,10 @@ func LoadConfig(path string) (config Config, err error) {
 	// opens the dev CORS allowlist unless debug is set explicitly.
 	viper.SetDefault("GIN_MODE", GinModeRelease)
 	viper.SetDefault("CORS_ALLOWED_ORIGINS", "")
+
+	// Dev seed admin credentials; empty means admin / 123456.
+	viper.SetDefault("SEED_ADMIN_USER", "")
+	viper.SetDefault("SEED_ADMIN_PASS", "")
 
 	// Collaborative editing server (optional — squash silently skipped if either is unset).
 	// Both default to empty so the feature is truly opt-in: setting only one would

@@ -25,6 +25,7 @@ type PostResponse struct {
 	UserID          int64                  `json:"user_id"`
 	Username        string                 `json:"username"`
 	Url             string                 `json:"url"`
+	Slug            string                 `json:"slug"`
 	PostType        string                 `json:"post_type"`
 	PostStatus      string                 `json:"post_status"`
 	PostParent      *int64                 `json:"post_parent"`
@@ -42,6 +43,7 @@ type PostWithMetaResponse struct {
 	UserID          int64                  `json:"user_id"`
 	Username        string                 `json:"username"`
 	Url             string                 `json:"url"`
+	Slug            string                 `json:"slug"`
 	PostType        string                 `json:"post_type"`
 	PostStatus      string                 `json:"post_status"`
 	PostParent      *int64                 `json:"post_parent"`
@@ -60,6 +62,7 @@ type PostWithAllMetaResponse struct {
 	UserID          int64                  `json:"user_id"`
 	Username        string                 `json:"username"`
 	Url             string                 `json:"url"`
+	Slug            string                 `json:"slug"`
 	PostType        string                 `json:"post_type"`
 	PostStatus      string                 `json:"post_status"`
 	PostParent      *int64                 `json:"post_parent"`
@@ -100,6 +103,7 @@ func toPostResponse(post db.Post) PostResponse {
 		UserID:          post.UserID,
 		Username:        post.Username,
 		Url:             post.Url,
+		Slug:            post.Slug,
 		PostType:        post.PostType,
 		PostStatus:      post.PostStatus,
 		PostParent:      postParent,
@@ -129,6 +133,7 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 		UserID:          post.UserID,
 		Username:        post.Username,
 		Url:             post.Url,
+		Slug:            post.Slug,
 		PostType:        post.PostType,
 		PostStatus:      post.PostStatus,
 		PostParent:      postParent,
@@ -165,6 +170,7 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 		UserID:          post.UserID,
 		Username:        post.Username,
 		Url:             post.Url,
+		Slug:            post.Slug,
 		PostType:        post.PostType,
 		PostStatus:      post.PostStatus,
 		PostParent:      postParent,
@@ -212,6 +218,7 @@ func toPostWithAllMetaResponse(post db.ListPostsWithAllMetaRow) PostWithAllMetaR
 		UserID:          post.UserID,
 		Username:        post.Username,
 		Url:             post.Url,
+		Slug:            post.Slug,
 		PostType:        post.PostType,
 		PostStatus:      post.PostStatus,
 		PostParent:      postParent,

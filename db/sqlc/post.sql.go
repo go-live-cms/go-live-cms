@@ -14,6 +14,23 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+const checkSlugExists = `-- name: CheckSlugExists :one
+SELECT EXISTS(SELECT 1 FROM posts WHERE slug = $1 AND id <> $2) as exists
+`
+
+type CheckSlugExistsParams struct {
+	Slug      string `json:"slug"`
+	ExcludeID int64  `json:"exclude_id"`
+}
+
+// exclude_id skips the post being edited; pass 0 when creating.
+func (q *Queries) CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkSlugExists, arg.Slug, arg.ExcludeID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const checkURLExists = `-- name: CheckURLExists :one
 SELECT EXISTS(SELECT 1 FROM posts WHERE url = $1) as exists
 `
@@ -370,7 +387,7 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug FROM posts
 WHERE 
     ($1::text = '' OR post_type = $1)
     AND ($2::text = '' OR post_status = $2)
@@ -415,6 +432,7 @@ type ListPostsRow struct {
 	CreatedAt         time.Time             `json:"created_at"`
 	ChangedAt         time.Time             `json:"changed_at"`
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug              string                `json:"slug"`
 }
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
@@ -452,6 +470,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
+			&i.Slug,
 		); err != nil {
 			return nil, err
 		}
@@ -469,7 +488,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 const listPostsWithAllMeta = `-- name: ListPostsWithAllMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
     -- Post custom meta
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
@@ -543,6 +562,7 @@ type ListPostsWithAllMetaRow struct {
 	CreatedAt         time.Time             `json:"created_at"`
 	ChangedAt         time.Time             `json:"changed_at"`
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug              string                `json:"slug"`
 	PostMeta          interface{}           `json:"post_meta"`
 	AuthorMeta        json.RawMessage       `json:"author_meta"`
 	PostTypeMeta      json.RawMessage       `json:"post_type_meta"`
@@ -583,6 +603,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
+			&i.Slug,
 			&i.PostMeta,
 			&i.AuthorMeta,
 			&i.PostTypeMeta,
@@ -603,7 +624,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 const listPostsWithMeta = `-- name: ListPostsWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -656,6 +677,7 @@ type ListPostsWithMetaRow struct {
 	CreatedAt         time.Time             `json:"created_at"`
 	ChangedAt         time.Time             `json:"changed_at"`
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug              string                `json:"slug"`
 	Meta              interface{}           `json:"meta"`
 }
 
@@ -694,6 +716,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
+			&i.Slug,
 			&i.Meta,
 		); err != nil {
 			return nil, err
@@ -751,6 +774,44 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		arg.MenuOrder,
 		arg.ID,
 	)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
+		&i.Slug,
+	)
+	return i, err
+}
+
+const updatePostSlug = `-- name: UpdatePostSlug :one
+UPDATE posts
+SET slug = $2,
+    changed_at = now()
+WHERE id = $1
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug
+`
+
+type UpdatePostSlugParams struct {
+	ID   int64  `json:"id"`
+	Slug string `json:"slug"`
+}
+
+func (q *Queries) UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) (Post, error) {
+	row := q.db.QueryRowContext(ctx, updatePostSlug, arg.ID, arg.Slug)
 	var i Post
 	err := row.Scan(
 		&i.ID,

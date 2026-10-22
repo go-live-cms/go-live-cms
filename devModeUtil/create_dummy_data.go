@@ -20,11 +20,19 @@
 //   - A configured util.Config (especially UploadPath for media storage)
 //   - Database migrations completed and tables available
 //
+// # Entry points
+//
+// They run on API startup in debug mode (api.NewServer) and from the seed
+// command (go run ./cmd/seed, make seed), which runs them against the
+// configured database explicitly.
+//
 // # Idempotency and Safety
 //
 // Functions use simple guards to prevent duplicate data:
-//   - CreateDefaultAdminUser: Checks if "admin" username exists
+//   - CreateDefaultAdminUser: Checks if the admin username exists
 //   - CreateDummyData: Skips if CountTotalUsers > 1
+//   - RestoreSampleMediaFiles (cmd/seed only): writes back missing sample
+//     files that a media row still references
 //
 // Re-running these functions is generally safe but may result in mixed content
 // states. For clean results, use a fresh database.
@@ -33,75 +41,47 @@
 //
 // These utilities perform several side effects:
 //   - Database writes (users, posts, taxonomies, media records)
-//   - Network requests to picsum.photos for sample images
 //   - File system writes to the configured UploadPath directory
 //   - Creates directory structure with 0755 permissions
 //
 // # Performance Characteristics
 //
 // All operations run synchronously with the following considerations:
-//   - External HTTP fetches have 30-second timeouts per image
 //   - Not designed for concurrent invocation
 //   - Best-effort error handling (logs errors and continues)
 //   - Operations are not transactional across entities
 //
 // # Determinism
 //
-// Content generation uses mixed seeding strategies:
-//   - Most creators use gofakeit.Seed(0) for reproducible results
-//   - Image downloads depend on external service availability
-//
-// # Network Dependencies
-//
-// The package downloads sample images from picsum.photos, which requires:
-//   - Internet connectivity
-//   - Corporate proxies/firewalls may need configuration
-//   - Rate limits may apply from the external service
-//   - Images are provided under Creative Commons licensing
-//
-// For offline development, consider replacing sampleImages URLs with local assets.
+// Most creators use gofakeit.Seed(0) for reproducible results. The sample
+// images are files embedded in the binary (sampleimages/, see its README for
+// source and license), so seeding needs no network access.
 //
 // # Example Usage
 //
-//	// Typical initialization in a development server
-//	func initDevelopmentData() {
-//		store := db.NewStore(dbConn)
-//		config, err := util.LoadConfig(".")
-//		if err != nil {
-//			log.Fatal("cannot load config:", err)
-//		}
-//
-//		// Create default admin user first
-//		devModeUtil.CreateDefaultAdminUser(store)
-//
-//		// Then seed comprehensive demo data
-//		devModeUtil.CreateDummyData(store, config)
-//
-//		log.Println("Development environment ready!")
-//		log.Println("Login with admin:123456 (CHANGE IN PRODUCTION)")
+//	store := db.NewStore(dbConn)
+//	config, err := util.LoadConfig(".")
+//	if err != nil {
+//		log.Fatal("cannot load config:", err)
 //	}
+//
+//	devModeUtil.CreateDefaultAdminUser(store, devModeUtil.AdminAccount(config))
+//	devModeUtil.CreateDummyData(store, config)
 //
 // # Configuration Notes
 //
 // Consider these configuration aspects:
 //   - Number of users/posts/pages is currently hardcoded
-//   - Image source list can be customized by modifying sampleImages
-//   - Timeout values are fixed at 30 seconds
-//   - Upload path must be writable by the application process
-//   - Media URLs assume standard /uploads public mapping
+//   - Upload path must be writable by the process running the seed
+//   - Media URLs assume the standard /uploads public mapping
 package devModeUtil
 
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
-	"io"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,28 +91,6 @@ import (
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/util"
 )
-
-// sampleImages contains URLs for placeholder images downloaded during demo data creation.
-// These images are sourced from picsum.photos (Creative Commons) and require internet
-// connectivity. For offline development or custom branding, replace these URLs with
-// local asset paths or alternative image services.
-//
-// Images are downloaded with a 30-second timeout and saved to the configured UploadPath.
-// Corporate firewalls or rate limiting may affect availability.
-var sampleImages = []string{
-	"https://picsum.photos/800/600?random=1",
-	"https://picsum.photos/800/600?random=2",
-	"https://picsum.photos/800/600?random=3",
-	"https://picsum.photos/800/600?random=4",
-	"https://picsum.photos/800/600?random=5",
-	"https://picsum.photos/800/600?random=6",
-	"https://picsum.photos/800/600?random=7",
-	"https://picsum.photos/800/600?random=8",
-	"https://picsum.photos/800/600?random=9",
-	"https://picsum.photos/800/600?random=10",
-	"https://picsum.photos/800/600?random=11",
-	"https://picsum.photos/800/600?random=12",
-}
 
 // generateSlug creates simple URL-friendly slugs from names by converting to lowercase
 // and replacing spaces with hyphens. This is a basic ASCII-only implementation that
@@ -166,7 +124,9 @@ func generateSlug(name string) string {
 //
 // Skips execution if CountTotalUsers > 1, assuming demo data already exists.
 // This simple guard prevents duplicate content but doesn't handle partial failures.
-// For clean results after partial runs, use a fresh database.
+// For clean results after partial runs, use a fresh database. Restoring the
+// files of media rows seeded earlier is cmd/seed's job (RestoreSampleMediaFiles),
+// not this function's, so a debug-mode restart never writes files.
 //
 // # Error Handling
 //
@@ -196,7 +156,6 @@ func generateSlug(name string) string {
 //   - store: Active database connection with completed migrations
 //   - config: Must include valid UploadPath for media storage
 //   - config.UploadPath: Directory must be writable, created if doesn't exist
-//   - Network access: Required for downloading sample images from picsum.photos
 func CreateDummyData(store db.Store, config util.Config) {
 	log.Println("🎭 Creating dummy data...")
 
@@ -210,15 +169,16 @@ func CreateDummyData(store db.Store, config util.Config) {
 	log.Printf("✅ Created %d dummy users", len(users))
 
 	taxonomyTypes, taxonomyTerms := createDummyTaxonomies(store)
-	log.Printf("✅ Created %d taxonomy types and %d taxonomy terms", len(taxonomyTypes), len(taxonomyTerms))
+	log.Printf("✅ Using %d taxonomy types, created %d taxonomy terms", len(taxonomyTypes), len(taxonomyTerms))
 
 	media := createDummyMedia(store, users, config)
 	log.Printf("✅ Created %d dummy media files", len(media))
 
-	posts := createDummyPosts(store, users, taxonomyTerms)
+	imageURLs := seededImageURLs(config.UploadPath, media)
+	posts := createDummyPosts(store, users, taxonomyTerms, imageURLs)
 	log.Printf("✅ Created %d dummy posts", len(posts))
 
-	pages := createDummyPages(store, users)
+	pages := createDummyPages(store, users, imageURLs)
 	log.Printf("✅ Created %d dummy pages", len(pages))
 
 	linkMediaToPosts(store, append(posts, pages...), media)
@@ -298,11 +258,17 @@ func createDummyUsers(store db.Store) []db.User {
 // taxonomy types and their associated terms. This provides a realistic content
 // classification system for theme development and CMS demonstrations.
 //
-// # Taxonomy Types Created
+// # Taxonomy Types Used
 //
 //   - category: Hierarchical categories (Technology, Design, Lifestyle, Business)
-//   - post_tag: Flat tags for content labeling (tutorial, guide, tips, frameworks, etc.)
-//   - page_category: Page-specific categories (Company, Legal, Support, Marketing)
+//   - tag: Flat tags for content labeling (tutorial, guide, tips, frameworks, etc.)
+//   - page_category: Page-specific categories (Company, Legal, Support, Campaigns)
+//
+// The init migration already inserts all three, so each type is looked up by
+// name and only created if missing (ensureTaxonomyType). Terms are attached
+// to the type with the matching name, never by position: when the seeder
+// created the types itself and two of them already existed, the remaining
+// one shifted into slot 0 and the categories were filed under Tags.
 //
 // # Category Structure (Hierarchical)
 //
@@ -315,19 +281,21 @@ func createDummyUsers(store db.Store) []db.User {
 // # Tags Created (Flat)
 //
 // Popular development and content tags including: tutorial, guide, tips,
-// best-practices, review, news, beginner, advanced, coding, design, productivity,
+// best-practices, review, news, beginner, advanced, coding, ui-design, productivity,
 // tools, framework, library, api, database, security, performance, and various
 // technology-specific tags (javascript, react, vue, angular, nodejs, python, golang, etc.)
 //
 // # Page Categories (Hierarchical)
 //
-// Organizational categories for static pages: Company, Legal, Support, Marketing
+// Organizational categories for static pages: Company, Legal, Support, Campaigns
 //
 // # Slugging Strategy
 //
-// All terms receive URL-friendly slugs via generateSlug() which converts to
-// lowercase and replaces spaces with hyphens. Sort order is populated for
-// predictable listing in admin interfaces.
+// All terms receive URL-safe slugs via seedSlug() ("UI/UX" -> "ui-ux").
+// taxonomy_terms.slug is unique across all types, so no two seeded terms may
+// share a slug (hence the "ui-design" tag and the "Campaigns" page category,
+// which would otherwise clash with the Design and Marketing categories).
+// Sort order is populated for predictable listing in admin interfaces.
 //
 // # Deterministic Creation
 //
@@ -347,10 +315,11 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		hierarchical bool
 	}{
 		{"category", "Categories", "Hierarchical categories for organizing content", true},
-		{"post_tag", "Tags", "Non-hierarchical tags for content", false},
+		{"tag", "Tags", "Post tags for labeling content", false},
 		{"page_category", "Page Categories", "Categories specifically for pages", true},
 	}
 
+	typesByName := map[string]db.TaxonomyType{}
 	for _, typeDef := range typeDefinitions {
 		typeParams := db.CreateTaxonomyTypeParams{
 			Name:         typeDef.name,
@@ -362,18 +331,16 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 			ShowInMenu:   true,
 		}
 
-		createdType, err := store.CreateTaxonomyType(context.TODO(), typeParams)
+		taxonomyType, err := ensureTaxonomyType(store, typeParams)
 		if err != nil {
-			log.Printf("❌ Failed to create taxonomy type %s: %v", typeDef.name, err)
+			log.Printf("❌ Failed to get or create taxonomy type %s: %v", typeDef.name, err)
 			continue
 		}
 
-		taxonomyTypes = append(taxonomyTypes, createdType)
-		log.Printf("✅ Created taxonomy type: %s", typeDef.label)
+		taxonomyTypes = append(taxonomyTypes, taxonomyType)
+		typesByName[typeDef.name] = taxonomyType
 	}
-
-	if len(taxonomyTypes) > 0 {
-		categoryType := taxonomyTypes[0]
+	if categoryType, ok := typesByName["category"]; ok {
 
 		parentCategories := []struct {
 			name        string
@@ -389,7 +356,7 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		for _, cat := range parentCategories {
 			termParams := db.CreateTaxonomyTermParams{
 				Name:           cat.name,
-				Slug:           generateSlug(cat.name),
+				Slug:           seedSlug(cat.name),
 				Description:    sql.NullString{String: cat.description, Valid: true},
 				TaxonomyTypeID: categoryType.ID,
 				SortOrder:      sql.NullInt32{Int32: int32(len(parentTerms) + 1), Valid: true},
@@ -436,7 +403,7 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 				for _, child := range children {
 					childParams := db.CreateTaxonomyTermParams{
 						Name:           child.name,
-						Slug:           generateSlug(child.name),
+						Slug:           seedSlug(child.name),
 						Description:    sql.NullString{String: child.description, Valid: true},
 						ParentID:       sql.NullInt64{Int64: parentTerm.ID, Valid: true},
 						TaxonomyTypeID: categoryType.ID,
@@ -455,12 +422,11 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		}
 	}
 
-	if len(taxonomyTypes) > 1 {
-		tagType := taxonomyTypes[1]
+	if tagType, ok := typesByName["tag"]; ok {
 
 		tags := []string{
 			"tutorial", "guide", "tips", "best-practices", "review", "news",
-			"beginner", "advanced", "coding", "design", "productivity", "tools",
+			"beginner", "advanced", "coding", "ui-design", "productivity", "tools",
 			"framework", "library", "api", "database", "security", "performance",
 			"mobile", "responsive", "javascript", "react", "vue", "angular",
 			"nodejs", "python", "golang", "java", "css", "html",
@@ -469,7 +435,7 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		for i, tagName := range tags {
 			tagParams := db.CreateTaxonomyTermParams{
 				Name:           tagName,
-				Slug:           generateSlug(tagName),
+				Slug:           seedSlug(tagName),
 				Description:    sql.NullString{String: fmt.Sprintf("Posts tagged with %s", tagName), Valid: true},
 				TaxonomyTypeID: tagType.ID,
 				SortOrder:      sql.NullInt32{Int32: int32(i + 1), Valid: true},
@@ -485,8 +451,7 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 		}
 	}
 
-	if len(taxonomyTypes) > 2 {
-		pageCategoryType := taxonomyTypes[2]
+	if pageCategoryType, ok := typesByName["page_category"]; ok {
 
 		pageCategories := []struct {
 			name        string
@@ -495,13 +460,13 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 			{"Company", "Company information and about pages"},
 			{"Legal", "Legal documents and policies"},
 			{"Support", "Help and support documentation"},
-			{"Marketing", "Marketing and promotional pages"},
+			{"Campaigns", "Marketing and promotional pages"},
 		}
 
 		for i, cat := range pageCategories {
 			pageCatParams := db.CreateTaxonomyTermParams{
 				Name:           cat.name,
-				Slug:           generateSlug(cat.name),
+				Slug:           seedSlug(cat.name),
 				Description:    sql.NullString{String: cat.description, Valid: true},
 				TaxonomyTypeID: pageCategoryType.ID,
 				SortOrder:      sql.NullInt32{Int32: int32(i + 1), Valid: true},
@@ -520,116 +485,92 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 	return taxonomyTypes, taxonomyTerms
 }
 
-// createDummyMedia downloads sample images from external sources and creates
-// corresponding media records in the database. This provides realistic media
-// assets for theme development and content demonstrations.
-//
-// # Image Sources
-//
-// Downloads approximately 12 placeholder images from picsum.photos with
-// 800x600 resolution. These are Creative Commons licensed images suitable
-// for development use.
-//
-// # Network Requirements
-//
-//   - Internet connectivity for image downloads
-//   - 30-second timeout per image request
-//   - Corporate firewalls/proxies may need configuration
-//   - Rate limiting may apply from external service
+// ensureTaxonomyType returns the taxonomy type named params.Name, creating it
+// from params only if it doesn't exist yet.
+func ensureTaxonomyType(store db.Store, params db.CreateTaxonomyTypeParams) (db.TaxonomyType, error) {
+	existing, err := store.GetTaxonomyType(context.TODO(), params.Name)
+	if err == nil {
+		log.Printf("ℹ️  Using existing taxonomy type: %s", existing.Label)
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return db.TaxonomyType{}, err
+	}
+
+	created, err := store.CreateTaxonomyType(context.TODO(), params)
+	if err != nil {
+		return db.TaxonomyType{}, err
+	}
+	log.Printf("✅ Created taxonomy type: %s", created.Label)
+	return created, nil
+}
+
+// createDummyMedia stores the sample images (embedded, see sampleimages/) in
+// config.UploadPath and creates a media record for each.
 //
 // # File System Operations
 //
-//   - Creates UploadPath directory with 0755 permissions if needed
-//   - Downloads images to config.UploadPath directory
-//   - Files named as sample-image-1.jpg through sample-image-12.jpg
-//   - Cleans up files if database record creation fails
+//   - Creates UploadPath (0755) if needed and writes sample-image-1.jpg
+//     through sample-image-12.jpg into it (storeSampleImage). A file that
+//     already holds the same image is reused; a different file with that
+//     name is left alone and the image goes to sample-image-N_1.jpg etc.
+//   - media_path has the same form as a real upload's: UploadPath + "/" +
+//     filename, so /uploads serves it and media DELETE/replace treat it as
+//     inside the upload directory
 //
-// # Image Processing
-//
-//   - Reads image dimensions using image.DecodeConfig
-//   - Stores width/height in database record
-//   - MIME type hardcoded as image/jpeg (picsum returns JPEG format)
-//   - File size determined from downloaded file stats
+// The files are JPEGs whose bytes match their extension, so they pass the
+// same content checks as uploads (api.allowedMediaTypes). Width and height
+// come from the image header.
 //
 // # User Assignment
 //
 // Media ownership assigned to users in round-robin fashion. Requires at least
-// one user to exist - logs error and terminates if no users available.
-//
-// # Media Path Structure
-//
-// Database records store paths as "uploads/filename" format, expecting themes
-// to map this to a publicly accessible URL pattern (e.g., /uploads/filename).
-//
-// # Error Handling
-//
-// Individual image download failures are logged and skipped. If database
-// record creation fails, the downloaded file is removed to prevent orphaned
-// files in the upload directory.
-//
-// # Dependencies
-//
-//   - users: Must have at least one user for ownership assignment
-//   - config.UploadPath: Must be a valid, writable directory path
-//   - External network access to image service
+// one user to exist - logs error and returns if no users available.
 func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.Medium {
 	var media []db.Medium
 	gofakeit.Seed(0)
 
-	uploadsDir := filepath.Join(".", config.UploadPath)
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
-		log.Printf("❌ Failed to create uploads directory: %v", err)
+	if len(users) == 0 {
+		log.Println("❌ No users available for media creation")
 		return media
 	}
 
-	for i, imageURL := range sampleImages {
-		filename := fmt.Sprintf("sample-image-%d.jpg", i+1)
-		filePath := filepath.Join(uploadsDir, filename)
+	for i := 0; i < sampleImageCount; i++ {
+		n := i + 1
 
-		if err := downloadImage(imageURL, filePath); err != nil {
-			log.Printf("❌ Failed to download image %d: %v", i+1, err)
-			continue
-		}
-
-		userIndex := i % len(users)
-		if len(users) == 0 {
-			log.Println("❌ No users available for media creation")
-			break
-		}
-
-		fileInfo, err := os.Stat(filePath)
+		_, imgConfig, err := sampleImage(n)
 		if err != nil {
-			log.Printf("❌ Failed to get file info for image %d: %v", i+1, err)
+			log.Printf("❌ Failed to read sample image %d: %v", n, err)
 			continue
 		}
-
-		var width, height int32 = 0, 0
-		if imageFile, err := os.Open(filePath); err == nil {
-			if config, _, err := image.DecodeConfig(imageFile); err == nil {
-				width = int32(config.Width)
-				height = int32(config.Height)
-			}
-			imageFile.Close()
+		filename, err := storeSampleImage(config.UploadPath, n)
+		if err != nil {
+			log.Printf("❌ Failed to store sample image %d: %v", n, err)
+			continue
+		}
+		fileInfo, err := os.Stat(filepath.Join(config.UploadPath, filename))
+		if err != nil {
+			log.Printf("❌ Failed to get file info for image %d: %v", n, err)
+			continue
 		}
 
 		mediaParams := db.CreateMediaParams{
 			Name:             filename,
 			Description:      gofakeit.Sentence(8),
-			Alt:              fmt.Sprintf("Beautiful sample image number %d", i+1),
-			MediaPath:        fmt.Sprintf("%s/%s", config.UploadPath, filename),
-			UserID:           users[userIndex].ID,
+			Alt:              fmt.Sprintf("Abstract sample image number %d", n),
+			MediaPath:        sampleMediaPath(config.UploadPath, filename),
+			UserID:           users[i%len(users)].ID,
 			FileSize:         fileInfo.Size(),
 			MimeType:         "image/jpeg",
-			Width:            width,
-			Height:           height,
+			Width:            int32(imgConfig.Width),
+			Height:           int32(imgConfig.Height),
 			Duration:         0,
 			OriginalFilename: filename,
 		}
 
 		createdMedia, err := store.CreateMedia(context.TODO(), mediaParams)
 		if err != nil {
-			log.Printf("❌ Failed to create media record %d: %v", i+1, err)
-			os.Remove(filePath)
+			log.Printf("❌ Failed to create media record %d: %v", n, err)
 			continue
 		}
 
@@ -637,6 +578,24 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 	}
 
 	return media
+}
+
+// seededImageURLs returns the public URLs of the seeded media, in order, for
+// post and page meta (featured_image, header_image).
+func seededImageURLs(uploadPath string, media []db.Medium) []string {
+	urls := make([]string, 0, len(media))
+	for _, m := range media {
+		urls = append(urls, sampleMediaURL(uploadPath, filepath.Base(m.MediaPath)))
+	}
+	return urls
+}
+
+// pickImageURL returns urls[i], wrapping around, or "" if there are none.
+func pickImageURL(urls []string, i int) string {
+	if len(urls) == 0 {
+		return ""
+	}
+	return urls[i%len(urls)]
 }
 
 // createDummyPosts generates a collection of sample blog posts with realistic
@@ -695,7 +654,7 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 //
 //   - users: Requires at least one user for authorship assignment
 //   - taxonomyTerms: Optional but recommended for realistic content classification
-func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.TaxonomyTerm) []db.Post {
+func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.TaxonomyTerm, imageURLs []string) []db.Post {
 	var posts []db.Post
 	gofakeit.Seed(0)
 
@@ -743,12 +702,12 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 		}
 
 		blogMeta := map[string]string{
-			"featured_image":   fmt.Sprintf("/uploads/sample-image-%d.jpg", (i%12)+1),
+			"featured_image":   pickImageURL(imageURLs, i),
 			"reading_time":     fmt.Sprintf("%d", gofakeit.Number(2, 15)),
 			"seo_title":        title + " - Complete Guide",
 			"seo_description":  gofakeit.Sentence(20),
 			"author_bio":       gofakeit.Sentence(25),
-			"social_image":     fmt.Sprintf("/uploads/sample-image-%d.jpg", (i%12)+1),
+			"social_image":     pickImageURL(imageURLs, i),
 			"enable_comments":  "true",
 			"post_views":       fmt.Sprintf("%d", gofakeit.Number(100, 5000)),
 			"difficulty_level": []string{"beginner", "intermediate", "advanced"}[i%3],
@@ -756,6 +715,9 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 		}
 
 		for key, value := range blogMeta {
+			if value == "" { // no seeded media to point at
+				continue
+			}
 			_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
 				PostID:    createdPost.ID,
 				MetaKey:   key,
@@ -860,7 +822,7 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 // # Dependencies
 //
 //   - users: Requires at least one user for page ownership
-func createDummyPages(store db.Store, users []db.User) []db.Post {
+func createDummyPages(store db.Store, users []db.User, imageURLs []string) []db.Post {
 	var pages []db.Post
 	gofakeit.Seed(0)
 
@@ -879,7 +841,7 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 			content: "# About Our Company\n\nWe are a leading technology company...",
 			meta: map[string]string{
 				"page_template":      "about-template",
-				"header_image":       "/uploads/sample-image-1.jpg",
+				"header_image":       pickImageURL(imageURLs, 0),
 				"show_in_navigation": "true",
 				"navigation_order":   "1",
 				"page_layout":        "full-width",
@@ -892,7 +854,7 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 			content: "# Our Services\n\nWe offer a wide range of services...",
 			meta: map[string]string{
 				"page_template":      "services-template",
-				"header_image":       "/uploads/sample-image-2.jpg",
+				"header_image":       pickImageURL(imageURLs, 1),
 				"show_in_navigation": "true",
 				"navigation_order":   "2",
 				"page_layout":        "sidebar-right",
@@ -940,6 +902,9 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 		}
 
 		for key, value := range pageData.meta {
+			if value == "" { // no seeded media to point at
+				continue
+			}
 			_, err := store.UpsertPostMeta(context.TODO(), db.UpsertPostMetaParams{
 				PostID:    createdPage.ID,
 				MetaKey:   key,
@@ -1102,67 +1067,6 @@ func linkMediaToPosts(store db.Store, posts []db.Post, media []db.Medium) {
 			}
 		}
 	}
-}
-
-// downloadImage downloads a file from a URL and saves it to the local filesystem.
-// This function is used to fetch sample images from external sources during
-// demo data creation.
-//
-// # Network Behavior
-//
-//   - Uses HTTP GET with 30-second timeout to prevent hanging
-//   - Validates HTTP 200 status code before proceeding
-//   - Streams response body directly to file (memory efficient)
-//   - Follows redirects automatically via default http.Client behavior
-//
-// # File System Behavior
-//
-//   - Creates or truncates the destination file
-//   - File permissions inherit from process umask
-//   - Automatically closes resources via defer statements
-//   - Returns first encountered error (network or filesystem)
-//
-// # Error Conditions
-//
-//   - Network timeouts or connection failures
-//   - Non-200 HTTP response codes (redirects handled automatically)
-//   - File system errors (permissions, disk space, path issues)
-//   - I/O errors during streaming
-//
-// # Security Considerations
-//
-//   - No validation of file content or size limits
-//   - Suitable for trusted sources in development environments
-//   - For production use, add content-type validation and size limits
-//
-// # Usage Context
-//
-// This function is specifically designed for development-time asset downloading
-// and should not be used with untrusted URLs or in production environments
-// without additional security measures.
-func downloadImage(url, filepath string) error {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
-	}
-
-	out, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
 }
 
 // min returns the smaller of two integers. This utility function is used

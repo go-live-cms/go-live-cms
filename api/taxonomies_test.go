@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,9 +25,13 @@ import (
 func randomTaxonomyType() db.TaxonomyType {
 	gofakeit.Seed(0)
 	return db.TaxonomyType{
-		ID:           gofakeit.Int64(),
-		Name:         gofakeit.BuzzWord(),
-		Label:        gofakeit.Word(),
+		ID: gofakeit.Int64(),
+		// The name is a URL path segment (/taxonomy/types/:name); gofakeit's
+		// buzzwords include "24/7", which would miss the route.
+		Name: strings.ReplaceAll(gofakeit.BuzzWord(), "/", "-"),
+		// Two words: the label must be at least 2 characters (#139), and a single
+		// gofakeit word can be "a".
+		Label:        gofakeit.Adjective() + " " + gofakeit.Noun(),
 		Description:  sql.NullString{String: gofakeit.Sentence(10), Valid: true},
 		Hierarchical: gofakeit.Bool(),
 		Public:       gofakeit.Bool(),
@@ -43,9 +48,11 @@ func randomTaxonomyTerm() db.TaxonomyTerm {
 		"icon":  gofakeit.Emoji(),
 	})
 	return db.TaxonomyTerm{
-		ID:             gofakeit.Int64(),
-		Name:           gofakeit.BuzzWord(),
-		Slug:           gofakeit.Word(),
+		ID:   gofakeit.Int64(),
+		Name: gofakeit.BuzzWord(),
+		// Normalized: the `slug` binding tag (#139) rejects anything generateSlug
+		// would change, and gofakeit (randomly seeded) sometimes returns "Word".
+		Slug:           generateSlug(gofakeit.Word()),
 		Description:    sql.NullString{String: gofakeit.Sentence(10), Valid: true},
 		ParentID:       sql.NullInt64{Int64: 0, Valid: false},
 		TaxonomyTypeID: gofakeit.Int64(),

@@ -40,6 +40,8 @@ const lookup = (target: string): "exact" | "case" | null => {
 }
 
 describe("import paths", () => {
+  // A synchronous walk of every web/ source file: a few seconds on a slow file
+  // share or with the astro test project running alongside, past vitest's 5s default.
   it("match the case of the files they import", () => {
     const mismatches: string[] = []
     for (const file of scanned.flatMap((dir) => sourceFiles(path.join(root, dir)))) {
@@ -56,5 +58,5 @@ describe("import paths", () => {
       }
     }
     expect(mismatches).toEqual([])
-  })
+  }, 30_000)
 })

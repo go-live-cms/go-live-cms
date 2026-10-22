@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,8 +101,9 @@ func TestReplaceMediaRegeneratesVariants(t *testing.T) {
 		var rsp struct{ Media MediaResponse }
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
 		require.Len(t, rsp.Media.Variants, 1)
-		require.Equal(t, filepath.Dir(media.MediaPath)+"/_variants/hero.jpg/thumb.jpg", rsp.Media.Variants["thumb"].Path,
+		require.Equal(t, publicMediaPath(server.config.UploadPath, filepath.Dir(media.MediaPath)+"/_variants/hero.jpg/thumb.jpg"), rsp.Media.Variants["thumb"].Path,
 			"variant URLs stay stable across a replace")
+		require.True(t, strings.HasPrefix(rsp.Media.Variants["thumb"].Path, "/uploads/"), "responses carry the public URL path, not the stored filesystem path")
 
 		w, h, _ := decodedSize(t, variantFile(media.MediaPath, "thumb.jpg"))
 		require.Equal(t, [2]int{320, 160}, [2]int{w, h})

@@ -73,6 +73,11 @@ server.
   a time (`imagePipelineSlots`). Published docs served by `GET /posts/:id`, `/posts/slug/:slug`
   and `/public/posts/:id/blocks` get a derived `media` map for image blocks
   (`post_block_media.go`) so the renderer can emit `srcset` and `object-position`.
+- **`media_path` in responses is a URL path, not the stored value.** The DB holds
+  the filesystem path (`<UPLOAD_PATH>/<file>`, e.g. `/app/uploads/media/x.jpg` in
+  compose); responses map it to where `/uploads` serves it (`/uploads/media/x.jpg`)
+  via `server.mediaResponse` / `publicMediaPath`. The admin uses it directly as the
+  image URL, so never return a media row through bare `toMediaResponse`.
 - **Password change revokes everything.** `UpdateUserTx{PasswordChanged: true}`
   locks the user row, stamps `password_changed_at` itself, and blocks every
   session. `authMiddleware` then rejects access tokens whose `iat` is before
@@ -117,14 +122,24 @@ server.
 - `GIN_MODE` (`util.Config.GinMode`) defaults to **release**; `main.go` applies it.
   Only `compose.dev.yaml` sets `debug`. An invalid value fails `LoadConfig`.
 - Debug mode seeds `admin`/`123456` + dummy data on startup (`shouldSeedDevData`)
-  and allows the local `:4321` origins. Gate dev-only behaviour on
+  and allows the local `:4321` origins. `go run ./cmd/seed` (`make seed`/`devseed`,
+  #130) runs the same seeders explicitly and refuses outside debug mode without
+  `-force`. `SEED_ADMIN_USER`/`SEED_ADMIN_PASS` override the admin credentials.
+- **Seeded media (#201)** are the embedded `devModeUtil/sampleimages/*.jpg`, written
+  into `UPLOAD_PATH` as given (never `filepath.Join(".", …)`: that turned compose's
+  absolute `/app/uploads/media` relative) with `media_path` in the same
+  `<UPLOAD_PATH>/<file>` form as uploads. A same-named file that isn't the seed's
+  is never reused or overwritten (`sample-image-N_1.jpg` instead). Only `cmd/seed`
+  restores missing files, and only ones a media row references
+  (`RestoreSampleMediaFiles` via `ListMediaPathsIn`); startup never writes them. Gate dev-only behaviour on
   `config.IsDebugMode()`, **not** `gin.Mode()` (global state, and tests set it).
 - **Outside debug mode, `NewServer` refuses to start** if a seeded account
   (`admin`/`123456`, or the dummy `editor`/`author`/`contributor`/`moderator` with
   `password123`) still has its seeded password (`checkSeededAccounts`), or if the
   lookup fails. Older versions always ran in debug mode, so real deployments
   have these accounts. Seeded credentials live in `devModeUtil/seeded_accounts.go`;
-  add any new seeded account there. Recovery steps: readme "Seeded dev accounts in
+  add any new seeded account there. A `SEED_ADMIN_USER` account is also checked
+  against the default password (`ConfiguredAdminAccounts`). Recovery steps: readme "Seeded dev accounts in
   production". `NewServer` tests that turn test mode off must expect these lookups.
 - CORS origins come from `CORS_ALLOWED_ORIGINS` (comma-separated). In release with
   none set, no CORS middleware is installed (same-origin only).

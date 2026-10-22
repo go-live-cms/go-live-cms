@@ -11,14 +11,17 @@
 //   - id: Primary key (int64)
 //   - Timestamps: ISO 8601 format (time.Time serializes automatically)
 //   - Optional fields: Use pointers, omitempty tags for clean JSON
-//   - Paths: Relative format ("uploads/file.jpg") for client URL construction
+//   - Paths: URL paths ("/uploads/media/file.jpg") for client URL construction
 //   - Counts: Include for listing views, omit for detail views
 //
 // # URL Construction
 //
-// media_path field returns relative paths like "uploads/filename.jpg".
-// Clients should construct full URLs: http://domain.com/{media_path}
-// This allows deployment flexibility and CDN integration.
+// media_path is returned as the URL path /uploads serves the file at, like
+// "/uploads/media/filename.jpg" (Server.mediaResponse, publicMediaPath). The
+// database stores the filesystem path under UPLOAD_PATH instead, which is
+// what replace and delete act on. Clients should construct full URLs:
+// http://domain.com{media_path}. Use Server.mediaResponse, not
+// toMediaResponse, in handlers.
 //
 // # Example Response
 //
@@ -27,7 +30,7 @@
 //	  "name": "Hero Image",
 //	  "description": "Homepage banner",
 //	  "alt": "Company logo on blue background",
-//	  "media_path": "uploads/hero-image.jpg",
+//	  "media_path": "/uploads/media/hero-image.jpg",
 //	  "mime_type": "image/jpeg",
 //	  "file_size": 245760,
 //	  "width": 1920,
