@@ -110,6 +110,21 @@ body:has(.gl-admin-login) {
 
   // Visually hidden but kept in the accessibility tree; absolutely positioned so
   // it doesn't take a slot in the card's flex gap.
+  &__notice {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 145%;
+    margin: 0;
+    padding: 0.75rem 1rem;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
   &__announcer {
     clip-path: inset(50%);
     height: 1px;

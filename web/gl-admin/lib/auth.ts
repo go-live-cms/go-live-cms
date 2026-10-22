@@ -1,5 +1,6 @@
 import { login, logout, RefreshError, renewAccessToken } from "./api/sessions"
 import { getMe } from "./api/users"
+import { ApiError } from "./api"
 
 export interface AuthState {
   isAuthenticated: boolean
@@ -8,6 +9,12 @@ export interface AuthState {
   refreshToken: null
   tokenExpiry: number | null
 }
+
+// Why the last sign-out happened, so whoever sends the user to the login page
+// can tell them: "session-expired" when a refresh failed (the session was
+// revoked or ran out), "password-changed" when they must sign in again with
+// a new password, "signed-out" when they asked to.
+export type SignOutReason = "signed-out" | "session-expired" | "password-changed"
 
 export class AuthManager {
   private static instance: AuthManager
@@ -18,6 +25,7 @@ export class AuthManager {
   private readonly REFRESH_COOLDOWN = 5000
   private readonly TOKEN_BUFFER = 60000
   private listeners: ((state: AuthState) => void)[] = []
+  private signOutReason: SignOutReason | null = null
 
   private constructor() {
     this.state = this.getStoredAuth()
@@ -97,7 +105,9 @@ export class AuthManager {
     return this.isTokenExpired()
   }
 
-  async login(username: string, password: string): Promise<{ success: boolean; error?: string }> {
+  // On failure, status is the API's HTTP status when it answered (absent when
+  // the request never got there, e.g. the API is unreachable).
+  async login(username: string, password: string): Promise<{ success: boolean; error?: string; status?: number }> {
     try {
       const response = await login({ username, password })
 
@@ -121,6 +131,7 @@ export class AuthManager {
         localStorage.setItem("token_expiry", tokenExpiry.toString())
       }
 
+      this.signOutReason = null
       this.scheduleTokenRefresh()
       this.notifyListeners()
 
@@ -129,21 +140,28 @@ export class AuthManager {
       return {
         success: false,
         error: error instanceof Error ? error.message : "Login failed",
+        status: error instanceof ApiError ? error.status : undefined,
       }
     }
   }
 
-  async logout(): Promise<void> {
+  async logout(reason: SignOutReason = "signed-out"): Promise<void> {
     try {
       await logout(this.state.accessToken || undefined)
     } catch (error) {
       console.error("Logout error:", error)
     } finally {
-      this.clearAuth()
+      this.clearAuth(reason)
     }
   }
 
-  private clearAuth(): void {
+  getSignOutReason(): SignOutReason | null {
+    return this.signOutReason
+  }
+
+  private clearAuth(reason: SignOutReason = "session-expired"): void {
+    this.signOutReason = reason
+
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
@@ -205,6 +223,7 @@ export class AuthManager {
   }
 
   private async performRefresh(): Promise<boolean> {
+    const tokenAtStart = this.state.accessToken
     try {
       console.log("refreshing access token...")
 
@@ -220,6 +239,12 @@ export class AuthManager {
         console.warn("Token refresh rate limited; retrying later")
         this.scheduleRefreshRetry(error.retryAfterSeconds)
         return false
+      }
+      if (this.state.accessToken && this.state.accessToken !== tokenAtStart) {
+        // A new token was adopted while this refresh was in flight (e.g. a
+        // password change, which also blocked the session this refresh
+        // presented). Its failure says nothing about the new session.
+        return true
       }
       console.error("Token refresh failed:", error)
       this.clearAuth()
@@ -277,16 +302,22 @@ export class AuthManager {
     if (!token) return this.state.user
     try {
       const { user } = await getMe(token)
-      this.state.user = user
-      if (typeof window !== "undefined") {
-        localStorage.setItem("user", JSON.stringify(user))
-      }
-      this.notifyListeners()
+      this.setUser(user)
       return user
     } catch (error) {
       console.error("Failed to refresh user:", error)
       return this.state.user
     }
+  }
+
+  // Replaces the cached user with one the API already returned (e.g. from a
+  // profile save), without another GET /users/me.
+  setUser(user: any): void {
+    this.state.user = user
+    if (typeof window !== "undefined") {
+      localStorage.setItem("user", JSON.stringify(user))
+    }
+    this.notifyListeners()
   }
 
   // Switches to an access token the API handed back outside the refresh flow

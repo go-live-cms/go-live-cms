@@ -16,6 +16,7 @@ import "@gl-admin/assets/styles/pages/login.scss"
       <p class="gl-admin-login__subtitle">Access the GoLive admin dashboard</p>
     </header>
 
+    <p id="noticeMessage" class="gl-admin-login__notice" role="status" hidden></p>
     <p id="errorMessage" class="gl-admin-login__error" hidden></p>
     <!-- Always rendered so screen readers announce every new error (see announce()). -->
     <div id="errorAnnouncer" class="gl-admin-login__announcer" role="alert" aria-atomic="true"></div>
@@ -90,6 +91,19 @@ import "@gl-admin/assets/styles/pages/login.scss"
       window.location.href = redirectTarget()
     }
 
+    // Set by the admin's AuthGuard when it signs the user out (lib/auth.ts
+    // SignOutReason). Only known reasons are shown; the text is ours.
+    const SIGN_OUT_NOTICES: Record<string, string> = {
+      "password-changed": "Your password was changed. Sign in with your new password.",
+      "session-expired": "Your session has expired. Please sign in again.",
+    }
+    const notice = SIGN_OUT_NOTICES[new URLSearchParams(window.location.search).get("reason") ?? ""]
+    if (notice) {
+      const noticeMessage = document.getElementById("noticeMessage") as HTMLParagraphElement
+      noticeMessage.textContent = notice
+      noticeMessage.hidden = false
+    }
+
     function setInvalid(invalid: boolean) {
       for (const input of inputs) {
         input.closest(".gl-input")?.classList.toggle("is-invalid", invalid)
@@ -127,11 +141,12 @@ import "@gl-admin/assets/styles/pages/login.scss"
       setInvalid(false)
     }
 
-    // authManager.login returns raw messages: "HTTP 401: {...}" from the API, or
-    // the browser's fetch error when the API can't be reached. Never show those.
-    function friendlyError(error?: string): string {
-      if (error && /\b401\b/.test(error)) return "Incorrect username or password."
-      if (error && /\b429\b/.test(error)) return "Too many sign-in attempts. Wait a moment and try again."
+    // authManager.login returns the HTTP status when the API answered, and the
+    // raw message otherwise (the browser's fetch error when the API can't be
+    // reached). Never show those messages.
+    function friendlyError(status?: number, error?: string): string {
+      if (status === 401) return "Incorrect username or password."
+      if (status === 429) return "Too many sign-in attempts. Wait a moment and try again."
       if (error && /failed to fetch|networkerror|load failed|network request failed/i.test(error)) {
         return "Can't reach the server. Check your connection and try again."
       }
@@ -167,7 +182,7 @@ import "@gl-admin/assets/styles/pages/login.scss"
 
       setLoading(true)
 
-      let result: { success: boolean; error?: string }
+      let result: { success: boolean; error?: string; status?: number }
       try {
         result = await authManager.login(username, password)
       } catch (error) {
@@ -182,7 +197,7 @@ import "@gl-admin/assets/styles/pages/login.scss"
       }
 
       setLoading(false)
-      showError(friendlyError(result.error))
+      showError(friendlyError(result.status, result.error))
     })
   </script>
 </Foot>
