@@ -8,6 +8,9 @@ import type { Media, User, MediaSortOption } from "@gl-admin/lib/types"
 import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import MediaEditModal from "@gl-admin/components/media/MediaEditModal"
+import { errorMessage } from "@gl-admin/lib/api/errors"
+import { canEditContent } from "@gl-admin/lib/roles"
+import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
 
 //import { initializeMediaCardHandlers } from "@gl-admin/scripts/media-card-handlers"
 import "@gl-admin/assets/styles/pages/media.scss"
@@ -22,6 +25,8 @@ function formatFileSize(bytes: number): string {
 
 const Media: React.FC = () => {
   const { baseTitle } = useGoLive()
+  // Uploading is limited to editors and admins (requireContentEditor in the API).
+  const canUpload = canEditContent(useCurrentRole())
   const [mediaItems, setMediaItems] = useState<Media[]>([])
   const [error, setError] = useState<string | null>(null)
   const [total, setTotal] = useState<number>(0)
@@ -76,13 +81,16 @@ const Media: React.FC = () => {
     refreshMediaData(true)
   }
 
-  // deprecated for now, TODO: add a clear filters button
+  // Used by the "no matches" empty state. Bumping clearCount makes the filter
+  // effect below refetch once, after the cleared values are in state (calling
+  // refreshMediaData here would query with the old filters).
+  const [clearCount, setClearCount] = useState(0)
   const handleClearFilters = () => {
     setSearchQuery("")
     setSelectedType("")
     setSelectedUser("")
     setSortBy("date_desc")
-    refreshMediaData(true)
+    setClearCount((n) => n + 1)
   }
 
   useEffect(() => {
@@ -90,7 +98,7 @@ const Media: React.FC = () => {
       refreshMediaData(true)
     }, 500)
     return () => clearTimeout(timeoutId)
-  }, [selectedType, selectedUser, sortBy])
+  }, [selectedType, selectedUser, sortBy, clearCount])
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -140,8 +148,11 @@ const Media: React.FC = () => {
     const uploadPromises = files.map((file, idx) => uploadSingleFile(file, idx))
     const results = await Promise.allSettled(uploadPromises)
 
-    const successCount = results.filter((r) => r.status === "fulfilled" && r.value).length
+    const successCount = results.filter((r) => r.status === "fulfilled" && r.value === true).length
     const failCount = results.length - successCount
+    const firstFailure = results.find(
+      (r): r is PromiseFulfilledResult<string> => r.status === "fulfilled" && typeof r.value === "string"
+    )?.value
 
     setTimeout(async () => {
       if (successCount > 0) {
@@ -152,7 +163,7 @@ const Media: React.FC = () => {
         )
         await refreshMediaData(true)
       } else {
-        showToast("All uploads failed", "error")
+        showToast(firstFailure ? `Upload failed: ${firstFailure}` : "All uploads failed", "error")
       }
       setUploading(false)
     }, 1000)
@@ -191,7 +202,7 @@ const Media: React.FC = () => {
 
       setError(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to fetch media")
+      setError(errorMessage(e, "Failed to fetch media"))
       console.error("Error fetching media:", e)
     } finally {
       setLoading(false)
@@ -221,14 +232,16 @@ const Media: React.FC = () => {
 
       setHasMore(response.data.length === itemsPerPage && currentOffset < totalItems)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load more media")
+      // Keep what's already loaded on screen; the button stays for a retry.
+      showToast(errorMessage(e, "Failed to load more media"), "error")
       console.error("Error loading more media:", e)
     } finally {
       setLoadingMore(false)
     }
   }
 
-  const uploadSingleFile = async (file: File, idx: number): Promise<boolean> => {
+  // Resolves true on success, or with a readable failure message.
+  const uploadSingleFile = async (file: File, idx: number): Promise<true | string> => {
     try {
       const formData = new FormData()
       formData.append("file", file)
@@ -266,7 +279,7 @@ const Media: React.FC = () => {
         copy[idx] = { ...copy[idx], status: "Failed", error: true }
         return copy
       })
-      return false
+      return errorMessage(error, "Upload failed")
     }
   }
 
@@ -427,9 +440,11 @@ const Media: React.FC = () => {
                 <Icon name="bulkSelectIcon" color={bulkSelectMode ? "white" : "#333536"} width="14" height="14" />
                 {bulkSelectMode ? "Exit Select" : "Bulk Select"}
               </GLAdminButton>
-              <GLAdminButton className="gl-admin-media__new-media-btn" onClick={handleNewMediaClick}>
-                <Icon name="add" color="white" width="14" height="14" /> New Media
-              </GLAdminButton>
+              {canUpload && (
+                <GLAdminButton className="gl-admin-media__new-media-btn" onClick={handleNewMediaClick}>
+                  <Icon name="add" color="white" width="14" height="14" /> New Media
+                </GLAdminButton>
+              )}
             </div>
           </div>
         </div>
@@ -510,24 +525,40 @@ const Media: React.FC = () => {
           </div>
         )}
 
-        {error && (
-          <div className="error-message">
-            <strong>Error:</strong> {error}
-          </div>
-        )}
-
         <MediaGrid
           mediaItems={mediaItems}
           loading={loading}
           error={error}
+          onRetry={() => refreshMediaData(true)}
           selectable={bulkSelectMode}
           selectedMedia={selectedMedia}
           onMediaSelect={handleMediaSelect}
           onMediaClick={handleMediaCardClick}
-          emptyState={{
-            title: "No media files yet",
-            description: 'Upload your first file by clicking "New Media" above',
-          }}
+          emptyState={
+            searchQuery || selectedType || selectedUser
+              ? {
+                  icon: "search",
+                  title: "No media matches these filters",
+                  description: "Try another type or user, or clear the filters.",
+                  action: (
+                    <GLAdminButton variation="flat" onClick={handleClearFilters}>
+                      Clear filters
+                    </GLAdminButton>
+                  ),
+                }
+              : {
+                  icon: "media",
+                  title: "No media yet",
+                  description: canUpload
+                    ? "Images, videos, audio and documents you upload will show up here."
+                    : "Nothing has been uploaded yet. Contributors can't upload media; ask an editor or administrator.",
+                  action: canUpload && !showUploadArea && (
+                    <GLAdminButton variation="primary" onClick={handleNewMediaClick}>
+                      <Icon name="uploadIcon" color="white" width="14" height="14" /> Upload media
+                    </GLAdminButton>
+                  ),
+                }
+          }
         />
 
         {!loading && !error && mediaItems.length > 0 && (

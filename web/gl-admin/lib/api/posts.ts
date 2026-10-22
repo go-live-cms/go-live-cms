@@ -1,5 +1,6 @@
 import type { Post, PostSortOption, PaginationParams, ApiResponse, TaxonomyTerm } from "./types"
 import { apiCall, authenticatedFetch } from "../api"
+import { apiErrorFromResponse } from "./errors"
 import { buildUrl } from "./utils"
 
 export interface CreatePostRequest {
@@ -76,8 +77,7 @@ export async function createPost(data: CreatePostRequest): Promise<any> {
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Create post failed")
+    throw await apiErrorFromResponse(response, { fallback: "Create post failed" })
   }
 
   return response.json()
@@ -93,8 +93,7 @@ export async function updatePost(id: string | number, data: Partial<Post>): Prom
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Update post failed")
+    throw await apiErrorFromResponse(response, { fallback: "Update post failed" })
   }
 
   return response.json()
@@ -106,8 +105,7 @@ export async function deletePost(id: string | number): Promise<any> {
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Delete post failed")
+    throw await apiErrorFromResponse(response, { fallback: "Delete post failed" })
   }
 
   return response.json()
@@ -126,8 +124,7 @@ export async function createPostMedia(postId: number, mediaId: number, order: nu
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Failed to link media to post")
+    throw await apiErrorFromResponse(response, { fallback: "Failed to link media to post" })
   }
 
   return response.json()

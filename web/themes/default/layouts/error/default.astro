@@ -1,0 +1,28 @@
+---
+/**
+ * Default Error Layout
+ * Used for the public 404 and 500 pages (src/pages/404.astro, 500.astro) while
+ * this theme is active. Themes can provide their own layouts/error/{status}.astro
+ * or layouts/error/default.astro; themes without one get src/layouts/ErrorLayout.astro.
+ */
+import BaseLayout from '../base.astro'
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import ErrorContent from '@/components/ErrorContent.astro'
+import { SITE_TITLE } from '@/consts'
+
+interface Props {
+  status: number
+  title: string
+  message: string
+  detail?: string
+}
+
+const { title, message } = Astro.props
+---
+
+<BaseLayout title={`${title} | ${SITE_TITLE}`} description={message}>
+  <Header />
+  <ErrorContent {...Astro.props} />
+  <Footer />
+</BaseLayout>

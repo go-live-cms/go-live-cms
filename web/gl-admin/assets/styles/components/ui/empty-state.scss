@@ -1,0 +1,104 @@
+@use "@gl-admin/assets/styles/variables";
+
+.gl-empty-state {
+  align-items: center;
+  border: 1px dashed var(--border-color);
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  margin: 1rem 0;
+  padding: 4rem 2rem;
+  text-align: center;
+
+  &__icon {
+    align-items: center;
+    background: var(--background-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    display: flex;
+    height: 4rem;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    width: 4rem;
+  }
+
+  &__title {
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    line-height: 130%;
+    margin: 0 0 0.5rem;
+  }
+
+  &__description {
+    color: var(--text-quaternary);
+    font-size: var(--text-size-body);
+    line-height: 150%;
+    margin: 0;
+    max-width: 32rem;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.75rem;
+  }
+
+  &--error {
+    border-color: var(--input-invalid-border-color);
+    border-style: solid;
+
+    .gl-empty-state__icon {
+      border-color: var(--input-invalid-border-color);
+    }
+  }
+}
+
+// Sidebar fallback from app.tsx (SidebarFallback).
+.gl-sidebar-fallback {
+  border-right: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.75rem;
+  padding: 1.5rem 1rem;
+  width: 14rem;
+
+  p {
+    color: var(--text-quaternary);
+    font-size: 0.875rem;
+  }
+
+  a,
+  button {
+    background: none;
+    border: none;
+    color: var(--text-selected);
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-align: left;
+    text-decoration: none;
+  }
+}
+
+// Page-level fallback from components/ErrorBoundary.tsx.
+.gl-error-boundary {
+  margin: 2rem auto;
+  max-width: 48rem;
+
+  &__detail {
+    background: var(--background-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    max-height: 20rem;
+    overflow: auto;
+    padding: 1rem;
+    white-space: pre-wrap;
+  }
+}

@@ -52,7 +52,7 @@ describe("apiCall 401 handling", () => {
       url === "/api/v1/auth/refresh" ? json(401, { error: "session is blocked" }) : json(401, { error: "token revoked" })
     )
 
-    await expect(apiCall("/users/me")).rejects.toThrow(/HTTP 401/)
+    await expect(apiCall("/users/me")).rejects.toMatchObject({ status: 401 })
     expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(["/api/v1/users/me", "/api/v1/auth/refresh"])
     expect(authManager.getState().isAuthenticated).toBe(false)
   })
@@ -74,7 +74,7 @@ describe("apiCall 401 handling", () => {
       })
       vi.spyOn(console, "warn").mockImplementation(() => {})
 
-      await expect(apiCall("/users/me")).rejects.toThrow(/HTTP 401/)
+      await expect(apiCall("/users/me")).rejects.toMatchObject({ status: 401 })
       expect(authManager.getState().isAuthenticated).toBe(true)
       expect(authManager.getAccessToken()).toBe("stale-token")
 
@@ -106,9 +106,10 @@ describe("apiCall 401 handling", () => {
   it("does not refresh on auth endpoints, where 401 means bad credentials", async () => {
     fetchMock.mockResolvedValue(json(401, { error: "invalid credentials" }))
 
-    await expect(apiCall("/auth/login", { method: "POST", body: { username: "a", password: "b" } })).rejects.toThrow(
-      /HTTP 401/
-    )
+    await expect(apiCall("/auth/login", { method: "POST", body: { username: "a", password: "b" } })).rejects.toMatchObject({
+      status: 401,
+      message: "Invalid credentials.",
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

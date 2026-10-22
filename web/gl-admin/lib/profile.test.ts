@@ -142,14 +142,16 @@ describe("apiCall errors", () => {
     vi.restoreAllMocks()
   })
 
-  it("throws an ApiError carrying the API's message, status and Retry-After", async () => {
+  it("throws an ApiError carrying a readable message, the API's message, status and Retry-After", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(429, { error: "too many requests" }, { "Retry-After": "17" }))
     )
     const err = await apiCall("/users/1", { method: "PUT", body: {} }).catch((e) => e)
     expect(err).toBeInstanceOf(ApiError)
-    expect(err.message).toBe("too many requests")
+    // message is the readable text (lib/api/errors.ts); the API's own is serverMessage.
+    expect(err.serverMessage).toBe("too many requests")
+    expect(err.message).toBe("You're doing that too often. Please wait 17 seconds and try again.")
     expect(err.status).toBe(429)
     expect(err.retryAfterSeconds).toBe(17)
   })

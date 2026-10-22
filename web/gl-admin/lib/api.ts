@@ -13,6 +13,7 @@ import type {
   ApiResponse,
 } from "./types"
 import { SERVER_API_URL, SERVER_MEDIA_URL } from "./server-api-url"
+import { apiErrorFromResponse } from "./api/errors"
 
 const isServer = typeof window === "undefined"
 const API_BASE = isServer ? SERVER_API_URL : "/api/v1"
@@ -34,21 +35,10 @@ export function getMediaURL(mediaPath: string): string {
   return cleanPath
 }
 
-// A non-2xx API response. message is the API's {"error": ...} text when it
-// sent one; status, code (the API's machine-readable {"code": ...}, when
-// present) and retryAfterSeconds (from Retry-After, on a 429) let callers
-// tell e.g. a wrong current password (403) from a rate limit.
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly retryAfterSeconds: number | null = null,
-    readonly code: string | null = null
-  ) {
-    super(message)
-    this.name = "ApiError"
-  }
-}
+// A non-2xx API response: readable message, plus status, code (the API's
+// machine-readable {"code": ...}), retryAfterSeconds and serverMessage. Defined
+// in ./api/errors; re-exported here for existing imports.
+export { ApiError } from "./api/errors"
 
 export async function apiCall(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<any> {
   const { token, method = "GET", body } = options
@@ -95,22 +85,11 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}, isRetr
         return apiCall(endpoint, { ...options, token: undefined }, true)
       }
     }
-    throw new ApiError(`HTTP 401: ${await response.text()}`, 401)
+    throw await apiErrorFromResponse(response, { authEndpoint: endpoint.startsWith("/auth/") })
   }
 
   if (!response.ok) {
-    const text = await response.text()
-    let message = `HTTP ${response.status}: ${text}`
-    let code: string | null = null
-    try {
-      const body = JSON.parse(text)
-      message = body.error || `HTTP ${response.status}`
-      code = typeof body.code === "string" ? body.code : null
-    } catch {
-      // not JSON; keep the raw text
-    }
-    const retryAfter = Number.parseInt(response.headers.get("Retry-After") ?? "", 10)
-    throw new ApiError(message, response.status, Number.isFinite(retryAfter) ? retryAfter : null, code)
+    throw await apiErrorFromResponse(response)
   }
 
   // If the response has no content, return an empty object

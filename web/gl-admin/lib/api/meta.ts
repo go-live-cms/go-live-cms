@@ -1,4 +1,5 @@
 import { apiCall, authenticatedFetch } from "../api"
+import { apiErrorFromResponse } from "./errors"
 
 export interface PostMeta {
   id?: number
@@ -50,8 +51,7 @@ export async function setPostMeta(
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Failed to set post meta")
+    throw await apiErrorFromResponse(response, { fallback: "Failed to set post meta" })
   }
 
   return response.json()
@@ -63,8 +63,7 @@ export async function deletePostMeta(postId: number, metaKey: string): Promise<v
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Failed to delete post meta")
+    throw await apiErrorFromResponse(response, { fallback: "Failed to delete post meta" })
   }
 }
 
@@ -97,8 +96,7 @@ export async function setFeaturedImage(postId: number, mediaId: number, mediaPat
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Failed to set featured image")
+    throw await apiErrorFromResponse(response, { fallback: "Failed to set featured image" })
   }
 }
 
@@ -108,8 +106,7 @@ export async function removeFeaturedImage(postId: number): Promise<void> {
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Failed to remove featured image")
+    throw await apiErrorFromResponse(response, { fallback: "Failed to remove featured image" })
   }
 }
 
