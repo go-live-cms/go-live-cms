@@ -77,7 +77,11 @@ const Sidebar: React.FC = () => {
   const [sidebarWidth, setSidebarWidth] = useState(`${initialWidth}px`)
   const [isClosed, setIsClosed] = useState(localStorage.getItem("sidebarState") === "true" || false)
   const [contentSection, setContentSection] = useState<Section[]>(defaultContentSection)
+  // Off-canvas drawer state, only used below the mobile breakpoint (sidebar.scss)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
   const resizing = useRef(false)
+  const menuButtonRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   // Fetch post types to build dynamic content section
   useEffect(() => {
@@ -101,6 +105,28 @@ const Sidebar: React.FC = () => {
   useEffect(() => {
     localStorage.setItem("sidebarState", isClosed.toString())
   }, [isClosed])
+
+  // Close the drawer after navigating
+  useEffect(() => {
+    setIsMobileOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!isMobileOpen) return
+
+    closeButtonRef.current?.focus()
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeMobileMenu()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [isMobileOpen])
+
+  const closeMobileMenu = () => {
+    setIsMobileOpen(false)
+    menuButtonRef.current?.focus()
+  }
 
   const handleResizeStart = (e: React.MouseEvent) => {
     resizing.current = true
@@ -148,7 +174,44 @@ const Sidebar: React.FC = () => {
   }
 
   return (
-    <nav className={`admin-sidebar${isClosed ? "closed" : ""}`} style={{ width: sidebarWidth }}>
+    <>
+    <header className="admin-mobile-bar">
+      <button
+        type="button"
+        ref={menuButtonRef}
+        className="admin-mobile-bar__toggle"
+        aria-label="Open menu"
+        aria-controls="admin-sidebar"
+        aria-expanded={isMobileOpen}
+        onClick={() => setIsMobileOpen(true)}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+      <Link to="/" className="admin-mobile-bar__logo">
+        <b>Go</b>Live
+      </Link>
+    </header>
+    <div
+      className={`admin-sidebar-backdrop${isMobileOpen ? " open" : ""}`}
+      onClick={closeMobileMenu}
+      aria-hidden="true"
+    />
+    <nav
+      id="admin-sidebar"
+      className={`admin-sidebar${isClosed ? "closed" : ""}${isMobileOpen ? " mobile-open" : ""}`}
+      style={{ width: sidebarWidth }}
+    >
+      <button
+        type="button"
+        ref={closeButtonRef}
+        className="admin-sidebar__close"
+        aria-label="Close menu"
+        onClick={closeMobileMenu}
+      >
+        <Icon name="close" color={navIconColor} width="20px" height="20px" />
+      </button>
       <Link to="/" className="admin-sidebar__head">
         <svg
           width="35"
@@ -190,6 +253,7 @@ const Sidebar: React.FC = () => {
       </div>
       <div className="admin-sidebar__resize-handle" onMouseDown={handleResizeStart}></div>
     </nav>
+    </>
   )
 }
 

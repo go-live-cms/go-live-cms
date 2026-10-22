@@ -10,14 +10,37 @@ main#admin {
   --admin-border-radius: 12px;
   --admin-card-shadow: 0 2px 8px rgb(var(--gray), 10%);
   --admin-card-shadow-hover: var(--box-shadow);
+  --admin-main-padding: 2rem 6.25rem;
 }
 
 section.admin-main {
   height: 100vh;
   overflow-y: auto;
-  padding: var(--admin-padding);
-  padding: 2rem 6.25rem;
+  padding: var(--admin-main-padding);
   width: 100%;
+}
+
+@media (width <= 1024px) {
+  main#admin {
+    --admin-main-padding: 2rem 2.5rem;
+  }
+}
+
+// The sidebar is an off-canvas drawer here (sidebar.scss), so the layout
+// stacks the mobile top bar above the page instead of beside the sidebar.
+@media (width <= 768px) {
+  main#admin {
+    --admin-main-padding: 1.5rem 1rem;
+
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  section.admin-main {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
 }
 
 .admin-header {
