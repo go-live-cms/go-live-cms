@@ -27,8 +27,7 @@ type collabTicketMaker interface {
 //   - 404 Not Found: a contributor asked for a post that doesn't exist
 func (server *Server) createCollabTicket(c *gin.Context) {
 	var req createCollabTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "doc is required"})
+	if !bindJSON(c, &req) {
 		return
 	}
 	postID, ok := postIDFromCollabDoc(req.Doc)

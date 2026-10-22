@@ -53,7 +53,7 @@ type UpdateThemeSettingRequest struct {
 
 // UpdateThemeSettingsRequest for batch updating settings
 type UpdateThemeSettingsRequest struct {
-	Settings map[string]interface{} `json:"settings" binding:"required"`
+	Settings map[string]interface{} `json:"settings" binding:"required,max=200,dive,keys,min=1,max=255,setting_key,endkeys"`
 }
 
 // Converter functions

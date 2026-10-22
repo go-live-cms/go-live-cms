@@ -8,7 +8,10 @@ and **LevelDB** persistence. Port 1234. Entry: `server.js`. Dev: `npm run dev`
 
 Clients connect with `ws://…:1234/post-<id>?ticket=<collab ticket>`. Outside dev, the
 editor uses `${host}/collab/post-<id>` through a reverse proxy, and `stripCollabPrefix`
-drops `/collab` whether or not the proxy did.
+drops `/collab` whether or not the proxy did. In production that proxy is Caddy
+(`deploy/caddy/Caddyfile`, access log off because of the ticket); the squash endpoint is
+not under `/collab`, so it stays unreachable from outside. The image runs as `node` with
+`/data/yjs` owned by it.
 
 **Never the access token (#233).** Browsers can't set headers on a WebSocket handshake, so
 the credential is in the URL, and every proxy or load balancer access log in front of :1234
@@ -29,8 +32,10 @@ tickets). `server.js` only injects the dependencies. Order: socket `error` liste
 the API can't answer) → `canEdit` (**403**) → accept.
 1. **`verifyTicket`** (`access.js`) checks the signature, issuer (`PASETO_ISSUER`),
    audience, `token_type: ws_ticket`, expiry, jti/exp presence, and that `doc` equals the
-   URL's doc name. The public key comes from `PASETO_V4_PUBLIC_PEM_FILE`
-   (`/run/secrets/public.pem`). `PASETO_AUDIENCE` / `PASETO_ALLOWED_AUDIENCES` are ignored
+   URL's doc name. The public key comes from `PASETO_V4_PUBLIC_KEY_HEX` (the API's own
+   variable, raw Ed25519 hex, `publicKeyFromHex`; what prod `compose.yaml` uses) or
+   `PASETO_V4_PUBLIC_PEM_FILE` (`/run/secrets/public.pem`, dev). `PASETO_ISSUER`
+   defaults to `golive.auth`, the API's default. `PASETO_AUDIENCE` / `PASETO_ALLOWED_AUDIENCES` are ignored
    now, and a startup warning says so.
 2. **`TicketReplayGuard`** (`access.js`) burns the jti: **single use**, so a ticket a
    proxy logged can't open a second socket. It's burned before the role lookup, so a

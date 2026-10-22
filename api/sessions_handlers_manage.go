@@ -107,8 +107,7 @@ func (server *Server) getUserSessions(ctx *gin.Context) {
 //   - Blocked sessions cannot be unblocked (security by design)
 func (server *Server) blockSession(ctx *gin.Context) {
 	var req BlockSessionRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(ctx, &req) {
 		return
 	}
 

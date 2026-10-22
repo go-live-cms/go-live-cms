@@ -22,6 +22,19 @@
 // access.test.js. Must NOT import yjs — see the single-yjs-instance gotcha in
 // websocket/CLAUDE.md.
 import { V4 } from "paseto";
+import { createPublicKey } from "node:crypto";
+
+// The API's PASETO_V4_PUBLIC_KEY_HEX (64 hex chars, the raw 32-byte Ed25519 key) as a
+// KeyObject. Lets a deployment give both services the same variable instead of exporting
+// a separate public.pem (#272). Throws on anything that isn't exactly 32 bytes of hex.
+export function publicKeyFromHex(hex) {
+  const clean = String(hex || "").trim();
+  if (!/^[0-9a-fA-F]{64}$/.test(clean)) {
+    throw new Error("PASETO_V4_PUBLIC_KEY_HEX must be 64 hex characters (a raw Ed25519 public key)");
+  }
+  const x = Buffer.from(clean, "hex").toString("base64url");
+  return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x }, format: "jwk" });
+}
 
 // Must match token.WSTicketAudience / token.WSTicketType in token/ws_ticket.go.
 export const TICKET_AUDIENCE = "golive.admin-ws";

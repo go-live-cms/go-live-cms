@@ -151,10 +151,13 @@ func (server *Server) updateThemeSetting(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "setting key is required"})
 		return
 	}
+	if len(key) > 255 || !settingKeyRe.MatchString(key) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "setting key must be at most 255 letters, digits, '.', '_', '-' or ':'"})
+		return
+	}
 
 	var req UpdateThemeSettingRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -183,6 +186,12 @@ func (server *Server) updateThemeSetting(c *gin.Context) {
 
 // updateActiveThemeSettings handles PUT /themes/active/settings - update active theme settings (shortcut)
 func (server *Server) updateActiveThemeSettings(c *gin.Context) {
+	// Validate the body before touching the database.
+	var req UpdateThemeSettingsRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
 	// Get active theme first
 	theme, err := server.store.GetActiveTheme(c)
 	if err != nil {
@@ -191,12 +200,6 @@ func (server *Server) updateActiveThemeSettings(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get active theme"})
-		return
-	}
-
-	var req UpdateThemeSettingsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

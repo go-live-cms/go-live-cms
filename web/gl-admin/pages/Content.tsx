@@ -40,7 +40,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
     { label: "All authors", value: "" },
   ])
   const initialFilters = (() => {
-    const base = { user_id: "", type: typeName || "", sort: "", status: "" }
+    const base = { user_id: "", type: typeName || "", sort: "", order: "", status: "" }
     if (queryProp) {
       const stringFilters = Object.fromEntries(
         Object.entries(queryProp).map(([key, value]) => [key, value !== undefined ? String(value) : ""])
@@ -113,7 +113,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
   }
 
   const clearFilters = () => {
-    setSelectedFilters({ user_id: "", status: "", type: "", sort: "" })
+    setSelectedFilters({ user_id: "", status: "", type: "", sort: "", order: "" })
   }
 
   const handleNewPost = () => {
@@ -171,7 +171,7 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
 
   const filters = (
     <>
-      {selectedFilters.user_id || selectedFilters.status || selectedFilters.type || selectedFilters.sort ? (
+      {selectedFilters.user_id || selectedFilters.status || selectedFilters.type || selectedFilters.sort || selectedFilters.order ? (
         <div className="gl-clear-filters" onClick={clearFilters}>
           Clear filters
         </div>
@@ -206,17 +206,24 @@ const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
       )}
       <FilterSelect
         options={[
-          { label: "Default", value: "" },
-          { label: "Newest First", value: "date_desc" },
-          { label: "Oldest First", value: "date_asc" },
-          { label: "Name A-Z", value: "title_asc" },
-          { label: "Name Z-A", value: "title_desc" },
-          { label: "Type A-Z", value: "type_asc" },
-          { label: "Type Z-A", value: "type_desc" },
+          { label: "Created", value: "" },
+          { label: "Updated", value: "changed_at" },
+          { label: "Title", value: "title" },
         ]}
         value={selectedFilters.sort}
         onChange={(value) => setSelectedFilters({ ...selectedFilters, sort: value })}
         prefix="Sort by:"
+      />
+      <FilterSelect
+        options={[
+          // Empty lets the API pick: newest first for dates, A-Z for titles.
+          { label: "Default", value: "" },
+          { label: "Ascending", value: "asc" },
+          { label: "Descending", value: "desc" },
+        ]}
+        value={selectedFilters.order}
+        onChange={(value) => setSelectedFilters({ ...selectedFilters, order: value })}
+        prefix="Order:"
       />
       {canCreate && (
         <Button onClick={handleNewPost} className="gl-admin-media__new-media-btn">

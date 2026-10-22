@@ -63,8 +63,7 @@ func (server *Server) createOrUpdatePostMeta(c *gin.Context) {
 	}
 
 	var req CreatePostMetaRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 

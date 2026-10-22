@@ -6,6 +6,7 @@ import { V4 } from "paseto";
 import {
   fetchDocAccess,
   isCollabDocName,
+  publicKeyFromHex,
   stripCollabPrefix,
   takeCredential,
   ticketIdentity,
@@ -132,6 +133,25 @@ test("verifyTicket rejects expired, foreign-key and wrong-issuer tickets", async
   await assert.rejects(verifyTicket(await sign({}, { key: otherKey }), publicKey, opts));
 
   await assert.rejects(verifyTicket(await sign(), publicKey, { ...opts, issuer: "someone.else" }));
+});
+
+test("publicKeyFromHex turns the API's raw hex public key into a verifying key", async () => {
+  // The raw key is the last 32 bytes of the SPKI DER, which is what the API's
+  // PASETO_V4_PUBLIC_KEY_HEX holds.
+  const hex = publicKey.export({ format: "der", type: "spki" }).subarray(-32).toString("hex");
+  const opts = { issuer: ISSUER, docName: "post-12" };
+  const payload = await verifyTicket(await sign(), publicKeyFromHex(`  ${hex.toUpperCase()}\n`), opts);
+  assert.equal(payload.user_id, "7");
+
+  const otherKey = createPublicKey(await V4.generateKey("public"));
+  const otherHex = otherKey.export({ format: "der", type: "spki" }).subarray(-32).toString("hex");
+  await assert.rejects(verifyTicket(await sign(), publicKeyFromHex(otherHex), opts));
+});
+
+test("publicKeyFromHex rejects anything but 64 hex characters", () => {
+  for (const bad of ["", "abc", "zz".repeat(32), "ab".repeat(31), "ab".repeat(33), "ab".repeat(64)]) {
+    assert.throws(() => publicKeyFromHex(bad), /64 hex characters/);
+  }
 });
 
 /** Identity as ticketIdentity returns it, for the access-lookup tests. */

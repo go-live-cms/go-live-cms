@@ -6,6 +6,7 @@ import {
   fetchDocAccess,
   isCollabDocName,
   TicketReplayGuard,
+  publicKeyFromHex,
   verifyTicket,
   TICKET_AUDIENCE,
 } from "./access.js";
@@ -54,7 +55,8 @@ const Y = require("yjs");
 
 const HOST = process.env.HOST || "localhost";
 const PORT = Number(process.env.PORT) || 1234;
-const ISSUER = process.env.PASETO_ISSUER || "go-live-cms";
+// Same default as the API's PASETO_ISSUER (util/config.go), so the two agree unset.
+const ISSUER = process.env.PASETO_ISSUER || "golive.auth";
 // Trim first, THEN fall back to "./data", so DATA_PATH=" " (whitespace only)
 // resolves to "./data" rather than "" (which would silently use the CWD).
 const DATA_PATH = (process.env.DATA_PATH || "").trim() || "./data";
@@ -100,12 +102,17 @@ if (process.env.PASETO_AUDIENCE || process.env.PASETO_ALLOWED_AUDIENCES) {
   console.warn("⚠️  PASETO_AUDIENCE / PASETO_ALLOWED_AUDIENCES are ignored (tickets only, #233)");
 }
 
-// Flexible public key loading (supports PEM, base64, or file)
+// Flexible public key loading (supports the API's raw hex key, PEM, base64, or file)
 function loadPublicKey() {
+  const hex = process.env.PASETO_V4_PUBLIC_KEY_HEX;
   const pem = process.env.PASETO_V4_PUBLIC_PEM;
   const pemB64 = process.env.PASETO_V4_PUBLIC_PEM_B64;
   const pemFile = process.env.PASETO_V4_PUBLIC_PEM_FILE;
 
+  if (hex && hex.trim()) {
+    console.log("📋 Loading public key from PASETO_V4_PUBLIC_KEY_HEX");
+    return publicKeyFromHex(hex);
+  }
   if (pem && pem.trim()) {
     console.log("📋 Loading public key from PASETO_V4_PUBLIC_PEM");
     return createPublicKey(pem);
@@ -120,7 +127,7 @@ function loadPublicKey() {
   }
 
   console.error(
-    "❌ Provide PASETO_V4_PUBLIC_PEM, PASETO_V4_PUBLIC_PEM_B64, or PASETO_V4_PUBLIC_PEM_FILE",
+    "❌ Provide PASETO_V4_PUBLIC_KEY_HEX, PASETO_V4_PUBLIC_PEM, PASETO_V4_PUBLIC_PEM_B64, or PASETO_V4_PUBLIC_PEM_FILE",
   );
   process.exit(1);
 }
