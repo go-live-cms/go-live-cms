@@ -83,15 +83,14 @@ export function absoluteUrl(siteUrl: string, path: string): string {
 }
 
 // Hosts an admin-stored media URL may point at that are really this site's own
-// /uploads: local dev hosts, the compose `api` service, and the API URLs.
+// /uploads: local dev hosts, the compose `api` service, and SERVER_API_URL's
+// host. (Not PUBLIC_API_URL: server code doesn't read it, docs/operations/deploy.md.)
 function ownMediaHosts(env: Env): Set<string> {
   const hosts = new Set(["localhost", "127.0.0.1", "[::1]", "api"])
-  for (const value of [env.PUBLIC_API_URL, env.SERVER_API_URL]) {
-    try {
-      if (value) hosts.add(new URL(value).hostname)
-    } catch {
-      // Not a URL: nothing to add.
-    }
+  try {
+    if (env.SERVER_API_URL) hosts.add(new URL(env.SERVER_API_URL).hostname)
+  } catch {
+    // Not a URL: nothing to add.
   }
   return hosts
 }

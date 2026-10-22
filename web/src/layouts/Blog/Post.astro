@@ -5,6 +5,7 @@ import type { CollectionEntry } from "astro:content"
 import FormattedDate from "@/components/FormattedDate.astro"
 import BlockRenderer from "@/components/BlockRenderer"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
 
 type Props = CollectionEntry<'blog'>['data'] & {
   postId?: number;
@@ -16,8 +17,9 @@ const { title, description, pubDate, updatedDate, heroImage, postId } = Astro.pr
 let blockDoc: BlockDocV1 | null = null;
 if (postId) {
   try {
-    const apiUrl = import.meta.env.PUBLIC_API_URL || 'http://localhost:8080';
-    const response = await fetch(`${apiUrl}/public/posts/${postId}/blocks`);
+    // Server-side fetch: the runtime SERVER_API_URL, not the build-time PUBLIC_API_URL.
+    // /public sits at the API root, not under /api/v1.
+    const response = await fetch(`${SERVER_MEDIA_URL}/public/posts/${postId}/blocks`);
     if (response.ok) {
       const data = await response.json();
       blockDoc = data.doc;

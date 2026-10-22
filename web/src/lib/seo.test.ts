@@ -88,10 +88,10 @@ describe("publicImageUrl", () => {
     )
   })
 
-  it("rewrites the configured API hosts too", () => {
+  it("rewrites the SERVER_API_URL host too", () => {
     expect(
-      publicImageUrl("https://example.org", "https://api.example.org/uploads/media/a.jpg", {
-        PUBLIC_API_URL: "https://api.example.org/api/v1",
+      publicImageUrl("https://example.org", "http://cms-api.internal:8080/uploads/media/a.jpg", {
+        SERVER_API_URL: "http://cms-api.internal:8080/api/v1",
       }),
     ).toBe("https://example.org/uploads/media/a.jpg")
   })

@@ -10,6 +10,13 @@ processes + Postgres, run via Docker Compose.
 | Web | 4321 | Astro SSR + React admin SPA | `web/` |
 | DB | 5432 | PostgreSQL 12 | `db/migration/` |
 
+**Production** (`compose.yaml`, #272/#267) adds **Caddy** in front: the only published
+service (80/443, TLS), `/collab/*` → websocket, everything else → web (which forwards
+`/api/v1` + `/uploads`). Nothing else publishes a port. CD (`.github/workflows/cd.yml`)
+pushes `ghcr.io/go-live-cms/{api,web,websocket}:<sha>` and deploys to one VM with
+`scripts/deploy/deploy.sh` (backup → migrate with the new image → `up --wait`). Runbook:
+`docs/operations/deploy.md`.
+
 Scoped context lives in nested `CLAUDE.md` files — read the one for the area you're
 working in: `api/`, `web/`, `web/gl-admin/lib/collaboration/`, `websocket/`.
 
@@ -91,6 +98,11 @@ sh scripts/backup/test-restore.sh
 # Full stack (dev)
 docker compose -f compose.dev.yaml up -d
 docker compose -f compose.dev.yaml restart websocket   # e.g. to test reconnects
+
+# Production stack locally (secrets in a gitignored .env; use another -p to keep it
+# apart from real volumes). Release mode: no seeded accounts, see deploy.md step 5.
+go run ./cmd/gen-prod-env -site localhost > .env
+docker compose -f compose.yaml up --build -d
 ```
 
 ## Status / history

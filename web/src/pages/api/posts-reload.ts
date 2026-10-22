@@ -1,8 +1,10 @@
 import type { APIRoute } from "astro";
+import { SERVER_API_URL } from "../../../gl-admin/lib/server-api-url";
 
-export const GET: APIRoute = async ({ request }) => {
-  const API_BASE =
-    import.meta.env.PUBLIC_API_URL || "http://localhost:8080/api/v1";
+export const GET: APIRoute = async () => {
+  // Server-side fetch, so the runtime SERVER_API_URL (the internal network address),
+  // not PUBLIC_API_URL, which Astro inlines at build time.
+  const API_BASE = SERVER_API_URL;
 
   try {
     const response = await fetch(`${API_BASE}/posts`);
