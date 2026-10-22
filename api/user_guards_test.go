@@ -278,18 +278,19 @@ func TestDeleteUserGuards(t *testing.T) {
 			},
 		},
 		{
-			// A body that doesn't bind is a plain delete, not a transfer.
-			name:     "MalformedBodyIsPlainDelete",
+			// A body that doesn't bind is refused (#139): deleting instead of
+			// transferring would lose the user's content.
+			name:     "MalformedBodyIsRefused",
 			caller:   admin,
 			targetID: target,
 			body:     `{"transfer_to_id": "not-a-number"`,
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(contributor.ID)).Times(1).Return(contributor, nil)
-				store.EXPECT().DeleteUserTx(gomock.Any(), gomock.Eq(contributor.ID)).Times(1).Return(nil)
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(contributor.ID)).Times(0)
+				store.EXPECT().DeleteUserTx(gomock.Any(), gomock.Any()).Times(0)
 				store.EXPECT().DeleteUserWithTransferTx(gomock.Any(), gomock.Any()).Times(0)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
 			},
 		},
 		{

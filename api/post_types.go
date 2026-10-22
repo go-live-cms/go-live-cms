@@ -123,26 +123,28 @@ func (server *Server) getPostTypes(c *gin.Context) {
 	})
 }
 
+// Post type names appear in admin routes, public URLs and theme layout lookups,
+// so name/slug must match the identifier pattern (lowercase ASCII, digits,
+// '-' and '_'; never a path).
 type createPostTypeRequest struct {
-	Name         string   `json:"name" binding:"omitempty,min=2,max=50"`
+	Name         string   `json:"name" binding:"omitempty,min=2,max=50,identifier"`
 	Label        string   `json:"label" binding:"required,min=2,max=100"`
-	Slug         string   `json:"slug"` // Alias for name (theme API compat)
-	Description  string   `json:"description"`
+	Slug         string   `json:"slug" binding:"omitempty,min=2,max=50,identifier"` // Alias for name (theme API compat)
+	Description  string   `json:"description" binding:"max=500"`
 	Public       *bool    `json:"public"`
 	Hierarchical *bool    `json:"hierarchical"`
 	HasArchive   *bool    `json:"has_archive"`
 	MenuPosition *int32   `json:"menu_position"`
-	Supports     []string `json:"supports"`
-	Icon         string   `json:"icon"`          // Stored in supports or ignored for now
-	RegisteredBy string   `json:"registered_by"` // e.g. "theme:example"
+	Supports     []string `json:"supports" binding:"omitempty,max=50,dive,min=1,max=50"`
+	Icon         string   `json:"icon" binding:"max=100"`          // Stored in supports or ignored for now
+	RegisteredBy string   `json:"registered_by" binding:"max=100"` // e.g. "theme:example"
 }
 
 // createPostType creates or upserts a post type.
 // If a post type with the same name already exists, it updates it (upsert).
 func (server *Server) createPostType(c *gin.Context) {
 	var req createPostTypeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -223,13 +225,13 @@ func (server *Server) createPostType(c *gin.Context) {
 }
 
 type updatePostTypeRequest struct {
-	Label        string   `json:"label"`
-	Description  string   `json:"description"`
+	Label        string   `json:"label" binding:"omitempty,min=2,max=100"`
+	Description  string   `json:"description" binding:"max=500"`
 	Public       *bool    `json:"public"`
 	Hierarchical *bool    `json:"hierarchical"`
 	HasArchive   *bool    `json:"has_archive"`
 	MenuPosition *int32   `json:"menu_position"`
-	Supports     []string `json:"supports"`
+	Supports     []string `json:"supports" binding:"omitempty,max=50,dive,min=1,max=50"`
 }
 
 // updatePostType updates an existing post type by name.
@@ -254,8 +256,7 @@ func (server *Server) updatePostType(c *gin.Context) {
 	}
 
 	var req updatePostTypeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
