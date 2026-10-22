@@ -187,11 +187,11 @@ func (server *Server) updateUser(c *gin.Context) {
 			return
 		}
 		if req.CurrentPassword == "" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "current password is required"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "current password is required", "code": "current_password_required"})
 			return
 		}
 		if err := util.CheckPassword(req.CurrentPassword, existingUser.HashedPassword); err != nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "current password is incorrect"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "current password is incorrect", "code": "current_password_incorrect"})
 			return
 		}
 	}

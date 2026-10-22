@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { useSelect } from "@gl-admin/utils/select"
-import { logout } from "@gl-admin/lib/api/sessions"
 import { authManager } from "@gl-admin/lib/auth"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import UserProfile from "@gl-admin/components/ui/user-profile/UserProfile"
@@ -10,7 +9,6 @@ import SidebarPopup from "./SidebarPopup"
 import SidebarItem from "./SidebarItem"
 
 export default function SidebarUserProfile() {
-  const auth = authManager.getState()
   const user = useAuthUser()
   const navigate = useNavigate()
   const { open, setOpen, ref, handleSelectClick } = useSelect()
@@ -22,11 +20,11 @@ export default function SidebarUserProfile() {
     navigate("/profile")
   }
 
+  // authManager.logout() revokes the session and clears auth; AuthGuard
+  // then sends the user to the login page.
   const handleLogout = async () => {
-    authManager.logout()
-    await logout({ refresh_token: auth.refreshToken })
     setOpen(false)
-    window.location.href = "/login"
+    await authManager.logout()
   }
 
   const footer = (

@@ -251,8 +251,9 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
-	// Extract claims from token
-	username, _ := refreshParsed.GetString("username")
+	// Extract claims from token. The username claim is not trusted: it is
+	// fixed at login, and the user may have renamed themselves since (the
+	// sessions row follows the rename via ON UPDATE CASCADE).
 	userIDStr, _ := refreshParsed.GetString("user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
@@ -321,11 +322,13 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
-	// Validate session matches token claims
-	if session.Username != username || session.UserID != userID {
+	// Validate session matches token claims. Match on the user id only and
+	// mint the new tokens with the session's (current) username.
+	if session.UserID != userID {
 		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "token/session mismatch"})
 		return
 	}
+	username := session.Username
 
 	// Monitor for IP/UA changes
 	currentUserAgent := ctx.GetHeader("User-Agent")

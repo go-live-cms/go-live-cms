@@ -82,8 +82,8 @@ export default function Profile() {
       const { user: updated } = await updateUser(user.id, update)
       setUser(updated)
       setFields(toFields(updated))
-      // Re-read the cached user so the sidebar shows the new name.
-      await authManager.refreshUser()
+      // Update the cached user so the sidebar shows the new name.
+      authManager.setUser(updated)
       showSuccess("Profile saved.")
     } catch (err) {
       console.error("Error saving profile:", err)
@@ -115,10 +115,9 @@ export default function Profile() {
 
       if (adoptPasswordChangeSession(authManager, response) === "reauth") {
         // The change went through but the API couldn't start a new session
-        // for this tab, whose token is now revoked: sign in again.
-        showError("Password changed. Please sign in again with your new password.")
-        await authManager.logout()
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`
+        // for this tab, whose token is now revoked: sign in again. AuthGuard
+        // redirects, and the login page says the password was changed.
+        await authManager.logout("password-changed")
         return
       }
       setPasswordNotice("Password changed. You were signed out on all other devices and browsers.")

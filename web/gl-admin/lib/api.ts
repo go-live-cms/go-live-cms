@@ -35,13 +35,15 @@ export function getMediaURL(mediaPath: string): string {
 }
 
 // A non-2xx API response. message is the API's {"error": ...} text when it
-// sent one; status and retryAfterSeconds (from Retry-After, on a 429) let
-// callers tell e.g. a wrong current password (403) from a rate limit.
+// sent one; status, code (the API's machine-readable {"code": ...}, when
+// present) and retryAfterSeconds (from Retry-After, on a 429) let callers
+// tell e.g. a wrong current password (403) from a rate limit.
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly retryAfterSeconds: number | null = null
+    readonly retryAfterSeconds: number | null = null,
+    readonly code: string | null = null
   ) {
     super(message)
     this.name = "ApiError"
@@ -99,13 +101,16 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}, isRetr
   if (!response.ok) {
     const text = await response.text()
     let message = `HTTP ${response.status}: ${text}`
+    let code: string | null = null
     try {
-      message = JSON.parse(text).error || `HTTP ${response.status}`
+      const body = JSON.parse(text)
+      message = body.error || `HTTP ${response.status}`
+      code = typeof body.code === "string" ? body.code : null
     } catch {
       // not JSON; keep the raw text
     }
     const retryAfter = Number.parseInt(response.headers.get("Retry-After") ?? "", 10)
-    throw new ApiError(message, response.status, Number.isFinite(retryAfter) ? retryAfter : null)
+    throw new ApiError(message, response.status, Number.isFinite(retryAfter) ? retryAfter : null, code)
   }
 
   // If the response has no content, return an empty object

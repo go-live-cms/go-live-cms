@@ -25,8 +25,22 @@ export type PasswordFields = {
 // Go's validator counts runes, not UTF-16 code units.
 const runeLength = (s: string) => [...s].length
 
-// Same rule as UserForm; the API's `email` tag is stricter and has the last word.
-const EMAIL_RE = /^\S+@\S+\.\S+$/
+// A loose shape check; the API's `email` tag is stricter and has the last word.
+export function isValidEmail(email: string): boolean {
+  return /^\S+@\S+\.\S+$/.test(email)
+}
+
+// A new password and its confirmation, as typed (the API doesn't trim them
+// either). Shared with UserForm so every form applies the API's min=6.
+export function validateNewPassword(password: string, confirm: string): string | null {
+  if (runeLength(password) < PASSWORD_MIN) {
+    return `New password must be at least ${PASSWORD_MIN} characters.`
+  }
+  if (password !== confirm) {
+    return "New passwords do not match."
+  }
+  return null
+}
 
 export function validateProfile(fields: ProfileFields): string | null {
   const username = fields.username.trim()
@@ -36,7 +50,7 @@ export function validateProfile(fields: ProfileFields): string | null {
   if (runeLength(username) < USERNAME_MIN || runeLength(username) > USERNAME_MAX) {
     return `Username must be ${USERNAME_MIN}–${USERNAME_MAX} characters.`
   }
-  if (!EMAIL_RE.test(email)) {
+  if (!isValidEmail(email)) {
     return "Please provide a valid email."
   }
   // The API keeps the old name when full_name is empty, so an empty field
@@ -63,12 +77,8 @@ export function validatePasswordChange(fields: PasswordFields): string | null {
   if (!fields.current_password) {
     return "Enter your current password."
   }
-  if (runeLength(fields.password) < PASSWORD_MIN) {
-    return `New password must be at least ${PASSWORD_MIN} characters.`
-  }
-  if (fields.password !== fields.confirm_password) {
-    return "New passwords do not match."
-  }
+  const invalid = validateNewPassword(fields.password, fields.confirm_password)
+  if (invalid) return invalid
   if (fields.password === fields.current_password) {
     return "New password must be different from the current one."
   }
@@ -77,7 +87,8 @@ export function validatePasswordChange(fields: PasswordFields): string | null {
 
 function retryHint(err: ApiError): string {
   const seconds = err.retryAfterSeconds
-  if (!seconds) return "Please wait a minute and try again."
+  if (seconds == null) return "Please wait a minute and try again."
+  if (seconds === 0) return "Please try again."
   return seconds === 1 ? "Try again in 1 second." : `Try again in ${seconds} seconds.`
 }
 
@@ -85,12 +96,9 @@ function retryHint(err: ApiError): string {
 export function describePasswordChangeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 429) return `Too many password change attempts. ${retryHint(err)}`
-    if (err.status === 403 && err.message === "current password is incorrect") {
-      return "Your current password is incorrect."
-    }
-    if (err.status === 403 && err.message === "current password is required") {
-      return "Enter your current password."
-    }
+    // Codes from api/users_handlers_write.go, not the English messages.
+    if (err.code === "current_password_incorrect") return "Your current password is incorrect."
+    if (err.code === "current_password_required") return "Enter your current password."
     if (err.status === 401) return "Your session has expired. Please sign in again."
     return err.message
   }

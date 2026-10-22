@@ -48,6 +48,22 @@ describe("buildProfileUpdate", () => {
   })
 })
 
+describe("authManager.setUser", () => {
+  it("stores the user and notifies subscribers without another request", () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    const seen: string[] = []
+    const unsubscribe = authManager.subscribe((s) => seen.push(s.user?.full_name))
+    authManager.setUser({ id: 7, full_name: "New Name" })
+    unsubscribe()
+    vi.unstubAllGlobals()
+
+    expect(seen).toEqual(["New Name"])
+    expect(JSON.parse(localStorage.getItem("user")!).full_name).toBe("New Name")
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("validatePasswordChange", () => {
   const ok = { current_password: "password123", password: "newpass1", confirm_password: "newpass1" }
 
@@ -77,13 +93,14 @@ describe("validatePasswordChange", () => {
 })
 
 describe("error messages", () => {
-  it("explains a wrong or missing current password", () => {
-    expect(describePasswordChangeError(new ApiError("current password is incorrect", 403))).toBe(
+  it("explains a wrong or missing current password by the API's code, not its wording", () => {
+    expect(describePasswordChangeError(new ApiError("reworded", 403, null, "current_password_incorrect"))).toBe(
       "Your current password is incorrect."
     )
-    expect(describePasswordChangeError(new ApiError("current password is required", 403))).toBe(
+    expect(describePasswordChangeError(new ApiError("reworded", 403, null, "current_password_required"))).toBe(
       "Enter your current password."
     )
+    expect(describePasswordChangeError(new ApiError("forbidden", 403))).toBe("forbidden")
   })
 
   it("explains the password-change rate limit with Retry-After", () => {
@@ -91,6 +108,10 @@ describe("error messages", () => {
       "Too many password change attempts. Try again in 42 seconds."
     )
     expect(describePasswordChangeError(new ApiError("too many requests", 429))).toMatch(/wait a minute/)
+    // Retry-After: 0 is a real value (retry now), not a missing header.
+    expect(describePasswordChangeError(new ApiError("too many requests", 429, 0))).toBe(
+      "Too many password change attempts. Please try again."
+    )
   })
 
   it("explains a taken username or email", () => {
@@ -120,9 +141,13 @@ describe("apiCall errors", () => {
     expect(err.retryAfterSeconds).toBe(17)
   })
 
-  it("surfaces a wrong current password as a plain 403 message", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => json(403, { error: "current password is incorrect" })))
+  it("carries the API's error code, so a wrong current password is recognised", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json(403, { error: "current password is incorrect", code: "current_password_incorrect" }))
+    )
     const err = await apiCall("/users/1", { method: "PUT", body: {} }).catch((e) => e)
+    expect(err.code).toBe("current_password_incorrect")
     expect(describePasswordChangeError(err)).toBe("Your current password is incorrect.")
   })
 })
@@ -168,6 +193,31 @@ describe("after a password change", () => {
     await expect(apiCall("/users/me")).resolves.toEqual({ user: { id: 7 } })
     const urls = fetchMock.mock.calls.map((c) => c[0])
     expect(urls).toEqual(["/api/v1/users/7", "/api/v1/users/me"])
+  })
+
+  it("keeps the adopted token when a refresh already in flight fails on the old session", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {})
+    authManager.adoptAccessToken({ access_token: "old-token", expires_at: Math.floor(Date.now() / 1000) + 900 })
+    let failRefresh!: () => void
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (url: string) =>
+          new Promise<Response>((resolve) => {
+            // The refresh presented the old cookie; the password change has
+            // since blocked that session.
+            if (url === "/api/v1/auth/refresh") failRefresh = () => resolve(json(401, { error: "session is blocked" }))
+          })
+      )
+    )
+
+    const refreshing = authManager.forceRefresh()
+    adoptPasswordChangeSession(authManager, { access_token: "new-token", expires_at: Math.floor(Date.now() / 1000) + 900 })
+    failRefresh()
+
+    await expect(refreshing).resolves.toBe(true)
+    expect(authManager.getState().isAuthenticated).toBe(true)
+    expect(authManager.getAccessToken()).toBe("new-token")
   })
 
   it("asks to sign in again when the API couldn't start a new session", () => {
