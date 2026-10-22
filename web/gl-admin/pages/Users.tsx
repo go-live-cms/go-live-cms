@@ -10,15 +10,20 @@ import Button from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
+import EmptyState from "@gl-admin/components/ui/EmptyState"
 import { getUsers } from "@gl-admin/lib/api/users"
 import type { User, ApiMeta } from "@gl-admin/lib/api/types"
 import { AuthManager } from "@gl-admin/lib/auth"
-import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
+import { USER_ROLE_OPTIONS, isSiteAdmin } from "@gl-admin/lib/roles"
+import { errorMessage } from "@gl-admin/lib/api/errors"
+import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
 
 const Users: React.FC = () => {
     const accessToken = AuthManager.getInstance().getAccessToken() || ""
     const navigate = useNavigate()
     const { baseTitle } = useGoLive()
+    // User management is admin-only (requireSiteAdmin in the API).
+    const isAdmin = isSiteAdmin(useCurrentRole())
     const initialFilters = { role: "", sort: "" }
     const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>(initialFilters)
     const columns: TableColumnWithRender<User>[] = [
@@ -48,7 +53,7 @@ const Users: React.FC = () => {
     ]
 
     const clearFilters = () => {
-        setSelectedFilters({ user_id: "", status: "", type: "", sort: "" })
+        setSelectedFilters(initialFilters)
     }
 
     const handleRowDoubleClick = (user: User) => {
@@ -101,18 +106,62 @@ const Users: React.FC = () => {
                 prefix="Sort:"
                 onChange={(value) => setSelectedFilters((prev) => ({ ...prev, sort: value }))}
             />
-            <Button onClick={() => navigate("/users/new")} className="gl-admin-media__new-media-btn">
-                <Icon name="add" color="#000000" width="14" height="14" /> New User
-            </Button>
+            {isAdmin && (
+                <Button onClick={() => navigate("/users/new")} className="gl-admin-media__new-media-btn">
+                    <Icon name="add" color="#000000" width="14" height="14" /> New User
+                </Button>
+            )}
         </>
     )
 
     return (
         <Listing title="Users" actions={actions}>
             <Pagination fetchData={fetchData} token={accessToken} query={selectedFilters || {}}>
-                {({ data, loading }) => (
-                    <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
-                )}
+                {({ data, loading, error, retry }) => {
+                    if (error) {
+                        return (
+                            <EmptyState
+                                variant="error"
+                                icon="close"
+                                title="Couldn't load users"
+                                description={errorMessage(error)}
+                                action={
+                                    <Button variation="primary" onClick={retry}>
+                                        Try again
+                                    </Button>
+                                }
+                            />
+                        )
+                    }
+                    if (!loading && data.length === 0) {
+                        return selectedFilters.role ? (
+                            <EmptyState
+                                icon="search"
+                                title="No users match these filters"
+                                description="Try another role, or clear the filters."
+                                action={
+                                    <Button variation="flat" onClick={clearFilters}>
+                                        Clear filters
+                                    </Button>
+                                }
+                            />
+                        ) : (
+                            <EmptyState
+                                icon="user"
+                                title="No users yet"
+                                description="Invite your team by creating their accounts."
+                                action={
+                                    isAdmin && (
+                                        <Button variation="primary" onClick={() => navigate("/users/new")}>
+                                            <Icon name="add" color="white" width="14" height="14" /> Add a user
+                                        </Button>
+                                    )
+                                }
+                            />
+                        )
+                    }
+                    return <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
+                }}
             </Pagination>
         </Listing>
     )

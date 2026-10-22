@@ -1,5 +1,6 @@
 import type { Media, MediaSortOption, PaginationParams, ApiResponse } from "./types"
 import { apiCall, authenticatedFetch } from "../api"
+import { apiErrorFromResponse } from "./errors"
 import { buildUrl } from "./utils"
 import type { Post } from "./types"
 
@@ -55,8 +56,7 @@ export async function createMedia(formData: FormData, token?: string): Promise<a
     body: formData,
   })
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Upload failed")
+    throw await apiErrorFromResponse(response, { fallback: "Upload failed" })
   }
   return response.json()
 }
@@ -74,8 +74,7 @@ export async function updateMedia(
     body: JSON.stringify(data),
   })
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Update failed")
+    throw await apiErrorFromResponse(response, { fallback: "Update failed" })
   }
   return response.json()
 }
@@ -85,8 +84,7 @@ export async function deleteMedia(id: number, token?: string): Promise<any> {
     method: "DELETE",
   })
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Delete failed")
+    throw await apiErrorFromResponse(response, { fallback: "Delete failed" })
   }
   return response.json()
 }

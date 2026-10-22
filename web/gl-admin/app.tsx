@@ -1,8 +1,9 @@
-import { StrictMode, lazy, useEffect } from "react"
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom"
+import { StrictMode, Suspense, lazy, useEffect } from "react"
+import { BrowserRouter, Routes, Route, useLocation, useParams } from "react-router-dom"
 import { GoLiveProvider } from "./contexts/GoLiveContext"
 import { ThemeProvider } from "./contexts/ThemeContext"
 import AuthGuard from "@gl-admin/components/AuthGuard"
+import ErrorBoundary from "@gl-admin/components/ErrorBoundary"
 import Sidebar from "@gl-admin/components/sidebar/Sidebar"
 import "@gl-admin/assets/styles/global.scss"
 import NewContent from "./pages/NewContent"
@@ -35,30 +36,53 @@ const BackfillBlocks = lazy(() => import("@gl-admin/pages/BackfillBlocks"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 const Themes = lazy(() => import("@gl-admin/pages/Themes"))
 
+// Minimal navigation shown if the sidebar itself fails to render.
+function SidebarFallback() {
+  return (
+    <nav className="gl-sidebar-fallback" aria-label="Admin">
+      <p>The menu couldn't be loaded.</p>
+      <a href="/gl-admin/">Dashboard</a>
+      <button type="button" onClick={() => window.location.reload()}>
+        Reload
+      </button>
+    </nav>
+  )
+}
+
 function AppLayout() {
   const routeClasses = useRouteClasses()
+  const { pathname } = useLocation()
 
   return (
     <main id="admin">
-      <Sidebar />
+      {/* Its own boundary, so a sidebar crash doesn't take the pages down with it. */}
+      <ErrorBoundary resetKey={pathname} fallback={<SidebarFallback />}>
+        <Sidebar />
+      </ErrorBoundary>
       <section className={routeClasses}>
         <div id="admin-content">
-          <Routes>
-            <Route path="*" element={<Navigate to="/404" replace />} />
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/404" element={<NotFound />} />
-            <Route path="/content" element={<ContentComponent key="all" />} />
-            <Route path="/content/:typeName" element={<ContentByType />} />
-            <Route path="/content/:typeName/new" element={<NewContent />} />
-            <Route path="/content/edit/:id" element={<EditContent />} />
-            <Route path="/media" element={<Media />} />
-            <Route path="/themes" element={<Themes />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/users/new" element={<NewUser />} />
-            <Route path="/users/edit/:id" element={<EditUser />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/tools/backfill-blocks" element={<BackfillBlocks />} />
-          </Routes>
+          {/* Resets on navigation, so leaving a crashed page recovers. */}
+          <ErrorBoundary resetKey={pathname}>
+            <Suspense fallback={null}>
+              <Routes>
+                {/* Rendered in place (no redirect) so the broken URL stays visible. */}
+                <Route path="*" element={<NotFound />} />
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/404" element={<NotFound />} />
+                <Route path="/content" element={<ContentComponent key="all" />} />
+                <Route path="/content/:typeName" element={<ContentByType />} />
+                <Route path="/content/:typeName/new" element={<NewContent />} />
+                <Route path="/content/edit/:id" element={<EditContent />} />
+                <Route path="/media" element={<Media />} />
+                <Route path="/themes" element={<Themes />} />
+                <Route path="/users" element={<Users />} />
+                <Route path="/users/new" element={<NewUser />} />
+                <Route path="/users/edit/:id" element={<EditUser />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/tools/backfill-blocks" element={<BackfillBlocks />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </section>
     </main>

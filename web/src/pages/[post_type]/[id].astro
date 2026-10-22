@@ -1,5 +1,5 @@
 ---
-import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes } from '../../lib/api'
+import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import type { Post } from '@gl-admin/lib/api/types'
 
@@ -69,6 +69,18 @@ const { 'post_type': postType, id } = Astro.params as { 'post_type': string; id:
 const { post } = Astro.props as { post?: Post }
 
 console.log(`Rendering ${postType} with ID/slug:`, id)
+
+// Inactive and non-public post types have no public pages. If the type list
+// can't be fetched, fall through to the post lookup.
+let publicTypes: string[] | null = null
+try {
+  publicTypes = await getPublicPostTypeNames()
+} catch (error) {
+  console.warn('Could not fetch post types:', error)
+}
+if (publicTypes && !publicTypes.includes(postType)) {
+  return new Response(null, { status: 404 })
+}
 
 let fullPost: Post | undefined = post
 
@@ -151,6 +163,13 @@ if (!fullPost || !fullPost.title) {
     status: 404,
     statusText: 'Post Content Not Found'
   })
+}
+
+// The API returns drafts and archived posts by id/slug to anyone, so only
+// published posts are public here. A post requested under another type's URL
+// (/page/12 for a post) is a 404 too. A null-body 404 renders src/pages/404.astro.
+if (fullPost.post_status !== 'published' || (fullPost.post_type && fullPost.post_type !== postType)) {
+  return new Response(null, { status: 404 })
 }
 
 // Phase 2: Apply theme content filter if available

@@ -1,0 +1,44 @@
+---
+/**
+ * Theme-neutral frame for the public error pages, used when the active theme
+ * ships no layouts/error/*.astro. It loads the active theme's registered
+ * stylesheets (so its CSS variables apply) without borrowing another theme's
+ * base layout.
+ */
+import Header from '@/layouts/Header.astro'
+import Footer from '@/layouts/Footer.astro'
+import ErrorContent from '@/components/ErrorContent.astro'
+import { SITE_TITLE } from '@/consts'
+import '@/assets/styles/global.css'
+
+interface Props {
+  status: number
+  title: string
+  message: string
+  detail?: string
+}
+
+const { title, message } = Astro.props
+const themeAssets = Astro.locals.themeAssets || {}
+const legacyCssPath = Astro.locals.themeCssPath
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={message} />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{`${title} | ${SITE_TITLE}`}</title>
+    {themeAssets.styles?.map((style: any) => (
+      <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
+    ))}
+    {!themeAssets.styles?.length && legacyCssPath && <link rel="stylesheet" href={legacyCssPath} />}
+  </head>
+  <body>
+    <Header />
+    <ErrorContent {...Astro.props} />
+    <Footer />
+  </body>
+</html>

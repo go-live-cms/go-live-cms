@@ -1,15 +1,21 @@
 import React from "react"
 import MediaCard from "./MediaCard"
+import EmptyState from "@gl-admin/components/ui/EmptyState"
+import Button from "@gl-admin/components/ui/Button"
 import type { Media } from "@gl-admin/lib/types"
 
 interface MediaGridProps {
   mediaItems: Media[]
   loading?: boolean
+  // A readable message (see errorMessage in lib/api/errors.ts).
   error?: string | null
+  onRetry?: () => void
   emptyState?: {
     title?: string
-    description?: string
-    icon?: React.ReactNode
+    description?: React.ReactNode
+    // Name of an svg in assets/icons.
+    icon?: string
+    action?: React.ReactNode
   }
   className?: string
   onMediaSelect?: (media: Media) => void
@@ -22,6 +28,7 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   mediaItems,
   loading = false,
   error = null,
+  onRetry,
   emptyState = {
     title: "No media files yet",
     description: 'Upload your first file by clicking "New Media" above',
@@ -69,9 +76,19 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   if (error) {
     return (
       <div className={`gl-admin-media__container ${className}`}>
-        <div className="error-message">
-          <strong>Error:</strong> {error}
-        </div>
+        <EmptyState
+          variant="error"
+          icon="close"
+          title="Couldn't load media"
+          description={error}
+          action={
+            onRetry && (
+              <Button variation="primary" onClick={onRetry}>
+                Try again
+              </Button>
+            )
+          }
+        />
       </div>
     )
   }
@@ -79,11 +96,12 @@ const MediaGrid: React.FC<MediaGridProps> = ({
   if (mediaItems.length === 0) {
     return (
       <div className={`gl-admin-media__container ${className}`}>
-        <div className="empty-state">
-          {emptyState.icon || <div className="empty-icon" />}
-          <h3>{emptyState.title}</h3>
-          <p>{emptyState.description}</p>
-        </div>
+        <EmptyState
+          icon={emptyState.icon || "media"}
+          title={emptyState.title || "No media files yet"}
+          description={emptyState.description}
+          action={emptyState.action}
+        />
       </div>
     )
   }

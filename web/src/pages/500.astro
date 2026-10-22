@@ -1,0 +1,27 @@
+---
+import ThemedErrorPage from '@/components/ThemedErrorPage.astro'
+
+export const prerender = false
+
+interface Props {
+  error: unknown
+}
+
+const { error } = Astro.props
+
+// Stack traces and internal messages are only shown in development. In
+// production visitors get the generic message; the error is in the server log.
+const detail =
+  import.meta.env.DEV && error
+    ? error instanceof Error
+      ? error.stack || error.message
+      : String(error)
+    : undefined
+---
+
+<ThemedErrorPage
+  status={500}
+  title="Something went wrong"
+  message="We hit an unexpected problem loading this page. Please try again in a moment."
+  detail={detail}
+/>
