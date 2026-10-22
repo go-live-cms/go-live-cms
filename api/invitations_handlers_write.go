@@ -1,4 +1,4 @@
-// invitations_handlers implements invite-only sign-up (#148): admins invite an
+// invitations_handlers_write implements invite-only sign-up (#148): admins invite an
 // email with a role, and the invitee accepts by choosing a username and
 // password. The invitation's email and role are what the account gets; the
 // accept request can't change them.
@@ -19,14 +19,15 @@ import (
 )
 
 // emailInvitation sends the invitation email for inv with its raw token and
-// reports whether it went out. A failure is logged, not returned: the
+// reports whether it went out. The stated lifetime is the configured TTL,
+// which is what the link was just given (create or resend). A failure is logged, not returned: the
 // invitation exists either way, and the admin can resend it.
 func (server *Server) emailInvitation(c *gin.Context, inv db.UserInvitation, token string) bool {
 	msg, err := mailer.RenderInvitation(inv.Email, mailer.Invitation{
 		SiteTitle: server.siteTitle(c.Request.Context()),
 		Role:      inv.Role,
 		Link:      server.accountLink(acceptInvitePath, token),
-		ExpiresIn: inv.ExpiresAt.Sub(inv.CreatedAt).Round(time.Minute),
+		ExpiresIn: server.config.InvitationLinkTTL(),
 	})
 	if err == nil {
 		err = server.sendMail(c.Request.Context(), msg)
@@ -98,24 +99,6 @@ func (server *Server) createInvitation(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"invitation": toInvitationResponse(inv, now), "email_sent": sent})
 }
 
-// listInvitations returns open invitations, newest first: pending ones and
-// expired ones (which can still be resent or revoked).
-//
-// Authentication: Bearer token + admin role
-func (server *Server) listInvitations(c *gin.Context) {
-	invitations, err := server.store.ListOpenUserInvitations(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list invitations"})
-		return
-	}
-	now := time.Now()
-	rsp := make([]InvitationResponse, 0, len(invitations))
-	for _, inv := range invitations {
-		rsp = append(rsp, toInvitationResponse(inv, now))
-	}
-	c.JSON(http.StatusOK, gin.H{"invitations": rsp})
-}
-
 func invitationIDParam(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -157,8 +140,6 @@ func (server *Server) resendInvitation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resend invitation"})
 		return
 	}
-	// The email states the link's lifetime from now, not from the original invite.
-	inv.CreatedAt = now
 	sent := server.emailInvitation(c, inv, token)
 
 	c.JSON(http.StatusOK, gin.H{"invitation": toInvitationResponse(inv, now), "email_sent": sent})
@@ -186,38 +167,6 @@ func (server *Server) revokeInvitation(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "invitation revoked"})
-}
-
-// previewInvite tells the accept page what a valid invitation is for, so it
-// can show the email and role (and spot a dead link) before the form.
-//
-// Request body: {"token": "..."}
-//
-// Returns:
-//   - 200 OK: {"email", "role", "expires_at"}
-//   - 400 Bad Request: code "invalid_token" for a link that doesn't work
-func (server *Server) previewInvite(c *gin.Context) {
-	var req PreviewInvitationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		respondInvalidAccountToken(c)
-		return
-	}
-	hash, ok := parseAccountToken(req.Token)
-	if !ok {
-		respondInvalidAccountToken(c)
-		return
-	}
-	inv, err := server.store.GetValidUserInvitationByTokenHash(c.Request.Context(), hash)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			respondInvalidAccountToken(c)
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load invitation"})
-		return
-	}
-	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, gin.H{"email": inv.Email, "role": inv.Role, "expires_at": inv.ExpiresAt})
 }
 
 // acceptInvite redeems an invitation: it creates the user with the invited

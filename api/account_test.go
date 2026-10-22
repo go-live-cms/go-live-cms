@@ -55,7 +55,7 @@ func newAccountTestServer(t *testing.T, store db.Store) (*Server, *recordingMail
 	server := newTestServer(t, store)
 	rec := &recordingMailer{}
 	server.mailer = rec
-	server.runInBackground = func(f func()) { f() }
+	server.runInBackground = func(_, _ string, f func()) { f() }
 	return server, rec
 }
 
@@ -469,6 +469,13 @@ func TestResendInvitationAPI(t *testing.T) {
 		require.Len(t, msgs, 1)
 		require.Equal(t, hashAccountToken(tokenFromMail(t, msgs[0], acceptInvitePath)), captured.TokenHash)
 		require.Contains(t, msgs[0].Text, "3 days", "the lifetime counts from the resend")
+
+		var rsp struct {
+			Invitation InvitationResponse `json:"invitation"`
+		}
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
+		require.WithinDuration(t, time.Now().Add(-100*time.Hour), rsp.Invitation.CreatedAt, time.Minute,
+			"created_at stays the original invitation time")
 	})
 
 	t.Run("accepted or revoked: 404", func(t *testing.T) {
@@ -638,7 +645,7 @@ func TestAccountEndpointRateLimits(t *testing.T) {
 		c.RateLimitPasswordForgotPerMinute = 2
 		c.RateLimitAccountTokenPerMinute = 2
 	})
-	server.runInBackground = func(f func()) { f() }
+	server.runInBackground = func(_, _ string, f func()) { f() }
 
 	from := func(ip string) func(*http.Request) {
 		return func(r *http.Request) { r.RemoteAddr = ip + ":1234" }
@@ -694,4 +701,28 @@ func TestNewServerMailConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "http://localhost:4321", server.publicURL)
 	})
+}
+
+type chanReporter chan ErrorEvent
+
+func (r chanReporter) ReportError(_ context.Context, event ErrorEvent) { r <- event }
+
+// A panic in background work (the forgot-password email) is recovered and
+// reported instead of crashing the process.
+func TestRunDetachedRecoversPanics(t *testing.T) {
+	server := newTestServer(t, mockdb.NewMockStore(gomock.NewController(t)))
+	reports := make(chanReporter, 1)
+	server.SetErrorReporter(reports)
+
+	server.runInBackground("req-123", "/api/v1/auth/password/forgot", func() { panic("boom") })
+
+	select {
+	case event := <-reports:
+		require.Equal(t, "req-123", event.RequestID)
+		require.Equal(t, "/api/v1/auth/password/forgot", event.Route)
+		require.ErrorContains(t, event.Err, "boom")
+		require.NotEmpty(t, event.Stack)
+	case <-time.After(5 * time.Second):
+		t.Fatal("panic was not reported")
+	}
 }

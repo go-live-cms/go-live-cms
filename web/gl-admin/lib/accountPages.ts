@@ -4,10 +4,11 @@
 // the logic is bundled (no inline script, CSP #161) and tested here.
 //
 // Emailed links carry their token in the URL fragment (#token=...), which the
-// browser never sends to a server. The page reads it, drops it from the
-// address bar and history, and POSTs it to the API.
+// browser never sends to a server. The page reads it, moves it from the
+// address bar and history into this tab's session storage (so a reload still
+// works), and POSTs it to the API.
 import { ApiError, apiErrorFromResponse } from "./api/errors"
-import { FULL_NAME_MAX, FULL_NAME_MIN, USERNAME_MAX, USERNAME_MIN, validateNewPassword } from "./profile"
+import { FULL_NAME_MAX, FULL_NAME_MIN, USERNAME_MAX, USERNAME_MIN, retryHint, validateNewPassword } from "./profile"
 import { USER_ROLE_OPTIONS } from "./roles"
 
 const API_BASE = "/api/v1"
@@ -81,14 +82,45 @@ export function forgetLinkToken(win: Window): void {
   win.history.replaceState(win.history.state, "", win.location.pathname + win.location.search)
 }
 
+// Once the token is out of the URL, a reload would lose it and show a working
+// link as invalid. So it is kept in sessionStorage (this tab only, gone when
+// the tab closes) until the page is done with it.
+const tokenStorageKey = (win: Window) => `gl-account-link-token:${win.location.pathname}`
+
+// The page's token: from the link's fragment (then moved out of the URL into
+// session storage), or from session storage after a reload. Null if neither.
+export function takeLinkToken(win: Window): string | null {
+  const key = tokenStorageKey(win)
+  const fromLink = readLinkToken(win.location.hash)
+  forgetLinkToken(win)
+  try {
+    if (fromLink) {
+      win.sessionStorage.setItem(key, fromLink)
+      return fromLink
+    }
+    return readLinkToken(`token=${win.sessionStorage.getItem(key) ?? ""}`)
+  } catch {
+    return fromLink // storage blocked: the token works until a reload
+  }
+}
+
+// Drops the stored token once it has been used up or found invalid.
+export function dropLinkToken(win: Window): void {
+  try {
+    win.sessionStorage.removeItem(tokenStorageKey(win))
+  } catch {
+    // Storage blocked: nothing was stored.
+  }
+}
+
 // --- Validation and messages ------------------------------------------------
 
 const runeLength = (s: string) => [...s].length
 const byteLength = (s: string) => new TextEncoder().encode(s).length
 
 export function validatePassword(password: string, confirm: string): string | null {
-  const invalid = validateNewPassword(password, confirm)
-  if (invalid) return invalid.replace("New password", "Password").replace("New passwords", "Passwords")
+  const invalid = validateNewPassword(password, confirm, "Password")
+  if (invalid) return invalid
   if (byteLength(password) > PASSWORD_MAX_BYTES) return "Password is too long."
   return null
 }
@@ -113,12 +145,7 @@ export function isInvalidLinkError(err: unknown): boolean {
 // User-facing text for a failed request on these pages.
 export function describeAccountError(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.status === 429) {
-      const s = err.retryAfterSeconds
-      return s && s > 0
-        ? `Too many attempts. Try again in ${s} second${s === 1 ? "" : "s"}.`
-        : "Too many attempts. Wait a moment and try again."
-    }
+    if (err.status === 429) return `Too many attempts. ${retryHint(err)}`
     if (err.code === "invalid_token") return "This link is invalid or has expired."
     if (err.code === "username_taken") return "That username is taken. Choose another one."
     if (err.code === "email_registered") return "An account with this email already exists. Sign in, or reset its password."
@@ -193,8 +220,10 @@ function field(form: HTMLFormElement, name: string): string {
   return (new FormData(form).get(name) as string | null) ?? ""
 }
 
-// Swaps the form for the "this link doesn't work" panel.
+// Swaps the form for the "this link doesn't work" panel, and forgets the
+// stored token.
 function showInvalidLink(doc: Document, form: HTMLFormElement) {
+  dropLinkToken(doc.defaultView!)
   form.hidden = true
   const panel = doc.getElementById("linkInvalid")
   if (panel) panel.hidden = false
@@ -235,8 +264,7 @@ export function mountResetPasswordPage(doc: Document = document, navigate: Navig
   const win = doc.defaultView!
   const form = doc.getElementById("resetForm") as HTMLFormElement
   const ui = formUi(doc, form, "Set new password", "Saving…")
-  const token = readLinkToken(win.location.hash)
-  forgetLinkToken(win)
+  const token = takeLinkToken(win)
   if (!token) {
     showInvalidLink(doc, form)
     return
@@ -263,6 +291,7 @@ export function mountResetPasswordPage(doc: Document = document, navigate: Navig
       ui.showError(describeAccountError(err))
       return
     }
+    dropLinkToken(win)
     navigate("/login?reason=password-reset")
   })
 }
@@ -274,8 +303,7 @@ export async function mountAcceptInvitePage(
   const win = doc.defaultView!
   const form = doc.getElementById("acceptForm") as HTMLFormElement
   const ui = formUi(doc, form, "Create account", "Creating account…")
-  const token = readLinkToken(win.location.hash)
-  forgetLinkToken(win)
+  const token = takeLinkToken(win)
   if (!token) {
     showInvalidLink(doc, form)
     return
@@ -307,6 +335,7 @@ export async function mountAcceptInvitePage(
       ui.showError(describeAccountError(err))
       return
     }
+    dropLinkToken(win)
     navigate("/login?reason=invite-accepted")
   })
 

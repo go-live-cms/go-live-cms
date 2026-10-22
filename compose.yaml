@@ -62,10 +62,12 @@ services:
       # Required (#148): the site is invite-only, so invitations and password
       # resets must be able to go out. The API refuses to start without
       # SMTP_HOST, MAIL_FROM and PUBLIC_BASE_URL (the origin email links point
-      # at). Port 465 is implicit TLS; others use STARTTLS when offered.
+      # at). TLS is required: implicit on port 465, STARTTLS otherwise
+      # (SMTP_TLS=starttls|tls; "none" is only accepted for a loopback relay).
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL}"
       SMTP_HOST: "${SMTP_HOST}"
       SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_TLS: "${SMTP_TLS:-}"
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       MAIL_FROM: "${MAIL_FROM}"

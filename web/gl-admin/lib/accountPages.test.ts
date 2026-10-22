@@ -56,6 +56,7 @@ let fetchMock: ReturnType<typeof vi.fn>
 beforeEach(() => {
   fetchMock = vi.fn()
   vi.stubGlobal("fetch", fetchMock)
+  sessionStorage.clear()
 })
 
 afterEach(() => {
@@ -107,6 +108,7 @@ describe("validation", () => {
     expect(describeAccountError(new ApiError("x", 409, null, "username_taken"))).toMatch(/username is taken/)
     expect(describeAccountError(new ApiError("x", 409, null, "email_registered"))).toMatch(/already exists/)
     expect(describeAccountError(new ApiError("x", 429, 12))).toMatch(/12 seconds/)
+    expect(describeAccountError(new ApiError("x", 429))).toMatch(/Too many attempts. Please wait a minute/)
     expect(describeAccountError(new ApiError("x", 500))).toMatch(/server/)
     expect(describeAccountError(new TypeError("Failed to fetch"))).toMatch(/Can't reach the server/)
   })
@@ -197,6 +199,50 @@ describe("reset password page", () => {
     expect(form.hidden).toBe(true)
     expect(visible("linkInvalid")).toBe(true)
     expect(navigate).not.toHaveBeenCalled()
+  })
+})
+
+describe("reloading a link page", () => {
+  it("keeps working after the token left the URL, until it is used", async () => {
+    setUrl(`/reset-password#token=${TOKEN}`)
+    renderPage("resetForm", ["password", "confirm_password"])
+    mountResetPasswordPage(document, vi.fn())
+    expect(window.location.hash).toBe("")
+
+    // Reload: the fragment is gone, but this tab still has the token.
+    const form = renderPage("resetForm", ["password", "confirm_password"])
+    const navigate = vi.fn()
+    mountResetPasswordPage(document, navigate)
+    expect(form.hidden).toBe(false)
+
+    fetchMock.mockResolvedValue(json(200, { message: "ok" }))
+    fill({ password: "new-secret", confirm_password: "new-secret" })
+    await submit(form)
+    expect(sentBody()).toEqual({ token: TOKEN, password: "new-secret" })
+    expect(navigate).toHaveBeenCalled()
+
+    // Used up: another reload shows the invalid-link panel.
+    renderPage("resetForm", ["password", "confirm_password"])
+    mountResetPasswordPage(document, vi.fn())
+    expect(visible("linkInvalid")).toBe(true)
+  })
+
+  it("forgets a token the API rejected", async () => {
+    setUrl(`/accept-invite#token=${TOKEN}`)
+    renderPage("acceptForm", ["username", "full_name", "password", "confirm_password"])
+    fetchMock.mockResolvedValueOnce(json(400, { error: "x", code: "invalid_token" }))
+    await mountAcceptInvitePage(document, vi.fn())
+    expect(sessionStorage.length).toBe(0)
+  })
+
+  it("keeps tokens per page", () => {
+    setUrl(`/accept-invite#token=${TOKEN}`)
+    renderPage("acceptForm", ["username"])
+    void mountAcceptInvitePage(document, vi.fn())
+    setUrl("/reset-password")
+    const form = renderPage("resetForm", ["password", "confirm_password"])
+    mountResetPasswordPage(document, vi.fn())
+    expect(form.hidden).toBe(true)
   })
 })
 

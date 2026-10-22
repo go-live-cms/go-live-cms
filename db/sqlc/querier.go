@@ -145,6 +145,8 @@ type Querier interface {
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
+	// What the admin Users page shows. Invitations that expired over 30 days ago
+	// are dropped (nobody is waiting on them any more), and the list is capped.
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)

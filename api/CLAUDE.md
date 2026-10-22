@@ -135,7 +135,7 @@ server.
 
 ## Invitations, password reset, mail (#148)
 
-- **Invite-only.** Admins create invitations (`/invitations`, `invitations_handlers.go`);
+- **Invite-only.** Admins create invitations (`/invitations`, `invitations_handlers_{read,write}.go`);
   `POST /auth/invitations/accept` creates the user with the invitation's email and
   role. `/auth/register` is still a placeholder (self-registration is Post-MVP, #191).
 - **Tokens** (`account_tokens_utils.go`): 32 random bytes, base64url; only the
@@ -149,11 +149,14 @@ server.
   session and burns the user's other reset tokens. `UpdateUserTx` with
   `PasswordChanged` burns outstanding reset tokens too.
 - **Forgot never enumerates:** same 200 for any address, and the lookup/token/email
-  run after the response (`server.runInBackground`, inline in tests). One email per
+  run after the response (`server.runInBackground` → `runDetached`, which recovers
+  and reports panics; inline in tests). One email per
   user per minute (silent cooldown).
 - **Mailer** (`mailer/`): `smtp` | `file` (debug default, `dev-mail/*.eml`) | `log`
   (test default). Outside debug/test `NewServer` fails without `SMTP_HOST`,
-  `MAIL_FROM` and `PUBLIC_BASE_URL`, and refuses `file`/`log`. Links are built from
+  `MAIL_FROM` and `PUBLIC_BASE_URL`, and refuses `file`/`log`. SMTP requires TLS
+  (`SMTP_TLS`: STARTTLS by default, a server without it is an error; `none` only in
+  debug/test or to a loopback relay). Links are built from
   `PUBLIC_BASE_URL`, never the Host header. Templates in `mailer/templates/`
   (text + HTML, site title from settings).
 

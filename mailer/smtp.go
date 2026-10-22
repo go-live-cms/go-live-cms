@@ -19,13 +19,21 @@ import (
 // earlier deadline.
 const smtpTimeout = 30 * time.Second
 
-// smtpMailer delivers through an SMTP server. Port 465 is implicit TLS;
-// otherwise STARTTLS is used whenever the server offers it, and required when
-// credentials are configured (net/smtp's PLAIN auth refuses to send them in
-// clear text except to localhost).
+// SMTP connection security (SMTP_TLS).
+const (
+	smtpTLSStartTLS = "starttls"
+	smtpTLSImplicit = "tls"
+	smtpTLSNone     = "none"
+)
+
+// smtpMailer delivers through an SMTP server. TLS is required by default:
+// implicit on port 465, STARTTLS otherwise, and a server that doesn't offer
+// STARTTLS is an error, not a fallback to clear text (which an on-path
+// attacker could force by stripping it). Emails carry working links.
 type smtpMailer struct {
 	host     string
 	port     int
+	tlsMode  string
 	username string
 	password string
 	from     *mail.Address
@@ -49,14 +57,49 @@ func newSMTPMailer(config util.Config) (*smtpMailer, error) {
 	if (config.SMTPUser == "") != (config.SMTPPass == "") {
 		return nil, errors.New("SMTP_USER and SMTP_PASS must be set together")
 	}
+	tlsMode, err := smtpTLSMode(config, host)
+	if err != nil {
+		return nil, err
+	}
 	return &smtpMailer{
 		host:     host,
 		port:     config.SMTPPort,
+		tlsMode:  tlsMode,
 		username: config.SMTPUser,
 		password: config.SMTPPass,
 		from:     from,
 		now:      time.Now,
 	}, nil
+}
+
+// smtpTLSMode resolves SMTP_TLS. Clear text ("none") is only allowed in
+// debug/test mode (e.g. Mailpit) or to a loopback relay.
+func smtpTLSMode(config util.Config, host string) (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(config.SMTPTLS))
+	switch mode {
+	case "":
+		if config.SMTPPort == 465 {
+			return smtpTLSImplicit, nil
+		}
+		return smtpTLSStartTLS, nil
+	case smtpTLSStartTLS, smtpTLSImplicit:
+		return mode, nil
+	case smtpTLSNone:
+		if config.IsDebugMode() || config.IsTestMode || isLoopbackHost(host) {
+			return mode, nil
+		}
+		return "", fmt.Errorf("SMTP_TLS=none sends reset and invitation links in clear text; it is only allowed in debug mode or to a loopback host")
+	default:
+		return "", fmt.Errorf("invalid SMTP_TLS %q: must be %q, %q or %q", config.SMTPTLS, smtpTLSStartTLS, smtpTLSImplicit, smtpTLSNone)
+	}
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (m *smtpMailer) tlsConf() *tls.Config {
@@ -80,7 +123,7 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	dialer := &net.Dialer{Deadline: deadline}
 
 	var conn net.Conn
-	if m.port == 465 {
+	if m.tlsMode == smtpTLSImplicit {
 		conn, err = (&tls.Dialer{NetDialer: dialer, Config: m.tlsConf()}).DialContext(ctx, "tcp", addr)
 	} else {
 		conn, err = dialer.DialContext(ctx, "tcp", addr)
@@ -100,11 +143,12 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	}
 	defer c.Close()
 
-	if m.port != 465 {
-		if ok, _ := c.Extension("STARTTLS"); ok {
-			if err := c.StartTLS(m.tlsConf()); err != nil {
-				return fmt.Errorf("smtp starttls: %w", err)
-			}
+	if m.tlsMode == smtpTLSStartTLS {
+		if ok, _ := c.Extension("STARTTLS"); !ok {
+			return errors.New("smtp: server does not offer STARTTLS (use SMTP_TLS=tls for implicit TLS)")
+		}
+		if err := c.StartTLS(m.tlsConf()); err != nil {
+			return fmt.Errorf("smtp starttls: %w", err)
 		}
 	}
 	if m.username != "" {

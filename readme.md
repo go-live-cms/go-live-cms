@@ -136,7 +136,8 @@ so outside `GIN_MODE=debug` the API **refuses to start** without:
 | Variable | Meaning |
 |----------|---------|
 | `PUBLIC_BASE_URL` | Site origin the links point at, e.g. `https://cms.example.com` (never taken from the request's Host header) |
-| `SMTP_HOST`, `SMTP_PORT` | SMTP server; port 465 is implicit TLS, others use STARTTLS when offered (default 587) |
+| `SMTP_HOST`, `SMTP_PORT` | SMTP server (default port 587) |
+| `SMTP_TLS` | Optional. TLS is required: implicit on port 465, STARTTLS otherwise (a server without STARTTLS is an error). `tls` or `starttls` to choose; `none` only for a loopback relay |
 | `SMTP_USER`, `SMTP_PASS` | Optional, set together; only sent over TLS |
 | `MAIL_FROM` | Sender, e.g. `GoLive CMS <no-reply@example.com>` |
 

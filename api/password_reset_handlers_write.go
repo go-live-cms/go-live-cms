@@ -1,4 +1,4 @@
-// account_handlers_password implements forgot/reset password (#148).
+// password_reset_handlers_write implements forgot/reset password (#148).
 //
 // Forgot never says whether an email belongs to an account: the response is
 // the same 200 either way, and all the work (lookup, token, email) happens
@@ -49,7 +49,7 @@ func (server *Server) forgotPassword(c *gin.Context) {
 
 	email := normEmail(req.Email)
 	logger := server.requestLog(c)
-	server.runInBackground(func() { server.sendPasswordResetEmail(logger, email) })
+	server.runInBackground(requestIDFromContext(c), c.FullPath(), func() { server.sendPasswordResetEmail(logger, email) })
 
 	c.JSON(http.StatusOK, gin.H{"message": forgotPasswordMessage})
 }

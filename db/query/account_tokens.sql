@@ -19,9 +19,13 @@ SET revoked_at = now()
 WHERE email = $1 AND accepted_at IS NULL AND revoked_at IS NULL;
 
 -- name: ListOpenUserInvitations :many
+-- What the admin Users page shows. Invitations that expired over 30 days ago
+-- are dropped (nobody is waiting on them any more), and the list is capped.
 SELECT * FROM user_invitations
 WHERE accepted_at IS NULL AND revoked_at IS NULL
-ORDER BY created_at DESC, id DESC;
+  AND expires_at > now() - interval '30 days'
+ORDER BY created_at DESC, id DESC
+LIMIT 200;
 
 -- name: RevokeUserInvitation :execrows
 UPDATE user_invitations

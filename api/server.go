@@ -45,7 +45,7 @@ type Server struct {
 	publicURL string
 	// runInBackground runs work that must outlive the request (the forgot
 	// password flow). A field so tests can run it synchronously.
-	runInBackground func(func())
+	runInBackground func(requestID, route string, f func())
 
 	// Observability (observability.go, metrics.go, health.go).
 	logger        *slog.Logger
@@ -122,9 +122,8 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		collabTickets: tokenMaker,
 		rateLimits:    limits,
 
-		mailer:          mail,
-		publicURL:       publicURL,
-		runInBackground: func(f func()) { go f() },
+		mailer:    mail,
+		publicURL: publicURL,
 
 		logger:        slog.Default(),
 		metrics:       newHTTPMetrics(),
@@ -134,6 +133,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 
 		maxUploadBytes: maxUploadBytes,
 	}
+	server.runInBackground = server.runDetached
 
 	if shouldCheckSeededAccounts(config) {
 		if err := checkSeededAccounts(server.store); err != nil {

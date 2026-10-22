@@ -309,3 +309,19 @@ func TestCountPasswordResetTokensSince(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, 1, n)
 }
+
+func TestListOpenUserInvitationsDropsLongExpired(t *testing.T) {
+	ctx := context.Background()
+	recent := createTestInvitation(t, uniqueEmail(), "editor", time.Now().Add(-24*time.Hour))
+	stale := createTestInvitation(t, uniqueEmail(), "editor", time.Now().Add(-31*24*time.Hour))
+
+	open, err := testQueries.ListOpenUserInvitations(ctx)
+	require.NoError(t, err)
+	ids := map[int64]bool{}
+	for _, inv := range open {
+		ids[inv.ID] = true
+	}
+	require.True(t, ids[recent.ID], "recently expired invitations can still be resent")
+	require.False(t, ids[stale.ID], "invitations expired over 30 days ago are dropped")
+	require.LessOrEqual(t, len(open), 200)
+}

@@ -62,6 +62,7 @@ services:
       MAIL_FILE_DIR: "/app/dev-mail"
       SMTP_HOST: mailpit
       SMTP_PORT: "1025"
+      SMTP_TLS: none # Mailpit has no TLS; clear text is only allowed in debug mode
       MAIL_FROM: "GoLive CMS (dev) <no-reply@golive.localhost>"
       PUBLIC_BASE_URL: "http://localhost:4321"
     volumes:

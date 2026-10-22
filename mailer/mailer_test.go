@@ -230,6 +230,8 @@ func TestSMTPMailerDelivers(t *testing.T) {
 		GinMode:  util.GinModeRelease,
 		SMTPHost: "127.0.0.1",
 		SMTPPort: port,
+		// The fake server has no TLS; clear text is allowed to a loopback relay.
+		SMTPTLS:  "none",
 		MailFrom: "Acme <no-reply@acme.example>",
 	}, discardLogger())
 	require.NoError(t, err)
@@ -259,4 +261,55 @@ func TestSMTPMailerReportsUnreachableServer(t *testing.T) {
 	err = m.Send(context.Background(), Message{To: "x@example.com", Text: testLink})
 	require.ErrorContains(t, err, "smtp dial")
 	require.NotContains(t, err.Error(), "SECRET-TOKEN-VALUE")
+}
+
+// A server that doesn't offer STARTTLS must not get the message in clear
+// text: an on-path attacker could strip the STARTTLS capability.
+func TestSMTPMailerRequiresStartTLS(t *testing.T) {
+	port, received := fakeSMTP(t)
+	m, err := New(util.Config{GinMode: util.GinModeRelease, SMTPHost: "127.0.0.1", SMTPPort: port, MailFrom: "a@b.example"}, discardLogger())
+	require.NoError(t, err)
+
+	err = m.Send(context.Background(), Message{To: "x@example.com", Text: testLink})
+	require.ErrorContains(t, err, "STARTTLS")
+	select {
+	case got := <-received:
+		require.NotContains(t, got, "SECRET-TOKEN-VALUE")
+		require.NotContains(t, got, "RCPT TO")
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestSMTPTLSMode(t *testing.T) {
+	base := util.Config{GinMode: util.GinModeRelease, SMTPPort: 587}
+	for name, tc := range map[string]struct {
+		configure func(*util.Config)
+		host      string
+		want      string
+		wantErr   bool
+	}{
+		"default is STARTTLS":     {func(*util.Config) {}, "smtp.example.com", smtpTLSStartTLS, false},
+		"port 465 is implicit":    {func(c *util.Config) { c.SMTPPort = 465 }, "smtp.example.com", smtpTLSImplicit, false},
+		"explicit tls":            {func(c *util.Config) { c.SMTPTLS = "TLS" }, "smtp.example.com", smtpTLSImplicit, false},
+		"none to a remote host":   {func(c *util.Config) { c.SMTPTLS = "none" }, "smtp.example.com", "", true},
+		"none to loopback":        {func(c *util.Config) { c.SMTPTLS = "none" }, "localhost", smtpTLSNone, false},
+		"none to loopback IPv6":   {func(c *util.Config) { c.SMTPTLS = "none" }, "::1", smtpTLSNone, false},
+		"none in debug (Mailpit)": {func(c *util.Config) { c.SMTPTLS = "none"; c.GinMode = util.GinModeDebug }, "mailpit", smtpTLSNone, false},
+		"unknown value":           {func(c *util.Config) { c.SMTPTLS = "ssl" }, "smtp.example.com", "", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			config := base
+			tc.configure(&config)
+			got, err := smtpTLSMode(config, tc.host)
+			if tc.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+
+	_, err := New(util.Config{GinMode: util.GinModeRelease, SMTPHost: "smtp.example.com", SMTPPort: 25, SMTPTLS: "none", MailFrom: "a@b.example"}, discardLogger())
+	require.ErrorContains(t, err, "clear text", "startup refuses clear-text SMTP in release")
 }

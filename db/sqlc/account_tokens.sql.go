@@ -216,9 +216,13 @@ func (q *Queries) InvalidatePasswordResetTokensForUser(ctx context.Context, user
 const listOpenUserInvitations = `-- name: ListOpenUserInvitations :many
 SELECT id, email, role, token_hash, invited_by, expires_at, accepted_at, accepted_user_id, revoked_at, created_at FROM user_invitations
 WHERE accepted_at IS NULL AND revoked_at IS NULL
+  AND expires_at > now() - interval '30 days'
 ORDER BY created_at DESC, id DESC
+LIMIT 200
 `
 
+// What the admin Users page shows. Invitations that expired over 30 days ago
+// are dropped (nobody is waiting on them any more), and the list is capped.
 func (q *Queries) ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error) {
 	rows, err := q.db.QueryContext(ctx, listOpenUserInvitations)
 	if err != nil {

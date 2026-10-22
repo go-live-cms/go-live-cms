@@ -179,10 +179,15 @@ type Config struct {
 	// mode, and "smtp" needs SMTPHost and MailFrom: the API won't start in
 	// release without a working mail setup (see mailer.New).
 	MailDriver string `mapstructure:"MAIL_DRIVER"`
-	// SMTPHost and SMTPPort locate the SMTP server. Port 465 uses implicit
-	// TLS; any other port upgrades with STARTTLS when the server offers it.
+	// SMTPHost and SMTPPort locate the SMTP server; SMTPTLS says how the
+	// connection is encrypted.
 	SMTPHost string `mapstructure:"SMTP_HOST"`
 	SMTPPort int    `mapstructure:"SMTP_PORT"`
+	// SMTPTLS is "starttls" (TLS required, upgraded on connect), "tls"
+	// (implicit TLS) or "none". Empty means "tls" on port 465 and "starttls"
+	// otherwise. Emails carry working links, so "none" is only accepted in
+	// debug/test mode or to a loopback host (a local relay).
+	SMTPTLS string `mapstructure:"SMTP_TLS"`
 	// SMTPUser and SMTPPass enable PLAIN auth (only over TLS, or to localhost).
 	SMTPUser string `mapstructure:"SMTP_USER"`
 	SMTPPass string `mapstructure:"SMTP_PASS"`
@@ -291,6 +296,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("MAIL_DRIVER", "")
 	viper.SetDefault("SMTP_HOST", "")
 	viper.SetDefault("SMTP_PORT", 587)
+	viper.SetDefault("SMTP_TLS", "")
 	viper.SetDefault("SMTP_USER", "")
 	viper.SetDefault("MAIL_FROM", "")
 	viper.SetDefault("MAIL_FILE_DIR", "dev-mail")
