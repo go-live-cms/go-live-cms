@@ -196,6 +196,14 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   `components/editor/extensions/BlockIdExtension.test.ts` (headless `Editor`). Note for
   such tests: StarterKit's TrailingNode appends its own transaction (no sync meta) when
   the doc ends in a list, which re-runs `appendTransaction` without the rule-7 guard.
+- **Paste (#128):** `components/editor/extensions/PasteSanitizer.ts` runs pasted HTML
+  through DOMPurify (`transformPastedHTML`, local pastes only; no appendTransaction, so
+  rule 7 doesn't apply) and the schema's parse rules turn the rest into nodes. It
+  strips every `data-block-id` (also inside ProseMirror's `data-pm-slice` context), so
+  pasted nodes always get fresh ids from BlockIdExtension and a copied id can never
+  re-key the original block. Pasted images are dropped by design (insert via the media
+  library). Pinned by `PasteSanitizer.test.ts` (fixtures, schema check, bridge
+  round-trip) and `PasteSanitizer.collab.test.ts` (two peers converge, no loop).
 - **Cycles:** `listItemsToPM` tracks the lists being converted. A list that (directly
   or through another list) contains itself throws at the child that closes the cycle,
   so that child is dropped and reported like any other bad child. Nothing recurses

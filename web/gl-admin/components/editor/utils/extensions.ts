@@ -14,6 +14,7 @@ import { CursorAwareness } from "./cursorAwareness"
 import { getSlashCommandItems } from "../blocks"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { BlockIdExtension } from "../extensions/BlockIdExtension"
+import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { createLowlight, common } from "lowlight"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 
@@ -81,6 +82,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       BlockIdExtension,
+      PasteSanitizer,
       Placeholder.configure({
         includeChildren: true,
         showOnlyWhenEditable: true,
