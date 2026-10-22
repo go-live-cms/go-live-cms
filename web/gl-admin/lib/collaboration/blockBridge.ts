@@ -154,7 +154,7 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
           src: node.attrs.src || undefined,
           alt: node.attrs.alt || undefined,
           title: node.attrs.title || undefined,
-          mediaId: node.attrs.mediaId ?? undefined,
+          mediaId: mediaIdOf(node.attrs.mediaId),
         },
       }
 
@@ -201,6 +201,34 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         },
       }
   }
+}
+
+/**
+ * The image's media id as the number Block Spec v1 (`zImage`) and the API's media sync
+ * (`extractMediaIDsFromBlocks`, which skips non-numbers) expect. HTML parsing
+ * (`data-media-id`) and older docs can carry it as a string.
+ */
+function mediaIdOf(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim())
+  return undefined
+}
+
+/**
+ * Calls `visit` for `rootId` and each block under it (list children, any depth) in
+ * `source`, each at most once, so a list that contains itself can't loop. Returning
+ * false from `visit` skips that block's children. Missing ids are skipped.
+ */
+export function walkBlockTree(source: BlockDocV1, rootId: BlockID, visit: (block: Block) => boolean | void): void {
+  const seen = new Set<BlockID>()
+  const walk = (id: BlockID) => {
+    const block = source.blocks[id]
+    if (!block || seen.has(id)) return
+    seen.add(id)
+    if (visit(block) === false) return
+    block.children?.forEach(walk)
+  }
+  walk(rootId)
 }
 
 /**
@@ -281,12 +309,12 @@ export function restoreDroppedBlocks(current: BlockDocV1, source: BlockDocV1, dr
   const blocks = { ...current.blocks }
   let order = current.blocks_order
 
-  const copyTree = (id: BlockID) => {
-    const block = source.blocks[id]
-    if (!block || blocks[id]) return
-    blocks[id] = block
-    block.children?.forEach(copyTree)
-  }
+  // A block already in `current` is left alone, and so is everything under it.
+  const copyTree = (id: BlockID) =>
+    walkBlockTree(source, id, (block) => {
+      if (blocks[block.id]) return false
+      blocks[block.id] = block
+    })
   const insertAfter = (siblings: BlockID[], afterId: BlockID | null, id: BlockID) => {
     const anchor = afterId === null ? -1 : siblings.indexOf(afterId)
     const at = afterId === null ? 0 : anchor === -1 ? siblings.length : anchor + 1

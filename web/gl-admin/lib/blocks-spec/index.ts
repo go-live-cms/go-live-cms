@@ -174,11 +174,13 @@ export const zImage = zBase.extend({
 export const zBulletList = zBase.extend({
   type: z.literal("bullet_list"),
   attrs: z.object({}),
+  children: z.array(zBlockID).optional(),
 })
 
 export const zOrderedList = zBase.extend({
   type: z.literal("ordered_list"),
   attrs: z.object({}),
+  children: z.array(zBlockID).optional(),
 })
 
 export const zListItem = zBase.extend({
@@ -196,31 +198,57 @@ export const zCustomBlock = zBase.extend({
   children: z.array(zBlockID).optional(),
 })
 
-// Use z.union so known types are matched first, with custom as fallback
-export const zBlock = z.union([
-  zParagraph,
-  zHeading,
-  zBlockquote,
-  zCodeBlock,
-  zDivider,
-  zImage,
-  zBulletList,
-  zOrderedList,
-  zListItem,
-  zCustomBlock,
-])
+const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
+  paragraph: zParagraph,
+  heading: zHeading,
+  blockquote: zBlockquote,
+  code_block: zCodeBlock,
+  divider: zDivider,
+  image: zImage,
+  bullet_list: zBulletList,
+  ordered_list: zOrderedList,
+  list_item: zListItem,
+}
 
-export const zBlockDocV1 = z.object({
-  doc_version: z.literal(1),
-  blocks_order: z.array(zBlockID),
-  blocks: z.record(zBlockID, zBlock),
-})
+// A known type must match its own schema; only other types fall back to the custom
+// catch-all. (A plain z.union let a malformed known block, e.g. a heading with
+// level 7, pass as a "custom" block, #214.) The input comes back unchanged: the
+// object schemas would strip keys they don't list, and the collab server stores
+// what it validated (#206).
+export const zBlock = z.unknown().superRefine((value, ctx) => {
+  const type = (value as { type?: unknown } | null)?.type
+  const schema =
+    typeof type === "string" && Object.prototype.hasOwnProperty.call(knownBlockSchemas, type)
+      ? knownBlockSchemas[type as KnownBlockType]
+      : zCustomBlock
+  const result = schema.safeParse(value)
+  if (!result.success) result.error.issues.forEach((issue) => ctx.addIssue(issue))
+}) as unknown as z.ZodType<Block>
 
-// Utility functions
+export const zBlockDocV1 = z
+  .object({
+    doc_version: z.literal(1),
+    blocks_order: z.array(zBlockID),
+    blocks: z.record(zBlockID, zBlock),
+  })
+  .superRefine((doc, ctx) => {
+    for (const [key, block] of Object.entries(doc.blocks)) {
+      // This runs even when a block already failed its own schema, so it may be null.
+      const blockId = (block as { id?: unknown } | null)?.id
+      if (blockId !== undefined && blockId !== key) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["blocks", key, "id"], message: "block id must equal its map key" })
+      }
+    }
+  })
+
+// Utility functions. Both throw a ZodError on invalid input and otherwise return the
+// input itself, never a stripped copy.
 export function validateBlockDoc(doc: unknown): BlockDocV1 {
-  return zBlockDocV1.parse(doc)
+  zBlockDocV1.parse(doc)
+  return doc as BlockDocV1
 }
 
 export function validateBlock(block: unknown): Block {
-  return zBlock.parse(block)
+  zBlock.parse(block)
+  return block as Block
 }

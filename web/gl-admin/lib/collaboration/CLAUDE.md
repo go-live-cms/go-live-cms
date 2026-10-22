@@ -52,6 +52,31 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
 - `BlockPersistenceManager.ts` — the autosave **state machine**. The brains; most
   invariants live here.
 - `blockBridge.ts` — `pmToBlockDoc` / `blockDocToPM`. Pure conversion.
+- `schema.ts` (#206 P0) — `schemaExtensions()`: the schema-defining extensions, configured
+  as the editor configures them, with no DOM or React. `components/editor/utils/extensions.ts`
+  builds its list from them, so **change editor schema config there, not in extensions.ts**.
+  `getCoreSchema()` builds the schema in plain Node (`schema.node.test.ts`), and
+  `schema.test.ts` fails if the editor's schema and the core schema ever differ.
+  `getCollabSchema(themeExtensions)` adds a theme's **headless** node definitions: a theme
+  block should keep its schema in a file without React (see
+  `themes/example/blocks/Alert/AlertSchema.ts`; `AlertExtension` extends it with the
+  NodeView) so the server can check it like a core block. `schemaWithStandIns(base, pmJson[])`
+  adds a permissive, cached stand-in for every node or mark type in the JSON that `base`
+  doesn't know, keeping its attrs, so the server never loses theme content it has no
+  definition for. A stand-in checks nothing.
+- `fragmentBridge.ts` (#206 P0) — `seedFragment` / `fragmentToBlockDoc`: Block Spec v1 ⇄ the
+  `"default"` XmlFragment with no editor, for the Hocuspocus server. Same bridge, same
+  schema, plus stand-ins, so theme blocks survive. Seeding returns `DroppedBlocks` (entries
+  **and** their block trees); the server must keep that record and pass it to every store
+  (`{ dropped }`), or the blocks the editor can't show (#213) are deleted. The store
+  converts each top-level node on its own: one it can't build is reported
+  (`onUnconvertible`) and keeps its version from `previous` (the last stored doc).
+  `stampFragmentBlockIds` gives nodes without a valid, unique id one in the live doc, by
+  BlockIdExtension's rules, in one transaction; the server must run it before each store,
+  or `pmToBlockDoc` mints a new random id for those nodes on every store. Not wired into
+  anything yet.
+  `fragmentBridge.test.ts` (plain Node) and `fragmentBridge.editor.test.ts` (editors bound to
+  a server-seeded doc: they show it, don't churn it, and their edits come back out).
 - `debug.ts` — gated logging. Enable in browser: `localStorage.setItem("GL_DEBUG_COLLAB","1")`.
   Server side: `COLLAB_DEBUG=1`. Both are timestamped (`t=…`) so client+server logs align.
 
@@ -220,7 +245,20 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   unboundedly, and `restoreDroppedBlocks` keeps the stored structure on save.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema all allow the full range — keep them in sync). `validateBlockDoc` has no
-  production caller yet; wiring validation is a tracked follow-up.
+  production caller yet; the collab server's store will call it (#206 P2, #214). A
+  **known** block type must match its own Zod schema (a malformed heading is no longer
+  accepted as a "custom" block); only unknown types use the custom catch-all. Both
+  validators return the **input object**, never Zod's parse output, which strips keys the
+  schemas don't list (e.g. list `children`). An image's `mediaId` must be a number (the
+  API's media sync skips anything else): `ImageWithMediaId.parseHTML` returns a number, and
+  `pmToBlockDoc` converts a numeric string and drops anything else.
+- **y-tiptap deletes what a client's schema can't build.** In `createNodeFromYElement`, a
+  failing `schema.node()` (e.g. a theme node type the editor didn't register) is caught,
+  and the element is **deleted from the shared Y doc**, for every peer and the next save.
+  The editor waits for the theme (#198), but a failed theme load still mounts it, and so
+  does a post with blocks from a theme that is no longer active. Pinned by the hazard test
+  in `fragmentBridge.editor.test.ts`. Any guard (don't bind, or bind read-only, when the doc
+  holds unknown node types) must keep that test meaningful.
 
 ## Canonical store & the WS layer
 

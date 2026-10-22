@@ -1,24 +1,16 @@
-import StarterKit from "@tiptap/starter-kit"
 import Collaboration from "@tiptap/extension-collaboration"
 import Placeholder from "@tiptap/extension-placeholder"
-import Link from "@tiptap/extension-link"
-import TextAlign from "@tiptap/extension-text-align"
 import CharacterCount from "@tiptap/extension-character-count"
 import Typography from "@tiptap/extension-typography"
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight"
 import { OpenLinkModal } from "../extensions/OpenLinkModal"
-import { ImageWithMediaId } from "../extensions/ImageWithMediaId"
 import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
 import { getSlashCommandItems } from "../blocks"
 import { SlashCommandExtension } from "../ui/SlashCommand"
-import { BlockIdExtension } from "../extensions/BlockIdExtension"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
-import { createLowlight, common } from "lowlight"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
-
-const lowlight = createLowlight(common)
+import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 
 const headingLabel = (lvl?: number) => {
   switch (lvl) {
@@ -35,35 +27,18 @@ const headingLabel = (lvl?: number) => {
 
 const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }) => {
   return () => {
+    // The schema-defining extensions are shared with the collab server
+    // (lib/collaboration/schema.ts, #206). Collaboration ships its own Yjs-aware
+    // undo/redo (with Mod-z / Mod-y / Shift-Mod-z keymaps), so StarterKit's bundled
+    // undoRedo is off when collaborating, which resolves the
+    // "@tiptap/extension-collaboration … not compatible with @tiptap/extension-undo-redo"
+    // conflict; non-collab editors keep it as their only undo stack.
+    const schema = schemaExtensions({ collaborating: Boolean(collabProvider) })
     const baseExtensions = [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
-        codeBlock: false,
-        dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
-        link: false,
-        // Collaboration ships its own Yjs-aware undo/redo (with Mod-z / Mod-y /
-        // Shift-Mod-z keymaps). Disable StarterKit's bundled undoRedo when collaborating
-        // to resolve the "@tiptap/extension-collaboration … not compatible with
-        // @tiptap/extension-undo-redo" conflict; keep it for non-collab editors where
-        // it's the only undo stack.
-        undoRedo: collabProvider ? false : undefined,
-      }),
-      CodeBlockLowlight.configure({
-        lowlight,
-        defaultLanguage: "javascript",
-      }),
+      schema.starterKit,
+      schema.codeBlock,
       Typography,
-      Link.configure({
-        autolink: true,
-        openOnClick: false,
-        // Reject non-http(s) protocols at the input layer (#188). `protocols` limits
-        // autolink/paste schemes; `validate` is the stronger guard for typed hrefs.
-        protocols: ["http", "https"],
-        validate: (href) => /^https?:\/\//.test(href),
-        HTMLAttributes: {
-          class: "editor-link",
-        },
-      }),
+      schema.link,
       ...(setUrl && setIsLinkModalOpen
         ? [
             OpenLinkModal.configure({
@@ -74,14 +49,9 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             }),
           ]
         : []),
-      ImageWithMediaId.configure({
-        allowBase64: false,
-        HTMLAttributes: {
-          class: "editor-image",
-        },
-      }),
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      BlockIdExtension,
+      schema.image,
+      schema.textAlign,
+      schema.blockId,
       PasteSanitizer,
       Placeholder.configure({
         includeChildren: true,
