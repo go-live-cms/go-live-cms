@@ -54,5 +54,7 @@ export default defineConfig({
     },
   },
   output: "server",
+  // Standalone: `npm run build` emits dist/server/entry.mjs, a self-contained
+  // Node server (HOST/PORT env) that also serves dist/client. See web/Dockerfile.
+  adapter: node({ mode: "standalone" }),
 })
-// TODO: for production we need to change the output and adaptor.

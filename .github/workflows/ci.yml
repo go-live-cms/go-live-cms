@@ -98,6 +98,12 @@ jobs:
         working-directory: web
         run: npm test
 
+      # The production image (web/Dockerfile) runs this; catches a missing SSR
+      # adapter or a case-mismatched import that only fails on Linux.
+      - name: Build web
+        working-directory: web
+        run: npm run build
+
       - name: Install websocket deps
         working-directory: websocket
         run: npm ci

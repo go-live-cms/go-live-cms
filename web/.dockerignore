@@ -1,0 +1,8 @@
+# Keep host builds (often Windows) out of the Linux image: `COPY . .` would
+# otherwise overwrite the container's `npm ci` node_modules.
+node_modules
+dist
+.astro
+.env
+.env.*
+!.env.example
