@@ -19,5 +19,6 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 # The middleware serves /themes/* from process.cwd()/themes at request time.
 COPY --from=builder /app/themes ./themes
+USER node
 EXPOSE 4321
 CMD ["node", "./dist/server/entry.mjs"]
