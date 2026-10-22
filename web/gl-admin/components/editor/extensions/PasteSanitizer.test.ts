@@ -163,12 +163,37 @@ describe("sanitizePastedHTML (#128)", () => {
     )
   })
 
-  it("drops block ids from the ProseMirror slice context", () => {
-    const ctx = JSON.stringify(["bulletList", { "data-block-id": "list-aaaa-0000000000" }, "listItem", { "data-block-id": "item-aaaa-0000000000" }])
-    const out = sanitizePastedHTML(`<p data-pm-slice='1 1 ${ctx}'>a</p>`)
-    const slice = new DOMParser().parseFromString(out, "text/html").body.firstElementChild!.getAttribute("data-pm-slice")
-    expect(slice).toBe('1 1 ["bulletList",{},"listItem",{}]')
+  it("keeps only list/quote wrappers in the ProseMirror slice context, with attrs reset", () => {
+    const sliceOf = (ctx: unknown[]) => {
+      const out = sanitizePastedHTML(`<p data-pm-slice='1 1 ${JSON.stringify(ctx)}'>a</p>`)
+      return new DOMParser().parseFromString(out, "text/html").body.firstElementChild!.getAttribute("data-pm-slice")
+    }
+    expect(sliceOf(["bulletList", { "data-block-id": "list-aaaa-0000000000" }, "listItem", { "data-block-id": "item-aaaa-0000000000" }]))
+      .toBe('1 1 ["bulletList",null,"listItem",null]')
+    // Any web page can set data-pm-slice; ProseMirror creates its context nodes unvalidated.
+    expect(sliceOf(["heading", { level: 99 }])).toBeNull()
+    expect(sliceOf(["blockquote", null, "paragraph", { textAlign: "left;background:url(https://evil.example/x)" }])).toBeNull()
     expect(sanitizePastedHTML(`<p data-pm-slice="garbage">a</p>`)).toBe("<p>a</p>")
+  })
+
+  it("lifts spans that switch bold/italic off out of their <b>/<i>", () => {
+    expect(sanitizePastedHTML('<p><strong>Total: <span style="font-weight:normal">see note</span> end</strong></p>')).toBe(
+      "<p><strong>Total: </strong>see note<strong> end</strong></p>"
+    )
+    expect(sanitizePastedHTML('<p><i><span style="font-style:normal">plain</span></i></p>')).toBe("<p>plain</p>")
+  })
+
+  it("doesn't bold heading text styled font-weight:700", () => {
+    expect(sanitizePastedHTML('<h2><span style="font-weight:700">Title</span></h2>')).toBe("<h2>Title</h2>")
+  })
+
+  it("nests a list with no preceding item in a new <li>", () => {
+    expect(sanitizePastedHTML("<ul><ul><li>a</li></ul><li>b</li></ul>")).toBe("<ul><li><ul><li>a</li></ul></li><li>b</li></ul>")
+  })
+
+  it("keeps nav/details and address boundaries so their text doesn't merge", () => {
+    expect(sanitizePastedHTML('<div><nav><a href="/">Home</a></nav>Intro</div>')).toBe('<div><div><a href="/">Home</a></div>Intro</div>')
+    expect(sanitizePastedHTML("<address>Main St</address>")).toBe("<address>Main St</address>")
   })
 })
 

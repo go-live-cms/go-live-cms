@@ -26,7 +26,7 @@ const ALLOWED_TAGS = [
   "p", "br", "h1", "h2", "h3", "h4", "h5", "h6",
   "ul", "ol", "li", "blockquote", "pre", "code", "hr",
   "a", "strong", "b", "em", "i", "u", "s", "strike", "del",
-  "div", "section", "article", "header", "footer", "aside", "main",
+  "div", "section", "article", "header", "footer", "aside", "main", "address", "hgroup",
   "figure", "figcaption", "dl", "dt", "dd",
   "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption",
 ]
@@ -50,10 +50,19 @@ const CODE_LANGUAGE_CLASS = /(?:^|\s)(language-[\w-]+)(?:\s|$)/
 
 let purifier: ReturnType<typeof DOMPurify> | null = null
 
-// A private DOMPurify instance, so our hooks don't leak into any other caller.
+// A private DOMPurify instance, so our hooks and config don't leak into any other caller.
 function getPurifier() {
   if (purifier) return purifier
   purifier = DOMPurify(window)
+  purifier.setConfig({
+    ALLOWED_TAGS,
+    ALLOWED_ATTR: ["href", "class", "data-pm-slice"],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_ARIA_ATTR: false,
+    ALLOWED_URI_REGEXP,
+    FORBID_CONTENTS,
+    KEEP_CONTENT: true,
+  })
   purifier.addHook("uponSanitizeAttribute", (node, data) => {
     if (data.attrName === "class") {
       // Keep only `language-*` on <code>: CodeBlockLowlight reads the language from it.
@@ -61,7 +70,7 @@ function getPurifier() {
       if (match) data.attrValue = match[1]
       else data.keepAttr = false
     } else if (data.attrName === "data-pm-slice") {
-      const value = stripSliceContextIds(data.attrValue)
+      const value = sanitizeSliceContext(data.attrValue)
       if (value === null) data.keepAttr = false
       else data.attrValue = value
     }
@@ -86,15 +95,12 @@ export function sanitizePastedHTML(html: string): string {
   const doc = new DOMParser().parseFromString(html, "text/html")
   normalizeClipboardMarkup(doc.body)
 
-  return getPurifier().sanitize(doc.body.innerHTML, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR: ["href", "class", "data-pm-slice"],
-    ALLOW_DATA_ATTR: false,
-    ALLOW_ARIA_ATTR: false,
-    ALLOWED_URI_REGEXP,
-    FORBID_CONTENTS,
-    KEEP_CONTENT: true,
-  })
+  // Hand DOMPurify the parsed nodes (it imports them into its own body) rather than
+  // re-serializing them to a string for a second parse. A fragment, because DOMPurify
+  // refuses a <body> root it would have to remove.
+  const fragment = doc.createDocumentFragment()
+  fragment.append(...Array.from(doc.body.childNodes))
+  return getPurifier().sanitize(fragment)
 }
 
 /**
@@ -103,11 +109,13 @@ export function sanitizePastedHTML(html: string): string {
  * - Docs wraps the whole selection in `<b style="font-weight:normal">`; unwrap it,
  *   or the paste would turn entirely bold once the style is gone.
  * - Docs and Word mark bold/italic/underline/strikethrough with inline styles on
- *   spans; wrap their content in strong/em/u/s.
+ *   spans; wrap their content in strong/em/u/s (no strong inside headings), and lift
+ *   spans that switch bold/italic off out of an enclosing <b>/<i>.
  * - Word fakes list bullets with `mso-list:Ignore` spans; drop them.
  * - Docs nests a sub-list directly inside the parent list; move it into the
- *   preceding <li>, where the schema (listItem: paragraph block*) expects it.
- * Plus two generic fixes for table cells and blank-line <br>s (see below).
+ *   preceding <li> (or a new one), where the schema (listItem: paragraph block*)
+ *   expects it.
+ * Plus generic fixes for table cells, nav/details and blank-line <br>s (see below).
  */
 function normalizeClipboardMarkup(root: HTMLElement) {
   for (const el of Array.from(root.querySelectorAll<HTMLElement>("[style]"))) {
@@ -125,9 +133,17 @@ function normalizeClipboardMarkup(root: HTMLElement) {
     }
 
     if (el.tagName !== "SPAN") continue
+    // A span that switches bold/italic back off inside <b>/<i> relied on the style
+    // (TipTap's clearMark rule); lift it out of that ancestor instead.
+    const fontStyle = style["font-style"]?.toLowerCase()
+    if (weight === "normal" || weight === "400") liftOutOf(el, "b, strong", root)
+    if (fontStyle === "normal") liftOutOf(el, "i, em", root)
+
     const wrappers: string[] = []
-    if (weight === "bold" || weight === "bolder" || Number(weight) >= 600) wrappers.push("strong")
-    if (style["font-style"]?.toLowerCase() === "italic") wrappers.push("em")
+    // Headings are already bold (Docs styles their spans font-weight:700).
+    const bold = weight === "bold" || weight === "bolder" || Number(weight) >= 600
+    if (bold && !el.closest("h1, h2, h3, h4, h5, h6")) wrappers.push("strong")
+    if (fontStyle === "italic") wrappers.push("em")
     const decoration = `${style["text-decoration"] || ""} ${style["text-decoration-line"] || ""}`.toLowerCase()
     // Docs styles every link underlined; the link itself already says that.
     if (decoration.includes("underline") && !el.closest("a")) wrappers.push("u")
@@ -142,11 +158,17 @@ function normalizeClipboardMarkup(root: HTMLElement) {
   for (const list of Array.from(root.querySelectorAll("ul > ul, ul > ol, ol > ul, ol > ol"))) {
     const previous = list.previousElementSibling
     if (previous?.tagName === "LI") previous.append(list)
+    else {
+      // No item to nest under (the list starts indented, or skips a level): give it one.
+      const li = list.ownerDocument.createElement("li")
+      list.replaceWith(li)
+      li.append(list)
+    }
   }
 
-  // ProseMirror doesn't treat table cells as block boundaries, so a row's cells would
-  // run together into one paragraph. Make each cell (and caption) a div.
-  for (const cell of Array.from(root.querySelectorAll("td, th, caption"))) {
+  // ProseMirror doesn't treat these as block boundaries, so a row's cells (or a nav
+  // and the text after it) would run together into one paragraph. Make them divs.
+  for (const cell of Array.from(root.querySelectorAll("td, th, caption, nav, details, summary"))) {
     const div = cell.ownerDocument.createElement("div")
     div.append(...Array.from(cell.childNodes))
     cell.replaceWith(div)
@@ -174,9 +196,35 @@ const CONTAINER_TAGS = new Set([
 
 const BLOCK_TAGS = new Set([
   ...CONTAINER_TAGS,
-  "P", "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI", "PRE", "HR", "NAV",
-  "FIGCAPTION", "DL", "DT", "DD", "TABLE", "THEAD", "TBODY", "TFOOT", "TR",
+  "P", "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI", "PRE", "HR", "ADDRESS",
+  "HGROUP", "FIGCAPTION", "DL", "DT", "DD", "TABLE", "THEAD", "TBODY", "TFOOT", "TR",
 ])
+
+/**
+ * Moves `el` out of its closest `selector` ancestor (within `root`) by splitting that
+ * ancestor around it: content before and after `el` stays wrapped, `el` doesn't.
+ */
+function liftOutOf(el: HTMLElement, selector: string, root: HTMLElement) {
+  const ancestor = el.parentElement?.closest(selector)
+  if (!ancestor || !root.contains(ancestor)) return
+  const doc = el.ownerDocument
+  const range = doc.createRange()
+
+  range.setStart(ancestor, 0)
+  range.setEndBefore(el)
+  const before = range.extractContents()
+  range.setStartAfter(el)
+  range.setEnd(ancestor, ancestor.childNodes.length)
+  const after = range.extractContents()
+
+  for (const [fragment, place] of [[before, "before"], [after, "after"]] as const) {
+    if (!fragment.childNodes.length) continue
+    const copy = ancestor.cloneNode(false) as Element
+    copy.append(fragment)
+    ancestor[place](copy)
+  }
+  ancestor.replaceWith(...Array.from(ancestor.childNodes))
+}
 
 /**
  * True when there's no inline content next to a <br> on that side: only the edge of
@@ -203,23 +251,29 @@ function parseStyle(style: string): Record<string, string> {
   return out
 }
 
+// Wrapper node types a pasted slice context may recreate.
+const SLICE_CONTEXT_TYPES = new Set(["bulletList", "orderedList", "listItem", "blockquote"])
+
 /**
  * ProseMirror's own clipboard HTML carries `data-pm-slice="<openStart> <openEnd>
  * <context JSON>"`, where the context is a flat [typeName, attrs, …] list of the
- * wrapper nodes the slice was cut from. Keep it (internal pastes keep their list/quote
- * context) but drop block ids from those attrs, like everywhere else in a paste.
- * Returns null to remove an attribute that doesn't parse.
+ * wrapper nodes the slice was cut from. ProseMirror recreates those nodes with
+ * `type.create(attrs)`, which validates nothing, and any web page can set the
+ * attribute. So keep it only when every wrapper is a list/quote type, with attrs reset
+ * to defaults (null), which also drops copied block ids. Returns null to remove it.
  */
-function stripSliceContextIds(value: string): string | null {
+function sanitizeSliceContext(value: string): string | null {
   const match = /^(\d+ \d+(?: -\d+)?) (.*)$/s.exec(value)
   if (!match) return null
   try {
     const context = JSON.parse(match[2])
-    if (!Array.isArray(context)) return null
-    for (const item of context) {
-      if (item && typeof item === "object" && !Array.isArray(item)) delete item["data-block-id"]
+    if (!Array.isArray(context) || context.length % 2 !== 0) return null
+    const safe: (string | null)[] = []
+    for (let i = 0; i < context.length; i += 2) {
+      if (!SLICE_CONTEXT_TYPES.has(context[i])) return null
+      safe.push(context[i], null)
     }
-    return `${match[1]} ${JSON.stringify(context)}`
+    return `${match[1]} ${JSON.stringify(safe)}`
   } catch {
     return null
   }
