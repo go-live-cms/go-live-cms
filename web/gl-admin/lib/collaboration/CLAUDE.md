@@ -176,6 +176,24 @@ non-editors anyway (see `websocket/CLAUDE.md` → Auth).
    editor accepted the doc. Returns `{ saved: false }` when a save was in flight (the
    follow-up save persists it).
 
+10. **Never bind Collaboration to a doc the editor's schema can't build (#206/#274).**
+   `@tiptap/y-tiptap` 3.0.0's `createNodeFromYElement` / `createTextNodesFromYText`
+   catch a failing `schema.node()` / `schema.text()` and **delete that element (or text
+   run) from the shared Y doc**: an unknown node type (a theme block whose extension
+   didn't load, a block of a theme that's no longer active) or an unknown mark vanishes
+   for every peer, and the next autosave persists the loss. `SchemaGate` in `Editor.tsx`
+   (between the theme gate and `EditorInner`) waits for the first WS `sync`, runs
+   `findUnbuildableTypes` (`schemaGuard.ts`) on the `"default"` fragment against
+   `getSchema(getExtensions(...))`, and only then mounts the collab editor. If anything
+   can't be built it mounts `EditorInner` **read-only** (no provider binding, REST
+   working copy, like contributors) with a notice naming the types, and
+   `forceSave`/`publish`/`restoreVersion` throw. Because the gate mounts the editor after
+   sync, `EditorInner`'s `onSynced` also runs immediately when `provider.synced` is
+   already true. **Not covered:** a peer inserting an unknown type *after* this editor
+   bound (a newer theme on another client) is still deleted by y-tiptap. Pinned by
+   `schemaGuard.test.ts` (the deletion itself + detection) and
+   `components/editor/Editor.schemaGate.test.tsx` (the real Editor, fake provider).
+
 ## State machine flags (BlockPersistenceManager)
 
 `isInitializing` (load latch, cleared 500ms after init in `finally`) · `isSaving`
