@@ -879,7 +879,7 @@ func TestUpdateUserPasswordAPI(t *testing.T) {
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
-				require.Contains(t, recorder.Body.String(), "current password is required")
+				require.Contains(t, recorder.Body.String(), `"code":"current_password_required"`)
 			},
 		},
 		{
@@ -894,7 +894,7 @@ func TestUpdateUserPasswordAPI(t *testing.T) {
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusForbidden, recorder.Code)
-				require.Contains(t, recorder.Body.String(), "current password is incorrect")
+				require.Contains(t, recorder.Body.String(), `"code":"current_password_incorrect"`)
 			},
 		},
 		{

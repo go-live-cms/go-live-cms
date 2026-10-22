@@ -191,6 +191,15 @@ test("fetchCurrentRole calls the internal endpoint with the shared secret, not a
   assert.equal(calls[0].init.headers.Authorization, "Bearer s3cret");
 });
 
+test("fetchCurrentRole forwards the request id as X-Request-ID when given one", async () => {
+  const { impl, calls } = fakeFetch(200, { role: "editor" });
+  await fetchCurrentRole("http://api:8081", identity, "s", { fetchImpl: impl, requestId: "req-12345678" });
+  assert.equal(calls[0].init.headers["X-Request-ID"], "req-12345678");
+
+  await fetchCurrentRole("http://api:8081", identity, "s", { fetchImpl: impl });
+  assert.ok(!("X-Request-ID" in calls[1].init.headers));
+});
+
 test("fetchCurrentRole returns null when the user is gone or the ticket predates a password change", async () => {
   for (const status of [403, 404]) {
     const { impl } = fakeFetch(status, { error: "nope" });

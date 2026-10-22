@@ -35,6 +35,11 @@ export function getMediaURL(mediaPath: string): string {
   return cleanPath
 }
 
+// A non-2xx API response: readable message, plus status, code (the API's
+// machine-readable {"code": ...}), retryAfterSeconds and serverMessage. Defined
+// in ./api/errors; re-exported here for existing imports.
+export { ApiError } from "./api/errors"
+
 export async function apiCall(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<any> {
   const { token, method = "GET", body } = options
 

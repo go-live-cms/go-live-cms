@@ -356,7 +356,7 @@ func TestGetPublicPostBlocksAPI(t *testing.T) {
 				store.EXPECT().
 					GetPublishedPostBlocks(gomock.Any(), int64(1)).
 					Times(1).
-					Return(pqtype.NullRawMessage{RawMessage: publishedDoc, Valid: true}, nil)
+					Return(db.GetPublishedPostBlocksRow{Content: pqtype.NullRawMessage{RawMessage: publishedDoc, Valid: true}, PostStatus: "published"}, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -373,15 +373,39 @@ func TestGetPublicPostBlocksAPI(t *testing.T) {
 				store.EXPECT().
 					GetPublishedPostBlocks(gomock.Any(), int64(1)).
 					Times(1).
-					Return(pqtype.NullRawMessage{Valid: false}, nil)
+					Return(db.GetPublishedPostBlocksRow{Content: pqtype.NullRawMessage{Valid: false}, PostStatus: "published"}, nil)
+			},
+			// Published status without a snapshot is not public (#136)
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+			},
+		},
+		{
+			// Unpublished posts are back to draft; their old snapshot must not leak (#136)
+			name:   "DraftIsHidden",
+			postID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPublishedPostBlocks(gomock.Any(), int64(1)).
+					Times(1).
+					Return(db.GetPublishedPostBlocksRow{Content: pqtype.NullRawMessage{RawMessage: publishedDoc, Valid: true}, PostStatus: "draft"}, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-				var resp BlockDocResponse
-				err := json.Unmarshal(recorder.Body.Bytes(), &resp)
-				require.NoError(t, err)
-				require.Equal(t, 1, resp.Doc.DocVersion)
-				require.Empty(t, resp.Doc.BlocksOrder)
+				require.Equal(t, http.StatusNotFound, recorder.Code)
+				require.NotContains(t, recorder.Body.String(), "hello")
+			},
+		},
+		{
+			name:   "ArchivedIsHidden",
+			postID: 1,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPublishedPostBlocks(gomock.Any(), int64(1)).
+					Times(1).
+					Return(db.GetPublishedPostBlocksRow{Content: pqtype.NullRawMessage{RawMessage: publishedDoc, Valid: true}, PostStatus: "archived"}, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusNotFound, recorder.Code)
 			},
 		},
 		{
@@ -391,7 +415,7 @@ func TestGetPublicPostBlocksAPI(t *testing.T) {
 				store.EXPECT().
 					GetPublishedPostBlocks(gomock.Any(), int64(1)).
 					Times(1).
-					Return(pqtype.NullRawMessage{}, sql.ErrNoRows)
+					Return(db.GetPublishedPostBlocksRow{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -414,7 +438,7 @@ func TestGetPublicPostBlocksAPI(t *testing.T) {
 				store.EXPECT().
 					GetPublishedPostBlocks(gomock.Any(), int64(1)).
 					Times(1).
-					Return(pqtype.NullRawMessage{}, sql.ErrConnDone)
+					Return(db.GetPublishedPostBlocksRow{}, sql.ErrConnDone)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)

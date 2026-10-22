@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -69,7 +70,7 @@ func ScanThemesDirectory(themesPath string) ([]DiscoveredTheme, error) {
 
 		// Check if theme.config.ts exists
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
-			fmt.Printf("Warning: Skipping '%s' - missing theme.config.ts\n", entry.Name())
+			slog.Warn("skipping theme: missing theme.config.ts", "theme", entry.Name())
 			continue
 		}
 
@@ -82,7 +83,7 @@ func ScanThemesDirectory(themesPath string) ([]DiscoveredTheme, error) {
 		missingLayouts := false
 		for _, layoutPath := range requiredLayouts {
 			if _, err := os.Stat(layoutPath); os.IsNotExist(err) {
-				fmt.Printf("Warning: Skipping '%s' - missing required layout: %s\n", entry.Name(), layoutPath)
+				slog.Warn("skipping theme: missing required layout", "theme", entry.Name(), "layout", layoutPath)
 				missingLayouts = true
 				break
 			}
@@ -95,7 +96,7 @@ func ScanThemesDirectory(themesPath string) ([]DiscoveredTheme, error) {
 		// Parse theme config
 		theme, err := parseThemeConfig(entry.Name(), configPath, themePath)
 		if err != nil {
-			fmt.Printf("Warning: Failed to parse theme config for %s: %v\n", entry.Name(), err)
+			slog.Warn("skipping theme: failed to parse theme config", "theme", entry.Name(), "error", err)
 			continue
 		}
 
@@ -291,22 +292,22 @@ func (server *Server) SyncThemesToDatabase(themes []DiscoveredTheme) error {
 	// Get all themes from database
 	dbThemes, err := server.store.ListThemes(server.ctx)
 	if err != nil {
-		fmt.Printf("Warning: Failed to list database themes: %v\n", err)
+		slog.Warn("failed to list database themes", "error", err)
 	} else {
 		// Delete themes that no longer exist in filesystem
 		for _, dbTheme := range dbThemes {
 			if !discoveredSlugs[dbTheme.Slug] {
 				// Don't delete if it's the active theme
 				if dbTheme.Active {
-					fmt.Printf("⚠️  Theme '%s' not found in filesystem but is active - keeping in database\n", dbTheme.Slug)
+					slog.Warn("active theme not found in filesystem, keeping it in the database", "theme", dbTheme.Slug)
 					continue
 				}
 
 				err := server.store.DeleteTheme(server.ctx, dbTheme.ID)
 				if err != nil {
-					fmt.Printf("Warning: Failed to delete orphaned theme %s: %v\n", dbTheme.Slug, err)
+					slog.Warn("failed to delete orphaned theme", "theme", dbTheme.Slug, "error", err)
 				} else {
-					fmt.Printf("✓ Removed orphaned theme: %s\n", dbTheme.Name)
+					slog.Info("removed orphaned theme", "theme", dbTheme.Slug)
 				}
 			}
 		}
@@ -317,7 +318,7 @@ func (server *Server) SyncThemesToDatabase(themes []DiscoveredTheme) error {
 		// Convert config to JSON
 		configJSON, err := json.Marshal(theme.Config)
 		if err != nil {
-			fmt.Printf("Warning: Failed to marshal config for theme %s: %v\n", theme.Slug, err)
+			slog.Warn("failed to marshal theme config", "theme", theme.Slug, "error", err)
 			continue
 		}
 
@@ -349,9 +350,9 @@ func (server *Server) SyncThemesToDatabase(themes []DiscoveredTheme) error {
 			})
 
 			if err != nil {
-				fmt.Printf("Warning: Failed to create theme %s: %v\n", theme.Slug, err)
+				slog.Warn("failed to create theme", "theme", theme.Slug, "error", err)
 			} else {
-				fmt.Printf("✓ Registered new theme: %s\n", theme.Name)
+				slog.Info("registered new theme", "theme", theme.Slug)
 			}
 		} else {
 			// Theme exists, update metadata but preserve active status
@@ -380,7 +381,7 @@ func (server *Server) SyncThemesToDatabase(themes []DiscoveredTheme) error {
 			})
 
 			if err != nil {
-				fmt.Printf("Warning: Failed to update theme %s: %v\n", theme.Slug, err)
+				slog.Warn("failed to update theme", "theme", theme.Slug, "error", err)
 			}
 		}
 	}
@@ -418,9 +419,9 @@ func (server *Server) SyncThemesToDatabase(themes []DiscoveredTheme) error {
 				RegisteredBy: registeredBy,
 			})
 			if err != nil {
-				fmt.Printf("Warning: Failed to upsert post type '%s' for theme '%s': %v\n", pt.Name, theme.Slug, err)
+				slog.Warn("failed to upsert theme post type", "post_type", pt.Name, "theme", theme.Slug, "error", err)
 			} else if isActive {
-				fmt.Printf("✓ Registered post type: %s (from theme %s)\n", pt.Name, theme.Slug)
+				slog.Info("registered theme post type", "post_type", pt.Name, "theme", theme.Slug)
 			}
 		}
 	}

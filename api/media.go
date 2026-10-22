@@ -12,11 +12,14 @@
 //
 // # Formats
 // Uploads: multipart/form-data. Updates: JSON.
-// Images: JPG/PNG/GIF/WebP/BMP/SVG; Video: MP4/MOV/AVI/MKV/WebM;
-// Audio: MP3/WAV/OGG/M4A; Docs: PDF/DOC/DOCX/TXT.
+// Images: JPG/PNG/GIF/WebP/BMP; Video: MP4/MOV/AVI/MKV/WebM;
+// Audio: MP3/WAV/OGG/M4A; Docs: PDF/DOC/DOCX/TXT. SVG is refused (it can
+// carry script). The file's bytes are sniffed and must match its extension;
+// the client's Content-Type is ignored (allowedMediaTypes in media_utils.go).
 //
 // # Limits & Safety
-// Max size: util.Config.MaxUploadSize (e.g., "10MB"). Extension + MIME checks.
+// Max size: util.Config.MaxUploadSize (e.g., "10MB"), enforced on the body
+// while it is read; larger uploads get 413.
 // Filenames sanitized; duplicates auto-suffixed (file_2.jpg).
 //
 // # Endpoints (index)
@@ -31,6 +34,7 @@
 // - GET    /api/v1/media/post/:id  (media for post)
 // - GET    /api/v1/media/:id/posts (posts using media)
 // - PUT    /api/v1/media/:id       (update metadata)
+// - POST   /api/v1/media/:id/replace (swap the file in place; id, name, alt kept)
 // - DELETE /api/v1/media/:id       (delete; admin/editor: any media)
 //
 // # Quickstart (single upload)

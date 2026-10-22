@@ -12,6 +12,6 @@ WHERE id = $1
 RETURNING block_doc AS content, block_revision AS revision;
 
 -- name: GetPublishedPostBlocks :one
-SELECT published_block_doc AS content
+SELECT published_block_doc AS content, post_status
 FROM posts
 WHERE id = $1;

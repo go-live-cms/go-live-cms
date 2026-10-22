@@ -122,10 +122,8 @@ func TestUpdateSession(t *testing.T) {
 func TestListSessionsByUser(t *testing.T) {
 	user := createRandomUser(t)
 
-	var sessions []Session
 	for i := 0; i < 5; i++ {
-		session := createRandomSession(t, user)
-		sessions = append(sessions, session)
+		createRandomSession(t, user)
 	}
 
 	otherUser := createRandomUser(t)
@@ -144,10 +142,8 @@ func TestListSessionsByUser(t *testing.T) {
 func TestListSessionsByUsername(t *testing.T) {
 	user := createRandomUser(t)
 
-	var sessions []Session
 	for i := 0; i < 3; i++ {
-		session := createRandomSession(t, user)
-		sessions = append(sessions, session)
+		createRandomSession(t, user)
 	}
 
 	otherUser := createRandomUser(t)
@@ -183,10 +179,8 @@ func TestUpdateSessionsUsername(t *testing.T) {
 	newUser := createRandomUser(t)
 	newUsername := newUser.Username
 
-	var sessions []Session
 	for i := 0; i < 3; i++ {
-		session := createRandomSession(t, user)
-		sessions = append(sessions, session)
+		createRandomSession(t, user)
 	}
 
 	otherUser := createRandomUser(t)

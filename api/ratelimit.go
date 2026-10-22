@@ -42,7 +42,7 @@ import (
 	"context"
 	"fmt"
 	"hash/maphash"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/netip"
@@ -225,7 +225,7 @@ func (l *rateLimiter) allow(c *gin.Context, key string) bool {
 	}
 	ok, retryAfter, err := l.store.Take(c.Request.Context(), l.name+":"+key)
 	if err != nil {
-		log.Printf("rate limit %s: store error, allowing request: %v", l.name, err)
+		slog.Warn("rate limit store error, allowing request", requestIDKey, requestIDFromContext(c), "limit", l.name, "error", err)
 		return true
 	}
 	if !ok {

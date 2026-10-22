@@ -35,6 +35,7 @@ const Users = lazy(() => import("@gl-admin/pages/Users"))
 const BackfillBlocks = lazy(() => import("@gl-admin/pages/BackfillBlocks"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 const Themes = lazy(() => import("@gl-admin/pages/Themes"))
+const Profile = lazy(() => import("@gl-admin/pages/Profile"))
 
 // Minimal navigation shown if the sidebar itself fails to render.
 function SidebarFallback() {
@@ -78,6 +79,7 @@ function AppLayout() {
                 <Route path="/users" element={<Users />} />
                 <Route path="/users/new" element={<NewUser />} />
                 <Route path="/users/edit/:id" element={<EditUser />} />
+                <Route path="/profile" element={<Profile />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/tools/backfill-blocks" element={<BackfillBlocks />} />
               </Routes>

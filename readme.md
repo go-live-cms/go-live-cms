@@ -77,6 +77,11 @@ make proddown      # Stop production environment
 make prodlogs      # View production logs
 ```
 
+The API image contains no `app.env`. `compose.yaml` takes its secrets from the
+environment (or a `.env` file next to it, never committed): `ROLE_LOOKUP_SECRET`,
+`PASETO_V4_PUBLIC_KEY_HEX`, `PASETO_V4_PRIVATE_KEY_HEX` and `PASETO_V4_LOCAL_KEY_HEX`.
+Generate fresh keys for a real deployment; don't reuse the ones in `example.app.env`.
+
 #### Seeded dev accounts in production
 
 Versions before #228 always ran the API in debug mode, so every deployment got the
@@ -138,7 +143,7 @@ refills evenly. `0` turns a limit off.
 | `RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE` | 5 | changing your own password (`PUT /users/:id`), per user and IP |
 | `RATE_LIMIT_EXEMPT_CIDRS` | empty | IPs/CIDRs that skip the general limit (auth limits still apply) |
 
-`/health`, `/uploads` and the internal listener aren't limited. IPv6 clients are
+`/health`, `/readyz`, `/uploads` and the internal listener aren't limited. IPv6 clients are
 counted per /64, since one host usually holds the whole block. Login is limited per IP
 and username, so a few bad guesses against one account can't lock out everyone else
 behind the same IP; the looser per-IP cap limits guessing across usernames. Counters
@@ -159,7 +164,35 @@ IP. On a busy site, add that address or its Docker network to
 `RATE_LIMIT_EXEMPT_CIDRS`. If browser API calls also pass through the web tier, it
 must forward the client IP in `X-Forwarded-For` and be listed in `TRUSTED_PROXIES`.
 In development the Vite proxy does that (`xfwd`), and `compose.dev.yaml` trusts the
-private Docker ranges.
+private Docker ranges. In production the web server forwards `/api/v1` and `/uploads` itself
+(`web/src/middleware/apiProxy.ts`), and `compose.yaml` pins the web container to
+`172.28.0.10` and trusts and exempts only that address.
+
+#### Health checks, logs and metrics
+
+| Endpoint | Listener | Meaning | Use it for |
+|----------|----------|---------|------------|
+| `GET /health` (also `/api/v1/health`) | public | liveness: the process serves HTTP | probes that *restart* the container |
+| `GET /readyz` | public | readiness: also pings Postgres (2s timeout), 503 if it can't | Docker/compose `healthcheck` (what `depends_on: service_healthy` waits on), load-balancer target checks |
+| `GET /metrics` | internal (`:8081`, never published) | Prometheus text: request counts and latency per method, route template and status | scraping from inside the Docker network |
+
+Both compose files healthcheck the API with `/readyz`. Neither health endpoint is rate
+limited or returns error details.
+
+Every API response has an `X-Request-ID` header (a well-formed incoming one is kept
+only when it comes from a proxy in `TRUSTED_PROXIES`; otherwise a new one is made), and
+JSON error bodies include it as `request_id`, so a
+user can quote it in a bug report. The API logs one line per request: JSON in release
+mode, readable text in debug mode, with the request id, method, route template (never
+the raw path or query string), status, latency and the caller's user id. Headers,
+cookies, tokens, passwords and request bodies are never logged, and client IPs only in
+debug mode. The collab WebSocket server logs `ws_upgrade` / `ws_connect` / `ws_deny` /
+`ws_close` as JSON lines, and forwards its request id to the API's role lookup, so both
+sides of a connection can be found by one id.
+
+Error tracking (Sentry and the like) plugs in through `api.ErrorReporter`
+(`server.SetErrorReporter`). It receives recovered panics and 5xx responses. The
+default does nothing.
 
 ### Database Management
 
@@ -170,6 +203,9 @@ make dropdb        # Drop database
 make migrateup     # Run all migrations
 make migratedown   # Rollback all migrations
 ```
+
+Backups, restore, and running migrations in production:
+[docs/operations/backups.md](docs/operations/backups.md).
 
 ### Code Generation & Testing
 
@@ -453,6 +489,41 @@ go test -v -cover -coverprofile=coverage.out ./...
 # View coverage in browser
 go tool cover -html=coverage.out
 ```
+
+### CI
+
+`.github/workflows/ci.yml` runs on every PR to `main` and every push to `main`. The
+jobs run in parallel:
+
+| Job | What it checks |
+|-----|----------------|
+| Test | `go build`, migrations, `make coverage-check` against Postgres 12 |
+| Go lint | `go vet`, `gofmt -l` (fails on unformatted files), golangci-lint (`.golangci.yml`) |
+| sqlc in sync | `sqlc diff`: `db/sqlc` must match `db/query` + `db/migration` (regenerate with `make sqlc`) |
+| Migrations up/down/up | every up, then every down (nothing may be left behind), then up again with an identical schema dump |
+| Web tests | `web` vitest and `websocket` `node --test` |
+| Web type check and build | `astro check` and `astro build` |
+| Docker image | builds the api, web and websocket production images (no push) |
+
+To reproduce locally before pushing:
+
+```bash
+gofmt -l .                      # must print nothing
+go vet ./...
+golangci-lint run               # v2, see the version in ci.yml
+sqlc diff
+cd web && npm run check && npm run build
+```
+
+**Secrets.** CI needs no repository secrets. The Postgres credentials in the workflow
+belong to a throwaway service container, and the token is read-only
+(`permissions: contents: read`). Nothing is pushed or deployed. Don't print secrets or
+env dumps in a step. A future deploy job should take its credentials from GitHub
+Actions secrets (`secrets.*`) on the step that uses them, and from a protected
+environment. Runtime secrets (`ROLE_LOOKUP_SECRET`, `COLLAB_SQUASH_SECRET`, the
+`PASETO_V4_*` keys, the DB password) come from the deployment's environment. They are
+never baked into images: the API image no longer copies `app.env`, and `.dockerignore`
+keeps it out of the build context.
 
 ## 🐛 Troubleshooting
 

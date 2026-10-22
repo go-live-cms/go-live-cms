@@ -1,0 +1,90 @@
+# Scratch stack for scripts/backup/test-restore.sh. Its own compose project and
+# volumes, no published ports and a tmpfs database, so it can never touch the
+# dev stack (golive_cms_dev) or its data. Torn down with `down -v` by the script.
+name: golive_restore_test
+
+x-db-source: &db-source postgresql://root:secret@postgres:5432/golive_cms?sslmode=disable
+
+services:
+  postgres:
+    image: postgres:12-alpine
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: golive_cms
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d golive_cms"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  # One-shot: the same golang-migrate version the API image and CI use.
+  migrate:
+    image: migrate/migrate:v4.16.2
+    profiles: [tools]
+    volumes:
+      - ../../db/migration:/migrations:ro
+    entrypoint: ["migrate", "-path", "/migrations", "-database", *db-source]
+
+  # Runs backup.sh / restore.sh with the same tools as the server (pg 12).
+  tools:
+    image: postgres:12-alpine
+    profiles: [tools]
+    environment:
+      DB_SOURCE: *db-source
+      BACKUP_DIR: /backups
+      MEDIA_DIR: /app/uploads/media
+      WS_DATA_DIR: /data/yjs
+    volumes:
+      - .:/scripts:ro
+      - uploads:/app/uploads
+      - ws_data:/data/yjs
+      - backups:/backups
+    entrypoint: ["sh"]
+
+  # The real API in release mode, built from this checkout, serving the restored
+  # data. It runs next to a copy of example.app.env for the dev PASETO keys: the
+  # config only reads env vars for keys it knows from defaults or app.env.
+  api:
+    image: golang:1.24.5-alpine3.22
+    profiles: [api]
+    working_dir: /src
+    environment:
+      CGO_ENABLED: "0"
+      GOFLAGS: -buildvcs=false
+      DB_SOURCE: *db-source
+      GIN_MODE: release
+      UPLOAD_PATH: /app/uploads/media
+      SERVER_ADDRESS: 0.0.0.0:8080
+      INTERNAL_SERVER_ADDRESS: 0.0.0.0:8081
+      ROLE_LOOKUP_SECRET: restore-test-secret
+    volumes:
+      - ../..:/src:ro
+      - uploads:/app/uploads
+      - gomod:/go/pkg/mod
+      - gocache:/root/.cache/go-build
+    entrypoint: ["sh", "-c"]
+    command:
+      - go build -o /tmp/golive-api . && mkdir -p /tmp/run && cp example.app.env /tmp/run/app.env && cd /tmp/run && exec /tmp/golive-api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 200
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  uploads:
+  ws_data:
+  backups:
+  # External so the script's `down -v` keeps them (it creates them first).
+  gomod:
+    external: true
+    name: golive_restore_test_gomod
+  gocache:
+    external: true
+    name: golive_restore_test_gocache

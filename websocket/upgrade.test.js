@@ -19,10 +19,16 @@ function fakeSocket() {
   };
 }
 
-function fakeReq(url) {
+function fakeReq(url, extraHeaders = {}) {
   return {
     url,
-    headers: { host: "localhost:1234", origin: "http://localhost:4321", "user-agent": "UA/1", cookie: `c=${SECRET}` },
+    headers: {
+      host: "localhost:1234",
+      origin: "http://localhost:4321",
+      "user-agent": "UA/1",
+      cookie: `c=${SECRET}`,
+      ...extraHeaders,
+    },
     socket: { remoteAddress: "10.0.0.7" },
   };
 }
@@ -36,9 +42,14 @@ function captureConsole(t) {
   return logs;
 }
 
+/** The captured lines, parsed (upgrade.js logs one JSON object per line). */
+const events = (logs) => logs.map((l) => ({ ...JSON.parse(l.text), consoleLevel: l.level }));
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 /** Runs one upgrade and checks, whatever happened, that the ticket never reached a log line. */
-async function upgrade(handler, logs, url) {
-  const req = fakeReq(url);
+async function upgrade(handler, logs, url, headers = {}) {
+  const req = fakeReq(url, headers);
   const socket = fakeSocket();
   await handler(req, socket, Buffer.alloc(0));
   const text = logs.map((l) => l.text).join("\n");
@@ -50,9 +61,9 @@ async function upgrade(handler, logs, url) {
  * Runs one upgrade through the handler with stub dependencies. `deps` overrides the
  * default happy path (a valid, unused ticket for the requested doc, for an editor).
  */
-async function runUpgrade(t, url, deps = {}) {
+async function runUpgrade(t, url, deps = {}, headers = {}) {
   const logs = captureConsole(t);
-  const calls = { verify: [], consume: [], fetchRole: [], accept: [] };
+  const calls = { verify: [], consume: [], fetchRole: [], fetchRoleOpts: [], accept: [] };
   const handler = createUpgradeHandler({
     verifyTicket: async (ticket, docName) => {
       calls.verify.push({ ticket, docName });
@@ -64,8 +75,9 @@ async function runUpgrade(t, url, deps = {}) {
       calls.consume.push(claims.jti);
       return deps.consumeTicket ? deps.consumeTicket(claims) : true;
     },
-    fetchRole: async (identity) => {
+    fetchRole: async (identity, opts) => {
       calls.fetchRole.push(identity);
+      calls.fetchRoleOpts.push(opts);
       return deps.fetchRole ? deps.fetchRole(identity) : "editor";
     },
     accept: (req, socket, head) => {
@@ -73,14 +85,14 @@ async function runUpgrade(t, url, deps = {}) {
       if (deps.accept) deps.accept(req, socket, head);
     },
   });
-  const result = await upgrade(handler, logs, url);
+  const result = await upgrade(handler, logs, url, headers);
   return { ...result, logs, calls };
 }
 
 const status = (socket) => socket.written.split("\r\n")[0];
 
 test("a valid editor connects; req.url is stripped before accept and no client context is logged", async (t) => {
-  const { socket, calls, text } = await runUpgrade(t, `/post-12?ticket=${SECRET}`);
+  const { socket, calls, text, logs } = await runUpgrade(t, `/post-12?ticket=${SECRET}`);
   assert.equal(socket.written, "");
   assert.equal(socket.destroyed, false);
   assert.deepEqual(calls.verify, [{ ticket: SECRET, docName: "post-12" }]);
@@ -89,10 +101,16 @@ test("a valid editor connects; req.url is stripped before accept and no client c
   assert.deepEqual(calls.fetchRole, [{ userId: "1", issuedAt: Date.parse(ISSUED_AT) / 1000 }]);
   assert.equal(calls.accept.length, 1);
   assert.equal(calls.accept[0].url, "/post-12");
-  assert.deepEqual(calls.accept[0].auth, { sub: "alice", userId: "1", username: "alice", role: "editor" });
-  assert.match(text, /upgrade request for doc: post-12/);
-  assert.match(text, /Ticket accepted for user alice \(role: editor\), doc post-12/);
+  const { requestId, ...auth } = calls.accept[0].auth;
+  assert.deepEqual(auth, { sub: "alice", userId: "1", username: "alice", role: "editor" });
+  assert.match(requestId, UUID, "no X-Request-ID came in, so one is generated");
+  assert.deepEqual(calls.fetchRoleOpts, [{ requestId }], "the request id is forwarded on the role lookup");
+  const logged = events(logs);
+  assert.deepEqual(logged.map((e) => e.event), ["ws_upgrade"]);
+  assert.equal(logged[0].doc, "post-12");
+  assert.equal(logged[0].request_id, requestId);
   assert.ok(!text.includes("10.0.0.7") && !text.includes("UA/1"), text);
+  assert.ok(!text.includes("alice"), "usernames are not logged (#155)");
 });
 
 test("the pre-#233 ?token= param is refused (access tokens never open a socket)", async (t) => {
@@ -103,10 +121,10 @@ test("the pre-#233 ?token= param is refused (access tokens never open a socket)"
 });
 
 test("the proxy's /collab prefix is dropped, so the doc is post-<id>", async (t) => {
-  const { calls, text } = await runUpgrade(t, `/collab/post-12?ticket=${SECRET}`);
+  const { calls, logs } = await runUpgrade(t, `/collab/post-12?ticket=${SECRET}`);
   assert.equal(calls.accept[0].url, "/post-12");
   assert.equal(calls.verify[0].docName, "post-12");
-  assert.match(text, /doc: post-12/);
+  assert.equal(events(logs)[0].doc, "post-12");
 });
 
 test("an invalid doc name gets 400 before any auth work, with client context logged", async (t) => {
@@ -117,9 +135,14 @@ test("an invalid doc name gets 400 before any auth work, with client context log
   assert.deepEqual(calls.consume, []);
   assert.deepEqual(calls.fetchRole, []);
   assert.deepEqual(calls.accept, []);
-  const line = logs.find((l) => l.text.includes("Invalid document name"));
-  assert.equal(line.level, "warn");
-  assert.match(line.text, /doc evil\?20doc \| origin="http:\/\/localhost:4321" ua="UA\/1" peer="10\.0\.0\.7"/);
+  const deny = events(logs).find((e) => e.event === "ws_deny");
+  assert.equal(deny.consoleLevel, "warn");
+  assert.equal(deny.level, "warn");
+  assert.equal(deny.status, 400);
+  assert.equal(deny.reason, "Invalid document name");
+  assert.equal(deny.doc, "evil?20doc");
+  assert.equal(deny.client, 'origin="http://localhost:4321" ua="UA/1" peer="10.0.0.7"');
+  assert.match(deny.request_id, UUID);
 });
 
 test("a missing credential gets 401 without verifying", async (t) => {
@@ -130,7 +153,7 @@ test("a missing credential gets 401 without verifying", async (t) => {
 });
 
 test("an invalid ticket gets 401 and is neither burned nor looked up", async (t) => {
-  const { socket, calls, text } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, {
+  const { socket, calls, logs } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, {
     verifyTicket: () => {
       throw new Error("ticket was issued for a different document");
     },
@@ -139,7 +162,10 @@ test("an invalid ticket gets 401 and is neither burned nor looked up", async (t)
   assert.deepEqual(calls.consume, []);
   assert.deepEqual(calls.fetchRole, []);
   assert.deepEqual(calls.accept, []);
-  assert.match(text, /Ticket rejected: ticket was issued for a different document.*peer="10\.0\.0\.7"/);
+  const deny = events(logs).find((e) => e.event === "ws_deny");
+  assert.equal(deny.status, 401);
+  assert.equal(deny.reason, "Ticket rejected: ticket was issued for a different document");
+  assert.match(deny.client, /peer="10\.0\.0\.7"/);
 });
 
 test("an already-used ticket gets 401 without a role lookup", async (t) => {
@@ -147,7 +173,25 @@ test("an already-used ticket gets 401 without a role lookup", async (t) => {
   assert.equal(status(socket), "HTTP/1.1 401 Unauthorized");
   assert.deepEqual(calls.fetchRole, []);
   assert.deepEqual(calls.accept, []);
-  assert.equal(logs.find((l) => l.text.includes("Ticket already used")).level, "warn");
+  const deny = events(logs).find((e) => e.event === "ws_deny");
+  assert.equal(deny.consoleLevel, "warn");
+  assert.equal(deny.reason, "Ticket already used");
+  assert.equal(deny.user_id, "1", "denials after verification name the user by id");
+});
+
+test("a well-formed incoming X-Request-ID is kept, logged, forwarded and handed to the connection", async (t) => {
+  const id = "edge-proxy-0123456789";
+  const { calls, logs } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, {}, { "x-request-id": id });
+  assert.equal(calls.accept[0].auth.requestId, id);
+  assert.deepEqual(calls.fetchRoleOpts, [{ requestId: id }]);
+  assert.ok(events(logs).every((e) => e.request_id === id));
+});
+
+test("a malformed incoming X-Request-ID is replaced, so it can't forge log content", async (t) => {
+  const bad = 'x"},"event":"forged';
+  const { calls, logs } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, {}, { "x-request-id": bad });
+  assert.match(calls.accept[0].auth.requestId, UUID);
+  assert.ok(!logs.some((l) => l.text.includes("forged")));
 });
 
 test("a ticket without a usable user_id/iat gets 403 without a role lookup", async (t) => {
@@ -225,7 +269,7 @@ function wiredHandler(fetchImpl, accepted) {
   return createUpgradeHandler({
     verifyTicket: (ticket, docName) => verifyTicket(ticket, publicKey, { issuer: ISSUER, docName }),
     consumeTicket: (claims) => usedTickets.consume(claims),
-    fetchRole: (identity) => fetchCurrentRole("http://api:8081", identity, "s3cret", { fetchImpl }),
+    fetchRole: (identity, opts) => fetchCurrentRole("http://api:8081", identity, "s3cret", { fetchImpl, ...opts }),
     accept: (req) => accepted.push(req.auth),
   });
 }
@@ -243,6 +287,8 @@ test("wired: an editor's ticket opens a socket; the ticket is never sent to the 
   assert.equal(api.calls.length, 1);
   assert.match(api.calls[0].url, /^http:\/\/api:8081\/internal\/users\/7\/role\?issued_at=\d+$/);
   assert.equal(api.calls[0].init.headers.Authorization, "Bearer s3cret");
+  assert.equal(api.calls[0].init.headers["X-Request-ID"], accepted[0].requestId);
+  assert.match(accepted[0].requestId, UUID);
   assert.ok(!JSON.stringify(api.calls).includes(ticket), "ticket must not leave the WS process");
   assert.ok(!logs.some((l) => l.text.includes(ticket)), "ticket must not be logged");
 });

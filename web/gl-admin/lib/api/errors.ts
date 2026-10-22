@@ -1,15 +1,19 @@
 // API errors as the admin shows them. The API answers errors with
-// `{"error": "..."}`; a 429 from the rate limiter (#190) also sends Retry-After.
-// ApiError.message is always a sentence a user can read: never a raw status
-// line or response body (an HTML error page from a proxy, say).
+// `{"error": "...", "code": "..."}` (code only on some); a 429 from the rate
+// limiter (#190) also sends Retry-After. ApiError.message is always a sentence
+// a user can read: never a raw status line or response body (an HTML error
+// page from a proxy, say). Callers that need to tell cases apart use status
+// and code, not the English text.
 
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    // The API's own `error` string, if the body had one.
-    readonly serverMessage: string | null = null,
-    readonly retryAfterSeconds: number | null = null
+    readonly retryAfterSeconds: number | null = null,
+    // The API's machine-readable {"code": ...}, when present.
+    readonly code: string | null = null,
+    // The API's own {"error": ...} text, if the body had one.
+    readonly serverMessage: string | null = null
   ) {
     super(message)
     this.name = "ApiError"
@@ -72,17 +76,19 @@ export async function apiErrorFromResponse(
   options: Pick<FriendlyOptions, "fallback" | "authEndpoint"> = {}
 ): Promise<ApiError> {
   let serverMessage: string | null = null
+  let code: string | null = null
   try {
     const text = await response.text()
     const parsed = JSON.parse(text)
     if (parsed && typeof parsed.error === "string") serverMessage = parsed.error
+    if (parsed && typeof parsed.code === "string") code = parsed.code
   } catch {
     // Not JSON (or no body): never show the raw text.
   }
   const retryAfter = Number.parseInt(response.headers.get("Retry-After") ?? "", 10)
   const retryAfterSeconds = Number.isFinite(retryAfter) ? retryAfter : null
   const message = friendlyApiMessage(response.status, { ...options, serverMessage, retryAfterSeconds })
-  return new ApiError(message, response.status, serverMessage, retryAfterSeconds)
+  return new ApiError(message, response.status, retryAfterSeconds, code, serverMessage)
 }
 
 // fetch() rejects with a TypeError when the server can't be reached at all;

@@ -139,13 +139,21 @@ export function ticketIdentity(payload) {
 // Throws on any other status (including 401 = ROLE_LOOKUP_SECRET mismatch, a config
 // error rather than a user error), a network error or a timeout → caller answers 503.
 // Either way the connection is never allowed without a verified editor role.
-export async function fetchCurrentRole(apiUrl, { userId, issuedAt }, secret, { fetchImpl = fetch, timeoutMs = 3000 } = {}) {
+// requestId (the upgrade's) is sent as X-Request-ID so the API logs the lookup under it.
+export async function fetchCurrentRole(
+  apiUrl,
+  { userId, issuedAt },
+  secret,
+  { fetchImpl = fetch, timeoutMs = 3000, requestId } = {},
+) {
   const url =
     `${apiUrl.replace(/\/+$/, "")}/internal/users/${encodeURIComponent(userId)}/role` +
     `?issued_at=${encodeURIComponent(issuedAt)}`;
+  const headers = { Authorization: `Bearer ${secret}`, Accept: "application/json" };
+  if (requestId) headers["X-Request-ID"] = requestId;
   const res = await fetchImpl(url, {
     method: "GET",
-    headers: { Authorization: `Bearer ${secret}`, Accept: "application/json" },
+    headers,
     signal: AbortSignal.timeout(timeoutMs),
   });
 

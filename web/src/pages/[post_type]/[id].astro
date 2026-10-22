@@ -130,7 +130,7 @@ if (post) {
     
     if (postResponse && postResponse.post) {
       fullPost = postResponse.post
-      console.log(`Successfully fetched fresh ${postType} data:`, fullPost.title)
+      console.log(`Successfully fetched fresh ${postType} data:`, fullPost?.title)
     }
   } catch (error) {
     console.warn(`Could not fetch fresh ${postType} data for ID/slug:`, id, 'Error:', error.message)
@@ -165,9 +165,10 @@ if (!fullPost || !fullPost.title) {
   })
 }
 
-// The API returns drafts and archived posts by id/slug to anyone, so only
-// published posts are public here. A post requested under another type's URL
-// (/page/12 for a post) is a 404 too. A null-body 404 renders src/pages/404.astro.
+// The API returns drafts (including unpublished posts, #136) and archived posts
+// by id/slug to anyone, so only published posts are public here. A post
+// requested under another type's URL (/page/12 for a post) is a 404 too. A
+// null-body 404 renders src/pages/404.astro.
 if (fullPost.post_status !== 'published' || (fullPost.post_type && fullPost.post_type !== postType)) {
   return new Response(null, { status: 404 })
 }

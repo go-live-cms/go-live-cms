@@ -95,9 +95,10 @@ non-editors anyway (see `websocket/CLAUDE.md` → Auth).
    (e.g. 401) must remain retryable and must NOT permanently disable autosave.
 
 3b. **Seed the editor from the REST working copy ONLY when the live Yjs doc is empty,
-   and ONLY after the WS `synced` event.** On a warm reload the WS server restores the
-   prosemirror fragment — Yjs is the source of truth and the Collaboration plugin already
-   shows the content. The seed runs inside `onSynced` (Editor.tsx) so the authoritative
+   and ONLY after the WS sync event.** (`Editor.tsx` listens to `sync`, the typed
+   event y-websocket emits right after the untyped `synced`, with the same state.)
+   On a warm reload the WS server restores the prosemirror fragment — Yjs is the source
+   of truth and the Collaboration plugin already shows the content. The seed runs inside `onSynced` (Editor.tsx) so the authoritative
    server state has loaded before we test emptiness; seeding earlier (e.g. from
    `initialize()` before WS sync) would mint fresh structs that then collide with the
    server's on sync — the same divergence as rule 0. `setContent` over a non-empty doc
@@ -115,7 +116,7 @@ non-editors anyway (see `websocket/CLAUDE.md` → Auth).
    working copy). Only explicit `forceSave`/`publish` may write empty.
 
 6. **Run-once content load:** `Editor.tsx` guards the `onSynced` content-load with
-   `hasInitializedRef` (reset only on `postId` change). The provider's `synced` event
+   `hasInitializedRef` (reset only on `postId` change). The provider's `sync` event
    re-fires on every reconnect; without the guard, reconnects re-run `setContent` and
    clobber in-progress typing. The persistence manager has its own `hasInitialized`.
 
@@ -140,6 +141,15 @@ non-editors anyway (see `websocket/CLAUDE.md` → Auth).
    between peers can mis-integrate complex struct operations (Yjs requires all peers on
    one version). Related but distinct: the **server-side dual ESM/CJS instance** hazard —
    see `websocket/CLAUDE.md`, it's the top gotcha there.
+
+9. **Restoring a version (#136) goes through the editor, never around it.**
+   `BlockPersistenceManager.restoreVersion(doc)` (only after `hasInitialized`, i.e.
+   after WS sync) applies the doc with `setEditorBlockDoc`, which the ySyncPlugin
+   mirrors to peers, then `forceSave`s through the normal PUT. Overwriting
+   `posts.block_doc` behind the live Yjs doc would be reverted by the next autosave
+   of any open editor. It adopts the version's dropped-block record only after the
+   editor accepted the doc. Returns `{ saved: false }` when a save was in flight (the
+   follow-up save persists it).
 
 ## State machine flags (BlockPersistenceManager)
 
@@ -196,6 +206,14 @@ resolves, edits arrived mid-flight so DON'T clear `hasUnsavedChanges`) · `saveT
   `components/editor/extensions/BlockIdExtension.test.ts` (headless `Editor`). Note for
   such tests: StarterKit's TrailingNode appends its own transaction (no sync meta) when
   the doc ends in a list, which re-runs `appendTransaction` without the rule-7 guard.
+- **Paste (#128):** `components/editor/extensions/PasteSanitizer.ts` runs pasted HTML
+  through DOMPurify (`transformPastedHTML`, local pastes only; no appendTransaction, so
+  rule 7 doesn't apply) and the schema's parse rules turn the rest into nodes. It
+  strips every `data-block-id` (also inside ProseMirror's `data-pm-slice` context), so
+  pasted nodes always get fresh ids from BlockIdExtension and a copied id can never
+  re-key the original block. Pasted images are dropped by design (insert via the media
+  library). Pinned by `PasteSanitizer.test.ts` (fixtures, schema check, bridge
+  round-trip) and `PasteSanitizer.collab.test.ts` (two peers converge, no loop).
 - **Cycles:** `listItemsToPM` tracks the lists being converted. A list that (directly
   or through another list) contains itself throws at the child that closes the cycle,
   so that child is dropped and reported like any other bad child. Nothing recurses

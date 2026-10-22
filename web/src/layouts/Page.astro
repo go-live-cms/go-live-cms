@@ -1,6 +1,5 @@
 ---
 import Head from "./Page/Head.astro"
-import Foot from "./Page/Foot.astro"
 import Header from "./Header.astro"
 import Footer from "./Footer.astro"
 
@@ -17,14 +16,17 @@ interface Props {
 const { title, description, image } = Astro.props
 ---
 
-<Head title={title} description={description} image={image || undefined}>
-  <slot name="head" />
-</Head>
-
-<Header />
-<slot />
-<Footer />
-
-<Foot>
-  <slot name="foot" />
-</Foot>
+<!doctype html>
+<html lang="en">
+  <head>
+    <Head title={title} description={description} image={image || undefined}>
+      <slot name="head" />
+    </Head>
+  </head>
+  <body>
+    <Header />
+    <slot />
+    <Footer />
+    <slot name="foot" />
+  </body>
+</html>

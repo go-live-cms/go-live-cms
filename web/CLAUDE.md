@@ -57,6 +57,13 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   contributed to collab data corruption. See
   `gl-admin/lib/collaboration/CLAUDE.md` rule 8 and `websocket/CLAUDE.md`'s top gotcha
   (dual ESM/CJS instance) before touching any yjs-family dependency.
+- **Production `/api/v1` + `/uploads` forwarding (#143):** the browser calls the API
+  same-origin. In dev the Vite proxy (`astro.config.mjs`) forwards those paths; the
+  production image runs the standalone `@astrojs/node` server, which has no Vite, so
+  `src/middleware/apiProxy.ts` forwards them (first thing in the middleware, skipped in
+  dev). It appends the client IP to `X-Forwarded-For`, so the API must list the web
+  container in `TRUSTED_PROXIES` (prod `compose.yaml` does). Astro's own `/api/theme` and
+  `/api/posts-reload` routes are not under `/api/v1`.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 
