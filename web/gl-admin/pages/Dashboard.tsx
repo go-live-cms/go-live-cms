@@ -6,6 +6,7 @@ import { getUsers } from "@gl-admin/lib/api/users"
 import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
 import { getMedia } from "@gl-admin/lib/api/media"
 import type { Post, User, TaxonomyType, Media } from "@gl-admin/lib/types"
+import { errorMessage } from "@gl-admin/lib/api/errors"
 
 const Dashboard: React.FC = () => {
   const { baseTitle } = useGoLive();
@@ -37,7 +38,7 @@ const Dashboard: React.FC = () => {
         setRecentPosts(postsResponse.data.slice(0, 5))
         setRecentUsers(usersResponse.data.slice(0, 5))
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to fetch admin data")
+        setError(errorMessage(e, "Failed to fetch admin data"))
         console.error("Admin dashboard error:", e)
       }
     }

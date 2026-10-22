@@ -5,7 +5,7 @@ import Footer from '@/layouts/Footer.astro'
 import FormattedDate from '@/components/FormattedDate.astro'
 import TipTapContent from '@/components/TipTapContent.astro'
 import { SITE_TITLE, SITE_DESCRIPTION } from '../../consts'
-import { getPostsByType, getPostTypes } from '../../lib/api'
+import { getPostsByType, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
 
 export async function getStaticPaths() {
   // Dynamically fetch active post types from the API
@@ -49,10 +49,23 @@ export async function getStaticPaths() {
 const { 'post_type': postType } = Astro.params as { post_type: string }
 const { totalPosts } = Astro.props as { postType: string; totalPosts: number | undefined }
 
-const { data: posts, meta } = await getPostsByType(postType, { 
+// Every unknown single-segment URL (/foo) lands on this route, so it must 404
+// unless the segment is a public post type. If the type list can't be
+// fetched, fall through and let the posts query decide.
+let publicTypes: string[] | null = null
+try {
+  publicTypes = await getPublicPostTypeNames()
+} catch (error) {
+  console.warn('Could not fetch post types:', error)
+}
+if (publicTypes && !publicTypes.includes(postType)) {
+  return new Response(null, { status: 404 })
+}
+
+const { data: posts, meta } = await getPostsByType(postType, {
   status: 'published',
   sort: 'date_desc',
-  limit: 20 
+  limit: 20
 })
 
 const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
@@ -72,10 +85,16 @@ const pluralType = postType === 'page' ? 'Pages' : `${displayType}s`
     <main>
       <section>
         <h1>{pluralType}</h1>
-        <p>Showing {posts.length} of {meta.total} {pluralType.toLowerCase()}</p>
-        
+        {posts.length > 0 && (
+          <p>Showing {posts.length} of {meta.total} {pluralType.toLowerCase()}</p>
+        )}
+
         {posts.length === 0 ? (
-          <p>No {pluralType.toLowerCase()} found.</p>
+          <div class="empty-state">
+            <h2>No {pluralType.toLowerCase()} yet</h2>
+            <p>Nothing has been published here so far. Check back soon.</p>
+            <a href="/">Go to the homepage</a>
+          </div>
         ) : (
           <ul>
             {posts.map((post: any) => (

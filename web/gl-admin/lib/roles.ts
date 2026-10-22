@@ -16,3 +16,9 @@ export function canEditContent(role?: string | null): boolean {
     if (!role) return false
     return CONTENT_EDITOR_ROLES.includes(role.toLowerCase())
 }
+
+// Mirrors requireSiteAdmin in api/auth_roles.go (user management). UI hint only,
+// like canEditContent.
+export function isSiteAdmin(role?: string | null): boolean {
+    return role?.toLowerCase() === "admin"
+}

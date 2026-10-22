@@ -1,5 +1,6 @@
 import type { Media, MediaSortOption, PaginationParams, ApiResponse } from "./types"
 import { apiCall, authenticatedFetch, getMediaURL } from "../api"
+import { apiErrorFromResponse, friendlyApiMessage } from "./errors"
 import { buildUrl } from "./utils"
 import type { Post } from "./types"
 
@@ -55,8 +56,7 @@ export async function createMedia(formData: FormData, token?: string): Promise<a
     body: formData,
   })
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Upload failed")
+    throw await apiErrorFromResponse(response, { fallback: "Upload failed" })
   }
   return response.json()
 }
@@ -74,8 +74,7 @@ export async function updateMedia(
     body: JSON.stringify(data),
   })
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Update failed")
+    throw await apiErrorFromResponse(response, { fallback: "Update failed" })
   }
   return response.json()
 }
@@ -85,8 +84,7 @@ export async function deleteMedia(id: number, token?: string): Promise<any> {
     method: "DELETE",
   })
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || "Delete failed")
+    throw await apiErrorFromResponse(response, { fallback: "Delete failed" })
   }
   return response.json()
 }
@@ -160,7 +158,8 @@ export async function replaceMediaFile(
   }
 
   if (res.status < 200 || res.status >= 300) {
-    throw new MediaUploadError(res.body?.error || `Replace failed (HTTP ${res.status})`, res.status)
+    const serverMessage = typeof res.body?.error === "string" ? res.body.error : null
+    throw new MediaUploadError(friendlyApiMessage(res.status, { serverMessage, fallback: "Replace failed" }), res.status)
   }
   return res.body
 }

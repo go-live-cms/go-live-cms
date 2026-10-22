@@ -1,0 +1,11 @@
+---
+import ThemedErrorPage from '@/components/ThemedErrorPage.astro'
+
+export const prerender = false
+---
+
+<ThemedErrorPage
+  status={404}
+  title="Page not found"
+  message="The page you're looking for doesn't exist, or it is no longer published."
+/>

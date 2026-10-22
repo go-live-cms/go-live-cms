@@ -78,8 +78,16 @@ describe("replaceMediaFile", () => {
 
     const err = await replaceMediaFile(7, new File(["x"], "new.jpg")).catch((e) => e)
     expect(err).toBeInstanceOf(MediaUploadError)
-    expect(err.message).toBe("replacement must be the same file type as the original")
+    expect(err.message).toBe("Replacement must be the same file type as the original.")
     expect(err.status).toBe(400)
+  })
+
+  it("never shows a raw status for permission errors", async () => {
+    installFakeXHR([{ status: 403, body: { error: "forbidden" } }])
+
+    const err = await replaceMediaFile(7, new File(["x"], "new.jpg")).catch((e) => e)
+    expect(err.message).toMatch(/don't have permission/)
+    expect(err.status).toBe(403)
   })
 
   it("refreshes once on 401 and retries with the new token", async () => {

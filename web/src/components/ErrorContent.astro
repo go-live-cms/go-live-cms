@@ -1,0 +1,118 @@
+---
+/**
+ * The body of a public error page (status, title, message, actions). Shared by
+ * themes/default/layouts/error/default.astro and the theme-neutral
+ * src/layouts/ErrorLayout.astro. Colors come from the active theme's CSS
+ * variables, with fallbacks for themes that don't define them.
+ */
+interface Props {
+  status: number
+  title: string
+  message: string
+  // Only set in development (see 500.astro); never rendered in production.
+  detail?: string
+}
+
+const { status, title, message, detail } = Astro.props
+---
+
+<main class="error-layout">
+  <section class="error-container">
+    <p class="error-status">{status}</p>
+    <h1 class="error-title">{title}</h1>
+    <p class="error-message">{message}</p>
+
+    <div class="error-actions">
+      <a href="/" class="error-action error-action--primary">Go to the homepage</a>
+      {status === 404 && <a href="/post" class="error-action">Browse posts</a>}
+    </div>
+
+    {detail && <pre class="error-detail">{detail}</pre>}
+  </section>
+</main>
+
+<style>
+  .error-layout {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    min-height: 70vh;
+    padding: var(--gutter, 2rem);
+  }
+
+  .error-container {
+    max-width: 640px;
+    text-align: center;
+  }
+
+  .error-status {
+    color: var(--color-primary, #0050fe);
+    font-family: var(--font-heading, var(--font-sans, sans-serif));
+    font-size: 6rem;
+    font-weight: 700;
+    line-height: 1;
+    margin: 0 0 1rem;
+  }
+
+  .error-title {
+    color: var(--text-primary, #202222);
+    font-family: var(--font-heading, var(--font-sans, sans-serif));
+    font-size: 2rem;
+    line-height: 1.2;
+    margin: 0 0 1rem;
+  }
+
+  .error-message {
+    color: var(--text-tertiary, #666b6d);
+    font-size: 1.125rem;
+    line-height: 1.6;
+    margin: 0 0 2rem;
+  }
+
+  .error-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+  }
+
+  .error-action {
+    border: 1px solid var(--color-border, #d2d2d2);
+    border-radius: 6px;
+    color: var(--text-primary, #202222);
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    text-decoration: none;
+  }
+
+  .error-action--primary {
+    background: var(--color-primary, #0050fe);
+    border-color: var(--color-primary, #0050fe);
+    color: #ffffff;
+  }
+
+  .error-detail {
+    background: var(--color-surface, #f8fafc);
+    border: 1px solid var(--color-border, #d2d2d2);
+    border-radius: 6px;
+    color: var(--text-secondary, #333536);
+    font-family: var(--font-mono, monospace);
+    font-size: 0.8rem;
+    margin-top: 2rem;
+    max-height: 320px;
+    overflow: auto;
+    padding: 1rem;
+    text-align: left;
+    white-space: pre-wrap;
+  }
+
+  @media (max-width: 768px) {
+    .error-status {
+      font-size: 4rem;
+    }
+
+    .error-title {
+      font-size: 1.5rem;
+    }
+  }
+</style>

@@ -1,0 +1,47 @@
+---
+/**
+ * Renders an error page (404/500) with the active theme's error layout.
+ *
+ * Layout fallback chain:
+ * 1. themes/{theme}/layouts/error/{status}.astro
+ * 2. themes/{theme}/layouts/error/default.astro
+ * 3. src/layouts/ErrorLayout.astro (theme-neutral, loads the theme's stylesheets)
+ *
+ * The theme slug comes from the middleware (Astro.locals.activeTheme) rather than a
+ * fresh API call: an unreachable API is a common cause of a 500, and the error page
+ * must still render then.
+ */
+import ErrorLayout from '@/layouts/ErrorLayout.astro'
+
+interface Props {
+  status: number
+  title: string
+  message: string
+  detail?: string
+}
+
+const errorLayouts = import.meta.glob('../../themes/*/layouts/error/*.astro')
+
+const { status } = Astro.props
+const themeSlug = Astro.locals.activeTheme || 'default'
+
+const fallbackChain = [
+  `../../themes/${themeSlug}/layouts/error/${status}.astro`,
+  `../../themes/${themeSlug}/layouts/error/default.astro`,
+]
+
+let LayoutComponent = ErrorLayout
+for (const candidatePath of fallbackChain) {
+  if (errorLayouts[candidatePath]) {
+    try {
+      const layoutModule = (await errorLayouts[candidatePath]()) as any
+      LayoutComponent = layoutModule.default
+      break
+    } catch (error) {
+      console.warn(`Failed to load error layout ${candidatePath}:`, error)
+    }
+  }
+}
+---
+
+<LayoutComponent {...Astro.props} />
