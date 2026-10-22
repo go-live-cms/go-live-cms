@@ -31,6 +31,37 @@ type BlockMedia struct {
 	FocalPoint *FocalPoint   `json:"focal_point"`
 }
 
+// isBlockDocShape reports whether a decoded doc would also decode into
+// BlockDocV1: doc_version a number, blocks_order an array of strings, blocks
+// an object. Like that decode, absent or null fields are fine.
+func isBlockDocShape(doc map[string]interface{}) bool {
+	if doc == nil {
+		return false
+	}
+	if v, ok := doc["doc_version"]; ok && v != nil {
+		if _, isNum := v.(float64); !isNum {
+			return false
+		}
+	}
+	if v, ok := doc["blocks_order"]; ok && v != nil {
+		order, isArr := v.([]interface{})
+		if !isArr {
+			return false
+		}
+		for _, id := range order {
+			if _, isStr := id.(string); !isStr {
+				return false
+			}
+		}
+	}
+	if v, ok := doc["blocks"]; ok && v != nil {
+		if _, isObj := v.(map[string]interface{}); !isObj {
+			return false
+		}
+	}
+	return true
+}
+
 // blockDocMediaIDs returns the mediaIds of the doc's image blocks.
 func blockDocMediaIDs(doc map[string]interface{}) []int64 {
 	blocks, _ := doc["blocks"].(map[string]interface{})

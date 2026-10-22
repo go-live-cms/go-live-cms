@@ -322,9 +322,12 @@ func swapInFile(target string, src io.Reader) (*fileSwap, error) {
 	if err != nil {
 		return nil, err
 	}
+	// CreateTemp makes the file 0600; a replaced file should be as readable
+	// as a fresh upload (os.Create, 0666 less umask).
+	chmodErr := tmp.Chmod(0644)
 	_, copyErr := io.Copy(tmp, src)
 	closeErr := tmp.Close()
-	if err := errors.Join(copyErr, closeErr); err != nil {
+	if err := errors.Join(chmodErr, copyErr, closeErr); err != nil {
 		os.Remove(tmp.Name())
 		return nil, err
 	}

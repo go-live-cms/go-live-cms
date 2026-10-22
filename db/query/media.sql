@@ -146,11 +146,28 @@ WHERE id = sqlc.arg('id')
 RETURNING *;
 
 -- name: ListImageMediaAfter :many
--- Pages through image media by id for the variant backfill.
+-- Pages through image media by id for the variant backfill. With
+-- only_missing, rows that already have variants are skipped, and so are
+-- images whose known long edge is at most min_long_edge (they never get any;
+-- {} is their final state, not "not processed yet").
 SELECT * FROM media
 WHERE mime_type LIKE 'image/%' AND id > sqlc.arg('after_id')
+  AND (
+    NOT sqlc.arg('only_missing')::boolean
+    OR (
+      variants = '{}'::jsonb
+      AND (width = 0 OR height = 0 OR GREATEST(width, height) > sqlc.arg('min_long_edge')::int)
+    )
+  )
 ORDER BY id
 LIMIT sqlc.arg('page_size');
+
+-- name: GetMediaForUpdate :one
+-- Locks the row for the variant backfill's check-and-write, so a concurrent
+-- replace's UPDATE waits until the backfill's files and row are both in.
+SELECT * FROM media
+WHERE id = $1 LIMIT 1
+FOR UPDATE;
 
 -- name: GetMediaByIDs :many
 SELECT * FROM media

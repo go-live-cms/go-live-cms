@@ -37,6 +37,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -112,7 +113,27 @@ func parseMediaVariants(raw json.RawMessage) MediaVariants {
 var (
 	errImageTooLargeToResize = errors.New("image too large to generate variants")
 	errAnimatedImage         = errors.New("animated image")
+	// errImageTooSmall is internal to stageImageVariants: such an image just
+	// has no variants.
+	errImageTooSmall = errors.New("image smaller than the smallest variant")
 )
+
+// smallestVariantEdge is the long edge at or below which an image gets no
+// variants at all.
+func smallestVariantEdge() int {
+	return imageVariantSpecs[len(imageVariantSpecs)-1].LongEdge
+}
+
+// imagePipelineSlots bounds how many images are decoded and resized at once
+// (uploads, replaces and the backfill share it). A 40 MP image needs ~160 MB
+// decoded plus the scaled copies, so unbounded parallel uploads could run the
+// process out of memory; the rest wait their turn.
+var imagePipelineSlots = make(chan struct{}, 2)
+
+func acquireImagePipeline() func() {
+	imagePipelineSlots <- struct{}{}
+	return func() { <-imagePipelineSlots }
+}
 
 // stagedVariants is a set of generated variants waiting for the database.
 // A nil *stagedVariants is valid and does nothing.
@@ -204,11 +225,11 @@ func stageImageVariants(uploadPath, mediaPath string) (*stagedVariants, error) {
 	}
 
 	src, err := decodeForVariants(target)
+	if errors.Is(err, errImageTooSmall) {
+		return staged, nil // smaller than the smallest variant
+	}
 	if err != nil {
 		return staged, err
-	}
-	if b := src.img.Bounds(); max(b.Dx(), b.Dy()) <= imageVariantSpecs[len(imageVariantSpecs)-1].LongEdge {
-		return staged, nil // smaller than the smallest variant
 	}
 
 	parent := filepath.Dir(staged.final)
@@ -217,6 +238,12 @@ func stageImageVariants(uploadPath, mediaPath string) (*stagedVariants, error) {
 	}
 	staging, err := os.MkdirTemp(parent, ".staging-*")
 	if err != nil {
+		return staged, err
+	}
+	// MkdirTemp creates 0700; this directory becomes the public variant
+	// directory, so give it the same mode as the rest of the upload tree.
+	if err := os.Chmod(staging, 0755); err != nil {
+		os.RemoveAll(staging)
 		return staged, err
 	}
 
@@ -254,6 +281,10 @@ func decodeForVariants(path string) (orientedImage, error) {
 	}
 	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxVariantSourcePixels {
 		return orientedImage{}, errImageTooLargeToResize
+	}
+	// The header is enough to know an image gets no variants; don't decode it.
+	if max(cfg.Width, cfg.Height) <= smallestVariantEdge() {
+		return orientedImage{}, errImageTooSmall
 	}
 
 	var img image.Image
@@ -445,13 +476,19 @@ func prepareStoredImage(log *slog.Logger, uploadPath, storedPath, mimeType strin
 	if _, err := resolveInUploadDir(uploadPath, storedPath); err != nil {
 		return size, nil
 	}
-	if strings.HasPrefix(mimeType, "image/") {
-		if err := stripImageMetadataFile(storedPath, mimeType); err != nil {
-			log.Warn("media: stripping image metadata failed; original kept as uploaded", "media_path", storedPath, "error", err)
-		}
-		if info, err := os.Stat(storedPath); err == nil {
-			size = info.Size()
-		}
+	if !strings.HasPrefix(mimeType, "image/") {
+		// Still staged, so a replace that changes nothing image-wise clears
+		// stale variants on commit.
+		staged, _ := stageImageVariants(uploadPath, storedPath)
+		return size, staged
+	}
+	defer acquireImagePipeline()()
+
+	if err := stripImageMetadataFile(storedPath, mimeType); err != nil {
+		log.Warn("media: stripping image metadata failed; original kept as uploaded", "media_path", storedPath, "error", err)
+	}
+	if info, err := os.Stat(storedPath); err == nil {
+		size = info.Size()
 	}
 	staged, err := stageImageVariants(uploadPath, storedPath)
 	switch {
@@ -473,15 +510,26 @@ type VariantBackfillStats struct {
 }
 
 // BackfillMediaVariants generates variants for image media stored before
-// #255 (and seeded media). With all set it regenerates every image's
-// variants, e.g. after the sizes change. Rows whose files lie outside
-// uploadPath are skipped. Originals are not rewritten (their metadata is
-// only stripped on upload and replace).
+// #255 (and seeded media). Without all it only visits rows that have none
+// and are large enough to get some (the query filters the rest), so a
+// repeated run is one query. With all it regenerates every image's variants,
+// e.g. after the sizes change. Rows whose files lie outside uploadPath are
+// skipped. Originals are not rewritten (their metadata is only stripped on
+// upload and replace).
+//
+// Each row's files and variants column are written in SetMediaVariantsTx,
+// with the row locked and only if it still describes the file the variants
+// came from, so a replace running in the API at the same time always wins.
 func BackfillMediaVariants(ctx context.Context, store db.Store, uploadPath string, all bool, log *slog.Logger) (VariantBackfillStats, error) {
 	var stats VariantBackfillStats
 	var after int64
 	for {
-		page, err := store.ListImageMediaAfter(ctx, db.ListImageMediaAfterParams{AfterID: after, PageSize: 100})
+		page, err := store.ListImageMediaAfter(ctx, db.ListImageMediaAfterParams{
+			AfterID:     after,
+			OnlyMissing: !all,
+			MinLongEdge: int32(smallestVariantEdge()),
+			PageSize:    100,
+		})
 		if err != nil {
 			return stats, err
 		}
@@ -491,45 +539,59 @@ func BackfillMediaVariants(ctx context.Context, store db.Store, uploadPath strin
 		for _, media := range page {
 			after = media.ID
 			stats.Scanned++
-			if !all && len(parseMediaVariants(media.Variants)) > 0 {
-				stats.Skipped++
-				continue
-			}
 			if err := ctx.Err(); err != nil {
 				return stats, err
 			}
-			staged, err := stageImageVariants(uploadPath, media.MediaPath)
-			if staged == nil {
-				stats.Skipped++
-				continue
-			}
-			if err != nil && !noVariantsReason(err) {
-				log.Warn("media variant backfill: generating failed", "media_id", media.ID, "error", err)
-				staged.discard()
+			if err := backfillOne(ctx, store, uploadPath, media, &stats); err != nil {
+				log.Warn("media variant backfill: skipped", "media_id", media.ID, "error", err)
 				stats.Failed++
-				continue
-			}
-			// Files first: if the row update then fails, the files are only
-			// unrecorded, and the next run regenerates them.
-			if err := staged.commit(); err != nil {
-				log.Warn("media variant backfill: moving files into place failed", "media_id", media.ID, "error", err)
-				staged.discard()
-				stats.Failed++
-				continue
-			}
-			column := staged.column()
-			raw := json.RawMessage(`{}`)
-			if column.Valid {
-				raw = column.RawMessage
-			}
-			if _, err := store.SetMediaVariants(ctx, db.SetMediaVariantsParams{ID: media.ID, Variants: raw}); err != nil {
-				return stats, fmt.Errorf("saving variants of media %d: %w", media.ID, err)
-			}
-			if column.Valid {
-				stats.Generated++
-			} else {
-				stats.Skipped++
 			}
 		}
 	}
+}
+
+// backfillOne generates and stores one row's variants. It returns an error
+// for a row it couldn't process (counted as failed); skips and successes
+// update stats directly.
+func backfillOne(ctx context.Context, store db.Store, uploadPath string, media db.Medium, stats *VariantBackfillStats) error {
+	release := acquireImagePipeline()
+	staged, err := stageImageVariants(uploadPath, media.MediaPath)
+	release()
+	if staged == nil {
+		stats.Skipped++
+		return nil
+	}
+	if err != nil && !noVariantsReason(err) {
+		staged.discard()
+		return err
+	}
+
+	column := staged.column()
+	raw := json.RawMessage(`{}`)
+	if column.Valid {
+		raw = column.RawMessage
+	}
+	_, err = store.SetMediaVariantsTx(ctx, db.SetMediaVariantsTxParams{
+		ID:          media.ID,
+		MediaPath:   media.MediaPath,
+		ChangedAt:   media.ChangedAt,
+		Variants:    raw,
+		CommitFiles: staged.commit,
+	})
+	switch {
+	case errors.Is(err, db.ErrMediaChanged), errors.Is(err, sql.ErrNoRows):
+		// Replaced, edited or deleted meanwhile: whatever happened is newer.
+		staged.discard()
+		stats.Skipped++
+		return nil
+	case err != nil:
+		staged.discard()
+		return fmt.Errorf("saving variants: %w", err)
+	}
+	if column.Valid {
+		stats.Generated++
+	} else {
+		stats.Skipped++
+	}
+	return nil
 }

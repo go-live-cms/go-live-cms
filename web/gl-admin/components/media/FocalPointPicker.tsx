@@ -74,10 +74,13 @@ const FocalPointPicker: React.FC<Props> = ({ src, alt, value, onChange, classNam
       className={`focal-point-picker${editable ? " focal-point-picker--editable" : ""}${className ? ` ${className}` : ""}`}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      role={editable ? "slider" : undefined}
+      // A 2-D point has no single value, so not role="slider" (which requires
+      // aria-valuenow/min/max): an application region that takes arrow keys,
+      // with the current point in its description.
+      role={editable ? "application" : undefined}
       tabIndex={editable ? 0 : undefined}
-      aria-label={editable ? "Focal point: click the image or use the arrow keys" : undefined}
-      aria-valuetext={editable ? formatFocalPoint(value) : undefined}
+      aria-roledescription={editable ? "focal point picker" : undefined}
+      aria-label={editable ? `Focal point ${formatFocalPoint(value)}. Click the image or use the arrow keys to move it.` : undefined}
       data-testid="focal-point-picker"
     >
       <img src={src} alt={alt} className="focal-point-picker__image" draggable={false} />

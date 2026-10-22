@@ -67,7 +67,10 @@ server.
   constraint) are returned as `variants` / `focal_point`. `variants` is
   server-owned (PUT → 400); `focal_point` is set by PUT (`null` clears, absent
   keeps). Existing media: `main backfill-variants [-all]` (debug startup runs it
-  after seeding). Published docs served by `GET /posts/:id`, `/posts/slug/:slug`
+  after seeding). It runs outside the API process, so it writes through
+  `SetMediaVariantsTx` (row `FOR UPDATE`, skip if `media_path`/`changed_at`
+  changed): a concurrent Replace always wins. Image decoding is capped at two at
+  a time (`imagePipelineSlots`). Published docs served by `GET /posts/:id`, `/posts/slug/:slug`
   and `/public/posts/:id/blocks` get a derived `media` map for image blocks
   (`post_block_media.go`) so the renderer can emit `srcset` and `object-position`.
 - **Password change revokes everything.** `UpdateUserTx{PasswordChanged: true}`

@@ -1004,3 +1004,73 @@ func TestMediaVariantsAndFocalPoint(t *testing.T) {
 	require.Len(t, page, 1)
 	require.Equal(t, media.ID, page[0].ID)
 }
+
+// TestSetMediaVariantsTx covers the backfill's locked check-and-write: a row
+// that changed since the variants were generated is left alone (and the files
+// aren't committed); an unchanged one gets files and variants.
+func TestSetMediaVariantsTx(t *testing.T) {
+	ctx := context.Background()
+	_, media := createTestMedia(t)
+	variants := json.RawMessage(`{"thumb": {"path": "p", "width": 320, "height": 200}}`)
+
+	committed := false
+	_, err := testStore.SetMediaVariantsTx(ctx, SetMediaVariantsTxParams{
+		ID: media.ID, MediaPath: media.MediaPath, ChangedAt: media.ChangedAt.Add(-time.Second),
+		Variants: variants, CommitFiles: func() error { committed = true; return nil },
+	})
+	require.ErrorIs(t, err, ErrMediaChanged)
+	require.False(t, committed, "files of stale variants are never moved into place")
+
+	_, err = testStore.SetMediaVariantsTx(ctx, SetMediaVariantsTxParams{
+		ID: media.ID, MediaPath: "/uploads/media/other.jpg", ChangedAt: media.ChangedAt, Variants: variants,
+	})
+	require.ErrorIs(t, err, ErrMediaChanged)
+
+	got, err := testStore.SetMediaVariantsTx(ctx, SetMediaVariantsTxParams{
+		ID: media.ID, MediaPath: media.MediaPath, ChangedAt: media.ChangedAt,
+		Variants: variants, CommitFiles: func() error { committed = true; return nil },
+	})
+	require.NoError(t, err)
+	require.True(t, committed)
+	require.JSONEq(t, string(variants), string(got.Variants))
+
+	_, err = testStore.SetMediaVariantsTx(ctx, SetMediaVariantsTxParams{ID: media.ID + 1_000_000, Variants: variants})
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+// TestListImageMediaAfterOnlyMissing: the backfill's default query skips rows
+// that have variants and images too small to get any.
+func TestListImageMediaAfterOnlyMissing(t *testing.T) {
+	ctx := context.Background()
+	_, needs := createTestMedia(t)
+	_, err := testQueries.ReplaceMediaFile(ctx, ReplaceMediaFileParams{
+		ID: needs.ID, MediaPath: needs.MediaPath, MimeType: "image/jpeg", Width: 1000, Height: 500, OriginalFilename: "a.jpg",
+	})
+	require.NoError(t, err)
+	_, small := createTestMedia(t)
+	_, err = testQueries.ReplaceMediaFile(ctx, ReplaceMediaFileParams{
+		ID: small.ID, MediaPath: small.MediaPath, MimeType: "image/jpeg", Width: 300, Height: 200, OriginalFilename: "b.jpg",
+	})
+	require.NoError(t, err)
+	_, done := createTestMedia(t)
+	_, err = testQueries.SetMediaVariants(ctx, SetMediaVariantsParams{ID: done.ID, Variants: json.RawMessage(`{"thumb":{"path":"p"}}`)})
+	require.NoError(t, err)
+
+	ids := func(onlyMissing bool) map[int64]bool {
+		rows, err := testQueries.ListImageMediaAfter(ctx, ListImageMediaAfterParams{
+			AfterID: needs.ID - 1, OnlyMissing: onlyMissing, MinLongEdge: 320, PageSize: 1000,
+		})
+		require.NoError(t, err)
+		seen := map[int64]bool{}
+		for _, r := range rows {
+			seen[r.ID] = true
+		}
+		return seen
+	}
+	missing := ids(true)
+	require.True(t, missing[needs.ID])
+	require.False(t, missing[small.ID], "too small to ever get variants")
+	require.False(t, missing[done.ID], "already has variants")
+	all := ids(false)
+	require.True(t, all[needs.ID] && all[small.ID] && all[done.ID])
+}

@@ -15,7 +15,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -447,37 +449,100 @@ func TestBackfillMediaVariants(t *testing.T) {
 	store := mockdb.NewMockStore(ctrl)
 
 	uploadPath, bigPath := writeUpload(t, "big.jpg", testJPEG(t, 1200, 600))
-	smallPath := filepath.Join(uploadPath, "small.png")
-	require.NoError(t, os.WriteFile(smallPath, testPNG(t, 10, 10), 0644))
+	racedPath := filepath.Join(uploadPath, "raced.jpg")
+	require.NoError(t, os.WriteFile(racedPath, testJPEG(t, 900, 600), 0644))
+	changedAt := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
 	rows := []db.Medium{
-		{ID: 1, MediaPath: bigPath, MimeType: "image/jpeg", Variants: json.RawMessage(`{}`)},
-		{ID: 2, MediaPath: smallPath, MimeType: "image/png", Variants: json.RawMessage(`{}`)},
+		{ID: 1, MediaPath: bigPath, MimeType: "image/jpeg", Width: 1200, Height: 600, ChangedAt: changedAt, Variants: json.RawMessage(`{}`)},
 		{ID: 3, MediaPath: "/somewhere/else.jpg", MimeType: "image/jpeg", Variants: json.RawMessage(`{}`)},
-		{ID: 4, MediaPath: bigPath, MimeType: "image/jpeg", Variants: json.RawMessage(`{"thumb":{"path":"x","width":1,"height":1}}`)},
+		{ID: 5, MediaPath: filepath.Join(uploadPath, "missing.jpg"), MimeType: "image/jpeg", Variants: json.RawMessage(`{}`)},
+		{ID: 6, MediaPath: racedPath, MimeType: "image/jpeg", ChangedAt: changedAt, Variants: json.RawMessage(`{}`)},
 	}
+	// Small images and rows with variants are filtered by the query itself
+	// (only_missing + min_long_edge), so a repeated run doesn't decode them.
 	gomock.InOrder(
-		store.EXPECT().ListImageMediaAfter(gomock.Any(), db.ListImageMediaAfterParams{AfterID: 0, PageSize: 100}).Return(rows, nil),
-		store.EXPECT().ListImageMediaAfter(gomock.Any(), db.ListImageMediaAfterParams{AfterID: 4, PageSize: 100}).Return(nil, nil),
+		store.EXPECT().ListImageMediaAfter(gomock.Any(), db.ListImageMediaAfterParams{AfterID: 0, OnlyMissing: true, MinLongEdge: 320, PageSize: 100}).Return(rows, nil),
+		store.EXPECT().ListImageMediaAfter(gomock.Any(), db.ListImageMediaAfterParams{AfterID: 6, OnlyMissing: true, MinLongEdge: 320, PageSize: 100}).Return(nil, nil),
 	)
-	store.EXPECT().SetMediaVariants(gomock.Any(), gomock.Any()).Times(2).
-		DoAndReturn(func(_ context.Context, arg db.SetMediaVariantsParams) (db.Medium, error) {
+	store.EXPECT().SetMediaVariantsTx(gomock.Any(), gomock.Any()).Times(2).
+		DoAndReturn(func(_ context.Context, arg db.SetMediaVariantsTxParams) (db.Medium, error) {
+			require.Equal(t, changedAt, arg.ChangedAt, "the write is conditional on the row read")
 			switch arg.ID {
 			case 1:
 				v := parseMediaVariants(arg.Variants)
 				require.Len(t, v, 2)
 				require.Equal(t, int32(800), v["medium"].Width)
-			case 2:
-				require.JSONEq(t, `{}`, string(arg.Variants))
-			default:
-				t.Fatalf("unexpected SetMediaVariants for %d", arg.ID)
+				require.NoError(t, arg.CommitFiles(), "files move while the row is locked")
+				return db.Medium{ID: 1}, nil
+			case 6:
+				// Replaced in the API meanwhile: nothing may be committed.
+				return db.Medium{}, db.ErrMediaChanged
 			}
-			return db.Medium{ID: arg.ID}, nil
+			t.Fatalf("unexpected SetMediaVariantsTx for %d", arg.ID)
+			return db.Medium{}, nil
 		})
 
 	stats, err := BackfillMediaVariants(context.Background(), store, uploadPath, false, discardLog)
 	require.NoError(t, err)
-	require.Equal(t, VariantBackfillStats{Scanned: 4, Generated: 1, Skipped: 3}, stats)
+	require.Equal(t, VariantBackfillStats{Scanned: 4, Generated: 1, Skipped: 2, Failed: 1}, stats)
 	_, err = os.Stat(variantFile(bigPath, "medium.jpg"))
 	require.NoError(t, err)
+	_, err = os.Stat(variantDirFor(racedPath))
+	require.True(t, os.IsNotExist(err), "a raced row's staged variants are discarded, not committed")
+	entries, err := os.ReadDir(filepath.Join(uploadPath, variantsDirName))
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "no staging directories left behind")
+}
+
+func TestBackfillMediaVariantsAll(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	store.EXPECT().ListImageMediaAfter(gomock.Any(), db.ListImageMediaAfterParams{AfterID: 0, OnlyMissing: false, MinLongEdge: 320, PageSize: 100}).Return(nil, nil)
+	stats, err := BackfillMediaVariants(context.Background(), store, t.TempDir(), true, discardLog)
+	require.NoError(t, err)
+	require.Zero(t, stats.Scanned)
+}
+
+// Variant directories and stripped originals must stay readable like any
+// other upload (MkdirTemp/CreateTemp would leave them 0700/0600).
+func TestPipelineKeepsUploadPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permissions")
+	}
+	jpg := jpegWithEXIF(t, testJPEG(t, 1000, 500), 1)
+	uploadPath, mediaPath := writeUpload(t, "perm.jpg", jpg)
+	require.NoError(t, os.Chmod(mediaPath, 0644))
+
+	_, staged := prepareStoredImage(discardLog, uploadPath, mediaPath, "image/jpeg", int64(len(jpg)))
+	require.NoError(t, staged.commit())
+
+	info, err := os.Stat(mediaPath)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0644), info.Mode().Perm(), "stripped original keeps its mode")
+	dir, err := os.Stat(variantDirFor(mediaPath))
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0755), dir.Mode().Perm(), "variant directory is world-readable")
+
+	swap, err := swapInFile(mediaPath, bytes.NewReader(testJPEG(t, 10, 10)))
+	require.NoError(t, err)
+	require.NoError(t, swap.commit())
+	info, err = os.Stat(mediaPath)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0644), info.Mode().Perm(), "a replaced file is as readable as an upload")
+}
+
+func TestIsBlockDocShape(t *testing.T) {
+	ok := func(s string) bool {
+		var doc map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(s), &doc))
+		return isBlockDocShape(doc)
+	}
+	require.True(t, ok(`{"doc_version":1,"blocks_order":["a"],"blocks":{"a":{}}}`))
+	require.True(t, ok(`{"doc_version":1,"blocks_order":null,"blocks":{}}`), "null/absent fields decode fine into BlockDocV1 too")
+	require.True(t, ok(`{}`))
+	require.False(t, ok(`{"doc_version":"1"}`))
+	require.False(t, ok(`{"blocks_order":[1]}`))
+	require.False(t, ok(`{"blocks":[]}`))
+	require.False(t, isBlockDocShape(nil))
 }

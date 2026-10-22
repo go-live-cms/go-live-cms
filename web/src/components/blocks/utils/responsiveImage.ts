@@ -1,3 +1,4 @@
+import { createContext } from "react"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { safeImageSrc } from "./safeUrl"
 
@@ -21,8 +22,14 @@ export interface BlockMedia {
   focal_point?: { x: number; y: number } | null
 }
 
-// Block images sit in the post's text column, which is at most ~720px wide.
-export const BLOCK_IMAGE_SIZES = "(max-width: 760px) 100vw, 720px"
+// Default `sizes` for block images: a content column up to ~1000px wide.
+// Layouts that know better pass `imageSizes` to BlockRenderer (a narrow text
+// column, or "100vw" for full-width layouts), which reaches ImageBlock through
+// ImageSizesContext. Erring wide only costs a larger download; erring narrow
+// makes the browser pick a variant smaller than the rendered image.
+export const BLOCK_IMAGE_SIZES = "(max-width: 1000px) 100vw, 1000px"
+
+export const ImageSizesContext = createContext<string>(BLOCK_IMAGE_SIZES)
 
 export interface ResponsiveImageAttrs {
   src: string
@@ -61,14 +68,27 @@ const srcsetSafe = (url: string | undefined): url is string => !!url && !/[\s,]/
 
 const clamp01 = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : null)
 
+// pathOf strips the query and hash, so URLs compare by path (an admin preview may carry
+// ?v=...).
+const pathOf = (url: string) => url.split(/[?#]/)[0]
+
 // responsiveImageAttrs builds the <img> attributes for an image block: the
 // block's own src, plus srcset/sizes from the variants (and the original as
 // the largest candidate), the intrinsic size, and object-position from the
-// focal point. Without media info it is just the sanitized src.
-export function responsiveImageAttrs(src: string | undefined, media: BlockMedia | undefined): ResponsiveImageAttrs {
+// focal point. Without media info it is just the sanitized src, and so it is
+// when the src isn't that media's file (a stale src after a replace moved
+// legacy media to a new path): mixing the two would show different images
+// depending on the viewport.
+export function responsiveImageAttrs(
+  src: string | undefined,
+  media: BlockMedia | undefined,
+  sizes: string = BLOCK_IMAGE_SIZES
+): ResponsiveImageAttrs {
   const safeSrc = safeImageSrc(src)
   const attrs: ResponsiveImageAttrs = { src: safeSrc }
   if (!media || !safeSrc) return attrs
+  const original = toUrl(media.media_path)
+  if (!original || pathOf(original) !== pathOf(safeSrc)) return attrs
 
   const candidates = new Map<number, string>()
   for (const variant of Object.values(media.variants || {})) {
@@ -81,7 +101,7 @@ export function responsiveImageAttrs(src: string | undefined, media: BlockMedia 
       .sort(([a], [b]) => a - b)
       .map(([w, url]) => `${url} ${w}w`)
       .join(", ")
-    attrs.sizes = BLOCK_IMAGE_SIZES
+    attrs.sizes = sizes
   }
 
   if (media.width > 0 && media.height > 0) {
@@ -98,3 +118,12 @@ export function responsiveImageAttrs(src: string | undefined, media: BlockMedia 
 }
 
 const round = (v: number) => Math.round(v * 10) / 10
+
+// isFirstImageBlock reports whether blockId is the first top-level image in
+// the doc. That image is often the largest thing above the fold, so it loads
+// eagerly; later ones are lazy.
+export function isFirstImageBlock(doc: BlockDocV1, blockId: string): boolean {
+  const blocks = doc.blocks as Record<string, { type?: string } | undefined>
+  const first = (doc.blocks_order || []).find((id) => blocks[id]?.type === "image")
+  return first === blockId
+}

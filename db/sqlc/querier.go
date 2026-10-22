@@ -79,6 +79,9 @@ type Querier interface {
 	GetMediaByPost(ctx context.Context, postID int64) ([]Medium, error)
 	GetMediaByPostWithOrder(ctx context.Context, postID int64) ([]GetMediaByPostWithOrderRow, error)
 	GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) ([]GetMediaByUserRow, error)
+	// Locks the row for the variant backfill's check-and-write, so a concurrent
+	// replace's UPDATE waits until the backfill's files and row are both in.
+	GetMediaForUpdate(ctx context.Context, id int64) (Medium, error)
 	GetMediaPostCount(ctx context.Context, mediaID int64) (int64, error)
 	GetNextVersionNoForPost(ctx context.Context, postID int64) (int32, error)
 	GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error)
@@ -131,7 +134,10 @@ type Querier interface {
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
-	// Pages through image media by id for the variant backfill.
+	// Pages through image media by id for the variant backfill. With
+	// only_missing, rows that already have variants are skipped, and so are
+	// images whose known long edge is at most min_long_edge (they never get any;
+	// {} is their final state, not "not processed yet").
 	ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)

@@ -1056,6 +1056,21 @@ func (mr *MockStoreMockRecorder) GetMediaByUser(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMediaByUser", reflect.TypeOf((*MockStore)(nil).GetMediaByUser), arg0, arg1)
 }
 
+// GetMediaForUpdate mocks base method.
+func (m *MockStore) GetMediaForUpdate(arg0 context.Context, arg1 int64) (db.Medium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMediaForUpdate", arg0, arg1)
+	ret0, _ := ret[0].(db.Medium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMediaForUpdate indicates an expected call of GetMediaForUpdate.
+func (mr *MockStoreMockRecorder) GetMediaForUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMediaForUpdate", reflect.TypeOf((*MockStore)(nil).GetMediaForUpdate), arg0, arg1)
+}
+
 // GetMediaPostCount mocks base method.
 func (m *MockStore) GetMediaPostCount(arg0 context.Context, arg1 int64) (int64, error) {
 	m.ctrl.T.Helper()
@@ -2188,6 +2203,21 @@ func (m *MockStore) SetMediaVariants(arg0 context.Context, arg1 db.SetMediaVaria
 func (mr *MockStoreMockRecorder) SetMediaVariants(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMediaVariants", reflect.TypeOf((*MockStore)(nil).SetMediaVariants), arg0, arg1)
+}
+
+// SetMediaVariantsTx mocks base method.
+func (m *MockStore) SetMediaVariantsTx(arg0 context.Context, arg1 db.SetMediaVariantsTxParams) (db.Medium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetMediaVariantsTx", arg0, arg1)
+	ret0, _ := ret[0].(db.Medium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetMediaVariantsTx indicates an expected call of SetMediaVariantsTx.
+func (mr *MockStoreMockRecorder) SetMediaVariantsTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMediaVariantsTx", reflect.TypeOf((*MockStore)(nil).SetMediaVariantsTx), arg0, arg1)
 }
 
 // SetPostTypeActive mocks base method.

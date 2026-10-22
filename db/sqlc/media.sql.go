@@ -578,6 +578,40 @@ func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) 
 	return items, nil
 }
 
+const getMediaForUpdate = `-- name: GetMediaForUpdate :one
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y FROM media
+WHERE id = $1 LIMIT 1
+FOR UPDATE
+`
+
+// Locks the row for the variant backfill's check-and-write, so a concurrent
+// replace's UPDATE waits until the backfill's files and row are both in.
+func (q *Queries) GetMediaForUpdate(ctx context.Context, id int64) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, getMediaForUpdate, id)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Alt,
+		&i.MediaPath,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.FileSize,
+		&i.MimeType,
+		&i.Width,
+		&i.Height,
+		&i.Duration,
+		&i.OriginalFilename,
+		&i.Metadata,
+		&i.Variants,
+		&i.FocalX,
+		&i.FocalY,
+	)
+	return i, err
+}
+
 const getMediaPostCount = `-- name: GetMediaPostCount :one
 SELECT COUNT(*) FROM post_media
 WHERE media_id = $1
@@ -1023,18 +1057,35 @@ func (q *Queries) GetUserMediaCount(ctx context.Context, userID int64) (int64, e
 const listImageMediaAfter = `-- name: ListImageMediaAfter :many
 SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y FROM media
 WHERE mime_type LIKE 'image/%' AND id > $1
+  AND (
+    NOT $2::boolean
+    OR (
+      variants = '{}'::jsonb
+      AND (width = 0 OR height = 0 OR GREATEST(width, height) > $3::int)
+    )
+  )
 ORDER BY id
-LIMIT $2
+LIMIT $4
 `
 
 type ListImageMediaAfterParams struct {
-	AfterID  int64 `json:"after_id"`
-	PageSize int32 `json:"page_size"`
+	AfterID     int64 `json:"after_id"`
+	OnlyMissing bool  `json:"only_missing"`
+	MinLongEdge int32 `json:"min_long_edge"`
+	PageSize    int32 `json:"page_size"`
 }
 
-// Pages through image media by id for the variant backfill.
+// Pages through image media by id for the variant backfill. With
+// only_missing, rows that already have variants are skipped, and so are
+// images whose known long edge is at most min_long_edge (they never get any;
+// {} is their final state, not "not processed yet").
 func (q *Queries) ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error) {
-	rows, err := q.db.QueryContext(ctx, listImageMediaAfter, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listImageMediaAfter,
+		arg.AfterID,
+		arg.OnlyMissing,
+		arg.MinLongEdge,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}

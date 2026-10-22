@@ -46,13 +46,20 @@ func stripImageMetadataFile(path, mimeType string) error {
 		return nil
 	}
 
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".strip-*.tmp")
 	if err != nil {
 		return err
 	}
+	// CreateTemp makes the file 0600; keep the original's mode instead, so
+	// the stripped file stays as readable as an unstripped upload.
+	chmodErr := tmp.Chmod(info.Mode().Perm())
 	_, writeErr := tmp.Write(clean)
 	closeErr := tmp.Close()
-	if err := errors.Join(writeErr, closeErr); err != nil {
+	if err := errors.Join(chmodErr, writeErr, closeErr); err != nil {
 		os.Remove(tmp.Name())
 		return err
 	}

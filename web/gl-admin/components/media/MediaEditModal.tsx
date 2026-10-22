@@ -302,7 +302,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
             {isImageFile && (
               <div className="media-edit-modal__focal">
                 <span className="media-edit-modal__info-label">Focal point:</span>
-                <span className="media-edit-modal__info-value" data-testid="focal-point-value">
+                <span className="media-edit-modal__info-value" data-testid="focal-point-value" aria-live="polite">
                   {formatFocalPoint(focalPoint)}
                 </span>
                 {isEditing && focalPoint && (
