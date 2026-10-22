@@ -109,7 +109,7 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "featured image set successfully",
-		"media":   toMediaResponse(media),
+		"media":   server.mediaResponse(media),
 	})
 }
 
@@ -166,7 +166,7 @@ func (server *Server) getFeaturedImageFull(c *gin.Context) {
 		"name":              featuredImage.Name,
 		"description":       featuredImage.Description,
 		"alt":               featuredImage.Alt,
-		"media_path":        featuredImage.MediaPath,
+		"media_path":        publicMediaPath(server.config.UploadPath, featuredImage.MediaPath),
 		"file_size":         featuredImage.FileSize,
 		"mime_type":         featuredImage.MimeType,
 		"original_filename": featuredImage.OriginalFilename,

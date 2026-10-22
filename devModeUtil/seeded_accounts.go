@@ -50,13 +50,14 @@ func SeededAccounts() []SeededAccount {
 // FindSeededAccountsWithSeededPasswords returns the usernames of seeded
 // accounts that exist and whose password still verifies against the seeded
 // one. Missing accounts are skipped; any other store error is returned, so a
-// caller can fail closed.
+// caller can fail closed. extra adds accounts to SeededAccounts(), such as an
+// admin seeded under SEED_ADMIN_USER with the default password.
 //
 // Before #228, every deployment ran in debug mode and so got these accounts;
 // release-mode startup uses this to find the ones never rotated.
-func FindSeededAccountsWithSeededPasswords(ctx context.Context, store db.Store) ([]string, error) {
+func FindSeededAccountsWithSeededPasswords(ctx context.Context, store db.Store, extra ...SeededAccount) ([]string, error) {
 	var found []string
-	for _, account := range SeededAccounts() {
+	for _, account := range append(SeededAccounts(), extra...) {
 		user, err := store.GetUserByUsername(ctx, account.Username)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue
@@ -69,4 +70,16 @@ func FindSeededAccountsWithSeededPasswords(ctx context.Context, store db.Store) 
 		}
 	}
 	return found, nil
+}
+
+// ConfiguredAdminAccounts returns the seed admin account to check on top of
+// SeededAccounts(): the SEED_ADMIN_USER account with the default password,
+// when that name differs from DefaultAdminUsername. A SEED_ADMIN_PASS is not
+// checked, because it is not public.
+func ConfiguredAdminAccounts(config util.Config) []SeededAccount {
+	admin := AdminAccount(config)
+	if admin.Username == DefaultAdminUsername {
+		return nil
+	}
+	return []SeededAccount{{Username: admin.Username, Password: DefaultAdminPassword}}
 }

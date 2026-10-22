@@ -74,7 +74,7 @@ func (server *Server) getMediaByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"media": toMediaResponse(media),
+		"media": server.mediaResponse(media),
 	})
 }
 
@@ -412,7 +412,7 @@ func (server *Server) getMediaByPost(c *gin.Context) {
 
 	mediaResponses := make([]MediaResponse, len(media))
 	for i, m := range media {
-		mediaResponses[i] = toMediaResponse(m)
+		mediaResponses[i] = server.mediaResponse(m)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -459,7 +459,7 @@ func (server *Server) getMediaPosts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"media": toMediaResponse(media),
+		"media": server.mediaResponse(media),
 		"posts": postResponses,
 		"meta": gin.H{
 			"media_id": mediaID,

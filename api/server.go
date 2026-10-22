@@ -112,7 +112,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	}
 
 	if shouldCheckSeededAccounts(config) {
-		if err := checkSeededAccounts(server.store); err != nil {
+		if err := checkSeededAccounts(server.store, config); err != nil {
 			return nil, err
 		}
 	}
@@ -140,7 +140,7 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	}
 
 	if shouldSeedDevData(config) {
-		devModeUtil.CreateDefaultAdminUser(server.store)
+		devModeUtil.CreateDefaultAdminUser(server.store, devModeUtil.AdminAccount(server.config))
 		devModeUtil.CreateDummyData(server.store, server.config)
 	}
 
@@ -167,11 +167,11 @@ const seededAccountsCheckTimeout = 30 * time.Second
 // #228 every deployment ran in debug mode and got these accounts, and their
 // passwords are public, so startup refuses to run until they are rotated.
 // A store error also fails the check: an unverified start is not allowed.
-func checkSeededAccounts(store db.Store) error {
+func checkSeededAccounts(store db.Store, config util.Config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), seededAccountsCheckTimeout)
 	defer cancel()
 
-	usernames, err := devModeUtil.FindSeededAccountsWithSeededPasswords(ctx, store)
+	usernames, err := devModeUtil.FindSeededAccountsWithSeededPasswords(ctx, store, devModeUtil.ConfiguredAdminAccounts(config)...)
 	if err != nil {
 		return fmt.Errorf("cannot verify that dev seeded accounts are disabled: %w", err)
 	}

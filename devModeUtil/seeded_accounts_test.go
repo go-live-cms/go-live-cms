@@ -106,3 +106,20 @@ func TestFindSeededAccountsWithSeededPasswordsStoreError(t *testing.T) {
 	require.ErrorIs(t, err, dbErr)
 	require.Nil(t, found)
 }
+
+func TestFindSeededAccountsWithSeededPasswordsExtra(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	expectSeededLookups(t, store, map[string]string{})
+	hashed, err := util.HashPassword("123456")
+	require.NoError(t, err)
+	store.EXPECT().
+		GetUserByUsername(gomock.Any(), gomock.Eq("root")).
+		Times(1).
+		Return(db.User{Username: "root", HashedPassword: hashed}, nil)
+
+	found, err := FindSeededAccountsWithSeededPasswords(context.Background(), store,
+		ConfiguredAdminAccounts(util.Config{SeedAdminUsername: "root"})...)
+	require.NoError(t, err)
+	require.Equal(t, []string{"root"}, found)
+}

@@ -20,11 +20,18 @@
 //   - A configured util.Config (especially UploadPath for media storage)
 //   - Database migrations completed and tables available
 //
+// # Entry points
+//
+// They run on API startup in debug mode (api.NewServer) and from the seed
+// command (go run ./cmd/seed, make seed), which runs them against the
+// configured database explicitly.
+//
 // # Idempotency and Safety
 //
 // Functions use simple guards to prevent duplicate data:
-//   - CreateDefaultAdminUser: Checks if "admin" username exists
-//   - CreateDummyData: Skips if CountTotalUsers > 1
+//   - CreateDefaultAdminUser: Checks if the admin username exists
+//   - CreateDummyData: Skips if CountTotalUsers > 1, but still restores any
+//     missing sample media file (EnsureSampleMediaFiles)
 //
 // Re-running these functions is generally safe but may result in mixed content
 // states. For clean results, use a fresh database.
@@ -33,77 +40,47 @@
 //
 // These utilities perform several side effects:
 //   - Database writes (users, posts, taxonomies, media records)
-//   - Network requests to picsum.photos for sample images
 //   - File system writes to the configured UploadPath directory
 //   - Creates directory structure with 0755 permissions
 //
 // # Performance Characteristics
 //
 // All operations run synchronously with the following considerations:
-//   - External HTTP fetches have 30-second timeouts per image
 //   - Not designed for concurrent invocation
 //   - Best-effort error handling (logs errors and continues)
 //   - Operations are not transactional across entities
 //
 // # Determinism
 //
-// Content generation uses mixed seeding strategies:
-//   - Most creators use gofakeit.Seed(0) for reproducible results
-//   - Image downloads depend on external service availability
-//
-// # Network Dependencies
-//
-// The package downloads sample images from picsum.photos, which requires:
-//   - Internet connectivity
-//   - Corporate proxies/firewalls may need configuration
-//   - Rate limits may apply from the external service
-//   - Images are provided under Creative Commons licensing
-//
-// For offline development, consider replacing sampleImages URLs with local assets.
+// Most creators use gofakeit.Seed(0) for reproducible results. The sample
+// images are files embedded in the binary (sampleimages/, see its README for
+// source and license), so seeding needs no network access.
 //
 // # Example Usage
 //
-//	// Typical initialization in a development server
-//	func initDevelopmentData() {
-//		store := db.NewStore(dbConn)
-//		config, err := util.LoadConfig(".")
-//		if err != nil {
-//			log.Fatal("cannot load config:", err)
-//		}
-//
-//		// Create default admin user first
-//		devModeUtil.CreateDefaultAdminUser(store)
-//
-//		// Then seed comprehensive demo data
-//		devModeUtil.CreateDummyData(store, config)
-//
-//		log.Println("Development environment ready!")
-//		log.Println("Login with admin:123456 (CHANGE IN PRODUCTION)")
+//	store := db.NewStore(dbConn)
+//	config, err := util.LoadConfig(".")
+//	if err != nil {
+//		log.Fatal("cannot load config:", err)
 //	}
+//
+//	devModeUtil.CreateDefaultAdminUser(store, devModeUtil.AdminAccount(config))
+//	devModeUtil.CreateDummyData(store, config)
 //
 // # Configuration Notes
 //
 // Consider these configuration aspects:
 //   - Number of users/posts/pages is currently hardcoded
-//   - Image source list can be customized by modifying sampleImages
-//   - Timeout values are fixed at 30 seconds
-//   - Upload path must be writable by the application process
-//   - Media URLs assume standard /uploads public mapping
+//   - Upload path must be writable by the process running the seed
+//   - Media URLs assume the standard /uploads public mapping
 package devModeUtil
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"image"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
-	"io"
 	"log"
-	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -111,28 +88,6 @@ import (
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/util"
 )
-
-// sampleImages contains URLs for placeholder images downloaded during demo data creation.
-// These images are sourced from picsum.photos (Creative Commons) and require internet
-// connectivity. For offline development or custom branding, replace these URLs with
-// local asset paths or alternative image services.
-//
-// Images are downloaded with a 30-second timeout and saved to the configured UploadPath.
-// Corporate firewalls or rate limiting may affect availability.
-var sampleImages = []string{
-	"https://picsum.photos/800/600?random=1",
-	"https://picsum.photos/800/600?random=2",
-	"https://picsum.photos/800/600?random=3",
-	"https://picsum.photos/800/600?random=4",
-	"https://picsum.photos/800/600?random=5",
-	"https://picsum.photos/800/600?random=6",
-	"https://picsum.photos/800/600?random=7",
-	"https://picsum.photos/800/600?random=8",
-	"https://picsum.photos/800/600?random=9",
-	"https://picsum.photos/800/600?random=10",
-	"https://picsum.photos/800/600?random=11",
-	"https://picsum.photos/800/600?random=12",
-}
 
 // generateSlug creates simple URL-friendly slugs from names by converting to lowercase
 // and replacing spaces with hyphens. This is a basic ASCII-only implementation that
@@ -166,7 +121,9 @@ func generateSlug(name string) string {
 //
 // Skips execution if CountTotalUsers > 1, assuming demo data already exists.
 // This simple guard prevents duplicate content but doesn't handle partial failures.
-// For clean results after partial runs, use a fresh database.
+// For clean results after partial runs, use a fresh database. Even when it
+// skips, it writes any sample image missing from UploadPath, so media rows
+// seeded earlier get their files back.
 //
 // # Error Handling
 //
@@ -196,13 +153,15 @@ func generateSlug(name string) string {
 //   - store: Active database connection with completed migrations
 //   - config: Must include valid UploadPath for media storage
 //   - config.UploadPath: Directory must be writable, created if doesn't exist
-//   - Network access: Required for downloading sample images from picsum.photos
 func CreateDummyData(store db.Store, config util.Config) {
 	log.Println("🎭 Creating dummy data...")
 
 	userCount, err := store.CountTotalUsers(context.TODO())
 	if err == nil && userCount > 1 {
 		log.Println("ℹ️  Dummy data already exists, skipping creation")
+		if _, err := EnsureSampleMediaFiles(config.UploadPath); err != nil {
+			log.Printf("❌ Failed to restore sample media files: %v", err)
+		}
 		return
 	}
 
@@ -215,10 +174,10 @@ func CreateDummyData(store db.Store, config util.Config) {
 	media := createDummyMedia(store, users, config)
 	log.Printf("✅ Created %d dummy media files", len(media))
 
-	posts := createDummyPosts(store, users, taxonomyTerms)
+	posts := createDummyPosts(store, users, taxonomyTerms, config.UploadPath)
 	log.Printf("✅ Created %d dummy posts", len(posts))
 
-	pages := createDummyPages(store, users)
+	pages := createDummyPages(store, users, config.UploadPath)
 	log.Printf("✅ Created %d dummy pages", len(pages))
 
 	linkMediaToPosts(store, append(posts, pages...), media)
@@ -520,116 +479,72 @@ func createDummyTaxonomies(store db.Store) ([]db.TaxonomyType, []db.TaxonomyTerm
 	return taxonomyTypes, taxonomyTerms
 }
 
-// createDummyMedia downloads sample images from external sources and creates
-// corresponding media records in the database. This provides realistic media
-// assets for theme development and content demonstrations.
-//
-// # Image Sources
-//
-// Downloads approximately 12 placeholder images from picsum.photos with
-// 800x600 resolution. These are Creative Commons licensed images suitable
-// for development use.
-//
-// # Network Requirements
-//
-//   - Internet connectivity for image downloads
-//   - 30-second timeout per image request
-//   - Corporate firewalls/proxies may need configuration
-//   - Rate limiting may apply from external service
+// createDummyMedia stores the sample images (embedded, see sampleimages/) in
+// config.UploadPath and creates a media record for each.
 //
 // # File System Operations
 //
-//   - Creates UploadPath directory with 0755 permissions if needed
-//   - Downloads images to config.UploadPath directory
-//   - Files named as sample-image-1.jpg through sample-image-12.jpg
-//   - Cleans up files if database record creation fails
+//   - Creates UploadPath (0755) if needed and writes sample-image-1.jpg
+//     through sample-image-12.jpg into it, keeping a file that is already
+//     there
+//   - media_path has the same form as a real upload's: UploadPath + "/" +
+//     filename, so /uploads serves it and media DELETE/replace treat it as
+//     inside the upload directory
 //
-// # Image Processing
-//
-//   - Reads image dimensions using image.DecodeConfig
-//   - Stores width/height in database record
-//   - MIME type hardcoded as image/jpeg (picsum returns JPEG format)
-//   - File size determined from downloaded file stats
+// The files are JPEGs whose bytes match their extension, so they pass the
+// same content checks as uploads (api.allowedMediaTypes). Width and height
+// come from the image header.
 //
 // # User Assignment
 //
 // Media ownership assigned to users in round-robin fashion. Requires at least
-// one user to exist - logs error and terminates if no users available.
-//
-// # Media Path Structure
-//
-// Database records store paths as "uploads/filename" format, expecting themes
-// to map this to a publicly accessible URL pattern (e.g., /uploads/filename).
-//
-// # Error Handling
-//
-// Individual image download failures are logged and skipped. If database
-// record creation fails, the downloaded file is removed to prevent orphaned
-// files in the upload directory.
-//
-// # Dependencies
-//
-//   - users: Must have at least one user for ownership assignment
-//   - config.UploadPath: Must be a valid, writable directory path
-//   - External network access to image service
+// one user to exist - logs error and returns if no users available.
 func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.Medium {
 	var media []db.Medium
 	gofakeit.Seed(0)
 
-	uploadsDir := filepath.Join(".", config.UploadPath)
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
-		log.Printf("❌ Failed to create uploads directory: %v", err)
+	if len(users) == 0 {
+		log.Println("❌ No users available for media creation")
 		return media
 	}
 
-	for i, imageURL := range sampleImages {
-		filename := fmt.Sprintf("sample-image-%d.jpg", i+1)
-		filePath := filepath.Join(uploadsDir, filename)
+	for i := 0; i < sampleImageCount; i++ {
+		n := i + 1
+		filename := sampleImageName(n)
 
-		if err := downloadImage(imageURL, filePath); err != nil {
-			log.Printf("❌ Failed to download image %d: %v", i+1, err)
+		_, imgConfig, err := sampleImage(n)
+		if err != nil {
+			log.Printf("❌ Failed to read sample image %d: %v", n, err)
 			continue
 		}
-
-		userIndex := i % len(users)
-		if len(users) == 0 {
-			log.Println("❌ No users available for media creation")
-			break
+		filePath, err := writeSampleImage(config.UploadPath, n)
+		if err != nil {
+			log.Printf("❌ Failed to store sample image %d: %v", n, err)
+			continue
 		}
-
 		fileInfo, err := os.Stat(filePath)
 		if err != nil {
-			log.Printf("❌ Failed to get file info for image %d: %v", i+1, err)
+			log.Printf("❌ Failed to get file info for image %d: %v", n, err)
 			continue
-		}
-
-		var width, height int32 = 0, 0
-		if imageFile, err := os.Open(filePath); err == nil {
-			if config, _, err := image.DecodeConfig(imageFile); err == nil {
-				width = int32(config.Width)
-				height = int32(config.Height)
-			}
-			imageFile.Close()
 		}
 
 		mediaParams := db.CreateMediaParams{
 			Name:             filename,
 			Description:      gofakeit.Sentence(8),
-			Alt:              fmt.Sprintf("Beautiful sample image number %d", i+1),
-			MediaPath:        fmt.Sprintf("%s/%s", config.UploadPath, filename),
-			UserID:           users[userIndex].ID,
+			Alt:              fmt.Sprintf("Abstract sample image number %d", n),
+			MediaPath:        sampleMediaPath(config.UploadPath, filename),
+			UserID:           users[i%len(users)].ID,
 			FileSize:         fileInfo.Size(),
 			MimeType:         "image/jpeg",
-			Width:            width,
-			Height:           height,
+			Width:            int32(imgConfig.Width),
+			Height:           int32(imgConfig.Height),
 			Duration:         0,
 			OriginalFilename: filename,
 		}
 
 		createdMedia, err := store.CreateMedia(context.TODO(), mediaParams)
 		if err != nil {
-			log.Printf("❌ Failed to create media record %d: %v", i+1, err)
-			os.Remove(filePath)
+			log.Printf("❌ Failed to create media record %d: %v", n, err)
 			continue
 		}
 
@@ -695,7 +610,7 @@ func createDummyMedia(store db.Store, users []db.User, config util.Config) []db.
 //
 //   - users: Requires at least one user for authorship assignment
 //   - taxonomyTerms: Optional but recommended for realistic content classification
-func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.TaxonomyTerm) []db.Post {
+func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.TaxonomyTerm, uploadPath string) []db.Post {
 	var posts []db.Post
 	gofakeit.Seed(0)
 
@@ -743,12 +658,12 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 		}
 
 		blogMeta := map[string]string{
-			"featured_image":   fmt.Sprintf("/uploads/sample-image-%d.jpg", (i%12)+1),
+			"featured_image":   sampleMediaURL(uploadPath, sampleImageName((i%sampleImageCount)+1)),
 			"reading_time":     fmt.Sprintf("%d", gofakeit.Number(2, 15)),
 			"seo_title":        title + " - Complete Guide",
 			"seo_description":  gofakeit.Sentence(20),
 			"author_bio":       gofakeit.Sentence(25),
-			"social_image":     fmt.Sprintf("/uploads/sample-image-%d.jpg", (i%12)+1),
+			"social_image":     sampleMediaURL(uploadPath, sampleImageName((i%sampleImageCount)+1)),
 			"enable_comments":  "true",
 			"post_views":       fmt.Sprintf("%d", gofakeit.Number(100, 5000)),
 			"difficulty_level": []string{"beginner", "intermediate", "advanced"}[i%3],
@@ -860,7 +775,7 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 // # Dependencies
 //
 //   - users: Requires at least one user for page ownership
-func createDummyPages(store db.Store, users []db.User) []db.Post {
+func createDummyPages(store db.Store, users []db.User, uploadPath string) []db.Post {
 	var pages []db.Post
 	gofakeit.Seed(0)
 
@@ -879,7 +794,7 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 			content: "# About Our Company\n\nWe are a leading technology company...",
 			meta: map[string]string{
 				"page_template":      "about-template",
-				"header_image":       "/uploads/sample-image-1.jpg",
+				"header_image":       sampleMediaURL(uploadPath, sampleImageName(1)),
 				"show_in_navigation": "true",
 				"navigation_order":   "1",
 				"page_layout":        "full-width",
@@ -892,7 +807,7 @@ func createDummyPages(store db.Store, users []db.User) []db.Post {
 			content: "# Our Services\n\nWe offer a wide range of services...",
 			meta: map[string]string{
 				"page_template":      "services-template",
-				"header_image":       "/uploads/sample-image-2.jpg",
+				"header_image":       sampleMediaURL(uploadPath, sampleImageName(2)),
 				"show_in_navigation": "true",
 				"navigation_order":   "2",
 				"page_layout":        "sidebar-right",
@@ -1102,67 +1017,6 @@ func linkMediaToPosts(store db.Store, posts []db.Post, media []db.Medium) {
 			}
 		}
 	}
-}
-
-// downloadImage downloads a file from a URL and saves it to the local filesystem.
-// This function is used to fetch sample images from external sources during
-// demo data creation.
-//
-// # Network Behavior
-//
-//   - Uses HTTP GET with 30-second timeout to prevent hanging
-//   - Validates HTTP 200 status code before proceeding
-//   - Streams response body directly to file (memory efficient)
-//   - Follows redirects automatically via default http.Client behavior
-//
-// # File System Behavior
-//
-//   - Creates or truncates the destination file
-//   - File permissions inherit from process umask
-//   - Automatically closes resources via defer statements
-//   - Returns first encountered error (network or filesystem)
-//
-// # Error Conditions
-//
-//   - Network timeouts or connection failures
-//   - Non-200 HTTP response codes (redirects handled automatically)
-//   - File system errors (permissions, disk space, path issues)
-//   - I/O errors during streaming
-//
-// # Security Considerations
-//
-//   - No validation of file content or size limits
-//   - Suitable for trusted sources in development environments
-//   - For production use, add content-type validation and size limits
-//
-// # Usage Context
-//
-// This function is specifically designed for development-time asset downloading
-// and should not be used with untrusted URLs or in production environments
-// without additional security measures.
-func downloadImage(url, filepath string) error {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
-	}
-
-	out, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
 }
 
 // min returns the smaller of two integers. This utility function is used

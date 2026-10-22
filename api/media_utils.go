@@ -48,6 +48,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
 // mediaKind is one accepted upload type: the MIME type stored for it and the
@@ -301,6 +302,37 @@ func resolveInUploadDir(uploadPath, mediaPath string) (string, error) {
 		return "", errOutsideUploadDir
 	}
 	return target, nil
+}
+
+// publicMediaPath returns the URL path /uploads serves a stored file at. The
+// file router serves the parent of uploadPath at /uploads, so with
+// UPLOAD_PATH=/app/uploads/media the file /app/uploads/media/x.jpg is
+// /uploads/media/x.jpg. media_path is stored as a filesystem path (it is what
+// replace and delete act on), but clients use the response's media_path as
+// the image URL, so the stored one 404s whenever UPLOAD_PATH is absolute.
+// A path outside uploadPath (legacy rows) is returned unchanged.
+func publicMediaPath(uploadPath, mediaPath string) string {
+	target, err := resolveInUploadDir(uploadPath, mediaPath)
+	if err != nil {
+		return mediaPath
+	}
+	served, err := filepath.Abs(filepath.Dir(uploadPath))
+	if err != nil {
+		return mediaPath
+	}
+	rel, err := filepath.Rel(served, target)
+	if err != nil {
+		return mediaPath
+	}
+	return "/uploads/" + filepath.ToSlash(rel)
+}
+
+// mediaResponse is toMediaResponse with media_path as its public URL path
+// (publicMediaPath).
+func (server *Server) mediaResponse(media db.Medium) MediaResponse {
+	response := toMediaResponse(media)
+	response.MediaPath = publicMediaPath(server.config.UploadPath, media.MediaPath)
+	return response
 }
 
 // fileSwap is a replacement file moved into place over an existing one,
