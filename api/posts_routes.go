@@ -28,31 +28,32 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/slug/:slug", server.getPostBySlug)
 		posts.GET("/:id", server.getPostByID)
 
-		// Protected writes (require auth + editor-or-admin role)
-		posts.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createPost)
-		posts.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updatePost)
-		posts.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deletePost)
+		// Protected writes. Any content role reaches them; the handler decides per
+		// post (auth_posts.go: contributors only their own, #135)
+		posts.POST("", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createPost)
+		posts.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updatePost)
+		posts.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePost)
 
 		// Post meta operations
 		posts.GET("/:id/meta", server.getPostMeta)
-		posts.POST("/:id/meta", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createOrUpdatePostMeta)
-		posts.DELETE("/:id/meta/:key", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deletePostMetaByKey)
+		posts.POST("/:id/meta", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createOrUpdatePostMeta)
+		posts.DELETE("/:id/meta/:key", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePostMetaByKey)
 
 		// Featured image operations
 		posts.GET("/:id/featured-image/full", server.getFeaturedImageFull)
 		posts.GET("/:id/featured-image", server.getFeaturedImageQuick)
-		posts.POST("/:id/featured-image", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.setFeaturedImage)
-		posts.DELETE("/:id/featured-image", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.removeFeaturedImage)
+		posts.POST("/:id/featured-image", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.setFeaturedImage)
+		posts.DELETE("/:id/featured-image", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.removeFeaturedImage)
 
 		// Post-Media link operations
 		posts.GET("/:id/media", server.getPostMedia)
-		posts.POST("/:id/media", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createPostMedia)
-		posts.DELETE("/:id/media/:media_id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deletePostMedia)
+		posts.POST("/:id/media", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createPostMedia)
+		posts.DELETE("/:id/media/:media_id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePostMedia)
 
 		// Block Spec v1 operations (the working-copy GET stays role-free:
 		// any authenticated user may load the editor doc)
 		posts.GET("/:id/blocks", authMiddleware(server.tokenMaker, server.store), server.getPostBlocks)
-		posts.PUT("/:id/blocks", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updatePostBlocks)
+		posts.PUT("/:id/blocks", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updatePostBlocks)
 		posts.POST("/:id/publish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.publishPost)
 		posts.POST("/:id/unpublish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.unpublishPost)
 

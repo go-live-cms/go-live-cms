@@ -24,10 +24,10 @@
 //
 // # Media Ownership Policy
 //
-// All write routes require the editor-or-admin role (requireContentEditor);
-// contributors get 403 from the middleware. Admins and editors may update and
-// delete media uploaded by anyone (moderation). Any role admitted to these
-// routes later is limited to its own media — see canModerateMedia.
+// All write routes admit any content role (requireContentAuthor), so
+// contributors can upload images for their own posts (#135). Admins and
+// editors may update and delete media uploaded by anyone (moderation);
+// contributors only their own — see canWriteMedia.
 //
 // # Integration
 //
@@ -51,12 +51,12 @@ func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	media := v1.Group("/media")
 
 	// Write operations - require Bearer authentication + editor-or-admin role
-	media.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMedia)              // Single upload
-	media.POST("/batch", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk)    // Batch upload (original path)
-	media.POST("/bulk", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk)     // Batch upload (alias for compatibility)
-	media.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updateMedia)           // Update metadata
-	media.POST("/:id/replace", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.replaceMedia) // Swap the file, keep id/metadata
-	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteMedia)        // Delete (admin/editor: any media)
+	media.POST("", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createMedia)              // Single upload
+	media.POST("/batch", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createMediaBulk)    // Batch upload (original path)
+	media.POST("/bulk", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createMediaBulk)     // Batch upload (alias for compatibility)
+	media.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updateMedia)           // Update metadata
+	media.POST("/:id/replace", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.replaceMedia) // Swap the file, keep id/metadata
+	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deleteMedia)        // Delete (admin/editor: any media)
 
 	// Read operations - public access for content consumption
 	media.GET("", server.getMedia)                // List/paginate/filter

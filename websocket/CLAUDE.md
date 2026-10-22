@@ -28,8 +28,8 @@ because the editor and this server ship together.
 tickets). `server.js` only injects the dependencies. Order: socket `error` listener →
 `takeCredential` → `stripCollabPrefix` → doc-name check (**400**) → ticket present
 (**401**) → `verifyTicket` (**401**) → burn the jti (**401** if already used) →
-`ticketIdentity` (**403** if no usable `user_id`/`iat`) → `fetchCurrentRole` (**503** if
-the API can't answer) → role allowed (**403**) → accept.
+`ticketIdentity` (**403** if no usable `user_id`/`iat`) → `fetchDocAccess` (**503** if
+the API can't answer) → `canEdit` (**403**) → accept.
 1. **`verifyTicket`** (`access.js`) checks the signature, issuer (`PASETO_ISSUER`),
    audience, `token_type: ws_ticket`, expiry, jti/exp presence, and that `doc` equals the
    URL's doc name. The public key comes from `PASETO_V4_PUBLIC_KEY_HEX` (the API's own
@@ -43,11 +43,12 @@ the API can't answer) → role allowed (**403**) → accept.
    reconnect). It's in memory, which assumes **one collab server process**. That already
    holds, because y-websocket keeps live docs in memory. A jti is kept until its ticket's
    `exp` + the 5s clock tolerance, the whole time `verifyTicket` could still accept it.
-3. **`fetchCurrentRole`** calls
-   `GET ${INTERNAL_API_URL}/internal/users/<user_id>/role?issued_at=<iat unix>` with
-   `Authorization: Bearer ${ROLE_LOOKUP_SECRET}`. That endpoint is on the API's
-   **separate internal listener** (`:8081`, never published), not the public `/api/v1`
-   (`api/internal_routes.go`). **The ticket never leaves this process.**
+3. **`fetchDocAccess`** calls
+   `GET ${INTERNAL_API_URL}/internal/users/<user_id>/access?doc=post-<id>&issued_at=<iat unix>`
+   with `Authorization: Bearer ${ROLE_LOOKUP_SECRET}` and gets `{role, can_edit}`. That
+   endpoint is on the API's **separate internal listener** (`:8081`, never published),
+   not the public `/api/v1` (`api/internal_routes.go`). **The ticket never leaves this
+   process.**
 
 **Decision: #223 + #233 merged (2026-10).** Two PRs replaced the old "forward the
 client's token to `/users/me`" check in parallel:
@@ -66,14 +67,16 @@ accepts a ticket. Rejected alternatives:
 
 If Hocuspocus (#206) lands, keep this lookup and call it from `onAuthenticate`.
 
-**Role check (#216).** Only **admins and editors** are admitted. This mirrors
-`requireContentEditor` in `api/auth_roles.go`, so keep the role lists in sync.
+**Access check (#216, #135).** The API decides per document: `canEditPost` in
+`api/auth_posts.go` (admins and editors any post, contributors only their own). This
+process keeps **no role list**; it admits only an explicit `can_edit: true`.
 - Tickets carry no `role` claim, and access is never decided from token contents. The
-  role always comes from the DB via the internal endpoint.
+  role and the post's owner always come from the DB via the internal endpoint.
 - **401:** a missing, invalid, expired, wrong-type, other-doc or already-used ticket.
 - **403:**
-  - a contributor;
-  - a deleted user (API 404);
+  - a user the API says can't edit this doc (`can_edit: false`, e.g. a contributor on
+    someone else's post);
+  - a deleted user or post (API 404);
   - a ticket without a usable `user_id`/`iat`;
   - a ticket issued before the user's latest password change. The API applies the same
     `issuedBeforePasswordChange` cutoff as `authMiddleware` and answers 403.
@@ -87,11 +90,12 @@ If Hocuspocus (#206) lands, keep this lookup and call it from `onAuthenticate`.
   the same value (both trim it). Docker sets `INTERNAL_API_URL=http://api:8081` and the
   secret in `compose.dev.yaml`.
 - `access.js` imports `paseto` but must never import yjs (single-instance rule below).
-- Known limitation: the role is checked **only at connect**. An editor demoted mid-session
+- Known limitation: access is checked **only at connect**. An editor demoted mid-session
   keeps their open socket until it reconnects (REST saves are already blocked). Revisit
   with Hocuspocus `onAuthenticate` (#206).
-- The admin SPA opens the editor `readOnly` for contributors (`canEditContent` in
-  `web/gl-admin/lib/roles.ts`), so they never attempt the connection.
+- The admin SPA opens the editor `readOnly` for posts the user can't edit
+  (`postEditorAccess` in `web/gl-admin/lib/roles.ts`), so they never attempt the
+  connection.
 - **Never log the raw upgrade request (#220).** The ticket is in the URL. It's single use,
   but an unused one is still a credential for 30s, so don't log `req.url`,
   `req.headers`, the query params or the credential.

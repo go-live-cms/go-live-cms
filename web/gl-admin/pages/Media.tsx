@@ -9,7 +9,7 @@ import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import MediaEditModal from "@gl-admin/components/media/MediaEditModal"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { canEditContent } from "@gl-admin/lib/roles"
+import { canCreateContent } from "@gl-admin/lib/roles"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
 
 //import { initializeMediaCardHandlers } from "@gl-admin/scripts/media-card-handlers"
@@ -25,8 +25,9 @@ function formatFileSize(bytes: number): string {
 
 const Media: React.FC = () => {
   const { baseTitle } = useGoLive()
-  // Uploading is limited to editors and admins (requireContentEditor in the API).
-  const canUpload = canEditContent(useCurrentRole())
+  // Every content role may upload (requireContentAuthor in the API, #135); editing or
+  // deleting someone else's media is still moderators only (canWriteMedia).
+  const canUpload = canCreateContent(useCurrentRole())
   const [mediaItems, setMediaItems] = useState<Media[]>([])
   const [error, setError] = useState<string | null>(null)
   const [total, setTotal] = useState<number>(0)
@@ -551,7 +552,7 @@ const Media: React.FC = () => {
                   title: "No media yet",
                   description: canUpload
                     ? "Images, videos, audio and documents you upload will show up here."
-                    : "Nothing has been uploaded yet. Contributors can't upload media; ask an editor or administrator.",
+                    : "Nothing has been uploaded yet. Your role can't upload media; ask an administrator.",
                   action: canUpload && !showUploadArea && (
                     <GLAdminButton variation="primary" onClick={handleNewMediaClick}>
                       <Icon name="uploadIcon" color="white" width="14" height="14" /> Upload media

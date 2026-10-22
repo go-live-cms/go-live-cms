@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createPublicKey, randomUUID } from "node:crypto";
 import { V4 } from "paseto";
 import { createUpgradeHandler } from "./upgrade.js";
-import { fetchCurrentRole, TicketReplayGuard, verifyTicket, TICKET_AUDIENCE, TICKET_TYPE } from "./access.js";
+import { fetchDocAccess, TicketReplayGuard, verifyTicket, TICKET_AUDIENCE, TICKET_TYPE } from "./access.js";
 
 const SECRET = "v4.public.eyJTOP-SECRET-TOKEN-BODY";
 const ISSUED_AT = "2026-10-20T12:00:00Z";
@@ -63,7 +63,7 @@ async function upgrade(handler, logs, url, headers = {}) {
  */
 async function runUpgrade(t, url, deps = {}, headers = {}) {
   const logs = captureConsole(t);
-  const calls = { verify: [], consume: [], fetchRole: [], fetchRoleOpts: [], accept: [] };
+  const calls = { verify: [], consume: [], fetchAccess: [], fetchAccessOpts: [], accept: [] };
   const handler = createUpgradeHandler({
     verifyTicket: async (ticket, docName) => {
       calls.verify.push({ ticket, docName });
@@ -75,10 +75,10 @@ async function runUpgrade(t, url, deps = {}, headers = {}) {
       calls.consume.push(claims.jti);
       return deps.consumeTicket ? deps.consumeTicket(claims) : true;
     },
-    fetchRole: async (identity, opts) => {
-      calls.fetchRole.push(identity);
-      calls.fetchRoleOpts.push(opts);
-      return deps.fetchRole ? deps.fetchRole(identity) : "editor";
+    fetchAccess: async (identity, docName, opts) => {
+      calls.fetchAccess.push({ ...identity, docName });
+      calls.fetchAccessOpts.push(opts);
+      return deps.fetchAccess ? deps.fetchAccess(identity, docName) : { role: "editor", canEdit: true };
     },
     accept: (req, socket, head) => {
       calls.accept.push({ url: req.url, auth: req.auth, head });
@@ -97,14 +97,14 @@ test("a valid editor connects; req.url is stripped before accept and no client c
   assert.equal(socket.destroyed, false);
   assert.deepEqual(calls.verify, [{ ticket: SECRET, docName: "post-12" }]);
   assert.deepEqual(calls.consume, ["j1"]);
-  // The role lookup gets the ticket's identity, never the ticket itself.
-  assert.deepEqual(calls.fetchRole, [{ userId: "1", issuedAt: Date.parse(ISSUED_AT) / 1000 }]);
+  // The access lookup gets the ticket's identity and the doc, never the ticket itself.
+  assert.deepEqual(calls.fetchAccess, [{ userId: "1", issuedAt: Date.parse(ISSUED_AT) / 1000, docName: "post-12" }]);
   assert.equal(calls.accept.length, 1);
   assert.equal(calls.accept[0].url, "/post-12");
   const { requestId, ...auth } = calls.accept[0].auth;
   assert.deepEqual(auth, { sub: "alice", userId: "1", username: "alice", role: "editor" });
   assert.match(requestId, UUID, "no X-Request-ID came in, so one is generated");
-  assert.deepEqual(calls.fetchRoleOpts, [{ requestId }], "the request id is forwarded on the role lookup");
+  assert.deepEqual(calls.fetchAccessOpts, [{ requestId }], "the request id is forwarded on the access lookup");
   const logged = events(logs);
   assert.deepEqual(logged.map((e) => e.event), ["ws_upgrade"]);
   assert.equal(logged[0].doc, "post-12");
@@ -133,7 +133,7 @@ test("an invalid doc name gets 400 before any auth work, with client context log
   assert.equal(socket.destroyed, true);
   assert.deepEqual(calls.verify, []);
   assert.deepEqual(calls.consume, []);
-  assert.deepEqual(calls.fetchRole, []);
+  assert.deepEqual(calls.fetchAccess, []);
   assert.deepEqual(calls.accept, []);
   const deny = events(logs).find((e) => e.event === "ws_deny");
   assert.equal(deny.consoleLevel, "warn");
@@ -160,7 +160,7 @@ test("an invalid ticket gets 401 and is neither burned nor looked up", async (t)
   });
   assert.equal(status(socket), "HTTP/1.1 401 Unauthorized");
   assert.deepEqual(calls.consume, []);
-  assert.deepEqual(calls.fetchRole, []);
+  assert.deepEqual(calls.fetchAccess, []);
   assert.deepEqual(calls.accept, []);
   const deny = events(logs).find((e) => e.event === "ws_deny");
   assert.equal(deny.status, 401);
@@ -168,10 +168,10 @@ test("an invalid ticket gets 401 and is neither burned nor looked up", async (t)
   assert.match(deny.client, /peer="10\.0\.0\.7"/);
 });
 
-test("an already-used ticket gets 401 without a role lookup", async (t) => {
+test("an already-used ticket gets 401 without an access lookup", async (t) => {
   const { socket, calls, logs } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, { consumeTicket: () => false });
   assert.equal(status(socket), "HTTP/1.1 401 Unauthorized");
-  assert.deepEqual(calls.fetchRole, []);
+  assert.deepEqual(calls.fetchAccess, []);
   assert.deepEqual(calls.accept, []);
   const deny = events(logs).find((e) => e.event === "ws_deny");
   assert.equal(deny.consoleLevel, "warn");
@@ -183,7 +183,7 @@ test("a well-formed incoming X-Request-ID is kept, logged, forwarded and handed 
   const id = "edge-proxy-0123456789";
   const { calls, logs } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, {}, { "x-request-id": id });
   assert.equal(calls.accept[0].auth.requestId, id);
-  assert.deepEqual(calls.fetchRoleOpts, [{ requestId: id }]);
+  assert.deepEqual(calls.fetchAccessOpts, [{ requestId: id }]);
   assert.ok(events(logs).every((e) => e.request_id === id));
 });
 
@@ -194,18 +194,18 @@ test("a malformed incoming X-Request-ID is replaced, so it can't forge log conte
   assert.ok(!logs.some((l) => l.text.includes("forged")));
 });
 
-test("a ticket without a usable user_id/iat gets 403 without a role lookup", async (t) => {
+test("a ticket without a usable user_id/iat gets 403 without an access lookup", async (t) => {
   const { socket, calls } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, {
     verifyTicket: (_ticket, doc) => ({ sub: "alice", user_id: "7/../../users/me", iat: ISSUED_AT, jti: "j1", doc }),
   });
   assert.equal(status(socket), "HTTP/1.1 403 Forbidden");
-  assert.deepEqual(calls.fetchRole, []);
+  assert.deepEqual(calls.fetchAccess, []);
 });
 
-test("a failed role lookup gets 503, and the ticket stays burned", async (t) => {
+test("a failed access lookup gets 503, and the ticket stays burned", async (t) => {
   const { socket, calls } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, {
-    fetchRole: () => {
-      throw new Error("role lookup failed: API responded 500");
+    fetchAccess: () => {
+      throw new Error("access lookup failed: API responded 500");
     },
   });
   assert.equal(status(socket), "HTTP/1.1 503 Service Unavailable");
@@ -213,13 +213,22 @@ test("a failed role lookup gets 503, and the ticket stays burned", async (t) => 
   assert.deepEqual(calls.accept, []);
 });
 
-test("a contributor, deleted user or revoked ticket (null role) gets 403", async (t) => {
-  for (const role of ["contributor", null]) {
-    const { socket, calls, logs } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, { fetchRole: () => role });
-    assert.equal(status(socket), "HTTP/1.1 403 Forbidden", String(role));
+test("a user the API won't let edit this doc, a deleted user or a revoked ticket (null) gets 403", async (t) => {
+  for (const access of [{ role: "contributor", canEdit: false }, { role: "editor", canEdit: false }, null]) {
+    const { socket, calls, logs } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, { fetchAccess: () => access });
+    assert.equal(status(socket), "HTTP/1.1 403 Forbidden", JSON.stringify(access));
     assert.deepEqual(calls.accept, []);
     assert.equal(logs.find((l) => l.text.includes("Forbidden")).level, "warn");
   }
+});
+
+test("a contributor the API lets edit this doc (their own post, #135) connects", async (t) => {
+  const { socket, calls } = await runUpgrade(t, `/post-12?ticket=${SECRET}`, {
+    fetchAccess: () => ({ role: "contributor", canEdit: true }),
+  });
+  assert.equal(socket.written, "");
+  assert.equal(calls.accept.length, 1);
+  assert.equal(calls.accept[0].auth.role, "contributor");
 });
 
 test("a throwing handshake is answered with 500 instead of escaping the listener", async (t) => {
@@ -239,7 +248,7 @@ test("a socket error listener is attached first, so a client reset can't crash t
 });
 
 // --- Wired like server.js: real tickets, real verifyTicket / TicketReplayGuard /
-// fetchCurrentRole, and a fake internal API (#223, #233). ---------------------------
+// fetchDocAccess, and a fake internal API (#223, #233, #135). ---------------------------
 
 const ISSUER = "golive.auth";
 const privateKey = await V4.generateKey("public");
@@ -254,12 +263,12 @@ function signTicket(claims = {}, { audience = TICKET_AUDIENCE } = {}) {
   );
 }
 
-/** A fake internal API that records requests and answers with `role` (or `status`). */
-function internalApi({ role = "editor", status = 200 } = {}) {
+/** A fake internal API that records requests and answers with `role`/`canEdit` (or `status`). */
+function internalApi({ role = "editor", canEdit = true, status = 200 } = {}) {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url, init });
-    return { status, ok: status >= 200 && status < 300, json: async () => ({ role }) };
+    return { status, ok: status >= 200 && status < 300, json: async () => ({ role, can_edit: canEdit }) };
   };
   return { calls, fetchImpl };
 }
@@ -269,7 +278,7 @@ function wiredHandler(fetchImpl, accepted) {
   return createUpgradeHandler({
     verifyTicket: (ticket, docName) => verifyTicket(ticket, publicKey, { issuer: ISSUER, docName }),
     consumeTicket: (claims) => usedTickets.consume(claims),
-    fetchRole: (identity, opts) => fetchCurrentRole("http://api:8081", identity, "s3cret", { fetchImpl, ...opts }),
+    fetchAccess: (identity, docName, opts) => fetchDocAccess("http://api:8081", identity, docName, "s3cret", { fetchImpl, ...opts }),
     accept: (req) => accepted.push(req.auth),
   });
 }
@@ -285,7 +294,7 @@ test("wired: an editor's ticket opens a socket; the ticket is never sent to the 
   assert.equal(accepted.length, 1);
   assert.equal(accepted[0].role, "editor");
   assert.equal(api.calls.length, 1);
-  assert.match(api.calls[0].url, /^http:\/\/api:8081\/internal\/users\/7\/role\?issued_at=\d+$/);
+  assert.match(api.calls[0].url, /^http:\/\/api:8081\/internal\/users\/7\/access\?doc=post-12&issued_at=\d+$/);
   assert.equal(api.calls[0].init.headers.Authorization, "Bearer s3cret");
   assert.equal(api.calls[0].init.headers["X-Request-ID"], accepted[0].requestId);
   assert.match(accepted[0].requestId, UUID);
@@ -308,9 +317,9 @@ test("wired: a ticket can be used once; the replay is refused before the API is 
   assert.equal(api.calls.length, 1);
 });
 
-test("wired: the DB role decides, not the ticket (a contributor gets 403 even if it claims admin)", async (t) => {
+test("wired: the API decides, not the ticket (a contributor on someone else's post gets 403 even if it claims admin)", async (t) => {
   const logs = captureConsole(t);
-  const api = internalApi({ role: "contributor" });
+  const api = internalApi({ role: "contributor", canEdit: false });
   const accepted = [];
   const ticket = await signTicket({ role: "admin" });
   const { socket } = await upgrade(wiredHandler(api.fetchImpl, accepted), logs, `/post-12?ticket=${ticket}`);
@@ -318,7 +327,7 @@ test("wired: the DB role decides, not the ticket (a contributor gets 403 even if
   assert.equal(accepted.length, 0);
 });
 
-test("wired: the API refusing the user (gone, or ticket predates a password change) gives 403", async (t) => {
+test("wired: the API refusing the user (user or post gone, or ticket predates a password change) gives 403", async (t) => {
   for (const apiStatus of [403, 404]) {
     const logs = captureConsole(t);
     const api = internalApi({ status: apiStatus });

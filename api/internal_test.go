@@ -19,10 +19,11 @@ import (
 
 const testRoleLookupSecret = "test-role-lookup-secret"
 
-// TestInternalUserRoleAPI covers GET /internal/users/:id/role, the
-// collab WS server's role lookup (#223): shared-secret auth instead of a user
-// token, the role read from the DB, and the password-change cutoff.
-func TestInternalUserRoleAPI(t *testing.T) {
+// TestInternalDocAccessAPI covers GET /internal/users/:id/access, the
+// collab WS server's access check (#223, #135): shared-secret auth instead of a
+// user token, the role read from the DB, and the password-change cutoff. An
+// editor's access needs no post lookup; per-post cases are below.
+func TestInternalDocAccessAPI(t *testing.T) {
 	user := randomUserNew()
 	user.ID = 42
 	user.Role = RoleEditor
@@ -39,7 +40,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 	}{
 		{
 			name:          "OK",
-			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/access?doc=post-5&issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
@@ -55,7 +56,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "MissingSecret",
-			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/access?doc=post-5&issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
@@ -66,7 +67,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "WrongSecret",
-			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/access?doc=post-5&issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "Bearer not-the-secret",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
@@ -77,7 +78,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "InvalidID",
-			path:          fmt.Sprintf("/internal/users/abc/role?issued_at=%d", ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/abc/access?doc=post-5&issued_at=%d", ticketIssuedAt),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
@@ -88,7 +89,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "MissingIssuedAt",
-			path:          fmt.Sprintf("/internal/users/%d/role", user.ID),
+			path:          fmt.Sprintf("/internal/users/%d/access?doc=post-5", user.ID),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
@@ -99,7 +100,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "UserNotFound",
-			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/access?doc=post-5&issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(db.User{}, sql.ErrNoRows)
@@ -110,7 +111,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "IssuedBeforePasswordChange",
-			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, user.PasswordChangedAt.Add(-time.Minute).Unix()),
+			path:          fmt.Sprintf("/internal/users/%d/access?doc=post-5&issued_at=%d", user.ID, user.PasswordChangedAt.Add(-time.Minute).Unix()),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
@@ -121,7 +122,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 		},
 		{
 			name:          "InternalError",
-			path:          fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, ticketIssuedAt),
+			path:          fmt.Sprintf("/internal/users/%d/access?doc=post-5&issued_at=%d", user.ID, ticketIssuedAt),
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(db.User{}, errors.New("db down"))
@@ -156,7 +157,7 @@ func TestInternalUserRoleAPI(t *testing.T) {
 }
 
 // A user access token is not a substitute for the shared secret.
-func TestInternalUserRoleRejectsUserToken(t *testing.T) {
+func TestInternalDocAccessRejectsUserToken(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -164,7 +165,7 @@ func TestInternalUserRoleRejectsUserToken(t *testing.T) {
 	store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
 	server := newTestServer(t, store)
 
-	request, err := http.NewRequest(http.MethodGet, "/internal/users/1/role?issued_at=1", nil)
+	request, err := http.NewRequest(http.MethodGet, "/internal/users/1/access?doc=post-5&issued_at=1", nil)
 	require.NoError(t, err)
 	addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, 1, "someone", time.Minute)
 
@@ -192,7 +193,7 @@ func TestInternalRoutesNotOnPublicRouter(t *testing.T) {
 	store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
 	server := newTestServer(t, store)
 
-	for _, path := range []string{"/internal/users/1/role?issued_at=1", "/api/v1/internal/users/1/role?issued_at=1"} {
+	for _, path := range []string{"/internal/users/1/access?doc=post-5&issued_at=1", "/api/v1/internal/users/1/access?doc=post-5&issued_at=1"} {
 		request, err := http.NewRequest(http.MethodGet, path, nil)
 		require.NoError(t, err)
 		request.Header.Set(authorizationHeaderKey, "Bearer "+testRoleLookupSecret)
@@ -222,11 +223,98 @@ func TestInternalSecretIsTrimmed(t *testing.T) {
 	server, err := NewServer(config, store)
 	require.NoError(t, err)
 
-	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/internal/users/%d/role?issued_at=%d", user.ID, time.Now().Unix()), nil)
+	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("/internal/users/%d/access?doc=post-5&issued_at=%d", user.ID, time.Now().Unix()), nil)
 	require.NoError(t, err)
 	request.Header.Set(authorizationHeaderKey, "Bearer "+testRoleLookupSecret)
 
 	recorder := httptest.NewRecorder()
 	server.internalRouter.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code)
+}
+
+// The per-post half of the access check (#135): a contributor may open only
+// their own post's collab doc; the owner comes from the DB.
+func TestInternalDocAccessPerPost(t *testing.T) {
+	contributor := randomUserNew()
+	contributor.ID = 50
+	contributor.Role = RoleContributor
+	contributor.PasswordChangedAt = time.Now().Add(-time.Hour).UTC()
+	issuedAt := time.Now().Unix()
+
+	testCases := []struct {
+		name        string
+		doc         string
+		post        db.Post
+		postErr     error
+		wantStatus  int
+		wantCanEdit bool
+	}{
+		{name: "OwnPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID, PostStatus: "draft"}, wantStatus: http.StatusOK, wantCanEdit: true},
+		{name: "OwnPublishedPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID, PostStatus: "published"}, wantStatus: http.StatusOK, wantCanEdit: true},
+		{name: "SomeoneElsesPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1}, wantStatus: http.StatusOK, wantCanEdit: false},
+		{name: "MissingPost", doc: "post-7", postErr: sql.ErrNoRows, wantStatus: http.StatusNotFound},
+		{name: "PostLookupFails", doc: "post-7", postErr: errors.New("db down"), wantStatus: http.StatusInternalServerError},
+		{name: "InvalidDoc", doc: "settings", wantStatus: http.StatusBadRequest},
+		{name: "MissingDoc", doc: "", wantStatus: http.StatusBadRequest},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			store := mockdb.NewMockStore(ctrl)
+			store.EXPECT().GetUser(gomock.Any(), contributor.ID).Return(contributor, nil).AnyTimes()
+			store.EXPECT().GetPost(gomock.Any(), int64(7)).Return(tc.post, tc.postErr).AnyTimes()
+
+			server := newTestServer(t, store)
+			request, err := http.NewRequest(http.MethodGet,
+				fmt.Sprintf("/internal/users/%d/access?doc=%s&issued_at=%d", contributor.ID, tc.doc, issuedAt), nil)
+			require.NoError(t, err)
+			request.Header.Set(authorizationHeaderKey, "Bearer "+testRoleLookupSecret)
+
+			recorder := httptest.NewRecorder()
+			server.internalRouter.ServeHTTP(recorder, request)
+			require.Equal(t, tc.wantStatus, recorder.Code, recorder.Body.String())
+			if tc.wantStatus == http.StatusOK {
+				var body struct {
+					Role    string `json:"role"`
+					CanEdit bool   `json:"can_edit"`
+				}
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+				require.Equal(t, RoleContributor, body.Role)
+				require.Equal(t, tc.wantCanEdit, body.CanEdit)
+			}
+		})
+	}
+}
+
+// Moderators may edit any post, so their check never loads one.
+func TestInternalDocAccessModeratorSkipsPostLookup(t *testing.T) {
+	for _, role := range []string{RoleAdmin, RoleEditor} {
+		t.Run(role, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			user := randomUserNew()
+			user.ID = 60
+			user.Role = role
+			user.PasswordChangedAt = time.Now().Add(-time.Hour).UTC()
+
+			store := mockdb.NewMockStore(ctrl)
+			store.EXPECT().GetUser(gomock.Any(), user.ID).Return(user, nil).Times(1)
+			store.EXPECT().GetPost(gomock.Any(), gomock.Any()).Times(0)
+
+			server := newTestServer(t, store)
+			request, err := http.NewRequest(http.MethodGet,
+				fmt.Sprintf("/internal/users/%d/access?doc=post-7&issued_at=%d", user.ID, time.Now().Unix()), nil)
+			require.NoError(t, err)
+			request.Header.Set(authorizationHeaderKey, "Bearer "+testRoleLookupSecret)
+
+			recorder := httptest.NewRecorder()
+			server.internalRouter.ServeHTTP(recorder, request)
+			require.Equal(t, http.StatusOK, recorder.Code)
+			require.JSONEq(t, fmt.Sprintf(`{"role":%q,"can_edit":true}`, role), recorder.Body.String())
+		})
+	}
 }

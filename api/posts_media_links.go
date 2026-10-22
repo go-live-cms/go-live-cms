@@ -26,6 +26,10 @@ func (server *Server) createPostMedia(c *gin.Context) {
 		return
 	}
 
+	if !server.authorizePost(c, postID, canEditPostDetails) {
+		return
+	}
+
 	var req PostMediaRequest
 	if !bindJSON(c, &req) {
 		return
@@ -92,6 +96,10 @@ func (server *Server) deletePostMedia(c *gin.Context) {
 	mediaID, err := strconv.ParseInt(mediaIDStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid media ID"})
+		return
+	}
+
+	if !server.authorizePost(c, postID, canEditPostDetails) {
 		return
 	}
 

@@ -10,34 +10,45 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// getInternalUserRole returns a user's CURRENT role, read from the database, for
-// the collab WebSocket server's per-connection role check (#216, #223).
+// getInternalDocAccess tells the collab WebSocket server whether a user may
+// edit one collab document, for its per-connection check (#216, #223, #135).
 //
 // The WS server verifies the client's ticket itself and passes the ticket's
-// user_id and iat. The role always comes from the users row, never from the
-// ticket's role claim. issued_at is required so a ticket issued before the
-// user's latest password change is refused here exactly as authMiddleware
-// refuses such an access token (issuedBeforePasswordChange).
+// user_id, iat and doc. Everything is read from the database, never from the
+// ticket: the user's current role, and (for non-moderators) the post's owner,
+// decided by canEditPost exactly as PUT /posts/:id/blocks decides it.
+// issued_at is required so a ticket issued before the user's latest password
+// change is refused here exactly as authMiddleware refuses such an access
+// token (issuedBeforePasswordChange).
+//
+// If Hocuspocus lands (#206), its onAuthenticate calls this same endpoint.
 //
 // Path parameters:
 //   - id: User's database primary key (the ticket's user_id claim)
 //
 // Query parameters:
+//   - doc: The collab document name, "post-<id>" (the ticket's doc claim)
 //   - issued_at: The ticket's iat as Unix seconds
 //
 // Authentication: Shared secret (requireInternalSecret), no user token.
 //
 // Returns:
-//   - 200 OK: { "role": "<role>" }
-//   - 400 Bad Request: Invalid user ID or issued_at
+//   - 200 OK: { "role": "<role>", "can_edit": true|false }
+//   - 400 Bad Request: Invalid user ID, doc or issued_at
 //   - 401 Unauthorized: Missing or wrong shared secret
 //   - 403 Forbidden: The ticket predates the user's latest password change
-//   - 404 Not Found: User does not exist
+//   - 404 Not Found: User (or, for a non-moderator, the post) does not exist
 //   - 500 Internal Server Error: Database query failure
-func (server *Server) getInternalUserRole(c *gin.Context) {
+func (server *Server) getInternalDocAccess(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
+		return
+	}
+
+	postID, ok := postIDFromCollabDoc(c.Query("doc"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid doc"})
 		return
 	}
 
@@ -62,5 +73,21 @@ func (server *Server) getInternalUserRole(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"role": user.Role})
+	// Moderators may edit any post; skip the post lookup like authorizePost.
+	if canModeratePosts(user) {
+		c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": true})
+		return
+	}
+
+	post, err := server.store.GetPost(c.Request.Context(), postID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": canEditPost(user, post)})
 }
