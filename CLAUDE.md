@@ -84,6 +84,10 @@ npm run dev                   # astro dev
 # WebSocket (run from websocket/)
 npm test                      # node --test
 
+# Backups (docs/operations/backups.md). Scratch compose project, never the dev data;
+# also proves migrations go up/down/up. CI job: backup-restore.
+sh scripts/backup/test-restore.sh
+
 # Full stack (dev)
 docker compose -f compose.dev.yaml up -d
 docker compose -f compose.dev.yaml restart websocket   # e.g. to test reconnects
