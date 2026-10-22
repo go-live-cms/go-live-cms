@@ -8,7 +8,8 @@ import Header from '@/layouts/Header.astro'
 import Footer from '@/layouts/Footer.astro'
 import FormattedDate from '@/components/FormattedDate.astro'
 import BlockRenderer from '@/components/BlockRenderer'
-import type { Post } from '@gl-admin/lib/api/types'
+import PostTerms from '../../components/PostTerms.astro'
+import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -16,9 +17,10 @@ interface Props {
   title: string
   description: string
   seo?: SeoMeta
+  terms?: TaxonomyTerm[]
 }
 
-const { post, title, description, seo } = Astro.props
+const { post, title, description, seo, terms } = Astro.props
 ---
 
 <BaseLayout title={title} description={description} seo={seo}>
@@ -41,6 +43,7 @@ const { post, title, description, seo } = Astro.props
             <FormattedDate date={new Date(post.created_at)} />
             <span class="author">by {post.username}</span>
           </div>
+          <PostTerms terms={terms} />
         </header>
         
         <div class="post-content">

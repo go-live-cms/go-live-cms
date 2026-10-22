@@ -109,7 +109,7 @@ func (server *Server) createTaxonomyTerm(c *gin.Context) {
 	}
 
 	// Validate that the taxonomy type exists
-	_, err := server.store.GetTaxonomyTypeByID(c.Request.Context(), req.TaxonomyTypeID)
+	taxonomyType, err := server.store.GetTaxonomyTypeByID(c.Request.Context(), req.TaxonomyTypeID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "taxonomy type not found"})
@@ -119,23 +119,24 @@ func (server *Server) createTaxonomyTerm(c *gin.Context) {
 		return
 	}
 
-	// Validate parent term if provided
+	// Validate parent term if provided (0 means "no parent", as on update)
+	if req.ParentID != nil && *req.ParentID == 0 {
+		req.ParentID = nil
+	}
 	if req.ParentID != nil {
-		_, err := server.store.GetTaxonomyTerm(c.Request.Context(), *req.ParentID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "parent term not found"})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate parent term"})
+		if !server.checkTermParent(c, taxonomyType, *req.ParentID, 0) {
 			return
 		}
 	}
 
-	// Generate SEO-friendly slug from term name
+	// Generate SEO-friendly slug from term name, or normalize the given one
 	slug := generateSlug(req.Name)
 	if req.Slug != "" {
-		slug = req.Slug
+		slug = generateSlug(req.Slug)
+	}
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "slug can't be empty"})
+		return
 	}
 
 	// Process optional JSON metadata
@@ -173,7 +174,7 @@ func (server *Server) createTaxonomyTerm(c *gin.Context) {
 	if err != nil {
 		// Handle unique constraint violations (slug conflicts)
 		if isUniqueViolation(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "taxonomy term slug already exists"})
+			c.JSON(http.StatusConflict, slugTakenResponse)
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create taxonomy term"})
@@ -260,14 +261,30 @@ func (server *Server) updateTaxonomyTerm(c *gin.Context) {
 	}
 
 	if req.Slug != "" {
-		updateParams.Slug = req.Slug
+		updateParams.Slug = generateSlug(req.Slug)
+	}
+	if updateParams.Slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "slug can't be empty"})
+		return
 	}
 
-	if req.Description != "" {
-		updateParams.Description = sql.NullString{String: req.Description, Valid: true}
+	// A present but empty description clears it
+	if req.Description != nil {
+		updateParams.Description = sql.NullString{String: *req.Description, Valid: true}
 	}
 
-	if req.ParentID != nil {
+	// parent_id 0 moves the term to the top level
+	if req.ParentID != nil && *req.ParentID == 0 {
+		updateParams.ParentID = sql.NullInt64{}
+	} else if req.ParentID != nil && (!existingTerm.ParentID.Valid || existingTerm.ParentID.Int64 != *req.ParentID) {
+		taxonomyType, err := server.store.GetTaxonomyTypeByID(c.Request.Context(), existingTerm.TaxonomyTypeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate taxonomy type"})
+			return
+		}
+		if !server.checkTermParent(c, taxonomyType, *req.ParentID, id) {
+			return
+		}
 		updateParams.ParentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
 	}
 
@@ -290,7 +307,7 @@ func (server *Server) updateTaxonomyTerm(c *gin.Context) {
 	if err != nil {
 		// Handle unique constraint violations (slug conflicts)
 		if isUniqueViolation(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "taxonomy term slug already exists"})
+			c.JSON(http.StatusConflict, slugTakenResponse)
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update taxonomy term"})
@@ -379,4 +396,133 @@ func (server *Server) deleteTaxonomyTerm(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "taxonomy term deleted successfully",
 	})
+}
+
+// addPostTaxonomyTerm handles PUT /posts/:id/taxonomy-terms/:term_id: assigns
+// one term to a post. It's idempotent and leaves the post's other terms alone,
+// so editors changing different terms at the same time don't overwrite each
+// other (PUT /posts/:id with taxonomy_ids replaces the whole set).
+func (server *Server) addPostTaxonomyTerm(c *gin.Context) {
+	postID, termID, ok := server.postTermParams(c)
+	if !ok {
+		return
+	}
+	if _, err := server.store.GetTaxonomyTerm(c.Request.Context(), termID); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "taxonomy term not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get taxonomy term"})
+		return
+	}
+
+	_, err := server.store.AddPostToTaxonomyTerm(c.Request.Context(), db.AddPostToTaxonomyTermParams{
+		PostID:         postID,
+		TaxonomyTermID: termID,
+	})
+	// Already assigned is fine: the request asks for an end state
+	if err != nil && !isUniqueViolation(err) {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign taxonomy term"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "taxonomy term assigned"})
+}
+
+// removePostTaxonomyTerm handles DELETE /posts/:id/taxonomy-terms/:term_id.
+// Idempotent: removing a term the post doesn't have succeeds.
+func (server *Server) removePostTaxonomyTerm(c *gin.Context) {
+	postID, termID, ok := server.postTermParams(c)
+	if !ok {
+		return
+	}
+	err := server.store.RemovePostFromTaxonomyTerm(c.Request.Context(), db.RemovePostFromTaxonomyTermParams{
+		PostID:         postID,
+		TaxonomyTermID: termID,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove taxonomy term"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "taxonomy term removed"})
+}
+
+// postTermParams parses :id and :term_id and checks that the post exists,
+// writing the error response when not.
+func (server *Server) postTermParams(c *gin.Context) (postID, termID int64, ok bool) {
+	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return 0, 0, false
+	}
+	termID, err = strconv.ParseInt(c.Param("term_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid taxonomy term ID"})
+		return 0, 0, false
+	}
+	if _, err := server.store.GetPost(c.Request.Context(), postID); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return 0, 0, false
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return 0, 0, false
+	}
+	return postID, termID, true
+}
+
+// slugTakenResponse is the 409 body for a duplicate slug. Slugs are unique
+// across all taxonomy types; the admin keys its field error off the code.
+var slugTakenResponse = gin.H{"error": "taxonomy term slug already exists", "code": "slug_taken"}
+
+// maxTermDepth bounds the ancestor walk in checkTermParent, so a hierarchy
+// that is already broken can't keep a request looping.
+const maxTermDepth = 100
+
+// checkTermParent validates parentID as the parent of a term of the given type
+// and writes the error response when it isn't valid. termID is the term being
+// updated (0 on create): a term can't sit under itself or its own descendants.
+func (server *Server) checkTermParent(c *gin.Context, taxonomyType db.TaxonomyType, parentID, termID int64) bool {
+	if !taxonomyType.Hierarchical {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "terms of this taxonomy type can't have a parent"})
+		return false
+	}
+	if parentID == termID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a term can't be its own parent"})
+		return false
+	}
+
+	parent, err := server.store.GetTaxonomyTerm(c.Request.Context(), parentID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "parent term not found"})
+			return false
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate parent term"})
+		return false
+	}
+	if parent.TaxonomyTypeID != taxonomyType.ID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "parent term must belong to the same taxonomy type"})
+		return false
+	}
+	if termID == 0 {
+		return true
+	}
+
+	// Walk up from the new parent: meeting the term itself means a cycle.
+	for depth := 0; parent.ParentID.Valid; depth++ {
+		if parent.ParentID.Int64 == termID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a term can't be moved under one of its own children"})
+			return false
+		}
+		if depth >= maxTermDepth {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "the term hierarchy is too deep"})
+			return false
+		}
+		parent, err = server.store.GetTaxonomyTerm(c.Request.Context(), parent.ParentID.Int64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate parent term"})
+			return false
+		}
+	}
+	return true
 }

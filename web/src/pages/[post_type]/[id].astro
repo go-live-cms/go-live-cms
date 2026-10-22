@@ -1,9 +1,9 @@
 ---
-import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl } from '../../lib/api'
+import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl, getPostTaxonomyTerms } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import { metaDescription, normalizeUrlStructure, postLastmod, postPath, toW3cDate, type SeoMeta } from '../../lib/seo'
 import { SITE_TITLE } from '../../consts'
-import type { Post } from '@gl-admin/lib/api/types'
+import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 
 // WordPress-style: Auto-discover all theme layouts using glob imports
 // This allows dropping in new themes without modifying code
@@ -192,6 +192,15 @@ if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
   }
 }
 
+// Categories/tags (#167). Layouts that don't take `terms` ignore them; a failed
+// lookup just renders the post without them.
+let terms: TaxonomyTerm[] = []
+try {
+  terms = await getPostTaxonomyTerms(fullPost.id)
+} catch (error) {
+  console.warn(`Could not fetch terms for ${postType} ${fullPost.id}:`, error)
+}
+
 // Get layout variant for this post
 const layoutVariant = await getPostLayoutVariant(fullPost, postType)
 
@@ -266,4 +275,5 @@ const seo: SeoMeta = {
   title={title}
   description={description}
   seo={seo}
+  terms={terms}
 />

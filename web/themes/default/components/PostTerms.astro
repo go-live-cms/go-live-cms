@@ -1,0 +1,75 @@
+---
+/**
+ * The post's categories, tags, ... grouped by taxonomy type (#167).
+ * Renders nothing when the post has no terms.
+ */
+import type { TaxonomyTerm } from '@gl-admin/lib/api/types'
+import { getTaxonomyTypes } from '@/lib/api'
+
+interface Props {
+  terms?: TaxonomyTerm[]
+}
+
+const { terms = [] } = Astro.props
+
+// Keeps the API's order (by type, then name)
+const groups = new Map<string, TaxonomyTerm[]>()
+for (const term of terms) {
+  const type = term.taxonomy_type_name || 'terms'
+  groups.set(type, [...(groups.get(type) ?? []), term])
+}
+
+// Headings use each type's configured label; its name if the lookup fails
+const labels = new Map<string, string>()
+if (groups.size > 0) {
+  try {
+    for (const type of await getTaxonomyTypes()) labels.set(type.name, type.label)
+  } catch (error) {
+    console.warn('[PostTerms] Could not fetch taxonomy types:', error)
+  }
+}
+const label = (type: string) => labels.get(type) ?? type
+---
+
+{groups.size > 0 && (
+  <dl class="post-terms">
+    {[...groups].map(([type, list]) => (
+      <div class={`post-terms__group post-terms__group--${type}`}>
+        <dt>{label(type)}</dt>
+        {list.map((term) => (
+          <dd class="post-terms__term" data-slug={term.slug}>{term.name}</dd>
+        ))}
+      </div>
+    ))}
+  </dl>
+)}
+
+<style>
+  .post-terms {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin: 1rem 0 0;
+    font-size: 0.875rem;
+  }
+
+  .post-terms__group {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  dt {
+    font-weight: 600;
+    margin-right: 0.25rem;
+  }
+
+  dd {
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    margin: 0;
+    opacity: 0.85;
+    padding: 0.1rem 0.6rem;
+  }
+</style>

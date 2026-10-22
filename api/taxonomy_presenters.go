@@ -136,6 +136,7 @@ func toTaxonomyTermWithTypeResponse(row db.ListTaxonomyTermsByTypeRow) TaxonomyT
 		Description:      row.Description.String,
 		TaxonomyTypeID:   row.TaxonomyTypeID,
 		TaxonomyTypeName: row.TaxonomyTypeName, // Enriched with type name
+		PostCount:        &row.PostCount,
 		CreatedAt:        row.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 

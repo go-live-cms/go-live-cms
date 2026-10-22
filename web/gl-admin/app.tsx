@@ -31,6 +31,7 @@ const NotFound = lazy(() => import("@gl-admin/pages/NotFound"))
 const Dashboard = lazy(() => import("@gl-admin/pages/Dashboard"))
 const ContentComponent = lazy(() => import("@gl-admin/pages/Content"))
 const Media = lazy(() => import("@gl-admin/pages/Media"))
+const Taxonomies = lazy(() => import("@gl-admin/pages/Taxonomies"))
 const Users = lazy(() => import("@gl-admin/pages/Users"))
 const BackfillBlocks = lazy(() => import("@gl-admin/pages/BackfillBlocks"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
@@ -75,6 +76,7 @@ function AppLayout() {
                 <Route path="/content/:typeName/new" element={<NewContent />} />
                 <Route path="/content/edit/:id" element={<EditContent />} />
                 <Route path="/media" element={<Media />} />
+                <Route path="/taxonomies" element={<Taxonomies />} />
                 <Route path="/themes" element={<Themes />} />
                 <Route path="/users" element={<Users />} />
                 <Route path="/users/new" element={<NewUser />} />
