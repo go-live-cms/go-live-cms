@@ -18,6 +18,13 @@
 //     because only the body says whether a password is being changed. Keying
 //     by user alone would let whoever stole a token lock the owner out of the
 //     password change that revokes it.
+//   - Forgot password: POST /auth/password/forgot, per client
+//     (RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE). On top of it, a user gets at
+//     most one reset email a minute (forgotPassword), silently.
+//   - Emailed tokens: POST /auth/password/reset and
+//     /auth/invitations/{preview,accept}, per client
+//     (RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE). The tokens are 256-bit random,
+//     so this is about abuse, not guessing.
 //
 // The internal listener (/internal/*) is not limited: only the collab WS server
 // can reach it, it calls once per connection for every editor, and its
@@ -295,6 +302,10 @@ type rateLimits struct {
 	register       *rateLimiter
 	refresh        *rateLimiter
 	passwordChange *rateLimiter
+	// passwordForgot limits forgot-password requests (each may send an
+	// email); accountToken the endpoints that redeem an emailed token.
+	passwordForgot *rateLimiter
+	accountToken   *rateLimiter
 	// generalExempt client IPs skip the general limit only.
 	generalExempt []netip.Prefix
 }
@@ -313,6 +324,8 @@ func newRateLimits(config util.Config) (rateLimits, error) {
 		register:       newRateLimiter("register", config.RateLimitLoginPerMinute),
 		refresh:        newRateLimiter("refresh", config.RateLimitRefreshPerMinute),
 		passwordChange: newRateLimiter("password", config.RateLimitPasswordChangePerMinute),
+		passwordForgot: newRateLimiter("password-forgot", config.RateLimitPasswordForgotPerMinute),
+		accountToken:   newRateLimiter("account-token", config.RateLimitAccountTokenPerMinute),
 		generalExempt:  exempt,
 	}, nil
 }

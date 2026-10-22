@@ -21,7 +21,14 @@ type Querier interface {
 	// exclude_id skips the post being edited; pass 0 when creating.
 	CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error)
 	CheckURLExists(ctx context.Context, url string) (bool, error)
+	// Single-use: like ClaimUserInvitation, only one claim can match.
+	ClaimPasswordResetToken(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
+	// Marks a valid invitation accepted in one statement, so two concurrent
+	// accepts can't both succeed: the loser re-checks accepted_at after the
+	// winner commits and matches no row.
+	ClaimUserInvitation(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
+	CountPasswordResetTokensSince(ctx context.Context, arg CountPasswordResetTokensSinceParams) (int64, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
 	CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error)
@@ -32,6 +39,7 @@ type Querier interface {
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
+	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
@@ -43,6 +51,10 @@ type Querier interface {
 	CreateTaxonomyType(ctx context.Context, arg CreateTaxonomyTypeParams) (TaxonomyType, error)
 	CreateTheme(ctx context.Context, arg CreateThemeParams) (Theme, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	// Invitations and password reset tokens (#148). Only token hashes are stored.
+	// "Open" invitations are neither accepted nor revoked (they may have expired);
+	// "valid" ones are open and unexpired.
+	CreateUserInvitation(ctx context.Context, arg CreateUserInvitationParams) (UserInvitation, error)
 	CreateUserPost(ctx context.Context, arg CreateUserPostParams) (UserPost, error)
 	// First deactivate all themes
 	DeactivateAllThemes(ctx context.Context) error
@@ -127,11 +139,17 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
+	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
+	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	InsertPostVersion(ctx context.Context, arg InsertPostVersionParams) (InsertPostVersionRow, error)
+	InvalidatePasswordResetTokensForUser(ctx context.Context, userID int64) error
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
+	// What the admin Users page shows. Invitations that expired over 30 days ago
+	// are dropped (nobody is waiting on them any more), and the list is capped.
+	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
@@ -169,10 +187,14 @@ type Querier interface {
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
+	// Resend: a new token (the old link stops working) and a new expiry.
+	RenewUserInvitation(ctx context.Context, arg RenewUserInvitationParams) (UserInvitation, error)
 	// File-only update used by POST /media/:id/replace: swaps the columns that
 	// describe the stored file and leaves name, description and alt alone, so a
 	// concurrent metadata edit is never overwritten by a stale read.
 	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
+	RevokeOpenUserInvitationsByEmail(ctx context.Context, email string) error
+	RevokeUserInvitation(ctx context.Context, id int64) (int64, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// Search and filtering
@@ -182,6 +204,8 @@ type Querier interface {
 	// Publishing also makes the post public: post_status follows the snapshot, so a
 	// post published from the editor is not left as 'draft' in the database.
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
+	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
+	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
 	// Back to draft and drop the public snapshot (#136). The snapshot stays in

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { addNonceToScripts, applyAdminCsp, buildAdminCsp, isAdminPath } from "./csp"
+import { addNonceToScripts, applyAdminCsp, buildAdminCsp, isAccountPagePath, isAdminPath } from "./csp"
 
 function directives(csp: string): Record<string, string[]> {
   return Object.fromEntries(
@@ -103,5 +103,16 @@ describe("isAdminPath", () => {
     expect(isAdminPath("/gl-admin/posts/1")).toBe(true)
     expect(isAdminPath("/gl-administrator")).toBe(false)
     expect(isAdminPath("/blog")).toBe(false)
+  })
+})
+
+describe("isAccountPagePath", () => {
+  it("covers the signed-out credential pages only", () => {
+    for (const path of ["/login", "/login/", "/forgot-password", "/reset-password/", "/accept-invite"]) {
+      expect(isAccountPagePath(path)).toBe(true)
+    }
+    for (const path of ["/", "/blog/login", "/login-help", "/reset-password/extra", "/gl-admin"]) {
+      expect(isAccountPagePath(path)).toBe(false)
+    }
   })
 })

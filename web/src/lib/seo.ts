@@ -138,10 +138,13 @@ export function metaDescription(text: string | null | undefined, maxLength = 160
   return `${(lastSpace > maxLength / 2 ? cut.slice(0, lastSpace) : cut).replace(/[\s.,;:!?-]+$/, "")}…`
 }
 
+// The signed-out account pages (#148): they handle credentials and emailed tokens.
+const ACCOUNT_PATHS = ["/login", "/forgot-password", "/reset-password", "/accept-invite"]
+
 // Pages that must not be indexed even when a crawler ignores robots.txt: the
-// admin SPA, the login page and the old demo pages. Error responses are
+// admin SPA, the account pages and the old demo pages. Error responses are
 // handled by status in shouldNoindex.
-const NOINDEX_PREFIXES = ["/gl-admin", "/login", "/users", "/taxonomies", "/test-theme"]
+const NOINDEX_PREFIXES = ["/gl-admin", ...ACCOUNT_PATHS, "/users", "/taxonomies", "/test-theme"]
 
 export function isNonPublicPath(pathname: string): boolean {
   return NOINDEX_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
@@ -157,7 +160,7 @@ export function buildRobotsTxt(siteUrl: string): string {
   return [
     "User-agent: *",
     "Disallow: /gl-admin",
-    "Disallow: /login",
+    ...ACCOUNT_PATHS.map((path) => `Disallow: ${path}`),
     "Disallow: /api/",
     "",
     `Sitemap: ${absoluteUrl(siteUrl, "/sitemap.xml")}`,

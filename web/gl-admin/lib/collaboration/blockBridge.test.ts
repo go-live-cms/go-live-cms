@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getSchema, Node } from "@tiptap/core"
+import { generateJSON, getSchema, Node } from "@tiptap/core"
 import StarterKit from "@tiptap/starter-kit"
 import TextAlign from "@tiptap/extension-text-align"
 import { Schema } from "prosemirror-model"
@@ -11,6 +11,7 @@ import {
   blockDocToPMWithReport,
   restoreDroppedBlocks,
   synthesizedItemId,
+  walkBlockTree,
 } from "./blockBridge"
 import type { BlockDocV1 } from "../blocks-spec"
 import { textOf } from "./testHelpers"
@@ -349,6 +350,21 @@ describe("pmToBlockDoc — per type (PM → Block)", () => {
     expect(attrs.alt).toBe("a")
     expect(attrs.title).toBe("t")
     expect(attrs.mediaId).toBe(7)
+  })
+
+  it("image: stores a numeric-string mediaId as a number and drops a non-numeric one", () => {
+    const image = (mediaId: unknown) => {
+      const out = pmToBlockDoc(pmDocOf({ type: "image", attrs: { src: "/m/a.png", mediaId, "data-block-id": id() } }))
+      return (out.blocks[out.blocks_order[0]].attrs as any).mediaId
+    }
+    expect(image("42")).toBe(42)
+    expect(image("abc")).toBeUndefined()
+    expect(image(null)).toBeUndefined()
+  })
+
+  it("image: parsing HTML gives a numeric mediaId", () => {
+    const json = generateJSON('<img src="/m/a.png" data-media-id="12">', [StarterKit, ImageWithMediaId])
+    expect(json.content[0].attrs.mediaId).toBe(12)
   })
 
   it("bullet_list: emits a list block plus list_item children entries", () => {
@@ -926,5 +942,39 @@ describe("blockBridge — additional edge cases", () => {
     const out = roundTrip(pmToBlockDoc(pmIn))
     const pm = (out.blocks[out.blocks_order[0]].attrs as any).pm
     expect(pm.attrs.textAlign).toBe("center")
+  })
+})
+
+describe("walkBlockTree", () => {
+  const block = (id: string, children?: string[]) =>
+    ({ id, type: children ? "bullet_list" : "list_item", version: 1, attrs: {}, ...(children ? { children } : {}) }) as any
+  const doc = (...blocks: any[]): BlockDocV1 => ({
+    doc_version: 1,
+    blocks_order: [],
+    blocks: Object.fromEntries(blocks.map((b) => [b.id, b])),
+  })
+
+  it("visits the root and every block under it once, in order, skipping missing ids", () => {
+    const source = doc(block("list-0000001", ["item-0000001", "gone-0000001", "list-0000002"]), block("item-0000001"), block("list-0000002", ["item-0000002"]), block("item-0000002"))
+    const seen: string[] = []
+    walkBlockTree(source, "list-0000001", (b) => void seen.push(b.id))
+    expect(seen).toEqual(["list-0000001", "item-0000001", "list-0000002", "item-0000002"])
+  })
+
+  it("stops at a list that contains itself", () => {
+    const source = doc(block("list-0000001", ["list-0000002"]), block("list-0000002", ["list-0000001"]))
+    const seen: string[] = []
+    walkBlockTree(source, "list-0000001", (b) => void seen.push(b.id))
+    expect(seen).toEqual(["list-0000001", "list-0000002"])
+  })
+
+  it("skips a block's children when visit returns false", () => {
+    const source = doc(block("list-0000001", ["item-0000001"]), block("item-0000001"))
+    const seen: string[] = []
+    walkBlockTree(source, "list-0000001", (b) => {
+      seen.push(b.id)
+      return false
+    })
+    expect(seen).toEqual(["list-0000001"])
   })
 })

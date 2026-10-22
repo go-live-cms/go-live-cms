@@ -17,6 +17,13 @@ import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
+import { getSchema } from "@tiptap/core"
+import {
+  EDITOR_FRAGMENT,
+  describeUnbuildableTypes,
+  findUnbuildableTypes,
+  type UnbuildableTypes,
+} from "@gl-admin/lib/collaboration/schemaGuard"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
 type Props = {
@@ -38,6 +45,10 @@ type Props = {
   onPublishError?: (error: Error) => void
 }
 
+// Set by the schema gate when the shared doc holds types this editor can't build: the
+// editor is opened read-only and saving/publishing must fail loudly, not no-op.
+type InnerProps = Props & { unbuildable?: UnbuildableTypes }
+
 export interface EditorRef {
   forceSave: () => Promise<void>
   publish: () => Promise<{ versionId: number; versionNo: number } | undefined>
@@ -46,7 +57,7 @@ export interface EditorRef {
   getSaveStatus: () => { isSaving: boolean; isPublishing: boolean; saveStatus: "saved" | "saving" | "error" | null }
 }
 
-const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
+const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   {
     value,
     onChange,
@@ -63,6 +74,7 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
     onPublishStart,
     onPublishSuccess,
     onPublishError,
+    unbuildable,
   },
   ref
 ) {
@@ -233,11 +245,17 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
   }
 
   // Expose functions via ref
+  const blockedError = () =>
+    new Error(`Editing is disabled: this post has blocks the editor can't load (${describeUnbuildableTypes(unbuildable!)})`)
   useImperativeHandle(
     ref,
     () => ({
-      forceSave: handleForceSave,
+      forceSave: async () => {
+        if (unbuildable) throw blockedError()
+        await handleForceSave()
+      },
       publish: async () => {
+        if (unbuildable) throw blockedError()
         if (!persistenceManager || !postId || isPublishing) return undefined
 
         setIsPublishing(true)
@@ -256,6 +274,7 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
         }
       },
       restoreVersion: async (doc) => {
+        if (unbuildable) throw blockedError()
         // Only a live collaborative editor can restore: the restore must reach the
         // shared Yjs doc (see BlockPersistenceManager.restoreVersion).
         if (!persistenceManager) throw new Error("Restoring needs the collaborative editor")
@@ -266,7 +285,7 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
       },
       getSaveStatus: () => ({ isSaving, isPublishing, saveStatus }),
     }),
-    [persistenceManager, postId, isSaving, isPublishing, saveStatus, onPublishStart, onPublishSuccess, onPublishError]
+    [persistenceManager, postId, isSaving, isPublishing, saveStatus, onPublishStart, onPublishSuccess, onPublishError, unbuildable]
   )
 
   // Apply link function (from main)
@@ -370,6 +389,10 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
     }
 
     collabProvider.provider.on("sync", onSynced)
+    // The schema gate (below) waits for the first sync before mounting this editor, so
+    // the provider has usually synced already and won't emit `sync` again until a
+    // reconnect. Run the load now in that case; it's still after the WS sync (rule 3b).
+    if (collabProvider.provider.synced) onSynced(true)
     return () => collabProvider.provider.off("sync", onSynced)
   }, [editor, collabProvider, value, blockDocManager, persistenceManager])
 
@@ -537,18 +560,77 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
 export default forwardRef<EditorRef, Props>(function Editor(props, ref) {
   const { isThemeLoaded } = useTheme()
 
-  if (!isThemeLoaded) {
-    return (
-      <div className="notion-editor">
-        <div
-          className="editor-wrapper"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "200px" }}
-        >
-          <p style={{ color: "#999" }}>Loading theme…</p>
-        </div>
-      </div>
-    )
-  }
+  if (!isThemeLoaded) return <EditorPlaceholder text="Loading theme…" />
 
-  return <EditorInner ref={ref} {...props} />
+  return <SchemaGate ref={ref} {...props} />
+})
+
+function EditorPlaceholder({ text }: { text: string }) {
+  return (
+    <div className="notion-editor">
+      <div
+        className="editor-wrapper"
+        style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "200px" }}
+      >
+        <p style={{ color: "#999" }}>{text}</p>
+      </div>
+    </div>
+  )
+}
+
+// Schema gate (#206/#274): y-tiptap DELETES any Y element its schema can't build
+// (unknown node type or mark, e.g. a block from a theme that failed to load or is no
+// longer active), for every peer, and the next autosave persists the loss. So before an
+// editor binds Collaboration, wait for the first WS sync and check the shared fragment
+// against the schema the editor would get. If anything can't be built, open the editor
+// read-only instead (no Collaboration binding, REST working copy, like contributors) and
+// say which types are missing. The provider is acquired here only to read the doc; the
+// editor acquires its own reference.
+const SchemaGate = forwardRef<EditorRef, Props>(function SchemaGate(props, ref) {
+  const { postId, enableCollaboration = true, readOnly = false } = props
+  const collaborating = !!postId && enableCollaboration && !readOnly
+  const [check, setCheck] = useState<{ postId: number; unbuildable: UnbuildableTypes | null } | null>(null)
+
+  useEffect(() => {
+    if (!collaborating || !postId) return
+    const collab = CollaborationProvider.getInstance(postId)
+    let done = false
+    const onSynced = (isSynced: boolean) => {
+      if (!isSynced || done) return
+      done = true
+      collab.provider.off("sync", onSynced)
+      // Same extension list the editor computes (theme extensions come from the
+      // registry); Collaboration adds no node or mark types.
+      const schema = getSchema(getExtensions({ collabProvider: null })())
+      const unbuildable = findUnbuildableTypes(collab.doc.getXmlFragment(EDITOR_FRAGMENT), schema)
+      if (unbuildable) {
+        console.error(
+          `[Editor] Not binding collaboration: the shared doc has types this editor can't build (${describeUnbuildableTypes(unbuildable)}). Opening read-only.`
+        )
+      }
+      setCheck({ postId, unbuildable })
+    }
+    collab.provider.on("sync", onSynced)
+    if (collab.provider.synced) onSynced(true)
+    return () => {
+      collab.provider.off("sync", onSynced)
+      CollaborationProvider.release(postId)
+    }
+  }, [collaborating, postId])
+
+  if (!collaborating) return <EditorInner ref={ref} {...props} />
+  if (check?.postId !== postId) return <EditorPlaceholder text="Connecting…" />
+  if (!check.unbuildable) return <EditorInner ref={ref} {...props} />
+
+  return (
+    <>
+      <div className="editor-blocked-notice" role="alert">
+        <strong>This post is open read-only.</strong> It contains{" "}
+        {describeUnbuildableTypes(check.unbuildable)} that the editor can't load, usually because the theme that
+        provides them failed to load or is no longer active. Editing here would delete them for everyone, so editing
+        is disabled until that theme is available. Those blocks are hidden below but kept in the post.
+      </div>
+      <EditorInner ref={ref} {...props} readOnly unbuildable={check.unbuildable} />
+    </>
+  )
 })

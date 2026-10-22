@@ -159,6 +159,55 @@ body:has(.gl-admin-login) {
     }
   }
 
+  // The account pages (forgot/reset password, accept invite) put a form and
+  // result panels inside the card instead of making the card the form.
+  &__form,
+  &__panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  &__panel {
+    gap: 1rem;
+    text-align: center;
+  }
+
+  &__text {
+    color: var(--text-secondary);
+    font-size: var(--text-size-body);
+    line-height: 145%;
+    margin: 0;
+  }
+
+  &__footer {
+    color: var(--text-quaternary);
+    font-size: 0.875rem;
+    margin: 0;
+    text-align: center;
+  }
+
+  &__link {
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+
+    &:focus-visible {
+      border-radius: 0.125rem;
+      outline: 2px solid var(--selected-border-color);
+      outline-offset: 2px;
+    }
+  }
+
   &__spinner {
     animation: gl-admin-login-spin 0.8s linear infinite;
     border: 2px solid currentcolor;

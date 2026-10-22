@@ -42,6 +42,10 @@ type Store interface {
 	DeleteUserWithTransferTx(ctx context.Context, arg DeleteUserWithTransferTxParams) error
 	UpdateUserTx(ctx context.Context, arg UpdateUserTxParams) (UpdateUserTxResult, error)
 
+	CreateUserInvitationTx(ctx context.Context, arg CreateUserInvitationParams) (UserInvitation, error)
+	AcceptInvitationTx(ctx context.Context, arg AcceptInvitationTxParams) (AcceptInvitationTxResult, error)
+	ResetPasswordTx(ctx context.Context, arg ResetPasswordTxParams) (User, error)
+
 	CreatePostWithTaxonomyTermsTx(ctx context.Context, arg CreatePostWithTaxonomyTermsTxParams) (CreatePostWithTaxonomyTermsTxResult, error)
 	DeleteTaxonomyTermTx(ctx context.Context, id int64) error
 	UpdatePostTaxonomyTermsTx(ctx context.Context, arg UpdatePostTaxonomyTermsTxParams) error
@@ -226,7 +230,8 @@ type UpdateUserTxParams struct {
 	CheckUniqueness bool
 	// PasswordChanged marks HashedPassword as a new password. The transaction
 	// then locks the user row, stamps PasswordChangedAt itself (overriding the
-	// caller's value), and blocks every session the user holds, so a stolen
+	// caller's value), uses up any outstanding password reset tokens, and
+	// blocks every session the user holds, so a stolen
 	// refresh or access token cannot outlive the password it was issued under.
 	//
 	// The row lock serializes against refresh-token rotation, which takes the
@@ -294,6 +299,11 @@ func (store *SQLStore) UpdateUserTx(ctx context.Context, arg UpdateUserTxParams)
 
 		if arg.PasswordChanged {
 			if err := q.BlockAllSessionsForUser(ctx, arg.ID); err != nil {
+				return err
+			}
+			// A reset link requested before the change must not be able
+			// to undo it.
+			if err := q.InvalidatePasswordResetTokensForUser(ctx, arg.ID); err != nil {
 				return err
 			}
 		}

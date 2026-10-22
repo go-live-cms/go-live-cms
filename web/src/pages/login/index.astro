@@ -59,6 +59,7 @@ import "@gl-admin/assets/styles/pages/login.scss"
       <span class="gl-admin-login__spinner" id="buttonLoading" aria-hidden="true" hidden></span>
       <span id="buttonText">Sign in</span>
     </button>
+    <p class="gl-admin-login__footer"><a class="gl-admin-login__link" href="/forgot-password">Forgot your password?</a></p>
   </form>
 </main>
 
@@ -95,10 +96,13 @@ import "@gl-admin/assets/styles/pages/login.scss"
     }
 
     // Set by the admin's AuthGuard when it signs the user out (lib/auth.ts
-    // SignOutReason). Only known reasons are shown; the text is ours.
+    // SignOutReason), or by the account pages (lib/accountPages.ts). Only
+    // known reasons are shown; the text is ours.
     const SIGN_OUT_NOTICES: Record<string, string> = {
       "password-changed": "Your password was changed. Sign in with your new password.",
       "session-expired": "Your session has expired. Please sign in again.",
+      "password-reset": "Your password was reset and every session signed out. Sign in with your new password.",
+      "invite-accepted": "Your account is ready. Sign in with your new username and password.",
     }
     const notice = SIGN_OUT_NOTICES[new URLSearchParams(window.location.search).get("reason") ?? ""]
     if (notice) {

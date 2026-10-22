@@ -77,6 +77,18 @@ services:
       PASETO_PREVIOUS_KEYS_VALID_UNTIL: "${PASETO_PREVIOUS_KEYS_VALID_UNTIL:-}"
       # Server-to-server listener (/internal/*). Never add it to `ports:`.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
+      # Required (#148): the site is invite-only, so invitations and password
+      # resets must be able to go out. The API refuses to start without
+      # SMTP_HOST, MAIL_FROM and PUBLIC_BASE_URL (the origin email links point
+      # at). TLS is required: implicit on port 465, STARTTLS otherwise
+      # (SMTP_TLS=starttls|tls; "none" is only accepted for a loopback relay).
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL}"
+      SMTP_HOST: "${SMTP_HOST}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_TLS: "${SMTP_TLS:-}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      MAIL_FROM: "${MAIL_FROM}"
       # Squash-on-publish (best effort): compacts the collab server's LevelDB log
       # after a publish. Same value as the websocket service's SQUASH_SECRET.
       COLLAB_SERVER_URL: "http://websocket:1234"

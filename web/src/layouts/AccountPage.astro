@@ -1,0 +1,47 @@
+---
+// Shell of the signed-out account pages (forgot/reset password, accept
+// invite), matching /login: the same card, logo and styles. Their logic is in
+// gl-admin/lib/accountPages.ts; each page's <script> only mounts it.
+import Head from "@/layouts/Page/Head.astro"
+import { SITE_TITLE } from "@/consts"
+import GLLogo from "@gl-admin/assets/gl-logo.svg?raw"
+import "@gl-admin/assets/styles/pages/login.scss"
+
+interface Props {
+  title: string
+  heading: string
+  subtitle: string
+}
+
+const { title, heading, subtitle } = Astro.props
+
+// Emailed links hold a token (in the fragment, but be safe): never cache the page.
+Astro.response.headers.set("Cache-Control", "no-store")
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+<!-- noindex: Head then emits robots noindex and no canonical/og:url (#137). -->
+<Head title={`${title} - ${SITE_TITLE}`} description={subtitle} noindex>
+  <meta name="referrer" content="no-referrer" />
+</Head>
+</head>
+<body>
+<main class="gl-admin-login">
+  <div class="gl-admin-login__card">
+    <header class="gl-admin-login__header">
+      <span class="gl-admin-login__logo" aria-hidden="true" set:html={GLLogo} />
+      <h1 class="gl-admin-login__title">{heading}</h1>
+      <p class="gl-admin-login__subtitle" id="pageSubtitle">{subtitle}</p>
+    </header>
+
+    <p id="errorMessage" class="gl-admin-login__error" hidden></p>
+    <!-- Always rendered so screen readers announce every new error. -->
+    <div id="errorAnnouncer" class="gl-admin-login__announcer" role="alert" aria-atomic="true"></div>
+
+    <slot />
+  </div>
+</main>
+</body>
+</html>

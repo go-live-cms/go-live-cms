@@ -279,6 +279,37 @@ func (q *Queries) LockUserForUpdate(ctx context.Context, id int64) error {
 	return err
 }
 
+const setUserPassword = `-- name: SetUserPassword :one
+UPDATE users
+SET
+    hashed_password = $2,
+    password_changed_at = $3
+WHERE id = $1
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role
+`
+
+type SetUserPasswordParams struct {
+	ID                int64     `json:"id"`
+	HashedPassword    string    `json:"hashed_password"`
+	PasswordChangedAt time.Time `json:"password_changed_at"`
+}
+
+func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, setUserPassword, arg.ID, arg.HashedPassword, arg.PasswordChangedAt)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.FullName,
+		&i.Email,
+		&i.HashedPassword,
+		&i.PasswordChangedAt,
+		&i.CreatedAt,
+		&i.Role,
+	)
+	return i, err
+}
+
 const transferPostsToAdmin = `-- name: TransferPostsToAdmin :exec
 UPDATE posts 
 SET user_id = $2, username = (SELECT username FROM users WHERE id = $2)
