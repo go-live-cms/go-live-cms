@@ -10,6 +10,7 @@ import {
   TICKET_AUDIENCE,
 } from "./access.js";
 import { createUpgradeHandler, docNameFromReq } from "./upgrade.js";
+import { logEvent, requestIdFrom } from "./logsafe.js";
 import { createPublicKey } from "crypto";
 import http from "http";
 import fs from "fs";
@@ -274,14 +275,15 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "invalid document name" }));
       return;
     }
-    console.log(`🗜️  Squash requested for document: ${docName}`);
+    // The API forwards the publish request's X-Request-ID, so this line joins its log.
+    const requestId = requestIdFrom(req.headers["x-request-id"]);
     try {
       await ldb.flushDocument(docName);
-      console.log(`✅ Squash complete for: ${docName}`);
+      logEvent("info", "ws_squash", { request_id: requestId, doc: docName });
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true, docName }));
     } catch (err) {
-      console.error(`❌ Squash failed for ${docName}:`, err.message);
+      logEvent("error", "ws_squash_failed", { request_id: requestId, doc: docName, error: err.message });
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "squash failed", detail: err.message }));
     }
@@ -295,12 +297,10 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 wss.on("connection", (ws, req) => {
   const docName = docNameFromReq(req);
-  console.log(
-    "✅ WebSocket connection established for user:",
-    req.auth?.username || "unknown",
-    "doc:",
-    docName,
-  );
+  // Set by the upgrade handler; users are logged by id only (#155).
+  const requestId = req.auth?.requestId;
+  const userId = req.auth?.userId;
+  const openedAt = Date.now();
 
   // Keep connection alive to prevent idle disconnects behind proxies
   const keepAliveInterval = setInterval(() => {
@@ -313,12 +313,18 @@ wss.on("connection", (ws, req) => {
     }
   }, 25000); // 25 seconds
 
-  ws.on("close", () => {
+  ws.on("close", (code) => {
     clearInterval(keepAliveInterval);
     // Log AFTER y-websocket has removed this conn so the count reflects survivors.
     setTimeout(() => {
-      const remaining = docs.get(docName)?.conns.size ?? 0;
-      console.log(`🔌 WS close — doc: ${docName} | live connections now: ${remaining}`);
+      logEvent("info", "ws_close", {
+        request_id: requestId,
+        doc: docName,
+        user_id: userId,
+        code,
+        duration_ms: Date.now() - openedAt,
+        live_connections: docs.get(docName)?.conns.size ?? 0,
+      });
     }, 0);
   });
 
@@ -328,8 +334,13 @@ wss.on("connection", (ws, req) => {
   // editor tab must show exactly 1 live connection per post. More than 1 with one tab
   // open means a zombie/duplicate binder is fighting over the doc — the kind of thing
   // that produces an unkillable server-vs-editor tug-of-war.
-  const liveConns = docs.get(docName)?.conns.size ?? 0;
-  console.log(`🔗 WS open — doc: ${docName} | live connections now: ${liveConns}`);
+  logEvent("info", "ws_connect", {
+    request_id: requestId,
+    doc: docName,
+    user_id: userId,
+    role: req.auth?.role,
+    live_connections: docs.get(docName)?.conns.size ?? 0,
+  });
 });
 
 // Ticket auth, single-use burn, role check and doc-name validation live in upgrade.js
@@ -341,7 +352,8 @@ server.on(
   createUpgradeHandler({
     verifyTicket: (ticket, docName) => verifyTicket(ticket, PUBLIC_KEY, { issuer: ISSUER, docName }),
     consumeTicket: (claims) => usedTickets.consume(claims),
-    fetchRole: (identity) => fetchCurrentRole(INTERNAL_API_URL, identity, ROLE_LOOKUP_SECRET),
+    fetchRole: (identity, { requestId } = {}) =>
+      fetchCurrentRole(INTERNAL_API_URL, identity, ROLE_LOOKUP_SECRET, { requestId }),
     accept: (req, socket, head) =>
       wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit("connection", ws, req);

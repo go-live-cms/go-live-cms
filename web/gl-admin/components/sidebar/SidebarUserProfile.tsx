@@ -1,15 +1,17 @@
 import { useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { useSelect } from "@gl-admin/utils/select"
-import { logout } from "@gl-admin/lib/api/sessions"
 import { authManager } from "@gl-admin/lib/auth"
+import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import UserProfile from "@gl-admin/components/ui/user-profile/UserProfile"
 import Icon from "@gl-admin/components/ui/Icon"
 import SidebarPopup from "./SidebarPopup"
 import SidebarItem from "./SidebarItem"
 
 export default function SidebarUserProfile() {
-  const auth = authManager.getState()
+  const user = useAuthUser()
+  const navigate = useNavigate()
   const { open, setOpen, ref, handleSelectClick } = useSelect()
   const isDark = useGoLive()
   const navIconColor = isDark ? "#FFFFFF" : "#46484A"
@@ -24,11 +26,16 @@ export default function SidebarUserProfile() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [open, setOpen])
 
-  const handleLogout = async () => {
-    authManager.logout()
-    await logout({ refresh_token: auth.refreshToken })
+  const handleProfile = () => {
     setOpen(false)
-    window.location.href = "/login"
+    navigate("/profile")
+  }
+
+  // authManager.logout() revokes the session and clears auth; AuthGuard
+  // then sends the user to the login page.
+  const handleLogout = async () => {
+    setOpen(false)
+    await authManager.logout()
   }
 
   const footer = (
@@ -40,7 +47,7 @@ export default function SidebarUserProfile() {
 
   return (
     <section className="sidebar-user-profile" ref={ref}>
-      <UserProfile user={auth.user} hover={false}>
+      <UserProfile user={user} hover={false}>
         <Icon
           name="options"
           color={navIconColor}
@@ -49,6 +56,7 @@ export default function SidebarUserProfile() {
         />
       </UserProfile>
       <SidebarPopup open={open} footer={footer}>
+        <SidebarItem iconPath="user" name="My profile" onClick={handleProfile} />
         <SidebarItem iconPath="logout" name="Logout" onClick={handleLogout} />
       </SidebarPopup>
     </section>

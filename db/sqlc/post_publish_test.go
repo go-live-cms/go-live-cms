@@ -76,8 +76,10 @@ func TestPublishCreatesVersionsAndSnapshot(t *testing.T) {
 	// Editing after publishing leaves the published snapshot alone.
 	published, err := testQueries.GetPublishedPostBlocks(ctx, post.ID)
 	require.NoError(t, err)
-	require.True(t, published.Valid)
-	require.JSONEq(t, string(docV1), string(published.RawMessage))
+	require.True(t, published.Content.Valid)
+	require.JSONEq(t, string(docV1), string(published.Content.RawMessage))
+	// Publishing makes the post public, whatever status it was created with (#136).
+	require.Equal(t, "published", published.PostStatus)
 
 	v2 := publishPost(t, post.ID, post.UserID, "")
 	require.Equal(t, int32(2), v2.VersionNo)
@@ -93,7 +95,8 @@ func TestPublishCreatesVersionsAndSnapshot(t *testing.T) {
 	versions, err := testQueries.GetPostVersions(ctx, post.ID)
 	require.NoError(t, err)
 	require.Len(t, versions, 2)
-	require.Equal(t, int32(2), versions[0].VersionNo, "newest first")
+	require.Equal(t, int32(2), versions[0].VersionNo.Int32, "newest first")
+	require.Equal(t, v2.ID, versions[0].PublishedVersionID.Int64, "post columns ride along")
 	require.Equal(t, "launch", versions[1].Label.String)
 
 	gotPost, err := testQueries.GetPost(ctx, post.ID)
@@ -113,6 +116,75 @@ func TestPublishCreatesVersionsAndSnapshot(t *testing.T) {
 		BlockDoc:  docV2,
 	})
 	require.Error(t, err)
+
+	// One version by number, scoped to its post (#136).
+	got, err := testQueries.GetPostVersion(ctx, GetPostVersionParams{PostID: post.ID, VersionNo: 1})
+	require.NoError(t, err)
+	require.Equal(t, v1.ID, got.ID)
+	require.JSONEq(t, string(docV1), string(got.BlockDoc))
+	require.Equal(t, "launch", got.Label.String)
+	require.True(t, got.CreatedByUsername.Valid)
+	_, err = testQueries.GetPostVersion(ctx, GetPostVersionParams{PostID: other.ID, VersionNo: 1})
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+// TestUnpublishKeepsHistory covers #136's unpublish: back to draft with the public
+// snapshot dropped, while the working copy and every version survive.
+func TestUnpublishKeepsHistory(t *testing.T) {
+	ctx := context.Background()
+	post := createPostWithTransaction(t).Post
+
+	doc := json.RawMessage(`{"doc_version":1,"blocks_order":["a"],"blocks":{"a":{"id":"a","type":"paragraph","attrs":{"text":"live"}}}}`)
+	current, err := testQueries.GetPostBlocks(ctx, post.ID)
+	require.NoError(t, err)
+	_, err = testQueries.UpdatePostBlocksIfRevisionMatches(ctx, UpdatePostBlocksIfRevisionMatchesParams{
+		ID: post.ID, BlockDoc: doc, BlockRevision: current.Revision,
+	})
+	require.NoError(t, err)
+	v1 := publishPost(t, post.ID, post.UserID, "")
+
+	unpublished, err := testQueries.UnpublishPost(ctx, post.ID)
+	require.NoError(t, err)
+	require.Equal(t, "draft", unpublished.PostStatus)
+	require.False(t, unpublished.PublishedVersionID.Valid)
+	require.False(t, unpublished.PublishedBlockDoc.Valid)
+
+	published, err := testQueries.GetPublishedPostBlocks(ctx, post.ID)
+	require.NoError(t, err)
+	require.Equal(t, "draft", published.PostStatus)
+	require.False(t, published.Content.Valid)
+
+	working, err := testQueries.GetPostBlocks(ctx, post.ID)
+	require.NoError(t, err)
+	require.JSONEq(t, string(doc), string(working.Content))
+
+	versions, err := testQueries.GetPostVersions(ctx, post.ID)
+	require.NoError(t, err)
+	require.Len(t, versions, 1)
+	require.Equal(t, v1.ID, versions[0].VersionID.Int64)
+	require.Equal(t, "draft", versions[0].PostStatus)
+	require.False(t, versions[0].PublishedVersionID.Valid)
+
+	// A post without versions yields one placeholder row; a missing post none.
+	fresh := createPostWithTransaction(t).Post
+	placeholder, err := testQueries.GetPostVersions(ctx, fresh.ID)
+	require.NoError(t, err)
+	require.Len(t, placeholder, 1)
+	require.False(t, placeholder[0].VersionID.Valid)
+	missing, err := testQueries.GetPostVersions(ctx, -1)
+	require.NoError(t, err)
+	require.Empty(t, missing)
+
+	// Republishing continues the numbering and makes the post public again.
+	v2 := publishPost(t, post.ID, post.UserID, "")
+	require.Equal(t, int32(2), v2.VersionNo)
+	again, err := testQueries.GetPost(ctx, post.ID)
+	require.NoError(t, err)
+	require.Equal(t, "published", again.PostStatus)
+	require.Equal(t, v2.ID, again.PublishedVersionID.Int64)
+
+	_, err = testQueries.UnpublishPost(ctx, -1)
+	require.ErrorIs(t, err, sql.ErrNoRows)
 }
 
 // TestBlockRevisionGuard covers the optimistic-concurrency check that keeps a

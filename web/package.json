@@ -8,6 +8,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
+    "check": "astro check",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -51,6 +52,7 @@
     "@typescript-eslint/parser": "^8.39.1",
     "@typescript-eslint/utils": "^8.39.1",
     "astro": "^5.12.8",
+    "dompurify": "3.4.16",
     "imask": "^7.6.1",
     "lowlight": "^3.3.0",
     "prosemirror-utils": "1.2.2",
@@ -67,6 +69,7 @@
     "yjs": "13.6.31"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.12",
     "@eslint/js": "^9.33.0",
     "eslint": "^9.33.0",
     "globals": "^16.3.0",
@@ -78,6 +81,7 @@
     "stylelint": "^16.23.1",
     "stylelint-config-standard-scss": "^15.0.1",
     "stylelint-order": "^7.0.0",
+    "typescript": "^5.9.2",
     "typescript-eslint": "^8.39.1",
     "vitest": "^4.1.8"
   },

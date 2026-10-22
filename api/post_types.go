@@ -49,7 +49,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -310,28 +309,5 @@ func (server *Server) getPostType(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"post_type": toPostTypeResponse(postType),
-	})
-}
-
-func (server *Server) getPostWithMeta(c *gin.Context) {
-	idParam := c.Param("id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
-		return
-	}
-
-	result, err := server.store.GetPostWithMeta(c.Request.Context(), id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"post": result,
 	})
 }

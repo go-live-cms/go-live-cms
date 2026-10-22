@@ -159,38 +159,3 @@ func toTaxonomyTermWithTypeResponse(row db.ListTaxonomyTermsByTypeRow) TaxonomyT
 
 	return response
 }
-
-// toTaxonomyTermWithCountResponse converts query result with post count to API response.
-// Includes usage statistics for popularity and analytics features.
-func toTaxonomyTermWithCountResponse(row db.GetTaxonomyTermsWithPostCountRow) TaxonomyTermResponse {
-	response := TaxonomyTermResponse{
-		ID:               row.ID,
-		Name:             row.Name,
-		Slug:             row.Slug,
-		Description:      row.Description.String,
-		TaxonomyTypeID:   row.TaxonomyTypeID,
-		TaxonomyTypeName: row.TaxonomyTypeName,
-		PostCount:        &row.PostCount, // Include usage statistics
-		CreatedAt:        row.CreatedAt.Format("2006-01-02T15:04:05Z"),
-	}
-
-	// Handle nullable parent_id
-	if row.ParentID.Valid {
-		response.ParentID = &row.ParentID.Int64
-	}
-
-	// Handle nullable sort_order
-	if row.SortOrder.Valid {
-		response.SortOrder = &row.SortOrder.Int32
-	}
-
-	// Handle nullable JSON metadata
-	if row.Meta.Valid {
-		var meta map[string]interface{}
-		if err := json.Unmarshal(row.Meta.RawMessage, &meta); err == nil {
-			response.Meta = meta
-		}
-	}
-
-	return response
-}

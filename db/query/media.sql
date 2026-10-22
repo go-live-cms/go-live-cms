@@ -101,6 +101,22 @@ SET
 WHERE id = sqlc.arg('id')
 RETURNING *;
 
+-- name: ReplaceMediaFile :one
+-- File-only update used by POST /media/:id/replace: swaps the columns that
+-- describe the stored file and leaves name, description and alt alone, so a
+-- concurrent metadata edit is never overwritten by a stale read.
+UPDATE media
+SET
+    media_path = sqlc.arg('media_path'),
+    file_size = sqlc.arg('file_size'),
+    mime_type = sqlc.arg('mime_type'),
+    width = sqlc.arg('width'),
+    height = sqlc.arg('height'),
+    duration = sqlc.arg('duration'),
+    original_filename = sqlc.arg('original_filename'),
+    changed_at = now()
+WHERE id = sqlc.arg('id')
+RETURNING *;
 -- name: DeleteMedia :exec
 DELETE FROM media
 WHERE id = $1;

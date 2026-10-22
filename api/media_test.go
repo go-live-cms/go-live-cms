@@ -39,43 +39,6 @@ func randomMedia() db.Medium {
 	}
 }
 
-func createMultipartRequest(fields map[string]string, filename string, fileContent string) (*http.Request, string, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	for field, value := range fields {
-		err := writer.WriteField(field, value)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-
-	if filename != "" {
-		part, err := writer.CreateFormFile("file", filename)
-		if err != nil {
-			return nil, "", err
-		}
-		_, err = io.Copy(part, strings.NewReader(fileContent))
-		if err != nil {
-			return nil, "", err
-		}
-	}
-
-	contentType := writer.FormDataContentType()
-	err := writer.Close()
-	if err != nil {
-		return nil, "", err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, "/api/v1/media", body)
-	if err != nil {
-		return nil, "", err
-	}
-	req.Header.Set("Content-Type", contentType)
-
-	return req, contentType, nil
-}
-
 func TestCreateMediaAPI(t *testing.T) {
 	user := randomUserForPosts()
 	media := randomMedia()
@@ -248,7 +211,7 @@ func TestCreateMediaAPI(t *testing.T) {
 
 			part, err := writer.CreateFormFile("file", "test.jpg")
 			require.NoError(t, err)
-			_, err = part.Write([]byte("fake image content"))
+			_, err = part.Write(testJPEG(t, 4, 3))
 			require.NoError(t, err)
 
 			err = writer.Close()

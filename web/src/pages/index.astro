@@ -27,10 +27,10 @@ try {
   ])
 
   latestPosts = postsResponse.data.slice(0, 3)
-  totalPosts = postsResponse.meta.total
-  totalTaxonomies = taxonomiesResponse.meta.total
-  totalMedia = mediaResponse.meta.total
-  totalUsers = usersResponse.meta.total
+  totalPosts = postsResponse.meta.total ?? 0
+  totalTaxonomies = taxonomiesResponse.meta.total ?? 0
+  totalMedia = mediaResponse.meta.total ?? 0
+  totalUsers = usersResponse.meta.total ?? 0
 
   console.log("Server-side fetch - Counts:", { totalPosts, totalTaxonomies, totalMedia, totalUsers })
 } catch (e) {

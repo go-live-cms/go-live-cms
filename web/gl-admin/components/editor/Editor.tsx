@@ -5,6 +5,7 @@ import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
 import { BlockPersistenceManager } from "@gl-admin/lib/collaboration/BlockPersistenceManager"
 import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
+import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
 import { authManager } from "@gl-admin/lib/auth"
 import { applyLink, openLinkModal } from "./utils/linkManager"
@@ -40,6 +41,8 @@ type Props = {
 export interface EditorRef {
   forceSave: () => Promise<void>
   publish: () => Promise<{ versionId: number; versionNo: number } | undefined>
+  // Load a stored version into the working copy through the editor (#136)
+  restoreVersion: (doc: BlockDocV1) => Promise<{ saved: boolean }>
   getSaveStatus: () => { isSaving: boolean; isPublishing: boolean; saveStatus: "saved" | "saving" | "error" | null }
 }
 
@@ -252,6 +255,15 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
           setIsPublishing(false)
         }
       },
+      restoreVersion: async (doc) => {
+        // Only a live collaborative editor can restore: the restore must reach the
+        // shared Yjs doc (see BlockPersistenceManager.restoreVersion).
+        if (!persistenceManager) throw new Error("Restoring needs the collaborative editor")
+        if (titleRef.current) {
+          persistenceManager.setTitle(titleRef.current)
+        }
+        return persistenceManager.restoreVersion(doc)
+      },
       getSaveStatus: () => ({ isSaving, isPublishing, saveStatus }),
     }),
     [persistenceManager, postId, isSaving, isPublishing, saveStatus, onPublishStart, onPublishSuccess, onPublishError]
@@ -354,11 +366,11 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
         persistenceManager.initialize()
       }
 
-      collabProvider.provider.off("synced", onSynced)
+      collabProvider.provider.off("sync", onSynced)
     }
 
-    collabProvider.provider.on("synced", onSynced)
-    return () => collabProvider.provider.off("synced", onSynced)
+    collabProvider.provider.on("sync", onSynced)
+    return () => collabProvider.provider.off("sync", onSynced)
   }, [editor, collabProvider, value, blockDocManager, persistenceManager])
 
   // Autosave trigger: notify the persistence manager on every editor edit.

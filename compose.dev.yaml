@@ -61,6 +61,15 @@ services:
       - ./uploads:/app/uploads
       - ./web/themes:/app/web/themes:ro
     entrypoint: ["/app/wait-for.sh", "postgres:5432", "--", "/app/start-dev.sh"]
+    # Readiness (/readyz pings Postgres), not liveness (/health): "healthy" should
+    # mean the API can serve requests. See api/health.go. start_period covers the
+    # first air build, which is slow on the Windows file share.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 120s
 
   web:
     build:

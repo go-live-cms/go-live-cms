@@ -9,7 +9,6 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
-	"github.com/sqlc-dev/pqtype"
 )
 
 type Querier interface {
@@ -93,14 +92,18 @@ type Querier interface {
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
 	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
-	GetPostVersions(ctx context.Context, postID int64) ([]GetPostVersionsRow, error)
+	GetPostVersion(ctx context.Context, arg GetPostVersionParams) (GetPostVersionRow, error)
+	// One statement, so the post's status/published version and its versions are read
+	// consistently. Starts from posts: no rows = no post; a single row with a NULL
+	// version id = a post without versions.
+	GetPostVersions(ctx context.Context, id int64) ([]GetPostVersionsRow, error)
 	GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error)
 	GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMetaRow, error)
 	GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPostsByMediaRow, error)
 	GetPostsByMultipleTaxonomyTerms(ctx context.Context, arg GetPostsByMultipleTaxonomyTermsParams) ([]Post, error)
 	GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxonomyTermParams) ([]Post, error)
 	GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error)
-	GetPublishedPostBlocks(ctx context.Context, id int64) (pqtype.NullRawMessage, error)
+	GetPublishedPostBlocks(ctx context.Context, id int64) (GetPublishedPostBlocksRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error)
@@ -155,15 +158,24 @@ type Querier interface {
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
+	// File-only update used by POST /media/:id/replace: swaps the columns that
+	// describe the stored file and leaves name, description and alt alone, so a
+	// concurrent metadata edit is never overwritten by a stale read.
+	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// Search and filtering
 	SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTermsParams) ([]SearchTaxonomyTermsRow, error)
 	SetPostTypeActive(ctx context.Context, arg SetPostTypeActiveParams) error
 	SetPostTypeActiveByRegisteredBy(ctx context.Context, arg SetPostTypeActiveByRegisteredByParams) error
+	// Publishing also makes the post public: post_status follows the snapshot, so a
+	// post published from the editor is not left as 'draft' in the database.
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
+	// Back to draft and drop the public snapshot (#136). The snapshot stays in
+	// post_versions, so it can still be viewed and restored.
+	UnpublishPost(ctx context.Context, id int64) (Post, error)
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	// Metadata-only update used by PUT /media/:id. The file columns (media_path,
 	// file_size, mime_type, dimensions, original_filename) are set on upload and

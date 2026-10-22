@@ -466,4 +466,133 @@ describe("blocks dropped on load", () => {
     // The Yjs maps keep mirroring the editor; only the PUT payload carries the block.
     expect(blockDocManager.getBlockDocV1().blocks[bad]).toBeUndefined()
   })
+
+  it("stops merging them back once a collaborator restores a version (#136)", async () => {
+    const { manager, blockDocManager } = setup()
+    await activate(manager)
+
+    // A peer's restoreVersion bumps the shared marker (same Y.Doc via sync)
+    blockDocManager.markRestored()
+    manager.notifyEditorChange()
+    await vi.advanceTimersByTimeAsync(1500)
+
+    const sent: BlockDocV1 = api.updatePostBlocks.mock.calls[0][1]
+    expect(sent.blocks_order).not.toContain(bad)
+    expect(sent.blocks[bad]).toBeUndefined()
+  })
+})
+
+// #136: restoring a stored version goes through the editor (→ Yjs → peers), then
+// saves the working copy with the normal PUT. Never a direct block_doc overwrite.
+describe("restoreVersion()", () => {
+  const schema = getSchema([StarterKit, BlockIdExtension])
+
+  function setup() {
+    const { manager, blockDocManager, syncFromEditor } = makeManager()
+    const editor = {
+      schema,
+      isDestroyed: false,
+      isEmpty: true,
+      content: null as any,
+      commands: {
+        setContent: vi.fn((json: any, _opts?: unknown) => void (editor.content = schema.nodeFromJSON(json))),
+      },
+    }
+    manager.setEditor(editor as any)
+    syncFromEditor.mockImplementation(() => blockDocManager.setBlockDocV1(pmToBlockDoc(editor.content)))
+    const onSaveError = vi.fn()
+    manager.setCallbacks({ onSaveError })
+    return { manager, blockDocManager, editor, onSaveError }
+  }
+
+  const textOf = (doc: BlockDocV1) => doc.blocks_order.map((b) => (doc.blocks[b].attrs as any).text ?? "")
+
+  it("refuses to restore before the document has loaded", async () => {
+    const { manager, editor } = setup()
+    await expect(manager.restoreVersion(oneBlockDoc("old"))).rejects.toThrow(/loading/)
+    expect(editor.commands.setContent).not.toHaveBeenCalled()
+    expect(api.updatePostBlocks).not.toHaveBeenCalled()
+  })
+
+  it("applies the version through the editor and saves it as the working copy", async () => {
+    const { manager, blockDocManager, editor } = setup()
+    await activate(manager)
+    editor.isEmpty = false
+    const setContentCallsAfterLoad = editor.commands.setContent.mock.calls.length
+
+    const version = oneBlockDoc("from version 1")
+    const result = await manager.restoreVersion(version)
+
+    expect(result).toEqual({ saved: true })
+    expect(editor.commands.setContent).toHaveBeenCalledTimes(setContentCallsAfterLoad + 1)
+    // emitUpdate:false like every programmatic load; the ySyncPlugin still syncs it
+    expect(editor.commands.setContent.mock.lastCall?.[1]).toEqual({ emitUpdate: false })
+    expect(api.updatePostBlocks).toHaveBeenCalledTimes(1)
+    const sent: BlockDocV1 = api.updatePostBlocks.mock.calls[0][1]
+    expect(textOf(sent)).toEqual(["from version 1"])
+    expect(sent.blocks_order).toEqual(version.blocks_order)
+    // The Yjs maps now mirror the restored editor content too
+    expect(textOf(blockDocManager.getBlockDocV1())).toEqual(["from version 1"])
+    expect(manager.hasUnsaved()).toBe(false)
+  })
+
+  it("keeps the version's unshowable blocks in the save, not the old ones", async () => {
+    const { manager, onSaveError } = setup()
+    await activate(manager)
+    const [p, bad] = [id(), id()]
+    const version: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: [p, bad],
+      blocks: {
+        [p]: { id: p, type: "paragraph", version: 1, attrs: { text: "kept" } },
+        [bad]: { id: bad, type: "blockquote", version: 1, attrs: { pm: { type: "blockquote", content: [] } } },
+      },
+    }
+
+    await manager.restoreVersion(version)
+
+    const sent: BlockDocV1 = api.updatePostBlocks.mock.calls[0][1]
+    expect(sent.blocks_order).toEqual([p, bad])
+    expect(sent.blocks[bad]).toEqual(version.blocks[bad])
+    expect(onSaveError).toHaveBeenCalledTimes(1)
+    expect(onSaveError.mock.calls[0][0].message).toContain(bad)
+  })
+
+  it("does not save or adopt the version when the editor rejects it", async () => {
+    const { manager, editor } = setup()
+    await activate(manager)
+    editor.commands.setContent.mockImplementationOnce(() => {
+      throw new Error("schema mismatch")
+    })
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    await expect(manager.restoreVersion(oneBlockDoc("v1"))).rejects.toThrow(/Failed to load the version/)
+    expect(api.updatePostBlocks).not.toHaveBeenCalled()
+    expect(manager.hasUnsaved()).toBe(false)
+    consoleError.mockRestore()
+  })
+
+  it("reports saved:false when a save is in flight, and the follow-up save persists the restore", async () => {
+    const { manager } = setup()
+    await activate(manager)
+
+    // Hold an autosave open so the restore's forceSave hits the isSaving latch
+    let release!: () => void
+    api.updatePostBlocks.mockImplementationOnce(
+      (_id, doc) => new Promise((resolve) => (release = () => resolve({ doc, revision: 2 })))
+    )
+    manager.notifyEditorChange()
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(api.updatePostBlocks).toHaveBeenCalledTimes(1)
+
+    const result = await manager.restoreVersion(oneBlockDoc("restored"))
+    expect(result).toEqual({ saved: false })
+    expect(manager.hasUnsaved()).toBe(true)
+
+    release()
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(api.updatePostBlocks).toHaveBeenCalledTimes(2)
+    expect(textOf(api.updatePostBlocks.mock.calls[1][1])).toEqual(["restored"])
+    expect(manager.hasUnsaved()).toBe(false)
+  })
 })

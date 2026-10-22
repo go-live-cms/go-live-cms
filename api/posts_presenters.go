@@ -90,7 +90,7 @@ func toPostResponse(post db.Post) PostResponse {
 
 	var publishedBlocks map[string]interface{}
 	if post.PublishedBlockDoc.Valid {
-		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+		decodeJSONBestEffort(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
 	}
 
 	return PostResponse{
@@ -119,7 +119,7 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 
 	var publishedBlocks map[string]interface{}
 	if post.PublishedBlockDoc.Valid {
-		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+		decodeJSONBestEffort(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
 	}
 
 	return PostResponse{
@@ -149,13 +149,13 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 	metaMap := make(map[string]interface{})
 	if post.Meta != nil {
 		if metaBytes, ok := post.Meta.([]byte); ok {
-			json.Unmarshal(metaBytes, &metaMap)
+			decodeJSONBestEffort(metaBytes, &metaMap)
 		}
 	}
 
 	var publishedBlocks map[string]interface{}
 	if post.PublishedBlockDoc.Valid {
-		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+		decodeJSONBestEffort(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
 	}
 
 	return PostWithMetaResponse{
@@ -186,23 +186,23 @@ func toPostWithAllMetaResponse(post db.ListPostsWithAllMetaRow) PostWithAllMetaR
 	postMetaMap := make(map[string]interface{})
 	if post.PostMeta != nil {
 		if metaBytes, ok := post.PostMeta.([]byte); ok {
-			json.Unmarshal(metaBytes, &postMetaMap)
+			decodeJSONBestEffort(metaBytes, &postMetaMap)
 		}
 	}
 
 	authorMetaMap := make(map[string]interface{})
 	if len(post.AuthorMeta) > 0 {
-		json.Unmarshal(post.AuthorMeta, &authorMetaMap)
+		decodeJSONBestEffort(post.AuthorMeta, &authorMetaMap)
 	}
 
 	postTypeMetaMap := make(map[string]interface{})
 	if len(post.PostTypeMeta) > 0 {
-		json.Unmarshal(post.PostTypeMeta, &postTypeMetaMap)
+		decodeJSONBestEffort(post.PostTypeMeta, &postTypeMetaMap)
 	}
 
 	var publishedBlocks map[string]interface{}
 	if post.PublishedBlockDoc.Valid {
-		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+		decodeJSONBestEffort(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
 	}
 
 	return PostWithAllMetaResponse{
@@ -235,13 +235,13 @@ func toPostWithMetaResponseFromTypeQuery(post db.ListPostsByTypeWithMetaRow) Pos
 	metaMap := make(map[string]interface{})
 	if post.Meta != nil {
 		if metaBytes, ok := post.Meta.([]byte); ok {
-			json.Unmarshal(metaBytes, &metaMap)
+			decodeJSONBestEffort(metaBytes, &metaMap)
 		}
 	}
 
 	var publishedBlocks map[string]interface{}
 	if post.PublishedBlockDoc.Valid {
-		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+		decodeJSONBestEffort(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
 	}
 
 	return PostWithMetaResponse{
@@ -272,23 +272,23 @@ func toPostWithAllMetaResponseFromTypeQuery(post db.ListPostsByTypeWithAllMetaRo
 	postMetaMap := make(map[string]interface{})
 	if post.PostMeta != nil {
 		if metaBytes, ok := post.PostMeta.([]byte); ok {
-			json.Unmarshal(metaBytes, &postMetaMap)
+			decodeJSONBestEffort(metaBytes, &postMetaMap)
 		}
 	}
 
 	authorMetaMap := make(map[string]interface{})
 	if len(post.AuthorMeta) > 0 {
-		json.Unmarshal(post.AuthorMeta, &authorMetaMap)
+		decodeJSONBestEffort(post.AuthorMeta, &authorMetaMap)
 	}
 
 	postTypeMetaMap := make(map[string]interface{})
 	if len(post.PostTypeMeta) > 0 {
-		json.Unmarshal(post.PostTypeMeta, &postTypeMetaMap)
+		decodeJSONBestEffort(post.PostTypeMeta, &postTypeMetaMap)
 	}
 
 	var publishedBlocks map[string]interface{}
 	if post.PublishedBlockDoc.Valid {
-		json.Unmarshal(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
+		decodeJSONBestEffort(post.PublishedBlockDoc.RawMessage, &publishedBlocks)
 	}
 
 	return PostWithAllMetaResponse{
@@ -325,4 +325,11 @@ func toPostMetaResponse(meta db.PostMetum) PostMetaResponse {
 		MetaValue: metaValue,
 		CreatedAt: meta.CreatedAt,
 	}
+}
+
+// decodeJSONBestEffort decodes stored JSON (published blocks, meta) for a
+// response. A malformed value leaves v empty or partially filled instead of
+// failing the whole response, so the error is deliberately ignored.
+func decodeJSONBestEffort(data []byte, v any) {
+	_ = json.Unmarshal(data, v)
 }

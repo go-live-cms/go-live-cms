@@ -7,6 +7,7 @@ import { createUser, updateUser } from "@gl-admin/lib/api/users"
 import type { User } from "@gl-admin/lib/api/types"
 import { AuthManager } from "@gl-admin/lib/auth"
 import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
+import { isValidEmail, validateNewPassword } from "@gl-admin/lib/profile"
 
 type UserFormMode = "create" | "edit"
 
@@ -38,10 +39,6 @@ function toUsername(seed?: string) {
         .replace(/[^a-z0-9._-]+/g, "-")
         .replace(/-+/g, "-")
         .replace(/^-+|-+$/g, "")
-}
-
-function isValidEmail(email: string) {
-    return /^\S+@\S+\.\S+$/.test(email)
 }
 
 export default function UserForm({
@@ -123,24 +120,17 @@ export default function UserForm({
                 throw new Error("Username is required.")
             }
 
-            const pwd = (formData.password || "").trim()
-            const cpwd = (formData.confirm_password || "").trim()
+            // Sent as typed, like the API (no trimming).
+            const pwd = formData.password || ""
+            const cpwd = formData.confirm_password || ""
 
             if (mode === "create") {
-                if (!pwd || pwd.length < 8) {
-                    throw new Error("Password must be at least 8 characters.")
-                }
-                if (pwd !== cpwd) {
-                    throw new Error("Passwords do not match.")
-                }
+                const invalid = validateNewPassword(pwd, cpwd)
+                if (invalid) throw new Error(invalid)
             } else {
                 if (pwd || cpwd) {
-                    if (pwd.length < 8) {
-                        throw new Error("Password must be at least 8 characters.")
-                    }
-                    if (pwd !== cpwd) {
-                        throw new Error("Passwords do not match.")
-                    }
+                    const invalid = validateNewPassword(pwd, cpwd)
+                    if (invalid) throw new Error(invalid)
                     if (isSelf && !formData.current_password) {
                         throw new Error("Enter your current password to change it.")
                     }

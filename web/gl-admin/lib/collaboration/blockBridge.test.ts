@@ -13,6 +13,7 @@ import {
   synthesizedItemId,
 } from "./blockBridge"
 import type { BlockDocV1 } from "../blocks-spec"
+import { textOf } from "./testHelpers"
 
 // A minimal test-only custom node, standing in for a theme block (e.g. "alert").
 // It defines `data-block-id` because the bridge injects that attr into every
@@ -64,7 +65,7 @@ describe("blockBridge round-trip — known block types", () => {
     const out = roundTrip(doc)
     expect(out.blocks_order).toEqual([a])
     expect(out.blocks[a].type).toBe("paragraph")
-    expect(out.blocks[a].attrs.text).toBe("hello world")
+    expect(textOf(out.blocks[a])).toBe("hello world")
   })
 
   it("heading preserves level and text", () => {
@@ -77,7 +78,7 @@ describe("blockBridge round-trip — known block types", () => {
     const out = roundTrip(doc)
     expect(out.blocks[a].type).toBe("heading")
     expect((out.blocks[a].attrs as any).pm.attrs.level).toBe(2)
-    expect(out.blocks[a].attrs.text).toBe("Title")
+    expect(textOf(out.blocks[a])).toBe("Title")
   })
 
   it("blockquote preserves text", () => {
@@ -89,7 +90,7 @@ describe("blockBridge round-trip — known block types", () => {
     }
     const out = roundTrip(doc)
     expect(out.blocks[a].type).toBe("blockquote")
-    expect(out.blocks[a].attrs.text).toBe("quoted")
+    expect(textOf(out.blocks[a])).toBe("quoted")
   })
 
   it("code_block preserves code and language", () => {
@@ -153,8 +154,8 @@ describe("blockBridge round-trip — lists with children", () => {
     expect(out.blocks_order).toEqual([list])
     expect(out.blocks[list].type).toBe("bullet_list")
     expect(out.blocks[list].children).toEqual([li1, li2])
-    expect(out.blocks[li1].attrs.text).toBe("one")
-    expect(out.blocks[li2].attrs.text).toBe("two")
+    expect(textOf(out.blocks[li1])).toBe("one")
+    expect(textOf(out.blocks[li2])).toBe("two")
   })
 })
 
@@ -201,7 +202,7 @@ describe("blockBridge — custom/theme node", () => {
     }
     const out = roundTrip(doc)
     expect(out.blocks[a].type).toBe("callout")
-    expect(out.blocks[a].attrs.text).toBe("heads up")
+    expect(textOf(out.blocks[a])).toBe("heads up")
   })
 })
 
@@ -226,7 +227,7 @@ describe("blockBridge — edge cases", () => {
     expect(out.blocks_order).toHaveLength(2)
     // Both blocks present under distinct ids (the duplicate was regenerated).
     expect(new Set(out.blocks_order).size).toBe(2)
-    const texts = out.blocks_order.map((bid) => out.blocks[bid].attrs.text)
+    const texts = out.blocks_order.map((bid) => textOf(out.blocks[bid]))
     expect(texts).toEqual(["first", "second"])
   })
 
@@ -284,7 +285,7 @@ describe("pmToBlockDoc — per type (PM → Block)", () => {
     )
     const block = out.blocks[out.blocks_order[0]]
     expect(block.type).toBe("paragraph")
-    expect(block.attrs.text).toBe("hello")
+    expect(textOf(block)).toBe("hello")
     expect((block.attrs as any).pm.type).toBe("paragraph")
   })
 
@@ -297,7 +298,7 @@ describe("pmToBlockDoc — per type (PM → Block)", () => {
     expect(block.type).toBe("heading")
     expect((block.attrs as any).level).toBe(5)
     expect((block.attrs as any).pm.attrs.level).toBe(5)
-    expect(block.attrs.text).toBe("Deep")
+    expect(textOf(block)).toBe("Deep")
   })
 
   it("blockquote: flattens nested text into attrs.text", () => {
@@ -311,7 +312,7 @@ describe("pmToBlockDoc — per type (PM → Block)", () => {
     )
     const block = out.blocks[out.blocks_order[0]]
     expect(block.type).toBe("blockquote")
-    expect(block.attrs.text).toBe("quoted")
+    expect(textOf(block)).toBe("quoted")
   })
 
   it("code_block: maps language and textContent to code", () => {
@@ -365,7 +366,7 @@ describe("pmToBlockDoc — per type (PM → Block)", () => {
     const listBlock = out.blocks[out.blocks_order[0]]
     expect(listBlock.type).toBe("bullet_list")
     expect(listBlock.children).toHaveLength(2)
-    const childTexts = listBlock.children!.map((cid) => out.blocks[cid].attrs.text)
+    const childTexts = listBlock.children!.map((cid) => textOf(out.blocks[cid]))
     expect(childTexts).toEqual(["one", "two"])
     expect(out.blocks[listBlock.children![0]].type).toBe("list_item")
   })
@@ -463,7 +464,7 @@ describe("blockBridge — full round-trip (one of each type)", () => {
   const summarize = (d: BlockDocV1) =>
     d.blocks_order.map((bid) => ({
       type: d.blocks[bid].type,
-      text: d.blocks[bid].attrs.text ?? undefined,
+      text: textOf(d.blocks[bid]) ?? undefined,
       children: d.blocks[bid].children,
     }))
 
@@ -496,7 +497,7 @@ describe("blockBridge — full round-trip (one of each type)", () => {
       { type: "image", text: undefined, children: undefined },
       { type: "bullet_list", text: undefined, children: [li] },
     ])
-    expect(out.blocks[li].attrs.text).toBe("item")
+    expect(textOf(out.blocks[li])).toBe("item")
     // Type-specific attrs the summary above doesn't cover.
     expect((out.blocks[h].attrs as any).level).toBe(2)
     expect((out.blocks[cb].attrs as any).code).toBe("go()")
@@ -578,7 +579,7 @@ describe("blockBridge — additional edge cases", () => {
     const backItemPm = (back.blocks[backList.children![0]].attrs as any).pm
     const backNested = backItemPm.content.find((n: any) => n.type === "bulletList")
     expect(backNested).toBeTruthy()
-    expect(back.blocks[backList.children![0]].attrs.text).toBe("parentchild")
+    expect(textOf(back.blocks[backList.children![0]])).toBe("parentchild")
   })
 
   it("image without src round-trips (characterizes the nullish src)", () => {
@@ -654,7 +655,7 @@ describe("blockBridge — additional edge cases", () => {
       const item = out.blocks[list.children![0]]
       expect(item.type).toBe("list_item")
       expect(item.id).toBe(synthesizedItemId(a))
-      expect(item.attrs.text).toBeUndefined()
+      expect(textOf(item)).toBeUndefined()
     })
 
     it("the synthesized item's id is stable across loads and saves (no Yjs churn, rule 2)", () => {
@@ -819,7 +820,7 @@ describe("blockBridge — additional edge cases", () => {
       const out = pmToBlockDoc(pmIn)
       expect(out.blocks_order).toEqual([para])
       expect(out.blocks[list]).toBeUndefined()
-      expect(out.blocks[para].attrs.text).toBe("kept")
+      expect(textOf(out.blocks[para])).toBe("kept")
     })
   })
 

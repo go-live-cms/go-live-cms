@@ -3,7 +3,7 @@ import Modal from "@gl-admin/components/ui/Modal"
 import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import { getMediaURL } from "@gl-admin/lib/api"
-import { updateMedia, deleteMedia, getMediaPosts } from "@gl-admin/lib/api/media"
+import { updateMedia, deleteMedia, getMediaPosts, replaceMediaFile, getMediaPreviewURL } from "@gl-admin/lib/api/media"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import type { Media } from "@gl-admin/lib/types"
 import MediaTypeBadge from "./MediaTypeBadge"
@@ -48,8 +48,13 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
   const [usedInPosts, setUsedInPosts] = useState<any[]>([])
   const [loadingPosts, setLoadingPosts] = useState(false)
   const [copyButtonText, setCopyButtonText] = useState("Copy URL")
+  // null when no replace is running; otherwise the upload fraction (0..1).
+  const [replaceProgress, setReplaceProgress] = useState<number | null>(null)
+  const [replaceError, setReplaceError] = useState<string | null>(null)
 
   const fileUrlRef = useRef<HTMLInputElement>(null)
+  const replaceInputRef = useRef<HTMLInputElement>(null)
+  const isReplacing = replaceProgress !== null
 
   React.useEffect(() => {
     if (media && isOpen) {
@@ -58,6 +63,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
         alt: media.alt || "",
         description: media.description || "",
       })
+      setReplaceError(null)
 
       if (media.post_count && media.post_count > 0) {
         setLoadingPosts(true)
@@ -85,6 +91,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
   if (!media) return null
 
   const mediaURL = getMediaURL(media.media_path)
+  const previewURL = getMediaPreviewURL(media)
   const fileExtension = getFileExtension(media.media_path)
   const fileSize = formatFileSize(media.file_size || 0)
   const isImageFile = isImage(media.media_path)
@@ -115,6 +122,31 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
       console.error("Failed to update media:", error)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  // Replace keeps the id, title, alt text and URL; the server only accepts a
+  // file of the same type, so the picker is limited to it and a mismatch is
+  // caught here before uploading.
+  const handleReplaceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = "" // so picking the same file again still fires onChange
+    if (!file) return
+
+    setReplaceError(null)
+    if (media.mime_type && file.type && file.type !== media.mime_type) {
+      setReplaceError(`The replacement must be a ${fileExtension} file, like the original.`)
+      return
+    }
+
+    setReplaceProgress(0)
+    try {
+      const { media: saved } = await replaceMediaFile(media.id, file, setReplaceProgress)
+      onMediaUpdated?.({ ...saved, post_count: saved.post_count ?? media.post_count })
+    } catch (error) {
+      setReplaceError(error instanceof Error ? error.message : "Replace failed")
+    } finally {
+      setReplaceProgress(null)
     }
   }
 
@@ -187,7 +219,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
           <GLAdminButton
             variation="danger"
             onClick={() => setShowDeleteConfirm(true)}
-            disabled={isSaving || isDeleting}
+            disabled={isSaving || isDeleting || isReplacing}
           >
             <Icon name="trash" color="white" width="14" height="14" />
             Delete Permanently
@@ -207,7 +239,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
 
       <div className="media-edit-modal__footer-right">
         {isEditing && (
-          <GLAdminButton color="white" variation="primary" onClick={handleSave} disabled={isSaving || isDeleting}>
+          <GLAdminButton color="white" variation="primary" onClick={handleSave} disabled={isSaving || isDeleting || isReplacing}>
             {isSaving ? "Saving..." : "Save Changes"}
           </GLAdminButton>
         )}
@@ -217,13 +249,13 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
             color="white"
             variation="primary"
             onClick={() => setIsEditing(true)}
-            disabled={isSaving || isDeleting}
+            disabled={isSaving || isDeleting || isReplacing}
           >
             Edit
           </GLAdminButton>
         )}
         {isEditing && (
-          <GLAdminButton color="white" variation="flat" onClick={handleCancel} disabled={isSaving || isDeleting}>
+          <GLAdminButton color="white" variation="flat" onClick={handleCancel} disabled={isSaving || isDeleting || isReplacing}>
             {isEditing ? "Cancel Changes" : "Close"}
           </GLAdminButton>
         )}
@@ -245,7 +277,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
           <div className="media-edit-modal__preview">
             <div className="media-edit-modal__preview-container">
               {isImageFile ? (
-                <img src={mediaURL} alt={editedData.alt || media.alt} className="media-edit-modal__preview-image" />
+                <img src={previewURL} alt={editedData.alt || media.alt} className="media-edit-modal__preview-image" />
               ) : (
                 <div className="media-edit-modal__preview-file">
                   <span className="media-edit-modal__preview-filename">{media.name}</span>
@@ -272,6 +304,41 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
                 <span className="media-edit-modal__info-label">Size:</span>
                 <span className="media-edit-modal__info-value">{fileSize}</span>
               </div>
+            </div>
+
+            <div className="media-edit-modal__replace">
+              <input
+                ref={replaceInputRef}
+                type="file"
+                accept={media.mime_type || undefined}
+                className="media-edit-modal__replace-input"
+                onChange={handleReplaceFile}
+                aria-label="Replacement file"
+                hidden
+              />
+              <GLAdminButton
+                variation="flat"
+                onClick={() => replaceInputRef.current?.click()}
+                disabled={isSaving || isDeleting || isReplacing}
+              >
+                {isReplacing ? "Uploading..." : "Replace file"}
+              </GLAdminButton>
+              <span className="media-edit-modal__replace-hint">
+                Same type ({fileExtension}). Keeps the URL, title and alt text, so posts using it show the new file.
+              </span>
+              {isReplacing && (
+                <progress
+                  className="media-edit-modal__replace-progress"
+                  value={replaceProgress ?? 0}
+                  max={1}
+                  aria-label="Upload progress"
+                />
+              )}
+              {replaceError && (
+                <div className="media-edit-modal__replace-error" role="alert">
+                  {replaceError}
+                </div>
+              )}
             </div>
           </div>
 

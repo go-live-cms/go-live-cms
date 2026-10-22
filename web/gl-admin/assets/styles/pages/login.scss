@@ -1,0 +1,193 @@
+@use "@gl-admin/assets/styles/variables";
+@use "@gl-admin/assets/styles/components/ui/input";
+@use "@gl-admin/assets/styles/components/ui/button";
+
+// The login page lives outside the admin SPA, so nothing sets data-theme on <html>.
+// Follow the OS colour scheme with the admin's dark tokens unless a theme is set.
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    @include variables.dark-tokens;
+  }
+}
+
+body:has(.gl-admin-login) {
+  margin: 0;
+}
+
+.gl-admin-login {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 2rem 1rem;
+
+  &__card {
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    box-shadow: var(--box-shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 25rem;
+    padding: 2.5rem 2rem;
+    width: 100%;
+  }
+
+  &__header {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+
+  &__logo {
+    filter: var(--logo-glow);
+    height: 2.5rem;
+    margin-bottom: 0.5rem;
+    width: 2.5rem;
+
+    svg {
+      height: 100%;
+      width: 100%;
+    }
+  }
+
+  &__title {
+    color: var(--text-primary);
+    font-size: 1.875rem;
+    font-weight: 600;
+    line-height: 130%;
+    margin: 0;
+  }
+
+  &__subtitle {
+    color: var(--text-quaternary);
+    font-size: var(--text-size-body);
+    font-weight: 500;
+    line-height: 145%;
+    margin: 0;
+  }
+
+  &__fields {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  // The admin's gl-input toggles .is-focused from React; there is no React here,
+  // so mirror it with :focus-within and add a visible ring for keyboard users.
+  .gl-input:focus-within {
+    border-color: var(--selected-border-color);
+    box-shadow: 0 0 0 1px var(--selected-border-color);
+
+    .gl-input__label {
+      color: var(--input-active-color);
+      font-size: 0.8rem;
+      top: 0.25rem;
+      transform: none;
+    }
+  }
+
+  &__error {
+    background: var(--input-invalid-background);
+    border: 1px solid var(--input-invalid-border-color);
+    border-radius: var(--border-radius);
+    color: var(--input-invalid-color);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 145%;
+    margin: 0;
+    padding: 0.75rem 1rem;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  // Visually hidden but kept in the accessibility tree; absolutely positioned so
+  // it doesn't take a slot in the card's flex gap.
+  &__notice {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 145%;
+    margin: 0;
+    padding: 0.75rem 1rem;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+
+  &__announcer {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  &__submit {
+    color: #ffffff;
+    min-height: 2.75rem;
+    width: 100%;
+
+    &:focus-visible {
+      outline: 2px solid var(--selected-border-color);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      cursor: progress;
+      opacity: 0.7;
+    }
+
+    &:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+
+    // The global `* { color }` rule would otherwise paint the label dark.
+    span {
+      color: inherit;
+    }
+  }
+
+  &__spinner {
+    animation: gl-admin-login-spin 0.8s linear infinite;
+    border: 2px solid currentcolor;
+    border-radius: 50%;
+    border-right-color: transparent;
+    display: inline-block;
+    height: 1rem;
+    width: 1rem;
+
+    &[hidden] {
+      display: none;
+    }
+  }
+}
+
+@keyframes gl-admin-login-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gl-admin-login__spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+@media (width <= 480px) {
+  .gl-admin-login__card {
+    padding: 2rem 1.25rem;
+  }
+}
