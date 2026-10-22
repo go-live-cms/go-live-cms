@@ -33,8 +33,8 @@ import (
 // LoginUserRequest contains credentials for user authentication.
 // Username must be alphanumeric, password must be at least 6 characters.
 type LoginUserRequest struct {
-	Username string `json:"username" binding:"required,alphanum"`
-	Password string `json:"password" binding:"required,min=6"`
+	Username string `json:"username" binding:"required,max=50,alphanum"`
+	Password string `json:"password" binding:"required,min=6,max_bytes=1024"`
 }
 
 // LoginUserResponse returns authentication tokens and user data upon successful login.

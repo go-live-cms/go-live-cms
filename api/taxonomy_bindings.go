@@ -12,11 +12,12 @@
 // **Taxonomy Type Names & Labels**:
 //   - Names: 2-100 characters, used as unique identifiers and URL paths
 //   - Labels: 2-100 characters, human-readable display names
-//   - Descriptions: Optional, no length restrictions for flexibility
+//   - Descriptions: Optional, up to 1000 characters
 //
 // **Taxonomy Term Names & Slugs**:
 //   - Names: 2-100 characters, display names for terms
-//   - Slugs: Optional on creation (auto-generated from name), used in SEO-friendly URLs
+//   - Slugs: Optional on creation (auto-generated from name), used in SEO-friendly URLs;
+//     a provided slug must be lowercase letters/digits in hyphen-separated runs (max 100)
 //   - Auto-generation: lowercase, spaces and underscores converted to hyphens
 //
 // **Hierarchical Relationships**:
@@ -27,7 +28,7 @@
 // **Metadata Support**:
 //   - meta: Optional JSON object for extensible term information
 //   - Must be valid JSON object structure (validated at handler level)
-//   - Supports arbitrary key-value pairs for custom implementations
+//   - Supports arbitrary key-value pairs (up to 100 keys) for custom implementations
 //
 // # Request Structure Patterns
 //
@@ -48,7 +49,7 @@ package api
 type CreateTaxonomyTypeRequest struct {
 	Name         string `json:"name" binding:"required,min=2,max=100"`
 	Label        string `json:"label" binding:"required,min=2,max=100"`
-	Description  string `json:"description"`
+	Description  string `json:"description" binding:"max=1000"`
 	Hierarchical bool   `json:"hierarchical"`
 	Public       bool   `json:"public"`
 	ShowUI       bool   `json:"show_ui"`
@@ -59,21 +60,22 @@ type CreateTaxonomyTypeRequest struct {
 // Used for individual classification items within taxonomy types.
 type CreateTaxonomyTermRequest struct {
 	Name           string                 `json:"name" binding:"required,min=2,max=100"`
-	Slug           string                 `json:"slug"`
-	Description    string                 `json:"description"`
+	Slug           string                 `json:"slug" binding:"omitempty,max=100,slug"`
+	Description    string                 `json:"description" binding:"max=1000"`
 	ParentID       *int64                 `json:"parent_id,omitempty"`
 	TaxonomyTypeID int64                  `json:"taxonomy_type_id" binding:"required"`
 	SortOrder      *int32                 `json:"sort_order,omitempty"`
-	Meta           map[string]interface{} `json:"meta,omitempty"`
+	Meta           map[string]interface{} `json:"meta,omitempty" binding:"omitempty,max=100"`
 }
 
 // UpdateTaxonomyTermRequest defines the structure for updating existing taxonomy terms.
 // All fields are optional to support partial updates with omitempty tags.
+// parent_id 0 moves the term to the top level; an empty description clears it.
 type UpdateTaxonomyTermRequest struct {
 	Name        string                 `json:"name" binding:"omitempty,min=2,max=100"`
-	Slug        string                 `json:"slug"`
-	Description string                 `json:"description"`
+	Slug        string                 `json:"slug" binding:"omitempty,max=100,slug"`
+	Description *string                `json:"description" binding:"omitempty,max=1000"`
 	ParentID    *int64                 `json:"parent_id"`
 	SortOrder   *int32                 `json:"sort_order"`
-	Meta        map[string]interface{} `json:"meta"`
+	Meta        map[string]interface{} `json:"meta" binding:"omitempty,max=100"`
 }

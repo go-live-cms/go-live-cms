@@ -1,4 +1,4 @@
-import type { Post, PostSortOption, PaginationParams, ApiResponse, TaxonomyTerm } from "./types"
+import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse, TaxonomyTerm } from "./types"
 import { apiCall, authenticatedFetch } from "../api"
 import { apiErrorFromResponse } from "./errors"
 import { buildUrl } from "./utils"
@@ -19,6 +19,7 @@ export interface CreatePostRequest {
 
 export interface PostQueryParams extends PaginationParams {
   sort?: PostSortOption
+  order?: SortOrder
   type?: string // post type name
   status?: string
   user_id?: string | number
@@ -41,7 +42,8 @@ export async function getPostById(id: string | number): Promise<{ post: Post }> 
 
 export async function getPostsByUser(
   userId: string | number,
-  params: PaginationParams & { sort?: PostSortOption } = {}
+  // GET /posts/user/:id always returns newest first; it takes no sort or order.
+  params: PaginationParams = {}
 ): Promise<ApiResponse<Post>> {
   const url = buildUrl(`/posts/user/${userId}`, params)
   const response = await apiCall(url)
@@ -53,7 +55,7 @@ export async function getPostsByUser(
 
 export async function getPostsByType(
   type: string,
-  params: PaginationParams & { sort?: PostSortOption } = {}
+  params: PaginationParams & { sort?: PostSortOption; order?: SortOrder } = {}
 ): Promise<ApiResponse<Post>> {
   const url = buildUrl(`/posts/type/${type}`, params)
   const response = await apiCall(url)

@@ -5,6 +5,10 @@ app.env
 .env
 **/.env
 web/
+# Except the themes (~200 KB): on startup the API scans web/themes (theme.config.ts plus
+# the required post/page layouts) to register themes and their post types
+# (api/themes_scanner.go). Without them a fresh production database has no themes.
+!web/themes
 websocket/
 uploads/
 coverage.out

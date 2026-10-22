@@ -21,10 +21,10 @@ type SettingsResponse struct {
 
 // ExtensionSettingRequest represents the request body for upserting an extension setting
 type ExtensionSettingRequest struct {
-	Key           string      `json:"key" binding:"required,min=1,max=255"`
+	Key           string      `json:"key" binding:"required,min=1,max=255,setting_key"`
 	Value         interface{} `json:"value" binding:"required"`
 	ExtensionType string      `json:"extension_type" binding:"required,oneof=plugin theme"`
-	ExtensionID   string      `json:"extension_id" binding:"required,min=1,max=100"`
+	ExtensionID   string      `json:"extension_id" binding:"required,min=1,max=100,setting_key"`
 }
 
 // ExtensionSettingResponse represents an extension setting response

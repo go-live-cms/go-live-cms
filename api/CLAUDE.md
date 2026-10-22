@@ -133,6 +133,31 @@ server.
   which may be the apex domain). Don't add a
   `Cross-Origin-Resource-Policy`: the web app loads `/uploads` cross-origin.
 
+## Request validation and hardening (#139)
+
+- **Bind JSON with `bindJSON(c, &req)`** (`request_binding.go`), never `ShouldBindJSON`.
+  It rejects unknown fields and trailing data, and writes every error as
+  `{"error": "<field> <message>", "fields": {"<json name>": "<message>"}}` without Go
+  struct names or types. Use `bindOptionalJSON` when the body may be omitted, and
+  `respondBindError` for a multipart `ShouldBind` error. A field a known client sends
+  but the API ignores must be declared (e.g. posts' `content`), or that client breaks.
+- Custom validator tags: `slug`, `identifier` (post type names; never a path),
+  `setting_key` (meta/setting keys), `max_bytes=N` (passwords: bcrypt reads 72 bytes).
+  URLs use `http_url` (http/https only). Give every string a `max`.
+- **Body limits** (`request_limits.go`): 1 MiB default on `/api/v1` and `/public`, 4 MiB
+  for `PUT /posts/:id/blocks`, uploads exempt (they cap themselves). A new upload route
+  must be added to `bodyLimitOverrides` with 0. Block docs also get
+  `checkLimits` (block count, block id length, JSON depth).
+- **CORS:** `CORS_ALLOWED_ORIGINS` entries must be exact http(s) origins (no `*`, path
+  or trailing slash), checked in `setupRoutes`. They are the admin's origins and get
+  credentials; the public site renders server-side and needs no CORS.
+- **CSRF:** `cookieOriginGuard` (`origin_guard.go`) on login/refresh/logout refuses
+  cross-origin browser requests (Sec-Fetch-Site, else Origin vs Host /
+  trusted-proxy X-Forwarded-Host), on top of SameSite=Strict + `__Host-`.
+- **Key rotation:** `PASETO_V4_PREVIOUS_{PUBLIC,LOCAL}_KEY_HEX` +
+  `PASETO_PREVIOUS_KEYS_VALID_UNTIL` keep retired keys verifying until the cutoff
+  (`token/paseto_v4_rotation.go`, `docs/operations/key-rotation.md`).
+
 ## Rate limiting and client IP (#190, #156)
 
 - `ratelimit.go`: a general per-IP limit on the `/api/v1` and `/public` groups, plus
@@ -208,6 +233,11 @@ server.
   recovered panics (with stack) and 5xx responses, once each.
 
 ## Gotchas
+
+- **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,
+  needs `theme.config.ts` + `layouts/{post,page}/default.astro`). The production image
+  ships `web/themes` for that (`Dockerfile`, a `.dockerignore` exception); without it a
+  fresh database has no themes.
 
 - `block_doc` (jsonb on `posts`) is the **working copy** the editor loads;
   `published_block_doc` is the published snapshot the public frontend reads. They can
