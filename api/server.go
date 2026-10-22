@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -31,6 +32,10 @@ type Server struct {
 	config         util.Config
 	tokenMaker     token.Maker
 	ctx            context.Context
+
+	// cookieOriginGuard refuses cross-origin browser requests on the refresh
+	// cookie routes (origin_guard.go); built in setupRoutes.
+	cookieOriginGuard gin.HandlerFunc
 
 	// Collab (WebSocket) ticket minting; see collab_routes.go.
 	collabTickets collabTicketMaker
@@ -76,6 +81,20 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create token maker: %w", err)
+	}
+	// Key rotation grace window (token/paseto_v4_rotation.go).
+	previousUntil, err := config.PasetoPreviousKeysUntil()
+	if err != nil {
+		return nil, err
+	}
+	if err := tokenMaker.SetPreviousKeys(config.PasetoV4PreviousPublicKeyHex, config.PasetoV4PreviousLocalKeyHex, previousUntil); err != nil {
+		return nil, fmt.Errorf("invalid previous PASETO key: %w", err)
+	}
+	// A cutoff already in the past (e.g. a typo'd year) silently accepts no
+	// old-key token at all, so say so: every old-key session is signed out.
+	if !previousUntil.IsZero() && !time.Now().Before(previousUntil) {
+		slog.Warn("PASETO_PREVIOUS_KEYS_VALID_UNTIL is in the past: previous PASETO keys are ignored",
+			"valid_until", previousUntil.Format(time.RFC3339))
 	}
 	// The collab WS server can't authorize any connection without the internal
 	// role lookup, so refuse to start rather than silently lock every editor out.
@@ -204,6 +223,23 @@ func corsOrigins(config util.Config) []string {
 	return origins
 }
 
+// validateCORSOrigins rejects CORS_ALLOWED_ORIGINS entries that aren't a
+// single exact origin (scheme://host[:port], http or https). Every allowed
+// origin gets credentialed CORS (the refresh cookie), so a wildcard or a
+// pattern must never get through. They are the admin's origins: the public
+// site renders server-side and needs no CORS.
+func validateCORSOrigins(origins []string) error {
+	for _, origin := range origins {
+		u, err := url.Parse(origin)
+		if err != nil || strings.Contains(origin, "*") ||
+			(u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+			u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("invalid CORS_ALLOWED_ORIGINS entry %q: want an exact origin such as https://admin.example.com (no wildcard or path)", origin)
+		}
+	}
+	return nil
+}
+
 // setupRoutes configures the Gin engine:
 //
 //   - Request ID, structured access log + metrics, panic recovery
@@ -265,7 +301,12 @@ func (server *Server) setupRoutes() error {
 
 	// No origins configured (release without CORS_ALLOWED_ORIGINS) means
 	// same-origin only: skip the middleware rather than send CORS headers.
-	if origins := corsOrigins(server.config); len(origins) > 0 {
+	origins := corsOrigins(server.config)
+	if err := validateCORSOrigins(origins); err != nil {
+		return err
+	}
+	server.cookieOriginGuard = originGuard(origins, trustedProxies)
+	if len(origins) > 0 {
 		router.Use(cors.New(cors.Config{
 			AllowOrigins:     origins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -279,8 +320,9 @@ func (server *Server) setupRoutes() error {
 	// and 429s carry CORS headers) and before any route's own middleware.
 	// /health, /readyz and /uploads are left unlimited.
 	generalLimit := server.rateLimits.general.perIP(server.rateLimits.generalExempt...)
-	v1 := router.Group("/api/v1", generalLimit)
-	public := router.Group("/public", generalLimit) // Public API group for SSR/public content
+	// Request bodies are capped per route (request_limits.go).
+	v1 := router.Group("/api/v1", generalLimit, bodyLimitMiddleware())
+	public := router.Group("/public", generalLimit, bodyLimitMiddleware()) // Public API group for SSR/public content
 
 	router.GET("/health", server.healthCheck)
 	router.GET("/api/v1/health", server.healthCheck) // same liveness check, reachable through the web /api proxy

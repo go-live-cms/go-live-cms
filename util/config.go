@@ -110,6 +110,14 @@ type Config struct {
 	// Verifiers accept tokens by matching KID to select the correct verification key
 	PasetoRefreshKID string `mapstructure:"PASETO_REFRESH_KID"`
 
+	// Key rotation (#139, docs/operations/key-rotation.md). The retired public
+	// key (access tokens) and/or local key (refresh tokens) keep verifying
+	// tokens until PASETO_PREVIOUS_KEYS_VALID_UNTIL (RFC 3339), which is
+	// required when either is set. New tokens always use the current keys.
+	PasetoV4PreviousPublicKeyHex string `mapstructure:"PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX"`
+	PasetoV4PreviousLocalKeyHex  string `mapstructure:"PASETO_V4_PREVIOUS_LOCAL_KEY_HEX"`
+	PasetoPreviousKeysValidUntil string `mapstructure:"PASETO_PREVIOUS_KEYS_VALID_UNTIL"`
+
 	// CookieDomain specifies the Domain attribute for the non-Secure refresh
 	// cookie (debug mode with COOKIE_SECURE=false; "localhost" is dropped).
 	// A Secure refresh cookie is __Host-refresh_token, which must not have a
@@ -268,6 +276,9 @@ func LoadConfig(path string) (config Config, err error) {
 		"PASETO_V4_PUBLIC_KEY_HEX",
 		"PASETO_V4_PRIVATE_KEY_HEX",
 		"PASETO_V4_LOCAL_KEY_HEX",
+		"PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX",
+		"PASETO_V4_PREVIOUS_LOCAL_KEY_HEX",
+		"PASETO_PREVIOUS_KEYS_VALID_UNTIL",
 	} {
 		if err = viper.BindEnv(key); err != nil {
 			return config, err
@@ -298,6 +309,10 @@ func LoadConfig(path string) (config Config, err error) {
 	}
 
 	if _, err = config.MaxUploadBytes(); err != nil {
+		return config, err
+	}
+
+	if _, err = config.PasetoPreviousKeysUntil(); err != nil {
 		return config, err
 	}
 
@@ -389,4 +404,18 @@ func (c Config) IsDebugMode() bool {
 // empty entries dropped.
 func (c Config) AllowedOrigins() []string {
 	return splitList(c.CORSAllowedOrigins)
+}
+
+// PasetoPreviousKeysUntil parses PASETO_PREVIOUS_KEYS_VALID_UNTIL: the end of
+// the key rotation grace window. It is zero when no previous key is set, and
+// an error when a previous key is set without a valid RFC 3339 time.
+func (c Config) PasetoPreviousKeysUntil() (time.Time, error) {
+	if c.PasetoV4PreviousPublicKeyHex == "" && c.PasetoV4PreviousLocalKeyHex == "" {
+		return time.Time{}, nil
+	}
+	until, err := time.Parse(time.RFC3339, strings.TrimSpace(c.PasetoPreviousKeysValidUntil))
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid PASETO_PREVIOUS_KEYS_VALID_UNTIL %q: a previous PASETO key needs an RFC 3339 end of grace window, e.g. 2026-11-01T00:00:00Z", c.PasetoPreviousKeysValidUntil)
+	}
+	return until, nil
 }

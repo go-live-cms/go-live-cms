@@ -101,19 +101,6 @@ func TestListMediaReturnsServedPaths(t *testing.T) {
 	require.Equal(t, "/uploads/media/legacy.png", body.Media[1].MediaPath)
 }
 
-func TestThumbnailURL(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	server := newTestServer(t, mockdb.NewMockStore(ctrl))
-	stored := server.config.UploadPath + "/hero.png"
-
-	// No media_path from the client: the row's filesystem path, as a URL.
-	require.Equal(t, "/uploads/media/hero.png", server.thumbnailURL("", stored))
-	// A pre-#201 admin echoed the filesystem path back.
-	require.Equal(t, "/uploads/media/hero.png", server.thumbnailURL(stored, stored))
-	// A URL from the client is kept.
-	require.Equal(t, "/uploads/media/other.png", server.thumbnailURL("/uploads/media/other.png", stored))
-}
-
 // _thumbnail_url rows written before #201 may hold the filesystem path.
 func TestGetFeaturedImageQuickMapsStoredPath(t *testing.T) {
 	ctrl := gomock.NewController(t)

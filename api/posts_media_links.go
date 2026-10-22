@@ -27,8 +27,7 @@ func (server *Server) createPostMedia(c *gin.Context) {
 	}
 
 	var req PostMediaRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 

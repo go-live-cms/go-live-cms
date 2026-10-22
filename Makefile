@@ -45,7 +45,7 @@ test-token:
 
 # Total statement coverage of ./... (includes the generated db/mock and the
 # untested main packages, so it reads lower than the per-package numbers).
-COVERAGE_MIN ?= 56.0
+COVERAGE_MIN ?= 59.0
 
 test-coverage:
 	go test -coverprofile=coverage.out ./...

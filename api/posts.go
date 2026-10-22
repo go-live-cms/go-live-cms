@@ -12,7 +12,7 @@
 //
 // Features
 //   - Create/Update/Delete posts
-//   - List with filters: type, status, user_id; pagination; sort (date_*, title_*, menu_order_*, id_*)
+//   - List with filters: type, status, user_id; pagination; sort (created_at, changed_at, title, id, menu_order) + order (asc|desc)
 //   - Optional meta hydration: with_meta=true & meta_level=basic|all
 //   - Post meta upsert/list/delete
 //   - Featured image helpers: set/get(quick|full)/remove

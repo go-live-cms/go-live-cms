@@ -30,8 +30,7 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 	}
 
 	var req SetFeaturedImageRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -85,8 +84,10 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 			return fmt.Errorf("failed to store thumbnail ID meta: %w", err)
 		}
 
-		// Store thumbnail URL meta
-		mediaPath := server.thumbnailURL(req.MediaPath, media.MediaPath)
+		// Store thumbnail URL meta, always from the media row (req.MediaPath is
+		// ignored, see SetFeaturedImageRequest). The row holds a filesystem
+		// path; store the URL /uploads serves it at.
+		mediaPath := publicMediaPath(server.config.UploadPath, media.MediaPath)
 		_, err = q.UpsertPostMeta(c.Request.Context(), db.UpsertPostMetaParams{
 			PostID:    postID,
 			MetaKey:   "_thumbnail_url",
@@ -100,7 +101,8 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		server.requestLog(c).Warn("featured image transaction failed", "post_id", postID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update featured image"})
 		return
 	}
 
@@ -108,18 +110,6 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 		"message": "featured image set successfully",
 		"media":   server.mediaResponse(media),
 	})
-}
-
-// thumbnailURL is the _thumbnail_url stored for a featured image: the
-// client's media_path, or the media row's when the client sent none, as the
-// URL /uploads serves it at. The row holds a filesystem path, and admins
-// before #201 sent that same path back, so both go through publicMediaPath.
-func (server *Server) thumbnailURL(requested, stored string) string {
-	path := requested
-	if path == "" {
-		path = stored
-	}
-	return publicMediaPath(server.config.UploadPath, path)
 }
 
 // getFeaturedImageQuick handles GET /posts/:id/featured-image (URL only)
@@ -240,7 +230,8 @@ func (server *Server) removeFeaturedImage(c *gin.Context) {
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		server.requestLog(c).Warn("featured image transaction failed", "post_id", postID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update featured image"})
 		return
 	}
 
