@@ -1,1 +1,1 @@
-DROP INDEX IF EXISTS idx_posts_title_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_posts_title_id;

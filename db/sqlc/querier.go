@@ -133,19 +133,19 @@ type Querier interface {
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
+	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
+	// keep the 0001-01-01 sentinel and rank by creation time instead.
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
-	// Whitelisted sort (#89), same as ListPosts.
-	ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error)
-	// Whitelisted sort (#89), same as ListPostsWithMeta.
-	ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsByTypeWithAllMetaParams) ([]ListPostsByTypeWithAllMetaRow, error)
-	// Whitelisted sort (#89), same as ListPostsWithMeta.
-	ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
+	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
+	// keep the 0001-01-01 sentinel and rank by creation time instead.
 	ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error)
 	ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
+	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
+	// keep the 0001-01-01 sentinel and rank by creation time instead.
 	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)

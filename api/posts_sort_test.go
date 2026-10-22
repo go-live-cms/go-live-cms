@@ -66,148 +66,168 @@ func TestResolvePostSort(t *testing.T) {
 }
 
 // TestListPostsSortParams checks that /posts and /posts/type/:type pass the
-// resolved sort to the store, echo it in meta, and 400 on bad values.
+// resolved sort to the store, echo it in meta, and 400 on bad values (the
+// mock has no expectations then, so any store call fails the test).
 func TestListPostsSortParams(t *testing.T) {
 	postType := randomPostType("article")
 
-	type expectation struct {
-		column, direction string
+	queries := []struct {
+		name string
+		url  func(query string) string
+		// expect registers the store calls for a valid request.
+		expect func(store *mockdb.MockStore, s postSort)
+	}{
+		{
+			name: "List",
+			url:  func(q string) string { return "/api/v1/posts" + q },
+			expect: func(store *mockdb.MockStore, s postSort) {
+				store.EXPECT().CountFilteredPosts(gomock.Any(), gomock.Any()).Return(int64(0), nil)
+				store.EXPECT().
+					ListPosts(gomock.Any(), db.ListPostsParams{
+						UserID: int64(0), SortColumn: s.Column, SortDirection: s.Direction, LimitCount: 10,
+					}).
+					Return([]db.ListPostsRow{}, nil)
+			},
+		},
+		{
+			name: "ListWithAllMeta",
+			url:  func(q string) string { return "/api/v1/posts" + appendQuery(q, "with_meta=true&meta_level=all") },
+			expect: func(store *mockdb.MockStore, s postSort) {
+				store.EXPECT().CountFilteredPosts(gomock.Any(), gomock.Any()).Return(int64(0), nil)
+				store.EXPECT().
+					ListPostsWithAllMeta(gomock.Any(), db.ListPostsWithAllMetaParams{
+						UserID: int64(0), SortColumn: s.Column, SortDirection: s.Direction, LimitCount: 10,
+					}).
+					Return([]db.ListPostsWithAllMetaRow{}, nil)
+			},
+		},
+		{
+			name: "ByType",
+			url:  func(q string) string { return "/api/v1/posts/type/" + postType.Name + q },
+			expect: func(store *mockdb.MockStore, s postSort) {
+				store.EXPECT().GetPostType(gomock.Any(), postType.Name).Return(postType, nil)
+				store.EXPECT().
+					ListPosts(gomock.Any(), db.ListPostsParams{
+						PostType: postType.Name, UserID: int64(0), SortColumn: s.Column, SortDirection: s.Direction, LimitCount: 10,
+					}).
+					Return([]db.ListPostsRow{}, nil)
+				store.EXPECT().CountPostsByTypeFiltered(gomock.Any(), gomock.Any()).Return(int64(0), nil)
+			},
+		},
+		{
+			name: "ByTypeWithMeta",
+			url:  func(q string) string { return "/api/v1/posts/type/" + postType.Name + appendQuery(q, "with_meta=true") },
+			expect: func(store *mockdb.MockStore, s postSort) {
+				store.EXPECT().GetPostType(gomock.Any(), postType.Name).Return(postType, nil)
+				store.EXPECT().
+					ListPostsWithMeta(gomock.Any(), db.ListPostsWithMetaParams{
+						PostType: postType.Name, UserID: int64(0), SortColumn: s.Column, SortDirection: s.Direction, LimitCount: 10,
+					}).
+					Return([]db.ListPostsWithMetaRow{}, nil)
+				store.EXPECT().CountPostsByTypeFiltered(gomock.Any(), gomock.Any()).Return(int64(0), nil)
+			},
+		},
 	}
 
 	testCases := []struct {
 		name   string
 		query  string
-		want   *expectation // nil: expect 400
+		want   *postSort // nil: expect 400 with errMsg
 		errMsg string
 	}{
-		{name: "Default", query: "", want: &expectation{"created_at", "desc"}},
-		{name: "ChangedAtAsc", query: "?sort=changed_at&order=asc", want: &expectation{"changed_at", "asc"}},
-		{name: "TitleDefaultAsc", query: "?sort=title", want: &expectation{"title", "asc"}},
-		{name: "TitleDesc", query: "?sort=title&order=desc", want: &expectation{"title", "desc"}},
-		{name: "IDAsc", query: "?sort=id&order=asc", want: &expectation{"id", "asc"}},
-		{name: "OrderOnly", query: "?order=asc", want: &expectation{"created_at", "asc"}},
-		{name: "LegacyDateAsc", query: "?sort=date_asc", want: &expectation{"created_at", "asc"}},
-		{name: "LegacyOverriddenByOrder", query: "?sort=title_asc&order=desc", want: &expectation{"title", "desc"}},
+		{name: "Default", query: "", want: &postSort{"created_at", "desc"}},
+		{name: "ChangedAtAsc", query: "?sort=changed_at&order=asc", want: &postSort{"changed_at", "asc"}},
+		{name: "TitleDefaultAsc", query: "?sort=title", want: &postSort{"title", "asc"}},
+		{name: "TitleDesc", query: "?sort=title&order=desc", want: &postSort{"title", "desc"}},
+		{name: "IDAsc", query: "?sort=id&order=asc", want: &postSort{"id", "asc"}},
+		{name: "OrderOnly", query: "?order=asc", want: &postSort{"created_at", "asc"}},
+		{name: "LegacyDateAsc", query: "?sort=date_asc", want: &postSort{"created_at", "asc"}},
+		{name: "LegacyOverriddenByOrder", query: "?sort=title_asc&order=desc", want: &postSort{"title", "desc"}},
 		{name: "InvalidSort", query: "?sort=type_asc", errMsg: "invalid sort parameter"},
 		{name: "InvalidSortInjection", query: "?sort=title%3BDROP%20TABLE%20posts", errMsg: "invalid sort parameter"},
 		{name: "InvalidOrder", query: "?sort=title&order=sideways", errMsg: "invalid order parameter"},
 	}
 
-	checkResponse := func(t *testing.T, recorder *httptest.ResponseRecorder, want *expectation, errMsg string) {
-		var body struct {
-			Error string `json:"error"`
-			Meta  struct {
-				Sort  string `json:"sort"`
-				Order string `json:"order"`
-			} `json:"meta"`
+	for _, q := range queries {
+		for _, tc := range testCases {
+			t.Run(q.name+"/"+tc.name, func(t *testing.T) {
+				store := mockdb.NewMockStore(gomock.NewController(t))
+				if tc.want != nil {
+					q.expect(store, *tc.want)
+				}
+
+				body, code := getJSON(t, store, q.url(tc.query))
+				if tc.want == nil {
+					require.Equal(t, http.StatusBadRequest, code)
+					require.Equal(t, tc.errMsg, body.Error)
+					return
+				}
+				require.Equal(t, http.StatusOK, code)
+				require.Equal(t, tc.want.Column, body.Meta.Sort)
+				require.Equal(t, tc.want.Direction, body.Meta.Order)
+			})
 		}
-		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
-		if want == nil {
-			require.Equal(t, http.StatusBadRequest, recorder.Code)
-			require.Equal(t, errMsg, body.Error)
-			return
-		}
-		require.Equal(t, http.StatusOK, recorder.Code)
-		require.Equal(t, want.column, body.Meta.Sort)
-		require.Equal(t, want.direction, body.Meta.Order)
 	}
+}
 
-	run := func(t *testing.T, url string, buildStubs func(store *mockdb.MockStore), want *expectation, errMsg string) {
-		ctrl := gomock.NewController(t)
-		store := mockdb.NewMockStore(ctrl)
-		buildStubs(store)
+// TestListPostsTotalMatchesFilters checks that meta.total is counted with the
+// same filters as the list: user_id on /posts with a type, status on
+// /posts/type/:type.
+func TestListPostsTotalMatchesFilters(t *testing.T) {
+	postType := randomPostType("article")
 
-		server := newTestServer(t, store)
-		recorder := httptest.NewRecorder()
-		request, err := http.NewRequest(http.MethodGet, url, nil)
-		require.NoError(t, err)
-		server.router.ServeHTTP(recorder, request)
-		checkResponse(t, recorder, want, errMsg)
-	}
+	t.Run("ListTypeAndAuthor", func(t *testing.T) {
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		store.EXPECT().
+			CountFilteredPosts(gomock.Any(), db.CountFilteredPostsParams{PostType: "post", UserID: int64(7)}).
+			Return(int64(3), nil)
+		store.EXPECT().ListPosts(gomock.Any(), gomock.Any()).Return([]db.ListPostsRow{}, nil)
 
-	for _, tc := range testCases {
-		t.Run("List/"+tc.name, func(t *testing.T) {
-			run(t, "/api/v1/posts"+tc.query, func(store *mockdb.MockStore) {
-				if tc.want == nil {
-					store.EXPECT().CountFilteredPosts(gomock.Any(), gomock.Any()).Times(0)
-					store.EXPECT().ListPosts(gomock.Any(), gomock.Any()).Times(0)
-					return
-				}
-				store.EXPECT().CountFilteredPosts(gomock.Any(), gomock.Any()).Times(1).Return(int64(0), nil)
-				store.EXPECT().
-					ListPosts(gomock.Any(), db.ListPostsParams{
-						UserID:        int64(0),
-						SortColumn:    tc.want.column,
-						SortDirection: tc.want.direction,
-						LimitCount:    10,
-					}).
-					Times(1).
-					Return([]db.ListPostsRow{}, nil)
-			}, tc.want, tc.errMsg)
-		})
+		body, code := getJSON(t, store, "/api/v1/posts?type=post&user_id=7")
+		require.Equal(t, http.StatusOK, code)
+		require.Equal(t, int64(3), body.Meta.Total)
+	})
 
-		t.Run("ListWithMeta/"+tc.name, func(t *testing.T) {
-			run(t, "/api/v1/posts"+appendQuery(tc.query, "with_meta=true&meta_level=all"), func(store *mockdb.MockStore) {
-				if tc.want == nil {
-					store.EXPECT().ListPostsWithAllMeta(gomock.Any(), gomock.Any()).Times(0)
-					return
-				}
-				store.EXPECT().CountFilteredPosts(gomock.Any(), gomock.Any()).Times(1).Return(int64(0), nil)
-				store.EXPECT().
-					ListPostsWithAllMeta(gomock.Any(), db.ListPostsWithAllMetaParams{
-						UserID:        int64(0),
-						SortColumn:    tc.want.column,
-						SortDirection: tc.want.direction,
-						LimitCount:    10,
-					}).
-					Times(1).
-					Return([]db.ListPostsWithAllMetaRow{}, nil)
-			}, tc.want, tc.errMsg)
-		})
+	for _, withMeta := range []string{"false", "true"} {
+		t.Run("ByTypeStatus/with_meta="+withMeta, func(t *testing.T) {
+			store := mockdb.NewMockStore(gomock.NewController(t))
+			store.EXPECT().GetPostType(gomock.Any(), postType.Name).Return(postType, nil)
+			if withMeta == "true" {
+				store.EXPECT().ListPostsWithMeta(gomock.Any(), gomock.Any()).Return([]db.ListPostsWithMetaRow{}, nil)
+			} else {
+				store.EXPECT().ListPosts(gomock.Any(), gomock.Any()).Return([]db.ListPostsRow{}, nil)
+			}
+			store.EXPECT().
+				CountPostsByTypeFiltered(gomock.Any(), db.CountPostsByTypeFilteredParams{PostType: postType.Name, PostStatus: "published"}).
+				Return(int64(5), nil)
 
-		t.Run("ByType/"+tc.name, func(t *testing.T) {
-			run(t, "/api/v1/posts/type/"+postType.Name+tc.query, func(store *mockdb.MockStore) {
-				if tc.want == nil {
-					store.EXPECT().GetPostType(gomock.Any(), gomock.Any()).Times(0)
-					store.EXPECT().ListPostsByType(gomock.Any(), gomock.Any()).Times(0)
-					return
-				}
-				store.EXPECT().GetPostType(gomock.Any(), postType.Name).Times(1).Return(postType, nil)
-				store.EXPECT().
-					ListPostsByType(gomock.Any(), db.ListPostsByTypeParams{
-						PostType:      postType.Name,
-						UserID:        int64(0),
-						SortColumn:    tc.want.column,
-						SortDirection: tc.want.direction,
-						LimitCount:    10,
-					}).
-					Times(1).
-					Return([]db.Post{}, nil)
-				store.EXPECT().CountPostsByType(gomock.Any(), postType.Name).Times(1).Return(int64(0), nil)
-			}, tc.want, tc.errMsg)
-		})
-
-		t.Run("ByTypeWithMeta/"+tc.name, func(t *testing.T) {
-			run(t, "/api/v1/posts/type/"+postType.Name+appendQuery(tc.query, "with_meta=true"), func(store *mockdb.MockStore) {
-				if tc.want == nil {
-					store.EXPECT().ListPostsByTypeWithMeta(gomock.Any(), gomock.Any()).Times(0)
-					return
-				}
-				store.EXPECT().GetPostType(gomock.Any(), postType.Name).Times(1).Return(postType, nil)
-				store.EXPECT().
-					ListPostsByTypeWithMeta(gomock.Any(), db.ListPostsByTypeWithMetaParams{
-						PostType:      postType.Name,
-						UserID:        int64(0),
-						SortColumn:    tc.want.column,
-						SortDirection: tc.want.direction,
-						LimitCount:    10,
-					}).
-					Times(1).
-					Return([]db.ListPostsByTypeWithMetaRow{}, nil)
-				store.EXPECT().CountPostsByType(gomock.Any(), postType.Name).Times(1).Return(int64(0), nil)
-			}, tc.want, tc.errMsg)
+			body, code := getJSON(t, store, "/api/v1/posts/type/"+postType.Name+"?status=published&with_meta="+withMeta)
+			require.Equal(t, http.StatusOK, code)
+			require.Equal(t, int64(5), body.Meta.Total)
 		})
 	}
+}
+
+type listPostsBody struct {
+	Error string `json:"error"`
+	Meta  struct {
+		Sort  string `json:"sort"`
+		Order string `json:"order"`
+		Total int64  `json:"total"`
+	} `json:"meta"`
+}
+
+// getJSON serves a GET through a test server backed by store.
+func getJSON(t *testing.T, store *mockdb.MockStore, url string) (listPostsBody, int) {
+	server := newTestServer(t, store)
+	recorder := httptest.NewRecorder()
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	require.NoError(t, err)
+	server.router.ServeHTTP(recorder, request)
+
+	var body listPostsBody
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+	return body, recorder.Code
 }
 
 // appendQuery adds extra to a query string that may be empty or start with "?".

@@ -19,8 +19,12 @@ type sortFixture struct {
 	title     string
 	menuOrder int32
 	createdAt time.Time
-	changedAt time.Time
+	// updatedAt is what sort=changed_at orders by: GREATEST(changed_at, created_at).
+	updatedAt time.Time
 }
+
+// neverChanged marks a fixture that keeps the 0001-01-01 changed_at sentinel.
+const neverChanged time.Duration = -1
 
 // createSortFixtures inserts posts of a unique post type, owned by a fresh
 // user, with deliberate ties on every sort column so the id tiebreaker is
@@ -39,7 +43,7 @@ func createSortFixtures(t *testing.T) (string, User, []sortFixture) {
 		{"Bravo", 2, 0, 3 * time.Hour},
 		{"Alpha", 1, time.Hour, time.Hour},
 		{"Bravo", 2, time.Hour, 2 * time.Hour},
-		{"Charlie", 0, 2 * time.Hour, time.Hour},
+		{"Charlie", 0, 2 * time.Hour, neverChanged}, // ties Bravo #2 on updatedAt
 		{"Delta", 1, 0, 0},
 	}
 
@@ -61,11 +65,16 @@ func createSortFixtures(t *testing.T) (string, User, []sortFixture) {
 		require.NoError(t, err)
 
 		created, changed := base.Add(s.created), base.Add(s.changed)
+		updated := changed
+		if s.changed == neverChanged {
+			changed = time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC)
+			updated = created
+		}
 		_, err = testQueries.db.ExecContext(context.Background(),
 			`UPDATE posts SET created_at = $1, changed_at = $2 WHERE id = $3`, created, changed, post.ID)
 		require.NoError(t, err)
 
-		fixtures = append(fixtures, sortFixture{post.ID, s.title, s.menuOrder, created, changed})
+		fixtures = append(fixtures, sortFixture{post.ID, s.title, s.menuOrder, created, updated})
 	}
 	return postType, user, fixtures
 }
@@ -79,7 +88,7 @@ func expectedOrder(fixtures []sortFixture, column, direction string) []int64 {
 		case "created_at":
 			return a.createdAt.Compare(b.createdAt)
 		case "changed_at":
-			return a.changedAt.Compare(b.changedAt)
+			return a.updatedAt.Compare(b.updatedAt)
 		case "title":
 			// Capitalized ASCII titles sort the same under C and en_US collations.
 			return strings.Compare(a.title, b.title)
@@ -115,74 +124,47 @@ func TestListPostsOrdering(t *testing.T) {
 			want := expectedOrder(fixtures, column, direction)
 
 			t.Run(column+"_"+direction, func(t *testing.T) {
-				rows, err := testQueries.ListPosts(ctx, ListPostsParams{
-					PostType: postType, UserID: user.ID,
-					SortColumn: column, SortDirection: direction, LimitCount: 10,
-				})
-				require.NoError(t, err)
-				got := make([]int64, len(rows))
-				for i, r := range rows {
-					got[i] = r.ID
+				for name, list := range postListQueries(postType, user.ID, column, direction) {
+					got, err := list(ctx)
+					require.NoError(t, err, name)
+					require.Equal(t, want, got, name)
 				}
-				require.Equal(t, want, got, "ListPosts")
-
-				byType, err := testQueries.ListPostsByType(ctx, ListPostsByTypeParams{
-					PostType: postType, UserID: int64(0),
-					SortColumn: column, SortDirection: direction, LimitCount: 10,
-				})
-				require.NoError(t, err)
-				got = make([]int64, len(byType))
-				for i, r := range byType {
-					got[i] = r.ID
-				}
-				require.Equal(t, want, got, "ListPostsByType")
-
-				withMeta, err := testQueries.ListPostsWithMeta(ctx, ListPostsWithMetaParams{
-					PostType: postType, UserID: int64(0),
-					SortColumn: column, SortDirection: direction, LimitCount: 10,
-				})
-				require.NoError(t, err)
-				got = make([]int64, len(withMeta))
-				for i, r := range withMeta {
-					got[i] = r.ID
-				}
-				require.Equal(t, want, got, "ListPostsWithMeta")
-
-				byTypeMeta, err := testQueries.ListPostsByTypeWithMeta(ctx, ListPostsByTypeWithMetaParams{
-					PostType: postType, UserID: int64(0),
-					SortColumn: column, SortDirection: direction, LimitCount: 10,
-				})
-				require.NoError(t, err)
-				got = make([]int64, len(byTypeMeta))
-				for i, r := range byTypeMeta {
-					got[i] = r.ID
-				}
-				require.Equal(t, want, got, "ListPostsByTypeWithMeta")
-
-				allMeta, err := testQueries.ListPostsWithAllMeta(ctx, ListPostsWithAllMetaParams{
-					PostType: postType, UserID: int64(0),
-					SortColumn: column, SortDirection: direction, LimitCount: 10,
-				})
-				require.NoError(t, err)
-				got = make([]int64, len(allMeta))
-				for i, r := range allMeta {
-					got[i] = r.ID
-				}
-				require.Equal(t, want, got, "ListPostsWithAllMeta")
-
-				byTypeAllMeta, err := testQueries.ListPostsByTypeWithAllMeta(ctx, ListPostsByTypeWithAllMetaParams{
-					PostType: postType, UserID: int64(0),
-					SortColumn: column, SortDirection: direction, LimitCount: 10,
-				})
-				require.NoError(t, err)
-				got = make([]int64, len(byTypeAllMeta))
-				for i, r := range byTypeAllMeta {
-					got[i] = r.ID
-				}
-				require.Equal(t, want, got, "ListPostsByTypeWithAllMeta")
 			})
 		}
 	}
+}
+
+// postListQueries runs each post list query with the same filter and sort and
+// returns the ids in result order.
+func postListQueries(postType string, userID int64, column, direction string) map[string]func(context.Context) ([]int64, error) {
+	return map[string]func(context.Context) ([]int64, error){
+		"ListPosts": func(ctx context.Context) ([]int64, error) {
+			rows, err := testQueries.ListPosts(ctx, ListPostsParams{
+				PostType: postType, UserID: userID, SortColumn: column, SortDirection: direction, LimitCount: 10,
+			})
+			return collectIDs(rows, func(r ListPostsRow) int64 { return r.ID }), err
+		},
+		"ListPostsWithMeta": func(ctx context.Context) ([]int64, error) {
+			rows, err := testQueries.ListPostsWithMeta(ctx, ListPostsWithMetaParams{
+				PostType: postType, UserID: userID, SortColumn: column, SortDirection: direction, LimitCount: 10,
+			})
+			return collectIDs(rows, func(r ListPostsWithMetaRow) int64 { return r.ID }), err
+		},
+		"ListPostsWithAllMeta": func(ctx context.Context) ([]int64, error) {
+			rows, err := testQueries.ListPostsWithAllMeta(ctx, ListPostsWithAllMetaParams{
+				PostType: postType, UserID: userID, SortColumn: column, SortDirection: direction, LimitCount: 10,
+			})
+			return collectIDs(rows, func(r ListPostsWithAllMetaRow) int64 { return r.ID }), err
+		},
+	}
+}
+
+func collectIDs[T any](rows []T, id func(T) int64) []int64 {
+	ids := make([]int64, len(rows))
+	for i, r := range rows {
+		ids[i] = id(r)
+	}
+	return ids
 }
 
 // TestListPostsOrderingPagination checks that the id tiebreaker makes pages
@@ -248,7 +230,7 @@ func TestListPostsWithMetaValues(t *testing.T) {
 		return map[string]string{}
 	}
 
-	rows, err := testQueries.ListPostsByTypeWithMeta(ctx, ListPostsByTypeWithMetaParams{
+	rows, err := testQueries.ListPostsWithMeta(ctx, ListPostsWithMetaParams{
 		PostType: postType, UserID: int64(0), SortColumn: "id", SortDirection: "asc", LimitCount: 10,
 	})
 	require.NoError(t, err)
@@ -257,7 +239,7 @@ func TestListPostsWithMetaValues(t *testing.T) {
 		require.Equal(t, wantMeta(r.ID), decode(r.Meta), "post %d", r.ID)
 	}
 
-	allRows, err := testQueries.ListPostsByTypeWithAllMeta(ctx, ListPostsByTypeWithAllMetaParams{
+	allRows, err := testQueries.ListPostsWithAllMeta(ctx, ListPostsWithAllMetaParams{
 		PostType: postType, UserID: int64(0), SortColumn: "id", SortDirection: "asc", LimitCount: 10,
 	})
 	require.NoError(t, err)

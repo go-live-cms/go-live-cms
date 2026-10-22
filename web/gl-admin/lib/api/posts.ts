@@ -42,7 +42,8 @@ export async function getPostById(id: string | number): Promise<{ post: Post }> 
 
 export async function getPostsByUser(
   userId: string | number,
-  params: PaginationParams & { sort?: PostSortOption; order?: SortOrder } = {}
+  // GET /posts/user/:id always returns newest first; it takes no sort or order.
+  params: PaginationParams = {}
 ): Promise<ApiResponse<Post>> {
   const url = buildUrl(`/posts/user/${userId}`, params)
   const response = await apiCall(url)

@@ -378,8 +378,8 @@ WHERE
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
     CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN changed_at END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN changed_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
     CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN title END ASC,
     CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN title END DESC,
     CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN menu_order END ASC,
@@ -419,6 +419,8 @@ type ListPostsRow struct {
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 // of these pairs; anything else falls through to the id tiebreaker.
+// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
+// keep the 0001-01-01 sentinel and rank by creation time instead.
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPosts,
 		arg.PostType,
@@ -450,319 +452,6 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPostsByType = `-- name: ListPostsByType :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug FROM posts
-WHERE post_type = $1
-    AND ($2::text = '' OR post_status = $2)
-    AND ($3 = 0 OR user_id = $3)  -- Add user filter
-ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN changed_at END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN changed_at END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN menu_order END DESC,
-    CASE WHEN $5::text = 'asc' THEN id END ASC,
-    id DESC
-LIMIT $7
-OFFSET $6
-`
-
-type ListPostsByTypeParams struct {
-	PostType      string      `json:"post_type"`
-	PostStatus    string      `json:"post_status"`
-	UserID        interface{} `json:"user_id"`
-	SortColumn    string      `json:"sort_column"`
-	SortDirection string      `json:"sort_direction"`
-	OffsetCount   int32       `json:"offset_count"`
-	LimitCount    int32       `json:"limit_count"`
-}
-
-// Whitelisted sort (#89), same as ListPosts.
-func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error) {
-	rows, err := q.db.QueryContext(ctx, listPostsByType,
-		arg.PostType,
-		arg.PostStatus,
-		arg.UserID,
-		arg.SortColumn,
-		arg.SortDirection,
-		arg.OffsetCount,
-		arg.LimitCount,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Post{}
-	for rows.Next() {
-		var i Post
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.UserID,
-			&i.Username,
-			&i.Url,
-			&i.PostType,
-			&i.PostStatus,
-			&i.PostParent,
-			&i.MenuOrder,
-			&i.CreatedAt,
-			&i.ChangedAt,
-			&i.BlockDoc,
-			&i.BlockRevision,
-			&i.PublishedVersionID,
-			&i.PublishedBlockDoc,
-			&i.Slug,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPostsByTypeWithAllMeta = `-- name: ListPostsByTypeWithAllMeta :many
-SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
-    -- Post custom meta
-    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
-    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
-    (
-        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
-        FROM post_meta pm
-        WHERE pm.post_id = p.id
-    ) as post_meta,
-    -- Author information
-    jsonb_build_object(
-        'id', u.id,
-        'username', u.username,
-        'email', u.email,
-        'full_name', u.full_name,
-        'role', u.role,
-        'created_at', u.created_at
-    ) as author_meta,
-    -- Post type information
-    jsonb_build_object(
-        'name', pt.name,
-        'label', pt.label,
-        'description', pt.description,
-        'hierarchical', pt.hierarchical,
-        'public', pt.public,
-        'supports', pt.supports
-    ) as post_type_meta
-FROM posts p
-LEFT JOIN users u ON p.user_id = u.id
-LEFT JOIN post_types pt ON p.post_type = pt.name
-WHERE p.post_type = $1
-    AND ($2::text = '' OR p.post_status = $2)
-    AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN p.changed_at END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN p.changed_at END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
-    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
-    p.id DESC
-LIMIT $7
-OFFSET $6
-`
-
-type ListPostsByTypeWithAllMetaParams struct {
-	PostType      string      `json:"post_type"`
-	PostStatus    string      `json:"post_status"`
-	UserID        interface{} `json:"user_id"`
-	SortColumn    string      `json:"sort_column"`
-	SortDirection string      `json:"sort_direction"`
-	OffsetCount   int32       `json:"offset_count"`
-	LimitCount    int32       `json:"limit_count"`
-}
-
-type ListPostsByTypeWithAllMetaRow struct {
-	ID                int64                 `json:"id"`
-	Title             string                `json:"title"`
-	Description       string                `json:"description"`
-	UserID            int64                 `json:"user_id"`
-	Username          string                `json:"username"`
-	Url               string                `json:"url"`
-	PostType          string                `json:"post_type"`
-	PostStatus        string                `json:"post_status"`
-	PostParent        sql.NullInt64         `json:"post_parent"`
-	MenuOrder         int32                 `json:"menu_order"`
-	CreatedAt         time.Time             `json:"created_at"`
-	ChangedAt         time.Time             `json:"changed_at"`
-	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
-	PostMeta          interface{}           `json:"post_meta"`
-	AuthorMeta        json.RawMessage       `json:"author_meta"`
-	PostTypeMeta      json.RawMessage       `json:"post_type_meta"`
-}
-
-// Whitelisted sort (#89), same as ListPostsWithMeta.
-func (q *Queries) ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsByTypeWithAllMetaParams) ([]ListPostsByTypeWithAllMetaRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPostsByTypeWithAllMeta,
-		arg.PostType,
-		arg.PostStatus,
-		arg.UserID,
-		arg.SortColumn,
-		arg.SortDirection,
-		arg.OffsetCount,
-		arg.LimitCount,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPostsByTypeWithAllMetaRow{}
-	for rows.Next() {
-		var i ListPostsByTypeWithAllMetaRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.UserID,
-			&i.Username,
-			&i.Url,
-			&i.PostType,
-			&i.PostStatus,
-			&i.PostParent,
-			&i.MenuOrder,
-			&i.CreatedAt,
-			&i.ChangedAt,
-			&i.PublishedBlockDoc,
-			&i.PostMeta,
-			&i.AuthorMeta,
-			&i.PostTypeMeta,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPostsByTypeWithMeta = `-- name: ListPostsByTypeWithMeta :many
-SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
-    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
-    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
-    (
-        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
-        FROM post_meta pm
-        WHERE pm.post_id = p.id
-    ) as meta
-FROM posts p
-WHERE p.post_type = $1
-    AND ($2::text = '' OR p.post_status = $2)
-    AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN p.changed_at END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN p.changed_at END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
-    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
-    p.id DESC
-LIMIT $7
-OFFSET $6
-`
-
-type ListPostsByTypeWithMetaParams struct {
-	PostType      string      `json:"post_type"`
-	PostStatus    string      `json:"post_status"`
-	UserID        interface{} `json:"user_id"`
-	SortColumn    string      `json:"sort_column"`
-	SortDirection string      `json:"sort_direction"`
-	OffsetCount   int32       `json:"offset_count"`
-	LimitCount    int32       `json:"limit_count"`
-}
-
-type ListPostsByTypeWithMetaRow struct {
-	ID                int64                 `json:"id"`
-	Title             string                `json:"title"`
-	Description       string                `json:"description"`
-	UserID            int64                 `json:"user_id"`
-	Username          string                `json:"username"`
-	Url               string                `json:"url"`
-	PostType          string                `json:"post_type"`
-	PostStatus        string                `json:"post_status"`
-	PostParent        sql.NullInt64         `json:"post_parent"`
-	MenuOrder         int32                 `json:"menu_order"`
-	CreatedAt         time.Time             `json:"created_at"`
-	ChangedAt         time.Time             `json:"changed_at"`
-	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
-	Meta              interface{}           `json:"meta"`
-}
-
-// Whitelisted sort (#89), same as ListPostsWithMeta.
-func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPostsByTypeWithMeta,
-		arg.PostType,
-		arg.PostStatus,
-		arg.UserID,
-		arg.SortColumn,
-		arg.SortDirection,
-		arg.OffsetCount,
-		arg.LimitCount,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPostsByTypeWithMetaRow{}
-	for rows.Next() {
-		var i ListPostsByTypeWithMetaRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Title,
-			&i.Description,
-			&i.UserID,
-			&i.Username,
-			&i.Url,
-			&i.PostType,
-			&i.PostStatus,
-			&i.PostParent,
-			&i.MenuOrder,
-			&i.CreatedAt,
-			&i.ChangedAt,
-			&i.PublishedBlockDoc,
-			&i.Meta,
 		); err != nil {
 			return nil, err
 		}
@@ -817,8 +506,8 @@ WHERE
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
     CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN p.changed_at END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
     CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
     CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
     CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
@@ -861,6 +550,8 @@ type ListPostsWithAllMetaRow struct {
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 // of these pairs; anything else falls through to the id tiebreaker.
+// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
+// keep the 0001-01-01 sentinel and rank by creation time instead.
 func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsWithAllMeta,
 		arg.PostType,
@@ -928,8 +619,8 @@ WHERE
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
     CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN p.changed_at END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
     CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
     CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
     CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
@@ -970,6 +661,8 @@ type ListPostsWithMetaRow struct {
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 // of these pairs; anything else falls through to the id tiebreaker.
+// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
+// keep the 0001-01-01 sentinel and rank by creation time instead.
 func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsWithMeta,
 		arg.PostType,

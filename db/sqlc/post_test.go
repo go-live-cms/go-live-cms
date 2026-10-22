@@ -387,7 +387,7 @@ func TestListPostsByType(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	posts, err := testQueries.ListPostsByType(context.Background(), ListPostsByTypeParams{
+	posts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
 		PostType:      "post",
 		PostStatus:    "",
 		UserID:        int64(0),
@@ -403,7 +403,7 @@ func TestListPostsByType(t *testing.T) {
 		require.Equal(t, "post", post.PostType)
 	}
 
-	pages, err := testQueries.ListPostsByType(context.Background(), ListPostsByTypeParams{
+	pages, err := testQueries.ListPosts(context.Background(), ListPostsParams{
 		PostType:      "page",
 		PostStatus:    "",
 		UserID:        int64(0),
@@ -607,7 +607,7 @@ func TestListPostsWithMeta(t *testing.T) {
 		require.NotEmpty(t, post.Title)
 	}
 
-	pagesWithMeta, err := testQueries.ListPostsByTypeWithMeta(context.Background(), ListPostsByTypeWithMetaParams{
+	pagesWithMeta, err := testQueries.ListPostsWithMeta(context.Background(), ListPostsWithMetaParams{
 		PostType:      "page",
 		PostStatus:    "",
 		UserID:        int64(0),
