@@ -2085,6 +2085,21 @@ func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostFromTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).RemovePostFromTaxonomyTerm), arg0, arg1)
 }
 
+// ReplaceMediaFile mocks base method.
+func (m *MockStore) ReplaceMediaFile(arg0 context.Context, arg1 db.ReplaceMediaFileParams) (db.Medium, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReplaceMediaFile", arg0, arg1)
+	ret0, _ := ret[0].(db.Medium)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReplaceMediaFile indicates an expected call of ReplaceMediaFile.
+func (mr *MockStoreMockRecorder) ReplaceMediaFile(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceMediaFile", reflect.TypeOf((*MockStore)(nil).ReplaceMediaFile), arg0, arg1)
+}
+
 // RotateToNewSession mocks base method.
 func (m *MockStore) RotateToNewSession(arg0 context.Context, arg1 db.RotateToNewSessionParams) (int64, error) {
 	m.ctrl.T.Helper()

@@ -16,6 +16,7 @@
 //	GET    /media/search  → Public (search by query)
 //	GET    /media/:id     → Public (fetch by ID)
 //	PUT    /media/:id     → Auth Required (update metadata; admin/editor: any media)
+//	POST   /media/:id/replace → Auth Required (swap the file; same policy as PUT)
 //	DELETE /media/:id     → Auth Required (delete; admin/editor: any media)
 //	GET    /media/user/:id → Public (user's media)
 //	GET    /media/post/:id → Public (post's media)
@@ -50,11 +51,12 @@ func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	media := v1.Group("/media")
 
 	// Write operations - require Bearer authentication + editor-or-admin role
-	media.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMedia)           // Single upload
-	media.POST("/batch", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk) // Batch upload (original path)
-	media.POST("/bulk", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk)  // Batch upload (alias for compatibility)
-	media.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updateMedia)        // Update metadata
-	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteMedia)     // Delete (admin/editor: any media)
+	media.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMedia)              // Single upload
+	media.POST("/batch", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk)    // Batch upload (original path)
+	media.POST("/bulk", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createMediaBulk)     // Batch upload (alias for compatibility)
+	media.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updateMedia)           // Update metadata
+	media.POST("/:id/replace", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.replaceMedia) // Swap the file, keep id/metadata
+	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteMedia)        // Delete (admin/editor: any media)
 
 	// Read operations - public access for content consumption
 	media.GET("", server.getMedia)                // List/paginate/filter

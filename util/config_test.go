@@ -97,3 +97,41 @@ func TestTrustedProxyList(t *testing.T) {
 		Config{TrustedProxies: " 10.0.0.0/8, ,192.0.2.1"}.TrustedProxyList(),
 	)
 }
+
+func TestMaxUploadBytes(t *testing.T) {
+	testCases := []struct {
+		in      string
+		want    int64
+		wantErr bool
+	}{
+		{in: "", want: DefaultMaxUploadBytes},
+		{in: "10MB", want: 10 << 20},
+		{in: " 512kb ", want: 512 << 10},
+		{in: "1GB", want: 1 << 30},
+		{in: "2048", want: 2048},
+		{in: "100B", want: 100},
+		{in: "0MB", wantErr: true},
+		{in: "-1MB", wantErr: true},
+		{in: "ten", wantErr: true},
+		{in: "10TB", wantErr: true},
+		{in: "99999999999GB", wantErr: true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.in, func(t *testing.T) {
+			got, err := Config{MaxUploadSize: tc.in}.MaxUploadBytes()
+			if tc.wantErr {
+				require.ErrorContains(t, err, "MAX_UPLOAD_SIZE")
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestLoadConfigRejectsInvalidMaxUploadSize(t *testing.T) {
+	t.Setenv("MAX_UPLOAD_SIZE", "lots")
+	_, err := LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "MAX_UPLOAD_SIZE")
+}

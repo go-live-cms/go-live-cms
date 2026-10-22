@@ -136,6 +136,39 @@ func TestUpdateMediaMetadata(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }
 
+func TestReplaceMediaFile(t *testing.T) {
+	_, media := createTestMedia(t)
+
+	arg := ReplaceMediaFileParams{
+		ID:               media.ID,
+		MediaPath:        media.MediaPath,
+		FileSize:         media.FileSize + 1,
+		MimeType:         "image/jpeg",
+		Width:            media.Width + 1,
+		Height:           media.Height + 1,
+		Duration:         0,
+		OriginalFilename: fmt.Sprintf("replacement-%d.jpg", time.Now().UnixNano()),
+	}
+	replaced, err := testQueries.ReplaceMediaFile(context.Background(), arg)
+	require.NoError(t, err)
+
+	// Identity and metadata are kept; only the file columns change.
+	require.Equal(t, media.ID, replaced.ID)
+	require.Equal(t, media.Name, replaced.Name)
+	require.Equal(t, media.Description, replaced.Description)
+	require.Equal(t, media.Alt, replaced.Alt)
+	require.Equal(t, media.UserID, replaced.UserID)
+	require.Equal(t, arg.MediaPath, replaced.MediaPath)
+	require.Equal(t, arg.FileSize, replaced.FileSize)
+	require.Equal(t, arg.Width, replaced.Width)
+	require.Equal(t, arg.Height, replaced.Height)
+	require.Equal(t, arg.OriginalFilename, replaced.OriginalFilename)
+	require.True(t, replaced.ChangedAt.After(media.ChangedAt) || replaced.ChangedAt.Equal(media.ChangedAt))
+
+	_, err = testQueries.ReplaceMediaFile(context.Background(), ReplaceMediaFileParams{ID: -1})
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
 func TestDeleteMediaTx(t *testing.T) {
 	user, media := createTestMedia(t)
 	_, post := createTestUserWithPosts(t)

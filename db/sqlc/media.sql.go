@@ -1128,6 +1128,67 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 	return items, nil
 }
 
+const replaceMediaFile = `-- name: ReplaceMediaFile :one
+UPDATE media
+SET
+    media_path = $1,
+    file_size = $2,
+    mime_type = $3,
+    width = $4,
+    height = $5,
+    duration = $6,
+    original_filename = $7,
+    changed_at = now()
+WHERE id = $8
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata
+`
+
+type ReplaceMediaFileParams struct {
+	MediaPath        string `json:"media_path"`
+	FileSize         int64  `json:"file_size"`
+	MimeType         string `json:"mime_type"`
+	Width            int32  `json:"width"`
+	Height           int32  `json:"height"`
+	Duration         int32  `json:"duration"`
+	OriginalFilename string `json:"original_filename"`
+	ID               int64  `json:"id"`
+}
+
+// File-only update used by POST /media/:id/replace: swaps the columns that
+// describe the stored file and leaves name, description and alt alone, so a
+// concurrent metadata edit is never overwritten by a stale read.
+func (q *Queries) ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error) {
+	row := q.db.QueryRowContext(ctx, replaceMediaFile,
+		arg.MediaPath,
+		arg.FileSize,
+		arg.MimeType,
+		arg.Width,
+		arg.Height,
+		arg.Duration,
+		arg.OriginalFilename,
+		arg.ID,
+	)
+	var i Medium
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Alt,
+		&i.MediaPath,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.FileSize,
+		&i.MimeType,
+		&i.Width,
+		&i.Height,
+		&i.Duration,
+		&i.OriginalFilename,
+		&i.Metadata,
+	)
+	return i, err
+}
+
 const searchMediaByName = `-- name: SearchMediaByName :many
 SELECT 
     m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata,
