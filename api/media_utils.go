@@ -339,8 +339,7 @@ func swapInFile(target string, src io.Reader) (*fileSwap, error) {
 	}
 	if err := os.Rename(tmp.Name(), target); err != nil {
 		os.Remove(tmp.Name())
-		swap.restore()
-		return nil, err
+		return nil, errors.Join(err, swap.restore())
 	}
 	return swap, nil
 }
