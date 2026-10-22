@@ -23,7 +23,8 @@ import (
 )
 
 // bulkUploadRequest builds a multipart POST to url with one "files" part per
-// entry of names, each holding a few bytes.
+// entry of names, each holding content that matches its extension
+// (testFileContent).
 func bulkUploadRequest(t *testing.T, url string, names []string) *http.Request {
 	t.Helper()
 
@@ -32,7 +33,7 @@ func bulkUploadRequest(t *testing.T, url string, names []string) *http.Request {
 	for _, name := range names {
 		part, err := writer.CreateFormFile("files", name)
 		require.NoError(t, err)
-		_, err = part.Write([]byte("content of " + name))
+		_, err = part.Write(testFileContent(t, name))
 		require.NoError(t, err)
 	}
 	require.NoError(t, writer.Close())

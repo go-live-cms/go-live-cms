@@ -6,6 +6,7 @@ package util
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,8 +54,10 @@ type Config struct {
 	// Accepts time.ParseDuration formats: 10s, 15m, 24h, etc.
 	RefreshTokenDuration time.Duration `mapstructure:"REFRESH_TOKEN_DURATION"`
 
-	// MaxUploadSize defines the maximum file upload size (e.g. "10MB", "50MB")
-	// Expected format is human-readable size string
+	// MaxUploadSize is the largest file a single media upload or replace may
+	// carry (e.g. "10MB", "512KB", "1GB"; 1024-based, plain digits are bytes).
+	// Larger files get 413. Use MaxUploadBytes for the parsed value; an empty
+	// value means the 10MB default and an invalid one fails LoadConfig.
 	MaxUploadSize string `mapstructure:"MAX_UPLOAD_SIZE"`
 
 	// UploadPath is the directory where uploaded files are stored
@@ -275,6 +278,10 @@ func LoadConfig(path string) (config Config, err error) {
 			config.GinMode, GinModeDebug, GinModeRelease, GinModeTest)
 	}
 
+	if _, err = config.MaxUploadBytes(); err != nil {
+		return config, err
+	}
+
 	for name, v := range map[string]int{
 		"RATE_LIMIT_GENERAL_PER_MINUTE":         config.RateLimitGeneralPerMinute,
 		"RATE_LIMIT_LOGIN_PER_MINUTE":           config.RateLimitLoginPerMinute,
@@ -288,6 +295,37 @@ func LoadConfig(path string) (config Config, err error) {
 	}
 
 	return config, nil
+}
+
+// DefaultMaxUploadBytes is the upload limit used when MAX_UPLOAD_SIZE is empty.
+const DefaultMaxUploadBytes int64 = 10 << 20
+
+// MaxUploadBytes returns MaxUploadSize in bytes: DefaultMaxUploadBytes when
+// it is empty (a zero Config in tests), an error when it doesn't parse or
+// isn't positive.
+func (c Config) MaxUploadBytes() (int64, error) {
+	s := strings.ToUpper(strings.TrimSpace(c.MaxUploadSize))
+	if s == "" {
+		return DefaultMaxUploadBytes, nil
+	}
+
+	multiplier := int64(1)
+	for _, unit := range []struct {
+		suffix string
+		mult   int64
+	}{{"GB", 1 << 30}, {"MB", 1 << 20}, {"KB", 1 << 10}, {"B", 1}} {
+		if strings.HasSuffix(s, unit.suffix) {
+			multiplier = unit.mult
+			s = strings.TrimSpace(strings.TrimSuffix(s, unit.suffix))
+			break
+		}
+	}
+
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil || n <= 0 || n > (1<<62)/multiplier {
+		return 0, fmt.Errorf("invalid MAX_UPLOAD_SIZE %q: want a positive size such as 10MB, 512KB or 1GB", c.MaxUploadSize)
+	}
+	return n * multiplier, nil
 }
 
 // splitList splits a comma-separated config value, trimming entries and

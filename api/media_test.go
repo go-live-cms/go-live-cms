@@ -248,7 +248,7 @@ func TestCreateMediaAPI(t *testing.T) {
 
 			part, err := writer.CreateFormFile("file", "test.jpg")
 			require.NoError(t, err)
-			_, err = part.Write([]byte("fake image content"))
+			_, err = part.Write(testJPEG(t, 4, 3))
 			require.NoError(t, err)
 
 			err = writer.Close()
