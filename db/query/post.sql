@@ -56,15 +56,19 @@ WHERE
     (@post_type::text = '' OR post_type = @post_type)
     AND (@post_status::text = '' OR post_status = @post_status)
     AND (@user_id = 0 OR user_id = @user_id)  -- Add user filter
+-- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+-- of these pairs; anything else falls through to the id tiebreaker.
 ORDER BY
-    CASE WHEN @sort_by = 'date_asc' THEN created_at END ASC,
-    CASE WHEN @sort_by = 'date_desc' THEN created_at END DESC,
-    CASE WHEN @sort_by = 'title_asc' THEN title END ASC,
-    CASE WHEN @sort_by = 'title_desc' THEN title END DESC,
-    CASE WHEN @sort_by = 'menu_order_asc' THEN menu_order END ASC,
-    CASE WHEN @sort_by = 'menu_order_desc' THEN menu_order END DESC,
-    CASE WHEN @sort_by = 'id_asc' THEN id END ASC,
-    CASE WHEN @sort_by = 'id_desc' THEN id END DESC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN created_at END ASC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN created_at END DESC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'asc' THEN changed_at END ASC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN changed_at END DESC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN title END ASC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN title END DESC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN menu_order END ASC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN menu_order END DESC,
+    -- Stable tiebreaker in the requested direction (also serves sort=id).
+    CASE WHEN @sort_direction::text = 'asc' THEN id END ASC,
     id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
@@ -74,13 +78,17 @@ SELECT * FROM posts
 WHERE post_type = @post_type
     AND (@post_status::text = '' OR post_status = @post_status)
     AND (@user_id = 0 OR user_id = @user_id)  -- Add user filter
+-- Whitelisted sort (#89), same as ListPosts.
 ORDER BY
-    CASE WHEN @sort_by = 'date_asc' THEN created_at END ASC,
-    CASE WHEN @sort_by = 'date_desc' THEN created_at END DESC,
-    CASE WHEN @sort_by = 'title_asc' THEN title END ASC,
-    CASE WHEN @sort_by = 'title_desc' THEN title END DESC,
-    CASE WHEN @sort_by = 'menu_order_asc' THEN menu_order END ASC,
-    CASE WHEN @sort_by = 'menu_order_desc' THEN menu_order END DESC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN created_at END ASC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN created_at END DESC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'asc' THEN changed_at END ASC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN changed_at END DESC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN title END ASC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN title END DESC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN menu_order END ASC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN menu_order END DESC,
+    CASE WHEN @sort_direction::text = 'asc' THEN id END ASC,
     id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
@@ -124,29 +132,31 @@ WHERE post_type = $1;
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
-    COALESCE(
-        jsonb_object_agg(
-            pm.meta_key, 
-            pm.meta_value
-        ) FILTER (WHERE pm.meta_key IS NOT NULL),
-        '{}'::jsonb
+    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
+    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
+    (
+        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
+        FROM post_meta pm
+        WHERE pm.post_id = p.id
     ) as meta
 FROM posts p
-LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = @post_status)
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+-- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+-- of these pairs; anything else falls through to the id tiebreaker.
 ORDER BY
-    CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN @sort_by = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN @sort_by = 'title_asc' THEN p.title END ASC,
-    CASE WHEN @sort_by = 'title_desc' THEN p.title END DESC,
-    CASE WHEN @sort_by = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN @sort_by = 'menu_order_desc' THEN p.menu_order END DESC,
-    CASE WHEN @sort_by = 'id_asc' THEN p.id END ASC,
-    CASE WHEN @sort_by = 'id_desc' THEN p.id END DESC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'asc' THEN p.changed_at END ASC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN p.title END ASC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN p.title END DESC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN p.menu_order END DESC,
+    -- Stable tiebreaker in the requested direction (also serves sort=id).
+    CASE WHEN @sort_direction::text = 'asc' THEN p.id END ASC,
     p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
@@ -155,26 +165,28 @@ OFFSET @offset_count;
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
-    COALESCE(
-        jsonb_object_agg(
-            pm.meta_key, 
-            pm.meta_value
-        ) FILTER (WHERE pm.meta_key IS NOT NULL),
-        '{}'::jsonb
+    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
+    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
+    (
+        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
+        FROM post_meta pm
+        WHERE pm.post_id = p.id
     ) as meta
 FROM posts p
-LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE p.post_type = @post_type
     AND (@post_status::text = '' OR p.post_status = @post_status)
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
+-- Whitelisted sort (#89), same as ListPostsWithMeta.
 ORDER BY
-    CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN @sort_by = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN @sort_by = 'title_asc' THEN p.title END ASC,
-    CASE WHEN @sort_by = 'title_desc' THEN p.title END DESC,
-    CASE WHEN @sort_by = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN @sort_by = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'asc' THEN p.changed_at END ASC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN p.title END ASC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN p.title END DESC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN @sort_direction::text = 'asc' THEN p.id END ASC,
     p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
@@ -197,12 +209,12 @@ SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     -- Post custom meta
-    COALESCE(
-        jsonb_object_agg(
-            pm.meta_key, 
-            pm.meta_value
-        ) FILTER (WHERE pm.meta_key IS NOT NULL),
-        '{}'::jsonb
+    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
+    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
+    (
+        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
+        FROM post_meta pm
+        WHERE pm.post_id = p.id
     ) as post_meta,
     -- Author information
     jsonb_build_object(
@@ -223,26 +235,25 @@ SELECT
         'supports', pt.supports
     ) as post_type_meta
 FROM posts p
-LEFT JOIN post_meta pm ON p.id = pm.post_id
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = @post_status)
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, 
-         p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
-         u.id, u.username, u.email, u.full_name, u.role, u.created_at,
-         pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
+-- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+-- of these pairs; anything else falls through to the id tiebreaker.
 ORDER BY
-    CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN @sort_by = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN @sort_by = 'title_asc' THEN p.title END ASC,
-    CASE WHEN @sort_by = 'title_desc' THEN p.title END DESC,
-    CASE WHEN @sort_by = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN @sort_by = 'menu_order_desc' THEN p.menu_order END DESC,
-    CASE WHEN @sort_by = 'id_asc' THEN p.id END ASC,
-    CASE WHEN @sort_by = 'id_desc' THEN p.id END DESC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'asc' THEN p.changed_at END ASC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN p.title END ASC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN p.title END DESC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN p.menu_order END DESC,
+    -- Stable tiebreaker in the requested direction (also serves sort=id).
+    CASE WHEN @sort_direction::text = 'asc' THEN p.id END ASC,
     p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
@@ -252,12 +263,12 @@ SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     -- Post custom meta
-    COALESCE(
-        jsonb_object_agg(
-            pm.meta_key, 
-            pm.meta_value
-        ) FILTER (WHERE pm.meta_key IS NOT NULL),
-        '{}'::jsonb
+    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
+    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
+    (
+        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
+        FROM post_meta pm
+        WHERE pm.post_id = p.id
     ) as post_meta,
     -- Author information
     jsonb_build_object(
@@ -278,23 +289,22 @@ SELECT
         'supports', pt.supports
     ) as post_type_meta
 FROM posts p
-LEFT JOIN post_meta pm ON p.id = pm.post_id
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE p.post_type = @post_type
     AND (@post_status::text = '' OR p.post_status = @post_status)
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, 
-         p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
-         u.id, u.username, u.email, u.full_name, u.role, u.created_at,
-         pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
+-- Whitelisted sort (#89), same as ListPostsWithMeta.
 ORDER BY
-    CASE WHEN @sort_by = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN @sort_by = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN @sort_by = 'title_asc' THEN p.title END ASC,
-    CASE WHEN @sort_by = 'title_desc' THEN p.title END DESC,
-    CASE WHEN @sort_by = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN @sort_by = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'asc' THEN p.changed_at END ASC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN p.title END ASC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN p.title END DESC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN @sort_direction::text = 'asc' THEN p.id END ASC,
     p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;

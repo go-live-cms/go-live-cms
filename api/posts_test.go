@@ -410,12 +410,13 @@ func TestListPostsAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListPosts(gomock.Any(), db.ListPostsParams{
-						PostType:    "",
-						PostStatus:  "",
-						UserID:      int64(0),
-						SortBy:      "date_desc",
-						OffsetCount: 0,
-						LimitCount:  5,
+						PostType:      "",
+						PostStatus:    "",
+						UserID:        int64(0),
+						SortColumn:    "created_at",
+						SortDirection: "desc",
+						OffsetCount:   0,
+						LimitCount:    5,
 					}).
 					Times(1).
 					Return(listRows, nil)

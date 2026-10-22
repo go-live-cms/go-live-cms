@@ -15,7 +15,16 @@ export type MediaSortOption =
   | "posts_asc"
   | "posts_desc"
 
+// Post list sort column (#89); pair it with `order`. When `order` is omitted
+// the API picks desc for created_at/changed_at/id and asc for title/menu_order.
+export type PostSortField = "created_at" | "changed_at" | "title" | "id" | "menu_order"
+
+export type SortOrder = "asc" | "desc"
+
+// Columns plus the older combined values, which the API still accepts (an
+// explicit `order` overrides their suffix).
 export type PostSortOption =
+  | PostSortField
   | "date_asc"
   | "date_desc"
   | "title_asc"

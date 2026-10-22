@@ -376,26 +376,29 @@ WHERE
     AND ($2::text = '' OR post_status = $2)
     AND ($3 = 0 OR user_id = $3)  -- Add user filter
 ORDER BY
-    CASE WHEN $4 = 'date_asc' THEN created_at END ASC,
-    CASE WHEN $4 = 'date_desc' THEN created_at END DESC,
-    CASE WHEN $4 = 'title_asc' THEN title END ASC,
-    CASE WHEN $4 = 'title_desc' THEN title END DESC,
-    CASE WHEN $4 = 'menu_order_asc' THEN menu_order END ASC,
-    CASE WHEN $4 = 'menu_order_desc' THEN menu_order END DESC,
-    CASE WHEN $4 = 'id_asc' THEN id END ASC,
-    CASE WHEN $4 = 'id_desc' THEN id END DESC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN created_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN changed_at END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN changed_at END DESC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN title END ASC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN title END DESC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN menu_order END ASC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN menu_order END DESC,
+    -- Stable tiebreaker in the requested direction (also serves sort=id).
+    CASE WHEN $5::text = 'asc' THEN id END ASC,
     id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type ListPostsParams struct {
-	PostType    string      `json:"post_type"`
-	PostStatus  string      `json:"post_status"`
-	UserID      interface{} `json:"user_id"`
-	SortBy      interface{} `json:"sort_by"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
+	PostType      string      `json:"post_type"`
+	PostStatus    string      `json:"post_status"`
+	UserID        interface{} `json:"user_id"`
+	SortColumn    string      `json:"sort_column"`
+	SortDirection string      `json:"sort_direction"`
+	OffsetCount   int32       `json:"offset_count"`
+	LimitCount    int32       `json:"limit_count"`
 }
 
 type ListPostsRow struct {
@@ -414,12 +417,15 @@ type ListPostsRow struct {
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
 }
 
+// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+// of these pairs; anything else falls through to the id tiebreaker.
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPosts,
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
-		arg.SortBy,
+		arg.SortColumn,
+		arg.SortDirection,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -464,32 +470,38 @@ WHERE post_type = $1
     AND ($2::text = '' OR post_status = $2)
     AND ($3 = 0 OR user_id = $3)  -- Add user filter
 ORDER BY
-    CASE WHEN $4 = 'date_asc' THEN created_at END ASC,
-    CASE WHEN $4 = 'date_desc' THEN created_at END DESC,
-    CASE WHEN $4 = 'title_asc' THEN title END ASC,
-    CASE WHEN $4 = 'title_desc' THEN title END DESC,
-    CASE WHEN $4 = 'menu_order_asc' THEN menu_order END ASC,
-    CASE WHEN $4 = 'menu_order_desc' THEN menu_order END DESC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN created_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN changed_at END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN changed_at END DESC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN title END ASC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN title END DESC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN menu_order END ASC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN menu_order END DESC,
+    CASE WHEN $5::text = 'asc' THEN id END ASC,
     id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type ListPostsByTypeParams struct {
-	PostType    string      `json:"post_type"`
-	PostStatus  string      `json:"post_status"`
-	UserID      interface{} `json:"user_id"`
-	SortBy      interface{} `json:"sort_by"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
+	PostType      string      `json:"post_type"`
+	PostStatus    string      `json:"post_status"`
+	UserID        interface{} `json:"user_id"`
+	SortColumn    string      `json:"sort_column"`
+	SortDirection string      `json:"sort_direction"`
+	OffsetCount   int32       `json:"offset_count"`
+	LimitCount    int32       `json:"limit_count"`
 }
 
+// Whitelisted sort (#89), same as ListPosts.
 func (q *Queries) ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsByType,
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
-		arg.SortBy,
+		arg.SortColumn,
+		arg.SortDirection,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -537,12 +549,12 @@ SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     -- Post custom meta
-    COALESCE(
-        jsonb_object_agg(
-            pm.meta_key, 
-            pm.meta_value
-        ) FILTER (WHERE pm.meta_key IS NOT NULL),
-        '{}'::jsonb
+    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
+    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
+    (
+        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
+        FROM post_meta pm
+        WHERE pm.post_id = p.id
     ) as post_meta,
     -- Author information
     jsonb_build_object(
@@ -563,35 +575,34 @@ SELECT
         'supports', pt.supports
     ) as post_type_meta
 FROM posts p
-LEFT JOIN post_meta pm ON p.id = pm.post_id
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE p.post_type = $1
     AND ($2::text = '' OR p.post_status = $2)
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, 
-         p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
-         u.id, u.username, u.email, u.full_name, u.role, u.created_at,
-         pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
 ORDER BY
-    CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN $4 = 'title_asc' THEN p.title END ASC,
-    CASE WHEN $4 = 'title_desc' THEN p.title END DESC,
-    CASE WHEN $4 = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN $4 = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN p.changed_at END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type ListPostsByTypeWithAllMetaParams struct {
-	PostType    string      `json:"post_type"`
-	PostStatus  string      `json:"post_status"`
-	UserID      interface{} `json:"user_id"`
-	SortBy      interface{} `json:"sort_by"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
+	PostType      string      `json:"post_type"`
+	PostStatus    string      `json:"post_status"`
+	UserID        interface{} `json:"user_id"`
+	SortColumn    string      `json:"sort_column"`
+	SortDirection string      `json:"sort_direction"`
+	OffsetCount   int32       `json:"offset_count"`
+	LimitCount    int32       `json:"limit_count"`
 }
 
 type ListPostsByTypeWithAllMetaRow struct {
@@ -613,12 +624,14 @@ type ListPostsByTypeWithAllMetaRow struct {
 	PostTypeMeta      json.RawMessage       `json:"post_type_meta"`
 }
 
+// Whitelisted sort (#89), same as ListPostsWithMeta.
 func (q *Queries) ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsByTypeWithAllMetaParams) ([]ListPostsByTypeWithAllMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsByTypeWithAllMeta,
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
-		arg.SortBy,
+		arg.SortColumn,
+		arg.SortDirection,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -664,38 +677,40 @@ const listPostsByTypeWithMeta = `-- name: ListPostsByTypeWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
-    COALESCE(
-        jsonb_object_agg(
-            pm.meta_key, 
-            pm.meta_value
-        ) FILTER (WHERE pm.meta_key IS NOT NULL),
-        '{}'::jsonb
+    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
+    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
+    (
+        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
+        FROM post_meta pm
+        WHERE pm.post_id = p.id
     ) as meta
 FROM posts p
-LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE p.post_type = $1
     AND ($2::text = '' OR p.post_status = $2)
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
-    CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN $4 = 'title_asc' THEN p.title END ASC,
-    CASE WHEN $4 = 'title_desc' THEN p.title END DESC,
-    CASE WHEN $4 = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN $4 = 'menu_order_desc' THEN p.menu_order END DESC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN p.changed_at END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type ListPostsByTypeWithMetaParams struct {
-	PostType    string      `json:"post_type"`
-	PostStatus  string      `json:"post_status"`
-	UserID      interface{} `json:"user_id"`
-	SortBy      interface{} `json:"sort_by"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
+	PostType      string      `json:"post_type"`
+	PostStatus    string      `json:"post_status"`
+	UserID        interface{} `json:"user_id"`
+	SortColumn    string      `json:"sort_column"`
+	SortDirection string      `json:"sort_direction"`
+	OffsetCount   int32       `json:"offset_count"`
+	LimitCount    int32       `json:"limit_count"`
 }
 
 type ListPostsByTypeWithMetaRow struct {
@@ -715,12 +730,14 @@ type ListPostsByTypeWithMetaRow struct {
 	Meta              interface{}           `json:"meta"`
 }
 
+// Whitelisted sort (#89), same as ListPostsWithMeta.
 func (q *Queries) ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsByTypeWithMeta,
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
-		arg.SortBy,
+		arg.SortColumn,
+		arg.SortDirection,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -765,12 +782,12 @@ SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
     -- Post custom meta
-    COALESCE(
-        jsonb_object_agg(
-            pm.meta_key, 
-            pm.meta_value
-        ) FILTER (WHERE pm.meta_key IS NOT NULL),
-        '{}'::jsonb
+    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
+    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
+    (
+        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
+        FROM post_meta pm
+        WHERE pm.post_id = p.id
     ) as post_meta,
     -- Author information
     jsonb_build_object(
@@ -791,38 +808,36 @@ SELECT
         'supports', pt.supports
     ) as post_type_meta
 FROM posts p
-LEFT JOIN post_meta pm ON p.id = pm.post_id
 LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = $2)
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, 
-         p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
-         u.id, u.username, u.email, u.full_name, u.role, u.created_at,
-         pt.name, pt.label, pt.description, pt.hierarchical, pt.public, pt.supports
 ORDER BY
-    CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN $4 = 'title_asc' THEN p.title END ASC,
-    CASE WHEN $4 = 'title_desc' THEN p.title END DESC,
-    CASE WHEN $4 = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN $4 = 'menu_order_desc' THEN p.menu_order END DESC,
-    CASE WHEN $4 = 'id_asc' THEN p.id END ASC,
-    CASE WHEN $4 = 'id_desc' THEN p.id END DESC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN p.changed_at END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
+    -- Stable tiebreaker in the requested direction (also serves sort=id).
+    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type ListPostsWithAllMetaParams struct {
-	PostType    string      `json:"post_type"`
-	PostStatus  string      `json:"post_status"`
-	UserID      interface{} `json:"user_id"`
-	SortBy      interface{} `json:"sort_by"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
+	PostType      string      `json:"post_type"`
+	PostStatus    string      `json:"post_status"`
+	UserID        interface{} `json:"user_id"`
+	SortColumn    string      `json:"sort_column"`
+	SortDirection string      `json:"sort_direction"`
+	OffsetCount   int32       `json:"offset_count"`
+	LimitCount    int32       `json:"limit_count"`
 }
 
 type ListPostsWithAllMetaRow struct {
@@ -844,12 +859,15 @@ type ListPostsWithAllMetaRow struct {
 	PostTypeMeta      json.RawMessage       `json:"post_type_meta"`
 }
 
+// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+// of these pairs; anything else falls through to the id tiebreaker.
 func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsWithAllMeta,
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
-		arg.SortBy,
+		arg.SortColumn,
+		arg.SortDirection,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -895,41 +913,42 @@ const listPostsWithMeta = `-- name: ListPostsWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc,
-    COALESCE(
-        jsonb_object_agg(
-            pm.meta_key, 
-            pm.meta_value
-        ) FILTER (WHERE pm.meta_key IS NOT NULL),
-        '{}'::jsonb
+    -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
+    -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
+    (
+        SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
+        FROM post_meta pm
+        WHERE pm.post_id = p.id
     ) as meta
 FROM posts p
-LEFT JOIN post_meta pm ON p.id = pm.post_id
 WHERE 
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = $2)
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
-GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at
 ORDER BY
-    CASE WHEN $4 = 'date_asc' THEN p.created_at END ASC,
-    CASE WHEN $4 = 'date_desc' THEN p.created_at END DESC,
-    CASE WHEN $4 = 'title_asc' THEN p.title END ASC,
-    CASE WHEN $4 = 'title_desc' THEN p.title END DESC,
-    CASE WHEN $4 = 'menu_order_asc' THEN p.menu_order END ASC,
-    CASE WHEN $4 = 'menu_order_desc' THEN p.menu_order END DESC,
-    CASE WHEN $4 = 'id_asc' THEN p.id END ASC,
-    CASE WHEN $4 = 'id_desc' THEN p.id END DESC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN p.changed_at END ASC,
+    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN p.changed_at END DESC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
+    -- Stable tiebreaker in the requested direction (also serves sort=id).
+    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type ListPostsWithMetaParams struct {
-	PostType    string      `json:"post_type"`
-	PostStatus  string      `json:"post_status"`
-	UserID      interface{} `json:"user_id"`
-	SortBy      interface{} `json:"sort_by"`
-	OffsetCount int32       `json:"offset_count"`
-	LimitCount  int32       `json:"limit_count"`
+	PostType      string      `json:"post_type"`
+	PostStatus    string      `json:"post_status"`
+	UserID        interface{} `json:"user_id"`
+	SortColumn    string      `json:"sort_column"`
+	SortDirection string      `json:"sort_direction"`
+	OffsetCount   int32       `json:"offset_count"`
+	LimitCount    int32       `json:"limit_count"`
 }
 
 type ListPostsWithMetaRow struct {
@@ -949,12 +968,15 @@ type ListPostsWithMetaRow struct {
 	Meta              interface{}           `json:"meta"`
 }
 
+// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+// of these pairs; anything else falls through to the id tiebreaker.
 func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsWithMeta,
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
-		arg.SortBy,
+		arg.SortColumn,
+		arg.SortDirection,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)

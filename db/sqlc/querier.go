@@ -131,12 +131,21 @@ type Querier interface {
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
+	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+	// of these pairs; anything else falls through to the id tiebreaker.
 	ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error)
+	// Whitelisted sort (#89), same as ListPosts.
 	ListPostsByType(ctx context.Context, arg ListPostsByTypeParams) ([]Post, error)
+	// Whitelisted sort (#89), same as ListPostsWithMeta.
 	ListPostsByTypeWithAllMeta(ctx context.Context, arg ListPostsByTypeWithAllMetaParams) ([]ListPostsByTypeWithAllMetaRow, error)
+	// Whitelisted sort (#89), same as ListPostsWithMeta.
 	ListPostsByTypeWithMeta(ctx context.Context, arg ListPostsByTypeWithMetaParams) ([]ListPostsByTypeWithMetaRow, error)
+	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+	// of these pairs; anything else falls through to the id tiebreaker.
 	ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error)
 	ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error)
+	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
+	// of these pairs; anything else falls through to the id tiebreaker.
 	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
