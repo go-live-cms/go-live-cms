@@ -88,7 +88,7 @@ server.
 
 ## Collaboration integration (squash-on-publish)
 
-- After a successful publish, `triggerCollabSquash(postID)` fires a **best-effort**
+- After a successful publish, `triggerCollabSquash(postID, requestID)` fires a **best-effort**
   goroutine to the WS server's `/_internal/documents/post-<id>/squash` endpoint to
   compact its LevelDB log. Never blocks/fails the publish.
 - Config: `COLLAB_SERVER_URL` + `COLLAB_SQUASH_SECRET` in `util/config.go`. **Both
@@ -174,6 +174,38 @@ server.
   `Unmarshal` drops env-only keys it doesn't know (see `util/config_test.go`).
   `NewServer` trims it once, and the WS server trims its copy too, so stray whitespace
   in `app.env` can't make the two sides disagree.
+
+## Observability (#142, #155)
+
+- **Middleware order** (both routers): `requestIDMiddleware` → `requestLogger` →
+  `recoveryMiddleware`, before security headers/CORS, so preflights, 429s and panics
+  are logged and carry `X-Request-ID`. `gin.Default()`/`gin.Logger()` are not used.
+- **Request id:** a well-formed incoming `X-Request-ID` (`[A-Za-z0-9._:-]{8,128}`) is
+  kept only from a peer in `TRUSTED_PROXIES` (public router) or on the internal
+  listener; anything else gets a UUID, so clients can't choose their ids. Read it with `requestIDFromContext(c)`. `requestIDErrorWriter`
+  splices `"request_id"` into every JSON error body (status ≥ 400), so handlers keep
+  returning plain `gin.H{"error": ...}`. It's forwarded on the collab squash call; the
+  WS server sends its own on the internal role lookup.
+- **Logging is `log/slog`.** `NewLogger` (JSON in release/test, text in debug) is
+  installed by `main.go` with `slog.SetDefault`, which also captures the `log` package.
+  In handlers use `server.requestLog(c).Warn(...)` (adds the request id). Don't use
+  `fmt.Printf`/`log.Printf`.
+- **Never log** headers, cookies, tokens, tickets, passwords/hashes, request bodies,
+  raw paths or query strings, usernames, or (outside debug) IPs/user agents. Log users
+  by `user_id` and routes by `c.FullPath()`. `NewLogger`'s `redactSensitiveAttr` blanks
+  attributes whose key contains authorization/cookie/password/secret/token/ticket/hash,
+  as a backstop only.
+- **Health:** `/health` + `/api/v1/health` = liveness; `/readyz` = readiness
+  (`db.Store.Ping`, 2s timeout, 503 when down). Compose healthchecks use `/readyz`.
+  Tests mock it with `store.EXPECT().Ping(...)`.
+- **Recovery** treats a broken pipe / connection reset (client hung up) as a warning
+  (`client_disconnected`), not a reported 500.
+- Session security events (`logSecurityEvent(c, ...)`) carry the request id.
+- **Metrics:** `metrics.go`, hand-rolled Prometheus text at `GET /metrics` on the
+  **internal** listener (unauthenticated; the unpublished port is the restriction).
+  Labels are bounded: route template or `(unmatched)`, unknown methods → `OTHER`.
+- **Error tracking:** `ErrorReporter` (`SetErrorReporter`, no-op default) gets
+  recovered panics (with stack) and 5xx responses, once each.
 
 ## Gotchas
 

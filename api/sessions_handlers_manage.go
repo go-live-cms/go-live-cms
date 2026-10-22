@@ -140,7 +140,7 @@ func (server *Server) blockSession(ctx *gin.Context) {
 	}
 
 	// Log security event
-	logSecurityEvent(LogSessionBlocked, req.SessionID.String(), authPayload.UserID, "Manual session block by user")
+	logSecurityEvent(ctx, LogSessionBlocked, req.SessionID.String(), authPayload.UserID, "Manual session block by user")
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"message":    "session blocked successfully",

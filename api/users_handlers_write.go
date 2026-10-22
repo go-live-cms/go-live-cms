@@ -259,7 +259,7 @@ func (server *Server) updateUser(c *gin.Context) {
 	}
 
 	if passwordChanged {
-		logSecurityEvent(LogPasswordChanged, "all", id, fmt.Sprintf("Changed by user %d", caller.ID))
+		logSecurityEvent(c, LogPasswordChanged, "all", id, fmt.Sprintf("Changed by user %d", caller.ID))
 
 		// The refresh cookie is scoped to /api/v1/auth, so this request
 		// cannot say which session it came from. Instead, the self-changer
@@ -271,7 +271,7 @@ func (server *Server) updateUser(c *gin.Context) {
 		// sign in again.
 		if isSelf {
 			if err := server.issueSelfSessionAfterPasswordChange(c, result.User, time.Now(), rsp); err != nil {
-				logSecurityEvent(LogPasswordChanged, "none", id, fmt.Sprintf("Failed to start a new session for the caller: %v", err))
+				logSecurityEvent(c, LogPasswordChanged, "none", id, fmt.Sprintf("Failed to start a new session for the caller: %v", err))
 			}
 		}
 	}
