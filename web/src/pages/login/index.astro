@@ -1,197 +1,188 @@
 ---
-import Page from "@/layouts/Page.astro"
+import Head from "@/layouts/Page/Head.astro"
+import Foot from "@/layouts/Page/Foot.astro"
 import { SITE_TITLE } from "@/consts"
+import GLLogo from "@gl-admin/assets/gl-logo.svg?raw"
+import "@gl-admin/assets/styles/pages/login.scss"
 ---
 
-<Page title={`Login - ${SITE_TITLE}`} description="Login to access admin features">
-  <Fragment slot="head">
-    <style>
-      .login-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 70vh;
-        padding: 2rem 1rem;
-      }
+<Head title={`Sign in - ${SITE_TITLE}`} description="Sign in to the GoLive admin" />
 
-      .login-form {
-        background: white;
-        border: 1px solid rgb(var(--gray-light));
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(var(--gray), 10%);
-        padding: 3rem;
-        width: 100%;
-        max-width: 400px;
-      }
+<main class="gl-admin-login">
+  <form class="gl-admin-login__card" id="loginForm" novalidate>
+    <header class="gl-admin-login__header">
+      <span class="gl-admin-login__logo" aria-hidden="true" set:html={GLLogo} />
+      <h1 class="gl-admin-login__title">Sign in</h1>
+      <p class="gl-admin-login__subtitle">Access the GoLive admin dashboard</p>
+    </header>
 
-      .login-form h1 {
-        color: rgb(var(--black));
-        font-size: 2rem;
-        margin: 0 0 0.5rem 0;
-        text-align: center;
-      }
+    <p id="errorMessage" class="gl-admin-login__error" hidden></p>
+    <!-- Always rendered so screen readers announce every new error (see announce()). -->
+    <div id="errorAnnouncer" class="gl-admin-login__announcer" role="alert" aria-atomic="true"></div>
 
-      .login-form p {
-        color: rgb(var(--gray));
-        margin: 0 0 2rem 0;
-        text-align: center;
-      }
+    <div class="gl-admin-login__fields">
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="text"
+          id="username"
+          name="username"
+          placeholder=" "
+          required
+          autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
+        />
+        <label class="gl-input__label" for="username">Username</label>
+      </div>
 
-      .form-group {
-        margin-bottom: 1.5rem;
-      }
-
-      .form-group label {
-        color: rgb(var(--black));
-        display: block;
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-      }
-
-      .form-group input {
-        border: 1px solid rgb(var(--gray-light));
-        border-radius: 6px;
-        font-size: 1rem;
-        padding: 0.75rem;
-        width: 100%;
-        transition: border-color 0.2s ease;
-      }
-
-      .form-group input:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 2px rgba(var(--accent), 0.1);
-        outline: none;
-      }
-
-      .login-button {
-        background: var(--accent);
-        border: none;
-        border-radius: 6px;
-        color: white;
-        cursor: pointer;
-        font-size: 1rem;
-        font-weight: 500;
-        padding: 0.875rem;
-        width: 100%;
-        transition: background 0.2s ease;
-      }
-
-      .login-button:hover {
-        background: var(--accent-dark);
-      }
-
-      .login-button:disabled {
-        background: rgb(var(--gray-light));
-        cursor: not-allowed;
-      }
-
-      .error-message {
-        background: #fee;
-        border: 1px solid #fcc;
-        border-radius: 6px;
-        color: #c00;
-        margin-bottom: 1rem;
-        padding: 0.75rem;
-        text-align: center;
-      }
-
-      .loading {
-        display: inline-block;
-        animation: spin 1s linear infinite;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-    </style>
-  </Fragment>
-
-  <main>
-    <div class="login-container">
-      <form class="login-form" id="loginForm">
-        <h1>🔐 Admin Login</h1>
-        <p>Sign in to access the admin dashboard</p>
-
-        <div id="errorMessage" class="error-message" style="display: none;"></div>
-
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input type="text" id="username" name="username" required autocomplete="username" />
-        </div>
-
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input type="password" id="password" name="password" required autocomplete="current-password" />
-        </div>
-
-        <button type="submit" class="login-button" id="loginButton">
-          <span id="buttonText">Sign In</span>
-          <span id="buttonLoading" class="loading" style="display: none;">⏳</span>
-        </button>
-      </form>
+      <div class="gl-input">
+        <input
+          class="gl-input__field"
+          type="password"
+          id="password"
+          name="password"
+          placeholder=" "
+          required
+          autocomplete="current-password"
+        />
+        <label class="gl-input__label" for="password">Password</label>
+      </div>
     </div>
-  </main>
 
-  <Fragment slot="foot">
-    <script>
-      import { authManager } from "@gl-admin/lib/auth.ts"
+    <button type="submit" class="button primary gl-admin-login__submit" id="loginButton">
+      <span class="gl-admin-login__spinner" id="buttonLoading" aria-hidden="true" hidden></span>
+      <span id="buttonText">Sign in</span>
+    </button>
+  </form>
+</main>
 
-      const form = document.getElementById("loginForm") as HTMLFormElement
-      const errorMessage = document.getElementById("errorMessage") as HTMLDivElement
-      const loginButton = document.getElementById("loginButton") as HTMLButtonElement
-      const buttonText = document.getElementById("buttonText") as HTMLSpanElement
-      const buttonLoading = document.getElementById("buttonLoading") as HTMLSpanElement
+<Foot>
+  <script>
+    import { authManager } from "@gl-admin/lib/auth.ts"
 
-      const authState = authManager.getState()
-      if (authState.isAuthenticated) {
-        const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/gl-admin"
-        window.location.href = redirectTo
+    const form = document.getElementById("loginForm") as HTMLFormElement
+    const errorMessage = document.getElementById("errorMessage") as HTMLParagraphElement
+    const errorAnnouncer = document.getElementById("errorAnnouncer") as HTMLDivElement
+    const loginButton = document.getElementById("loginButton") as HTMLButtonElement
+    const buttonText = document.getElementById("buttonText") as HTMLSpanElement
+    const buttonLoading = document.getElementById("buttonLoading") as HTMLSpanElement
+    const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input"))
+
+    // ?redirect= comes from AuthGuard (the page the user was on), but anyone can
+    // craft a login link with it. Only follow same-origin paths, so the page can't
+    // be used to bounce a freshly signed-in user to another site or a javascript: URL.
+    function redirectTarget(): string {
+      const fallback = "/gl-admin"
+      const raw = new URLSearchParams(window.location.search).get("redirect")
+      if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return fallback
+      try {
+        const url = new URL(raw, window.location.origin)
+        if (url.origin !== window.location.origin) return fallback
+        return url.pathname + url.search + url.hash
+      } catch {
+        return fallback
       }
+    }
 
-      function showError(message: string) {
-        errorMessage.textContent = message
-        errorMessage.style.display = "block"
-      }
+    const authState = authManager.getState()
+    if (authState.isAuthenticated) {
+      window.location.href = redirectTarget()
+    }
 
-      function hideError() {
-        errorMessage.style.display = "none"
-      }
-
-      function setLoading(loading: boolean) {
-        loginButton.disabled = loading
-        buttonText.style.display = loading ? "none" : "inline"
-        buttonLoading.style.display = loading ? "inline" : "none"
-      }
-
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault()
-        hideError()
-        setLoading(true)
-
-        const formData = new FormData(form)
-        const username = formData.get("username") as string
-        const password = formData.get("password") as string
-
-        try {
-          const result = await authManager.login(username, password)
-
-          if (result.success) {
-            const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/gl-admin"
-            window.location.href = redirectTo
-          } else {
-            showError(result.error || "Login failed")
-          }
-        } catch (error) {
-          showError("An unexpected error occurred")
-        } finally {
-          setLoading(false)
+    function setInvalid(invalid: boolean) {
+      for (const input of inputs) {
+        input.closest(".gl-input")?.classList.toggle("is-invalid", invalid)
+        if (invalid) {
+          input.setAttribute("aria-invalid", "true")
+          input.setAttribute("aria-describedby", "errorMessage")
+        } else {
+          input.removeAttribute("aria-invalid")
+          input.removeAttribute("aria-describedby")
         }
-      })
-    </script>
-  </Fragment>
-</Page>
+      }
+    }
+
+    // A live region only speaks when its content changes, so a second identical
+    // error would be silent. Clear it, then set the text on a later frame.
+    let announceTimer: number | undefined
+    function announce(message: string) {
+      window.clearTimeout(announceTimer)
+      errorAnnouncer.textContent = ""
+      announceTimer = window.setTimeout(() => {
+        errorAnnouncer.textContent = message
+      }, 100)
+    }
+
+    function showError(message: string) {
+      errorMessage.textContent = message
+      errorMessage.hidden = false
+      setInvalid(true)
+      announce(message)
+    }
+
+    function hideError() {
+      errorMessage.hidden = true
+      errorMessage.textContent = ""
+      setInvalid(false)
+    }
+
+    // authManager.login returns raw messages: "HTTP 401: {...}" from the API, or
+    // the browser's fetch error when the API can't be reached. Never show those.
+    function friendlyError(error?: string): string {
+      if (error && /\b401\b/.test(error)) return "Incorrect username or password."
+      if (error && /\b429\b/.test(error)) return "Too many sign-in attempts. Wait a moment and try again."
+      if (error && /failed to fetch|networkerror|load failed|network request failed/i.test(error)) {
+        return "Can't reach the server. Check your connection and try again."
+      }
+      return "Sign in failed. Please try again."
+    }
+
+    function setLoading(loading: boolean) {
+      loginButton.disabled = loading
+      loginButton.setAttribute("aria-busy", String(loading))
+      buttonLoading.hidden = !loading
+      buttonText.textContent = loading ? "Signing in…" : "Sign in"
+    }
+
+    // Coming Back from the admin restores this page from the bfcache with the
+    // loading state still set; reset it so the form is usable again.
+    window.addEventListener("pageshow", (e) => {
+      if (e.persisted) setLoading(false)
+    })
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault()
+      hideError()
+
+      const formData = new FormData(form)
+      const username = (formData.get("username") as string).trim()
+      const password = formData.get("password") as string
+
+      if (!username || !password) {
+        showError("Enter your username and password.")
+        ;(username ? inputs[1] : inputs[0]).focus()
+        return
+      }
+
+      setLoading(true)
+
+      let result: { success: boolean; error?: string }
+      try {
+        result = await authManager.login(username, password)
+      } catch (error) {
+        result = { success: false, error: error instanceof Error ? error.message : undefined }
+      }
+
+      if (result.success) {
+        // Stay in the loading state while the admin loads, so the button
+        // can't be clicked again and send a second login.
+        window.location.href = redirectTarget()
+        return
+      }
+
+      setLoading(false)
+      showError(friendlyError(result.error))
+    })
+  </script>
+</Foot>
