@@ -72,7 +72,7 @@ describe("authManager.setUser", () => {
     vi.unstubAllGlobals()
 
     expect(seen).toEqual(["New Name"])
-    expect(JSON.parse(localStorage.getItem("user")!).full_name).toBe("New Name")
+    expect(JSON.parse(localStorage.getItem("gl-auth-user")!).full_name).toBe("New Name")
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
@@ -202,7 +202,7 @@ describe("after a password change", () => {
     expect(state.isAuthenticated).toBe(true)
     expect(state.accessToken).toBe("new-token")
     expect(state.tokenExpiry).toBe(expiresAt.getTime())
-    expect(localStorage.getItem("access_token")).toBe("new-token")
+    expect(localStorage.getItem("access_token")).toBeNull()
 
     // The next request uses the new token directly: no 401, no refresh.
     await expect(apiCall("/users/me")).resolves.toEqual({ user: { id: 7 } })

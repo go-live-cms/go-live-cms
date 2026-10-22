@@ -124,12 +124,14 @@ import { SITE_TITLE } from "@/consts"
   const adminLink = document.getElementById("admin-link")
 
   function updateAuthUI() {
-    const authState = authManager.getState()
+    // Display data only: restoring the session here would rotate the refresh
+    // token on every public page view. Logout needs no access token.
+    const user = authManager.getDisplayUser()
 
-    if (authState.isAuthenticated && authState.user) {
+    if (user) {
       loginBtn!.style.display = "none"
       userMenu!.style.display = "flex"
-      userName!.textContent = authState.user.username
+      userName!.textContent = user.username
       adminLink!.style.display = "inline"
     } else {
       loginBtn!.style.display = "inline-block"
