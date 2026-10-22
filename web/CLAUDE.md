@@ -64,6 +64,14 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   dev). It appends the client IP to `X-Forwarded-For`, so the API must list the web
   container in `TRUSTED_PROXIES` (prod `compose.yaml` does). Astro's own `/api/theme` and
   `/api/posts-reload` routes are not under `/api/v1`.
+- **Image variants + focal point (#255):** media responses carry `variants`
+  (`thumb`/`medium`/`large`, each `{path,width,height,…}`; absent when the image is
+  smaller) and `focal_point` (`{x,y}` 0..1 or null). Admin grids/pickers use
+  `getMediaVariantPreviewURL(media, size)` (falls back to larger, then the original);
+  the edit modal sets the focal point with `FocalPointPicker`. Image blocks keep
+  storing the original `src`; the public `ImageBlock` reads the API-attached
+  `doc.media[mediaId]` (`blocks/utils/responsiveImage.ts`) for `srcset`/`sizes`/
+  `width`/`height`/`object-position`, all URLs through `safeImageSrc`.
 - **Server-side API calls use `SERVER_API_URL`, read at runtime** (#272): import
   `SERVER_API_URL` (with `/api/v1`) or `SERVER_MEDIA_URL` (the API origin, e.g. for
   `/public/*` and `/uploads`) from `gl-admin/lib/server-api-url.ts`. Never

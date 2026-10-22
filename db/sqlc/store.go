@@ -3,10 +3,13 @@ package db
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 // ErrLastAdmin is returned by user-removing transactions (delete, or an update
@@ -56,6 +59,7 @@ type Store interface {
 	UpdatePostMediaTx(ctx context.Context, arg UpdatePostMediaTxParams) error
 	UpdatePostWithSlugTx(ctx context.Context, arg UpdatePostWithSlugTxParams) (Post, error)
 	CreateMediaAndLinkTx(ctx context.Context, arg CreateMediaAndLinkTxParams) (CreateMediaAndLinkTxResult, error)
+	SetMediaVariantsTx(ctx context.Context, arg SetMediaVariantsTxParams) (Medium, error)
 
 	ExecTx(ctx context.Context, fn func(*Queries) error) error
 
@@ -631,6 +635,8 @@ type CreateMediaAndLinkTxParams struct {
 	OriginalFilename string
 	PostID           int64
 	Order            int32
+	// Variants is the generated image variants (NULL stores {}).
+	Variants pqtype.NullRawMessage
 }
 
 type CreateMediaAndLinkTxResult struct {
@@ -779,6 +785,7 @@ func (store *SQLStore) CreateMediaAndLinkTx(ctx context.Context, arg CreateMedia
 			Height:           arg.Height,
 			Duration:         arg.Duration,
 			OriginalFilename: arg.OriginalFilename,
+			Variants:         arg.Variants,
 		})
 		if err != nil {
 			return err
@@ -802,4 +809,47 @@ func (store *SQLStore) CreateMediaAndLinkTx(ctx context.Context, arg CreateMedia
 	})
 
 	return result, err
+}
+
+// ErrMediaChanged is returned by SetMediaVariantsTx when the media row no
+// longer describes the file the variants were generated from (a replace or
+// an edit happened in between).
+var ErrMediaChanged = errors.New("media changed since its variants were generated")
+
+type SetMediaVariantsTxParams struct {
+	ID int64
+	// MediaPath and ChangedAt are the row's values when the variants were
+	// generated; the write only happens if both still match.
+	MediaPath string
+	ChangedAt time.Time
+	Variants  json.RawMessage
+	// CommitFiles moves the generated files into place. It runs while the row
+	// is locked, after the check, so it never overwrites a newer replace's
+	// variants: that replace's UPDATE waits for this transaction.
+	CommitFiles func() error
+}
+
+// SetMediaVariantsTx is the variant backfill's write: lock the row, check it
+// still describes the same file, move the files into place and store the
+// variants. The backfill runs in its own process, so the API's in-process
+// replace lock doesn't cover it; the row lock does.
+func (store *SQLStore) SetMediaVariantsTx(ctx context.Context, arg SetMediaVariantsTxParams) (Medium, error) {
+	var media Medium
+	err := store.ExecTx(ctx, func(q *Queries) error {
+		current, err := q.GetMediaForUpdate(ctx, arg.ID)
+		if err != nil {
+			return err
+		}
+		if current.MediaPath != arg.MediaPath || !current.ChangedAt.Equal(arg.ChangedAt) {
+			return ErrMediaChanged
+		}
+		if arg.CommitFiles != nil {
+			if err := arg.CommitFiles(); err != nil {
+				return err
+			}
+		}
+		media, err = q.SetMediaVariants(ctx, SetMediaVariantsParams{ID: arg.ID, Variants: arg.Variants})
+		return err
+	})
+	return media, err
 }

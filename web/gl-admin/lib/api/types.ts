@@ -102,6 +102,11 @@ export interface Media {
   height?: number
   duration?: number
   original_filename: string
+  // Resized copies of an image (#255), keyed thumb/medium/large. An image
+  // smaller than a size has no variant of it; {} for non-images.
+  variants?: Partial<Record<MediaVariantName, MediaVariant>>
+  // Point of interest (0..1 from the top-left), null when unset.
+  focal_point?: FocalPoint | null
 }
 
 export interface Post {
@@ -167,4 +172,19 @@ export interface Session {
   is_blocked: boolean
   expires_at: string
   created_at: string
+}
+
+export type MediaVariantName = "thumb" | "medium" | "large"
+
+export interface MediaVariant {
+  path: string
+  width: number
+  height: number
+  mime_type: string
+  file_size: number
+}
+
+export interface FocalPoint {
+  x: number
+  y: number
 }

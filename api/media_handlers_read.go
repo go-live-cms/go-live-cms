@@ -198,6 +198,7 @@ func (server *Server) getPopularMedia(c *gin.Context) {
 	for i, m := range media {
 		mediaResponses[i] = toPopularMediaResponse(m)
 		mediaResponses[i].MediaPath = publicMediaPath(server.config.UploadPath, m.MediaPath)
+		mediaResponses[i].Variants = publicVariants(server.config.UploadPath, mediaResponses[i].Variants)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

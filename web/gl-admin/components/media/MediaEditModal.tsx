@@ -3,10 +3,11 @@ import Modal from "@gl-admin/components/ui/Modal"
 import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import { getMediaURL } from "@gl-admin/lib/api"
-import { updateMedia, deleteMedia, getMediaPosts, replaceMediaFile, getMediaPreviewURL } from "@gl-admin/lib/api/media"
+import { updateMedia, deleteMedia, getMediaPosts, replaceMediaFile, getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
 import { getPosts } from "@gl-admin/lib/api/posts"
-import type { Media } from "@gl-admin/lib/types"
+import type { FocalPoint, Media } from "@gl-admin/lib/types"
 import MediaTypeBadge from "./MediaTypeBadge"
+import FocalPointPicker, { formatFocalPoint } from "./FocalPointPicker"
 import "@gl-admin/assets/styles/components/media/media-edit-modal.scss"
 import Button from "@gl-admin/components/ui/Button"
 
@@ -51,6 +52,8 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
   // null when no replace is running; otherwise the upload fraction (0..1).
   const [replaceProgress, setReplaceProgress] = useState<number | null>(null)
   const [replaceError, setReplaceError] = useState<string | null>(null)
+  // The focal point being edited; saved with the other fields.
+  const [focalPoint, setFocalPoint] = useState<FocalPoint | null>(null)
 
   const fileUrlRef = useRef<HTMLInputElement>(null)
   const replaceInputRef = useRef<HTMLInputElement>(null)
@@ -63,6 +66,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
         alt: media.alt || "",
         description: media.description || "",
       })
+      setFocalPoint(media.focal_point ?? null)
       setReplaceError(null)
 
       if (media.post_count && media.post_count > 0) {
@@ -91,7 +95,8 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
   if (!media) return null
 
   const mediaURL = getMediaURL(media.media_path)
-  const previewURL = getMediaPreviewURL(media)
+  // The large variant is plenty for the preview; it falls back to the original.
+  const previewURL = getMediaVariantPreviewURL(media, "large")
   const fileExtension = getFileExtension(media.media_path)
   const fileSize = formatFileSize(media.file_size || 0)
   const isImageFile = isImage(media.media_path)
@@ -106,14 +111,17 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      const updated = await updateMedia(media.id, editedData)
-      const saved = updated.media as Media
+      const current = media.focal_point ?? null
+      const focalChanged = focalPoint?.x !== current?.x || focalPoint?.y !== current?.y
+      const updated = await updateMedia(media.id, focalChanged ? { ...editedData, focal_point: focalPoint } : editedData)
+      const saved = { ...(updated.media as Media), post_count: (updated.media as Media).post_count ?? media.post_count }
 
       setEditedData({
         name: saved.name || "",
         alt: saved.alt || "",
         description: saved.description || "",
       })
+      setFocalPoint(saved.focal_point ?? null)
 
       onMediaUpdated?.(saved)
 
@@ -206,6 +214,7 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
         alt: media.alt || "",
         description: media.description || "",
       })
+      setFocalPoint(media.focal_point ?? null)
       setIsEditing(false)
     } else {
       onClose()
@@ -277,13 +286,37 @@ const MediaEditModal: React.FC<MediaEditModalProps> = ({ isOpen, onClose, media,
           <div className="media-edit-modal__preview">
             <div className="media-edit-modal__preview-container">
               {isImageFile ? (
-                <img src={previewURL} alt={editedData.alt || media.alt} className="media-edit-modal__preview-image" />
+                <FocalPointPicker
+                  src={previewURL}
+                  alt={editedData.alt || media.alt}
+                  value={focalPoint}
+                  onChange={isEditing ? setFocalPoint : undefined}
+                />
               ) : (
                 <div className="media-edit-modal__preview-file">
                   <span className="media-edit-modal__preview-filename">{media.name}</span>
                 </div>
               )}
             </div>
+
+            {isImageFile && (
+              <div className="media-edit-modal__focal">
+                <span className="media-edit-modal__info-label">Focal point:</span>
+                <span className="media-edit-modal__info-value" data-testid="focal-point-value" aria-live="polite">
+                  {formatFocalPoint(focalPoint)}
+                </span>
+                {isEditing && focalPoint && (
+                  <GLAdminButton variation="flat" onClick={() => setFocalPoint(null)} disabled={isSaving}>
+                    Clear
+                  </GLAdminButton>
+                )}
+                {isEditing && (
+                  <span className="media-edit-modal__focal-hint">
+                    Click the image to mark what must stay visible when it is cropped.
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="media-edit-modal__file-info">
               {media.width && media.height && (

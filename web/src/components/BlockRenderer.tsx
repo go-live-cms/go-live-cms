@@ -2,9 +2,14 @@ import React from "react"
 import type { BlockDocV1, Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
 import { renderContent, getBlockContent } from "./blocks/utils/contentRenderer"
+import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 
 interface BlockRendererProps {
   doc: BlockDocV1
+  // The `sizes` attribute for image blocks: how wide this layout renders
+  // them (e.g. "(max-width: 760px) 100vw, 720px" for a text column, "100vw"
+  // for full width). Defaults to BLOCK_IMAGE_SIZES.
+  imageSizes?: string
 }
 
 /**
@@ -13,7 +18,7 @@ interface BlockRendererProps {
  * Uses the block registry to delegate rendering to individual block components.
  * WordPress-style architecture for easy extensibility.
  */
-export default function BlockRenderer({ doc }: BlockRendererProps) {
+export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES }: BlockRendererProps) {
   /**
    * Render a single block by ID using the registry
    */
@@ -45,5 +50,9 @@ export default function BlockRenderer({ doc }: BlockRendererProps) {
   // Deduplicate blocks_order to prevent duplicate rendering
   const uniqueBlockIds = Array.from(new Set(doc.blocks_order))
 
-  return <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+  return (
+    <ImageSizesContext.Provider value={imageSizes}>
+      <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+    </ImageSizesContext.Provider>
+  )
 }

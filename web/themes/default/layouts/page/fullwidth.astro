@@ -33,7 +33,7 @@ const { post, title, description, seo } = Astro.props
       
       <div class="page-content">
         {post.published_blocks && (
-          <BlockRenderer doc={post.published_blocks} client:load />
+          <BlockRenderer doc={post.published_blocks} imageSizes="100vw" client:load />
         )}
       </div>
     </article>

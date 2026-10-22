@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { authManager } from "../auth"
-import { getMediaPreviewURL, MediaUploadError, replaceMediaFile } from "./media"
+import { getMediaPreviewURL, getMediaVariantPreviewURL, MediaUploadError, replaceMediaFile } from "./media"
 
 // A scripted XMLHttpRequest: each send() answers with the next response and
 // reports one progress event first.
@@ -122,5 +122,40 @@ describe("getMediaPreviewURL", () => {
     expect(getMediaPreviewURL({ media_path: "uploads/media/a.png", changed_at: "" })).toBe("/uploads/media/a.png")
     // The column's default before the first update.
     expect(getMediaPreviewURL({ media_path: "/uploads/media/a.png", changed_at: "0001-01-01T00:00:00Z" })).toBe("/uploads/media/a.png")
+  })
+})
+
+describe("getMediaVariantPreviewURL", () => {
+  const changedAt = "2026-10-22T10:00:00Z"
+  const v = `?v=${Date.parse(changedAt)}`
+  const variant = (name: string) => ({
+    path: `/uploads/media/_variants/hero.jpg/${name}.jpg`,
+    width: 1,
+    height: 1,
+    mime_type: "image/jpeg",
+    file_size: 1,
+  })
+
+  it("uses the requested variant, versioned like the original", () => {
+    const media = {
+      media_path: "/uploads/media/hero.jpg",
+      changed_at: changedAt,
+      variants: { thumb: variant("thumb"), medium: variant("medium") },
+    }
+    expect(getMediaVariantPreviewURL(media, "thumb")).toBe(`/uploads/media/_variants/hero.jpg/thumb.jpg${v}`)
+    expect(getMediaVariantPreviewURL(media, "medium")).toBe(`/uploads/media/_variants/hero.jpg/medium.jpg${v}`)
+  })
+
+  it("falls back to the next larger variant, then the original", () => {
+    // A 1000px image has no large variant; a 300px one has none at all.
+    const mid = { media_path: "/uploads/media/hero.jpg", changed_at: changedAt, variants: { medium: variant("medium") } }
+    expect(getMediaVariantPreviewURL(mid, "thumb")).toBe(`/uploads/media/_variants/hero.jpg/medium.jpg${v}`)
+    expect(getMediaVariantPreviewURL(mid, "large")).toBe(`/uploads/media/hero.jpg${v}`)
+    expect(getMediaVariantPreviewURL({ media_path: "/uploads/media/a.png", changed_at: changedAt, variants: {} })).toBe(
+      `/uploads/media/a.png${v}`
+    )
+    expect(getMediaVariantPreviewURL({ media_path: "/uploads/media/a.png", changed_at: changedAt })).toBe(
+      `/uploads/media/a.png${v}`
+    )
   })
 })

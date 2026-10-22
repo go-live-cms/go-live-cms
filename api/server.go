@@ -185,6 +185,15 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if shouldSeedDevData(config) {
 		devModeUtil.CreateDefaultAdminUser(server.store, devModeUtil.AdminAccount(server.config))
 		devModeUtil.CreateDummyData(server.store, server.config)
+		// Seeded images (and dev uploads from before #255) get their variants.
+		// Only images without any are processed, so after the first start this
+		// is one query. Production runs `main backfill-variants` instead.
+		stats, err := BackfillMediaVariants(context.Background(), server.store, server.config.UploadPath, false, server.logger)
+		if err != nil {
+			server.logger.Warn("dev media variant backfill failed", "error", err)
+		} else if stats.Generated > 0 {
+			server.logger.Info("dev media variant backfill finished", "generated", stats.Generated, "scanned", stats.Scanned)
+		}
 	}
 
 	return server, nil

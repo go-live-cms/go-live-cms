@@ -31,6 +31,61 @@
     object-fit: contain;
   }
 
+  // Focal point picker (#255): the marker is positioned over the image box,
+  // so the wrapper shrinks to the image.
+  .focal-point-picker {
+    display: inline-block;
+    line-height: 0;
+    max-height: 100%;
+    max-width: 100%;
+    position: relative;
+
+    &--editable {
+      cursor: crosshair;
+
+      &:focus-visible {
+        outline: 2px solid var(--primary, #2563eb);
+        outline-offset: 2px;
+      }
+    }
+
+    &__image {
+      border-radius: 4px;
+      display: block;
+      max-height: 480px;
+      max-width: 100%;
+      user-select: none;
+    }
+
+    &__marker {
+      background: rgb(255 255 255 / 35%);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow:
+        0 0 0 2px rgb(0 0 0 / 55%),
+        0 1px 4px rgb(0 0 0 / 40%);
+      height: 22px;
+      pointer-events: none;
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 22px;
+    }
+  }
+
+  &__focal {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.875rem;
+    gap: 0.5rem;
+  }
+
+  &__focal-hint {
+    color: #6c757d;
+    font-size: 0.8125rem;
+    width: 100%;
+  }
+
   &__preview-file {
     align-items: center;
     color: #6c757d;

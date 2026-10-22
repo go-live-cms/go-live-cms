@@ -1,4 +1,5 @@
 -- name: CreateMedia :one
+-- variants is NULL for media without generated variants, stored as {}.
 INSERT INTO media (
     name,
     description,
@@ -10,9 +11,21 @@ INSERT INTO media (
     width,
     height,
     duration,
-    original_filename
+    original_filename,
+    variants
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    sqlc.arg('name'),
+    sqlc.arg('description'),
+    sqlc.arg('alt'),
+    sqlc.arg('media_path'),
+    sqlc.arg('user_id'),
+    sqlc.arg('file_size'),
+    sqlc.arg('mime_type'),
+    sqlc.arg('width'),
+    sqlc.arg('height'),
+    sqlc.arg('duration'),
+    sqlc.arg('original_filename'),
+    COALESCE(sqlc.narg('variants')::jsonb, '{}'::jsonb)
 ) RETURNING *;
 
 -- name: GetMedia :one
@@ -29,7 +42,7 @@ WHERE
     m.user_id = $1
     AND ($2 = '' OR m.mime_type LIKE $2 || '%')
     AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -55,7 +68,7 @@ WHERE
     ($1 = '' OR m.mime_type LIKE $1 || '%')
     AND ($2 = 0 OR m.user_id = $2)
     AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -97,14 +110,19 @@ SET
     name = COALESCE(sqlc.narg('name'), name),
     description = COALESCE(sqlc.narg('description'), description),
     alt = COALESCE(sqlc.narg('alt'), alt),
+    -- set_focal_point false keeps the focal point; true writes focal_x and
+    -- focal_y, where NULL clears it.
+    focal_x = CASE WHEN sqlc.arg('set_focal_point')::boolean THEN sqlc.narg('focal_x')::double precision ELSE focal_x END,
+    focal_y = CASE WHEN sqlc.arg('set_focal_point')::boolean THEN sqlc.narg('focal_y')::double precision ELSE focal_y END,
     changed_at = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;
 
 -- name: ReplaceMediaFile :one
 -- File-only update used by POST /media/:id/replace: swaps the columns that
--- describe the stored file and leaves name, description and alt alone, so a
--- concurrent metadata edit is never overwritten by a stale read.
+-- describe the stored file (variants included; NULL stores {}) and leaves
+-- name, description, alt and the focal point alone, so a concurrent metadata
+-- edit is never overwritten by a stale read.
 UPDATE media
 SET
     media_path = sqlc.arg('media_path'),
@@ -114,9 +132,46 @@ SET
     height = sqlc.arg('height'),
     duration = sqlc.arg('duration'),
     original_filename = sqlc.arg('original_filename'),
+    variants = COALESCE(sqlc.narg('variants')::jsonb, '{}'::jsonb),
     changed_at = now()
 WHERE id = sqlc.arg('id')
 RETURNING *;
+
+-- name: SetMediaVariants :one
+-- Used by the variant backfill. changed_at is left alone: nothing the user
+-- edited changed.
+UPDATE media
+SET variants = sqlc.arg('variants')
+WHERE id = sqlc.arg('id')
+RETURNING *;
+
+-- name: ListImageMediaAfter :many
+-- Pages through image media by id for the variant backfill. With
+-- only_missing, rows that already have variants are skipped, and so are
+-- images whose known long edge is at most min_long_edge (they never get any;
+-- {} is their final state, not "not processed yet").
+SELECT * FROM media
+WHERE mime_type LIKE 'image/%' AND id > sqlc.arg('after_id')
+  AND (
+    NOT sqlc.arg('only_missing')::boolean
+    OR (
+      variants = '{}'::jsonb
+      AND (width = 0 OR height = 0 OR GREATEST(width, height) > sqlc.arg('min_long_edge')::int)
+    )
+  )
+ORDER BY id
+LIMIT sqlc.arg('page_size');
+
+-- name: GetMediaForUpdate :one
+-- Locks the row for the variant backfill's check-and-write, so a concurrent
+-- replace's UPDATE waits until the backfill's files and row are both in.
+SELECT * FROM media
+WHERE id = $1 LIMIT 1
+FOR UPDATE;
+
+-- name: GetMediaByIDs :many
+SELECT * FROM media
+WHERE id = ANY(sqlc.arg('ids')::bigint[]);
 -- name: ListMediaPathsIn :many
 -- Which of the given media_path values some media row uses (the dev seed
 -- restores only sample files a row still references).
@@ -141,7 +196,7 @@ WHERE
     (m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%')
     AND ($2 = '' OR m.mime_type LIKE $2 || '%')
     AND ($3 = 0 OR m.user_id = $3)
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -257,7 +312,7 @@ SELECT
     COUNT(pm.post_id) as post_count
 FROM media m
 JOIN post_media pm ON m.id = pm.media_id
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
 HAVING COUNT(pm.post_id) > 0
 ORDER BY COUNT(pm.post_id) DESC
 LIMIT $1;

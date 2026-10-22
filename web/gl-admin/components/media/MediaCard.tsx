@@ -1,5 +1,5 @@
 import React from "react"
-import { getMediaPreviewURL } from "@gl-admin/lib/api/media"
+import { getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
 import type { Media } from "@gl-admin/lib/types"
 import "@gl-admin/assets/styles/components/media/media-card.scss"
 import MediaTypeBadge from "@gl-admin/components/media/MediaTypeBadge"
@@ -23,7 +23,8 @@ function isImage(mediaPath: string): boolean {
 }
 
 const MediaCard: React.FC<Props> = ({ media, onClick }) => {
-  const mediaURL = getMediaPreviewURL(media)
+  // The thumb variant (#255): the grid never needs the full-size file.
+  const mediaURL = getMediaVariantPreviewURL(media, "thumb")
   const fileName = media.name
   const fileSize = media.file_size ? formatFileSize(media.file_size) : "Unknown size"
   const postCount = media.post_count || 0

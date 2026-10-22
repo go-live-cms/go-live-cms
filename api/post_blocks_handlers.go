@@ -515,12 +515,14 @@ func (server *Server) getPublicPostBlocks(c *gin.Context) {
 		return
 	}
 
-	// Parse the JSONB content
-	var blockDoc BlockDocV1
-	if err := json.Unmarshal(result.Content.RawMessage, &blockDoc); err != nil {
+	// Parsed once, as a map: image blocks get their variants and focal point
+	// added (post_block_media.go). The shape check is what decoding into
+	// BlockDocV1 used to enforce.
+	var docMap map[string]interface{}
+	if err := json.Unmarshal(result.Content.RawMessage, &docMap); err != nil || !isBlockDocShape(docMap) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse published document"})
 		return
 	}
-
-	c.JSON(http.StatusOK, BlockDocResponse{Doc: blockDoc})
+	server.attachBlockMedia(c.Request.Context(), docMap)
+	c.JSON(http.StatusOK, gin.H{"doc": docMap})
 }

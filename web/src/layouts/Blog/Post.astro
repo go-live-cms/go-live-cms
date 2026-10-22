@@ -155,7 +155,7 @@ if (postId) {
 				</div>
 				
 				{blockDoc && blockDoc.blocks_order && blockDoc.blocks_order.length > 0 ? (
-					<BlockRenderer doc={blockDoc} client:load />
+					<BlockRenderer doc={blockDoc} imageSizes="(max-width: 760px) 100vw, 720px" client:load />
 				) : (
 					<slot />
 				)}

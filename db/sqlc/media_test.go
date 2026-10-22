@@ -938,6 +938,143 @@ func TestSearchMediaByNameEmptyTerm(t *testing.T) {
 	require.Len(t, results2, 0)
 }
 
+// TestMediaVariantsAndFocalPoint covers the #255 columns: variants default to
+// {} and round-trip through create, replace and the backfill update; the
+// focal point is kept, set and cleared by UpdateMediaMetadata, and the CHECK
+// constraint refuses values outside 0..1 or only one coordinate.
+func TestMediaVariantsAndFocalPoint(t *testing.T) {
+	ctx := context.Background()
+	_, media := createTestMedia(t)
+	require.JSONEq(t, `{}`, string(media.Variants), "no variants stored as {}")
+	require.False(t, media.FocalX.Valid)
+	require.False(t, media.FocalY.Valid)
+
+	variants := `{"thumb": {"path": "/uploads/media/_variants/x.jpg/thumb.jpg", "width": 320, "height": 200, "mime_type": "image/jpeg", "file_size": 1234}}`
+	updated, err := testQueries.SetMediaVariants(ctx, SetMediaVariantsParams{ID: media.ID, Variants: json.RawMessage(variants)})
+	require.NoError(t, err)
+	require.JSONEq(t, variants, string(updated.Variants))
+	require.Equal(t, media.ChangedAt, updated.ChangedAt, "the backfill doesn't count as an edit")
+
+	set, err := testQueries.UpdateMediaMetadata(ctx, UpdateMediaMetadataParams{
+		ID: media.ID, SetFocalPoint: true,
+		FocalX: sql.NullFloat64{Float64: 0.25, Valid: true},
+		FocalY: sql.NullFloat64{Float64: 0.75, Valid: true},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0.25, set.FocalX.Float64)
+	require.Equal(t, 0.75, set.FocalY.Float64)
+
+	kept, err := testQueries.UpdateMediaMetadata(ctx, UpdateMediaMetadataParams{
+		ID: media.ID, Alt: sql.NullString{String: "new alt", Valid: true},
+	})
+	require.NoError(t, err)
+	require.Equal(t, set.FocalX, kept.FocalX, "absent focal point is kept")
+	require.Equal(t, set.FocalY, kept.FocalY)
+
+	// Replace swaps the variants (NULL stores {}) and keeps the focal point.
+	replaced, err := testQueries.ReplaceMediaFile(ctx, ReplaceMediaFileParams{
+		ID: media.ID, MediaPath: media.MediaPath, FileSize: 10, MimeType: media.MimeType,
+		Width: 10, Height: 10, OriginalFilename: "small.jpg",
+	})
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, string(replaced.Variants))
+	require.Equal(t, set.FocalX, replaced.FocalX)
+
+	cleared, err := testQueries.UpdateMediaMetadata(ctx, UpdateMediaMetadataParams{ID: media.ID, SetFocalPoint: true})
+	require.NoError(t, err)
+	require.False(t, cleared.FocalX.Valid)
+	require.False(t, cleared.FocalY.Valid)
+
+	for name, p := range map[string]UpdateMediaMetadataParams{
+		"OutOfRange": {ID: media.ID, SetFocalPoint: true, FocalX: sql.NullFloat64{Float64: 1.5, Valid: true}, FocalY: sql.NullFloat64{Float64: 0.5, Valid: true}},
+		"OnlyX":      {ID: media.ID, SetFocalPoint: true, FocalX: sql.NullFloat64{Float64: 0.5, Valid: true}},
+	} {
+		_, err := testQueries.UpdateMediaMetadata(ctx, p)
+		require.Error(t, err, name)
+		require.Contains(t, err.Error(), "media_focal_point_check", name)
+	}
+
+	got, err := testQueries.GetMediaByIDs(ctx, []int64{media.ID, media.ID + 1_000_000})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, media.ID, got[0].ID)
+
+	page, err := testQueries.ListImageMediaAfter(ctx, ListImageMediaAfterParams{AfterID: media.ID - 1, PageSize: 1})
+	require.NoError(t, err)
+	require.Len(t, page, 1)
+	require.Equal(t, media.ID, page[0].ID)
+}
+
+// TestSetMediaVariantsTx covers the backfill's locked check-and-write: a row
+// that changed since the variants were generated is left alone (and the files
+// aren't committed); an unchanged one gets files and variants.
+func TestSetMediaVariantsTx(t *testing.T) {
+	ctx := context.Background()
+	_, media := createTestMedia(t)
+	variants := json.RawMessage(`{"thumb": {"path": "p", "width": 320, "height": 200}}`)
+
+	committed := false
+	_, err := testStore.SetMediaVariantsTx(ctx, SetMediaVariantsTxParams{
+		ID: media.ID, MediaPath: media.MediaPath, ChangedAt: media.ChangedAt.Add(-time.Second),
+		Variants: variants, CommitFiles: func() error { committed = true; return nil },
+	})
+	require.ErrorIs(t, err, ErrMediaChanged)
+	require.False(t, committed, "files of stale variants are never moved into place")
+
+	_, err = testStore.SetMediaVariantsTx(ctx, SetMediaVariantsTxParams{
+		ID: media.ID, MediaPath: "/uploads/media/other.jpg", ChangedAt: media.ChangedAt, Variants: variants,
+	})
+	require.ErrorIs(t, err, ErrMediaChanged)
+
+	got, err := testStore.SetMediaVariantsTx(ctx, SetMediaVariantsTxParams{
+		ID: media.ID, MediaPath: media.MediaPath, ChangedAt: media.ChangedAt,
+		Variants: variants, CommitFiles: func() error { committed = true; return nil },
+	})
+	require.NoError(t, err)
+	require.True(t, committed)
+	require.JSONEq(t, string(variants), string(got.Variants))
+
+	_, err = testStore.SetMediaVariantsTx(ctx, SetMediaVariantsTxParams{ID: media.ID + 1_000_000, Variants: variants})
+	require.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+// TestListImageMediaAfterOnlyMissing: the backfill's default query skips rows
+// that have variants and images too small to get any.
+func TestListImageMediaAfterOnlyMissing(t *testing.T) {
+	ctx := context.Background()
+	_, needs := createTestMedia(t)
+	_, err := testQueries.ReplaceMediaFile(ctx, ReplaceMediaFileParams{
+		ID: needs.ID, MediaPath: needs.MediaPath, MimeType: "image/jpeg", Width: 1000, Height: 500, OriginalFilename: "a.jpg",
+	})
+	require.NoError(t, err)
+	_, small := createTestMedia(t)
+	_, err = testQueries.ReplaceMediaFile(ctx, ReplaceMediaFileParams{
+		ID: small.ID, MediaPath: small.MediaPath, MimeType: "image/jpeg", Width: 300, Height: 200, OriginalFilename: "b.jpg",
+	})
+	require.NoError(t, err)
+	_, done := createTestMedia(t)
+	_, err = testQueries.SetMediaVariants(ctx, SetMediaVariantsParams{ID: done.ID, Variants: json.RawMessage(`{"thumb":{"path":"p"}}`)})
+	require.NoError(t, err)
+
+	ids := func(onlyMissing bool) map[int64]bool {
+		rows, err := testQueries.ListImageMediaAfter(ctx, ListImageMediaAfterParams{
+			AfterID: needs.ID - 1, OnlyMissing: onlyMissing, MinLongEdge: 320, PageSize: 1000,
+		})
+		require.NoError(t, err)
+		seen := map[int64]bool{}
+		for _, r := range rows {
+			seen[r.ID] = true
+		}
+		return seen
+	}
+	missing := ids(true)
+	require.True(t, missing[needs.ID])
+	require.False(t, missing[small.ID], "too small to ever get variants")
+	require.False(t, missing[done.ID], "already has variants")
+	all := ids(false)
+	require.True(t, all[needs.ID] && all[small.ID] && all[done.ID])
+}
+
 func TestListMediaPathsIn(t *testing.T) {
 	_, media := createTestMedia(t)
 	// createTestMedia reseeds gofakeit, so use a real random name here.

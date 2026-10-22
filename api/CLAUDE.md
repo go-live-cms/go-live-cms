@@ -78,6 +78,23 @@ the WS server.
   DELETE removes the stored file after the transaction commits, but only when
   `media_path` resolves inside `UploadPath` (`removeMediaFile`). PUT rejects
   `media_path`, but old/seeded rows may hold anything, so keep that check.
+- **Image pipeline (#255, `media_variants.go`, `media_metadata.go`):** upload and
+  Replace strip the original's EXIF/GPS/XMP/text metadata losslessly (a JPEG keeps
+  only its orientation) and generate `thumb`/`medium`/`large` variants (320/800/1600
+  long edge, never upscaled, pure Go via `golang.org/x/image`, JPEG or PNG if
+  transparent) in `<dir>/_variants/<file>/`. They're **staged** and only moved into
+  place once the DB agrees (`stagedVariants.commit`), so a failed Replace keeps the
+  old set; Delete removes the directory (`removeMediaVariants`). The `variants`
+  column (jsonb, `{}` = none) and `focal_x`/`focal_y` (0..1, both or neither; CHECK
+  constraint) are returned as `variants` / `focal_point`. `variants` is
+  server-owned (PUT → 400); `focal_point` is set by PUT (`null` clears, absent
+  keeps). Existing media: `main backfill-variants [-all]` (debug startup runs it
+  after seeding). It runs outside the API process, so it writes through
+  `SetMediaVariantsTx` (row `FOR UPDATE`, skip if `media_path`/`changed_at`
+  changed): a concurrent Replace always wins. Image decoding is capped at two at
+  a time (`imagePipelineSlots`). Published docs served by `GET /posts/:id`, `/posts/slug/:slug`
+  and `/public/posts/:id/blocks` get a derived `media` map for image blocks
+  (`post_block_media.go`) so the renderer can emit `srcset` and `object-position`.
 - **`media_path` in responses is a URL path, not the stored value.** The DB holds
   the filesystem path (`<UPLOAD_PATH>/<file>`, e.g. `/app/uploads/media/x.jpg` in
   compose); responses map it to where `/uploads` serves it (`/uploads/media/x.jpg`)
