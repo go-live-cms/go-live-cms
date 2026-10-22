@@ -57,6 +57,10 @@ services:
       PASETO_V4_PUBLIC_KEY_HEX: "${PASETO_V4_PUBLIC_KEY_HEX}"
       PASETO_V4_PRIVATE_KEY_HEX: "${PASETO_V4_PRIVATE_KEY_HEX}"
       PASETO_V4_LOCAL_KEY_HEX: "${PASETO_V4_LOCAL_KEY_HEX}"
+      # Optional, only during a key rotation (docs/operations/key-rotation.md).
+      PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX: "${PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX:-}"
+      PASETO_V4_PREVIOUS_LOCAL_KEY_HEX: "${PASETO_V4_PREVIOUS_LOCAL_KEY_HEX:-}"
+      PASETO_PREVIOUS_KEYS_VALID_UNTIL: "${PASETO_PREVIOUS_KEYS_VALID_UNTIL:-}"
       # Server-to-server listener (/internal/*). Never add it to `ports:`.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
       # The web container forwards the admin's /api/v1 and /uploads calls here and

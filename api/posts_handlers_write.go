@@ -85,8 +85,7 @@ func uniqueViolationMessage(err error) string {
 // createPost handles POST /posts with author validation and conditional transactions
 func (server *Server) createPost(c *gin.Context) {
 	var req CreatePostRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -247,8 +246,7 @@ func (server *Server) updatePost(c *gin.Context) {
 	}
 
 	var req UpdatePostRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 

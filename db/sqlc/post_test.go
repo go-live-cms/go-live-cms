@@ -133,12 +133,13 @@ func TestListPosts(t *testing.T) {
 	}
 
 	posts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		PostType:    "",
-		PostStatus:  "",
-		UserID:      int64(0),
-		SortBy:      "",
-		OffsetCount: 5,
-		LimitCount:  5,
+		PostType:      "",
+		PostStatus:    "",
+		UserID:        int64(0),
+		SortColumn:    "created_at",
+		SortDirection: "desc",
+		OffsetCount:   5,
+		LimitCount:    5,
 	})
 	require.NoError(t, err)
 	require.Len(t, posts, 5)
@@ -386,13 +387,14 @@ func TestListPostsByType(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	posts, err := testQueries.ListPostsByType(context.Background(), ListPostsByTypeParams{
-		PostType:    "post",
-		PostStatus:  "",
-		UserID:      int64(0),
-		SortBy:      "",
-		OffsetCount: 0,
-		LimitCount:  10,
+	posts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
+		PostType:      "post",
+		PostStatus:    "",
+		UserID:        int64(0),
+		SortColumn:    "created_at",
+		SortDirection: "desc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(posts), 3)
@@ -401,13 +403,14 @@ func TestListPostsByType(t *testing.T) {
 		require.Equal(t, "post", post.PostType)
 	}
 
-	pages, err := testQueries.ListPostsByType(context.Background(), ListPostsByTypeParams{
-		PostType:    "page",
-		PostStatus:  "",
-		UserID:      int64(0),
-		SortBy:      "",
-		OffsetCount: 0,
-		LimitCount:  10,
+	pages, err := testQueries.ListPosts(context.Background(), ListPostsParams{
+		PostType:      "page",
+		PostStatus:    "",
+		UserID:        int64(0),
+		SortColumn:    "created_at",
+		SortDirection: "desc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(pages), 2)
@@ -446,23 +449,25 @@ func TestListPostsWithSorting(t *testing.T) {
 	}
 
 	posts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		PostType:    "",
-		PostStatus:  "",
-		UserID:      int64(0),
-		SortBy:      "title_asc",
-		OffsetCount: 0,
-		LimitCount:  10,
+		PostType:      "",
+		PostStatus:    "",
+		UserID:        int64(0),
+		SortColumn:    "title",
+		SortDirection: "asc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(posts), 3)
 
 	postsByMenu, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		PostType:    "",
-		PostStatus:  "",
-		UserID:      int64(0),
-		SortBy:      "menu_order_asc",
-		OffsetCount: 0,
-		LimitCount:  10,
+		PostType:      "",
+		PostStatus:    "",
+		UserID:        int64(0),
+		SortColumn:    "menu_order",
+		SortDirection: "asc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(postsByMenu), 3)
@@ -614,12 +619,13 @@ func TestListPostsWithMeta(t *testing.T) {
 	}
 
 	postsWithMeta, err := testQueries.ListPostsWithMeta(context.Background(), ListPostsWithMetaParams{
-		PostType:    "",
-		PostStatus:  "",
-		UserID:      int64(0),
-		SortBy:      "menu_order_asc",
-		OffsetCount: 0,
-		LimitCount:  10,
+		PostType:      "",
+		PostStatus:    "",
+		UserID:        int64(0),
+		SortColumn:    "menu_order",
+		SortDirection: "asc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(postsWithMeta), 3)
@@ -630,13 +636,14 @@ func TestListPostsWithMeta(t *testing.T) {
 		require.NotEmpty(t, post.Title)
 	}
 
-	pagesWithMeta, err := testQueries.ListPostsByTypeWithMeta(context.Background(), ListPostsByTypeWithMetaParams{
-		PostType:    "page",
-		PostStatus:  "",
-		UserID:      int64(0),
-		SortBy:      "",
-		OffsetCount: 0,
-		LimitCount:  10,
+	pagesWithMeta, err := testQueries.ListPostsWithMeta(context.Background(), ListPostsWithMetaParams{
+		PostType:      "page",
+		PostStatus:    "",
+		UserID:        int64(0),
+		SortColumn:    "created_at",
+		SortDirection: "desc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(pagesWithMeta), 1)
@@ -677,12 +684,13 @@ func TestListPostsByStatus(t *testing.T) {
 	}
 
 	publishedPosts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		PostType:    "",
-		PostStatus:  "published",
-		UserID:      int64(0),
-		SortBy:      "",
-		OffsetCount: 0,
-		LimitCount:  10,
+		PostType:      "",
+		PostStatus:    "published",
+		UserID:        int64(0),
+		SortColumn:    "created_at",
+		SortDirection: "desc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(publishedPosts), 2)
@@ -692,12 +700,13 @@ func TestListPostsByStatus(t *testing.T) {
 	}
 
 	draftPosts, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		PostType:    "",
-		PostStatus:  "draft",
-		UserID:      int64(0),
-		SortBy:      "",
-		OffsetCount: 0,
-		LimitCount:  10,
+		PostType:      "",
+		PostStatus:    "draft",
+		UserID:        int64(0),
+		SortColumn:    "created_at",
+		SortDirection: "desc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(draftPosts), 2)
@@ -707,12 +716,13 @@ func TestListPostsByStatus(t *testing.T) {
 	}
 
 	publishedPostsOfTypePost, err := testQueries.ListPosts(context.Background(), ListPostsParams{
-		PostType:    "post",
-		PostStatus:  "published",
-		UserID:      int64(0),
-		SortBy:      "",
-		OffsetCount: 0,
-		LimitCount:  10,
+		PostType:      "post",
+		PostStatus:    "published",
+		UserID:        int64(0),
+		SortColumn:    "created_at",
+		SortDirection: "desc",
+		OffsetCount:   0,
+		LimitCount:    10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(publishedPostsOfTypePost), 2)

@@ -537,12 +537,13 @@ func TestListPostsAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					ListPosts(gomock.Any(), db.ListPostsParams{
-						PostType:    "",
-						PostStatus:  "",
-						UserID:      int64(0),
-						SortBy:      "date_desc",
-						OffsetCount: 0,
-						LimitCount:  5,
+						PostType:      "",
+						PostStatus:    "",
+						UserID:        int64(0),
+						SortColumn:    "created_at",
+						SortDirection: "desc",
+						OffsetCount:   0,
+						LimitCount:    5,
 					}).
 					Times(1).
 					Return(listRows, nil)
@@ -1167,11 +1168,11 @@ func TestGetPostsByTypeAPI(t *testing.T) {
 					Times(1).
 					Return(postType, nil)
 				store.EXPECT().
-					ListPostsByType(gomock.Any(), gomock.Any()).
+					ListPosts(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return([]db.Post{post}, nil)
+					Return([]db.ListPostsRow{{ID: post.ID, Title: post.Title, PostType: post.PostType}}, nil)
 				store.EXPECT().
-					CountPostsByType(gomock.Any(), postType.Name).
+					CountPostsByTypeFiltered(gomock.Any(), db.CountPostsByTypeFilteredParams{PostType: postType.Name}).
 					Times(1).
 					Return(int64(1), nil)
 			},
@@ -1193,8 +1194,8 @@ func TestGetPostsByTypeAPI(t *testing.T) {
 					GetPostType(gomock.Any(), postType.Name).
 					Times(1).
 					Return(db.PostType{}, sql.ErrNoRows)
-				store.EXPECT().ListPostsByType(gomock.Any(), gomock.Any()).Times(0)
-				store.EXPECT().CountPostsByType(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().ListPosts(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().CountPostsByTypeFiltered(gomock.Any(), gomock.Any()).Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -1206,7 +1207,7 @@ func TestGetPostsByTypeAPI(t *testing.T) {
 			query:    "?sort=invalid",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetPostType(gomock.Any(), gomock.Any()).Times(0)
-				store.EXPECT().ListPostsByType(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().ListPosts(gomock.Any(), gomock.Any()).Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
@@ -1222,10 +1223,10 @@ func TestGetPostsByTypeAPI(t *testing.T) {
 					Times(1).
 					Return(postType, nil)
 				store.EXPECT().
-					ListPostsByType(gomock.Any(), gomock.Any()).
+					ListPosts(gomock.Any(), gomock.Any()).
 					Times(1).
 					Return(nil, sql.ErrConnDone)
-				store.EXPECT().CountPostsByType(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().CountPostsByTypeFiltered(gomock.Any(), gomock.Any()).Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)

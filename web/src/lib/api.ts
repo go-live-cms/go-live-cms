@@ -1,4 +1,4 @@
-import type { Post, PostSortOption, PaginationParams, ApiResponse } from "../../gl-admin/lib/api/types"
+import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse } from "../../gl-admin/lib/api/types"
 import { SERVER_API_URL } from "../../gl-admin/lib/server-api-url"
 
 const API_BASE = typeof window === "undefined" ? SERVER_API_URL : "/api/v1"
@@ -57,6 +57,7 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}) {
 
 export interface PostQueryParams extends PaginationParams {
   sort?: PostSortOption
+  order?: SortOrder
   type?: string
   status?: string
   user_id?: string | number
@@ -70,6 +71,7 @@ export async function getPosts(params: PostQueryParams = {}): Promise<ApiRespons
   if (params.limit) searchParams.set("limit", params.limit.toString())
   if (params.offset) searchParams.set("offset", params.offset.toString())
   if (params.sort) searchParams.set("sort", params.sort)
+  if (params.order) searchParams.set("order", params.order)
   if (params.type) searchParams.set("type", params.type)
   if (params.status) searchParams.set("status", params.status)
   if (params.user_id) searchParams.set("user_id", params.user_id.toString())

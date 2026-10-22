@@ -77,8 +77,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	now := time.Now() // Single time base for consistency
 
 	var req LoginUserRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(ctx, &req) {
 		return
 	}
 

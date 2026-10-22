@@ -27,7 +27,7 @@ function buildSitemap(siteUrl: string): Promise<string> {
       }
     },
     getPublishedPosts: async (type, limit, offset) =>
-      (await getPostsByType(type, { status: "published", sort: "id_asc", limit, offset })).data,
+      (await getPostsByType(type, { status: "published", sort: "id", order: "asc", limit, offset })).data,
   }).then(buildSitemapXml)
 }
 

@@ -777,11 +777,10 @@ func TestUpdateActiveThemeSettingsAPI(t *testing.T) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, 1, "testuser", time.Minute)
 			},
 			buildStubs: func(store *mockdb.MockStore) {
-				// Handler fetches active theme before binding the body
+				// The body is validated before the active theme is looked up.
 				store.EXPECT().
 					GetActiveTheme(gomock.Any()).
-					Times(1).
-					Return(theme, nil)
+					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)

@@ -104,8 +104,7 @@ import (
 //   - 500 Internal Server Error: Database error or system failure
 func (server *Server) createTaxonomyTerm(c *gin.Context) {
 	var req CreateTaxonomyTermRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 
@@ -225,8 +224,7 @@ func (server *Server) updateTaxonomyTerm(c *gin.Context) {
 	}
 
 	var req UpdateTaxonomyTermRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !bindJSON(c, &req) {
 		return
 	}
 

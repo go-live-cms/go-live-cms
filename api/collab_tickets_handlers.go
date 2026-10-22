@@ -26,8 +26,7 @@ type collabTicketMaker interface {
 //   - 401/403: see authMiddleware and requireContentEditor
 func (server *Server) createCollabTicket(c *gin.Context) {
 	var req createCollabTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "doc is required"})
+	if !bindJSON(c, &req) {
 		return
 	}
 	if !collabDocNamePattern.MatchString(req.Doc) {
