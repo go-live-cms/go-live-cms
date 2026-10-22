@@ -17,6 +17,11 @@ import { AuthManager } from "@gl-admin/lib/auth"
 import { USER_ROLE_OPTIONS, isSiteAdmin } from "@gl-admin/lib/roles"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
+import InviteUserModal from "@gl-admin/components/users/InviteUserModal"
+import PendingInvitations from "@gl-admin/components/users/PendingInvitations"
+import { ToastContainer, useToast } from "@gl-admin/components/Toast"
+import { invitationSentNotice } from "@gl-admin/lib/invitations"
+import type { InvitationResult } from "@gl-admin/lib/api/invitations"
 
 const Users: React.FC = () => {
     const accessToken = AuthManager.getInstance().getAccessToken() || ""
@@ -24,6 +29,20 @@ const Users: React.FC = () => {
     const { baseTitle } = useGoLive()
     // User management is admin-only (requireSiteAdmin in the API).
     const isAdmin = isSiteAdmin(useCurrentRole())
+    const [inviteOpen, setInviteOpen] = useState(false)
+    const [invitationsKey, setInvitationsKey] = useState(0)
+    const { toasts, showSuccess, showError, showWarning, removeToast } = useToast()
+    const showSentNotice = (result: InvitationResult) => {
+        const notice = invitationSentNotice(result)
+        if (notice.type === "success") showSuccess(notice.message)
+        else showWarning(notice.message, 6000)
+    }
+    const handleInvited = (result: InvitationResult) => {
+        setInviteOpen(false)
+        setInvitationsKey((k) => k + 1)
+        showSentNotice(result)
+    }
+    const showInvitationError = useCallback((message: string) => showError(message), [])
     const initialFilters = { role: "", sort: "" }
     const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>(initialFilters)
     const columns: TableColumnWithRender<User>[] = [
@@ -107,15 +126,32 @@ const Users: React.FC = () => {
                 onChange={(value) => setSelectedFilters((prev) => ({ ...prev, sort: value }))}
             />
             {isAdmin && (
-                <Button onClick={() => navigate("/users/new")} className="gl-admin-media__new-media-btn">
-                    <Icon name="add" color="#000000" width="14" height="14" /> New User
-                </Button>
+                <>
+                    <Button onClick={() => setInviteOpen(true)} variation="primary">
+                        Invite user
+                    </Button>
+                    <Button onClick={() => navigate("/users/new")} className="gl-admin-media__new-media-btn">
+                        <Icon name="add" color="#000000" width="14" height="14" /> New User
+                    </Button>
+                </>
             )}
         </>
     )
 
     return (
         <Listing title="Users" actions={actions}>
+            {isAdmin && (
+                <>
+                    <PendingInvitations
+                        refreshKey={invitationsKey}
+                        onResent={showSentNotice}
+                        onRevoked={(invitation) => showSuccess(`Invitation to ${invitation.email} revoked.`)}
+                        onError={showInvitationError}
+                    />
+                    <InviteUserModal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={handleInvited} />
+                </>
+            )}
+            <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
             <Pagination fetchData={fetchData} token={accessToken} query={selectedFilters || {}}>
                 {({ data, loading, error, retry }) => {
                     if (error) {
@@ -149,11 +185,11 @@ const Users: React.FC = () => {
                             <EmptyState
                                 icon="user"
                                 title="No users yet"
-                                description="Invite your team by creating their accounts."
+                                description="Invite your team: they'll get an email to set up their account."
                                 action={
                                     isAdmin && (
-                                        <Button variation="primary" onClick={() => navigate("/users/new")}>
-                                            <Icon name="add" color="white" width="14" height="14" /> Add a user
+                                        <Button variation="primary" onClick={() => setInviteOpen(true)}>
+                                            <Icon name="add" color="white" width="14" height="14" /> Invite user
                                         </Button>
                                     )
                                 }

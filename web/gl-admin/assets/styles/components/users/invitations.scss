@@ -1,0 +1,96 @@
+// Invite user modal and the Users page's pending invitations (#148).
+
+// The short form fits without scrolling; let the role dropdown spill out of
+// the modal instead of being clipped by its scroll container.
+.gl-modal:has(.gl-invite-form),
+.gl-modal:has(.gl-invite-form) .gl-modal__content {
+  overflow: visible;
+}
+
+.gl-invite-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+
+  &__hint {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 145%;
+    margin: 0;
+  }
+
+  &__error {
+    background: var(--input-invalid-background);
+    border: 1px solid var(--input-invalid-border-color);
+    border-radius: var(--border-radius);
+    color: var(--input-invalid-color);
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin: 0;
+    padding: 0.75rem 1rem;
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+}
+
+.gl-invitations {
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+
+  &__title {
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__item {
+    align-items: center;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding: 0.625rem 0;
+
+    &:first-child {
+      border-top: 0;
+    }
+  }
+
+  &__email {
+    color: var(--text-primary);
+    flex: 1 1 14rem;
+    font-weight: 500;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__expiry {
+    color: var(--text-quaternary);
+    font-size: 0.875rem;
+
+    &.is-expired {
+      color: var(--input-invalid-color);
+    }
+  }
+
+  &__actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+}

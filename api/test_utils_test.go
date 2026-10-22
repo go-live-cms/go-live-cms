@@ -52,6 +52,12 @@ func newTestConfig(t *testing.T) util.Config {
 		MaxUploadSize:         "10MB",
 		RoleLookupSecret:      testRoleLookupSecret,
 		IsTestMode:            true,
+		// Mail (#148): unused in test mode (the "log" driver), but tests that
+		// turn test mode off need a complete release-mode setup.
+		SMTPHost:      "smtp.test.invalid",
+		SMTPPort:      587,
+		MailFrom:      "GoLive CMS <no-reply@test.invalid>",
+		PublicBaseURL: testPublicBaseURL,
 	}
 }
 
