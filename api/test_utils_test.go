@@ -1,35 +1,19 @@
 package api
 
 import (
-	"math/rand"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	p "aidanwoods.dev/go-paseto"
 	"github.com/gin-gonic/gin"
-	"github.com/golang/mock/gomock"
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/util"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 )
-
-const alphabet = "abcdefghijklmnopqrstuvwxyz"
-
-func randomString(n int) string {
-	var sb strings.Builder
-	k := len(alphabet)
-
-	for range n {
-		c := alphabet[rand.Intn(k)]
-		sb.WriteByte(c)
-	}
-
-	return sb.String()
-}
 
 func newTestServer(t *testing.T, store db.Store) *Server {
 

@@ -1,0 +1,11 @@
+# Build context for the root (API) Dockerfile. Keep local config/secrets and
+# the JS trees out of it: the API image only needs the Go sources and migrations.
+.git
+app.env
+.env
+**/.env
+web/
+websocket/
+uploads/
+coverage.out
+go-live-cms

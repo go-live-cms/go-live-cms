@@ -366,11 +366,11 @@ const EditorInner = forwardRef<EditorRef, Props>(function EditorInner(
         persistenceManager.initialize()
       }
 
-      collabProvider.provider.off("synced", onSynced)
+      collabProvider.provider.off("sync", onSynced)
     }
 
-    collabProvider.provider.on("synced", onSynced)
-    return () => collabProvider.provider.off("synced", onSynced)
+    collabProvider.provider.on("sync", onSynced)
+    return () => collabProvider.provider.off("sync", onSynced)
   }, [editor, collabProvider, value, blockDocManager, persistenceManager])
 
   // Autosave trigger: notify the persistence manager on every editor edit.

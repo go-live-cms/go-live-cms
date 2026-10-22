@@ -1,13 +1,17 @@
 ---
 import Head from "@/layouts/Page/Head.astro"
-import Foot from "@/layouts/Page/Foot.astro"
 import { SITE_TITLE } from "@/consts"
 import GLLogo from "@gl-admin/assets/gl-logo.svg?raw"
 import "@gl-admin/assets/styles/pages/login.scss"
 ---
 
+<!doctype html>
+<html lang="en">
+<head>
+<!-- Head renders only the <head> contents; this page owns the document skeleton. -->
 <Head title={`Sign in - ${SITE_TITLE}`} description="Sign in to the GoLive admin" />
-
+</head>
+<body>
 <main class="gl-admin-login">
   <form class="gl-admin-login__card" id="loginForm" novalidate>
     <header class="gl-admin-login__header">
@@ -58,7 +62,6 @@ import "@gl-admin/assets/styles/pages/login.scss"
   </form>
 </main>
 
-<Foot>
   <script>
     import { authManager } from "@gl-admin/lib/auth.ts"
 
@@ -200,4 +203,5 @@ import "@gl-admin/assets/styles/pages/login.scss"
       showError(friendlyError(result.status, result.error))
     })
   </script>
-</Foot>
+</body>
+</html>

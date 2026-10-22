@@ -51,11 +51,22 @@ services:
       # Plain interpolation (not :?) so `down`/`ps` still work without it; the API
       # itself refuses to start when it is empty.
       ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
+      # Required signing/encryption keys (64-hex public, 128-hex private, 64-hex
+      # local). The image has no app.env, so they must come from the environment
+      # (e.g. a .env file next to this one, never committed).
+      PASETO_V4_PUBLIC_KEY_HEX: "${PASETO_V4_PUBLIC_KEY_HEX}"
+      PASETO_V4_PRIVATE_KEY_HEX: "${PASETO_V4_PRIVATE_KEY_HEX}"
+      PASETO_V4_LOCAL_KEY_HEX: "${PASETO_V4_LOCAL_KEY_HEX}"
       # Server-to-server listener (/internal/*). Never add it to `ports:`.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
-      # Behind a reverse proxy, list its IPs/CIDRs so rate limits key on the real
-      # client (X-Forwarded-For). Empty trusts no proxy. See readme "Rate limiting".
-      TRUSTED_PROXIES: ""
+      # The web container forwards the admin's /api/v1 and /uploads calls here and
+      # appends the browser IP to X-Forwarded-For (web/src/middleware/apiProxy.ts).
+      # Trust only its fixed address so rate limits key on the browser; add your
+      # reverse proxy's address if one sits in front of the API. See readme
+      # "Rate limiting". SSR requests from web carry no client IP, so exempt them
+      # from the general limit (auth limits still apply).
+      TRUSTED_PROXIES: "172.28.0.10"
+      RATE_LIMIT_EXEMPT_CIDRS: "172.28.0.10"
       # Uploaded media. Media rows store absolute paths under it, so keep it the
       # same across deploys and restores. Served at /uploads/media/*.
       UPLOAD_PATH: "/app/uploads/media"
@@ -75,13 +86,25 @@ services:
   web:
     build:
       context: ./web
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile
     ports:
       - "4321:4321"
     environment:
       PUBLIC_API_URL: http://api:8080/api/v1
+      # SSR-side API base (gl-admin/lib/server-api-url.ts).
+      SERVER_API_URL: http://api:8080/api/v1
     depends_on:
       - api
+    networks:
+      default:
+        # Fixed so the API can trust exactly this address (TRUSTED_PROXIES above).
+        ipv4_address: 172.28.0.10
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
 
 volumes:
   postgres_data:

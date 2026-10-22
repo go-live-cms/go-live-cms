@@ -95,9 +95,10 @@ non-editors anyway (see `websocket/CLAUDE.md` → Auth).
    (e.g. 401) must remain retryable and must NOT permanently disable autosave.
 
 3b. **Seed the editor from the REST working copy ONLY when the live Yjs doc is empty,
-   and ONLY after the WS `synced` event.** On a warm reload the WS server restores the
-   prosemirror fragment — Yjs is the source of truth and the Collaboration plugin already
-   shows the content. The seed runs inside `onSynced` (Editor.tsx) so the authoritative
+   and ONLY after the WS sync event.** (`Editor.tsx` listens to `sync`, the typed
+   event y-websocket emits right after the untyped `synced`, with the same state.)
+   On a warm reload the WS server restores the prosemirror fragment — Yjs is the source
+   of truth and the Collaboration plugin already shows the content. The seed runs inside `onSynced` (Editor.tsx) so the authoritative
    server state has loaded before we test emptiness; seeding earlier (e.g. from
    `initialize()` before WS sync) would mint fresh structs that then collide with the
    server's on sync — the same divergence as rule 0. `setContent` over a non-empty doc
@@ -115,7 +116,7 @@ non-editors anyway (see `websocket/CLAUDE.md` → Auth).
    working copy). Only explicit `forceSave`/`publish` may write empty.
 
 6. **Run-once content load:** `Editor.tsx` guards the `onSynced` content-load with
-   `hasInitializedRef` (reset only on `postId` change). The provider's `synced` event
+   `hasInitializedRef` (reset only on `postId` change). The provider's `sync` event
    re-fires on every reconnect; without the guard, reconnects re-run `setContent` and
    clobber in-progress typing. The persistence manager has its own `hasInitialized`.
 

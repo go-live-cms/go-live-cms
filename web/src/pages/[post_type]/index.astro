@@ -97,7 +97,7 @@ const pluralType = postType === 'page' ? 'Pages' : `${displayType}s`
           </ul>
         )}
         
-        {meta.total > posts.length && (
+        {(meta.total ?? 0) > posts.length && (
           <div class="pagination">
             <a href={`/${postType}/?page=2`}>Load More</a>
           </div>

@@ -248,8 +248,17 @@ func LoadConfig(path string) (config Config, err error) {
 	// Unmarshal only sees AutomaticEnv values for keys it already knows from a
 	// default or app.env, so without this a ROLE_LOOKUP_SECRET set only in the
 	// environment (e.g. compose) would be silently dropped.
-	if err = viper.BindEnv("ROLE_LOOKUP_SECRET"); err != nil {
-		return config, err
+	// The same goes for the PASETO keys: secrets with no safe default, which a
+	// deployment passes as env vars (the API image no longer bakes in app.env).
+	for _, key := range []string{
+		"ROLE_LOOKUP_SECRET",
+		"PASETO_V4_PUBLIC_KEY_HEX",
+		"PASETO_V4_PRIVATE_KEY_HEX",
+		"PASETO_V4_LOCAL_KEY_HEX",
+	} {
+		if err = viper.BindEnv(key); err != nil {
+			return config, err
+		}
 	}
 
 	// Try to read config file (optional)
