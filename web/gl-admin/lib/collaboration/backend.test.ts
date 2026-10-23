@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest"
 import { hocuspocusUrl, parseCollabBackend } from "./backend"
 
-describe("collab backend flag (#206 P3)", () => {
-  it("defaults to y-websocket; only the exact value selects hocuspocus", () => {
-    expect(parseCollabBackend(undefined)).toBe("y-websocket")
-    expect(parseCollabBackend("")).toBe("y-websocket")
-    expect(parseCollabBackend("Hocuspocus")).toBe("y-websocket")
+describe("collab backend flag (#206 P3, P4)", () => {
+  it("defaults to hocuspocus; only the exact value selects y-websocket (rollback)", () => {
+    expect(parseCollabBackend(undefined)).toBe("hocuspocus")
+    expect(parseCollabBackend("")).toBe("hocuspocus")
+    expect(parseCollabBackend("Y-Websocket")).toBe("hocuspocus")
     expect(parseCollabBackend("hocuspocus")).toBe("hocuspocus")
+    expect(parseCollabBackend("y-websocket")).toBe("y-websocket")
   })
 
   it("dev: port 1235 on the page's own host name (localhost and 127.0.0.1 logins both reach it)", () => {

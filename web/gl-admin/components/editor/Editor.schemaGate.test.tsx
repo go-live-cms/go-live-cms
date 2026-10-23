@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { act, createRef } from "react"
+import { act, createRef, StrictMode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import * as Y from "yjs"
 import { Awareness } from "y-protocols/awareness"
@@ -10,7 +10,8 @@ import { BlockIdExtension } from "./extensions/BlockIdExtension"
 import { tiptapExtensionRegistry } from "./utils/extensionRegistry"
 import { EDITOR_FRAGMENT } from "@gl-admin/lib/collaboration/schemaGuard"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
-import Editor, { type EditorRef } from "./Editor"
+// The y-websocket editor by name: the default export follows PUBLIC_COLLAB_BACKEND.
+import { YWebsocketEditor as Editor, type EditorRef } from "./Editor"
 
 // The schema gate in Editor.tsx (#206/#274): the real Editor, mounted on a shared doc
 // holding a theme block. Without the theme extension it must open read-only and leave
@@ -187,6 +188,34 @@ describe("Editor schema gate", () => {
     expect(pm?.textContent).toContain("Careful")
     // (StarterKit's TrailingNode may append an empty paragraph after the callout.)
     expect(nodeTypes().slice(0, 2)).toEqual(["paragraph", "callout"])
+  })
+
+  // StrictMode (dev) runs effect cleanups once right after mount. The persistence
+  // manager's cleanup used to clear its ref, so the next re-render with new inline save
+  // callbacks (PostForm passes them) built a second, never-initialized manager and every
+  // autosave was dropped (#284's rollback test).
+  it("still autosaves under StrictMode after a re-render with new callbacks", async () => {
+    tiptapExtensionRegistry.register(Callout)
+    vi.mocked(blockAPIClient.updatePostBlocks).mockResolvedValue({ revision: 2 } as any)
+    const ref = createRef<EditorRef>()
+    const render = () =>
+      root.render(
+        <StrictMode>
+          <Editor ref={ref} value="" onChange={() => {}} postId={7} onSaveStart={() => {}} onSaveSuccess={() => {}} />
+        </StrictMode>
+      )
+    await act(async () => render())
+    await act(async () => fake.collab.provider.sync(live))
+    await settle()
+    // Past the 500ms init latch, then a parent re-render with fresh callbacks.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 600)))
+    await act(async () => render())
+
+    const editor = (container.querySelector(".ProseMirror") as any).editor
+    await act(async () => editor.commands.insertContentAt(1, "typed "))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 1800)))
+
+    expect(blockAPIClient.updatePostBlocks).toHaveBeenCalled()
   })
 
   it("releases the provider references it took on unmount", async () => {

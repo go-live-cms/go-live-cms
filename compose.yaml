@@ -1,7 +1,8 @@
 name: golive_cms
 
 # Production stack (#272). Only `caddy` publishes ports (80/443): it terminates TLS,
-# sends /collab/* to the websocket service and everything else to web, which forwards
+# sends /collab to the Hocuspocus collab service (#206 P4, #284; it replaced the
+# y-websocket `websocket` service) and everything else to web, which forwards
 # /api/v1 and /uploads to the API. Postgres, the API and the collab server are reachable
 # only on the compose network.
 #
@@ -39,7 +40,7 @@ services:
   api:
     # Built locally (tagged golive/api:local); a deployment pulls the CD image instead
     # (GOLIVE_IMAGE_REGISTRY=ghcr.io/go-live-cms, GOLIVE_IMAGE_TAG=<commit sha>), see
-    # scripts/deploy/deploy.sh. Same for web and websocket.
+    # scripts/deploy/deploy.sh. Same for web and collab.
     image: "${GOLIVE_IMAGE_REGISTRY:-golive}/api:${GOLIVE_IMAGE_TAG:-local}"
     build:
       context: .
@@ -89,12 +90,14 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       MAIL_FROM: "${MAIL_FROM}"
-      # API -> collab server calls (#206/#280). Under y-websocket (the default),
-      # squash-on-publish (best effort) compacts its LevelDB log after a publish.
-      # Same value as the websocket service's SQUASH_SECRET. Falls back to the
-      # pre-#280 name so an older .env keeps working.
-      COLLAB_BACKEND: "${COLLAB_BACKEND:-y-websocket}"
-      COLLAB_INTERNAL_URL: "http://websocket:1234"
+      # API -> collab server calls (#206/#280). Under hocuspocus (the default since
+      # #284) every publish first flushes the doc at collab:1236 and answers 503 if it
+      # can't. The secret is the collab service's COLLAB_INTERNAL_SECRET; it falls
+      # back to the pre-#280 name so an older .env keeps working. COLLAB_BACKEND must
+      # match the web image's build arg PUBLIC_COLLAB_BACKEND. Rolling back to
+      # y-websocket means redeploying a pre-#284 release: docs/operations/collab-cutover.md.
+      COLLAB_BACKEND: "${COLLAB_BACKEND:-hocuspocus}"
+      COLLAB_INTERNAL_URL: "${COLLAB_INTERNAL_URL:-http://collab:1236}"
       COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET:-${COLLAB_SQUASH_SECRET:-}}"
       # Browser requests reach the API as caddy -> web -> api. web appends its peer
       # (caddy) to X-Forwarded-For (web/src/middleware/apiProxy.ts), and caddy sets it
@@ -157,38 +160,32 @@ services:
         # Fixed so the API can trust exactly this address (TRUSTED_PROXIES above).
         ipv4_address: 172.28.0.10
 
-  websocket:
-    image: "${GOLIVE_IMAGE_REGISTRY:-golive}/websocket:${GOLIVE_IMAGE_TAG:-local}"
+  # The Hocuspocus collab server (#206, web/collab-server/). Caddy sends /collab here.
+  # Live Yjs state is in Postgres (post_ydoc_state), so it has no volume.
+  collab:
+    image: "${GOLIVE_IMAGE_REGISTRY:-golive}/collab:${GOLIVE_IMAGE_TAG:-local}"
     build:
-      context: ./websocket
-      dockerfile: Dockerfile
+      context: ./web
+      dockerfile: collab-server/Dockerfile
     environment:
-      # Verifies collab tickets with the API's public key (same variable as the API),
-      # and must use the API's issuer (PASETO_ISSUER, default golive.auth).
+      PORT: "1235"
+      # Internal listener: /healthz (the image's healthcheck) and the flush the API
+      # calls before a publish. Never published; the API reaches it as collab:1236.
+      INTERNAL_PORT: "1236"
+      # Verifies collab tickets with the API's public key and issuer.
       PASETO_V4_PUBLIC_KEY_HEX: "${PASETO_V4_PUBLIC_KEY_HEX}"
       PASETO_ISSUER: golive.auth
-      # Per-connection role check (#216, #223) on the API's unpublished internal
-      # listener. Required: the server exits at startup without either.
+      # Access lookups and load/store on the API's unpublished internal listener.
+      # Required: the server exits at startup without any of these.
       INTERNAL_API_URL: http://api:8081
       ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
-      SQUASH_SECRET: "${COLLAB_INTERNAL_SECRET:-${COLLAB_SQUASH_SECRET:-}}"
-      DATA_PATH: /data/yjs
-    volumes:
-      # LevelDB: in-flight Yjs state across restarts (Postgres block_doc is canonical).
-      - ws_data:/data/yjs
+      COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET:-${COLLAB_SQUASH_SECRET:-}}"
     depends_on:
       api:
         condition: service_healthy
-    # GET / answers 200 once the server listens (server.js). busybox wget.
-    healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:1234/"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
     restart: unless-stopped
     # Exactly ONE collab process: live docs and the ticket replay guard are in
-    # memory (websocket/CLAUDE.md). Never scale this service.
+    # memory (web/collab-server/CLAUDE.md). Never scale this service.
     deploy:
       replicas: 1
 
@@ -210,7 +207,7 @@ services:
     depends_on:
       web:
         condition: service_healthy
-      websocket:
+      collab:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -230,6 +227,5 @@ networks:
 volumes:
   postgres_data:
   uploads:
-  ws_data:
   caddy_data:
   caddy_config:

@@ -21,10 +21,15 @@ from the very top**.
 ## Two backends behind a build-time flag (#206 P3, #283)
 
 `PUBLIC_COLLAB_BACKEND` (`backend.ts`, inlined at build) picks the collab path for the whole
-deployment, never per user, and must match the API's `COLLAB_BACKEND`:
-- **`y-websocket` (default):** everything below this section (CollaborationProvider,
-  BlockDocManager, BlockPersistenceManager, rules 1–6). Unchanged by P3.
-- **`hocuspocus`:** the client is a bound editor that **never seeds and never saves
+deployment, never per user, and must match the API's `COLLAB_BACKEND`. **Hocuspocus is the
+default since the P4 cutover (#284)**; only the exact value `y-websocket` selects the old
+path, for a rollback (`docs/operations/collab-cutover.md`) until P5 deletes it.
+- **`y-websocket` (rollback only):** everything below this section (CollaborationProvider,
+  BlockDocManager, BlockPersistenceManager, rules 1–6). Editor.tsx exports it by name
+  (`YWebsocketEditor`) so its tests don't depend on the flag. Its persistence manager ref
+  must survive StrictMode's mount-time effect cleanup (#284 found autosave silently dead in
+  dev when it didn't; pinned in `Editor.schemaGate.test.tsx`).
+- **`hocuspocus` (default):** the client is a bound editor that **never seeds and never saves
   content**. The server (`web/collab-server/`) seeds a new doc from `block_doc` and stores
   the Yjs state + derived `block_doc` (debounced). Files:
   - `HocuspocusCollaboration.ts`: `HocuspocusProvider` + ticket per (re)connect

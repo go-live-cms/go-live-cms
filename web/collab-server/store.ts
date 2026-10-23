@@ -54,7 +54,7 @@ function validationSummary(error: unknown): string {
 }
 
 /** JSON with object keys sorted: the stored doc comes back from Postgres jsonb, which reorders keys. */
-const canonicalJSON = (value: unknown): string =>
+export const canonicalJSON = (value: unknown): string =>
   JSON.stringify(value, (_key, v: unknown) =>
     v && typeof v === "object" && !Array.isArray(v)
       ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))

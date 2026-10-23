@@ -132,10 +132,12 @@ the WS server.
 
 ## Collaboration backend: `COLLAB_BACKEND` (#206, #280)
 
-`y-websocket` (default, today's behaviour) or `hocuspocus` (`util.Config.UsesHocuspocus()`;
-`LoadConfig` rejects anything else, the zero `Config` in tests is y-websocket). It is
-deployment-wide and must match web's `PUBLIC_COLLAB_BACKEND`. **Everything Hocuspocus-only
-checks the flag**, so main behaves exactly as before until the P4 cutover.
+`hocuspocus` (`LoadConfig`'s default since the P4 cutover, #284) or `y-websocket` (rollback
+only until P5; `util.Config.UsesHocuspocus()`; `LoadConfig` rejects anything else, and the
+zero `Config` in tests is still y-websocket, so handler tests opt into Hocuspocus
+explicitly). It is deployment-wide and must match web's `PUBLIC_COLLAB_BACKEND`. Under
+hocuspocus `NewServer` requires `COLLAB_INTERNAL_URL` + `COLLAB_INTERNAL_SECRET`. Cutover
+and rollback: `docs/operations/collab-cutover.md`.
 
 - **API → collab calls** (`collab_internal_client.go`) use `COLLAB_INTERNAL_URL` +
   `COLLAB_INTERNAL_SECRET` (Bearer; renamed from `COLLAB_SERVER_URL` /

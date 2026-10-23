@@ -311,8 +311,17 @@ jobs:
         working-directory: web
         run: npm run check
 
+      # Default build: the Hocuspocus editor (#284).
       - name: Build
         working-directory: web
+        run: npm run build
+
+      # The y-websocket editor must keep building until P5 deletes it: it's the
+      # rollback path (docs/operations/collab-cutover.md).
+      - name: Build (y-websocket, rollback)
+        working-directory: web
+        env:
+          PUBLIC_COLLAB_BACKEND: y-websocket
         run: npm run build
 
   docker:
@@ -329,6 +338,10 @@ jobs:
           - image: web
             context: web
             file: web/Dockerfile
+            # Same build arg as cd.yml, so CD reuses these layers.
+            build-args: PUBLIC_COLLAB_BACKEND=hocuspocus
+          # Still built until P5 deletes it (#206): retired from compose.yaml and CD by
+          # the cutover (#284), kept in compose.dev.yaml for the rollback window.
           - image: websocket
             context: websocket
             file: websocket/Dockerfile
@@ -348,6 +361,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
+          build-args: ${{ matrix.build-args }}
           push: false
           load: ${{ matrix.image == 'collab' }}
           tags: golive-${{ matrix.image }}:ci

@@ -6,17 +6,18 @@ processes + Postgres, run via Docker Compose.
 | Process | Port | Stack | Dir |
 |---------|------|-------|-----|
 | API | 8080 (+ 8081 internal, never published) | Go, Gin, sqlc, PASETO v4 | `api/`, `db/`, `token/`, `util/` |
-| WebSocket collab | 1234 | Node, y-websocket, Yjs, LevelDB | `websocket/` |
-| Hocuspocus collab (dev only, not the default yet; editor behind `PUBLIC_COLLAB_BACKEND=hocuspocus`, #206) | 1235 (+ 1236 internal) | Node, Hocuspocus, esbuild bundle | `web/collab-server/` |
+| Hocuspocus collab (the editor's default since the P4 cutover, #206/#284) | 1235 (+ 1236 internal) | Node, Hocuspocus, esbuild bundle | `web/collab-server/` |
+| WebSocket collab (retired; dev rollback only, profile `y-websocket`, deleted in P5) | 1234 | Node, y-websocket, Yjs, LevelDB | `websocket/` |
 | Web | 4321 | Astro SSR + React admin SPA | `web/` |
 | DB | 5432 | PostgreSQL 12 | `db/migration/` |
 
 **Production** (`compose.yaml`, #272/#267) adds **Caddy** in front: the only published
-service (80/443, TLS), `/collab/*` → websocket, everything else → web (which forwards
-`/api/v1` + `/uploads`). Nothing else publishes a port. CD (`.github/workflows/cd.yml`)
-pushes `ghcr.io/go-live-cms/{api,web,websocket}:<sha>` and deploys to one VM with
-`scripts/deploy/deploy.sh` (backup → migrate with the new image → `up --wait`). Runbook:
-`docs/operations/deploy.md`.
+service (80/443, TLS), `/collab` → the Hocuspocus `collab` service, everything else → web
+(which forwards `/api/v1` + `/uploads`). Nothing else publishes a port. CD
+(`.github/workflows/cd.yml`) pushes `ghcr.io/go-live-cms/{api,web,collab}:<sha>` and deploys
+to one VM with `scripts/deploy/deploy.sh` (backup → migrate with the new image → `up
+--wait`). Runbooks: `docs/operations/deploy.md`, `docs/operations/collab-cutover.md`
+(y-websocket → Hocuspocus cutover and rollback). No production deployment exists yet.
 
 Scoped context lives in nested `CLAUDE.md` files — read the one for the area you're
 working in: `api/`, `web/`, `web/gl-admin/lib/collaboration/`, `websocket/`,
@@ -100,7 +101,8 @@ sh scripts/backup/test-restore.sh
 
 # Full stack (dev)
 docker compose -f compose.dev.yaml up -d
-docker compose -f compose.dev.yaml restart websocket   # e.g. to test reconnects
+docker compose -f compose.dev.yaml restart collab      # e.g. to test reconnects
+sh scripts/collab/leveldb-diff-dev.sh                  # P4 dry run: legacy LevelDB vs block_doc (read-only)
 
 # Production stack locally (secrets in a gitignored .env; use another -p to keep it
 # apart from real volumes). Release mode: no seeded accounts, see deploy.md step 5.

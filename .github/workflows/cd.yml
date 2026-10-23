@@ -2,7 +2,7 @@ name: cd
 
 # Continuous delivery (#267): single VM running compose.yaml, images on GHCR.
 #
-#   main, after `ci-test` passes -> push ghcr.io/<owner>/{api,web,websocket}:<sha> + :latest,
+#   main, after `ci-test` passes -> push ghcr.io/<owner>/{api,web,collab}:<sha> + :latest,
 #                                   then deploy <sha> to the `production` environment
 #   tag v*                       -> push :<sha> + :<version> (release images, no deploy)
 #   manual (workflow_dispatch)   -> deploy an existing <sha>: redeploy or ROLLBACK
@@ -63,9 +63,14 @@ jobs:
           - image: web
             context: ./web
             file: ./web/Dockerfile
-          - image: websocket
-            context: ./websocket
-            file: ./websocket/Dockerfile
+            # The editor's collab backend is inlined at build time; it must match the
+            # API's COLLAB_BACKEND (compose.yaml, default hocuspocus since #284).
+            build-args: PUBLIC_COLLAB_BACKEND=hocuspocus
+          # The Hocuspocus collab server (#206), which replaced the y-websocket
+          # `websocket` image in #284. Releases before that still have theirs on GHCR.
+          - image: collab
+            context: ./web
+            file: ./web/collab-server/Dockerfile
     steps:
       - uses: actions/checkout@v5
         with:
@@ -93,6 +98,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
+          build-args: ${{ matrix.build-args }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

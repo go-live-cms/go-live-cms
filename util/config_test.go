@@ -44,19 +44,25 @@ func TestLoadConfigGinMode(t *testing.T) {
 }
 
 func TestLoadConfigCollabBackend(t *testing.T) {
+	// Hocuspocus is the default since the P4 cutover (#284).
 	t.Setenv("COLLAB_BACKEND", "")
 	config, err := LoadConfig(t.TempDir())
 	require.NoError(t, err)
-	require.Equal(t, CollabBackendYWebsocket, config.CollabBackend)
+	require.Equal(t, CollabBackendHocuspocus, config.CollabBackend)
+	require.True(t, config.UsesHocuspocus())
+
+	t.Setenv("COLLAB_BACKEND", "y-websocket")
+	config, err = LoadConfig(t.TempDir())
+	require.NoError(t, err)
 	require.False(t, config.UsesHocuspocus())
 
 	t.Setenv("COLLAB_BACKEND", "hocuspocus")
-	t.Setenv("COLLAB_INTERNAL_URL", "http://collab:1235")
+	t.Setenv("COLLAB_INTERNAL_URL", "http://collab:1236")
 	t.Setenv("COLLAB_INTERNAL_SECRET", "s3cret")
 	config, err = LoadConfig(t.TempDir())
 	require.NoError(t, err)
 	require.True(t, config.UsesHocuspocus())
-	require.Equal(t, "http://collab:1235", config.CollabInternalURL)
+	require.Equal(t, "http://collab:1236", config.CollabInternalURL)
 	require.Equal(t, "s3cret", config.CollabInternalSecret)
 
 	t.Setenv("COLLAB_BACKEND", "Hocuspocus")

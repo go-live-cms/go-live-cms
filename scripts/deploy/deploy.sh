@@ -6,7 +6,7 @@
 #   sh scripts/deploy/deploy.sh <image-tag>          # e.g. the 40-char commit sha
 #
 # Order, so the new API never runs against an unmigrated schema:
-#   1. pull the three app images for <tag>
+#   1. pull the three app images for <tag> (api, web, collab; websocket before #284)
 #   2. refuse if the database is AHEAD of <tag>'s migrations (a rollback past a release
 #      that added migrations), unless ALLOW_DOWN_MIGRATIONS=1, which migrates down with
 #      the currently running API image (the only one that has those down files)
@@ -49,8 +49,8 @@ migrate_with() { # <image> <migrate args...>
 }
 
 if [ "${SKIP_PULL:-}" != "1" ]; then
-  log "pulling $GOLIVE_IMAGE_REGISTRY/{api,web,websocket}:$TAG"
-  dc pull --quiet api web websocket postgres caddy
+  log "pulling $GOLIVE_IMAGE_REGISTRY/{api,web,collab}:$TAG"
+  dc pull --quiet api web collab postgres caddy
 fi
 
 log "starting postgres"

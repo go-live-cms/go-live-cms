@@ -129,17 +129,19 @@ type Config struct {
 	// debug mode (GIN_MODE=debug) so local HTTP works. Every other mode forces Secure.
 	CookieSecure bool `mapstructure:"COOKIE_SECURE"`
 
-	// CollabBackend selects the collaboration server (#206): "y-websocket"
-	// (default, today's behaviour) or "hocuspocus". It is deployment-wide and
-	// must match the web build's PUBLIC_COLLAB_BACKEND. Under "hocuspocus" the
-	// collab server owns block_doc: PUT /posts/:id/blocks answers 409, publish
-	// flushes the document first, and contributors get read-only tickets.
+	// CollabBackend selects the collaboration server (#206): "hocuspocus"
+	// (default since the P4 cutover, #284) or "y-websocket" (rollback only,
+	// removed in P5). It is deployment-wide and must match the web build's
+	// PUBLIC_COLLAB_BACKEND. Under "hocuspocus" the collab server owns
+	// block_doc: PUT /posts/:id/blocks answers 409, publish flushes the
+	// document first, and contributors get read-only tickets.
 	CollabBackend string `mapstructure:"COLLAB_BACKEND"`
 
 	// CollabInternalURL is the base URL of the collab server's internal HTTP
 	// endpoints, used for the API's server-to-server calls to it: squash after
 	// publish (y-websocket) or flush before publish (hocuspocus).
-	// Example: "http://websocket:1234" (Docker) or "http://localhost:1234" (local dev)
+	// Example: "http://collab:1236" (Docker) or "http://localhost:1236" (local dev);
+	// "http://websocket:1234" under y-websocket.
 	CollabInternalURL string `mapstructure:"COLLAB_INTERNAL_URL"`
 
 	// CollabInternalSecret is the shared secret sent as "Authorization: Bearer
@@ -297,14 +299,12 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("SEED_ADMIN_USER", "")
 	viper.SetDefault("SEED_ADMIN_PASS", "")
 
-	// Collaborative editing server. Under y-websocket these are optional (squash
-	// is silently skipped if either is unset).
-	// Both default to empty so the feature is truly opt-in: setting only one would
-	// otherwise cause every publish to fire a goroutine that times out against
-	// http://localhost:1234 in environments without a co-located WS server.
-	// Under COLLAB_BACKEND=hocuspocus both are required (NewServer checks):
-	// publish can't flush without them.
-	viper.SetDefault("COLLAB_BACKEND", CollabBackendYWebsocket)
+	// Collaborative editing server. Under COLLAB_BACKEND=hocuspocus (the default
+	// since #284) the URL and secret are required (NewServer checks): publish
+	// can't flush without them. Under y-websocket they are optional (squash is
+	// silently skipped if either is unset). Both default to empty rather than
+	// to a guessed address, so a missing setting fails at startup.
+	viper.SetDefault("COLLAB_BACKEND", CollabBackendHocuspocus)
 	viper.SetDefault("COLLAB_INTERNAL_URL", "")
 	viper.SetDefault("COLLAB_INTERNAL_SECRET", "")
 
@@ -490,8 +490,8 @@ const (
 )
 
 // UsesHocuspocus reports whether the Hocuspocus collab server owns block_doc
-// (COLLAB_BACKEND=hocuspocus). Anything else, including the zero Config in
-// tests, is today's y-websocket behaviour.
+// (COLLAB_BACKEND=hocuspocus, LoadConfig's default). Anything else, including
+// the zero Config in tests, is the y-websocket behaviour (kept until P5).
 func (c Config) UsesHocuspocus() bool {
 	return c.CollabBackend == CollabBackendHocuspocus
 }

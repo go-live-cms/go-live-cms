@@ -11,14 +11,17 @@ and how schema migrations run in production. The scripts live in
 |------|-------|------------|--------------|
 | Users, posts (`block_doc`, `published_block_doc`, versions), media rows, taxonomies, settings, themes, sessions | Postgres (`postgres_data` volume) | **Yes** | `db.dump` (pg_dump custom format) |
 | Uploaded media files | `UPLOAD_PATH` (`/app/uploads/media`, `uploads` volume) | **Yes** | `media.tar.gz` |
-| Live Yjs state of open editor documents | websocket `DATA_PATH` LevelDB (`ws_data` volume) | No, a safety net | `leveldb.tar.gz` (optional) |
+| Live Yjs state of editor documents (Hocuspocus, since #284) | Postgres `post_ydoc_state` | No: `block_doc` is canonical, and a missing or stale row reseeds from it | `db.dump` (it's a table) |
+| Live Yjs state before the Hocuspocus cutover (#284; dev rollback only until P5) | websocket `DATA_PATH` LevelDB (`ws_data` volume) | No, a safety net | `leveldb.tar.gz` (optional) |
 | Secrets: `app.env`, PASETO keys, `websocket/public.pem`, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` | host / secret store | Yes | **Not** by these scripts. Keep them in your secret manager. Without the PASETO keys a restore still works, but every session is invalidated. |
 | Theme sources (`web/themes`) | git | Yes | git |
 
 Postgres and the media directory must be backed up **together**: media rows store the
 file's absolute path under `UPLOAD_PATH`, and a row without its file is a broken image.
 LevelDB is not needed for a correct restore: an editor that opens a document whose
-LevelDB state is empty seeds it from Postgres `block_doc`.
+LevelDB state is empty seeds it from Postgres `block_doc`. Since the Hocuspocus cutover
+([collab-cutover.md](collab-cutover.md)) production has no LevelDB at all; the collab
+server keeps its Yjs state in Postgres, so `db.dump` covers it.
 
 ## Backing up
 
