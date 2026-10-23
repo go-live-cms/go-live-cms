@@ -9,7 +9,7 @@ import type { Schema } from "prosemirror-model"
 import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { getCoreSchema } from "../gl-admin/lib/collaboration/schema"
 import { isCollabDocName, postIdOf, TicketReplayGuard, type TicketClaims } from "./access"
-import type { InternalApi } from "./api"
+import type { CollabStoreBody, InternalApi } from "./api"
 import { AuthRejection, createAuthenticate, DENY, type CollabContext } from "./auth"
 import { loadIntoDoc, readMeta } from "./load"
 import { docNameForLog, errorMessage, logEvent } from "./logsafe"
@@ -55,6 +55,16 @@ class PostNotFoundError extends Error {
     super("post not found")
     this.name = "PostNotFoundError"
   }
+}
+
+/**
+ * Every store says which block_revision its state was derived from. The API requires it
+ * on a state-only store (a seed, an invalid or unchanged block_doc) and refuses any store
+ * whose base is behind, so a state can't be recorded against a block_doc it never saw.
+ */
+function withBaseRevision(body: CollabStoreBody, session: Pick<Session, "revision">): CollabStoreBody {
+  if (session.revision !== null && session.revision > 0) body.base_revision = session.revision
+  return body
 }
 
 const contextOf = (value: unknown): Partial<CollabContext> =>
@@ -139,6 +149,7 @@ export function createCollabServer(options: CollabServerOptions) {
       return storeFailed(docName, document, session, trigger, error)
     }
     const { body, decision, unconvertible, stamped } = prepared
+    withBaseRevision(body, session)
     // What `body.state` holds (prepareStore encodes it synchronously). Taken before the
     // PUT: edits that arrive while it's in flight must not count as stored.
     const storing = Y.snapshot(document)
@@ -279,7 +290,10 @@ export function createCollabServer(options: CollabServerOptions) {
           const { epoch } = readMeta(document)
           await api.putCollab(
             postId,
-            { state: Buffer.from(Y.encodeStateAsUpdate(document)).toString("base64"), epoch: epoch as string },
+            withBaseRevision(
+              { state: Buffer.from(Y.encodeStateAsUpdate(document)).toString("base64"), epoch: epoch as string },
+              session,
+            ),
             { requestId },
           )
           session.storedSnapshot = Y.snapshot(document)

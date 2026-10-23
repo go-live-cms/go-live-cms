@@ -37,6 +37,12 @@ type CreatePostRequest struct {
 	MediaIDs    []int64 `json:"media_ids" binding:"omitempty,max=500"`
 	TaxonomyIDs []int64 `json:"taxonomy_ids" binding:"omitempty,max=500"`
 
+	// BlockDoc is the initial body (optional). Under COLLAB_BACKEND=hocuspocus
+	// PUT /posts/:id/blocks is refused, so the admin sends a new post's body
+	// here and the collab server seeds the live doc from it (#206, #283). It
+	// gets the same checks as PUT /blocks (prepareForStore).
+	BlockDoc *BlockDocV1 `json:"block_doc"`
+
 	// Content is accepted for the admin form's sake and ignored (see above).
 	Content json.RawMessage `json:"content"`
 }

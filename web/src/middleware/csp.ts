@@ -16,6 +16,9 @@ export interface AdminCspOptions {
   // the proxy), but absolute media URLs point at this origin.
   apiUrl?: string
   dev: boolean
+  // The Hocuspocus collab server for this page (#206 P3, backend.ts hocuspocusUrl), when the
+  // build uses it. In dev it is another port (ws://<host>:1235), which 'self' doesn't cover.
+  collabUrl?: string
 }
 
 function originOf(url: string | undefined): string | null {
@@ -33,14 +36,16 @@ function wsOriginOf(origin: string): string {
   return origin.replace(/^http/, "ws")
 }
 
-export function buildAdminCsp({ nonce, pageOrigin, apiUrl, dev }: AdminCspOptions): string {
+export function buildAdminCsp({ nonce, pageOrigin, apiUrl, dev, collabUrl }: AdminCspOptions): string {
   const apiOrigin = originOf(apiUrl)
+  const collabOrigin = originOf(collabUrl)
   const extra = (list: (string | null)[]) => list.filter((s): s is string => !!s && s !== pageOrigin)
 
   const connectSrc = [
     "'self'",
     wsOriginOf(pageOrigin), // prod collab: wss://<host>/collab (CollaborationProvider.ts)
     ...extra([apiOrigin]),
+    ...(collabOrigin && collabOrigin !== wsOriginOf(pageOrigin) ? [collabOrigin] : []),
   ]
   const scriptSrc = ["'self'", `'nonce-${nonce}'`]
 

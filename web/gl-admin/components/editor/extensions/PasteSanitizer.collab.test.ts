@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest"
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest"
 import * as Y from "yjs"
 import { Editor } from "@tiptap/core"
 import StarterKit from "@tiptap/starter-kit"
@@ -6,6 +6,9 @@ import Collaboration, { isChangeOrigin } from "@tiptap/extension-collaboration"
 import { BlockIdExtension } from "./BlockIdExtension"
 import { PasteSanitizer } from "./PasteSanitizer"
 import googleDocsHTML from "./__fixtures__/paste/google-docs.html?raw"
+import { paragraphDoc } from "../../../../collab-server/testkit"
+import { canonical } from "@gl-admin/lib/collaboration/fragmentBridge.fixtures"
+import { startRelay, waitFor, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 
 // Two collaborators: each editor is bound (TipTap Collaboration / ySyncPlugin) to its
 // own Y.Doc, and a relay forwards every update to the other doc, like the WS server.
@@ -114,5 +117,59 @@ describe("PasteSanitizer with collaboration (#128)", () => {
     expect(onB.changes).toBe(0)
     // Not toJSON(): A's schema has no data-block-id attr at all, B's has it as null.
     expect(b.getText()).toBe(a.getText())
+  })
+})
+// The same, with the real Hocuspocus server as the relay (#206 P3, #283): each editor is
+// bound to the doc of the editor's own provider (HocuspocusCollaboration), the server
+// seeded the doc, and it stores block_doc from it.
+describe("PasteSanitizer with collaboration, on the Hocuspocus relay", () => {
+  let relay: Relay
+  beforeEach(async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {})
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    relay = await startRelay({ blockDoc: canonical(paragraphDoc("start")), revision: 2 })
+  })
+  afterEach(async () => {
+    while (editors.length) editors.pop()!.destroy()
+    await relay.destroy()
+    vi.restoreAllMocks()
+  })
+
+  it("a paste reaches the other peer and the stored block_doc with the same ids, and goes quiet", async () => {
+    const pa = relay.client("1")
+    const pb = relay.client("2")
+    await Promise.all([pa.whenSynced(), pb.whenSynced()])
+    const a = makePeer(pa.doc)
+    const b = makePeer(pb.doc)
+    await settle()
+    expect(b.getText()).toBe("start")
+    const onB = countLocalChanges(b)
+
+    a.commands.focus("end")
+    a.view.pasteHTML(googleDocsHTML, new Event("paste") as ClipboardEvent)
+    await waitFor(() => b.getText().includes("twelve percent"), { what: "the paste to reach b" })
+    await waitFor(() => JSON.stringify(b.state.doc.toJSON()) === JSON.stringify(a.state.doc.toJSON()), {
+      what: "convergence",
+    })
+
+    // Quiet: no more updates once converged (no re-stamping loop between the peers).
+    let updates = 0
+    const count = () => updates++
+    pa.doc.on("update", count)
+    pb.doc.on("update", count)
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(onB.changes).toBe(0)
+    expect(updates).toBe(0)
+
+    // The server stored the editor's ids (it stamps only nodes without one).
+    const ids = (editor: Editor) => {
+      const out: string[] = []
+      editor.state.doc.forEach((node) => out.push(node.attrs["data-block-id"]))
+      return out
+    }
+    await waitFor(() => relay.api.posts.get("12")!.block_doc!.blocks_order.length === a.state.doc.childCount, {
+      what: "the store",
+    })
+    expect(relay.api.posts.get("12")!.block_doc!.blocks_order).toEqual(ids(a))
   })
 })

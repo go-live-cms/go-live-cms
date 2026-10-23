@@ -2,6 +2,7 @@ import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse, Ta
 import { apiCall, authenticatedFetch } from "../api"
 import { apiErrorFromResponse } from "./errors"
 import { buildUrl } from "./utils"
+import type { BlockDocV1 } from "../blocks-spec"
 
 export interface CreatePostRequest {
   title: string
@@ -17,6 +18,9 @@ export interface CreatePostRequest {
   author_ids: number[]
   media_ids?: number[]
   taxonomy_ids?: number[]
+  // The initial body (Hocuspocus, #206 P3): the collab server seeds the doc from it. Under
+  // y-websocket the form PUTs /blocks after creating instead.
+  block_doc?: BlockDocV1
 }
 
 export interface PostQueryParams extends PaginationParams {

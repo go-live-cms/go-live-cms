@@ -170,6 +170,10 @@ checks the flag**, so main behaves exactly as before until the P4 cutover.
     `last_editor_id` (NULL if the user is gone).
 - **`PUT /posts/:id/blocks` answers 409 `managed by collaboration server`** under
   hocuspocus (an old tab can't overwrite). GET stays. Removed in P5.
+- **`POST /posts` takes an optional `block_doc`** (#283): the new post's initial body, with
+  the same `prepareForStore` checks and the 4 MiB body limit. Under hocuspocus the admin
+  sends the body this way (it can't PUT /blocks); the collab server seeds the doc from it
+  on first open. Nothing is live yet, so this isn't a write around the collab server.
 - **Tickets:** under hocuspocus `POST /collab/tickets` uses `canReadPostBlocks` (any content
   role, any existing post) instead of `canEditPost`: contributors get a read-only live
   view of others' posts. The ticket still carries no role; the server asks

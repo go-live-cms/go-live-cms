@@ -7,9 +7,11 @@ bridge (`gl-admin/lib/collaboration/{schema,fragmentBridge,blockBridge}.ts`,
 `gl-admin/lib/blocks-spec`). Read `gl-admin/lib/collaboration/CLAUDE.md` too.
 
 **Status:** runs in dev **next to** the y-websocket `websocket` service, as the `collab`
-compose service on **:1235**. The editor still uses `websocket` (:1234) until P3 (#283)
-adds the client behind `PUBLIC_COLLAB_BACKEND`, and P4 cuts over. Not in prod
-`compose.yaml` yet (P5).
+compose service on **:1235**. The editor talks to it only when built with
+`PUBLIC_COLLAB_BACKEND=hocuspocus` (P3, #283; the client side is in
+`gl-admin/lib/collaboration/CLAUDE.md`), with the API on `COLLAB_BACKEND=hocuspocus` and
+`COLLAB_INTERNAL_URL=http://collab:1236`; `websocket` (:1234) stays the default until P4
+cuts over. Not in prod `compose.yaml` yet (P5).
 
 | File | What |
 |------|------|
@@ -83,7 +85,9 @@ disconnect. `prepareStore`:
 4. **empty guard:** an empty result is written only if a client edited the doc since it
    was loaded; never after a failed seed (`collab_store_empty_skipped`);
 5. unchanged `block_doc` → state only (no revision churn).
-Then `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?}`, and
+Then `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?, base_revision}`
+(`base_revision` = the revision loaded or last stored, on **every** store, the seed's
+too: the API answers 400 to a state-only store without it and 409 when it's behind), and
 `broadcastStateless` `{"type":"stored","revision","block_doc"}` or `{"type":"store_failed"}`.
 
 - The store never throws (Hocuspocus calls it from an un-awaited debounce). A failed

@@ -51,6 +51,18 @@ describe("buildAdminCsp", () => {
     expect(dev["connect-src"]).toContain("ws://localhost:1234")
     expect(dev["connect-src"]).toContain("ws://localhost:4321") // Vite HMR
   })
+
+  it("adds the Hocuspocus collab origin when it isn't the page's own (#206 P3)", () => {
+    const dev = directives(
+      buildAdminCsp({ nonce: "n", pageOrigin: "http://127.0.0.1:4321", dev: true, collabUrl: "ws://127.0.0.1:1235" }),
+    )
+    expect(dev["connect-src"]).toContain("ws://127.0.0.1:1235")
+    // Production: wss://<host>/collab is the page's own ws origin, listed once.
+    const prod = directives(
+      buildAdminCsp({ nonce: "n", pageOrigin: "https://cms.example.com", dev: false, collabUrl: "wss://cms.example.com/collab" }),
+    )
+    expect(prod["connect-src"]).toEqual(["'self'", "wss://cms.example.com"])
+  })
 })
 
 describe("addNonceToScripts", () => {

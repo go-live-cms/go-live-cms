@@ -13,6 +13,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -109,6 +110,20 @@ func (server *Server) createPost(c *gin.Context) {
 		return
 	}
 
+	blockDoc := []byte(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
+	if req.BlockDoc != nil {
+		if err := req.BlockDoc.prepareForStore(); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		encoded, err := json.Marshal(req.BlockDoc)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal block document"})
+			return
+		}
+		blockDoc = encoded
+	}
+
 	primaryAuthor, err := server.store.GetUser(c.Request.Context(), req.AuthorIDs[0])
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -128,7 +143,7 @@ func (server *Server) createPost(c *gin.Context) {
 		PostType:    req.PostType,
 		PostStatus:  req.PostStatus,
 		MenuOrder:   req.MenuOrder,
-		BlockDoc:    []byte(`{"doc_version":1,"blocks_order":[],"blocks":{}}`),
+		BlockDoc:    blockDoc,
 	}
 
 	if req.PostParent != nil {

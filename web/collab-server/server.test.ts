@@ -107,6 +107,8 @@ describe("collab server (in-process Hocuspocus)", () => {
     // The seed is persisted right away (state + epoch, block_doc untouched).
     expect(api.puts).toHaveLength(1)
     expect(api.puts[0].body.block_doc).toBeUndefined()
+    // A state-only store must name its base revision (the API answers 400 without it).
+    expect(api.puts[0].body.base_revision).toBe(api.posts.get("12")!.block_revision)
     const epoch = api.posts.get("12")!.epoch
     appendParagraph(a.doc, "typed before restart", "blk-typed-00001")
     await closeAll(first.collab, a)

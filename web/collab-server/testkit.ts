@@ -10,7 +10,7 @@ import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/pro
 import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
 import { TICKET_AUDIENCE, TICKET_TYPE, type DocAccess, type TicketIdentity } from "./access"
-import type { CollabRecord, CollabStoreBody, CollabStoreResult, InternalApi } from "./api"
+import { InternalApiError, type CollabRecord, type CollabStoreBody, type CollabStoreResult, type InternalApi } from "./api"
 
 export const ISSUER = "golive.auth"
 
@@ -105,6 +105,13 @@ export class FakeCollabApi implements InternalApi {
     if (this.failPut) throw new Error("collab store failed: API responded 503")
     const post = this.posts.get(postId)
     if (!post) throw new Error("collab store failed: API responded 404")
+    // Same rules as the API's StorePostCollabTx (#280).
+    if (!body.block_doc && body.base_revision === undefined) {
+      throw new InternalApiError("collab store failed: API responded 400", 400)
+    }
+    if (body.base_revision !== undefined && body.base_revision !== post.block_revision) {
+      throw new InternalApiError("collab store failed: API responded 409", 409)
+    }
     this.puts.push({ postId, body: structuredClone(body) })
     if (body.block_doc) {
       post.block_doc = structuredClone(body.block_doc)
