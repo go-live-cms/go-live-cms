@@ -34,6 +34,12 @@ export interface CollabStoreBody {
   epoch: string
   block_doc?: BlockDocV1
   last_editor_id?: number
+  /**
+   * The `block_revision` the doc was loaded at or last stored at. The API refuses the
+   * store (409) if `block_doc` moved since, and requires it on a state-only store (400
+   * without): the state is recorded against the current revision.
+   */
+  base_revision?: number
 }
 
 export interface CollabStoreResult {

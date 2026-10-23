@@ -43,9 +43,12 @@ services:
       UPLOAD_PATH: "/app/uploads/media"
       # API -> collab server (#280): squash after publish under y-websocket (the
       # default), flush before publish under hocuspocus. The secret must match
-      # the websocket service's SQUASH_SECRET.
+      # the websocket service's SQUASH_SECRET and the collab service's
+      # COLLAB_INTERNAL_SECRET. To try Hocuspocus (#206), set both, e.g.
+      #   COLLAB_BACKEND=hocuspocus COLLAB_INTERNAL_URL=http://collab:1236 docker compose ...
+      # (COLLAB_BACKEND also builds the editor for it: web's PUBLIC_COLLAB_BACKEND).
       COLLAB_BACKEND: "${COLLAB_BACKEND:-y-websocket}"
-      COLLAB_INTERNAL_URL: "http://websocket:1234"
+      COLLAB_INTERNAL_URL: "${COLLAB_INTERNAL_URL:-http://websocket:1234}"
       COLLAB_INTERNAL_SECRET: "dev-squash-secret"
       # Required: the WS server's per-connection role lookup (#223)
       ROLE_LOOKUP_SECRET: "dev-role-lookup-secret"
@@ -159,7 +162,7 @@ services:
       INTERNAL_API_URL: http://api:8081
       ROLE_LOOKUP_SECRET: dev-role-lookup-secret
       # The bearer secret the API sends to flush (its COLLAB_INTERNAL_SECRET, #280).
-      COLLAB_INTERNAL_SECRET: dev-collab-internal-secret
+      COLLAB_INTERNAL_SECRET: dev-squash-secret
       PASETO_V4_PUBLIC_PEM_FILE: /run/secrets/public.pem
       PASETO_ISSUER: golive.auth
     volumes:
