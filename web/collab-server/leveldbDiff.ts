@@ -10,6 +10,7 @@ import * as Y from "yjs"
 import type { Schema } from "prosemirror-model"
 import type { Block, BlockDocV1, BlockID } from "../gl-admin/lib/blocks-spec"
 import { EDITOR_FRAGMENT, fragmentToBlockDoc, seedFragment } from "../gl-admin/lib/collaboration/fragmentBridge"
+import { canonicalJSON } from "./store"
 
 export type DiffStatus =
   /** Same blocks, same ids. */
@@ -170,13 +171,4 @@ function firstDifference(a: TreeBlock[], b: TreeBlock[], path = "block"): string
     }
   }
   return "order differs"
-}
-
-/** JSON with object keys sorted (Postgres jsonb reorders keys). */
-function canonicalJSON(value: unknown): string {
-  return JSON.stringify(value, (_key, v: unknown) =>
-    v && typeof v === "object" && !Array.isArray(v)
-      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-      : v,
-  )
 }

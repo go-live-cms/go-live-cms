@@ -2,8 +2,8 @@
 // LevelDB store, convert its "default" fragment to a block_doc and compare it with the
 // post's block_doc in Postgres. Hocuspocus seeds every doc from block_doc and never
 // imports LevelDB, so a doc reported "differs" holds content the cutover would lose.
-// Resolve those by opening the post once on the OLD stack (its autosave catches up),
-// then run this again. Runbook: docs/operations/collab-cutover.md.
+// Resolve those on the y-websocket path (its autosave catches up), then run this again.
+// Runbook: docs/operations/collab-cutover.md, "Resolving a differs".
 //
 // It never writes: it copies the LevelDB directory to a temp dir first (y-leveldb
 // compacts long logs when it reads them) and only reads the block_doc file.
@@ -29,28 +29,44 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
-function usage(message) {
-  if (message) console.error(`leveldb-diff: ${message}`)
-  console.error("usage: node scripts/collab/leveldb-diff.mjs --data <leveldb dir> --block-docs <posts.json> [--web <dir>] [--websocket <dir>] [--json <out>]")
-  process.exit(2)
-}
+/** A usage or input error: reported, exit code 2. */
+class UsageError extends Error {}
 
-const args = {}
-for (let i = 2; i < process.argv.length; i += 2) {
-  const key = process.argv[i]
-  const value = process.argv[i + 1]
-  if (!key?.startsWith("--") || value === undefined) usage(`bad argument ${key}`)
-  args[key.slice(2)] = value
+function usage(message) {
+  throw new UsageError(message ?? "")
 }
-const dataDir = args.data
-const blockDocsFile = args["block-docs"]
-const webDir = path.resolve(args.web ?? path.join(here, "../../web"))
-const websocketDir = path.resolve(args.websocket ?? path.join(here, "../../websocket"))
-if (!dataDir || !blockDocsFile) usage()
-if (!existsSync(dataDir)) usage(`no such directory: ${dataDir}`)
 
 const scratch = mkdtempSync(path.join(tmpdir(), "leveldb-diff-"))
+let exitCode
 try {
+  exitCode = await main()
+} catch (error) {
+  if (!(error instanceof UsageError)) throw error
+  if (error.message) console.error(`leveldb-diff: ${error.message}`)
+  console.error("usage: node scripts/collab/leveldb-diff.mjs --data <leveldb dir> --block-docs <posts.json> [--web <dir>] [--websocket <dir>] [--json <out>]")
+  exitCode = 2
+} finally {
+  // The scratch dir holds a copy of every doc's content: always remove it, which is why
+  // nothing in main() calls process.exit.
+  rmSync(scratch, { recursive: true, force: true })
+}
+process.exit(exitCode)
+
+async function main() {
+  const args = {}
+  for (let i = 2; i < process.argv.length; i += 2) {
+    const key = process.argv[i]
+    const value = process.argv[i + 1]
+    if (!key?.startsWith("--") || value === undefined) usage(`bad argument ${key}`)
+    args[key.slice(2)] = value
+  }
+  const dataDir = args.data
+  const blockDocsFile = args["block-docs"]
+  const webDir = path.resolve(args.web ?? path.join(here, "../../web"))
+  const websocketDir = path.resolve(args.websocket ?? path.join(here, "../../websocket"))
+  if (!dataDir || !blockDocsFile) usage()
+  if (!existsSync(dataDir)) usage(`no such directory: ${dataDir}`)
+
   // 1. LevelDB → {doc, update} lines, from a copy.
   const copy = path.join(scratch, "leveldb")
   cpSync(dataDir, copy, { recursive: true })
@@ -95,27 +111,16 @@ try {
 
   report(results)
   if (args.json) writeFileSync(args.json, JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2) + "\n")
-  process.exit(results.some((r) => r.status === "differs") ? 1 : 0)
-} finally {
-  rmSync(scratch, { recursive: true, force: true })
+  return results.some((r) => r.status === "differs") ? 1 : 0
 }
 
 async function loadComparison(webDir, outDir) {
   const webRequire = createRequire(path.join(webDir, "package.json"))
   const esbuild = webRequire("esbuild")
   const outfile = path.join(outDir, "compare.mjs")
-  // Same as web/collab-server/build.mjs: every require() of yjs/lib0/y-protocols is
-  // resolved like an import, so the bundle holds exactly one yjs build.
-  const singleYjsInstance = {
-    name: "single-yjs-instance",
-    setup(build) {
-      build.onResolve({ filter: /^(yjs|lib0|y-protocols)(\/.*)?$/ }, async (a) => {
-        if (a.kind === "import-statement" || a.kind === "dynamic-import" || a.pluginData?.pinned) return undefined
-        const r = await build.resolve(a.path, { kind: "import-statement", resolveDir: a.resolveDir, importer: a.importer, pluginData: { pinned: true } })
-        return r.errors.length > 0 ? { errors: r.errors } : { path: r.path, external: r.external, sideEffects: r.sideEffects }
-      })
-    },
-  }
+  // The collab server's own plugin (web/collab-server/build.mjs): every require() of
+  // yjs/lib0/y-protocols is resolved like an import, so the bundle holds one yjs build.
+  const { singleYjsInstance } = await import(pathToFileURL(path.join(webDir, "collab-server/singleYjsInstance.mjs")).href)
   await esbuild.build({
     stdin: {
       contents: 'export { compareDoc } from "./collab-server/leveldbDiff"\nexport { getCoreSchema } from "./gl-admin/lib/collaboration/schema"\n',

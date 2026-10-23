@@ -11,30 +11,11 @@
 import * as esbuild from "esbuild"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { singleYjsInstance } from "./singleYjsInstance.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const webRoot = path.resolve(here, "..")
 const outfile = path.resolve(process.argv[2] ?? path.join(webRoot, "dist/collab-server/server.mjs"))
-
-const PINNED = /^(yjs|lib0|y-protocols)(\/.*)?$/
-
-/** Resolve require("yjs" | "lib0/…" | "y-protocols/…") like an import, i.e. to the ESM build. */
-const singleYjsInstance = {
-  name: "single-yjs-instance",
-  setup(build) {
-    build.onResolve({ filter: PINNED }, async (args) => {
-      if (args.kind === "import-statement" || args.kind === "dynamic-import" || args.pluginData?.pinned) return undefined
-      const result = await build.resolve(args.path, {
-        kind: "import-statement",
-        resolveDir: args.resolveDir,
-        importer: args.importer,
-        pluginData: { pinned: true },
-      })
-      if (result.errors.length > 0) return { errors: result.errors }
-      return { path: result.path, external: result.external, sideEffects: result.sideEffects }
-    })
-  },
-}
 
 const result = await esbuild.build({
   entryPoints: [path.join(here, "main.ts")],

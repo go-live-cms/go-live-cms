@@ -106,6 +106,14 @@ diff.
    `COLLAB_BACKEND` / `COLLAB_INTERNAL_URL` you exported in your shell or put in a root
    `.env`. The `websocket` service now sits behind the `y-websocket` profile, so a plain
    `up` no longer starts it.
+   **An API run outside compose** (`go run`, reading only `app.env`) now defaults to
+   Hocuspocus too, and refuses to start without `COLLAB_INTERNAL_URL` and
+   `COLLAB_INTERNAL_SECRET`. An `app.env` from before #280 only has the old names
+   (`COLLAB_SERVER_URL`, `COLLAB_SQUASH_SECRET`). Update it as in `example.app.env`:
+   `COLLAB_INTERNAL_URL` is the collab server's internal listener (`:1236`, which
+   compose doesn't publish, so a host-run API also needs the collab server reachable),
+   and the secret must match the collab server's `COLLAB_INTERNAL_SECRET`. Compose's
+   `api` service sets both itself.
 3. **Truncate `post_ydoc_state`**, before opening any editor, so every doc seeds fresh from
    `block_doc` (it may hold rows from earlier Hocuspocus experiments, possibly at a
    revision that still matches):

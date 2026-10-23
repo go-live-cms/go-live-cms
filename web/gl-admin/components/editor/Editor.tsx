@@ -100,6 +100,11 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   // each reconnect would re-run setContent and clobber the user's in-progress typing.
   // Reset to false whenever postId changes so the new post loads its content.
   const hasInitializedRef = useRef(false)
+  // The parent's save callbacks, read when a save starts or ends. PostForm passes them
+  // inline, so as useMemo deps they rebuilt the persistence manager on every parent
+  // render, and a rebuilt manager is never initialized (#284).
+  const saveCallbacksRef = useRef({ onSaveStart, onSaveSuccess, onSaveError })
+  saveCallbacksRef.current = { onSaveStart, onSaveSuccess, onSaveError }
 
   // Link modal state (from main)
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
@@ -142,14 +147,14 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
         const handleSaveStart = () => {
           setIsSaving(true)
           setSaveStatus("saving")
-          onSaveStart?.()
+          saveCallbacksRef.current.onSaveStart?.()
         }
 
         const handleSaveSuccess = (revision: number) => {
           setIsSaving(false)
           setSaveStatus("saved")
           setTimeout(() => setSaveStatus(null), 3000)
-          onSaveSuccess?.(revision)
+          saveCallbacksRef.current.onSaveSuccess?.(revision)
         }
 
         const handleSaveError = (error: Error) => {
@@ -157,7 +162,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
           setSaveStatus("error")
           console.error("Save failed:", error)
           setTimeout(() => setSaveStatus(null), 5000)
-          onSaveError?.(error)
+          saveCallbacksRef.current.onSaveError?.(error)
         }
 
         manager.setCallbacks({
@@ -172,7 +177,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       return persistenceRef.current
     }
     return null
-  }, [blockDocManager, postId, readOnly, onSaveStart, onSaveSuccess, onSaveError])
+  }, [blockDocManager, postId, readOnly])
 
   // Update titleRef when title changes (no autosave)
   useEffect(() => {
@@ -480,10 +485,10 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
 
   // Cleanup persistence manager on unmount. destroy() only cancels a pending debounce,
   // so the ref is deliberately NOT cleared: StrictMode (dev) runs this cleanup once
-  // right after mount, and a cleared ref made the next useMemo recompute (PostForm
-  // passes inline save callbacks, so any re-render) build a second manager that was
-  // never initialized, which silently dropped every autosave (found in #284's rollback
-  // test). A real unmount discards the ref anyway; a postId change is handled above.
+  // right after mount, and a cleared ref let the next useMemo recompute build a second
+  // manager that was never initialized, which silently dropped every autosave (found in
+  // #284's rollback test). A real unmount discards the ref anyway; a postId change is
+  // handled above.
   useEffect(() => {
     return () => {
       persistenceRef.current?.destroy()
