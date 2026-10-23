@@ -11,6 +11,40 @@ type CursorAwarenessOpts = {
 
 const key = new PluginKey("cursorAwareness")
 
+/**
+ * A remote user's caret + name label, as a widget decoration's DOM.
+ *
+ * It must never change the line's height (#305). Like y-prosemirror's caret: a zero-width
+ * inline span drawn with a border (negative margins keep the text from shifting), holding
+ * a word joiner so it takes the line's own height, with the label absolutely positioned
+ * inside it, out of the flow and just above the caret. (The old 1.2em inline-block grew
+ * the line box; the label resets typography it would otherwise inherit from a heading or
+ * an emphasized run.)
+ */
+export function createCaretElement(label: string, color: string, caretWidth = 2): HTMLSpanElement {
+  const caret = document.createElement("span")
+  caret.className = "collab-caret"
+  caret.style.cssText = `
+    position:relative; border-left:${caretWidth}px solid ${color};
+    margin-left:-${caretWidth / 2}px; margin-right:-${caretWidth / 2}px;
+    word-break:normal; pointer-events:none;
+  `
+  caret.appendChild(document.createTextNode(String.fromCharCode(0x2060))) // word joiner: zero width, but gives the span line height
+
+  const labelEl = document.createElement("span")
+  labelEl.className = "collab-caret-label"
+  labelEl.textContent = label
+  labelEl.style.cssText = `
+    position:absolute; left:-${caretWidth / 2}px; top:0; transform:translateY(-100%);
+    background:${color}; color:white; font-size:12px; line-height:1;
+    font-weight:500; font-style:normal; letter-spacing:normal; text-transform:none;
+    padding:2px 6px; border-radius:4px 4px 4px 0; white-space:nowrap;
+    box-shadow:0 1px 2px rgba(0,0,0,.15); pointer-events:none; user-select:none;
+  `
+  caret.appendChild(labelEl)
+  return caret
+}
+
 export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
   name: "cursorAwareness",
 
@@ -74,32 +108,7 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
                 )
               }
 
-              // The caret must never change the line's height (#305). Like y-prosemirror's
-              // caret: a zero-width inline span drawn with a border (negative margins keep
-              // the text from shifting), holding a word joiner so it gets the line's own
-              // height. The label is absolutely positioned inside it, out of the flow.
-              // (The old 1.2em inline-block grew the line box by a few px.)
-              const caret = document.createElement("span")
-              caret.className = "collab-caret"
-              caret.style.cssText = `
-                position:relative; border-left:${caretWidth}px solid ${color};
-                margin-left:-${caretWidth / 2}px; margin-right:-${caretWidth / 2}px;
-                word-break:normal; pointer-events:none;
-              `
-              caret.appendChild(document.createTextNode(String.fromCharCode(0x2060))) // word joiner: zero width, but gives the span line height
-
-              const labelEl = document.createElement("span")
-              labelEl.className = "collab-caret-label"
-              labelEl.textContent = label
-              labelEl.style.cssText = `
-                position:absolute; left:-${caretWidth / 2}px; bottom:100%;
-                background:${color}; color:white; font-size:12px; line-height:1;
-                padding:2px 6px; border-radius:4px 4px 4px 0; white-space:nowrap;
-                box-shadow:0 1px 2px rgba(0,0,0,.15); pointer-events:none;
-                user-select:none;
-              `
-              caret.appendChild(labelEl)
-
+              const caret = createCaretElement(label, color, caretWidth)
               decos.push(Decoration.widget(h, caret, { key: `caret-${clientId}`, side: 10 }))
             }
 
