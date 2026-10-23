@@ -109,7 +109,8 @@ func (q *Queries) SyncPostContentMedia(ctx context.Context, arg SyncPostContentM
 const updatePostBlockDocFromCollab = `-- name: UpdatePostBlockDocFromCollab :one
 UPDATE posts
 SET block_doc = $2,
-    block_revision = block_revision + 1
+    block_revision = block_revision + 1,
+    changed_at = now()
 WHERE id = $1
 RETURNING block_revision
 `
@@ -119,6 +120,10 @@ type UpdatePostBlockDocFromCollabParams struct {
 	BlockDoc json.RawMessage `json:"block_doc"`
 }
 
+// changed_at is the post's "last modified" (admin list and sort, sitemap
+// lastmod). Only stores that carry a block_doc reach this query, and the
+// collab server sends one only when the derived doc changed, so state-only
+// stores (the seed, unchanged or invalid docs) leave it alone (#307).
 func (q *Queries) UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, updatePostBlockDocFromCollab, arg.ID, arg.BlockDoc)
 	var block_revision int64

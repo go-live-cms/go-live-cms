@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -158,6 +159,41 @@ func TestStorePostCollabTxRollsBack(t *testing.T) {
 	after, err := testQueries.GetPostCollab(ctx, post.ID)
 	require.NoError(t, err)
 	require.Equal(t, before, after)
+}
+
+// A store with block_doc is an edit, so it updates changed_at (admin "last
+// modified", the changed sort, sitemap lastmod). A state-only store isn't and
+// leaves it alone (#307).
+func TestStorePostCollabTxChangedAt(t *testing.T) {
+	ctx := context.Background()
+	post := createPostWithTransaction(t).Post
+	past := time.Date(2000, 1, 2, 3, 4, 5, 0, time.UTC)
+	_, err := testQueries.db.ExecContext(ctx, `UPDATE posts SET changed_at = $2 WHERE id = $1`, post.ID, past)
+	require.NoError(t, err)
+
+	epoch := uuid.New()
+	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
+		PostID:       post.ID,
+		State:        []byte{1},
+		Epoch:        epoch,
+		BaseRevision: sql.NullInt64{Int64: post.BlockRevision, Valid: true},
+	})
+	require.NoError(t, err)
+	stored, err := testQueries.GetPost(ctx, post.ID)
+	require.NoError(t, err)
+	require.True(t, stored.ChangedAt.Equal(past), "state-only store changed changed_at to %v", stored.ChangedAt)
+
+	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
+		PostID:       post.ID,
+		State:        []byte{2},
+		Epoch:        epoch,
+		BlockDoc:     json.RawMessage(`{"doc_version":1,"blocks_order":["a"],"blocks":{"a":{"type":"paragraph"}}}`),
+		BaseRevision: sql.NullInt64{Int64: post.BlockRevision, Valid: true},
+	})
+	require.NoError(t, err)
+	stored, err = testQueries.GetPost(ctx, post.ID)
+	require.NoError(t, err)
+	require.WithinDuration(t, time.Now(), stored.ChangedAt, time.Minute)
 }
 
 func TestStorePostCollabTxMissingPost(t *testing.T) {

@@ -246,6 +246,10 @@ type Querier interface {
 	// deliberately not writable here. NULL args keep the current value.
 	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
+	// changed_at is the post's "last modified" (admin list and sort, sitemap
+	// lastmod). Only stores that carry a block_doc reach this query, and the
+	// collab server sends one only when the derived doc changed, so state-only
+	// stores (the seed, unchanged or invalid docs) leave it alone (#307).
 	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
 	UpdatePostBlocksIfRevisionMatches(ctx context.Context, arg UpdatePostBlocksIfRevisionMatchesParams) (UpdatePostBlocksIfRevisionMatchesRow, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)

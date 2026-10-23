@@ -166,7 +166,8 @@ and rollback: `docs/operations/collab-cutover.md`.
     otherwise), or a stale state could be stamped with the current revision and pass the
     guard. `base_revision` behind → 409. 404 for a missing post.
   - `StorePostCollabTx` (`db/sqlc/post_collab_tx.go`) is one transaction: lock the post,
-    `block_doc` + `block_revision+1`, sync content media links (`SyncPostContentMedia`:
+    `block_doc` + `block_revision+1` + `changed_at` (state-only stores touch none of
+    them, #307), sync content media links (`SyncPostContentMedia`:
     unknown media ids skipped, featured image untouched; **only while unpublished**, publish
     syncs them otherwise), upsert `post_ydoc_state` (`000020`) at the new revision with
     `last_editor_id` (NULL if the user is gone).

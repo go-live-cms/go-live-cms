@@ -20,9 +20,14 @@ WHERE id = $1
 FOR UPDATE;
 
 -- name: UpdatePostBlockDocFromCollab :one
+-- changed_at is the post's "last modified" (admin list and sort, sitemap
+-- lastmod). Only stores that carry a block_doc reach this query, and the
+-- collab server sends one only when the derived doc changed, so state-only
+-- stores (the seed, unchanged or invalid docs) leave it alone (#307).
 UPDATE posts
 SET block_doc = $2,
-    block_revision = block_revision + 1
+    block_revision = block_revision + 1,
+    changed_at = now()
 WHERE id = $1
 RETURNING block_revision;
 
