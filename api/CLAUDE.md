@@ -160,8 +160,9 @@ checks the flag**, so main behaves exactly as before until the P4 cutover.
     16 MiB body (`collabStoreBodyLimit`), `block_doc` itself ≤ 4 MiB, and the same
     `prepareForStore` as `PUT /blocks` (limits, dedupe `blocks_order`, sanitize, v1 +
     order integrity). `block_doc` omitted/null = store the Yjs state only (server-side
-    validation failed), revision unchanged. `base_revision` behind → 409. 404 for a
-    missing post.
+    validation failed), revision unchanged; that **requires `base_revision`** (400
+    otherwise), or a stale state could be stamped with the current revision and pass the
+    guard. `base_revision` behind → 409. 404 for a missing post.
   - `StorePostCollabTx` (`db/sqlc/post_collab_tx.go`) is one transaction: lock the post,
     `block_doc` + `block_revision+1`, sync content media links (`SyncPostContentMedia`:
     unknown media ids skipped, featured image untouched; **only while unpublished**, publish

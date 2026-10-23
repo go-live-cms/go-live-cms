@@ -65,12 +65,12 @@ func TestPublishFlushesCollab(t *testing.T) {
 		{name: "DocNotLoaded", body: ``},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			// The handler only records (require must run on the test
+			// goroutine); the request is checked after publish returns.
 			var flushed atomic.Bool
+			var got *http.Request
 			collab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				require.Equal(t, http.MethodPost, r.Method)
-				require.Equal(t, "/internal/documents/post-1/flush", r.URL.Path)
-				require.Equal(t, "Bearer "+testCollabInternalSecret, r.Header.Get(authorizationHeaderKey))
-				require.NotEmpty(t, r.Header.Get(requestIDHeader))
+				got = r.Clone(r.Context())
 				flushed.Store(true)
 				_, _ = w.Write([]byte(tc.body))
 			}))
@@ -90,6 +90,12 @@ func TestPublishFlushesCollab(t *testing.T) {
 			var resp PublishResponse
 			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
 			require.Equal(t, int32(1), resp.VersionNo)
+
+			require.NotNil(t, got)
+			require.Equal(t, http.MethodPost, got.Method)
+			require.Equal(t, "/internal/documents/post-1/flush", got.URL.Path)
+			require.Equal(t, "Bearer "+testCollabInternalSecret, got.Header.Get(authorizationHeaderKey))
+			require.NotEmpty(t, got.Header.Get(requestIDHeader))
 		})
 	}
 }
@@ -156,10 +162,10 @@ func TestCollabFlushTimeoutDefault(t *testing.T) {
 // Under y-websocket, publish never calls the collab server before reading
 // (squash, if configured, runs after and can't fail it).
 func TestPublishWithoutHocuspocusDoesNotFlush(t *testing.T) {
+	// Only squash may arrive, and only after the read (checked below).
 	var calls atomic.Int32
 	collab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		require.NotContains(t, r.URL.Path, "/flush")
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer collab.Close()

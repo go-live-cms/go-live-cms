@@ -41,9 +41,10 @@ type storePostCollabRequest struct {
 	BlockDoc *BlockDocV1 `json:"block_doc"`
 	// LastEditorID is the user whose edit triggered this store (optional).
 	LastEditorID *int64 `json:"last_editor_id" binding:"omitempty,min=1"`
-	// BaseRevision, if sent, is the block_revision the server loaded or last
-	// stored; the store is refused (409) if block_doc changed since.
-	BaseRevision *int64 `json:"base_revision" binding:"omitempty,min=1"`
+	// BaseRevision is the block_revision the server loaded or last stored;
+	// the store is refused (409) if block_doc changed since. Optional with a
+	// block_doc, required without one (the state is recorded against it).
+	BaseRevision *int64 `json:"base_revision" binding:"required_without=BlockDoc,omitempty,min=1"`
 }
 
 // getInternalPostCollab serves the collab server's onLoadDocument (#206 /
@@ -118,7 +119,8 @@ func (server *Server) getInternalPostCollab(c *gin.Context) {
 //
 // Returns:
 //   - 200 OK: { "block_revision": 4, "epoch": "<uuid>" }
-//   - 400 Bad Request: Invalid ID, body, epoch or block document
+//   - 400 Bad Request: Invalid ID, body, epoch or block document, or no
+//     base_revision on a state-only store
 //   - 401 Unauthorized: Missing or wrong shared secret
 //   - 404 Not Found: The post does not exist
 //   - 409 Conflict: Not under Hocuspocus, or base_revision is behind
@@ -188,6 +190,8 @@ func (server *Server) putInternalPostCollab(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		case errors.Is(err, db.ErrCollabRevisionConflict):
 			c.JSON(http.StatusConflict, gin.H{"error": "revision conflict"})
+		case errors.Is(err, db.ErrCollabBaseRevisionRequired): // binding already refuses it
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		default:
 			server.requestLog(c).Error("collab store failed", "post_id", postID, "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store post collab state"})

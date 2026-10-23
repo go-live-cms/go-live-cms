@@ -15,6 +15,10 @@ import (
 // wrote block_doc around the collab server since it loaded the document.
 var ErrCollabRevisionConflict = errors.New("block_revision changed since the collab document was loaded")
 
+// ErrCollabBaseRevisionRequired is returned by StorePostCollabTx for a
+// state-only store (no BlockDoc) without a BaseRevision.
+var ErrCollabBaseRevisionRequired = errors.New("a state-only collab store needs a base revision")
+
 type StorePostCollabTxParams struct {
 	PostID int64
 	// State is the full Yjs document (Y.encodeStateAsUpdate).
@@ -28,7 +32,11 @@ type StorePostCollabTxParams struct {
 	// links (post_media order > 0) are synced to them. Ignored without BlockDoc.
 	MediaIDs []int64
 	// BaseRevision, when set, must equal posts.block_revision or nothing is
-	// written (ErrCollabRevisionConflict).
+	// written (ErrCollabRevisionConflict). Required without BlockDoc
+	// (ErrCollabBaseRevisionRequired): the state is then recorded against the
+	// current revision, which is only right if nothing wrote block_doc since
+	// the server loaded it. Otherwise a stale state would pass the load-time
+	// revision guard.
 	BaseRevision sql.NullInt64
 	LastEditorID sql.NullInt64
 }
@@ -52,6 +60,9 @@ type StorePostCollabTxResult struct {
 // Returns sql.ErrNoRows when the post does not exist.
 func (store *SQLStore) StorePostCollabTx(ctx context.Context, arg StorePostCollabTxParams) (StorePostCollabTxResult, error) {
 	var result StorePostCollabTxResult
+	if arg.BlockDoc == nil && !arg.BaseRevision.Valid {
+		return result, ErrCollabBaseRevisionRequired
+	}
 
 	err := store.execTx(ctx, func(q *Queries) error {
 		post, err := q.LockPostForCollabStore(ctx, arg.PostID)
@@ -72,13 +83,9 @@ func (store *SQLStore) StorePostCollabTx(ctx context.Context, arg StorePostColla
 				return err
 			}
 			if !strings.EqualFold(post.PostStatus, "published") {
-				mediaIDs := arg.MediaIDs
-				if mediaIDs == nil {
-					mediaIDs = []int64{}
-				}
 				if err := q.SyncPostContentMedia(ctx, SyncPostContentMediaParams{
 					PostID:   arg.PostID,
-					MediaIds: mediaIDs,
+					MediaIds: arg.MediaIDs,
 				}); err != nil {
 					return err
 				}

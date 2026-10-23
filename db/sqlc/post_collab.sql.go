@@ -72,9 +72,10 @@ func (q *Queries) LockPostForCollabStore(ctx context.Context, id int64) (LockPos
 
 const syncPostContentMedia = `-- name: SyncPostContentMedia :exec
 WITH wanted AS (
-    SELECT m.id AS media_id, w.ord::int AS ord
+    SELECT DISTINCT ON (m.id) m.id AS media_id, w.ord::int AS ord
     FROM unnest($2::bigint[]) WITH ORDINALITY AS w(id, ord)
     JOIN media m ON m.id = w.id
+    ORDER BY m.id, w.ord
 ), removed AS (
     DELETE FROM post_media pm
     WHERE pm.post_id = $1
@@ -97,7 +98,9 @@ type SyncPostContentMediaParams struct {
 // Makes the post's content image links (order > 0) match media_ids, in
 // document order, like syncPostMediaAssociations does for PUT /blocks. Ids
 // without a media row are skipped (a stale mediaId must not fail the store),
-// and the featured image link (order 0) is never moved or removed.
+// and the featured image link (order 0) is never moved or removed. A repeated
+// id keeps its first position (one row per media, or the upsert would touch
+// the same row twice and fail).
 func (q *Queries) SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error {
 	_, err := q.db.ExecContext(ctx, syncPostContentMedia, arg.PostID, pq.Array(arg.MediaIds))
 	return err

@@ -258,20 +258,33 @@ func TestPutInternalPostCollab(t *testing.T) {
 		},
 		{
 			name:          "StateOnly",
-			body:          collabStoreBody(t, map[string]any{"block_doc": nil, "base_revision": nil, "last_editor_id": nil}),
+			body:          collabStoreBody(t, map[string]any{"block_doc": nil, "last_editor_id": nil}),
 			authorization: auth,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().StorePostCollabTx(gomock.Any(), gomock.Any()).Times(1).
 					DoAndReturn(func(_ any, arg db.StorePostCollabTxParams) (db.StorePostCollabTxResult, error) {
 						require.Nil(t, arg.BlockDoc)
 						require.Nil(t, arg.MediaIDs)
-						require.False(t, arg.BaseRevision.Valid)
+						require.Equal(t, sql.NullInt64{Int64: 4, Valid: true}, arg.BaseRevision)
 						require.False(t, arg.LastEditorID.Valid)
 						return db.StorePostCollabTxResult{BlockRevision: 4}, nil
 					})
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			},
+		},
+		{
+			// Without the revision it was loaded at, a state-only store could
+			// stamp a stale state as current and defeat the revision guard.
+			name:          "StateOnlyNeedsBaseRevision",
+			body:          collabStoreBody(t, map[string]any{"block_doc": nil, "base_revision": nil}),
+			authorization: auth,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().StorePostCollabTx(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
 			},
 		},
 		{

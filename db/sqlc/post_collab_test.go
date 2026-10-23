@@ -76,9 +76,10 @@ func TestStorePostCollabTx(t *testing.T) {
 	// State only (the server's derived doc failed validation): block_doc and
 	// the revision stay, the state is replaced and still matches.
 	result, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
-		PostID: post.ID,
-		State:  []byte{4, 5},
-		Epoch:  epoch,
+		PostID:       post.ID,
+		State:        []byte{4, 5},
+		Epoch:        epoch,
+		BaseRevision: sql.NullInt64{Int64: startRevision + 1, Valid: true},
 	})
 	require.NoError(t, err)
 	require.Equal(t, startRevision+1, result.BlockRevision)
@@ -111,13 +112,60 @@ func TestStorePostCollabTx(t *testing.T) {
 	after, err := testQueries.GetPostCollab(ctx, post.ID)
 	require.NoError(t, err)
 	require.Equal(t, loaded, after)
+
+	// The same for a state-only store: the old state must not be re-stamped
+	// with the new revision, or the next load would apply it.
+	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
+		PostID:       post.ID,
+		State:        []byte{9},
+		Epoch:        epoch,
+		BaseRevision: sql.NullInt64{Int64: startRevision + 1, Valid: true},
+	})
+	require.ErrorIs(t, err, ErrCollabRevisionConflict)
+	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{PostID: post.ID, State: []byte{9}, Epoch: epoch})
+	require.ErrorIs(t, err, ErrCollabBaseRevisionRequired)
+	after, err = testQueries.GetPostCollab(ctx, post.ID)
+	require.NoError(t, err)
+	require.Equal(t, loaded, after)
+}
+
+// A statement failing after block_doc was written (here the state upsert,
+// refused by a constraint that only matches this post) rolls the block_doc
+// write and revision bump back too.
+func TestStorePostCollabTxRollsBack(t *testing.T) {
+	ctx := context.Background()
+	post := createPostWithTransaction(t).Post
+	before, err := testQueries.GetPostCollab(ctx, post.ID)
+	require.NoError(t, err)
+
+	constraint := fmt.Sprintf("test_reject_post_%d", post.ID)
+	_, err = testQueries.db.ExecContext(ctx, fmt.Sprintf(
+		`ALTER TABLE post_ydoc_state ADD CONSTRAINT %s CHECK (post_id <> %d) NOT VALID`, constraint, post.ID))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = testQueries.db.ExecContext(context.Background(),
+			fmt.Sprintf(`ALTER TABLE post_ydoc_state DROP CONSTRAINT IF EXISTS %s`, constraint))
+	})
+
+	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
+		PostID:   post.ID,
+		State:    []byte{1},
+		Epoch:    uuid.New(),
+		BlockDoc: json.RawMessage(`{"doc_version":1,"blocks_order":["x"],"blocks":{"x":{"type":"paragraph"}}}`),
+	})
+	require.Error(t, err)
+
+	after, err := testQueries.GetPostCollab(ctx, post.ID)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
 }
 
 func TestStorePostCollabTxMissingPost(t *testing.T) {
 	_, err := testStore.StorePostCollabTx(context.Background(), StorePostCollabTxParams{
-		PostID: -1,
-		State:  []byte{1},
-		Epoch:  uuid.New(),
+		PostID:       -1,
+		State:        []byte{1},
+		Epoch:        uuid.New(),
+		BaseRevision: sql.NullInt64{Int64: 1, Valid: true},
 	})
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }
@@ -131,6 +179,7 @@ func TestStorePostCollabTxUnknownLastEditor(t *testing.T) {
 		PostID:       post.ID,
 		State:        []byte{1},
 		Epoch:        uuid.New(),
+		BaseRevision: sql.NullInt64{Int64: post.BlockRevision, Valid: true},
 		LastEditorID: sql.NullInt64{Int64: -5, Valid: true},
 	})
 	require.NoError(t, err)
@@ -165,8 +214,9 @@ func TestStorePostCollabTxSyncsContentMedia(t *testing.T) {
 		PostID:   post.ID,
 		State:    []byte{1},
 		Epoch:    uuid.New(),
-		BlockDoc: collabDocWithImages(added.ID, missingMediaID, kept.ID, featured.ID),
-		MediaIDs: []int64{added.ID, missingMediaID, kept.ID, featured.ID},
+		BlockDoc: collabDocWithImages(added.ID, missingMediaID, kept.ID, featured.ID, added.ID),
+		// added.ID twice: one link, at its first position.
+		MediaIDs: []int64{added.ID, missingMediaID, kept.ID, featured.ID, added.ID},
 	})
 	require.NoError(t, err)
 
@@ -203,7 +253,10 @@ func TestStorePostCollabTxPublishedPostKeepsMedia(t *testing.T) {
 func TestPostYdocStateCascadesOnPostDelete(t *testing.T) {
 	ctx := context.Background()
 	post := createPostWithTransaction(t).Post
-	_, err := testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{PostID: post.ID, State: []byte{1}, Epoch: uuid.New()})
+	_, err := testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
+		PostID: post.ID, State: []byte{1}, Epoch: uuid.New(),
+		BaseRevision: sql.NullInt64{Int64: post.BlockRevision, Valid: true},
+	})
 	require.NoError(t, err)
 
 	require.NoError(t, testStore.DeletePostTx(ctx, post.ID))
