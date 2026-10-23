@@ -12,6 +12,7 @@ import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { useCollabPresence } from "@gl-admin/components/editor/utils/useCollabPresence"
 import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
+import { usesHocuspocus } from "@gl-admin/lib/collaboration/backend"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 import "@gl-admin/assets/styles/components/Toast.scss"
 
@@ -108,9 +109,34 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const contentReadOnly = !access.content
   const detailsReadOnly = !access.details
   const canPublish = access.publish
-  const collabEnabled = mode === "edit" && roleVerified && !contentReadOnly
+  // Under Hocuspocus (#206 P3) a user who can't edit the post still gets the live doc,
+  // read-only (the server makes that connection read-only); y-websocket rejects them.
+  const collabEnabled = mode === "edit" && roleVerified && (!contentReadOnly || usesHocuspocus())
 
   const { status: collabStatus, users: collabUsers } = useCollabPresence(initialData?.id, collabEnabled)
+
+  // Under Hocuspocus the title no longer rides on the blocks autosave (PUT /blocks is 409
+  // there; the collab server saves the content only), so it's saved on its own, debounced
+  // like the old autosave, through PUT /posts/:id. Only for users who may change it.
+  const savedTitleRef = useRef(initialData?.title ?? "")
+  const titleSaveable = usesHocuspocus() && mode === "edit" && roleVerified && !detailsReadOnly && !!initialData?.id
+  const saveTitle = async (): Promise<void> => {
+    const title = formData.title.trim()
+    if (!titleSaveable || !initialData?.id || title === savedTitleRef.current || title.length < 3) return
+    await updatePost(initialData.id, { title })
+    savedTitleRef.current = title
+  }
+  useEffect(() => {
+    if (!titleSaveable) return
+    const timer = setTimeout(() => {
+      saveTitle().catch((error) => {
+        showError("Failed to save the title")
+        console.error("Title save failed:", error)
+      })
+    }, 1500)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.title, titleSaveable])
 
   const handlePostUpdate = (updates: Partial<Post>) => {
     setFormData((prev) => ({
@@ -141,6 +167,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     if (mode === "edit" && initialData) {
       const urlParts = initialData.url.split("/")
       const slug = initialData.slug || urlParts[urlParts.length - 1] || ""
+      savedTitleRef.current = initialData.title
 
       setFormData({
         title: initialData.title,
@@ -252,7 +279,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     // Use Block Spec v1 persistence for edit mode, fallback to traditional save for create mode
     if (mode === "edit" && editorRef.current && initialData?.id) {
       try {
-        await editorRef.current.forceSave()
+        await Promise.all([saveTitle(), editorRef.current.forceSave()])
         showSuccess("Changes saved successfully")
       } catch (error) {
         showError("Failed to save changes")
@@ -268,6 +295,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     // Use Block Spec v1 publishing for edit mode, fallback to traditional publish for create mode
     if (mode === "edit" && editorRef.current && initialData?.id) {
       try {
+        await saveTitle()
         const result = await editorRef.current.publish()
         if (result) {
           showSuccess(`Published as version ${result.versionNo}`)
@@ -350,6 +378,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           post_status: isPublish ? "published" : formData.post_status,
           post_type: postType,
           menu_order: 0,
+          // Hocuspocus: the body goes in with the post (PUT /blocks is 409 there); the
+          // collab server seeds the doc from it on first open.
+          ...(usesHocuspocus() && formData.content ? { block_doc: htmlToBlockDoc(formData.content) } : {}),
         }
 
         const result = await createPost(postData)
@@ -380,8 +411,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             if (token) {
               blockAPIClient.setAuthToken(token)
               console.log("💾 Saving blocks to post", result.post.id)
-              const saveResult = await blockAPIClient.updatePostBlocks(result.post.id, blockDoc, 1)
-              console.log("✅ Blocks saved successfully to block_doc:", saveResult)
+              if (!usesHocuspocus()) {
+                const saveResult = await blockAPIClient.updatePostBlocks(result.post.id, blockDoc, 1)
+                console.log("✅ Blocks saved successfully to block_doc:", saveResult)
+              }
 
               // If published, also publish the blocks (copies block_doc → published_block_doc)
               if (isPublish) {

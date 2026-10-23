@@ -24,9 +24,11 @@ import {
   findUnbuildableTypes,
   type UnbuildableTypes,
 } from "@gl-admin/lib/collaboration/schemaGuard"
+import { usesHocuspocus } from "@gl-admin/lib/collaboration/backend"
+import HocuspocusEditor from "./HocuspocusEditor"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
-type Props = {
+export type EditorProps = {
   value: string
   onChange: (html: string, plainText: string) => void
   placeholder?: string
@@ -44,6 +46,8 @@ type Props = {
   onPublishSuccess?: (result: { versionId: number; versionNo: number }) => void
   onPublishError?: (error: Error) => void
 }
+
+type Props = EditorProps
 
 // Set by the schema gate when the shared doc holds types this editor can't build: the
 // editor is opened read-only and saving/publishing must fail loudly, not no-op.
@@ -557,7 +561,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
 // useEditor deps), causing a double create in production (#198). This must be a separate
 // wrapper component — an early return before `useEditor` inside EditorInner would change
 // the hook count between renders and violate the Rules of Hooks.
-export default forwardRef<EditorRef, Props>(function Editor(props, ref) {
+const YWebsocketEditor = forwardRef<EditorRef, Props>(function Editor(props, ref) {
   const { isThemeLoaded } = useTheme()
 
   if (!isThemeLoaded) return <EditorPlaceholder text="Loading theme…" />
@@ -634,3 +638,8 @@ const SchemaGate = forwardRef<EditorRef, Props>(function SchemaGate(props, ref) 
     </>
   )
 })
+
+// The collab backend is fixed at build time (PUBLIC_COLLAB_BACKEND, backend.ts). Under
+// Hocuspocus the editor never seeds or saves (HocuspocusEditor.tsx); everything above is
+// the y-websocket path, unchanged until P5 removes it.
+export default usesHocuspocus() ? HocuspocusEditor : YWebsocketEditor

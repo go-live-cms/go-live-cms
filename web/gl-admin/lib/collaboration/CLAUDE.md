@@ -18,6 +18,42 @@ pointed at the *server* long before the cause was found, and the yjs warning
 "Yjs was already imported" had been printed at every server boot — **read process logs
 from the very top**.
 
+## Two backends behind a build-time flag (#206 P3, #283)
+
+`PUBLIC_COLLAB_BACKEND` (`backend.ts`, inlined at build) picks the collab path for the whole
+deployment, never per user, and must match the API's `COLLAB_BACKEND`:
+- **`y-websocket` (default):** everything below this section (CollaborationProvider,
+  BlockDocManager, BlockPersistenceManager, rules 1–6). Unchanged by P3.
+- **`hocuspocus`:** the client is a bound editor that **never seeds and never saves
+  content**. The server (`web/collab-server/`) seeds a new doc from `block_doc` and stores
+  the Yjs state + derived `block_doc` (debounced). Files:
+  - `HocuspocusCollaboration.ts`: `HocuspocusProvider` + ticket per (re)connect
+    (`getTicket`, in the auth message, not the URL), `meta.epoch` put on the socket URL
+    (`?epoch=`) after each sync, `stale-epoch` → `onStale` + destroy (holders remount on a
+    fresh Y.Doc; `acquireHocuspocus` never hands a stale one out), auth retry with backoff
+    for `access-unavailable`/ticket failures, `onStore` for the server's
+    `stored`/`store_failed` stateless messages. No `resyncInterval`. `postCollab.ts` wires it
+    to the app (URL, tickets, cursor label).
+  - `CollabSaveStatus.ts`: Saved/Saving/Error from those messages (only local edits make it
+    "saving"; `kept-invalid` is an error), `waitForStored` (waits for the provider to have no
+    unsynced changes, then the next `stored`), and `meta.dropped` for the hidden-blocks notice.
+  - `liveRestore.ts`: rule 9 on this path. `setEditorBlockDoc`, then the version's dropped
+    record into `meta.dropped`, then await `stored`. No PUT.
+  - `components/editor/HocuspocusEditor.tsx` (Editor.tsx's default export under the flag):
+    theme gate → connect → first sync → schema gate (rule 10) → bind. Contributors on
+    others' posts get a **live read-only** view (the server makes that connection read-only).
+    Publish waits for the server to have every local edit and calls publish; the API flushes.
+  - `useCollabPresence`, `PostForm` (title saved on its own via `PUT /posts/:id`; new posts
+    send `block_doc` with `POST /posts`) and the admin CSP (`collabUrl`) branch on the flag.
+  - URL (`hocuspocusUrl`): `PUBLIC_COLLAB_URL`, else dev `ws://<page host name>:1235`, else
+    `/collab` on the page origin (Caddy).
+  - Tests: `reconnect.hocuspocus.test.ts`, `liveRestore.test.ts`, `CollabSaveStatus.test.ts`,
+    `HocuspocusEditor.test.tsx`, and the paste/BlockId collab tests, all on the real server
+    in-process (`hocuspocusRelay.testkit.ts`). Under jsdom the clients use the provider's own
+    `ws` (Node's and jsdom's WebSockets can't dispatch jsdom's `Event`). Its `restart()`
+    terminates the sockets: Hocuspocus's `destroy()` leaves them open.
+  Rules 0, 7, 9 and 10 hold on both paths. Rules 1–6 apply to the y-websocket path only.
+
 ## The big mental model: TWO separate Yjs structures
 
 A post's `Y.Doc` (keyed `post-<id>`) holds **two independent shared types**:
@@ -74,8 +110,8 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` �
   `stampFragmentBlockIds` gives nodes without a valid, unique id one in the live doc, by
   BlockIdExtension's rules, in one transaction; the server must run it before each store,
   or `pmToBlockDoc` mints a new random id for those nodes on every store. Used by the
-  Hocuspocus server in `web/collab-server/` (#282; its `load.ts` / `store.ts`), which the
-  editor doesn't talk to yet (P3, #283).
+  Hocuspocus server in `web/collab-server/` (#282; its `load.ts` / `store.ts`); the editor
+  talks to it only when built with PUBLIC_COLLAB_BACKEND=hocuspocus (P3, #283).
   `fragmentBridge.test.ts` (plain Node) and `fragmentBridge.editor.test.ts` (editors bound to
   a server-seeded doc: they show it, don't churn it, and their edits come back out).
 - `debug.ts` — gated logging. Enable in browser: `localStorage.setItem("GL_DEBUG_COLLAB","1")`.

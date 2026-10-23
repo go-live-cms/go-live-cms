@@ -7,9 +7,11 @@ bridge (`gl-admin/lib/collaboration/{schema,fragmentBridge,blockBridge}.ts`,
 `gl-admin/lib/blocks-spec`). Read `gl-admin/lib/collaboration/CLAUDE.md` too.
 
 **Status:** runs in dev **next to** the y-websocket `websocket` service, as the `collab`
-compose service on **:1235**. The editor still uses `websocket` (:1234) until P3 (#283)
-adds the client behind `PUBLIC_COLLAB_BACKEND`, and P4 cuts over. Not in prod
-`compose.yaml` yet (P5).
+compose service on **:1235**. The editor talks to it only when built with
+`PUBLIC_COLLAB_BACKEND=hocuspocus` (P3, #283; the client side is in
+`gl-admin/lib/collaboration/CLAUDE.md`), with the API on `COLLAB_BACKEND=hocuspocus` and
+`COLLAB_INTERNAL_URL=http://collab:1236`; `websocket` (:1234) stays the default until P4
+cuts over. Not in prod `compose.yaml` yet (P5).
 
 | File | What |
 |------|------|

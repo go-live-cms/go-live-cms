@@ -7,7 +7,7 @@ processes + Postgres, run via Docker Compose.
 |---------|------|-------|-----|
 | API | 8080 (+ 8081 internal, never published) | Go, Gin, sqlc, PASETO v4 | `api/`, `db/`, `token/`, `util/` |
 | WebSocket collab | 1234 | Node, y-websocket, Yjs, LevelDB | `websocket/` |
-| Hocuspocus collab (dev only, not the default yet, #206) | 1235 (+ 1236 internal) | Node, Hocuspocus, esbuild bundle | `web/collab-server/` |
+| Hocuspocus collab (dev only, not the default yet; editor behind `PUBLIC_COLLAB_BACKEND=hocuspocus`, #206) | 1235 (+ 1236 internal) | Node, Hocuspocus, esbuild bundle | `web/collab-server/` |
 | Web | 4321 | Astro SSR + React admin SPA | `web/` |
 | DB | 5432 | PostgreSQL 12 | `db/migration/` |
 
