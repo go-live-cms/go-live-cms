@@ -478,13 +478,15 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     }
   }, [postId, collabProvider])
 
-  // Cleanup persistence manager on unmount
+  // Cleanup persistence manager on unmount. destroy() only cancels a pending debounce,
+  // so the ref is deliberately NOT cleared: StrictMode (dev) runs this cleanup once
+  // right after mount, and a cleared ref made the next useMemo recompute (PostForm
+  // passes inline save callbacks, so any re-render) build a second manager that was
+  // never initialized, which silently dropped every autosave (found in #284's rollback
+  // test). A real unmount discards the ref anyway; a postId change is handled above.
   useEffect(() => {
     return () => {
-      if (persistenceRef.current) {
-        persistenceRef.current.destroy()
-        persistenceRef.current = null
-      }
+      persistenceRef.current?.destroy()
     }
   }, [])
 
@@ -561,7 +563,9 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
 // useEditor deps), causing a double create in production (#198). This must be a separate
 // wrapper component — an early return before `useEditor` inside EditorInner would change
 // the hook count between renders and violate the Rules of Hooks.
-const YWebsocketEditor = forwardRef<EditorRef, Props>(function Editor(props, ref) {
+// Exported by name so its tests keep covering the y-websocket path now that the default
+// export is HocuspocusEditor (P4, #284).
+export const YWebsocketEditor = forwardRef<EditorRef, Props>(function Editor(props, ref) {
   const { isThemeLoaded } = useTheme()
 
   if (!isThemeLoaded) return <EditorPlaceholder text="Loading theme…" />
