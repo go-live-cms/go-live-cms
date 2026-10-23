@@ -105,4 +105,6 @@ export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): Pre
   return { body, decision, unconvertible, stamped }
 }
 
-const isEmpty = (doc: BlockDocV1 | null): boolean => !doc || doc.blocks_order.length === 0
+// `{}` (a post that never had blocks) counts as empty, like null (#304).
+const isEmpty = (doc: BlockDocV1 | null): boolean =>
+  !doc || !Array.isArray(doc.blocks_order) || doc.blocks_order.length === 0

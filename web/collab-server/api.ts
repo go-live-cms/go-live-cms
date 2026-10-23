@@ -46,6 +46,21 @@ export interface CollabStoreResult {
   block_revision: number | null
 }
 
+/**
+ * `posts.block_doc` as the server may use it: a Block Spec doc, or null for "no content".
+ * Posts that never had blocks store `{}` (most seeded posts, and posts created without a
+ * body), with no `blocks`/`blocks_order`. Anything that isn't shaped like a Block Spec doc
+ * becomes null, which load seeds as an empty document and store treats as empty (#304).
+ * Deeper problems inside a well-shaped doc are left to the seed/validation pipeline.
+ */
+export function normalizeBlockDoc(raw: unknown): BlockDocV1 | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const doc = raw as { blocks?: unknown; blocks_order?: unknown }
+  if (!Array.isArray(doc.blocks_order)) return null
+  if (!doc.blocks || typeof doc.blocks !== "object" || Array.isArray(doc.blocks)) return null
+  return raw as BlockDocV1
+}
+
 export class InternalApiError extends Error {
   constructor(
     message: string,
@@ -109,7 +124,7 @@ export function createInternalApi({
         throw new InternalApiError("collab load failed: malformed response", res.status)
       }
       return {
-        block_doc: body.block_doc ?? null,
+        block_doc: normalizeBlockDoc(body.block_doc),
         block_revision: body.block_revision,
         ydoc_state: body.ydoc_state ?? null,
         epoch: body.epoch ?? null,

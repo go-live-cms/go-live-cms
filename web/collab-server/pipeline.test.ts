@@ -6,7 +6,7 @@ import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { getCoreSchema } from "../gl-admin/lib/collaboration/schema"
 import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
 import { canonical, ids, richDoc } from "../gl-admin/lib/collaboration/fragmentBridge.fixtures"
-import type { CollabRecord } from "./api"
+import { createInternalApi, normalizeBlockDoc, type CollabRecord } from "./api"
 import { loadIntoDoc, readMeta, usableState } from "./load"
 import { prepareStore } from "./store"
 import { appendParagraph, paragraphDoc, paragraphs } from "./testkit"
@@ -85,6 +85,16 @@ describe("load", () => {
     expect(readMeta(doc).epoch).toMatch(/^epoch-/)
   })
 
+  it("seeds an empty doc for a post whose block_doc is {} instead of throwing (#304)", () => {
+    // Posts that never had blocks store `{}` (no blocks / blocks_order). load must not
+    // throw on it even without api.ts's normalization (FakeCollabApi bypasses that).
+    const doc = new Y.Doc()
+    const outcome = loadIntoDoc(doc, record({ block_doc: {} as unknown as BlockDocV1 }), schema, newEpoch)
+    expect(outcome).toMatchObject({ kind: "seeded", reason: "no-state", dropped: 0 })
+    expect(doc.getXmlFragment(EDITOR_FRAGMENT).length).toBe(0)
+    expect(readMeta(doc).epoch).toBe(outcome.epoch)
+  })
+
   it("empties the old client's blocks/blocks_order mirror", () => {
     const old = new Y.Doc()
     old.getMap("blocks").set("x", new Y.Map())
@@ -99,6 +109,27 @@ describe("load", () => {
 
   it("throws on stored state that can't be decoded, instead of reseeding over it", () => {
     expect(() => loadIntoDoc(new Y.Doc(), record({ ydoc_state: Buffer.from([255, 255, 255]).toString("base64"), epoch: "e" }), schema)).toThrow()
+  })
+})
+
+describe("normalizeBlockDoc (#304)", () => {
+  it("passes a Block Spec doc through unchanged", () => {
+    const doc = canonical(paragraphDoc("one"))
+    expect(normalizeBlockDoc(doc)).toBe(doc)
+  })
+
+  it("getCollab returns block_doc null when the API sends {}", async () => {
+    const fetchImpl = (async () =>
+      new Response(JSON.stringify({ block_doc: {}, block_revision: 1 }), { status: 200 })) as unknown as typeof fetch
+    const api = createInternalApi({ apiUrl: "http://api.test", secret: "s", fetchImpl })
+    const rec = await api.getCollab("1410")
+    expect(rec).toMatchObject({ block_doc: null, block_revision: 1 })
+  })
+
+  it("maps anything that isn't shaped like a Block Spec doc to null", () => {
+    for (const raw of [{}, null, undefined, [], "x", 1, { blocks: {} }, { blocks_order: [] }, { blocks: [], blocks_order: [] }, { blocks: {}, blocks_order: "a" }]) {
+      expect(normalizeBlockDoc(raw)).toBeNull()
+    }
   })
 })
 
@@ -120,6 +151,25 @@ describe("store", () => {
     const roundTrip = new Y.Doc()
     Y.applyUpdate(roundTrip, Buffer.from(body.state, "base64"))
     expect(paragraphs(roundTrip)).toEqual(["one", "two", "three"])
+  })
+
+  it("writes a real block_doc on the first edit of a post that had block_doc {} (#304)", () => {
+    // What the server sees for such a post: api.ts normalizes `{}` to null.
+    const previous = normalizeBlockDoc({})
+    expect(previous).toBeNull()
+    const doc = loaded(record({ block_doc: previous }))
+    appendParagraph(doc, "first words", "blk-para-000001")
+    const { body, decision } = prepareStore(doc, schema, { previous, clientEdited: true, lastEditorId: "1" })
+    expect(decision.write).toBe(true)
+    expect(body.block_doc?.blocks_order).toEqual(["blk-para-000001"])
+  })
+
+  it("replaces block_doc {} with a well-formed empty doc when an untouched post is stored (#304)", () => {
+    const previous = normalizeBlockDoc({})
+    const doc = loaded(record({ block_doc: previous }))
+    const { decision } = prepareStore(doc, schema, { previous, clientEdited: false, lastEditorId: null })
+    expect(decision.write).toBe(true)
+    expect(decision.write && decision.blockDoc.blocks_order).toEqual([])
   })
 
   it("doesn't rewrite block_doc when nothing changed (no revision churn)", () => {

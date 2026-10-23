@@ -44,7 +44,10 @@ export type LoadOutcome =
   | { kind: "restored"; epoch: string }
   | { kind: "seeded"; epoch: string; dropped: number; reason: "no-state" | "revision-mismatch" }
 
-const isEmptyBlockDoc = (doc: BlockDocV1 | null): boolean => !doc || doc.blocks_order.length === 0
+// `{}` (a post that never had blocks) counts as empty, like null (#304). api.ts already
+// normalizes it; this guard keeps a malformed doc from throwing here regardless.
+const isEmptyBlockDoc = (doc: BlockDocV1 | null): boolean =>
+  !doc || !Array.isArray(doc.blocks_order) || doc.blocks_order.length === 0
 
 /** Whether the record's stored Yjs state may be used: present, with an epoch, and produced at the current revision. */
 export function usableState(record: CollabRecord): boolean {

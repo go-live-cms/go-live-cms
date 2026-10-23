@@ -70,6 +70,11 @@ doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, au
   reseed with yet another epoch.
 - The old client's `blocks` map / `blocks_order` array are emptied (`meta.restore_id`
   is left alone).
+- **`block_doc` may be `{}`** (posts that never had blocks: most seeded posts, posts
+  created without a body). `api.ts` `normalizeBlockDoc` turns anything not shaped like a
+  Block Spec doc into `null`, which seeds an empty fragment; the emptiness checks in
+  load/store are defensive too. Before #304 this threw in `onLoadDocument`, which the
+  client reported as "access denied" (editor stuck on "Connecting...").
 - A load error refuses the connection; it never seeds over state it couldn't read.
 - **Epoch guard:** a client that already holds structs of this doc connects with
   `?epoch=<epoch>` on the WebSocket URL (Hocuspocus 3's provider has no per-doc params).
