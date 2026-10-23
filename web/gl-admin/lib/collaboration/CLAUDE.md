@@ -73,8 +73,9 @@ A change in (1) only reaches (2) when something **mirrors** it (`pmToBlockDoc` â
   (`onUnconvertible`) and keeps its version from `previous` (the last stored doc).
   `stampFragmentBlockIds` gives nodes without a valid, unique id one in the live doc, by
   BlockIdExtension's rules, in one transaction; the server must run it before each store,
-  or `pmToBlockDoc` mints a new random id for those nodes on every store. Not wired into
-  anything yet.
+  or `pmToBlockDoc` mints a new random id for those nodes on every store. Used by the
+  Hocuspocus server in `web/collab-server/` (#282; its `load.ts` / `store.ts`), which the
+  editor doesn't talk to yet (P3, #283).
   `fragmentBridge.test.ts` (plain Node) and `fragmentBridge.editor.test.ts` (editors bound to
   a server-seeded doc: they show it, don't churn it, and their edits come back out).
 - `debug.ts` â€” gated logging. Enable in browser: `localStorage.setItem("GL_DEBUG_COLLAB","1")`.

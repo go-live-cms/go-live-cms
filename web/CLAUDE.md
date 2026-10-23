@@ -116,6 +116,10 @@ Known-good set, last reviewed 2026-10 (web test suite + two-user collab test):
 - One exception on its own release line (no `3.4.2` exists): `@tiptap/y-tiptap` `3.0.0`.
 - `prosemirror-utils` `1.2.2` is pinned exact too. `y-websocket` `2.1.0` and
   `y-protocols` `1.0.7` are pinned exact here and `y-websocket` in `websocket/` (rule 8).
+- `@hocuspocus/server` / `@hocuspocus/provider` `3.4.4` and `paseto` `3.1.4` are pinned
+  exact for the collab server in `collab-server/` (#206; read its `CLAUDE.md`). It is
+  bundled with esbuild (`npm run build:collab`) and tested as its own vitest project
+  (`npx vitest run --project collab-server`, plain Node).
 
 ### Upgrading TipTap
 
