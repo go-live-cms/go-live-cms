@@ -58,7 +58,9 @@ doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, au
 - Otherwise **seed** (the only place anything seeds; the client never does):
   `seedFragment` (`blockDocToPMWithReport` + `prosemirrorToYXmlFragment` into
   `"default"`), the `DroppedBlocks` record into `meta.dropped`, a **new `meta.epoch`**,
-  and the seed is PUT right away (state + epoch only) so the epoch is durable.
+  and the seed is PUT right away (state + epoch only) so the epoch is durable. A failed
+  seed PUT is retried like a failed store (and blocks the unload), or the next load would
+  reseed with yet another epoch.
 - The old client's `blocks` map / `blocks_order` array are emptied (`meta.restore_id`
   is left alone).
 - A load error refuses the connection; it never seeds over state it couldn't read.
@@ -102,7 +104,7 @@ Own port (`INTERNAL_PORT`, default 1236), **never published**.
 
 Ported from `websocket/logsafe.js` (#142, #155, #220, #254): one JSON object per line via
 `logEvent`. Events: `ws_connect`, `ws_close`, `ws_deny`, `collab_load`,
-`collab_load_failed`, `collab_seed_store_failed`, `collab_store`,
+`collab_load_failed`, `collab_store`,
 `collab_store_invalid`, `collab_store_empty_skipped`, `collab_store_unconvertible`,
 `collab_store_failed`, `collab_flush`, `collab_flush_denied`, `collab_listening`,
 `collab_startup_failed`, `collab_shutdown`. Users by id only.

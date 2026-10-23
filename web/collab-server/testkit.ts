@@ -97,7 +97,11 @@ export class FakeCollabApi implements InternalApi {
     }
   }
 
+  /** Awaited at the start of each PUT (to hold one in flight). */
+  beforePut: (() => Promise<void>) | null = null
+
   async putCollab(postId: string, body: CollabStoreBody): Promise<CollabStoreResult> {
+    if (this.beforePut) await this.beforePut()
     if (this.failPut) throw new Error("collab store failed: API responded 503")
     const post = this.posts.get(postId)
     if (!post) throw new Error("collab store failed: API responded 404")

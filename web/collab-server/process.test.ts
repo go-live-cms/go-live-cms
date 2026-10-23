@@ -11,7 +11,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import type { Server } from "node:http"
 import { DENY } from "./auth"
 import { appendParagraph, connect, FakeCollabApi, paragraphDoc, paragraphs, serveFakeApi, ticketKeys, waitFor, type Client } from "./testkit"
@@ -104,7 +104,7 @@ describe("the bundled server process", () => {
     writeFileSync(
       script,
       `import { createRequire } from "node:module"; const require = createRequire(${JSON.stringify(path.join(webRoot, "package.json"))});
-       require("yjs"); await import(${JSON.stringify("file://" + path.join(webRoot, "node_modules/yjs/dist/yjs.mjs").replaceAll("\\", "/"))});`,
+       require("yjs"); await import(${JSON.stringify(pathToFileURL(path.join(webRoot, "node_modules/yjs/dist/yjs.mjs")).href)});`,
     )
     const { stdout: out, stderr: err } = await run(process.execPath, [script])
     expect(out + err).toContain(YJS_WARNING)

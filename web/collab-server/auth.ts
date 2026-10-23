@@ -130,7 +130,10 @@ export function createAuthenticate(deps: AuthDeps) {
       try {
         epoch = await deps.currentEpoch(rawDocName, { requestId })
       } catch (error) {
-        throw reject(DENY.unavailable, `Epoch check failed: ${errorMessage(error)}`, { userId: identity.userId })
+        // currentEpoch throws an AuthRejection for a final answer (the post is gone);
+        // anything else is an outage the client retries.
+        const reason = error instanceof AuthRejection ? error.reason : DENY.unavailable
+        throw reject(reason, `Epoch check failed: ${errorMessage(error)}`, { userId: identity.userId })
       }
       if (epoch !== clientEpoch) {
         throw reject(DENY.staleEpoch, "Client epoch does not match the document", { warn: true, userId: identity.userId })

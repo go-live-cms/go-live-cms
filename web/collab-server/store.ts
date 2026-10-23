@@ -53,7 +53,15 @@ function validationSummary(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-const sameDoc = (a: BlockDocV1 | null, b: BlockDocV1): boolean => !!a && JSON.stringify(a) === JSON.stringify(b)
+/** JSON with object keys sorted: the stored doc comes back from Postgres jsonb, which reorders keys. */
+const canonicalJSON = (value: unknown): string =>
+  JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  )
+
+const sameDoc = (a: BlockDocV1 | null, b: BlockDocV1): boolean => !!a && canonicalJSON(a) === canonicalJSON(b)
 
 /** Steps 1–4. Mutates the doc only to stamp block ids (origin SERVER_ORIGIN). */
 export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): PreparedStore {

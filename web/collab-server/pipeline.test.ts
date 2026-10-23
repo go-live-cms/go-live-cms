@@ -130,6 +130,21 @@ describe("store", () => {
     expect(body.block_doc).toBeUndefined()
   })
 
+  it("treats a previous doc with reordered keys (Postgres jsonb) as unchanged", () => {
+    const rec = record()
+    const doc = loaded(rec)
+    const reorder = (value: unknown): unknown =>
+      Array.isArray(value)
+        ? value.map(reorder)
+        : value && typeof value === "object"
+          ? Object.fromEntries(Object.entries(value).reverse().map(([k, v]) => [k, reorder(v)]))
+          : value
+    const fromJsonb = reorder(rec.block_doc) as BlockDocV1
+    expect(JSON.stringify(fromJsonb)).not.toBe(JSON.stringify(rec.block_doc))
+    const { decision } = prepareStore(doc, schema, { previous: fromJsonb, clientEdited: false, lastEditorId: null })
+    expect(decision).toEqual({ write: false, reason: "unchanged" })
+  })
+
   it("puts the blocks seeding dropped back into block_doc", () => {
     const source = docWithBadBlocks()
     const doc = loaded(record({ block_doc: source }))

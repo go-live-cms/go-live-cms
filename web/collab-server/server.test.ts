@@ -240,6 +240,51 @@ describe("collab server (in-process Hocuspocus)", () => {
     await waitFor(() => collab.hocuspocus.getDocumentsCount() === 0, { what: "unload after the retry" })
   })
 
+  it("an edit that lands while a store's PUT is in flight is stored by the next store", async () => {
+    const { url, collab } = await startServer({ debounce: 60_000 })
+    const a = open(url, "2")
+    await synced(a)
+    const live = () => collab.hocuspocus.documents.get(DOC)!.getXmlFragment("default").length
+    appendParagraph(a.doc, "first", "blk-first-00001")
+    await waitFor(() => live() === 3, { what: "the first edit" })
+
+    let release!: () => void
+    api.beforePut = () => new Promise<void>((resolve) => (release = resolve))
+    const inFlight = collab.flush(DOC)
+    await waitFor(() => typeof release === "function", { what: "the PUT to start" })
+    appendParagraph(a.doc, "during the PUT", "blk-during-0001")
+    await waitFor(() => live() === 4, { what: "the second edit" })
+    api.beforePut = null
+    release()
+    expect((await inFlight).ok).toBe(true)
+    expect(api.posts.get("12")!.block_doc!.blocks_order).not.toContain("blk-during-0001")
+
+    expect(await collab.flush(DOC)).toEqual({ ok: true, skipped: false, loaded: true })
+    expect(api.posts.get("12")!.block_doc!.blocks_order).toContain("blk-during-0001")
+  })
+
+  it("a failed seed PUT is retried, so the epoch becomes durable", async () => {
+    const { url, collab } = await startServer()
+    api.failPut = true
+    const reader = open(url, "3")
+    await synced(reader)
+    const epoch = readMeta(reader.doc).epoch
+    expect(api.posts.get("12")!.epoch).toBeNull()
+    reader.destroy()
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(collab.hocuspocus.documents.has(DOC)).toBe(true)
+
+    api.failPut = false
+    await waitFor(() => api.posts.get("12")!.epoch === epoch, { what: "the seed retry" })
+    await waitFor(() => collab.hocuspocus.getDocumentsCount() === 0, { what: "unload after the retry" })
+  })
+
+  it("an epoch check on a deleted post is a final refusal, not a retryable outage", async () => {
+    const { url } = await startServer()
+    api.posts.delete("12")
+    expect(await open(url, "2", { epoch: "some-epoch" }).outcome).toEqual({ synced: false, reason: DENY.forbidden })
+  })
+
   it("a doc that fails to load is refused, not seeded empty", async () => {
     const { url, collab } = await startServer()
     api.failGet = true

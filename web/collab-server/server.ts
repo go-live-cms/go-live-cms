@@ -10,7 +10,7 @@ import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { getCoreSchema } from "../gl-admin/lib/collaboration/schema"
 import { isCollabDocName, postIdOf, TicketReplayGuard, type TicketClaims } from "./access"
 import type { InternalApi } from "./api"
-import { createAuthenticate, type CollabContext } from "./auth"
+import { AuthRejection, createAuthenticate, DENY, type CollabContext } from "./auth"
 import { loadIntoDoc, readMeta } from "./load"
 import { docNameForLog, errorMessage, logEvent } from "./logsafe"
 import { prepareStore } from "./store"
@@ -47,6 +47,14 @@ interface Session {
   failed: boolean
   retryTimer: NodeJS.Timeout | null
   retryDelay: number
+}
+
+/** onLoadDocument for a post the API doesn't have (404). */
+class PostNotFoundError extends Error {
+  constructor() {
+    super("post not found")
+    this.name = "PostNotFoundError"
+  }
 }
 
 const contextOf = (value: unknown): Partial<CollabContext> =>
@@ -87,14 +95,20 @@ export function createCollabServer(options: CollabServerOptions) {
     async currentEpoch(docName, { requestId }) {
       // Load it (or join the load in progress), so the epoch compared is the one the
       // connection will get: a load that reseeds makes a new epoch.
-      const document = await hocuspocus.createDocument(
-        docName,
-        {},
-        `epoch-check-${requestId}`,
-        { readOnly: true, isAuthenticated: true },
-        { requestId },
-      )
-      return readMeta(document).epoch
+      try {
+        const document = await hocuspocus.createDocument(
+          docName,
+          {},
+          `epoch-check-${requestId}`,
+          { readOnly: true, isAuthenticated: true },
+          { requestId },
+        )
+        return readMeta(document).epoch
+      } catch (error) {
+        // A deleted post is a final answer, not an outage the client should retry.
+        if (error instanceof PostNotFoundError) throw new AuthRejection(DENY.forbidden, "Post not found")
+        throw error
+      }
     },
   })
 
@@ -125,6 +139,9 @@ export function createCollabServer(options: CollabServerOptions) {
       return storeFailed(docName, document, session, trigger, error)
     }
     const { body, decision, unconvertible, stamped } = prepared
+    // What `body.state` holds (prepareStore encodes it synchronously). Taken before the
+    // PUT: edits that arrive while it's in flight must not count as stored.
+    const storing = Y.snapshot(document)
     for (const block of unconvertible) {
       logEvent("warn", "collab_store_unconvertible", {
         doc,
@@ -144,7 +161,7 @@ export function createCollabServer(options: CollabServerOptions) {
       const result = await api.putCollab(session.postId, body)
       if (decision.write) session.previous = decision.blockDoc
       if (result.block_revision !== null) session.revision = result.block_revision
-      session.storedSnapshot = Y.snapshot(document)
+      session.storedSnapshot = storing
       session.failed = false
       session.retryDelay = storeRetryMs
       if (session.retryTimer) clearTimeout(session.retryTimer)
@@ -231,7 +248,7 @@ export function createCollabServer(options: CollabServerOptions) {
       }
       if (!record) {
         logEvent("warn", "collab_load_failed", { request_id: requestId, doc, error: "post not found" })
-        throw new Error("post not found")
+        throw new PostNotFoundError()
       }
       const outcome = loadIntoDoc(document, record, schema, newEpoch)
       const session: Session = {
@@ -267,7 +284,10 @@ export function createCollabServer(options: CollabServerOptions) {
           )
           session.storedSnapshot = Y.snapshot(document)
         } catch (error) {
-          logEvent("warn", "collab_seed_store_failed", { request_id: requestId, doc, error: errorMessage(error) })
+          // Retried like any failed store, and the doc isn't unloaded until it lands:
+          // otherwise the next load reseeds with yet another epoch and every client
+          // holding this one is refused (stale-epoch).
+          storeFailed(documentName, document, session, "seed", error)
         }
       }
     },
