@@ -61,12 +61,12 @@ SITE_ADDRESS=%s
 POSTGRES_PASSWORD=%s
 
 # Ed25519 (access tokens + collab tickets) and XChaCha20 (refresh tokens) keys.
-# The websocket service verifies tickets with the same public key.
+# The collab service verifies tickets with the same public key.
 PASETO_V4_PUBLIC_KEY_HEX=%s
 PASETO_V4_PRIVATE_KEY_HEX=%s
 PASETO_V4_LOCAL_KEY_HEX=%s
 
-# Shared between the api and websocket services.
+# Shared between the api and collab services.
 ROLE_LOOKUP_SECRET=%s
 COLLAB_INTERNAL_SECRET=%s
 `,

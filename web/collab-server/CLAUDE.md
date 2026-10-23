@@ -6,12 +6,17 @@ match the editor by construction, and it imports the editor's own schema and Blo
 bridge (`gl-admin/lib/collaboration/{schema,fragmentBridge,blockBridge}.ts`,
 `gl-admin/lib/blocks-spec`). Read `gl-admin/lib/collaboration/CLAUDE.md` too.
 
-**Status:** runs in dev **next to** the y-websocket `websocket` service, as the `collab`
-compose service on **:1235**. The editor talks to it only when built with
-`PUBLIC_COLLAB_BACKEND=hocuspocus` (P3, #283; the client side is in
-`gl-admin/lib/collaboration/CLAUDE.md`), with the API on `COLLAB_BACKEND=hocuspocus` and
-`COLLAB_INTERNAL_URL=http://collab:1236`; `websocket` (:1234) stays the default until P4
-cuts over. Not in prod `compose.yaml` yet (P5).
+**Status:** the editor's collab server **by default** since the P4 cutover (#284): the
+`collab` service on **:1235** in `compose.dev.yaml`, and in prod `compose.yaml` behind
+Caddy's `/collab` (image `ghcr.io/go-live-cms/collab`, pushed by CD). The API runs
+`COLLAB_BACKEND=hocuspocus` with `COLLAB_INTERNAL_URL=http://collab:1236`, and the web
+build `PUBLIC_COLLAB_BACKEND=hocuspocus` (client side: `gl-admin/lib/collaboration/CLAUDE.md`).
+The y-websocket `websocket` service stays in dev behind the `y-websocket` profile for the
+rollback window, until P5. Cutover, verification and rollback:
+`docs/operations/collab-cutover.md`.
+- `leveldbDiff.ts` (+ `scripts/collab/leveldb-diff.mjs`, `leveldb-diff-dev.sh`): P4's
+  read-only dry run comparing each y-websocket LevelDB doc with what this server would
+  seed from `block_doc`. Not part of the server bundle; deleted in P5.
 
 | File | What |
 |------|------|

@@ -32,3 +32,7 @@ websocket/node_modules/
 .DS_Store
 # Dev mail driver output (#148): emails with working links
 /dev-mail/
+
+# LevelDB diff reports and scratch export (scripts/collab/leveldb-diff-dev.sh, #284)
+scripts/collab/leveldb-diff-*.json
+scripts/collab/.blockdocs.json

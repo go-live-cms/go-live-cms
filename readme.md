@@ -572,7 +572,7 @@ jobs run in parallel:
 | Migrations up/down/up | every up, then every down (nothing may be left behind), then up again with an identical schema dump |
 | Web tests | `web` vitest and `websocket` `node --test` |
 | Web type check and build | `astro check` and `astro build` |
-| Docker image | builds the api, web and websocket production images (no push) |
+| Docker image | builds the api, web (Hocuspocus editor), collab and websocket production images (no push); smoke-runs collab |
 
 To reproduce locally before pushing:
 

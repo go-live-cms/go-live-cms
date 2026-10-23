@@ -3,6 +3,12 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# The editor's collab backend, inlined at build (gl-admin/lib/collaboration/backend.ts).
+# Must match the API's COLLAB_BACKEND. Hocuspocus since the P4 cutover (#284); build
+# with --build-arg PUBLIC_COLLAB_BACKEND=y-websocket only to roll back
+# (docs/operations/collab-cutover.md).
+ARG PUBLIC_COLLAB_BACKEND=hocuspocus
+ENV PUBLIC_COLLAB_BACKEND=$PUBLIC_COLLAB_BACKEND
 RUN npm run build
 # Keep only the runtime dependencies for the final stage (no second install).
 RUN npm prune --omit=dev

@@ -1,5 +1,10 @@
 # WebSocket collaboration server — agent context
 
+**Retired by the Hocuspocus cutover (#206 P4, #284):** the editor now uses
+`web/collab-server/` by default. This server only runs for a dev rollback (compose profile
+`y-websocket`, `docs/operations/collab-cutover.md`), is no longer in prod `compose.yaml` or
+CD, and is deleted in P5.
+
 Node, ESM (`"type": "module"`). A `y-websocket` server with **PASETO v4.public** auth
 and **LevelDB** persistence. Port 1234. Entry: `server.js`. Dev: `npm run dev`
 (nodemon). Tests: `npm test` (`node --test`).

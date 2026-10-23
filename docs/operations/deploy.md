@@ -7,8 +7,8 @@ SSH (#267). Backups and restores: [backups.md](backups.md).
 ## The stack
 
 ```
-browser ──https──▶ caddy :443 ──/collab/*──▶ websocket:1234 ──▶ api:8081 (internal role lookup)
-  (80 → 443)         │                          LevelDB volume ws_data
+browser ──https──▶ caddy :443 ──/collab──▶ collab:1235 ──▶ api:8081 (access lookup, Yjs load/store)
+  (80 → 443)         │                     (Hocuspocus)  ◀── api → collab:1236 (flush before publish)
                      └──everything else──▶ web:4321 (Astro SSR + admin SPA)
                                               │ /api/v1, /uploads forwarded (apiProxy.ts)
                                               │ SSR fetches: SERVER_API_URL
@@ -20,21 +20,26 @@ browser ──https──▶ caddy :443 ──/collab/*──▶ websocket:1234 
 |---------|-------|-----------|-------|
 | `caddy` | `caddy:2.10-alpine` | 80, 443 (tcp+udp) | `caddy_data` (certificates; keep it) |
 | `web` | `ghcr.io/go-live-cms/web` | no | none |
-| `websocket` | `ghcr.io/go-live-cms/websocket` | no | `ws_data` (LevelDB) |
+| `collab` | `ghcr.io/go-live-cms/collab` | no | none (live Yjs state is in Postgres, `post_ydoc_state`) |
 | `api` | `ghcr.io/go-live-cms/api` | no | `uploads` |
 | `postgres` | `postgres:12-alpine` | no | `postgres_data` |
 
 - **Caddy** terminates TLS (Let's Encrypt for a domain, its local CA for `localhost`) and
-  is the only thing on the internet. It sends `/collab/*` to the collab server, because the
-  Astro server can't proxy a WebSocket upgrade, and everything else to `web`. Its access log
-  is off: the collab URL carries a single-use ticket. Config: `deploy/caddy/Caddyfile`.
-- **Exactly one `websocket` process.** Live Yjs docs and the ticket replay guard live in its
-  memory (`websocket/CLAUDE.md`). Never scale it.
+  is the only thing on the internet. It sends `/collab` and `/collab/*` to the collab
+  server, because the Astro server can't proxy a WebSocket upgrade, and everything else to
+  `web`. Its access log stays off. Config: `deploy/caddy/Caddyfile`.
+- **The collab server is Hocuspocus** (`web/collab-server/`, #206). It replaced the
+  y-websocket `websocket` service in #284; releases before that ran `websocket` with a
+  LevelDB volume `ws_data`. Cutover and rollback: [collab-cutover.md](collab-cutover.md).
+  The web image bakes the editor's backend in at build time (`PUBLIC_COLLAB_BACKEND`, a
+  build arg CD sets), and it must match the API's `COLLAB_BACKEND` (`compose.yaml`).
+- **Exactly one `collab` process.** Live Yjs docs and the ticket replay guard live in its
+  memory (`web/collab-server/CLAUDE.md`). Never scale it.
 - **Client IPs.** Browser API calls go caddy → web → api. The API trusts exactly those two
   fixed addresses (`172.28.0.11` caddy, `172.28.0.10` web, `TRUSTED_PROXIES`), and Caddy
   drops any `X-Forwarded-For` a client sends. If a cloud load balancer sits in front of
   Caddy, add its range as Caddy `trusted_proxies` (see the Caddyfile comment).
-- `web` and `websocket` run as the `node` user. The `api` image still runs as root.
+- `web` and `collab` run as the `node` user. The `api` image still runs as root.
 
 ### API URLs: server side vs browser
 
@@ -131,14 +136,16 @@ Caddyfile, the scripts and `.env` to `DEPLOY_PATH`:
    previous release (add columns/tables first, drop them a release later). `start.sh` still
    runs `migrate up` on boot, which is then a no-op.
 5. `docker compose up -d --wait`: recreates what changed and fails the job unless every
-   healthcheck passes (api `/readyz`, web `/favicon.ico`, websocket `/`) within 4 minutes.
+   healthcheck passes (api `/readyz`, web `/favicon.ico`, collab `/healthz` on its
+   internal port) within 4 minutes.
 6. Appends `<time> <sha>` to `/opt/golive/.deploy-history`.
 
 Deploys run one at a time. An automatic deploy is skipped when its commit is no longer
 `main`'s tip by the time it runs, so a slow older run can't roll back a newer one.
 
 Expect a few seconds of downtime while containers are recreated. Open editors show
-"Reconnecting" and resync by themselves: LevelDB and the editor's 2s autosave cover the gap.
+"Reconnecting" and resync by themselves: on SIGTERM the collab server stores every open doc
+(Yjs state + `block_doc`), and edits typed while it's down are sent when the tab reconnects.
 
 ## Rollback
 
@@ -146,6 +153,9 @@ Find the previous sha in `/opt/golive/.deploy-history` (or the Actions history),
 the **cd** workflow manually (Actions → cd → Run workflow) with that sha.
 
 - **No new migrations since that release:** that's it.
+- **Rolling back past the Hocuspocus cutover (#284)** (to a release that still ran
+  `websocket`): follow [collab-cutover.md](collab-cutover.md), "Rollback (production)"
+  first. Its LevelDB must start empty.
 - **The bad release added migrations:** the old API image doesn't have them, so its
   startup `migrate up` would fail. The deploy stops and says so. Choose one:
   - Tick **allow_down_migrations**. The script takes a backup, then migrates down to the
@@ -177,7 +187,8 @@ docker compose -f compose.yaml up --build -d
 Open `https://localhost` and accept the warning for Caddy's local certificate. Create the
 first admin as in step 5. To skip TLS locally, set `SITE_ADDRESS=http://localhost`:
 browsers accept the `Secure` refresh cookie on `localhost`, and the editor then uses
-`ws://localhost/collab`.
+`ws://localhost/collab`. Before #284 this ran a `websocket` service; after pulling the
+cutover, `docker compose -f compose.yaml up -d --remove-orphans` drops its container.
 
 ## Upgrading from before #272
 

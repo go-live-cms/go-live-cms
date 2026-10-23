@@ -3,13 +3,15 @@
 // PUBLIC_COLLAB_BACKEND is read at BUILD time (Astro inlines PUBLIC_* vars), and it is
 // deployment-wide, never per user: two backends serving one post would fork the doc. It
 // must match the API's COLLAB_BACKEND.
-//   - "y-websocket" (default): CollaborationProvider + BlockPersistenceManager (REST autosave).
-//   - "hocuspocus": HocuspocusCollaboration + CollabSaveStatus; the server seeds and saves.
+//   - "hocuspocus" (default since the P4 cutover, #284): HocuspocusCollaboration +
+//     CollabSaveStatus; the server seeds and saves.
+//   - "y-websocket": CollaborationProvider + BlockPersistenceManager (REST autosave). Only
+//     for the rollback window (docs/operations/collab-cutover.md); P5 deletes it.
 
 export type CollabBackend = "y-websocket" | "hocuspocus"
 
 export function parseCollabBackend(value: unknown): CollabBackend {
-  return value === "hocuspocus" ? "hocuspocus" : "y-websocket"
+  return value === "y-websocket" ? "y-websocket" : "hocuspocus"
 }
 
 export const COLLAB_BACKEND: CollabBackend = parseCollabBackend(import.meta.env.PUBLIC_COLLAB_BACKEND)

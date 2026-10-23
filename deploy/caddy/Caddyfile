@@ -2,26 +2,29 @@
 # terminates TLS and routes everything to the web container, except the collab
 # WebSocket, which the Astro server can't proxy (it can't handle an upgrade).
 #
-#   https://<site>/collab/*  -> websocket:1234  (CollaborationProvider.ts, wss://<host>/collab/post-<id>)
-#   https://<site>/*         -> web:4321        (pages, /gl-admin; web forwards /api/v1 and /uploads to the API)
+#   https://<site>/collab, /collab/*  -> collab:1235  (the Hocuspocus server, #284;
+#                                        wss://<host>/collab?epoch=…, backend.ts hocuspocusUrl)
+#   https://<site>/*                  -> web:4321     (pages, /gl-admin; web forwards /api/v1 and /uploads to the API)
 #
 # SITE_ADDRESS is a domain (Caddy gets and renews a Let's Encrypt certificate; ports 80
 # and 443 must reach this host) or `localhost` (Caddy's own local CA, for testing).
 #
-# Access logs stay OFF (Caddy's default): the collab URL carries a single-use ticket
+# Access logs stay OFF (Caddy's default). Hocuspocus sends the collab ticket in its auth
+# message, not the URL, but a rollback to a pre-#284 release puts it back in the URL
 # (#233), and the API/web already log requests without query strings.
 
 {$SITE_ADDRESS:localhost} {
 	# A fresh id per request, replacing any the client sent. The web server passes it
-	# to the API and the WS server forwards it on its role lookup, so one id ties a
+	# to the API and the collab server forwards it on its access lookup, so one id ties a
 	# browser request to every log line it caused (#142).
 	request_header X-Request-ID {http.request.uuid}
 
 	# Caddy passes the WebSocket upgrade through and sets X-Forwarded-For/-Proto/-Host
 	# itself. Incoming X-Forwarded-* are discarded (no trusted_proxies here); if a load
 	# balancer sits in front, add a global `servers { trusted_proxies static <range> }`.
-	handle /collab/* {
-		reverse_proxy websocket:1234
+	@collab path /collab /collab/*
+	handle @collab {
+		reverse_proxy collab:1235
 	}
 
 	handle {
