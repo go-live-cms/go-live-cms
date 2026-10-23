@@ -46,19 +46,29 @@ export interface CollabStoreResult {
   block_revision: number | null
 }
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v)
+
 /**
- * `posts.block_doc` as the server may use it: a Block Spec doc, or null for "no content".
- * Posts that never had blocks store `{}` (most seeded posts, and posts created without a
- * body), with no `blocks`/`blocks_order`. Anything that isn't shaped like a Block Spec doc
- * becomes null, which load seeds as an empty document and store treats as empty (#304).
- * Deeper problems inside a well-shaped doc are left to the seed/validation pipeline.
+ * Whether `raw` is the stored form of "no content": null, or `{}`, which posts that never
+ * had blocks store (most seeded posts, and posts created without a body) (#304).
+ */
+export const isBareEmptyBlockDoc = (raw: unknown): boolean =>
+  raw == null || (isPlainObject(raw) && Object.keys(raw).length === 0)
+
+/**
+ * `posts.block_doc` as the server may use it (#304):
+ *   - null or `{}` → null (load seeds an empty document; store treats it as empty);
+ *   - shaped like a Block Spec doc (`blocks_order` array, `blocks` object) → the doc
+ *     (deeper problems are left to the seed/validation pipeline);
+ *   - anything else **throws**, so the load fails and the connection is refused. Treating
+ *     an unrecognized doc as empty would show an empty editor, and the next store would
+ *     overwrite whatever content it holds.
  */
 export function normalizeBlockDoc(raw: unknown): BlockDocV1 | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
-  const doc = raw as { blocks?: unknown; blocks_order?: unknown }
-  if (!Array.isArray(doc.blocks_order)) return null
-  if (!doc.blocks || typeof doc.blocks !== "object" || Array.isArray(doc.blocks)) return null
-  return raw as BlockDocV1
+  if (isBareEmptyBlockDoc(raw)) return null
+  if (isPlainObject(raw) && Array.isArray(raw.blocks_order) && isPlainObject(raw.blocks)) return raw as unknown as BlockDocV1
+  throw new InternalApiError("collab load failed: block_doc is not a Block Spec v1 document", null)
 }
 
 export class InternalApiError extends Error {

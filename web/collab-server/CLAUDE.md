@@ -71,10 +71,18 @@ doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, au
 - The old client's `blocks` map / `blocks_order` array are emptied (`meta.restore_id`
   is left alone).
 - **`block_doc` may be `{}`** (posts that never had blocks: most seeded posts, posts
-  created without a body). `api.ts` `normalizeBlockDoc` turns anything not shaped like a
-  Block Spec doc into `null`, which seeds an empty fragment; the emptiness checks in
-  load/store are defensive too. Before #304 this threw in `onLoadDocument`, which the
-  client reported as "access denied" (editor stuck on "Connecting...").
+  created without a body). `normalizeBlockDoc` (`api.ts`, and again in `loadIntoDoc` for
+  callers that bypass it) maps only `null`/`{}` to `null`, which seeds an empty fragment.
+  **Any other malformed shape throws**: the load fails and the connection is refused,
+  rather than showing an empty editor whose next store would overwrite unknown content.
+  Before #304, `{}` threw in `onLoadDocument`, which the client reported as "access
+  denied" (editor stuck on "Connecting...").
+- **No write for a still-empty post:** if `block_doc` was empty and the derived doc has
+  no content (nothing, or only empty paragraphs such as TipTap's TrailingNode adds on
+  open), the store is `unchanged`: no `block_revision`/`changed_at` bump for a post
+  nobody edited.
+- The REST side matches: `GET /posts/:id/blocks` and `GET /posts/:id/versions/:no` return
+  `{}` as a well-formed empty doc (`parseStoredBlockDoc` in `api/post_blocks_handlers.go`).
 - A load error refuses the connection; it never seeds over state it couldn't read.
 - **Epoch guard:** a client that already holds structs of this doc connects with
   `?epoch=<epoch>` on the WebSocket URL (Hocuspocus 3's provider has no per-doc params).

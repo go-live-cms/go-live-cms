@@ -95,6 +95,13 @@ describe("load", () => {
     expect(readMeta(doc).epoch).toBe(outcome.epoch)
   })
 
+  it("refuses to load a malformed block_doc instead of seeding an empty editor over it (#304)", () => {
+    // Content stored in an unexpected shape (blocks as an array): seeding it as empty
+    // would let the next store overwrite that content.
+    const malformed = { blocks: [{ type: "paragraph" }], blocks_order: ["a"] } as unknown as BlockDocV1
+    expect(() => loadIntoDoc(new Y.Doc(), record({ block_doc: malformed }), schema, newEpoch)).toThrow()
+  })
+
   it("empties the old client's blocks/blocks_order mirror", () => {
     const old = new Y.Doc()
     old.getMap("blocks").set("x", new Y.Map())
@@ -118,18 +125,38 @@ describe("normalizeBlockDoc (#304)", () => {
     expect(normalizeBlockDoc(doc)).toBe(doc)
   })
 
-  it("getCollab returns block_doc null when the API sends {}", async () => {
-    const fetchImpl = (async () =>
-      new Response(JSON.stringify({ block_doc: {}, block_revision: 1 }), { status: 200 })) as unknown as typeof fetch
-    const api = createInternalApi({ apiUrl: "http://api.test", secret: "s", fetchImpl })
-    const rec = await api.getCollab("1410")
-    expect(rec).toMatchObject({ block_doc: null, block_revision: 1 })
+  it("passes a well-formed empty doc through (store treats it as empty)", () => {
+    const empty = { doc_version: 1, blocks: {}, blocks_order: [] }
+    expect(normalizeBlockDoc(empty)).toBe(empty)
   })
 
-  it("maps anything that isn't shaped like a Block Spec doc to null", () => {
-    for (const raw of [{}, null, undefined, [], "x", 1, { blocks: {} }, { blocks_order: [] }, { blocks: [], blocks_order: [] }, { blocks: {}, blocks_order: "a" }]) {
+  it("maps only null and {} (no content) to null", () => {
+    for (const raw of [{}, null, undefined]) {
       expect(normalizeBlockDoc(raw)).toBeNull()
     }
+  })
+
+  it("throws on any other shape, so the load fails instead of overwriting unknown content", () => {
+    for (const raw of [[], "x", 1, { blocks: {} }, { blocks_order: [] }, { blocks: [{ type: "paragraph" }], blocks_order: ["a"] }, { blocks: {}, blocks_order: "a" }, { blocks: null, blocks_order: [] }]) {
+      expect(() => normalizeBlockDoc(raw)).toThrow(/not a Block Spec v1 document/)
+    }
+  })
+
+  const apiReturning = (block_doc: unknown) =>
+    createInternalApi({
+      apiUrl: "http://api.test",
+      secret: "s",
+      fetchImpl: (async () => new Response(JSON.stringify({ block_doc, block_revision: 1 }), { status: 200 })) as unknown as typeof fetch,
+    })
+
+  it("getCollab returns block_doc null when the API sends {}", async () => {
+    await expect(apiReturning({}).getCollab("1410")).resolves.toMatchObject({ block_doc: null, block_revision: 1 })
+  })
+
+  it("getCollab rejects a malformed block_doc (the load fails, the content is untouched)", async () => {
+    await expect(apiReturning({ blocks: [{ type: "paragraph" }], blocks_order: ["a"] }).getCollab("1410")).rejects.toThrow(
+      /not a Block Spec v1 document/,
+    )
   })
 })
 
@@ -164,12 +191,26 @@ describe("store", () => {
     expect(body.block_doc?.blocks_order).toEqual(["blk-para-000001"])
   })
 
-  it("replaces block_doc {} with a well-formed empty doc when an untouched post is stored (#304)", () => {
+  it("doesn't write block_doc for an untouched post that had no content (no revision/changed_at churn, #304)", () => {
     const previous = normalizeBlockDoc({})
     const doc = loaded(record({ block_doc: previous }))
-    const { decision } = prepareStore(doc, schema, { previous, clientEdited: false, lastEditorId: null })
-    expect(decision.write).toBe(true)
-    expect(decision.write && decision.blockDoc.blocks_order).toEqual([])
+    const { body, decision } = prepareStore(doc, schema, { previous, clientEdited: false, lastEditorId: null })
+    expect(decision).toEqual({ write: false, reason: "unchanged" })
+    expect(body.block_doc).toBeUndefined()
+  })
+
+  it("doesn't write block_doc when opening an empty post only added the editor's empty paragraph (#304)", () => {
+    // TipTap's TrailingNode puts an empty paragraph into an empty doc as soon as the
+    // editor binds; that arrives as a client edit but isn't content.
+    const previous = normalizeBlockDoc({})
+    const doc = loaded(record({ block_doc: previous }))
+    doc.transact(() => {
+      const p = new Y.XmlElement("paragraph")
+      doc.getXmlFragment(EDITOR_FRAGMENT).insert(0, [p])
+      p.setAttribute("data-block-id", "blk-para-trailing")
+    })
+    const { decision } = prepareStore(doc, schema, { previous, clientEdited: true, lastEditorId: "1" })
+    expect(decision).toEqual({ write: false, reason: "unchanged" })
   })
 
   it("doesn't rewrite block_doc when nothing changed (no revision churn)", () => {

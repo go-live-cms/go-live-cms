@@ -18,7 +18,7 @@ import {
   stampFragmentBlockIds,
   type UnconvertibleBlock,
 } from "../gl-admin/lib/collaboration/fragmentBridge"
-import type { CollabStoreBody } from "./api"
+import { isBareEmptyBlockDoc, type CollabStoreBody } from "./api"
 import { readMeta, SERVER_ORIGIN } from "./load"
 
 export interface StoreInput {
@@ -86,7 +86,11 @@ export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): Pre
     validateBlockDoc(derived)
     if (derived.blocks_order.length === 0 && !input.clientEdited && !isEmpty(input.previous)) {
       decision = { write: false, reason: "empty-without-edit" }
-    } else if (sameDoc(input.previous, derived)) {
+    } else if (sameDoc(input.previous, derived) || (isEmpty(input.previous) && !hasContent(derived))) {
+      // The second case: a post with no content (block_doc null / `{}`, #304) whose doc
+      // still has none. Opening it makes the editor add an empty paragraph (TipTap's
+      // TrailingNode), and writing that would bump block_revision and changed_at for a
+      // post nobody edited.
       decision = { write: false, reason: "unchanged" }
     } else {
       decision = { write: true, blockDoc: derived }
@@ -105,6 +109,16 @@ export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): Pre
   return { body, decision, unconvertible, stamped }
 }
 
-// `{}` (a post that never had blocks) counts as empty, like null (#304).
+// null, `{}` (a post that never had blocks, #304) or no blocks.
 const isEmpty = (doc: BlockDocV1 | null): boolean =>
-  !doc || !Array.isArray(doc.blocks_order) || doc.blocks_order.length === 0
+  isBareEmptyBlockDoc(doc) || (Array.isArray(doc?.blocks_order) && doc.blocks_order.length === 0)
+
+// A block that renders nothing: a paragraph with no inline content (what the editor adds
+// on its own, e.g. TrailingNode). Anything else counts as content.
+const isBlankParagraph = (block: BlockDocV1["blocks"][string] | undefined): boolean => {
+  if (!block || block.type !== "paragraph") return false
+  const attrs = block.attrs as { text?: unknown; pm?: { content?: unknown[] } } | undefined
+  return !(Array.isArray(attrs?.pm?.content) && attrs.pm.content.length > 0) && !attrs?.text
+}
+
+const hasContent = (doc: BlockDocV1): boolean => doc.blocks_order.some((id) => !isBlankParagraph(doc.blocks[id]))
