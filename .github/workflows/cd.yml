@@ -158,14 +158,15 @@ jobs:
           PASETO_V4_PRIVATE_KEY_HEX: ${{ secrets.PASETO_V4_PRIVATE_KEY_HEX }}
           PASETO_V4_LOCAL_KEY_HEX: ${{ secrets.PASETO_V4_LOCAL_KEY_HEX }}
           ROLE_LOOKUP_SECRET: ${{ secrets.ROLE_LOOKUP_SECRET }}
-          COLLAB_SQUASH_SECRET: ${{ secrets.COLLAB_SQUASH_SECRET }}
+          # Renamed from COLLAB_SQUASH_SECRET (#280); the old secret works until it's renamed.
+          COLLAB_INTERNAL_SECRET: ${{ secrets.COLLAB_INTERNAL_SECRET || secrets.COLLAB_SQUASH_SECRET }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           umask 077
           mkdir -p ~/.ssh
           for v in SITE_ADDRESS POSTGRES_PASSWORD PASETO_V4_PUBLIC_KEY_HEX PASETO_V4_PRIVATE_KEY_HEX \
-                   PASETO_V4_LOCAL_KEY_HEX ROLE_LOOKUP_SECRET COLLAB_SQUASH_SECRET; do
+                   PASETO_V4_LOCAL_KEY_HEX ROLE_LOOKUP_SECRET COLLAB_INTERNAL_SECRET; do
             eval "val=\${$v}"
             [ -n "$val" ] || { echo "::error::$v is not set in the production environment"; exit 1; }
             printf '%s=%s\n' "$v" "$val" >> deploy.env

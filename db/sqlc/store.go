@@ -61,6 +61,8 @@ type Store interface {
 	CreateMediaAndLinkTx(ctx context.Context, arg CreateMediaAndLinkTxParams) (CreateMediaAndLinkTxResult, error)
 	SetMediaVariantsTx(ctx context.Context, arg SetMediaVariantsTxParams) (Medium, error)
 
+	StorePostCollabTx(ctx context.Context, arg StorePostCollabTxParams) (StorePostCollabTxResult, error)
+
 	ExecTx(ctx context.Context, fn func(*Queries) error) error
 
 	// Ping checks that the database is reachable (the API's /readyz).

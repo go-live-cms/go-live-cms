@@ -41,8 +41,12 @@ services:
       API_PORT: ":8080"
       MAX_UPLOAD_SIZE: "50MB"
       UPLOAD_PATH: "/app/uploads/media"
-      COLLAB_SERVER_URL: "http://websocket:1234"
-      COLLAB_SQUASH_SECRET: "dev-squash-secret"
+      # API -> collab server (#280): squash after publish under y-websocket (the
+      # default), flush before publish under hocuspocus. The secret must match
+      # the websocket service's SQUASH_SECRET.
+      COLLAB_BACKEND: "${COLLAB_BACKEND:-y-websocket}"
+      COLLAB_INTERNAL_URL: "http://websocket:1234"
+      COLLAB_INTERNAL_SECRET: "dev-squash-secret"
       # Required: the WS server's per-connection role lookup (#223)
       ROLE_LOOKUP_SECRET: "dev-role-lookup-secret"
       # Server-to-server listener (/internal/*). Deliberately NOT in `ports:`;

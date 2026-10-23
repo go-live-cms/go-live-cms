@@ -104,6 +104,10 @@ type Querier interface {
 	GetPostBlocks(ctx context.Context, id int64) (GetPostBlocksRow, error)
 	GetPostBySlug(ctx context.Context, slug string) (Post, error)
 	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
+	// Collaboration server persistence (#206 / #280). The collab server reaches
+	// these through the API's internal listener (GET/PUT /internal/posts/:id/collab);
+	// the writes run together in StorePostCollabTx.
+	GetPostCollab(ctx context.Context, id int64) (GetPostCollabRow, error)
 	GetPostMedia(ctx context.Context, postID int64) ([]GetPostMediaRow, error)
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
 	GetPostMeta(ctx context.Context, postID int64) ([]PostMetum, error)
@@ -191,6 +195,7 @@ type Querier interface {
 	// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
 	// acquire in the same order and cannot deadlock each other.
 	LockAdminUserIDs(ctx context.Context) ([]int64, error)
+	LockPostForCollabStore(ctx context.Context, id int64) (LockPostForCollabStoreRow, error)
 	// Taken by refresh-token rotation so it cannot interleave with a password
 	// change on the same user (which holds the row FOR UPDATE).
 	LockUserForShare(ctx context.Context, id int64) error
@@ -223,6 +228,13 @@ type Querier interface {
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
+	// Makes the post's content image links (order > 0) match media_ids, in
+	// document order, like syncPostMediaAssociations does for PUT /blocks. Ids
+	// without a media row are skipped (a stale mediaId must not fail the store),
+	// and the featured image link (order 0) is never moved or removed. A repeated
+	// id keeps its first position (one row per media, or the upsert would touch
+	// the same row twice and fail).
+	SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
 	// Back to draft and drop the public snapshot (#136). The snapshot stays in
@@ -234,6 +246,7 @@ type Querier interface {
 	// deliberately not writable here. NULL args keep the current value.
 	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
+	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
 	UpdatePostBlocksIfRevisionMatches(ctx context.Context, arg UpdatePostBlocksIfRevisionMatchesParams) (UpdatePostBlocksIfRevisionMatchesRow, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
 	UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) (Post, error)
@@ -252,6 +265,9 @@ type Querier interface {
 	UpsertExtensionSetting(ctx context.Context, arg UpsertExtensionSettingParams) (ExtensionSetting, error)
 	UpsertPostMeta(ctx context.Context, arg UpsertPostMetaParams) (PostMetum, error)
 	UpsertPostType(ctx context.Context, arg UpsertPostTypeParams) (PostType, error)
+	// A last_editor_id that no longer exists is stored as NULL rather than
+	// failing the whole store on the foreign key.
+	UpsertPostYdocState(ctx context.Context, arg UpsertPostYdocStateParams) error
 	UpsertThemeSetting(ctx context.Context, arg UpsertThemeSettingParams) (ThemeSetting, error)
 }
 

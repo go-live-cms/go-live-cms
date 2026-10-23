@@ -39,7 +39,7 @@ func TestWriteEnvProducesUsableKeys(t *testing.T) {
 	hexOf := func(n int) *regexp.Regexp { return regexp.MustCompile(fmt.Sprintf(`^[0-9a-f]{%d}$`, n)) }
 	require.Regexp(t, hexOf(64), env["PASETO_V4_PUBLIC_KEY_HEX"])
 	require.Regexp(t, hexOf(128), env["PASETO_V4_PRIVATE_KEY_HEX"])
-	for _, k := range []string{"PASETO_V4_LOCAL_KEY_HEX", "POSTGRES_PASSWORD", "ROLE_LOOKUP_SECRET", "COLLAB_SQUASH_SECRET"} {
+	for _, k := range []string{"PASETO_V4_LOCAL_KEY_HEX", "POSTGRES_PASSWORD", "ROLE_LOOKUP_SECRET", "COLLAB_INTERNAL_SECRET"} {
 		require.Regexp(t, hexOf(64), env[k], k)
 	}
 	// The private key embeds the public one, and the API accepts the set.

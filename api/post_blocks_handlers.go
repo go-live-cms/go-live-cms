@@ -4,11 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -36,6 +33,39 @@ func (doc *BlockDocV1) deduplicateBlocksOrder() {
 	}
 
 	doc.BlocksOrder = unique
+}
+
+// prepareForStore checks and normalizes a block document before it is
+// written to block_doc, by PUT /posts/:id/blocks or the collab server's
+// PUT /internal/posts/:id/collab. It modifies doc in place; an error means
+// the document must be refused (400).
+func (doc *BlockDocV1) prepareForStore() error {
+	// Size/depth limits before any walk over the tree (#139).
+	if err := doc.checkLimits(); err != nil {
+		return err
+	}
+
+	// Deduplicate blocks_order to prevent duplicate rendering
+	doc.deduplicateBlocksOrder()
+
+	// Sanitize the block tree before it is persisted (stored-XSS defence, #188).
+	// Neutralises dangerous link/image URL schemes, on* handler attrs, disallowed
+	// node types, and unsafe highlight colors. Best-effort, never rejects the save.
+	// publishPost reads this already-sanitized working copy, so it's covered too.
+	doc.sanitize()
+
+	// Validate Block Spec v1
+	if doc.DocVersion != 1 {
+		return fmt.Errorf("unsupported doc_version: %d", doc.DocVersion)
+	}
+
+	// Validate blocks_order integrity
+	for _, blockID := range doc.BlocksOrder {
+		if _, exists := doc.Blocks[blockID]; !exists {
+			return fmt.Errorf("block_id %s in blocks_order not found in blocks", blockID)
+		}
+	}
+	return nil
 }
 
 // extractMediaIDsFromBlocks extracts all mediaId values from image blocks in the document
@@ -203,6 +233,14 @@ func (server *Server) getPostBlocks(c *gin.Context) {
 
 // updatePostBlocks handles PUT /posts/:id/blocks - update working copy
 func (server *Server) updatePostBlocks(c *gin.Context) {
+	// Under Hocuspocus only the collab server writes block_doc (through the
+	// internal PUT /internal/posts/:id/collab). A tab still running the old
+	// autosave must not overwrite what it stored (#206).
+	if server.config.UsesHocuspocus() {
+		c.JSON(http.StatusConflict, gin.H{"error": "managed by collaboration server"})
+		return
+	}
+
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
@@ -242,33 +280,9 @@ func (server *Server) updatePostBlocks(c *gin.Context) {
 		return
 	}
 
-	// Size/depth limits before any walk over the tree (#139).
-	if err := req.Doc.checkLimits(); err != nil {
+	if err := req.Doc.prepareForStore(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Deduplicate blocks_order to prevent duplicate rendering
-	req.Doc.deduplicateBlocksOrder()
-
-	// Sanitize the block tree before it is persisted (stored-XSS defence, #188).
-	// Neutralises dangerous link/image URL schemes, on* handler attrs, disallowed
-	// node types, and unsafe highlight colors. Best-effort, never rejects the save.
-	// publishPost reads this already-sanitized working copy, so it's covered too.
-	req.Doc.sanitize()
-
-	// Validate Block Spec v1
-	if req.Doc.DocVersion != 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("unsupported doc_version: %d", req.Doc.DocVersion)})
-		return
-	}
-
-	// Validate blocks_order integrity
-	for _, blockID := range req.Doc.BlocksOrder {
-		if _, exists := req.Doc.Blocks[blockID]; !exists {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("block_id %s in blocks_order not found in blocks", blockID)})
-			return
-		}
 	}
 
 	// Refuse a title change the caller may not make before saving anything, so
@@ -371,6 +385,17 @@ func (server *Server) publishPost(c *gin.Context) {
 		return
 	}
 
+	// Under Hocuspocus, edits reach block_doc only when the collab server
+	// stores (debounced). Make it store now, or the snapshot below could miss
+	// the last seconds of editing; if it can't, publish nothing (#206).
+	if server.config.UsesHocuspocus() {
+		if err := server.flushCollabDoc(c.Request.Context(), postID, requestIDFromContext(c)); err != nil {
+			server.requestLog(c).Warn("collab flush before publish failed", "post_id", postID, "error", err)
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "the collaboration server could not save the latest edits; nothing was published, try again"})
+			return
+		}
+	}
+
 	// Get current working copy
 	currentBlocks, err := server.store.GetPostBlocks(c, postID)
 	if err != nil {
@@ -425,67 +450,17 @@ func (server *Server) publishPost(c *gin.Context) {
 		}
 	}
 
-	// Best-effort: compact the LevelDB collaboration log for this document.
-	// Squash failure is non-fatal and does not affect the publish response.
-	server.triggerCollabSquash(postID, requestIDFromContext(c))
+	// Best-effort: compact the y-websocket server's LevelDB log for this
+	// document. Squash failure is non-fatal and does not affect the publish
+	// response. Hocuspocus has no update log to compact.
+	if !server.config.UsesHocuspocus() {
+		server.triggerCollabSquash(postID, requestIDFromContext(c))
+	}
 
 	c.JSON(http.StatusOK, PublishResponse{
 		VersionID: version.ID,
 		VersionNo: version.VersionNo,
 	})
-}
-
-// triggerCollabSquash fires a best-effort async squash request to the WebSocket
-// collaboration server for the given postID. It runs in a goroutine and never
-// blocks or fails the caller. Squash merges all LevelDB update entries for the
-// document into a single snapshot, preventing unbounded log growth.
-//
-// Silently skips if CollabServerURL or CollabSquashSecret are not configured.
-// requestID (the publish request's) is forwarded as X-Request-ID so the WS
-// server's squash log line can be matched to it.
-func (server *Server) triggerCollabSquash(postID int64, requestID string) {
-	// Trim trailing slashes so URLs like "http://websocket:1234/" don't produce
-	// "//_internal/..." (which the WS server's route regex would not match,
-	// silently breaking squash-on-publish).
-	collabURL := strings.TrimRight(server.config.CollabServerURL, "/")
-	secret := server.config.CollabSquashSecret
-	if collabURL == "" || secret == "" {
-		return
-	}
-
-	logger := slog.Default()
-	if server.logger != nil {
-		logger = server.logger
-	}
-	go func() {
-		docName := fmt.Sprintf("post-%d", postID)
-		url := fmt.Sprintf("%s/_internal/documents/%s/squash", collabURL, docName)
-		log := logger.With(requestIDKey, requestID, "doc", docName)
-
-		req, err := http.NewRequest(http.MethodPost, url, nil)
-		if err != nil {
-			log.Warn("collab squash: failed to build request", "error", err)
-			return
-		}
-		req.Header.Set("Authorization", "Bearer "+secret)
-		if requestID != "" {
-			req.Header.Set(requestIDHeader, requestID)
-		}
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Warn("collab squash: request failed", "error", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			log.Warn("collab squash: unexpected status", "status", resp.StatusCode)
-			return
-		}
-		log.Info("collab squash complete")
-	}()
 }
 
 // getPublicPostBlocks handles GET /public/posts/:id/blocks - get published snapshot

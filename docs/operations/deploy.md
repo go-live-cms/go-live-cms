@@ -87,7 +87,7 @@ Any Linux VM with Docker Engine + the Compose plugin (v2.20+, for `up --wait`), 
    |------|------|-------|
    | variable | `SITE_ADDRESS` | your domain, e.g. `cms.example.com` |
    | variable | `DEPLOY_PATH` | `/opt/golive` (default) |
-   | secret | `POSTGRES_PASSWORD`, `PASETO_V4_PUBLIC_KEY_HEX`, `PASETO_V4_PRIVATE_KEY_HEX`, `PASETO_V4_LOCAL_KEY_HEX`, `ROLE_LOOKUP_SECRET`, `COLLAB_SQUASH_SECRET` | from `prod.env` |
+   | secret | `POSTGRES_PASSWORD`, `PASETO_V4_PUBLIC_KEY_HEX`, `PASETO_V4_PRIVATE_KEY_HEX`, `PASETO_V4_LOCAL_KEY_HEX`, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` (formerly `COLLAB_SQUASH_SECRET`, which CD still falls back to) | from `prod.env` |
    | secret | `DEPLOY_HOST`, `DEPLOY_USER` | the VM's address, `deploy` |
    | secret | `DEPLOY_SSH_KEY` | the private key from step 1 |
    | secret | `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -t ed25519 <host>`, checked against the VM's real fingerprint |

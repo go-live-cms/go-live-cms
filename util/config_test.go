@@ -43,6 +43,27 @@ func TestLoadConfigGinMode(t *testing.T) {
 	}
 }
 
+func TestLoadConfigCollabBackend(t *testing.T) {
+	t.Setenv("COLLAB_BACKEND", "")
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, CollabBackendYWebsocket, config.CollabBackend)
+	require.False(t, config.UsesHocuspocus())
+
+	t.Setenv("COLLAB_BACKEND", "hocuspocus")
+	t.Setenv("COLLAB_INTERNAL_URL", "http://collab:1235")
+	t.Setenv("COLLAB_INTERNAL_SECRET", "s3cret")
+	config, err = LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.True(t, config.UsesHocuspocus())
+	require.Equal(t, "http://collab:1235", config.CollabInternalURL)
+	require.Equal(t, "s3cret", config.CollabInternalSecret)
+
+	t.Setenv("COLLAB_BACKEND", "Hocuspocus")
+	_, err = LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "COLLAB_BACKEND")
+}
+
 func TestAllowedOrigins(t *testing.T) {
 	require.Empty(t, Config{}.AllowedOrigins())
 	require.Equal(t,

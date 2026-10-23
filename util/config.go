@@ -129,15 +129,23 @@ type Config struct {
 	// debug mode (GIN_MODE=debug) so local HTTP works. Every other mode forces Secure.
 	CookieSecure bool `mapstructure:"COOKIE_SECURE"`
 
-	// CollabServerURL is the internal base URL of the Yjs WebSocket server.
-	// Used for server-to-server calls such as the squash-on-publish endpoint.
-	// Example: "http://websocket:1234" (Docker) or "http://localhost:1234" (local dev)
-	CollabServerURL string `mapstructure:"COLLAB_SERVER_URL"`
+	// CollabBackend selects the collaboration server (#206): "y-websocket"
+	// (default, today's behaviour) or "hocuspocus". It is deployment-wide and
+	// must match the web build's PUBLIC_COLLAB_BACKEND. Under "hocuspocus" the
+	// collab server owns block_doc: PUT /posts/:id/blocks answers 409, publish
+	// flushes the document first, and contributors get read-only tickets.
+	CollabBackend string `mapstructure:"COLLAB_BACKEND"`
 
-	// CollabSquashSecret is the shared secret sent as "Authorization: Bearer <secret>"
-	// to the WS server's /_internal/documents/:docName/squash endpoint.
-	// Must match SQUASH_SECRET in websocket/.env.
-	CollabSquashSecret string `mapstructure:"COLLAB_SQUASH_SECRET"`
+	// CollabInternalURL is the base URL of the collab server's internal HTTP
+	// endpoints, used for the API's server-to-server calls to it: squash after
+	// publish (y-websocket) or flush before publish (hocuspocus).
+	// Example: "http://websocket:1234" (Docker) or "http://localhost:1234" (local dev)
+	CollabInternalURL string `mapstructure:"COLLAB_INTERNAL_URL"`
+
+	// CollabInternalSecret is the shared secret sent as "Authorization: Bearer
+	// <secret>" on those calls. Must match the collab server's copy
+	// (SQUASH_SECRET in websocket/.env).
+	CollabInternalSecret string `mapstructure:"COLLAB_INTERNAL_SECRET"`
 
 	// InternalServerAddress is the bind address of the separate server-to-server
 	// listener (e.g. "0.0.0.0:8081") that serves /internal/* routes. Never publish
@@ -289,12 +297,16 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("SEED_ADMIN_USER", "")
 	viper.SetDefault("SEED_ADMIN_PASS", "")
 
-	// Collaborative editing server (optional — squash silently skipped if either is unset).
+	// Collaborative editing server. Under y-websocket these are optional (squash
+	// is silently skipped if either is unset).
 	// Both default to empty so the feature is truly opt-in: setting only one would
 	// otherwise cause every publish to fire a goroutine that times out against
 	// http://localhost:1234 in environments without a co-located WS server.
-	viper.SetDefault("COLLAB_SERVER_URL", "")
-	viper.SetDefault("COLLAB_SQUASH_SECRET", "")
+	// Under COLLAB_BACKEND=hocuspocus both are required (NewServer checks):
+	// publish can't flush without them.
+	viper.SetDefault("COLLAB_BACKEND", CollabBackendYWebsocket)
+	viper.SetDefault("COLLAB_INTERNAL_URL", "")
+	viper.SetDefault("COLLAB_INTERNAL_SECRET", "")
 
 	// Client IP and rate limiting. No trusted proxies by default, so
 	// X-Forwarded-For can't be forged to dodge the limits. The general limit
@@ -364,6 +376,13 @@ func LoadConfig(path string) (config Config, err error) {
 	default:
 		return config, fmt.Errorf("invalid GIN_MODE %q: must be %q, %q or %q",
 			config.GinMode, GinModeDebug, GinModeRelease, GinModeTest)
+	}
+
+	switch config.CollabBackend {
+	case CollabBackendYWebsocket, CollabBackendHocuspocus:
+	default:
+		return config, fmt.Errorf("invalid COLLAB_BACKEND %q: must be %q or %q",
+			config.CollabBackend, CollabBackendYWebsocket, CollabBackendHocuspocus)
 	}
 
 	if _, err = config.MaxUploadBytes(); err != nil {
@@ -462,6 +481,19 @@ const (
 // Secure flag from auth cookies.
 func (c Config) IsDebugMode() bool {
 	return c.GinMode == GinModeDebug
+}
+
+// Collaboration servers accepted by COLLAB_BACKEND (#206).
+const (
+	CollabBackendYWebsocket = "y-websocket"
+	CollabBackendHocuspocus = "hocuspocus"
+)
+
+// UsesHocuspocus reports whether the Hocuspocus collab server owns block_doc
+// (COLLAB_BACKEND=hocuspocus). Anything else, including the zero Config in
+// tests, is today's y-websocket behaviour.
+func (c Config) UsesHocuspocus() bool {
+	return c.CollabBackend == CollabBackendHocuspocus
 }
 
 // Mail drivers accepted by MAIL_DRIVER (see Config.MailDriver).

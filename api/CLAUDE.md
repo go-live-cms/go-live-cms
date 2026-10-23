@@ -130,14 +130,50 @@ the WS server.
   unique values (UUID/UnixNano suffixes) and restore global state such as the
   active theme with `t.Cleanup`.
 
-## Collaboration integration (squash-on-publish)
+## Collaboration backend: `COLLAB_BACKEND` (#206, #280)
 
-- After a successful publish, `triggerCollabSquash(postID, requestID)` fires a **best-effort**
-  goroutine to the WS server's `/_internal/documents/post-<id>/squash` endpoint to
-  compact its LevelDB log. Never blocks/fails the publish.
-- Config: `COLLAB_SERVER_URL` + `COLLAB_SQUASH_SECRET` in `util/config.go`. **Both
-  default to empty (opt-in)** — if either is unset, squash is silently skipped. The URL
-  is trailing-slash-trimmed before building the request.
+`y-websocket` (default, today's behaviour) or `hocuspocus` (`util.Config.UsesHocuspocus()`;
+`LoadConfig` rejects anything else, the zero `Config` in tests is y-websocket). It is
+deployment-wide and must match web's `PUBLIC_COLLAB_BACKEND`. **Everything Hocuspocus-only
+checks the flag**, so main behaves exactly as before until the P4 cutover.
+
+- **API → collab calls** (`collab_internal_client.go`) use `COLLAB_INTERNAL_URL` +
+  `COLLAB_INTERNAL_SECRET` (Bearer; renamed from `COLLAB_SERVER_URL` /
+  `COLLAB_SQUASH_SECRET`). `NewServer` trims both (URL also of trailing `/`) and, under
+  hocuspocus, refuses to start without them. The secret is NOT the one the collab
+  server sends to the API (that's `ROLE_LOOKUP_SECRET`).
+  - y-websocket: after a publish, `triggerCollabSquash` fires a **best-effort** goroutine
+    to `/_internal/documents/post-<id>/squash` (LevelDB compaction). Skipped if either
+    setting is unset; never blocks/fails the publish.
+  - hocuspocus: **before** reading `block_doc`, publish calls
+    `POST /internal/documents/post-<id>/flush` synchronously (`collabFlushTimeout`, 5s).
+    200 = stored or not loaded. Anything else (down, timeout, non-200) → **503**, nothing
+    published, so a snapshot never misses the last debounced edits. No squash.
+- **Collab → API** (internal listener, `ROLE_LOOKUP_SECRET`, `internal_handlers_collab.go`):
+  - `GET /internal/posts/:id/collab` → `{block_doc, block_revision, ydoc_state?, epoch?}`
+    (`ydoc_state` base64). **Revision guard is applied here:** the state is returned only
+    if `post_ydoc_state.block_revision == posts.block_revision`; otherwise something wrote
+    `block_doc` around the collab server and the state is omitted, so the server reseeds
+    under a new epoch. Works under either backend (read-only).
+  - `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?, base_revision?}`
+    → `{block_revision, epoch}`. **Hocuspocus only** (409 otherwise: two block_doc writers).
+    16 MiB body (`collabStoreBodyLimit`), `block_doc` itself ≤ 4 MiB, and the same
+    `prepareForStore` as `PUT /blocks` (limits, dedupe `blocks_order`, sanitize, v1 +
+    order integrity). `block_doc` omitted/null = store the Yjs state only (server-side
+    validation failed), revision unchanged; that **requires `base_revision`** (400
+    otherwise), or a stale state could be stamped with the current revision and pass the
+    guard. `base_revision` behind → 409. 404 for a missing post.
+  - `StorePostCollabTx` (`db/sqlc/post_collab_tx.go`) is one transaction: lock the post,
+    `block_doc` + `block_revision+1`, sync content media links (`SyncPostContentMedia`:
+    unknown media ids skipped, featured image untouched; **only while unpublished**, publish
+    syncs them otherwise), upsert `post_ydoc_state` (`000020`) at the new revision with
+    `last_editor_id` (NULL if the user is gone).
+- **`PUT /posts/:id/blocks` answers 409 `managed by collaboration server`** under
+  hocuspocus (an old tab can't overwrite). GET stays. Removed in P5.
+- **Tickets:** under hocuspocus `POST /collab/tickets` uses `canReadPostBlocks` (any content
+  role, any existing post) instead of `canEditPost`: contributors get a read-only live
+  view of others' posts. The ticket still carries no role; the server asks
+  `/internal/users/:id/access` and makes `can_edit: false` connections read-only.
 
 ## Gin mode, dev seeding, CORS
 
@@ -226,7 +262,8 @@ the WS server.
   `setting_key` (meta/setting keys), `max_bytes=N` (passwords: bcrypt reads 72 bytes).
   URLs use `http_url` (http/https only). Give every string a `max`.
 - **Body limits** (`request_limits.go`): 1 MiB default on `/api/v1` and `/public`, 4 MiB
-  for `PUT /posts/:id/blocks`, uploads exempt (they cap themselves). A new upload route
+  for `PUT /posts/:id/blocks`, uploads exempt (they cap themselves). The internal listener
+  has no group limit; `PUT /internal/posts/:id/collab` caps itself (16 MiB). A new upload route
   must be added to `bodyLimitOverrides` with 0. Block docs also get
   `checkLimits` (block count, block id length, JSON depth).
 - **CORS:** `CORS_ALLOWED_ORIGINS` entries must be exact http(s) origins (no `*`, path
@@ -294,7 +331,7 @@ the WS server.
   kept only from a peer in `TRUSTED_PROXIES` (public router) or on the internal
   listener; anything else gets a UUID, so clients can't choose their ids. Read it with `requestIDFromContext(c)`. `requestIDErrorWriter`
   splices `"request_id"` into every JSON error body (status ≥ 400), so handlers keep
-  returning plain `gin.H{"error": ...}`. It's forwarded on the collab squash call; the
+  returning plain `gin.H{"error": ...}`. It's forwarded on the collab squash/flush calls; the
   WS server sends its own on the internal role lookup.
 - **Logging is `log/slog`.** `NewLogger` (JSON in release/test, text in debug) is
   installed by `main.go` with `slog.SetDefault`, which also captures the `log` package.
@@ -334,5 +371,7 @@ the WS server.
   `published_version_id` (versions stay). `/public/posts/:id/blocks` and the SSR post
   page 404 unless the status is `published`. **There is no restore endpoint on
   purpose:** never write `block_doc` from the server while editors may be connected;
-  the editor restores through Yjs and saves with the normal PUT.
+  the editor restores through Yjs and saves with the normal PUT (under hocuspocus the
+  collab server's store persists it instead). The only server-side `block_doc` writer
+  allowed is the collab server's `PUT /internal/posts/:id/collab`.
 </content>

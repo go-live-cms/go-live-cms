@@ -1311,6 +1311,21 @@ func (mr *MockStoreMockRecorder) GetPostChildren(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostChildren", reflect.TypeOf((*MockStore)(nil).GetPostChildren), arg0, arg1)
 }
 
+// GetPostCollab mocks base method.
+func (m *MockStore) GetPostCollab(arg0 context.Context, arg1 int64) (db.GetPostCollabRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostCollab", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPostCollabRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostCollab indicates an expected call of GetPostCollab.
+func (mr *MockStoreMockRecorder) GetPostCollab(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostCollab", reflect.TypeOf((*MockStore)(nil).GetPostCollab), arg0, arg1)
+}
+
 // GetPostMedia mocks base method.
 func (m *MockStore) GetPostMedia(arg0 context.Context, arg1 int64) ([]db.GetPostMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -2195,6 +2210,21 @@ func (mr *MockStoreMockRecorder) LockAdminUserIDs(arg0 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockAdminUserIDs", reflect.TypeOf((*MockStore)(nil).LockAdminUserIDs), arg0)
 }
 
+// LockPostForCollabStore mocks base method.
+func (m *MockStore) LockPostForCollabStore(arg0 context.Context, arg1 int64) (db.LockPostForCollabStoreRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostForCollabStore", arg0, arg1)
+	ret0, _ := ret[0].(db.LockPostForCollabStoreRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostForCollabStore indicates an expected call of LockPostForCollabStore.
+func (mr *MockStoreMockRecorder) LockPostForCollabStore(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForCollabStore", reflect.TypeOf((*MockStore)(nil).LockPostForCollabStore), arg0, arg1)
+}
+
 // LockUserForShare mocks base method.
 func (m *MockStore) LockUserForShare(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -2499,6 +2529,35 @@ func (mr *MockStoreMockRecorder) SetUserPassword(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserPassword", reflect.TypeOf((*MockStore)(nil).SetUserPassword), arg0, arg1)
 }
 
+// StorePostCollabTx mocks base method.
+func (m *MockStore) StorePostCollabTx(arg0 context.Context, arg1 db.StorePostCollabTxParams) (db.StorePostCollabTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StorePostCollabTx", arg0, arg1)
+	ret0, _ := ret[0].(db.StorePostCollabTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StorePostCollabTx indicates an expected call of StorePostCollabTx.
+func (mr *MockStoreMockRecorder) StorePostCollabTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StorePostCollabTx", reflect.TypeOf((*MockStore)(nil).StorePostCollabTx), arg0, arg1)
+}
+
+// SyncPostContentMedia mocks base method.
+func (m *MockStore) SyncPostContentMedia(arg0 context.Context, arg1 db.SyncPostContentMediaParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncPostContentMedia", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SyncPostContentMedia indicates an expected call of SyncPostContentMedia.
+func (mr *MockStoreMockRecorder) SyncPostContentMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncPostContentMedia", reflect.TypeOf((*MockStore)(nil).SyncPostContentMedia), arg0, arg1)
+}
+
 // TransferMediaToUser mocks base method.
 func (m *MockStore) TransferMediaToUser(arg0 context.Context, arg1 db.TransferMediaToUserParams) error {
 	m.ctrl.T.Helper()
@@ -2585,6 +2644,21 @@ func (m *MockStore) UpdatePost(arg0 context.Context, arg1 db.UpdatePostParams) (
 func (mr *MockStoreMockRecorder) UpdatePost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePost", reflect.TypeOf((*MockStore)(nil).UpdatePost), arg0, arg1)
+}
+
+// UpdatePostBlockDocFromCollab mocks base method.
+func (m *MockStore) UpdatePostBlockDocFromCollab(arg0 context.Context, arg1 db.UpdatePostBlockDocFromCollabParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostBlockDocFromCollab", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostBlockDocFromCollab indicates an expected call of UpdatePostBlockDocFromCollab.
+func (mr *MockStoreMockRecorder) UpdatePostBlockDocFromCollab(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostBlockDocFromCollab", reflect.TypeOf((*MockStore)(nil).UpdatePostBlockDocFromCollab), arg0, arg1)
 }
 
 // UpdatePostBlocksIfRevisionMatches mocks base method.
@@ -2881,6 +2955,20 @@ func (m *MockStore) UpsertPostType(arg0 context.Context, arg1 db.UpsertPostTypeP
 func (mr *MockStoreMockRecorder) UpsertPostType(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPostType", reflect.TypeOf((*MockStore)(nil).UpsertPostType), arg0, arg1)
+}
+
+// UpsertPostYdocState mocks base method.
+func (m *MockStore) UpsertPostYdocState(arg0 context.Context, arg1 db.UpsertPostYdocStateParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertPostYdocState", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertPostYdocState indicates an expected call of UpsertPostYdocState.
+func (mr *MockStoreMockRecorder) UpsertPostYdocState(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPostYdocState", reflect.TypeOf((*MockStore)(nil).UpsertPostYdocState), arg0, arg1)
 }
 
 // UpsertThemeSetting mocks base method.
