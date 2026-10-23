@@ -35,6 +35,18 @@ export default defineConfig({
           exclude: ["node_modules/**", "dist/**", ".astro/**", "**/*.astro.test.ts"],
         },
       },
+      {
+        extends: true,
+        test: {
+          // The Hocuspocus collab server (#206): plain Node, like production. Its
+          // process tests spawn the esbuild bundle (collab-server/process.test.ts).
+          name: "collab-server",
+          environment: "node",
+          include: ["collab-server/**/*.test.ts"],
+          testTimeout: 30_000,
+          hookTimeout: 60_000,
+        },
+      },
       "./vitest.astro.config.ts",
     ],
   },

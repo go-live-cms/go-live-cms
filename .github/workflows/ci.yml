@@ -263,6 +263,31 @@ jobs:
         working-directory: websocket
         run: npm test
 
+  # The collab server's tests on Node 24, the version its image runs (web-tests above
+  # runs them on Node 22). process.test.ts spawns the esbuild bundle, so this also
+  # checks that Node 24 loads exactly one yjs build (#206).
+  collab-server-node24:
+    name: Collab server tests (Node 24)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web deps
+        working-directory: web
+        run: npm ci
+
+      - name: Run collab server tests
+        working-directory: web
+        run: npx vitest run --project collab-server
+
   web-check:
     name: Web type check and build
     runs-on: ubuntu-latest
@@ -307,19 +332,55 @@ jobs:
           - image: websocket
             context: websocket
             file: websocket/Dockerfile
+          - image: collab
+            context: web
+            file: web/collab-server/Dockerfile
 
     steps:
       - uses: actions/checkout@v5
 
       - uses: docker/setup-buildx-action@v3
 
-      # Build only: catches Dockerfile breakage. Nothing is pushed anywhere.
+      # Build only: catches Dockerfile breakage. Nothing is pushed anywhere. Loaded
+      # into the local daemon so the smoke step below can run it.
       - name: Build
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           push: false
+          load: true
           tags: golive-${{ matrix.image }}:ci
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+      # The collab image on its own Node 24: it starts (the single-yjs-instance probe
+      # exits 1 otherwise), prints no "Yjs was already imported" warning, and answers
+      # /healthz. The key is a throwaway; no API is needed to start.
+      - name: Smoke test the collab image
+        if: matrix.image == 'collab'
+        run: |
+          openssl genpkey -algorithm ed25519 -out smoke.pem
+          pubhex=$(openssl pkey -in smoke.pem -pubout -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')
+          docker run -d --name collab-smoke \
+            -e INTERNAL_API_URL=http://127.0.0.1:9 \
+            -e ROLE_LOOKUP_SECRET=smoke -e COLLAB_INTERNAL_SECRET=smoke \
+            -e PASETO_V4_PUBLIC_KEY_HEX="$pubhex" \
+            golive-collab:ci
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' collab-smoke)
+            [ "$status" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' collab-smoke)" = true ] || break
+            sleep 1
+          done
+          docker logs collab-smoke > collab-smoke.log 2>&1
+          cat collab-smoke.log
+          docker exec collab-smoke node --version
+          grep -q '"collab_listening"' collab-smoke.log
+          grep -q '"yjs_single_instance":true' collab-smoke.log
+          if grep -q "Yjs was already imported" collab-smoke.log; then
+            echo "::error::the collab image loads yjs twice"
+            exit 1
+          fi
+          [ "$(docker inspect -f '{{.State.Health.Status}}' collab-smoke)" = healthy ]
+          docker rm -f collab-smoke

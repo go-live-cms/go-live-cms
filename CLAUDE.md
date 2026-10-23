@@ -7,6 +7,7 @@ processes + Postgres, run via Docker Compose.
 |---------|------|-------|-----|
 | API | 8080 (+ 8081 internal, never published) | Go, Gin, sqlc, PASETO v4 | `api/`, `db/`, `token/`, `util/` |
 | WebSocket collab | 1234 | Node, y-websocket, Yjs, LevelDB | `websocket/` |
+| Hocuspocus collab (dev only, not the default yet, #206) | 1235 (+ 1236 internal) | Node, Hocuspocus, esbuild bundle | `web/collab-server/` |
 | Web | 4321 | Astro SSR + React admin SPA | `web/` |
 | DB | 5432 | PostgreSQL 12 | `db/migration/` |
 
@@ -18,7 +19,8 @@ pushes `ghcr.io/go-live-cms/{api,web,websocket}:<sha>` and deploys to one VM wit
 `docs/operations/deploy.md`.
 
 Scoped context lives in nested `CLAUDE.md` files — read the one for the area you're
-working in: `api/`, `web/`, `web/gl-admin/lib/collaboration/`, `websocket/`.
+working in: `api/`, `web/`, `web/gl-admin/lib/collaboration/`, `websocket/`,
+`web/collab-server/`.
 
 ---
 

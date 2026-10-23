@@ -134,6 +134,35 @@ services:
     depends_on:
       - api
 
+  # Hocuspocus collab server (#206 P2), running NEXT TO the y-websocket `websocket`
+  # service, which stays the editor's default until the P3/P4 cutover. The editor only
+  # talks to it once PUBLIC_COLLAB_BACKEND=hocuspocus (P3). It runs the production
+  # bundle (one yjs instance, no node_modules), so rebuild after changing the server:
+  #   docker compose -f compose.dev.yaml up -d --build collab
+  collab:
+    build:
+      context: ./web
+      dockerfile: collab-server/Dockerfile
+    ports:
+      - "1235:1235"
+    environment:
+      PORT: "1235"
+      # Internal listener (/healthz, POST /internal/documents/:doc/flush for publish).
+      # Deliberately NOT in `ports:`; the API reaches it as http://collab:1236.
+      INTERNAL_PORT: "1236"
+      # Access lookups and load/store go to the API's unpublished internal listener with
+      # ROLE_LOOKUP_SECRET (must match the api service's value).
+      INTERNAL_API_URL: http://api:8081
+      ROLE_LOOKUP_SECRET: dev-role-lookup-secret
+      # The bearer secret the API sends to flush (its COLLAB_INTERNAL_SECRET, #280).
+      COLLAB_INTERNAL_SECRET: dev-collab-internal-secret
+      PASETO_V4_PUBLIC_PEM_FILE: /run/secrets/public.pem
+      PASETO_ISSUER: golive.auth
+    volumes:
+      - ./websocket/public.pem:/run/secrets/public.pem:ro
+    depends_on:
+      - api
+
   # Optional dev mail catcher (#148): `--profile mail`, with MAIL_DRIVER=smtp.
   # SMTP on 1025 (compose network only), inbox UI on http://localhost:8025.
   mailpit:
