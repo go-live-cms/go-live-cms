@@ -77,12 +77,19 @@ block_doc), so seed-format docs that were opened but never saved compare by cont
 Exit code 1 means at least one `differs`; the report is also written to
 `scripts/collab/leveldb-diff-golive_cms_dev.json` (gitignored).
 
-**Resolving a `differs`:** on the **old** stack, open each listed post
-(`/gl-admin/content/edit/<id>`) as an admin or editor, wait for "Saved", close it, and
-run the diff again until nothing differs. Opening it loads the LevelDB state into the
-editor, and its autosave writes it to `block_doc`. If what LevelDB holds is the *older*
-side (`block_doc` was changed some other way), there is nothing to save; check the post
-and accept the diff.
+**Resolving a `differs`:** on the **y-websocket** path, open each listed post
+(`/gl-admin/content/edit/<id>`) as an admin or editor, make a trivial edit (type and
+delete a space), wait for "Saved", close it, and run the diff again until nothing
+differs. Opening it loads the LevelDB state into the editor, and its autosave writes it
+to `block_doc`. Use a checkout that includes #284 with the rollback flags
+(`COLLAB_BACKEND=y-websocket COLLAB_INTERNAL_URL=http://websocket:1234`, profile
+`y-websocket`, see [Dev rollback](#dev-rollback) step 4, but **without** clearing
+`ws_data`): before #284 the y-websocket editor's autosave could silently stop in dev
+(StrictMode created a second, never-initialized persistence manager), which is also how a
+post can end up with content only in LevelDB. Check the API log shows `PUT
+/api/v1/posts/<id>/blocks` 200. If what LevelDB holds is the *older* side (`block_doc`
+was changed some other way), there is nothing to save; check the post and accept the
+diff.
 
 ### 2. Switch
 
