@@ -1,8 +1,6 @@
 import React from "react"
 import type { BlockComponentProps } from "../types"
-
-const isEmptyContent = (content: React.ReactNode): boolean =>
-  content == null || content === false || content === "" || (Array.isArray(content) && content.every(isEmptyContent))
+import { isBlankParagraph } from "../utils/contentRenderer"
 
 const ParagraphBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent }) => {
   const content = getBlockContent(block)
@@ -12,12 +10,14 @@ const ParagraphBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent 
 
   const style: React.CSSProperties = textAlign ? { textAlign } : {}
 
-  // An empty paragraph is a blank line the author put there on purpose (the editor
-  // shows it as a full line via ProseMirror's trailing <br>). Render it the same way:
-  // returning null, or an empty <p></p> (zero height), erased that spacing (#306).
+  // A blank paragraph (no content, or only whitespace) is a blank line the author put
+  // there on purpose (the editor shows it as a full line via ProseMirror's trailing
+  // <br>). Render it the same way: returning null, or a <p> with nothing visible in it
+  // (zero height), erased that spacing (#306). Blank paragraphs at the very end of the
+  // document are trimmed by BlockRenderer instead.
   return (
     <p key={block.id} style={style}>
-      {isEmptyContent(content) ? <br /> : content}
+      {isBlankParagraph(block) ? <br /> : content}
     </p>
   )
 }

@@ -1,7 +1,7 @@
 import React from "react"
 import type { BlockDocV1, Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
-import { renderContent, getBlockContent } from "./blocks/utils/contentRenderer"
+import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 
 interface BlockRendererProps {
@@ -49,6 +49,13 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES }: B
 
   // Deduplicate blocks_order to prevent duplicate rendering
   const uniqueBlockIds = Array.from(new Set(doc.blocks_order))
+  // Drop blank paragraphs at the end. The editor appends an empty paragraph after a final
+  // image, list, quote or heading (TipTap's TrailingNode), and the author never typed it;
+  // rendering it would add space at the bottom of every such post. Blank lines anywhere
+  // else are the author's spacing and render as one line (ParagraphBlock, #306).
+  while (uniqueBlockIds.length > 0 && isBlankParagraph(doc.blocks[uniqueBlockIds[uniqueBlockIds.length - 1]] as Block)) {
+    uniqueBlockIds.pop()
+  }
 
   return (
     <ImageSizesContext.Provider value={imageSizes}>
