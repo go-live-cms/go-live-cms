@@ -16,6 +16,15 @@ import type { EditorRef } from "./Editor"
 // before Collaboration binds), no client seeding, the live read-only view, a stale-epoch
 // remount, publish without a client save, and restore through the editor.
 
+// jsdom has no layout: Range lacks getClientRects/getBoundingClientRect, which
+// ProseMirror's scrollIntoView calls when the editor focuses itself after mounting.
+// (On a timing-dependent tick that otherwise surfaces as an uncaught TypeError.)
+const emptyRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) })
+Range.prototype.getClientRects ??= function () {
+  return Object.assign([], { item: () => null }) as unknown as DOMRectList
+}
+Range.prototype.getBoundingClientRect ??= emptyRect as unknown as () => DOMRect
+
 const state = vi.hoisted(() => ({ relay: null as any, user: "1", themeLoaded: true }))
 
 vi.mock("@gl-admin/lib/collaboration/postCollab", () => ({
