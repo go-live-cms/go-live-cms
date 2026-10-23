@@ -138,6 +138,7 @@ func TestStorePostCollabTxRollsBack(t *testing.T) {
 	post := createPostWithTransaction(t).Post
 	before, err := testQueries.GetPostCollab(ctx, post.ID)
 	require.NoError(t, err)
+	changedBefore := postChangedAt(t, post.ID)
 
 	constraint := fmt.Sprintf("test_reject_post_%d", post.ID)
 	_, err = testQueries.db.ExecContext(ctx, fmt.Sprintf(
@@ -159,41 +160,89 @@ func TestStorePostCollabTxRollsBack(t *testing.T) {
 	after, err := testQueries.GetPostCollab(ctx, post.ID)
 	require.NoError(t, err)
 	require.Equal(t, before, after)
+	require.True(t, postChangedAt(t, post.ID).Equal(changedBefore), "a rolled-back store moved changed_at")
+}
+
+// setPostChangedAt backdates the post's changed_at so a test can tell
+// whether a write moved it.
+func setPostChangedAt(t *testing.T, postID int64, at time.Time) {
+	t.Helper()
+	_, err := testQueries.db.ExecContext(context.Background(), `UPDATE posts SET changed_at = $2 WHERE id = $1`, postID, at)
+	require.NoError(t, err)
+}
+
+func postChangedAt(t *testing.T, postID int64) time.Time {
+	t.Helper()
+	post, err := testQueries.GetPost(context.Background(), postID)
+	require.NoError(t, err)
+	return post.ChangedAt
+}
+
+// dbNow is the database clock, which now() in the queries reads, so tests
+// don't depend on the test process's clock agreeing with it.
+func dbNow(t *testing.T) time.Time {
+	t.Helper()
+	var now time.Time
+	require.NoError(t, testQueries.db.QueryRowContext(context.Background(), `SELECT now()`).Scan(&now))
+	return now
 }
 
 // A store with block_doc is an edit, so it updates changed_at (admin "last
-// modified", the changed sort, sitemap lastmod). A state-only store isn't and
-// leaves it alone (#307).
+// modified", the changed sort, sitemap lastmod). A state-only store or a
+// refused one isn't and leaves it alone (#307).
 func TestStorePostCollabTxChangedAt(t *testing.T) {
 	ctx := context.Background()
 	post := createPostWithTransaction(t).Post
 	past := time.Date(2000, 1, 2, 3, 4, 5, 0, time.UTC)
-	_, err := testQueries.db.ExecContext(ctx, `UPDATE posts SET changed_at = $2 WHERE id = $1`, post.ID, past)
-	require.NoError(t, err)
+	setPostChangedAt(t, post.ID, past)
+	doc := json.RawMessage(`{"doc_version":1,"blocks_order":["a"],"blocks":{"a":{"type":"paragraph"}}}`)
 
 	epoch := uuid.New()
-	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
+	_, err := testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
 		PostID:       post.ID,
 		State:        []byte{1},
 		Epoch:        epoch,
 		BaseRevision: sql.NullInt64{Int64: post.BlockRevision, Valid: true},
 	})
 	require.NoError(t, err)
-	stored, err := testQueries.GetPost(ctx, post.ID)
-	require.NoError(t, err)
-	require.True(t, stored.ChangedAt.Equal(past), "state-only store changed changed_at to %v", stored.ChangedAt)
+	require.True(t, postChangedAt(t, post.ID).Equal(past), "a state-only store moved changed_at")
 
 	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
 		PostID:       post.ID,
 		State:        []byte{2},
 		Epoch:        epoch,
-		BlockDoc:     json.RawMessage(`{"doc_version":1,"blocks_order":["a"],"blocks":{"a":{"type":"paragraph"}}}`),
+		BlockDoc:     doc,
+		BaseRevision: sql.NullInt64{Int64: post.BlockRevision - 1, Valid: true},
+	})
+	require.ErrorIs(t, err, ErrCollabRevisionConflict)
+	require.True(t, postChangedAt(t, post.ID).Equal(past), "a refused store moved changed_at")
+
+	before := dbNow(t)
+	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
+		PostID:       post.ID,
+		State:        []byte{3},
+		Epoch:        epoch,
+		BlockDoc:     doc,
 		BaseRevision: sql.NullInt64{Int64: post.BlockRevision, Valid: true},
 	})
 	require.NoError(t, err)
-	stored, err = testQueries.GetPost(ctx, post.ID)
+	require.False(t, postChangedAt(t, post.ID).Before(before), "a store with block_doc didn't move changed_at")
+}
+
+// The REST blocks save (y-websocket, until P5) updates changed_at itself,
+// not only through the title update the handler may run after it (#307).
+func TestUpdatePostBlocksIfRevisionMatchesChangedAt(t *testing.T) {
+	post := createPostWithTransaction(t).Post
+	setPostChangedAt(t, post.ID, time.Date(2000, 1, 2, 3, 4, 5, 0, time.UTC))
+
+	before := dbNow(t)
+	_, err := testQueries.UpdatePostBlocksIfRevisionMatches(context.Background(), UpdatePostBlocksIfRevisionMatchesParams{
+		ID:            post.ID,
+		BlockDoc:      json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`),
+		BlockRevision: post.BlockRevision,
+	})
 	require.NoError(t, err)
-	require.WithinDuration(t, time.Now(), stored.ChangedAt, time.Minute)
+	require.False(t, postChangedAt(t, post.ID).Before(before))
 }
 
 func TestStorePostCollabTxMissingPost(t *testing.T) {
