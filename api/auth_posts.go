@@ -15,6 +15,8 @@
 //     their post is not published (canEditPostDetails). Otherwise a
 //     contributor could change or remove published content without the
 //     publish permission.
+//   - Under COLLAB_BACKEND=hocuspocus, contributors may also watch any post's
+//     working copy live, read-only (canReadPostBlocks: collab tickets).
 //   - Publishing, unpublishing and revisions are moderator-only
 //     (requireContentEditor on those routes).
 //
@@ -65,6 +67,14 @@ func canCreatePost(user db.User, authorIDs []int64, status string) bool {
 // /posts/:id/blocks and the collab socket. The working copy is not public.
 func canEditPost(user db.User, post db.Post) bool {
 	return canModeratePosts(user) || (hasRole(user, RoleContributor) && post.UserID == user.ID)
+}
+
+// canReadPostBlocks reports whether the user may read the post's working copy
+// live: a collab ticket under Hocuspocus (#206), read-only unless canEditPost.
+// Every content role may, as GET /posts/:id/blocks lets any signed-in user
+// load any working copy. The post must still exist (authorizePost: 404).
+func canReadPostBlocks(user db.User, _ db.Post) bool {
+	return hasRole(user, RoleAdmin, RoleEditor, RoleContributor)
 }
 
 // canEditPostDetails reports whether the user may change the post's live

@@ -47,7 +47,7 @@ func writeEnv(w io.Writer, random io.Reader, site string) error {
 		return hex.EncodeToString(b), nil
 	}
 	values := map[string]string{}
-	for _, name := range []string{"PASETO_V4_LOCAL_KEY_HEX", "POSTGRES_PASSWORD", "ROLE_LOOKUP_SECRET", "COLLAB_SQUASH_SECRET"} {
+	for _, name := range []string{"PASETO_V4_LOCAL_KEY_HEX", "POSTGRES_PASSWORD", "ROLE_LOOKUP_SECRET", "COLLAB_INTERNAL_SECRET"} {
 		if values[name], err = secret(32); err != nil {
 			return err
 		}
@@ -68,7 +68,7 @@ PASETO_V4_LOCAL_KEY_HEX=%s
 
 # Shared between the api and websocket services.
 ROLE_LOOKUP_SECRET=%s
-COLLAB_SQUASH_SECRET=%s
+COLLAB_INTERNAL_SECRET=%s
 `,
 		site,
 		values["POSTGRES_PASSWORD"],
@@ -76,7 +76,7 @@ COLLAB_SQUASH_SECRET=%s
 		hex.EncodeToString(priv),
 		values["PASETO_V4_LOCAL_KEY_HEX"],
 		values["ROLE_LOOKUP_SECRET"],
-		values["COLLAB_SQUASH_SECRET"],
+		values["COLLAB_INTERNAL_SECRET"],
 	)
 	return err
 }

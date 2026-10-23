@@ -589,7 +589,7 @@ belong to a throwaway service container, and the token is read-only
 (`permissions: contents: read`). Nothing is pushed or deployed. Don't print secrets or
 env dumps in a step. A future deploy job should take its credentials from GitHub
 Actions secrets (`secrets.*`) on the step that uses them, and from a protected
-environment. Runtime secrets (`ROLE_LOOKUP_SECRET`, `COLLAB_SQUASH_SECRET`, the
+environment. Runtime secrets (`ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET`, the
 `PASETO_V4_*` keys, the DB password) come from the deployment's environment. They are
 never baked into images: the API image no longer copies `app.env`, and `.dockerignore`
 keeps it out of the build context.

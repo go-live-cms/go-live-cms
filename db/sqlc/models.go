@@ -119,6 +119,15 @@ type PostVersion struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
+type PostYdocState struct {
+	PostID        int64         `json:"post_id"`
+	State         []byte        `json:"state"`
+	Epoch         uuid.UUID     `json:"epoch"`
+	BlockRevision int64         `json:"block_revision"`
+	LastEditorID  sql.NullInt64 `json:"last_editor_id"`
+	UpdatedAt     time.Time     `json:"updated_at"`
+}
+
 type Session struct {
 	ID               uuid.UUID      `json:"id"`
 	UserID           int64          `json:"user_id"`

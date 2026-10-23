@@ -40,6 +40,9 @@ type Server struct {
 
 	// Collab (WebSocket) ticket minting; see collab_routes.go.
 	collabTickets collabTicketMaker
+	// collabFlushTimeout bounds publish's flush call to the Hocuspocus server
+	// (collab_internal_client.go); a field so tests can shorten it.
+	collabFlushTimeout time.Duration
 
 	// Per-client request limits; see ratelimit.go.
 	rateLimits rateLimits
@@ -113,6 +116,13 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if config.RoleLookupSecret == "" {
 		return nil, errors.New("ROLE_LOOKUP_SECRET is required (shared with the collab WebSocket server)")
 	}
+	// Under Hocuspocus every publish flushes the collab server first and fails
+	// (503) when it can't, so a missing URL or secret would break publishing.
+	config.CollabInternalURL = strings.TrimRight(strings.TrimSpace(config.CollabInternalURL), "/")
+	config.CollabInternalSecret = strings.TrimSpace(config.CollabInternalSecret)
+	if config.UsesHocuspocus() && (config.CollabInternalURL == "" || config.CollabInternalSecret == "") {
+		return nil, errors.New("COLLAB_BACKEND=hocuspocus requires COLLAB_INTERNAL_URL and COLLAB_INTERNAL_SECRET")
+	}
 	limits, err := newRateLimits(config)
 	if err != nil {
 		return nil, err
@@ -138,8 +148,9 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		tokenMaker: tokenMaker,
 		ctx:        context.Background(),
 
-		collabTickets: tokenMaker,
-		rateLimits:    limits,
+		collabTickets:      tokenMaker,
+		collabFlushTimeout: collabFlushTimeout,
+		rateLimits:         limits,
 
 		mailer:    mail,
 		publicURL: publicURL,

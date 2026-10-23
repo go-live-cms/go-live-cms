@@ -89,10 +89,13 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       MAIL_FROM: "${MAIL_FROM}"
-      # Squash-on-publish (best effort): compacts the collab server's LevelDB log
-      # after a publish. Same value as the websocket service's SQUASH_SECRET.
-      COLLAB_SERVER_URL: "http://websocket:1234"
-      COLLAB_SQUASH_SECRET: "${COLLAB_SQUASH_SECRET}"
+      # API -> collab server calls (#206/#280). Under y-websocket (the default),
+      # squash-on-publish (best effort) compacts its LevelDB log after a publish.
+      # Same value as the websocket service's SQUASH_SECRET. Falls back to the
+      # pre-#280 name so an older .env keeps working.
+      COLLAB_BACKEND: "${COLLAB_BACKEND:-y-websocket}"
+      COLLAB_INTERNAL_URL: "http://websocket:1234"
+      COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET:-${COLLAB_SQUASH_SECRET:-}}"
       # Browser requests reach the API as caddy -> web -> api. web appends its peer
       # (caddy) to X-Forwarded-For (web/src/middleware/apiProxy.ts), and caddy sets it
       # to the browser's IP. Trust exactly those two fixed addresses, so rate limits
@@ -168,7 +171,7 @@ services:
       # listener. Required: the server exits at startup without either.
       INTERNAL_API_URL: http://api:8081
       ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
-      SQUASH_SECRET: "${COLLAB_SQUASH_SECRET}"
+      SQUASH_SECRET: "${COLLAB_INTERNAL_SECRET:-${COLLAB_SQUASH_SECRET:-}}"
       DATA_PATH: /data/yjs
     volumes:
       # LevelDB: in-flight Yjs state across restarts (Postgres block_doc is canonical).
