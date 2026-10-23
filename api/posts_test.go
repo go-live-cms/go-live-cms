@@ -107,6 +107,70 @@ func TestCreatePostAPI(t *testing.T) {
 			},
 		},
 		{
+			// Under Hocuspocus the admin sends a new post's body with the create
+			// (PUT /blocks is refused there); it becomes block_doc (#283).
+			name: "OKWithBlockDoc",
+			body: gin.H{
+				"title":       post.Title,
+				"description": post.Description,
+				"url":         post.Url,
+				"author_ids":  []int64{user.ID},
+				"block_doc": gin.H{
+					"doc_version":  1,
+					"blocks_order": []string{"intro-block-0001", "intro-block-0001"},
+					"blocks": gin.H{
+						"intro-block-0001": gin.H{"id": "intro-block-0001", "type": "paragraph", "attrs": gin.H{"text": "Hello"}},
+					},
+				},
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().CheckURLExists(gomock.Any(), gomock.Eq(post.Url)).Times(1).Return(false, nil)
+				store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).Times(1).Return(false, nil)
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				store.EXPECT().
+					CreatePostTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					DoAndReturn(func(_ context.Context, arg db.CreatePostTxParams) (db.CreatePostTxResult, error) {
+						var doc BlockDocV1
+						require.NoError(t, json.Unmarshal(arg.BlockDoc, &doc))
+						// prepareForStore ran: the duplicate order entry is gone.
+						require.Equal(t, []string{"intro-block-0001"}, doc.BlocksOrder)
+						require.Contains(t, doc.Blocks, "intro-block-0001")
+						return db.CreatePostTxResult{Post: post}, nil
+					})
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusCreated, recorder.Code)
+			},
+		},
+		{
+			name: "InvalidBlockDoc",
+			body: gin.H{
+				"title":       post.Title,
+				"description": post.Description,
+				"url":         post.Url,
+				"author_ids":  []int64{user.ID},
+				"block_doc": gin.H{
+					"doc_version":  2,
+					"blocks_order": []string{"intro-block-0001"},
+					"blocks":       gin.H{},
+				},
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetUser(gomock.Any(), gomock.Any()).Times(0)
+				store.EXPECT().CreatePostTx(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+			},
+		},
+		{
 			name: "AuthorNotFound",
 			body: gin.H{
 				"title":       post.Title,

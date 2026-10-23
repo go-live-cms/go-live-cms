@@ -27,6 +27,7 @@ const (
 // the handler sets its own.
 var bodyLimitOverrides = map[string]int64{
 	"PUT /api/v1/posts/:id/blocks":   blockDocBodyLimit,
+	"POST /api/v1/posts":             blockDocBodyLimit, // may carry the initial block_doc (#283)
 	"POST /api/v1/media":             0,
 	"POST /api/v1/media/batch":       0,
 	"POST /api/v1/media/bulk":        0,
