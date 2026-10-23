@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { act, createRef } from "react"
+import { act, createRef, StrictMode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { Node } from "@tiptap/core"
 import type * as Y from "yjs"
@@ -178,6 +178,26 @@ describe("HocuspocusEditor", () => {
     const { appendParagraph } = await import("../../../collab-server/testkit")
     appendParagraph(editor.doc, "typed by an editor", "blk-live-edit-01")
     await until(() => !!pm()?.textContent?.includes("typed by an editor"), "the live edit")
+  })
+
+  it("reports Saving → Saved under StrictMode (effects mount, clean up, mount again)", async () => {
+    tiptapExtensionRegistry.register(Callout)
+    const ref = createRef<EditorRef>()
+    const saves: number[] = []
+    await act(async () => {
+      root.render(
+        <StrictMode>
+          <HocuspocusEditor ref={ref} value="" onChange={() => {}} postId={POST} onSaveSuccess={(r) => saves.push(r)} />
+        </StrictMode>
+      )
+    })
+    await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
+    // TipTap exposes the editor on its DOM node.
+    await act(async () => (pm() as any).editor.commands.insertContentAt(1, "typed "))
+    expect(ref.current!.getSaveStatus().saveStatus).toBe("saving")
+    await until(() => saves.length > 0, "the server's store")
+    expect(saves[0]).toBeGreaterThan(3)
+    expect(ref.current!.getSaveStatus().saveStatus).toBe("saved")
   })
 
   it("publishes without a client save: waits for the server to have the edits, then calls publish", async () => {

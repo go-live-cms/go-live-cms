@@ -60,6 +60,22 @@ describe("CollabSaveStatus", () => {
     expect(status.hasPendingEdits()).toBe(false)
   })
 
+  it("notifies transitions only, and ignores stores of other users' edits", () => {
+    const f = fakeSource()
+    const status = new CollabSaveStatus(f.source)
+    const seen: (string | null)[] = []
+    status.subscribe(({ state, revision }) => seen.push(`${state}:${revision ?? "-"}`))
+    f.localEdit("a")
+    f.localEdit("b")
+    f.localEdit("c")
+    f.send(stored())
+    // Idle now: a store of someone else's edit isn't our save.
+    f.remoteEdit()
+    f.send(stored())
+    expect(seen).toEqual(["saving:-", "saved:5"])
+    expect(status.getState()).toBe("saved")
+  })
+
   it("a store that finished while newer edits were still unsent keeps it 'saving'", () => {
     const f = fakeSource()
     const status = new CollabSaveStatus(f.source)

@@ -368,6 +368,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       const fullUrl = `${baseUrl}/${postType}/${formData.slug}`
 
       if (mode === "create") {
+        // Hocuspocus: the body as Block Spec v1, sent with the create (and reused below).
+        const initialBlockDoc = usesHocuspocus() && formData.content ? htmlToBlockDoc(formData.content) : null
         const postData: CreatePostRequest = {
           title: formData.title,
           url: fullUrl,
@@ -380,7 +382,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           menu_order: 0,
           // Hocuspocus: the body goes in with the post (PUT /blocks is 409 there); the
           // collab server seeds the doc from it on first open.
-          ...(usesHocuspocus() && formData.content ? { block_doc: htmlToBlockDoc(formData.content) } : {}),
+          ...(initialBlockDoc ? { block_doc: initialBlockDoc } : {}),
         }
 
         const result = await createPost(postData)
@@ -400,7 +402,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         if (formData.content) {
           try {
             console.log("🔄 Converting HTML to blocks...")
-            const blockDoc = htmlToBlockDoc(formData.content)
+            const blockDoc = initialBlockDoc ?? htmlToBlockDoc(formData.content)
             console.log("✅ Blocks generated:", {
               blocksCount: Object.keys(blockDoc.blocks).length,
               blocksOrder: blockDoc.blocks_order.length,

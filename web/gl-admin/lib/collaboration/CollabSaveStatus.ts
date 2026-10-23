@@ -45,6 +45,8 @@ export interface SaveStatusChange {
   state: SaveState
   /** Why it's "error", for the UI. */
   error?: Error
+  /** The block_revision the server reported with "saved", when it has one. */
+  revision?: number
 }
 
 export class CollabSaveStatus {
@@ -137,9 +139,11 @@ export class CollabSaveStatus {
     } else if (message.block_doc === "kept-invalid") {
       this.set({ state: "error", error: new CollabStoreError(INVALID_MESSAGE, "invalid") })
     } else {
+      // Nothing of ours was waiting: another user's edit was stored. Not our save.
+      if (!this.pending && this.state !== "error") return
       // Edits typed after this store began keep their own debounced store coming.
       if (!this.source.provider.hasUnsyncedChanges) this.pending = false
-      this.set({ state: this.pending ? "saving" : "saved" })
+      this.set({ state: this.pending ? "saving" : "saved", revision: message.revision ?? undefined })
     }
   }
 
@@ -163,6 +167,8 @@ export class CollabSaveStatus {
   }
 
   private set(change: SaveStatusChange) {
+    // Every keystroke is an update: tell listeners about transitions only (errors always).
+    if (change.state === this.state && change.state !== "error") return
     this.state = change.state
     for (const listener of [...this.listeners]) listener(change)
   }

@@ -223,6 +223,12 @@ export class HocuspocusCollaboration {
 
   private handleSynced() {
     this.authRetryDelay = this.authRetryMs
+    // Authenticated after all (the socket's own reconnect got there first): a retry
+    // scheduled for the failure would close this healthy connection.
+    if (this.authRetryTimer) {
+      clearTimeout(this.authRetryTimer)
+      this.authRetryTimer = null
+    }
     // Every later reconnect of this Y.Doc names the epoch its structs belong to.
     const epoch = this.doc.getMap(META_MAP).get("epoch")
     if (typeof epoch === "string" && epoch && epoch !== this.epoch) {

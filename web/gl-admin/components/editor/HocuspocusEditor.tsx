@@ -84,16 +84,21 @@ const HocuspocusEditorInner = forwardRef<EditorRef, InnerProps>(function Hocuspo
   const callbacks = useRef({ onSaveStart, onSaveSuccess, onSaveError })
   callbacks.current = { onSaveStart, onSaveSuccess, onSaveError }
 
-  const saveStatus = useMemo(() => (collab ? new CollabSaveStatus(collab) : null), [collab])
+  // Created by the effect that destroys it, not in useMemo: StrictMode runs effects
+  // mount → cleanup → mount, and a memoized instance would be destroyed by the first cleanup
+  // and then used dead (no doc listener, no subscribers).
+  const [saveStatus, setSaveStatusTracker] = useState<CollabSaveStatus | null>(null)
   useEffect(() => {
-    if (!saveStatus) return
+    if (!collab) return
+    const status = new CollabSaveStatus(collab)
+    setSaveStatusTracker(status)
     let clearTimer: ReturnType<typeof setTimeout> | undefined
-    const off = saveStatus.subscribe(({ state, error }) => {
+    const off = status.subscribe(({ state, error, revision }) => {
       clearTimeout(clearTimer)
       setSaveState(state)
       if (state === "saving") callbacks.current.onSaveStart?.()
       if (state === "saved") {
-        callbacks.current.onSaveSuccess?.(0)
+        callbacks.current.onSaveSuccess?.(revision ?? 0)
         clearTimer = setTimeout(() => setSaveState(null), 3000)
       }
       if (state === "error") {
@@ -101,14 +106,15 @@ const HocuspocusEditorInner = forwardRef<EditorRef, InnerProps>(function Hocuspo
         callbacks.current.onSaveError?.(error ?? new Error("Save failed"))
       }
     })
-    const offDropped = saveStatus.watchDroppedBlocks((entries) => setDroppedCount(entries.length))
+    const offDropped = status.watchDroppedBlocks((entries) => setDroppedCount(entries.length))
     return () => {
       clearTimeout(clearTimer)
       off()
       offDropped()
-      saveStatus.destroy()
+      status.destroy()
+      setSaveStatusTracker(null)
     }
-  }, [saveStatus])
+  }, [collab])
 
   const extensions = useMemo(
     () => getExtensions({ collabProvider: collab, maxChars, placeholder, setUrl, setIsLinkModalOpen })(),
