@@ -74,29 +74,33 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
                 )
               }
 
+              // The caret must never change the line's height (#305). Like y-prosemirror's
+              // caret: a zero-width inline span drawn with a border (negative margins keep
+              // the text from shifting), holding a word joiner so it gets the line's own
+              // height. The label is absolutely positioned inside it, out of the flow.
+              // (The old 1.2em inline-block grew the line box by a few px.)
               const caret = document.createElement("span")
               caret.className = "collab-caret"
               caret.style.cssText = `
-                display:inline-block;width:${caretWidth}px;height:1.2em;
-                background:${color}; transform: translateY(2px); pointer-events:none;
+                position:relative; border-left:${caretWidth}px solid ${color};
+                margin-left:-${caretWidth / 2}px; margin-right:-${caretWidth / 2}px;
+                word-break:normal; pointer-events:none;
               `
+              caret.appendChild(document.createTextNode(String.fromCharCode(0x2060))) // word joiner: zero width, but gives the span line height
 
               const labelEl = document.createElement("span")
               labelEl.className = "collab-caret-label"
               labelEl.textContent = label
               labelEl.style.cssText = `
-                position:absolute; transform: translate(-50%, -110%);
+                position:absolute; left:-${caretWidth / 2}px; bottom:100%;
                 background:${color}; color:white; font-size:12px; line-height:1;
-                padding:2px 6px; border-radius:4px; white-space:nowrap;
+                padding:2px 6px; border-radius:4px 4px 4px 0; white-space:nowrap;
                 box-shadow:0 1px 2px rgba(0,0,0,.15); pointer-events:none;
+                user-select:none;
               `
+              caret.appendChild(labelEl)
 
-              const wrap = document.createElement("span")
-              wrap.style.position = "relative"
-              wrap.appendChild(caret)
-              wrap.appendChild(labelEl)
-
-              decos.push(Decoration.widget(h, wrap, { key: `caret-${clientId}` }))
+              decos.push(Decoration.widget(h, caret, { key: `caret-${clientId}`, side: 10 }))
             }
 
             return DecorationSet.create(view.state.doc, decos)

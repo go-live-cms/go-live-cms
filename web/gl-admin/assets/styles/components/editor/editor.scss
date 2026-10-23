@@ -134,6 +134,19 @@
     max-width: 100%;
   }
 
+  // ProseMirror puts an invisible <img class="ProseMirror-separator"> (+ a trailing <br>)
+  // after a widget that ends a textblock, e.g. a remote user's caret at the end of a
+  // line. TipTap's injected base CSS normally neutralizes it, but that stylesheet isn't
+  // on the admin page, so the `img` rule above (plus a global display:block reset) made
+  // it a block with 1em margins: every line holding a remote caret grew by ~2 lines
+  // (#305). This is ProseMirror's own rule, shipped here so it doesn't depend on TipTap.
+  img.ProseMirror-separator {
+    border: none !important;
+    box-shadow: none !important;
+    display: inline !important;
+    margin: 0 !important;
+  }
+
   hr {
     background: #e1e5e9;
     border: none;
