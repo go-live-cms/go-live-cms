@@ -2,7 +2,7 @@ import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 import type { Block, BlockDocV1 } from "@gl-admin/lib/blocks-spec"
-import { getBlockContent } from "../utils/contentRenderer"
+import { getBlockContent, renderContent } from "../utils/contentRenderer"
 import ParagraphBlock from "./ParagraphBlock"
 
 const paragraph = (pm: Record<string, unknown> | undefined, extra: Record<string, unknown> = {}): Block =>
@@ -16,7 +16,13 @@ const pmParagraph = (content?: unknown[], attrs: Record<string, unknown> = {}) =
 
 const render = (block: Block) =>
   renderToStaticMarkup(
-    <ParagraphBlock block={block} doc={{} as BlockDocV1} getBlockContent={getBlockContent} renderBlock={() => null} />,
+    <ParagraphBlock
+      block={block}
+      doc={{} as BlockDocV1}
+      renderContent={renderContent}
+      getBlockContent={getBlockContent}
+      renderBlock={() => null}
+    />,
   )
 
 describe("ParagraphBlock", () => {
