@@ -51,7 +51,8 @@ func (q *Queries) GetPublishedPostBlocks(ctx context.Context, id int64) (GetPubl
 const updatePostBlocksIfRevisionMatches = `-- name: UpdatePostBlocksIfRevisionMatches :one
 UPDATE posts
 SET block_doc = $2,
-    block_revision = block_revision + 1
+    block_revision = block_revision + 1,
+    changed_at = now()
 WHERE id = $1
   AND block_revision = $3
 RETURNING block_doc AS content, block_revision AS revision
@@ -68,6 +69,9 @@ type UpdatePostBlocksIfRevisionMatchesRow struct {
 	Revision int64           `json:"revision"`
 }
 
+// Sets changed_at itself, like UpdatePostBlockDocFromCollab: the title update
+// the handler may run afterwards is skipped without a title, or for a
+// contributor's published post (#307).
 func (q *Queries) UpdatePostBlocksIfRevisionMatches(ctx context.Context, arg UpdatePostBlocksIfRevisionMatchesParams) (UpdatePostBlocksIfRevisionMatchesRow, error) {
 	row := q.db.QueryRowContext(ctx, updatePostBlocksIfRevisionMatches, arg.ID, arg.BlockDoc, arg.BlockRevision)
 	var i UpdatePostBlocksIfRevisionMatchesRow
