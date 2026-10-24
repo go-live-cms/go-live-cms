@@ -1,3 +1,6 @@
+// TipTap/ProseMirror base CSS, shipped here instead of injected (#305; see the file).
+@use "./tiptap-base";
+
 .gl-content-editor {
   color: #37352f;
   font-size: 16px;

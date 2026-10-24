@@ -196,6 +196,9 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   const editor = useEditor(
     {
       editable: !readOnly,
+      // TipTap's injected base CSS is removed by any destroyed editor (shared tag); it
+      // ships in editor.scss instead (_tiptap-base.scss, #305).
+      injectCSS: false,
       extensions,
       content: !collabProvider ? value || "<p></p>" : undefined,
       // autofocus disabled to prevent race condition with BubbleMenu during mount

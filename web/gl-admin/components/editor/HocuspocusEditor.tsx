@@ -124,6 +124,9 @@ const HocuspocusEditorInner = forwardRef<EditorRef, InnerProps>(function Hocuspo
   const editor = useEditor(
     {
       editable: !readOnly,
+      // TipTap's injected base CSS is removed by any destroyed editor (shared tag); it
+      // ships in editor.scss instead (_tiptap-base.scss, #305).
+      injectCSS: false,
       extensions,
       // Bound to the collab doc: content comes from the server, never from here.
       content: !collab ? value || "<p></p>" : undefined,

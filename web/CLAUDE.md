@@ -152,5 +152,10 @@ Upgrades are a deliberate, standalone PR — never part of an unrelated change.
    change them as a side effect of a TipTap bump (see rule 8 in
    `gl-admin/lib/collaboration/CLAUDE.md`). If a new `y-tiptap` needs a newer `yjs`,
    bump `web/` and `websocket/` together in the same PR.
-8. Update the version and review date at the top of this section.
+8. **Re-copy TipTap's base stylesheet** into
+   `gl-admin/assets/styles/components/editor/_tiptap-base.scss` from the new
+   `@tiptap/core` (`src/style.ts`, or the `var style =` string in `dist/index.js`). The
+   editors run with `injectCSS: false` because a destroyed editor removes TipTap's shared
+   `<style>` tag (#305), so nothing else picks up changes to it.
+9. Update the version and review date at the top of this section.
 </content>
