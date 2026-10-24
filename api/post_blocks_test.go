@@ -58,6 +58,25 @@ func TestGetPostBlocksAPI(t *testing.T) {
 			},
 		},
 		{
+			// Posts that never had blocks store `{}`: clients read doc.blocks_order.length,
+			// so the API must not answer null for it (#304).
+			name:   "EmptyStoredDocIsWellFormed",
+			postID: 1,
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, 1, "testuser", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetPostBlocks(gomock.Any(), int64(1)).
+					Times(1).
+					Return(db.GetPostBlocksRow{Content: json.RawMessage(`{}`), Revision: 1}, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.JSONEq(t, `{"doc":{"doc_version":1,"blocks_order":[],"blocks":{}}}`, recorder.Body.String())
+			},
+		},
+		{
 			name:   "NotFound",
 			postID: 999,
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {

@@ -20,6 +20,28 @@ type BlockDocV1 struct {
 	Blocks      map[string]interface{} `json:"blocks" binding:"required"`
 }
 
+// parseStoredBlockDoc decodes a block doc read from the database for a response.
+// Posts that never had blocks store `{}` (most seeded posts, posts created without a
+// body), which decodes to doc_version 0 and null blocks_order/blocks. Clients read
+// `doc.blocks_order.length`, so return a well-formed empty Block Spec v1 doc instead
+// (#304).
+func parseStoredBlockDoc(raw json.RawMessage) (BlockDocV1, error) {
+	var doc BlockDocV1
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return doc, err
+	}
+	if doc.DocVersion == 0 && len(doc.BlocksOrder) == 0 && len(doc.Blocks) == 0 {
+		doc.DocVersion = 1
+	}
+	if doc.BlocksOrder == nil {
+		doc.BlocksOrder = []string{}
+	}
+	if doc.Blocks == nil {
+		doc.Blocks = map[string]interface{}{}
+	}
+	return doc, nil
+}
+
 // deduplicateBlocksOrder removes duplicate block IDs while preserving order
 func (doc *BlockDocV1) deduplicateBlocksOrder() {
 	seen := make(map[string]bool)
@@ -218,8 +240,8 @@ func (server *Server) getPostBlocks(c *gin.Context) {
 	}
 
 	// Parse the JSONB content
-	var blockDoc BlockDocV1
-	if err := json.Unmarshal(result.Content, &blockDoc); err != nil {
+	blockDoc, err := parseStoredBlockDoc(result.Content)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse block document"})
 		return
 	}

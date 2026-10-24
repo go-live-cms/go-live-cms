@@ -12,7 +12,6 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -133,8 +132,8 @@ func (server *Server) getPostVersion(c *gin.Context) {
 		return
 	}
 
-	var doc BlockDocV1
-	if err := json.Unmarshal(row.BlockDoc, &doc); err != nil {
+	doc, err := parseStoredBlockDoc(row.BlockDoc)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse version document"})
 		return
 	}

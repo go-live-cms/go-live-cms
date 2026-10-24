@@ -13,7 +13,7 @@ import * as Y from "yjs"
 import type { Schema } from "prosemirror-model"
 import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { EDITOR_FRAGMENT, seedFragment, type DroppedBlocks } from "../gl-admin/lib/collaboration/fragmentBridge"
-import type { CollabRecord } from "./api"
+import { normalizeBlockDoc, type CollabRecord } from "./api"
 
 /**
  * Server-owned metadata, persisted inside the doc: `epoch` and `dropped`. (The old
@@ -44,6 +44,7 @@ export type LoadOutcome =
   | { kind: "restored"; epoch: string }
   | { kind: "seeded"; epoch: string; dropped: number; reason: "no-state" | "revision-mismatch" }
 
+// Only called on a normalizeBlockDoc result: null or a well-shaped doc.
 const isEmptyBlockDoc = (doc: BlockDocV1 | null): boolean => !doc || doc.blocks_order.length === 0
 
 /** Whether the record's stored Yjs state may be used: present, with an epoch, and produced at the current revision. */
@@ -74,13 +75,18 @@ export function loadIntoDoc(
     return { kind: "restored", epoch }
   }
 
+  // `{}` (a post that never had blocks, #304) → null; any other malformed doc throws, so the
+  // load fails instead of seeding an empty editor whose next store would overwrite it.
+  // api.ts already normalizes; this repeats it for callers that don't go through it
+  // (the in-memory FakeCollabApi).
+  const blockDoc = normalizeBlockDoc(record.block_doc)
   const reason = record.ydoc_state ? "revision-mismatch" : "no-state"
   const epoch = newEpoch()
   let droppedCount = 0
   doc.transact(() => {
     let dropped: DroppedBlocks | null = null
-    if (!isEmptyBlockDoc(record.block_doc)) {
-      dropped = seedFragment(record.block_doc as BlockDocV1, doc.getXmlFragment(EDITOR_FRAGMENT), schema)
+    if (!isEmptyBlockDoc(blockDoc)) {
+      dropped = seedFragment(blockDoc as BlockDocV1, doc.getXmlFragment(EDITOR_FRAGMENT), schema)
       droppedCount = dropped.entries.length
     }
     const meta = doc.getMap<unknown>(META_MAP)
