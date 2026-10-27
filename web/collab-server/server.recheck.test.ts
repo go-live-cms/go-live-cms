@@ -138,8 +138,9 @@ describe("access re-check of open connections (#313)", () => {
     await synced(editor)
     await waitFor(() => collab.recheckedConnections === 2, { what: "both connections tracked" })
 
+    // Last confirmed at connect (t=0); still writable 10s before the grace period ends.
     api.failAccess = true
-    await clock.advance(MINUTE + 2 * MINUTE - 10_000)
+    await clock.advance(2 * MINUTE - 10_000)
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(admin.closes).toEqual([])
     expect(editor.closes).toEqual([])

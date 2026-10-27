@@ -16,7 +16,8 @@
 //   - denied (403/404: user deleted, post deleted, ticket predates a password change;
 //     or no content role any more) → the connection is closed with `access-revoked`.
 //   - lookup failed (API down, slow, 5xx) → the connection KEEPS its mode, the failure
-//     is logged and retried after `retryMs`. Fail-open for `graceMs` only: an API blip
+//     is logged once and retried after `retryMs`. Fail-open for `graceMs` after the
+//     last confirmed lookup (at connect, or the last successful re-check) only: an API blip
 //     must not disconnect every editor, but an outage can't extend a revoked session's
 //     write access indefinitely either. Past the grace period a writable connection is
 //     made read-only (`unverified`, never closed: the client keeps its state and goes
@@ -70,7 +71,7 @@ export interface AccessRecheckOptions {
   jitter?: number
   /** After a failed lookup. Default 10s (never more than the interval). */
   retryMs?: number
-  /** How long failed lookups may keep a connection writable. Default 120s. */
+  /** How long a connection stays writable without a confirmed lookup (API failing). Default 120s. */
   graceMs?: number
   clock?: Clock
   random?: () => number
@@ -82,8 +83,10 @@ interface Group {
   /** Each connection with the `iat` (Unix seconds) of the ticket it opened with. */
   connections: Map<CheckedConnection, number>
   timer: unknown
-  /** When lookups started failing (null while they succeed). */
-  failingSince: number | null
+  /** The last time the API confirmed this access: at connect, then each successful lookup. */
+  confirmedAt: number
+  /** Lookups are failing (logged once per outage). */
+  failing: boolean
   /** Made read-only because lookups kept failing (not because the API said so). */
   unverified: Set<CheckedConnection>
 }
@@ -101,6 +104,7 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
   } = options
   const retryMs = Math.min(options.retryMs ?? 10_000, intervalMs || Infinity)
   const groups = new Map<string, Group>()
+  const groupOf = new Map<CheckedConnection, Group>()
   let stopped = false
 
   const keyOf = (userId: string, docName: string) => `${userId}\u0000${docName}`
@@ -169,25 +173,28 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
       results = await lookUp(group, requestId)
     } catch (error) {
       if (!live(group)) return
-      const now = clock.now()
-      group.failingSince ??= now
-      const failingMs = now - group.failingSince
-      logEvent("warn", "ws_access_check_failed", {
-        request_id: requestId,
-        doc: docNameForLog(group.docName),
-        user_id: group.userId,
-        error: errorMessage(error),
-        failing_ms: failingMs,
-        grace_ms: graceMs,
-      })
-      if (failingMs >= graceMs) {
+      const unconfirmedMs = clock.now() - group.confirmedAt
+      // Once per outage, not on every retry: with many sessions open that would flood the log.
+      if (!group.failing) {
+        logEvent("warn", "ws_access_check_failed", {
+          request_id: requestId,
+          doc: docNameForLog(group.docName),
+          user_id: group.userId,
+          error: errorMessage(error),
+          unconfirmed_ms: unconfirmedMs,
+          grace_ms: graceMs,
+        })
+      }
+      group.failing = true
+      if (unconfirmedMs >= graceMs) {
         for (const connection of group.connections.keys()) setMode(group, connection, "read", "unverified", requestId)
       }
       schedule(group, retryMs)
       return
     }
     if (!live(group)) return
-    group.failingSince = null
+    group.failing = false
+    group.confirmedAt = clock.now()
 
     for (const [connection, issuedAt] of [...group.connections]) {
       // Opened while the lookup was in flight (with a newer ticket): checked next time.
@@ -213,14 +220,14 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
   }
 
   function remove(connection: CheckedConnection) {
-    for (const [key, group] of groups) {
-      if (!group.connections.delete(connection)) continue
-      group.unverified.delete(connection)
-      if (group.connections.size === 0) {
-        if (group.timer) clock.clearTimeout(group.timer)
-        groups.delete(key)
-      }
-      return
+    const group = groupOf.get(connection)
+    if (!group) return
+    groupOf.delete(connection)
+    group.connections.delete(connection)
+    group.unverified.delete(connection)
+    if (group.connections.size === 0) {
+      if (group.timer) clock.clearTimeout(group.timer)
+      groups.delete(keyOf(group.userId, group.docName))
     }
   }
 
@@ -231,23 +238,23 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
       const key = keyOf(userId, docName)
       let group = groups.get(key)
       if (!group) {
-        group = { userId, docName, connections: new Map(), timer: null, failingSince: null, unverified: new Set() }
+        group = { userId, docName, connections: new Map(), timer: null, confirmedAt: clock.now(), failing: false, unverified: new Set() }
         groups.set(key, group)
         schedule(group, intervalMs)
       }
       group.connections.set(connection, issuedAt)
+      groupOf.set(connection, group)
     },
     remove,
     /** Open connections being re-checked (tests). */
     get size(): number {
-      let n = 0
-      for (const group of groups.values()) n += group.connections.size
-      return n
+      return groupOf.size
     },
     stop() {
       stopped = true
       for (const group of groups.values()) if (group.timer) clock.clearTimeout(group.timer)
       groups.clear()
+      groupOf.clear()
     },
   }
 }

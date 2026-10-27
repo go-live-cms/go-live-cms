@@ -83,6 +83,8 @@ export interface EditorRef {
 type InnerProps = EditorProps & {
   collab: HocuspocusCollaboration | null
   unbuildable?: UnbuildableTypes
+  /** Focus the end of the doc on mount (not on a remount for an access change: the user is elsewhere). */
+  autoFocus?: boolean
 }
 
 const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
@@ -102,6 +104,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     onPublishError,
     collab,
     unbuildable,
+    autoFocus = true,
   },
   ref
 ) {
@@ -173,7 +176,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   )
 
   useEffect(() => {
-    if (!editor || readOnly) return
+    if (!editor || readOnly || !autoFocus) return
     const raf = requestAnimationFrame(() => {
       try {
         editor.commands.focus("end")
@@ -182,7 +185,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       }
     })
     return () => cancelAnimationFrame(raf)
-  }, [editor, readOnly])
+  }, [editor, readOnly, autoFocus])
 
   // No collab doc (create mode): the form's value is the content.
   useEffect(() => {
@@ -443,6 +446,7 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
           {...props}
           collab={gate.collab}
           readOnly={viewOnly}
+          autoFocus={!access?.reason}
         />
       </>
     )
@@ -455,6 +459,7 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
         here would delete them for everyone, so editing is disabled until that theme is available. Those blocks are
         hidden below but kept in the post.
       </div>
+      {access?.revoked && <AccessNotice access={access} />}
       <EditorInner ref={ref} {...props} readOnly collab={null} unbuildable={gate.unbuildable} />
     </>
   )

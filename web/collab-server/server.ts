@@ -343,7 +343,9 @@ export function createCollabServer(options: CollabServerOptions) {
 
     async connected({ documentName, context, connection }) {
       const ctx = contextOf(context)
-      if (ctx.userId && typeof ctx.issuedAt === "number") {
+      // Hocuspocus runs this hook after the connection exists and its queued messages ran;
+      // one closed in between would never fire the onClose below and stay re-checked forever.
+      if (ctx.userId && typeof ctx.issuedAt === "number" && connection.document.hasConnection(connection)) {
         recheck.add(connection, { userId: ctx.userId, issuedAt: ctx.issuedAt, docName: documentName })
         connection.onClose(() => recheck.remove(connection))
       }

@@ -180,24 +180,26 @@ describe("access re-check (recheck.ts)", () => {
     const checks = recheck()
     const conn = new FakeConnection()
     checks.add(conn, { userId: "2", issuedAt: ISSUED, docName: DOC })
-    await clock.advance(MINUTE) // healthy check
+    await clock.advance(MINUTE) // healthy check at t=60s: access confirmed
 
     api.failAccess = true
     const callsBefore = api.accessCalls
-    await clock.advance(MINUTE) // first failure
+    await clock.advance(MINUTE) // first failure at t=120s
     expect(conn.readOnly).toBe(false)
     expect(conn.closed).toBeNull()
-    // Retried every 10s, not every minute, and still writable just inside the grace period.
-    await clock.advance(2 * MINUTE - 10_000)
-    expect(api.accessCalls - callsBefore).toBe(12)
+    // Retried every 10s, not every minute. The grace period runs from the last confirmed
+    // lookup (t=60s), not the first failure: still writable at t=170s.
+    await clock.advance(MINUTE - 10_000)
+    expect(api.accessCalls - callsBefore).toBe(6)
     expect(conn.readOnly).toBe(false)
     expect(conn.closed).toBeNull()
     expect(conn.messages).toEqual([])
-    expect(events("ws_access_check_failed")[0]).toEqual(
-      expect.objectContaining({ doc: DOC, user_id: "2", error: "access lookup failed: API responded 502", grace_ms: 2 * MINUTE })
-    )
+    // Logged once per outage, not on every retry.
+    expect(events("ws_access_check_failed")).toEqual([
+      expect.objectContaining({ doc: DOC, user_id: "2", error: "access lookup failed: API responded 502", grace_ms: 2 * MINUTE }),
+    ])
 
-    // Past the grace period: no more writes on an access nobody could confirm, but not closed.
+    // t=180s, 120s without a confirmed lookup: no more writes, but not closed.
     await clock.advance(10_000)
     expect(conn.readOnly).toBe(true)
     expect(conn.closed).toBeNull()
@@ -233,6 +235,32 @@ describe("access re-check (recheck.ts)", () => {
     await clock.advance(10_000)
     expect(conn.messages).toEqual([])
     expect(conn.readOnly).toBe(true)
+  })
+
+  it("counts the grace period from connect when the API fails from the first re-check", async () => {
+    const checks = recheck()
+    const conn = new FakeConnection()
+    checks.add(conn, { userId: "2", issuedAt: ISSUED, docName: DOC })
+    api.failAccess = true
+    await clock.advance(2 * MINUTE - 1)
+    expect(conn.readOnly).toBe(false)
+    await clock.advance(1)
+    expect(conn.readOnly).toBe(true)
+  })
+
+  it("keeps checking the other connections of a (user, doc) when one closes", async () => {
+    const checks = recheck()
+    const a = new FakeConnection()
+    const b = new FakeConnection()
+    checks.add(a, { userId: "2", issuedAt: ISSUED, docName: DOC })
+    checks.add(b, { userId: "2", issuedAt: ISSUED, docName: DOC })
+    checks.remove(a)
+    expect(checks.size).toBe(1)
+    api.users.delete("2")
+    await clock.advance(MINUTE)
+    expect(b.closed?.reason).toBe(ACCESS_REVOKED)
+    expect(a.closed).toBeNull()
+    expect(checks.size).toBe(0)
   })
 
   it("stops checking closed connections, and can be turned off", async () => {

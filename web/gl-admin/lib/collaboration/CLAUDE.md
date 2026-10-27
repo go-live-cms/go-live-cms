@@ -41,7 +41,11 @@ every server boot — **read process logs from the very top**.
   (`demoted` / `unverified` / `restored`) or closes the doc with `access-revoked`;
   `onAccess` / `getAccess()` / `readOnly` follow it. A revoke sets status `revoked`,
   disconnects for good (never handed out again by `acquireHocuspocus`) and **keeps the
-  Y.Doc**; the next authentication (a reconnect) replaces any earlier access message.
+  Y.Doc**; the next authentication (a reconnect) replaces any earlier access message. **A
+  promotion with unsynced changes reconnects:** updates sent while read-only were dropped
+  by the server (acked as not applied, so still counted as unsynced) and Yjs never resends
+  them, so every later update would wait on the server for them and never be stored; the
+  reconnect's sync handshake sends them (pinned by `accessChange.hocuspocus.test.ts`).
 - `postCollab.ts`: wires it to the app (URL from `backend.ts` `hocuspocusUrl`, tickets
   from `POST /collab/tickets`, the cursor label).
 - `backend.ts`: `hocuspocusUrl`: `PUBLIC_COLLAB_URL`, else dev `ws://<page host

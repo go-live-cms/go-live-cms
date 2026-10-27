@@ -359,6 +359,14 @@ export class HocuspocusCollaboration {
       collabDebug("access message", message)
       this.accessOverride = { type: "access", mode, reason: reason ?? (mode === "read" ? "demoted" : "restored") }
       if (mode === "read") console.warn(`[collab] ${this.docName}: the server made this session read-only (${reason})`)
+      // Writable again, but the server dropped what this doc sent while it was read-only
+      // (Hocuspocus acks those updates as not applied, so they stay counted as unsynced).
+      // Yjs never resends them, so every later update would wait on the server for the
+      // missing ones and never be stored. Reconnect: the sync handshake sends them.
+      if (mode === "write" && this.provider.hasUnsyncedChanges) {
+        collabDebug("resyncing after a promotion: updates were dropped while read-only")
+        this.socket.webSocket?.close()
+      }
       this.emit("access", this.getAccess())
     }
   }

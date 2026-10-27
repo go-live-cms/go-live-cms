@@ -73,11 +73,16 @@ differs, and the API compares it with the password change alone).
   → `connection.close` with reason **`access-revoked`** (`ACCESS_REVOKED`); the client
   shows "session ended, sign in again" and never reconnects.
 - **Lookup failure** (API down, slow, 5xx): the connection **keeps its mode**, the failure
-  is logged (`ws_access_check_failed`) and retried every 10s. This fails open for
-  `COLLAB_ACCESS_GRACE_MS` (120s) only: an API blip must not disconnect or freeze every
+  is logged once per outage (`ws_access_check_failed`) and retried every 10s. This fails
+  open for `COLLAB_ACCESS_GRACE_MS` (120s) **after the last confirmed lookup** (at connect,
+  or the last successful re-check) only: an API blip must not disconnect or freeze every
   editor, but an outage can't extend a revoked session's write access indefinitely. Past
-  the grace period a writable connection becomes read-only (`reason:"unverified"`, never
-  closed) and goes back to read-write on the next successful lookup.
+  that a writable connection becomes read-only (`reason:"unverified"`, never closed) and
+  goes back to read-write on the next successful lookup.
+- A promotion back to read-write is in place; the client reconnects if the server dropped
+  anything it sent while read-only (see `gl-admin/lib/collaboration/CLAUDE.md`).
+- The `connected` hook only tracks a connection its document still has (one closed before
+  the hook ran would never fire `onClose`).
 - Not re-checked on events (e.g. a store); the interval bounds how long a change takes.
 - Tests: `recheck.test.ts` (fake connections, `FakeClock`) and
   `server.recheck.test.ts` (real server and clients: demote → later edits dropped,
