@@ -23,7 +23,9 @@ TAG="${1:?usage: deploy.sh <image-tag>}"
 cd "$(dirname "$0")/../.."
 
 [ -f .env ] || { echo "deploy: .env missing in $(pwd)" >&2; exit 1; }
-# Values are hex/hostnames (cmd/gen-prod-env), safe to source.
+# CD writes every value single-quoted (scripts/deploy/write-env.sh), so sourcing reads
+# e.g. MAIL_FROM's spaces and <> or an SMTP_PASS with $ literally. A hand-written .env
+# must quote such values too (cmd/gen-prod-env does).
 set -a; . ./.env; set +a
 : "${POSTGRES_PASSWORD:?deploy: POSTGRES_PASSWORD is not set in .env}"
 

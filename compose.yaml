@@ -8,6 +8,8 @@ name: golive_cms
 # Secrets come from a `.env` next to this file (never committed). Generate one with
 #   go run ./cmd/gen-prod-env -site cms.example.com > .env
 # Full guide, first admin account and upgrade notes: docs/operations/deploy.md.
+# In production CD rewrites that .env on every deploy (scripts/deploy/write-env.sh):
+# a new ${VAR} here must be added there and to cd.yml, or CI fails (check-env.sh).
 #
 # UPGRADING a deployment that used this file before #141: Postgres data and
 # uploads now live in the named volumes postgres_data and uploads. They start
@@ -71,7 +73,10 @@ services:
       PASETO_V4_PUBLIC_KEY_HEX: "${PASETO_V4_PUBLIC_KEY_HEX}"
       PASETO_V4_PRIVATE_KEY_HEX: "${PASETO_V4_PRIVATE_KEY_HEX}"
       PASETO_V4_LOCAL_KEY_HEX: "${PASETO_V4_LOCAL_KEY_HEX}"
-      # Optional, only during a key rotation (docs/operations/key-rotation.md).
+      # Optional, only during a key rotation (docs/operations/key-rotation.md). Empty
+      # KIDs keep the API's defaults.
+      PASETO_ACCESS_KID: "${PASETO_ACCESS_KID:-}"
+      PASETO_REFRESH_KID: "${PASETO_REFRESH_KID:-}"
       PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX: "${PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX:-}"
       PASETO_V4_PREVIOUS_LOCAL_KEY_HEX: "${PASETO_V4_PREVIOUS_LOCAL_KEY_HEX:-}"
       PASETO_PREVIOUS_KEYS_VALID_UNTIL: "${PASETO_PREVIOUS_KEYS_VALID_UNTIL:-}"

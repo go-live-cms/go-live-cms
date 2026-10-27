@@ -96,6 +96,19 @@ jobs:
       - name: Run restore test
         run: sh scripts/backup/test-restore.sh
 
+  # CD replaces the production .env on every deploy (scripts/deploy/write-env.sh), so a
+  # variable compose.yaml reads that CD doesn't write is lost, or stops the stack (#314).
+  # Also resolves compose.yaml with a CD-shaped .env of dummy values.
+  deploy-env:
+    name: CD .env covers compose.yaml
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check compose.yaml against CD's .env writer
+        run: sh scripts/deploy/check-env.sh
+
   go-lint:
     name: Go lint (vet, gofmt, golangci-lint)
     runs-on: ubuntu-latest
