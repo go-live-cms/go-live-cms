@@ -47,18 +47,23 @@ for v in $required_vars; do
 done
 
 # 2. cd.yml maps each one as NAME: ${{ secrets.NAME }} or ${{ vars.NAME }}.
+# Only the writer's own step counts: a mapping in another step never reaches it.
+step="$(awk '/^      - name: Write \.env and SSH config$/ { on = 1; next }
+             on && /^      - / { exit }
+             on' .github/workflows/cd.yml)"
+[ -n "$step" ] || err "cd.yml has no \"Write .env and SSH config\" step"
 for v in $REQUIRED $OPTIONAL; do
-  if grep -qE "^[[:space:]]+$v: \\$\\{\\{ secrets\\.$v \\}\\}" .github/workflows/cd.yml; then
+  if printf '%s\n' "$step" | grep -qE "^[[:space:]]+$v: \\$\\{\\{ secrets\\.$v \\}\\}"; then
     continue
   fi
-  if grep -qE "^[[:space:]]+$v: \\$\\{\\{ vars\\.$v \\}\\}" .github/workflows/cd.yml; then
+  if printf '%s\n' "$step" | grep -qE "^[[:space:]]+$v: \\$\\{\\{ vars\\.$v \\}\\}"; then
     # Variables are shown in plain text in the settings and logs.
     case "$v" in
       *PASS*|*SECRET*|*_KEY_*|*_USER) err "cd.yml passes $v from vars; credentials must be secrets" ;;
     esac
     continue
   fi
-  err "$WRITER writes $v, but cd.yml doesn't map it (\"$v: \${{ secrets.$v }}\" or vars.$v)"
+  err "$WRITER writes $v, but cd.yml's writer step doesn't map it (\"$v: \${{ secrets.$v }}\" or vars.$v)"
 done
 
 # 3. The stack's config with a CD-shaped .env. Only the required values are set, and
@@ -77,20 +82,33 @@ env -i PATH="$PATH" \
 
 # Without compose.yaml's variables in the environment, so nothing outside the .env
 # fills a gap. (Not env -i: docker needs its own environment to find the plugin.)
-( for v in $all_vars; do unset "$v"; done
-  docker compose -f compose.yaml --env-file "$tmp/.env" config ) > "$tmp/config.yaml" 2> "$tmp/config.err" || {
-  cat "$tmp/config.err" >&2; err "docker compose config failed with the CD-shaped .env"; }
-if grep -i 'not set' "$tmp/config.err" >&2; then
-  err "docker compose config: a variable compose.yaml reads is unset with the CD-shaped .env (above)"
+if ( for v in $all_vars; do unset "$v"; done
+     docker compose -f compose.yaml --env-file "$tmp/.env" config ) > "$tmp/config.yaml" 2> "$tmp/config.err"; then
+  if grep -i 'not set' "$tmp/config.err" >&2; then
+    err "docker compose config: a variable compose.yaml reads is unset with the CD-shaped .env (above)"
+  fi
+  # Whole lines, whatever the indentation. (`config` prints a literal $ as $$.)
+  sed 's/^[[:space:]]*//' "$tmp/config.yaml" > "$tmp/config.lines"
+  for want in 'MAIL_FROM: GoLive CMS <no-reply@cms.example.com>' \
+              'PUBLIC_BASE_URL: https://cms.example.com' \
+              'SITE_URL: https://cms.example.com' \
+              'SMTP_HOST: smtp.example.com' \
+              'SMTP_PASS: p#ss $$word'; do
+    grep -qxF "$want" "$tmp/config.lines" || err "docker compose config: expected \"$want\" in the resolved config"
+  done
+else
+  cat "$tmp/config.err" >&2
+  err "docker compose config failed with the CD-shaped .env"
 fi
-# (`config` prints a literal $ as $$.)
-for want in 'MAIL_FROM: GoLive CMS <no-reply@cms.example.com>' \
-            'PUBLIC_BASE_URL: https://cms.example.com' \
-            'SITE_URL: https://cms.example.com' \
-            'SMTP_HOST: smtp.example.com' \
-            'SMTP_PASS: p#ss $$word'; do
-  grep -qF "      $want" "$tmp/config.yaml" || err "docker compose config: expected \"$want\" in the resolved config"
-done
+
+# A SITE_ADDRESS with a scheme is the origin as it is (no https://http://...).
+origins="$(env -i PATH="$PATH" SITE_ADDRESS=http://localhost POSTGRES_PASSWORD=x \
+  PASETO_V4_PUBLIC_KEY_HEX=x PASETO_V4_PRIVATE_KEY_HEX=x PASETO_V4_LOCAL_KEY_HEX=x \
+  ROLE_LOOKUP_SECRET=x COLLAB_INTERNAL_SECRET=x SMTP_HOST=x MAIL_FROM=x \
+  sh "$WRITER" | grep -E '^(PUBLIC_BASE_URL|SITE_URL)=')"
+want_origins="PUBLIC_BASE_URL='http://localhost'
+SITE_URL='http://localhost'"
+[ "$origins" = "$want_origins" ] || err "$WRITER: SITE_ADDRESS=http://localhost gave: $origins"
 
 if [ "$fail" != 0 ]; then
   echo "The production .env CD writes doesn't match compose.yaml (see the errors above; #314)." >&2

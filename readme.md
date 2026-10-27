@@ -120,8 +120,8 @@ to it (never committed). Generate one with fresh keys, never `example.app.env`'s
 go run ./cmd/gen-prod-env -site cms.example.com > .env
 ```
 
-Then replace its SMTP placeholders: outside debug mode the API won't start without mail
-settings (invitations and password resets). In production CD writes this file on every
+Then replace its SMTP placeholders. The API starts with them, but no invitation or
+password reset email goes out until they point at a real SMTP server (TLS required). In production CD writes this file on every
 deploy from the GitHub `production` environment instead (deploy.md, step 3).
 
 #### Seeded dev accounts in production
