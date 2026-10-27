@@ -28,11 +28,9 @@ browser ──https──▶ caddy :443 ──/collab──▶ collab:1235 ─�
   is the only thing on the internet. It sends `/collab` and `/collab/*` to the collab
   server, because the Astro server can't proxy a WebSocket upgrade, and everything else to
   `web`. Its access log stays off. Config: `deploy/caddy/Caddyfile`.
-- **The collab server is Hocuspocus** (`web/collab-server/`, #206). It replaced the
-  y-websocket `websocket` service in #284; releases before that ran `websocket` with a
-  LevelDB volume `ws_data`. Cutover and rollback: [collab-cutover.md](collab-cutover.md).
-  The web image bakes the editor's backend in at build time (`PUBLIC_COLLAB_BACKEND`, a
-  build arg CD sets), and it must match the API's `COLLAB_BACKEND` (`compose.yaml`).
+- **The collab server is Hocuspocus** (`web/collab-server/`, #206), the only collab
+  server since #285. Releases before #284 ran a y-websocket `websocket` service with a
+  LevelDB volume `ws_data` instead. Guards and checks: [collab-cutover.md](collab-cutover.md).
 - **Exactly one `collab` process.** Live Yjs docs and the ticket replay guard live in its
   memory (`web/collab-server/CLAUDE.md`). Never scale it.
 - **Client IPs.** Browser API calls go caddy → web → api. The API trusts exactly those two
@@ -92,7 +90,7 @@ Any Linux VM with Docker Engine + the Compose plugin (v2.20+, for `up --wait`), 
    |------|------|-------|
    | variable | `SITE_ADDRESS` | your domain, e.g. `cms.example.com` |
    | variable | `DEPLOY_PATH` | `/opt/golive` (default) |
-   | secret | `POSTGRES_PASSWORD`, `PASETO_V4_PUBLIC_KEY_HEX`, `PASETO_V4_PRIVATE_KEY_HEX`, `PASETO_V4_LOCAL_KEY_HEX`, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` (formerly `COLLAB_SQUASH_SECRET`, which CD still falls back to) | from `prod.env` |
+   | secret | `POSTGRES_PASSWORD`, `PASETO_V4_PUBLIC_KEY_HEX`, `PASETO_V4_PRIVATE_KEY_HEX`, `PASETO_V4_LOCAL_KEY_HEX`, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` | from `prod.env` |
    | secret | `DEPLOY_HOST`, `DEPLOY_USER` | the VM's address, `deploy` |
    | secret | `DEPLOY_SSH_KEY` | the private key from step 1 |
    | secret | `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -t ed25519 <host>`, checked against the VM's real fingerprint |
@@ -154,8 +152,7 @@ the **cd** workflow manually (Actions → cd → Run workflow) with that sha.
 
 - **No new migrations since that release:** that's it.
 - **Rolling back past the Hocuspocus cutover (#284)** (to a release that still ran
-  `websocket`): follow [collab-cutover.md](collab-cutover.md), "Rollback (production)"
-  first. Its LevelDB must start empty.
+  y-websocket) is unsupported: see [collab-cutover.md](collab-cutover.md).
 - **The bad release added migrations:** the old API image doesn't have them, so its
   startup `migrate up` would fail. The deploy stops and says so. Choose one:
   - Tick **allow_down_migrations**. The script takes a backup, then migrates down to the
@@ -187,8 +184,8 @@ docker compose -f compose.yaml up --build -d
 Open `https://localhost` and accept the warning for Caddy's local certificate. Create the
 first admin as in step 5. To skip TLS locally, set `SITE_ADDRESS=http://localhost`:
 browsers accept the `Secure` refresh cookie on `localhost`, and the editor then uses
-`ws://localhost/collab`. Before #284 this ran a `websocket` service; after pulling the
-cutover, `docker compose -f compose.yaml up -d --remove-orphans` drops its container.
+`ws://localhost/collab`. Before #284 this ran a y-websocket `websocket` service; a stack
+from then drops its container with `docker compose -f compose.yaml up -d --remove-orphans`.
 
 ## Upgrading from before #272
 

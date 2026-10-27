@@ -1,13 +1,13 @@
 #!/bin/sh
 # Restore a GoLive CMS backup set made by backup.sh.
 #
-#   restore.sh [--force] [--with-leveldb] <backup-set-dir>
+#   restore.sh [--force] <backup-set-dir>
 #
 # Restores into a FRESH database and an EMPTY media directory. Before touching
 # anything it verifies the set's checksums and checks every target; if the
-# database has any tables, or MEDIA_DIR / WS_DATA_DIR has any files, it refuses
-# and changes nothing. --force replaces them instead: it DROPS the public schema
-# and empties the directories first. Prefer restoring into a new database.
+# database has any tables, or MEDIA_DIR has any files, it refuses and changes
+# nothing. --force replaces them instead: it DROPS the public schema and empties
+# the directory first. Prefer restoring into a new database.
 #
 # Configuration (environment only):
 #   DB_SOURCE     postgres URL of the TARGET database (or the libpq PG* variables).
@@ -15,31 +15,25 @@
 #   MEDIA_DIR     target for the media archive; must match the API's UPLOAD_PATH
 #                 (media rows store absolute paths under it). Required unless the
 #                 set has no media or SKIP_MEDIA=1.
-#   WS_DATA_DIR   optional: the websocket server's DATA_PATH. Without --with-leveldb
-#                 it is only checked/emptied, so every document reseeds from the
-#                 restored Postgres block_doc (recommended). With --with-leveldb the
-#                 set's LevelDB snapshot is extracted there.
 #
-# Stop the API and websocket server before restoring into the live targets.
+# Stop the API and collab server before restoring into the live targets (the
+# collab server holds open documents in memory and would store them back).
 # See docs/operations/backups.md.
 
 set -eu
 
 FORCE=0
-WITH_LEVELDB=0
 SET_DIR=
 SKIP_MEDIA=${SKIP_MEDIA:-0}
 MEDIA_DIR=${MEDIA_DIR:-}
-WS_DATA_DIR=${WS_DATA_DIR:-}
 
 log() { printf '%s restore: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 die() { log "ERROR: $*"; exit 1; }
-usage() { echo "usage: $0 [--force] [--with-leveldb] <backup-set-dir>" >&2; exit 2; }
+usage() { echo "usage: $0 [--force] <backup-set-dir>" >&2; exit 2; }
 
 while [ $# -gt 0 ]; do
 	case $1 in
 		--force) FORCE=1 ;;
-		--with-leveldb) WITH_LEVELDB=1 ;;
 		-h | --help) usage ;;
 		-*) echo "unknown option: $1" >&2; usage ;;
 		*) [ -z "$SET_DIR" ] || usage; SET_DIR=$1 ;;
@@ -88,11 +82,6 @@ if [ "$has_media" = 1 ] && [ "$SKIP_MEDIA" != 1 ]; then
 else
 	MEDIA_DIR=
 fi
-if [ "$WITH_LEVELDB" = 1 ]; then
-	[ -n "$WS_DATA_DIR" ] || die "--with-leveldb needs WS_DATA_DIR"
-	[ -f "$SET_DIR/leveldb.tar.gz" ] || die "--with-leveldb given but the set has no leveldb.tar.gz"
-fi
-[ -z "$WS_DATA_DIR" ] || check_target_dir "$WS_DATA_DIR"
 
 # --- 2. Safety checks: refuse to overwrite anything without --force -----------
 tables=$(sql "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')") ||
@@ -103,10 +92,6 @@ refuse=
 if [ -n "$MEDIA_DIR" ] && ! dir_is_empty "$MEDIA_DIR"; then
 	refuse="$refuse
   - MEDIA_DIR $MEDIA_DIR is not empty"
-fi
-if [ -n "$WS_DATA_DIR" ] && ! dir_is_empty "$WS_DATA_DIR"; then
-	refuse="$refuse
-  - WS_DATA_DIR $WS_DATA_DIR is not empty"
 fi
 if [ -n "$refuse" ]; then
 	if [ "$FORCE" != 1 ]; then
@@ -156,18 +141,6 @@ if [ -n "$MEDIA_DIR" ]; then
 	tar -C "$MEDIA_DIR" -xzf "$SET_DIR/media.tar.gz" || die "media extraction failed"
 elif [ "$has_media" = 1 ]; then
 	log "SKIP_MEDIA=1: media not restored"
-fi
-
-# --- 5. Collab LevelDB --------------------------------------------------------
-if [ -n "$WS_DATA_DIR" ]; then
-	mkdir -p "$WS_DATA_DIR"
-	dir_is_empty "$WS_DATA_DIR" || empty_dir "$WS_DATA_DIR"
-	if [ "$WITH_LEVELDB" = 1 ]; then
-		log "extracting LevelDB snapshot into $WS_DATA_DIR"
-		tar -C "$WS_DATA_DIR" -xzf "$SET_DIR/leveldb.tar.gz" || die "LevelDB extraction failed"
-	else
-		log "WS_DATA_DIR left empty: documents reseed from the restored block_doc"
-	fi
 fi
 
 log "done. Start the API (it runs pending migrations) and check the runbook's verification steps."
