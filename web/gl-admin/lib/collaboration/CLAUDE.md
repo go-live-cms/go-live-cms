@@ -36,7 +36,16 @@ every server boot — **read process logs from the very top**.
   on the socket URL (`?epoch=`) after each sync; `stale-epoch` → `onStale` + destroy
   (holders remount on a fresh Y.Doc; `acquireHocuspocus` never hands a stale one out);
   auth retry with backoff for `access-unavailable` / ticket failures; `onStore` for the
-  server's `stored` / `store_failed` messages. No `resyncInterval`.
+  server's `stored` / `store_failed` messages. No `resyncInterval`. **Access changes
+  while connected (#313):** the server's re-check sends `{type:"access", mode, reason}`
+  (`demoted` / `unverified` / `restored`) or closes the doc with `access-revoked`;
+  `onAccess` / `getAccess()` / `readOnly` follow it. A revoke sets status `revoked`,
+  disconnects for good (never handed out again by `acquireHocuspocus`) and **keeps the
+  Y.Doc**; the next authentication (a reconnect) replaces any earlier access message. **A
+  promotion with unsynced changes reconnects:** updates sent while read-only were dropped
+  by the server (acked as not applied, so still counted as unsynced) and Yjs never resends
+  them, so every later update would wait on the server for them and never be stored; the
+  reconnect's sync handshake sends them (pinned by `accessChange.hocuspocus.test.ts`).
 - `postCollab.ts`: wires it to the app (URL from `backend.ts` `hocuspocusUrl`, tickets
   from `POST /collab/tickets`, the cursor label).
 - `backend.ts`: `hocuspocusUrl`: `PUBLIC_COLLAB_URL`, else dev `ws://<page host
@@ -50,7 +59,10 @@ every server boot — **read process logs from the very top**.
 - `components/editor/Editor.tsx`: theme gate → connect → first sync → schema gate (rule
   10) → bind. Users who may read but not edit the post (a contributor on someone else's
   post, `postEditorAccess` in `lib/roles.ts`) get a **live read-only** view; the server
-  makes that connection read-only anyway. Publish waits for the server to have every
+  makes that connection read-only anyway. `LiveGate` follows `onAccess`: a demotion
+  turns the editor view-only with a notice (the bound doc stays, nothing is reloaded), a
+  promotion back makes it editable, a revoke keeps it read-only with "session ended, sign
+  in again" (`authManager.logout("session-expired")`). Publish waits for the server to have every
   local edit, then calls publish; the API flushes. `useCollabPresence` and `PostForm`
   (title saved on its own via `PUT /posts/:id`; a new post sends its body as `block_doc`
   with `POST /posts`) share the same connection.
@@ -243,7 +255,9 @@ kept so references in code stay valid.
   BlockIdExtension, …])` (see `blockBridge.test.ts`), or `getCoreSchema()`.
 - Client ↔ server: `hocuspocusRelay.testkit.ts` runs the real collab server in-process
   with the #280 API faked in memory; `reconnect.hocuspocus.test.ts`, `liveRestore.test.ts`,
-  `CollabSaveStatus.test.ts`, `Editor.test.tsx` and the paste/BlockId collab tests use it.
+  `CollabSaveStatus.test.ts`, `Editor.test.tsx`, `accessChange.hocuspocus.test.ts` and the
+  paste/BlockId collab tests use it. Its `clock` drives the server's access re-check
+  (`await relay.clock.advance(RECHECK_MS)`); the re-check never fires on its own there.
   Under jsdom the clients use the provider's own `ws` (Node's and jsdom's WebSockets
   can't dispatch jsdom's `Event`). Its `restart()` terminates the sockets: Hocuspocus's
   `destroy()` leaves them open. Encode any newly found reconnect bug as a red test there.
@@ -255,6 +269,5 @@ kept so references in code stay valid.
 
 ## Open follow-ups (don't "fix" silently)
 
-- Access is checked only at connect (#286, P6: periodic re-check).
 - Server-side restore through `openDirectConnection` (#286).
 - The block-map schema (#122) and block comments (#192) as `Y.Map`s keyed by block id.

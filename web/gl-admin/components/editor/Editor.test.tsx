@@ -6,14 +6,15 @@ import type * as Y from "yjs"
 import { paragraphs } from "../../../collab-server/testkit"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { EDITOR_FRAGMENT } from "@gl-admin/lib/collaboration/schemaGuard"
-import { startRelay, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
+import { RECHECK_MS, startRelay, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 import { acquireHocuspocus, releaseHocuspocus } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { tiptapExtensionRegistry } from "./utils/extensionRegistry"
 
 // The editor (#206 P3, #283), mounted for real against the in-process collab
 // server: the theme gate, the schema gate (rule 10: theme extensions must be registered
 // before Collaboration binds), no client seeding, the live read-only view, a stale-epoch
-// remount, publish without a client save, and restore through the editor.
+// remount, publish without a client save, restore through the editor, and access changes
+// while open (#313).
 
 // jsdom has no layout: Range lacks getClientRects/getBoundingClientRect, which
 // ProseMirror's scrollIntoView calls when the editor focuses itself after mounting.
@@ -45,17 +46,34 @@ vi.mock("@gl-admin/lib/auth", () => ({
     getAccessToken: () => "token",
     subscribe: () => () => {},
     getState: () => ({ user: null }),
+    logout: vi.fn(async () => {}),
   },
 }))
 vi.mock("./ui/BubbleMenu", () => ({ default: () => null }))
 vi.mock("./ui/BlockTypeToolbar", () => ({ default: () => null }))
-vi.mock("./ui/DragHandle", () => ({ default: () => null }))
+// Like the real one: TipTap's drag-handle plugin moves the component's element into the
+// editor's DOM, so React can't unmount it on its own (removeChild throws). An access
+// change must remount the whole editor instead (#313).
+vi.mock("./ui/DragHandle", async () => {
+  const { createElement, useLayoutEffect, useRef } = await import("react")
+  return {
+    default: function DragHandle({ editor }: { editor: { view: { dom: HTMLElement } } }) {
+      const el = useRef<HTMLDivElement>(null)
+      useLayoutEffect(() => {
+        const host = editor.view.dom.parentElement
+        if (el.current && host) host.appendChild(el.current)
+      }, [editor])
+      return createElement("div", { ref: el, className: "drag-handle-mock" })
+    },
+  }
+})
 vi.mock("./ui/MediaSelector", () => ({ default: () => null }))
 vi.mock("./ui/CharacterCount", () => ({ default: () => null }))
 vi.mock("./ui/LinkModal", () => ({ default: () => null }))
 
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
-import Editor, { type EditorRef } from "./Editor"
+import { authManager } from "@gl-admin/lib/auth"
+import Editor, { type EditorProps, type EditorRef } from "./Editor"
 
 const Callout = Node.create({
   name: "callout",
@@ -132,7 +150,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-async function mount(props: { readOnly?: boolean } = {}) {
+async function mount(props: Partial<EditorProps> = {}) {
   const ref = createRef<EditorRef>()
   await act(async () => {
     root.render(<Editor ref={ref} value="" onChange={() => {}} postId={POST} {...props} />)
@@ -212,6 +230,52 @@ describe("Editor", () => {
     const result = await act(async () => ref.current!.publish())
     expect(result).toEqual({ versionId: 1, versionNo: 1 })
     expect(blockAPIClient.publishPost).toHaveBeenCalledWith(POST)
+  })
+
+  it("turns view-only with a notice when the user is demoted while editing, keeping what's on screen", async () => {
+    tiptapExtensionRegistry.register(Callout)
+    state.user = "2"
+    const onAccessChange = vi.fn()
+    const ref = await mount({ onAccessChange })
+    await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
+    expect(pm()!.getAttribute("contenteditable")).toBe("true")
+    await until(() => relay.server.recheckedConnections === 1, "the server to track the connection")
+
+    relay.api.users.set("2", { role: "contributor" })
+    await act(async () => relay.clock.advance(RECHECK_MS))
+    await until(() => pm()?.getAttribute("contenteditable") === "false", "the editor to turn view-only")
+    expect(container.querySelector(".editor-blocked-notice")!.textContent).toContain("now view-only")
+    // The form re-reads the user's role on this (PostForm).
+    expect(onAccessChange).toHaveBeenCalledWith({ readOnly: true, reason: "demoted", revoked: false })
+    expect(pm()!.textContent).toContain("Careful")
+    vi.mocked(blockAPIClient.publishPost).mockClear()
+    expect(await ref.current!.publish()).toBeUndefined()
+    expect(blockAPIClient.publishPost).not.toHaveBeenCalled()
+
+    // Promoted again: editable, notice gone.
+    relay.api.users.set("2", { role: "editor" })
+    await act(async () => relay.clock.advance(RECHECK_MS))
+    await until(() => pm()?.getAttribute("contenteditable") === "true", "the editor to be editable again")
+    expect(container.querySelector(".editor-blocked-notice")).toBeNull()
+  })
+
+  it("shows 'session ended, sign in again' when the server revokes the session", async () => {
+    tiptapExtensionRegistry.register(Callout)
+    state.user = "2"
+    await mount()
+    await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
+    await until(() => relay.server.recheckedConnections === 1, "the server to track the connection")
+
+    relay.api.passwordChangedAt.set("2", Math.floor(Date.now() / 1000) + 1)
+    await act(async () => relay.clock.advance(RECHECK_MS))
+    await until(() => !!container.querySelector("[role=alert]"), "the session-ended notice")
+    const notice = container.querySelector("[role=alert]")!
+    expect(notice.textContent).toContain("Your editing session has ended")
+    expect(pm()!.getAttribute("contenteditable")).toBe("false")
+    expect(pm()!.textContent).toContain("Careful")
+
+    await act(async () => (notice.querySelector("button") as HTMLButtonElement).click())
+    expect(authManager.logout).toHaveBeenCalledWith("session-expired")
   })
 
   it("remounts on a fresh doc after stale-epoch (block_doc was written around the server)", async () => {

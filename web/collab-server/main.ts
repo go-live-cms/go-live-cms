@@ -14,6 +14,10 @@
 //   PASETO_V4_PUBLIC_PEM_FILE a PEM file with it
 //   PASETO_ISSUER             default golive.auth (the API's default)
 //   COLLAB_STORE_DEBOUNCE_MS / COLLAB_STORE_MAX_DEBOUNCE_MS  default 2000 / 10000
+//   COLLAB_ACCESS_RECHECK_MS  re-check of open connections' access, per (user, doc),
+//                             ±20% jitter (default 60000; 0 turns it off)
+//   COLLAB_ACCESS_GRACE_MS    how long failed re-checks keep a connection writable
+//                             before it is made read-only (default 120000)
 import { readFileSync } from "node:fs"
 import { createPublicKey, type KeyObject } from "node:crypto"
 import { publicKeyFromHex, verifyTicket } from "./access"
@@ -71,6 +75,10 @@ const collab = createCollabServer({
   address: host,
   debounce: intEnv("COLLAB_STORE_DEBOUNCE_MS", 2000),
   maxDebounce: intEnv("COLLAB_STORE_MAX_DEBOUNCE_MS", 10_000),
+  accessRecheck: {
+    intervalMs: intEnv("COLLAB_ACCESS_RECHECK_MS", 60_000),
+    graceMs: intEnv("COLLAB_ACCESS_GRACE_MS", 120_000),
+  },
 })
 
 const internal = createInternalServer({ secret: internalSecret, flush: (docName) => collab.flush(docName) })
@@ -86,6 +94,7 @@ logEvent("info", "collab_listening", {
   port,
   internal_port: typeof internalAddress === "object" && internalAddress ? internalAddress.port : internalPort,
   issuer,
+  access_recheck_ms: intEnv("COLLAB_ACCESS_RECHECK_MS", 60_000),
   yjs_single_instance: true,
 })
 

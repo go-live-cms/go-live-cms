@@ -6,7 +6,7 @@ import { authManager } from "@gl-admin/lib/auth"
 import { setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { CollabSaveStatus, type SaveState } from "@gl-admin/lib/collaboration/CollabSaveStatus"
-import type { HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
+import type { CollabAccess, HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { restoreVersionLive } from "@gl-admin/lib/collaboration/liveRestore"
 import { acquirePostCollab, releasePostCollab } from "@gl-admin/lib/collaboration/postCollab"
 import {
@@ -39,6 +39,10 @@ import "@gl-admin/assets/styles/components/editor/editor.scss"
 //   - Restore goes through the editor (rule 9) and waits for the store that includes it.
 //   - On `stale-epoch` (the server reseeded the doc), the Y.Doc is dropped and the editor
 //     remounts on a fresh one.
+//   - Access changes while open (#313): the server re-checks access periodically. A
+//     demotion turns the editor view-only with a notice (the doc and what's on screen
+//     stay); a revoked session (user deleted, password changed or reset, no access any
+//     more) stays on screen read-only with a "sign in again" notice.
 //   - Theme extensions are registered before Collaboration binds: the theme gate waits for
 //     the theme, and the schema gate (rule 10) checks the synced fragment against the
 //     schema the editor will have. Unbuildable types → no binding at all (y-tiptap would
@@ -61,6 +65,11 @@ export type EditorProps = {
   onPublishStart?: () => void
   onPublishSuccess?: (result: { versionId: number; versionNo: number }) => void
   onPublishError?: (error: Error) => void
+  /**
+   * The collab server changed this session's access while open (#313). The form re-reads
+   * the user's role then, so the rest of it (title, settings, publish) follows the body.
+   */
+  onAccessChange?: (access: CollabAccess) => void
 }
 
 export interface EditorRef {
@@ -74,6 +83,8 @@ export interface EditorRef {
 type InnerProps = EditorProps & {
   collab: HocuspocusCollaboration | null
   unbuildable?: UnbuildableTypes
+  /** Focus the end of the doc on mount (not on a remount for an access change: the user is elsewhere). */
+  autoFocus?: boolean
 }
 
 const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
@@ -93,6 +104,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     onPublishError,
     collab,
     unbuildable,
+    autoFocus = true,
   },
   ref
 ) {
@@ -164,7 +176,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   )
 
   useEffect(() => {
-    if (!editor || readOnly) return
+    if (!editor || readOnly || !autoFocus) return
     const raf = requestAnimationFrame(() => {
       try {
         editor.commands.focus("end")
@@ -173,7 +185,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       }
     })
     return () => cancelAnimationFrame(raf)
-  }, [editor, readOnly])
+  }, [editor, readOnly, autoFocus])
 
   // No collab doc (create mode): the form's value is the content.
   useEffect(() => {
@@ -334,6 +346,38 @@ function Placeholder({ text }: { text: string }) {
 
 type Gate = { collab: HocuspocusCollaboration; unbuildable: UnbuildableTypes | null }
 
+// What the server's access re-check changed while the editor was open (#313).
+function AccessNotice({ access }: { access: CollabAccess }) {
+  if (access.revoked) {
+    return (
+      <div className="editor-blocked-notice" role="alert">
+        <strong>Your editing session has ended.</strong> Your access to this post changed, or your password was changed
+        or reset. The post is shown read-only below; changes made after that point weren't saved.{" "}
+        <button type="button" className="editor-notice-action" onClick={() => void authManager.logout("session-expired")}>
+          Sign in again
+        </button>
+      </div>
+    )
+  }
+  if (access.reason === "demoted") {
+    return (
+      <div className="editor-blocked-notice" role="status">
+        <strong>This post is now view-only for you.</strong> Your access to it changed while it was open. You still see
+        live changes from others; anything you typed after the change wasn't saved.
+      </div>
+    )
+  }
+  if (access.reason === "unverified") {
+    return (
+      <div className="editor-blocked-notice" role="status">
+        <strong>Editing is paused.</strong> The server can't confirm your access right now. Editing resumes on its own
+        once it can.
+      </div>
+    )
+  }
+  return null
+}
+
 // Connects (after the theme gate), waits for the first sync, checks the fragment against
 // the schema the editor will get (rule 10), then mounts the bound editor. A stale-epoch
 // refusal (the server reseeded) bumps `generation`: release the dead connection and start
@@ -343,6 +387,9 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
   const live = !!postId && enableCollaboration
   const [generation, setGeneration] = useState(0)
   const [gate, setGate] = useState<Gate | null>(null)
+  const [access, setAccess] = useState<CollabAccess | null>(null)
+  const onAccessChange = useRef(props.onAccessChange)
+  onAccessChange.current = props.onAccessChange
 
   useEffect(() => {
     if (!live || !postId) return
@@ -352,6 +399,11 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
       if (cancelled) return
       setGate(null)
       setGeneration((g) => g + 1)
+    })
+    const offAccess = collab.onAccess((next) => {
+      if (cancelled) return
+      setAccess(next)
+      onAccessChange.current?.(next)
     })
     collab.whenSynced().then(() => {
       if (cancelled || collab.stale) return
@@ -364,12 +416,15 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
           `[Editor] Not binding collaboration: the shared doc has types this editor can't build (${describeUnbuildableTypes(unbuildable)}). Opening read-only.`
         )
       }
+      setAccess(collab.getAccess())
       setGate({ collab, unbuildable })
     })
     return () => {
       cancelled = true
       offStale()
+      offAccess()
       setGate(null)
+      setAccess(null)
       releasePostCollab(collab)
     }
   }, [live, postId, generation])
@@ -377,14 +432,23 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
   if (!live) return <EditorInner ref={ref} {...props} collab={null} />
   if (!gate || gate.collab.postId !== postId || gate.collab.stale) return <Placeholder text="Connecting…" />
   if (!gate.unbuildable) {
+    const viewOnly = readOnly || (access?.readOnly ?? gate.collab.readOnly)
     return (
-      <EditorInner
-        key={generation}
-        ref={ref}
-        {...props}
-        collab={gate.collab}
-        readOnly={readOnly || gate.collab.readOnly}
-      />
+      <>
+        {access && <AccessNotice access={access} />}
+        {/* Remounted (not re-rendered) when the server changes the mode (#313): the
+            editing UI (DragHandle's element is moved into the editor DOM by its plugin)
+            can't be unmounted on its own while the editor is recreated; React's
+            removeChild then throws and the page crashes. The doc lives in the Y.Doc. */}
+        <EditorInner
+          key={`${generation}:${viewOnly ? "view" : "edit"}`}
+          ref={ref}
+          {...props}
+          collab={gate.collab}
+          readOnly={viewOnly}
+          autoFocus={!access?.reason}
+        />
+      </>
     )
   }
   return (
@@ -395,6 +459,7 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
         here would delete them for everyone, so editing is disabled until that theme is available. Those blocks are
         hidden below but kept in the post.
       </div>
+      {access?.revoked && <AccessNotice access={access} />}
       <EditorInner ref={ref} {...props} readOnly collab={null} unbuildable={gate.unbuildable} />
     </>
   )

@@ -57,7 +57,9 @@ describe("onAuthenticate", () => {
     const { all, fetchAccess } = deps({ role: "editor", canEdit: true })
     const p = payload({ token: await sign(iat) })
     const context = await createAuthenticate(all)(p)
-    expect(context).toEqual({ userId: "7", role: "editor", requestId: "req-abcdef12", readOnly: false })
+    // issuedAt: the ticket's iat (Unix seconds), which the access re-check sends again (#313).
+    expect(context).toEqual({ userId: "7", issuedAt: expect.any(Number), role: "editor", requestId: "req-abcdef12", readOnly: false })
+    expect(fetchAccess).toHaveBeenCalledWith({ userId: "7", issuedAt: context.issuedAt }, "post-12", { requestId: "req-abcdef12" })
     expect(p.connectionConfig.readOnly).toBe(false)
     expect(fetchAccess).toHaveBeenCalledWith({ userId: "7", issuedAt: expect.any(Number) }, "post-12", { requestId: "req-abcdef12" })
   })

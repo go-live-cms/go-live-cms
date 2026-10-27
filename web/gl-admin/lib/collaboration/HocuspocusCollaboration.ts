@@ -18,6 +18,11 @@ import { collabDebug, collabDebugEnabled, contentFingerprint, fragmentStructure 
 //     instance (and a fresh Y.Doc). The server-side counterpart of rule 0.
 //   - Store results: `{type:"stored", revision, block_doc}` / `{type:"store_failed"}`,
 //     surfaced through `onStore` (CollabSaveStatus).
+//   - Access changes (#313): the server re-checks every open connection's access. A
+//     demotion (or an API outage past its grace period) makes the connection read-only
+//     and sends `{type:"access", mode, reason}`; losing access altogether closes it with
+//     `access-revoked`. Both surface through `onAccess`: the editor turns view-only and
+//     keeps its local state; after a revoke this instance never reconnects (sign in again).
 //   - No resyncInterval: Hocuspocus has no periodic resync, so there is no "2s" cadence.
 
 /** Rejection reasons the server sends (web/collab-server/auth.ts DENY). */
@@ -27,12 +32,31 @@ export const DENY_REASON = {
   staleEpoch: "stale-epoch",
 } as const
 
+/** The close reason when the server's access re-check revokes a session (web/collab-server/recheck.ts). */
+export const ACCESS_REVOKED = "access-revoked"
+
+/** Sent to one connection when the server changes its mode (web/collab-server/recheck.ts AccessMessage). */
+export interface AccessMessage {
+  type: "access"
+  mode: "read" | "write"
+  reason: "demoted" | "unverified" | "restored"
+}
+
+/** What this connection may do now, as far as the server has said. */
+export interface CollabAccess {
+  readOnly: boolean
+  /** Why the server last changed the mode while connected (null: as authorized at connect). */
+  reason: AccessMessage["reason"] | null
+  /** The server ended the session (access-revoked): no reconnects; sign in again. */
+  revoked: boolean
+}
+
 /** Sent with broadcastStateless after each store attempt (web/collab-server/server.ts). */
 export type StoreMessage =
   | { type: "stored"; revision: number | null; block_doc: "written" | "kept-invalid" | "kept-empty" | "unchanged" }
   | { type: "store_failed" }
 
-export type HocuspocusStatus = "connecting" | "connected" | "disconnected" | "denied"
+export type HocuspocusStatus = "connecting" | "connected" | "disconnected" | "denied" | "revoked"
 
 export const META_MAP = "meta"
 
@@ -82,8 +106,12 @@ export class HocuspocusCollaboration {
   private status: HocuspocusStatus = "connecting"
   private _stale = false
   private _destroyed = false
+  /** Set by an access message; cleared by the next authentication (a fresh lookup). */
+  private accessOverride: AccessMessage | null = null
+  private _revoked = false
   private readonly listeners = {
     store: new Set<Listener<StoreMessage>>(),
+    access: new Set<Listener<CollabAccess>>(),
     stale: new Set<Listener<void>>(),
     status: new Set<Listener<HocuspocusStatus>>(),
     synced: new Set<Listener<void>>(),
@@ -110,10 +138,14 @@ export class HocuspocusCollaboration {
       // Called on every connect and reconnect: tickets are single use and live 30s.
       token: async () => options.getTicket(this.docName),
       onSynced: () => this.handleSynced(),
+      onAuthenticated: () => this.handleAuthenticated(),
       onAuthenticationFailed: ({ reason }) => this.handleAuthFailed(reason),
       onStateless: ({ payload }) => this.handleStateless(payload),
+      onClose: ({ event }) => {
+        if (event?.reason === ACCESS_REVOKED) this.handleRevoked()
+      },
       onStatus: ({ status }) => {
-        if (this.status !== "denied") this.setStatus(status as HocuspocusStatus)
+        if (this.status !== "denied" && this.status !== "revoked") this.setStatus(status as HocuspocusStatus)
       },
     })
     if (options.user) this.provider.setAwarenessField("user", options.user)
@@ -132,9 +164,22 @@ export class HocuspocusCollaboration {
     return this.provider.isSynced
   }
 
-  /** The server made this connection read-only (a contributor on someone else's post). */
+  /**
+   * The server made this connection read-only: at connect (a contributor on someone else's
+   * post), by a later access change (#313), or by ending the session.
+   */
   get readOnly(): boolean {
+    if (this._revoked) return true
+    if (this.accessOverride) return this.accessOverride.mode === "read"
     return this.provider.authorizedScope === "readonly"
+  }
+
+  get revoked(): boolean {
+    return this._revoked
+  }
+
+  getAccess(): CollabAccess {
+    return { readOnly: this.readOnly, reason: this.accessOverride?.reason ?? null, revoked: this._revoked }
   }
 
   /** Refused with stale-epoch: this Y.Doc must not be used again (remount). */
@@ -157,6 +202,10 @@ export class HocuspocusCollaboration {
 
   onStore(listener: Listener<StoreMessage>): () => void {
     return this.subscribe("store", listener)
+  }
+  /** Access changes while connected (#313): downgrade, restore, revoke. */
+  onAccess(listener: Listener<CollabAccess>): () => void {
+    return this.subscribe("access", listener)
   }
   onStale(listener: Listener<void>): () => void {
     return this.subscribe("stale", listener)
@@ -237,6 +286,27 @@ export class HocuspocusCollaboration {
     this.emit("synced", undefined)
   }
 
+  private handleAuthenticated() {
+    if (this._revoked) return
+    // A (re)connect looked access up again: its scope is current.
+    const wasReadOnly = this.readOnly
+    const hadOverride = this.accessOverride !== null
+    this.accessOverride = null
+    if (hadOverride || wasReadOnly !== this.readOnly) this.emit("access", this.getAccess())
+  }
+
+  private handleRevoked() {
+    if (this._revoked || this._destroyed) return
+    console.warn(`[collab] ${this.docName}: the server ended this session (access revoked)`)
+    this._revoked = true
+    if (this.authRetryTimer) clearTimeout(this.authRetryTimer)
+    this.authRetryTimer = null
+    this.setStatus("revoked")
+    // The Y.Doc stays (the editor keeps showing it); this instance never reconnects.
+    this.socket.disconnect()
+    this.emit("access", this.getAccess())
+  }
+
   private handleAuthFailed(reason: string) {
     if (this._destroyed) return
     collabDebug("authentication failed", reason)
@@ -281,6 +351,23 @@ export class HocuspocusCollaboration {
     if (type === "stored" || type === "store_failed") {
       collabDebug("store message", message)
       this.emit("store", message as StoreMessage)
+      return
+    }
+    if (type === "access") {
+      const { mode, reason } = message as Partial<AccessMessage>
+      if ((mode !== "read" && mode !== "write") || this._revoked) return
+      collabDebug("access message", message)
+      this.accessOverride = { type: "access", mode, reason: reason ?? (mode === "read" ? "demoted" : "restored") }
+      if (mode === "read") console.warn(`[collab] ${this.docName}: the server made this session read-only (${reason})`)
+      // Writable again, but the server dropped what this doc sent while it was read-only
+      // (Hocuspocus acks those updates as not applied, so they stay counted as unsynced).
+      // Yjs never resends them, so every later update would wait on the server for the
+      // missing ones and never be stored. Reconnect: the sync handshake sends them.
+      if (mode === "write" && this.provider.hasUnsyncedChanges) {
+        collabDebug("resyncing after a promotion: updates were dropped while read-only")
+        this.socket.webSocket?.close()
+      }
+      this.emit("access", this.getAccess())
     }
   }
 
@@ -297,7 +384,7 @@ const DESTROY_DELAY_MS = 750
 
 export function acquireHocuspocus(postId: number, create: () => HocuspocusCollaboration): HocuspocusCollaboration {
   const entry = instances.get(postId)
-  if (entry && !entry.instance.stale && !entry.instance.destroyed) {
+  if (entry && !entry.instance.stale && !entry.instance.destroyed && !entry.instance.revoked) {
     if (entry.timer !== null) {
       clearTimeout(entry.timer)
       entry.timer = null
