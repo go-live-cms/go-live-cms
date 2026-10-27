@@ -571,4 +571,16 @@
   border-radius: 6px;
   background: rgba(var(--warning-rgb), 0.1);
   font-size: 0.875rem;
+
+  .editor-notice-action {
+    margin-left: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid var(--warning);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
 }

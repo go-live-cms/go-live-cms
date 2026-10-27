@@ -18,6 +18,7 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 |------|------|
 | `access.ts` | `verifyTicket`, `TicketReplayGuard`, `ticketIdentity`, `fetchDocAccess`, `isCollabDocName`, plus `accessMode` (write / read / deny). |
 | `auth.ts` | `onAuthenticate` (`createAuthenticate`, deps injected). |
+| `recheck.ts` | `createAccessRecheck`: periodic access re-check of open connections (#313). |
 | `api.ts` | Client for the API's internal listener (#280 contract). |
 | `load.ts` | `onLoadDocument`: restore stored state, or seed from `block_doc`. |
 | `store.ts` | `onStoreDocument` pipeline (`prepareStore`). |
@@ -28,7 +29,8 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 
 Tests: `npx vitest run --project collab-server` (from `web/`; plain Node env).
 `testkit.ts` has signed tickets, `FakeCollabApi` (the #280 contract in memory, and over
-HTTP for the process test) and a `HocuspocusProvider` client helper.
+HTTP for the process test; users can be demoted, deleted or given a `passwordChangedAt`),
+`FakeClock` (drives the access re-check) and a `HocuspocusProvider` client helper.
 
 ## Auth (`auth.ts`)
 
@@ -51,7 +53,35 @@ doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, au
   denial logs `ws_deny` with the request id, user id and client context, never the ticket.
 - The replay guard is in memory: **one collab process** (Hocuspocus keeps live docs in
   memory anyway).
-- Access is checked only at connect (P6 follow-up: periodic re-check).
+- The context carries the ticket's `issuedAt`: the access re-check sends it again.
+
+## Access re-check (`recheck.ts`, #313)
+
+Every open connection's access is looked up again (same `GET /internal/users/:id/access`)
+on a timer per **(user, doc)**: `COLLAB_ACCESS_RECHECK_MS` (60s) ±20% jitter, so
+connections that opened together (a restart) don't all hit the API at once. One lookup per
+(user, doc) per round: connections whose tickets have different `iat`s are looked up
+oldest first, and once one passes the newer ones need no lookup (only `issued_at`
+differs, and the API compares it with the password change alone).
+- **`issued_at` is the original ticket's.** A password change or reset after connect
+  makes the API answer 403 for that session → closed.
+- `can_edit` false but still a content role (demoted; a contributor's post was published,
+  #135) → **`connection.readOnly = true`** (Hocuspocus drops its updates from then on) and
+  `sendStateless` `{"type":"access","mode":"read","reason":"demoted"}`. Promoted again →
+  read-write, `reason:"restored"`.
+- 403/404 (user or post deleted, ticket predates the password change) or no content role
+  → `connection.close` with reason **`access-revoked`** (`ACCESS_REVOKED`); the client
+  shows "session ended, sign in again" and never reconnects.
+- **Lookup failure** (API down, slow, 5xx): the connection **keeps its mode**, the failure
+  is logged (`ws_access_check_failed`) and retried every 10s. This fails open for
+  `COLLAB_ACCESS_GRACE_MS` (120s) only: an API blip must not disconnect or freeze every
+  editor, but an outage can't extend a revoked session's write access indefinitely. Past
+  the grace period a writable connection becomes read-only (`reason:"unverified"`, never
+  closed) and goes back to read-write on the next successful lookup.
+- Not re-checked on events (e.g. a store); the interval bounds how long a change takes.
+- Tests: `recheck.test.ts` (fake connections, `FakeClock`) and
+  `server.recheck.test.ts` (real server and clients: demote → later edits dropped,
+  delete / password change → closed, outage → nobody disconnected).
 
 ## Load (`load.ts`) and the epoch
 
@@ -121,7 +151,8 @@ Own port (`INTERNAL_PORT`, default 1236), **never published**.
 ## Logging
 
 (#142, #155, #220, #254) One JSON object per line via
-`logEvent`. Events: `ws_connect`, `ws_close`, `ws_deny`, `collab_load`,
+`logEvent`. Events: `ws_connect`, `ws_close`, `ws_deny`, `ws_access_changed`,
+`ws_access_revoked`, `ws_access_check_failed` (user id, doc, old → new mode), `collab_load`,
 `collab_load_failed`, `collab_store`,
 `collab_store_invalid`, `collab_store_empty_skipped`, `collab_store_unconvertible`,
 `collab_store_failed`, `collab_flush`, `collab_flush_denied`, `collab_listening`,
@@ -165,7 +196,8 @@ is pinned exact in the same file (rule 8). `paseto` `3.1.4`.
 (required; the API's internal listener and its secret), `COLLAB_INTERNAL_SECRET`
 (required; what the API sends to flush), `PASETO_V4_PUBLIC_KEY_HEX` or
 `PASETO_V4_PUBLIC_PEM_FILE`, `PASETO_ISSUER` (`golive.auth`),
-`COLLAB_STORE_DEBOUNCE_MS` / `COLLAB_STORE_MAX_DEBOUNCE_MS`. In dev compose, the one-shot
+`COLLAB_STORE_DEBOUNCE_MS` / `COLLAB_STORE_MAX_DEBOUNCE_MS`, `COLLAB_ACCESS_RECHECK_MS`
+(60000; 0 turns the re-check off) / `COLLAB_ACCESS_GRACE_MS` (120000). In dev compose, the one-shot
 `collab-key` service copies only the public key and issuer out of `app.env` (which also
 holds the API's private keys) into a volume the `collab` command sources. It exits 1 on anything
 missing. SIGTERM closes all connections (storing every doc) for up to 10s, then exits.

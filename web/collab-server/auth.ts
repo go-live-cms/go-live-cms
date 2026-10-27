@@ -37,6 +37,8 @@ export class AuthRejection extends Error {
 /** What onAuthenticate adds to the Hocuspocus connection context. */
 export interface CollabContext {
   userId: string
+  /** The ticket's iat (Unix seconds): the access re-check sends it again (recheck.ts). */
+  issuedAt: number
   role: string | null
   requestId: string
   readOnly: boolean
@@ -143,6 +145,6 @@ export function createAuthenticate(deps: AuthDeps) {
 
     const readOnly = mode === "read"
     payload.connectionConfig.readOnly = readOnly
-    return { userId: identity.userId, role: access?.role ?? null, requestId, readOnly }
+    return { userId: identity.userId, issuedAt: identity.issuedAt, role: access?.role ?? null, requestId, readOnly }
   }
 }

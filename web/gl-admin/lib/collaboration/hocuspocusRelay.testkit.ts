@@ -7,7 +7,7 @@
 // for everything); web/collab-server/process.test.ts covers that.
 import { verifyTicket } from "../../../collab-server/access"
 import { createCollabServer, type CollabServer } from "../../../collab-server/server"
-import { FakeCollabApi, ISSUER, ticketKeys, waitFor } from "../../../collab-server/testkit"
+import { FakeClock, FakeCollabApi, ISSUER, ticketKeys, waitFor } from "../../../collab-server/testkit"
 import type { BlockDocV1 } from "../blocks-spec"
 import { HocuspocusCollaboration } from "./HocuspocusCollaboration"
 
@@ -15,8 +15,13 @@ export { waitFor }
 
 export const POST_ID = 12
 
+/** The server's access re-check interval in the relay; it runs only when a test advances `clock`. */
+export const RECHECK_MS = 60_000
+
 export interface Relay {
   api: FakeCollabApi
+  /** Drives the server's access re-check (#313): `await relay.clock.advance(RECHECK_MS)`. */
+  clock: FakeClock
   server: CollabServer
   url: string
   /** A client as `userId` (1 admin, 2 editor, 3 contributor who doesn't own the post). */
@@ -39,6 +44,7 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
   api.addPost(String(POST_ID), blockDoc, revision)
 
   const clients: HocuspocusCollaboration[] = []
+  const clock = new FakeClock()
   const make = (port = 0) =>
     createCollabServer({
       api,
@@ -48,6 +54,7 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
       debounce: 50,
       maxDebounce: 500,
       storeRetryMs: 50,
+      accessRecheck: { intervalMs: RECHECK_MS, jitter: 0, clock },
     })
 
   let server = make()
@@ -56,6 +63,7 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
 
   const relay: Relay = {
     api,
+    clock,
     get server() {
       return server
     },

@@ -527,6 +527,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             <Editor
               ref={editorRef}
               readOnly={contentReadOnly}
+              // The server re-checked access and it changed (#313): the role cached here is
+              // stale. Not after a revoke: the editor shows "sign in again" then.
+              onAccessChange={(change) => {
+                if (!change.revoked) void authManager.refreshUser().then((user) => setMe(user ?? undefined))
+              }}
               value={formData.content}
               title={formData.title}
               minChars={10}

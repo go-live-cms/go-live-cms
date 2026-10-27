@@ -11,6 +11,7 @@ import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
 import { TICKET_AUDIENCE, TICKET_TYPE, type DocAccess, type TicketIdentity } from "./access"
 import { InternalApiError, type CollabRecord, type CollabStoreBody, type CollabStoreResult, type InternalApi } from "./api"
+import type { Clock } from "./recheck"
 
 export const ISSUER = "golive.auth"
 
@@ -56,7 +57,9 @@ export interface FakePost {
  */
 export class FakeCollabApi implements InternalApi {
   posts = new Map<string, FakePost>()
-  users = new Map<string, { role: string; owns?: string[] }>()
+  users = new Map<string, { role: string; owns?: string[]; published?: string[] }>()
+  /** user id → Unix seconds of the latest password change or reset. */
+  passwordChangedAt = new Map<string, number>()
   puts: { postId: string; body: CollabStoreBody }[] = []
   accessCalls = 0
   failAccess = false
@@ -79,9 +82,14 @@ export class FakeCollabApi implements InternalApi {
     if (this.failAccess) throw new Error("access lookup failed: API responded 502")
     const user = this.users.get(identity.userId)
     if (!user) return null
+    // issuedBeforePasswordChange (api/auth.go): whole seconds, strictly before → 403.
+    const changedAt = this.passwordChangedAt.get(identity.userId)
+    if (changedAt !== undefined && identity.issuedAt < changedAt) return null
     const postId = docName.slice("post-".length)
     const moderator = user.role === "admin" || user.role === "editor"
-    return { role: user.role, canEdit: moderator || (user.role === "contributor" && !!user.owns?.includes(postId)) }
+    // canEditPost (#135): a contributor edits only their own post, and only until it is published.
+    const ownsDraft = !!user.owns?.includes(postId) && !user.published?.includes(postId)
+    return { role: user.role, canEdit: moderator || (user.role === "contributor" && ownsDraft) }
   }
 
   async getCollab(postId: string): Promise<CollabRecord | null> {
@@ -210,6 +218,48 @@ export function paragraphs(doc: Y.Doc): string[] {
     .map((node) => (node instanceof Y.XmlElement ? node.toArray().map((child) => (child instanceof Y.XmlText ? child.toString() : "")).join("") : ""))
 }
 
+/**
+ * A manual clock for the access re-check: timers fire only in dvance, which awaits
+ * each callback (the re-check's lookup) before the next one.
+ */
+export class FakeClock implements Clock {
+  private time = 0
+  private seq = 0
+  private timers = new Map<number, { at: number; callback: () => unknown }>()
+
+  now(): number {
+    return this.time
+  }
+
+  setTimeout(callback: () => unknown, ms: number): unknown {
+    const id = ++this.seq
+    this.timers.set(id, { at: this.time + ms, callback })
+    return id
+  }
+
+  clearTimeout(handle: unknown): void {
+    this.timers.delete(handle as number)
+  }
+
+  get pending(): number {
+    return this.timers.size
+  }
+
+  /** Moves the clock forward ms, running every timer that comes due on the way. */
+  async advance(ms: number): Promise<void> {
+    const end = this.time + ms
+    for (;;) {
+      let next: [number, { at: number; callback: () => unknown }] | undefined
+      for (const entry of this.timers) if (entry[1].at <= end && (!next || entry[1].at < next[1].at)) next = entry
+      if (!next) break
+      this.timers.delete(next[0])
+      this.time = Math.max(this.time, next[1].at)
+      await next[1].callback()
+    }
+    this.time = end
+  }
+}
+
 export async function waitFor(check: () => boolean, { timeoutMs = 10_000, what = "condition" } = {}) {
   const deadline = Date.now() + timeoutMs
   while (!check()) {
@@ -223,6 +273,8 @@ export interface Client {
   socket: HocuspocusProviderWebsocket
   doc: Y.Doc
   stateless: unknown[]
+  /** Reasons of the close messages (and socket closes) this provider saw. */
+  closes: string[]
   /** Resolves "synced", or the permission-denied reason. */
   outcome: Promise<{ synced: true; readOnly: boolean } | { synced: false; reason: string }>
   destroy(): void
@@ -232,6 +284,7 @@ export interface Client {
 export function connect(url: string, docName: string, token: () => Promise<string> | string, { epoch }: { epoch?: string } = {}): Client {
   const doc = new Y.Doc()
   const stateless: unknown[] = []
+  const closes: string[] = []
   const socket = new HocuspocusProviderWebsocket({
     url: epoch ? `${url}?epoch=${encodeURIComponent(epoch)}` : url,
     // A denied client must not keep reconnecting during a test.
@@ -247,6 +300,7 @@ export function connect(url: string, docName: string, token: () => Promise<strin
     onSynced: () => settle({ synced: true, readOnly: provider.authorizedScope === "readonly" }),
     onAuthenticationFailed: ({ reason }) => settle({ synced: false, reason }),
     onStateless: ({ payload }) => stateless.push(JSON.parse(payload)),
+    onClose: ({ event }) => closes.push(String(event.reason ?? "")),
   })
   provider.attach()
   return {
@@ -254,6 +308,7 @@ export function connect(url: string, docName: string, token: () => Promise<strin
     socket,
     doc,
     stateless,
+    closes,
     outcome,
     destroy() {
       provider.destroy()

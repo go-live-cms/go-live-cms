@@ -1,5 +1,6 @@
-// The Hocuspocus collab server (#206 P2): auth (auth.ts), load (load.ts) and store
-// (store.ts) wired into Hocuspocus hooks, plus `flush` for the internal listener.
+// The Hocuspocus collab server (#206 P2): auth (auth.ts), load (load.ts), store
+// (store.ts) and the access re-check of open connections (recheck.ts, #313) wired into
+// Hocuspocus hooks, plus `flush` for the internal listener.
 //
 // Built by a factory with every dependency injected, so tests run it in-process
 // (server.test.ts) and main.ts runs the same code from the bundle.
@@ -13,6 +14,7 @@ import type { CollabStoreBody, InternalApi } from "./api"
 import { AuthRejection, createAuthenticate, DENY, type CollabContext } from "./auth"
 import { loadIntoDoc, readMeta } from "./load"
 import { docNameForLog, errorMessage, logEvent } from "./logsafe"
+import { createAccessRecheck, type AccessRecheckOptions } from "./recheck"
 import { prepareStore } from "./store"
 
 export interface CollabServerOptions {
@@ -27,6 +29,8 @@ export interface CollabServerOptions {
   newEpoch?: () => string
   /** First retry delay after a failed store (doubles up to 60s). */
   storeRetryMs?: number
+  /** Interval, jitter, grace period and clock of the access re-check (recheck.ts). */
+  accessRecheck?: Omit<AccessRecheckOptions, "fetchAccess">
 }
 
 /** Sent to every client of a doc with broadcastStateless after each store attempt. */
@@ -83,6 +87,10 @@ export function createCollabServer(options: CollabServerOptions) {
   } = options
   const sessions = new Map<string, Session>()
   const replayGuard = new TicketReplayGuard()
+  const recheck = createAccessRecheck({
+    ...options.accessRecheck,
+    fetchAccess: (identity, docName, { requestId }) => api.fetchAccess(identity, docName, { requestId }),
+  })
   let hocuspocus: Hocuspocus
 
   /** The loaded (or loading) document, without loading it. */
@@ -335,6 +343,10 @@ export function createCollabServer(options: CollabServerOptions) {
 
     async connected({ documentName, context, connection }) {
       const ctx = contextOf(context)
+      if (ctx.userId && typeof ctx.issuedAt === "number") {
+        recheck.add(connection, { userId: ctx.userId, issuedAt: ctx.issuedAt, docName: documentName })
+        connection.onClose(() => recheck.remove(connection))
+      }
       logEvent("info", "ws_connect", {
         request_id: ctx.requestId,
         doc: docNameForLog(documentName),
@@ -375,6 +387,10 @@ export function createCollabServer(options: CollabServerOptions) {
       return hocuspocus
     },
     flush,
+    /** Open connections the access re-check is tracking. */
+    get recheckedConnections(): number {
+      return recheck.size
+    },
     async listen(): Promise<number> {
       await server.listen()
       const addr = server.httpServer.address()
@@ -386,6 +402,7 @@ export function createCollabServer(options: CollabServerOptions) {
      * whose store keeps failing never does.
      */
     async destroy(timeoutMs = 10_000) {
+      recheck.stop()
       let timer: NodeJS.Timeout | undefined
       await Promise.race([
         server.destroy(),
