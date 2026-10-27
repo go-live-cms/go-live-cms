@@ -79,7 +79,7 @@ func (m *PasetoV4Maker) CreateWSTicket(userID int64, username, doc string, dur t
 // VerifyWSTicket checks a collab ticket's signature, issuer, audience, type
 // and expiry. It does NOT enforce single use (the collab server does). The
 // API itself never accepts tickets; this is the Go reference for the checks
-// websocket/access.js verifyTicket makes, used by tests.
+// web/collab-server/access.ts verifyTicket makes, used by tests.
 func (m *PasetoV4Maker) VerifyWSTicket(tok string) (*WSTicketPayload, error) {
 	parser := p.NewParser()
 	parser.AddRule(p.IssuedBy(m.keys.Issuer))

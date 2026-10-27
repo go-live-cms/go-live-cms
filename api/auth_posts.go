@@ -8,15 +8,15 @@
 //
 //   - Admins and editors (canModeratePosts) may do anything to any post.
 //   - Contributors may create posts (always as drafts, owned by themselves)
-//     and edit their own posts' working copy (blocks + collab socket), at any
+//     and edit their own posts' working copy (the collab socket), at any
 //     status. The working copy only goes live when a moderator publishes.
 //   - What is live on the public site (title, slug, status, meta, featured
 //     image, media links, the row itself) a contributor may change only while
 //     their post is not published (canEditPostDetails). Otherwise a
 //     contributor could change or remove published content without the
 //     publish permission.
-//   - Under COLLAB_BACKEND=hocuspocus, contributors may also watch any post's
-//     working copy live, read-only (canReadPostBlocks: collab tickets).
+//   - Contributors may also watch any post's working copy live, read-only
+//     (canReadPostBlocks: collab tickets).
 //   - Publishing, unpublishing and revisions are moderator-only
 //     (requireContentEditor on those routes).
 //
@@ -63,14 +63,14 @@ func canCreatePost(user db.User, authorIDs []int64, status string) bool {
 	return ownDraft && len(authorIDs) == 1 && authorIDs[0] == user.ID
 }
 
-// canEditPost reports whether the user may edit the post's working copy: PUT
-// /posts/:id/blocks and the collab socket. The working copy is not public.
+// canEditPost reports whether the user may edit the post's working copy: a
+// read-write collab connection. The working copy is not public.
 func canEditPost(user db.User, post db.Post) bool {
 	return canModeratePosts(user) || (hasRole(user, RoleContributor) && post.UserID == user.ID)
 }
 
 // canReadPostBlocks reports whether the user may read the post's working copy
-// live: a collab ticket under Hocuspocus (#206), read-only unless canEditPost.
+// live: a collab ticket (#206), read-only unless canEditPost.
 // Every content role may, as GET /posts/:id/blocks lets any signed-in user
 // load any working copy. The post must still exist (authorizePost: 404).
 func canReadPostBlocks(user db.User, _ db.Post) bool {

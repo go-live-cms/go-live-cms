@@ -6,8 +6,8 @@
 // There is deliberately no "restore" endpoint. Restoring loads a version into the
 // working copy, and while collaborators are connected the live Yjs doc owns the
 // working copy: overwriting posts.block_doc behind its back would be reverted (or
-// fought) by the next autosave. The editor fetches the version here and applies it
-// through the editor/Yjs path, then saves with the normal PUT /posts/:id/blocks.
+// fought) by the collab server's next store. The editor fetches the version here and
+// applies it through the editor/Yjs path; the collab server stores it like any edit.
 package api
 
 import (

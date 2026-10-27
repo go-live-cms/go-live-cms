@@ -58,8 +58,8 @@ func (doc *BlockDocV1) deduplicateBlocksOrder() {
 }
 
 // prepareForStore checks and normalizes a block document before it is
-// written to block_doc, by PUT /posts/:id/blocks or the collab server's
-// PUT /internal/posts/:id/collab. It modifies doc in place; an error means
+// written to block_doc: by the collab server's PUT /internal/posts/:id/collab,
+// or as a new post's initial body (POST /posts). It modifies doc in place; an error means
 // the document must be refused (400).
 func (doc *BlockDocV1) prepareForStore() error {
 	// Size/depth limits before any walk over the tree (#139).
@@ -191,8 +191,7 @@ func (server *Server) syncPostMediaAssociations(ctx *gin.Context, postID int64, 
 
 // BlockDocResponse wraps the block document for API responses
 type BlockDocResponse struct {
-	Doc   BlockDocV1 `json:"doc"`
-	Title *string    `json:"title,omitempty" binding:"omitempty,max=255"` // Optional title to update alongside blocks
+	Doc BlockDocV1 `json:"doc"`
 }
 
 // PublishRequest represents the request to publish a version
@@ -246,146 +245,11 @@ func (server *Server) getPostBlocks(c *gin.Context) {
 		return
 	}
 
-	// Set headers for optimistic concurrency
+	// The working copy's revision (block_revision)
 	c.Header("ETag", fmt.Sprintf(`W/"%d"`, result.Revision))
 	c.Header("X-Revision", fmt.Sprintf("%d", result.Revision))
 
 	c.JSON(http.StatusOK, BlockDocResponse{Doc: blockDoc})
-}
-
-// updatePostBlocks handles PUT /posts/:id/blocks - update working copy
-func (server *Server) updatePostBlocks(c *gin.Context) {
-	// Under Hocuspocus only the collab server writes block_doc (through the
-	// internal PUT /internal/posts/:id/collab). A tab still running the old
-	// autosave must not overwrite what it stored (#206).
-	if server.config.UsesHocuspocus() {
-		c.JSON(http.StatusConflict, gin.H{"error": "managed by collaboration server"})
-		return
-	}
-
-	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
-		return
-	}
-
-	// Contributors get their post row loaded for the owner check; reused below.
-	post, loaded, ok := server.authorizeLoadPost(c, postID, canEditPost)
-	if !ok {
-		return
-	}
-	caller, ok := server.callerUser(c)
-	if !ok {
-		return
-	}
-	// The title and post_media links are live fields: a contributor can't
-	// change them once the post is published (canEditPostDetails). Moderators
-	// pass without a post row.
-	liveFieldsAllowed := !loaded || canEditPostDetails(caller, post)
-
-	// Check If-Match header for optimistic concurrency
-	ifMatch := c.GetHeader("If-Match")
-	if ifMatch == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "If-Match header required"})
-		return
-	}
-
-	expectedRevision, err := strconv.ParseInt(ifMatch, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid If-Match header"})
-		return
-	}
-
-	// Parse request body
-	var req BlockDocResponse
-	if !bindJSON(c, &req) {
-		return
-	}
-
-	if err := req.Doc.prepareForStore(); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Refuse a title change the caller may not make before saving anything, so
-	// the editor sees the error instead of a 200 that dropped the title. An
-	// unchanged title (every autosave sends it) is fine.
-	if !liveFieldsAllowed && req.Title != nil && *req.Title != "" && *req.Title != post.Title {
-		c.JSON(http.StatusForbidden, gin.H{"error": "the title of a published post can only be changed by an editor"})
-		return
-	}
-
-	// Marshal to JSONB
-	contentBytes, err := json.Marshal(req.Doc)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal block document"})
-		return
-	}
-
-	// Update with optimistic concurrency check
-	result, err := server.store.UpdatePostBlocksIfRevisionMatches(c, db.UpdatePostBlocksIfRevisionMatchesParams{
-		ID:            postID,
-		BlockDoc:      contentBytes,
-		BlockRevision: expectedRevision,
-	})
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// Revision mismatch - return 412 Precondition Failed
-			c.JSON(http.StatusPreconditionFailed, gin.H{"error": "revision mismatch"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post blocks"})
-		return
-	}
-
-	// Update title if provided (refused above when it isn't allowed)
-	if req.Title != nil && *req.Title != "" && liveFieldsAllowed {
-		// Get current post to preserve other fields (contributors' is loaded)
-		if !loaded {
-			post, err = server.store.GetPost(c, postID)
-		}
-		if err == nil {
-			_, err = server.store.UpdatePost(c, db.UpdatePostParams{
-				ID:          postID,
-				Title:       *req.Title,
-				Description: post.Description,
-				UserID:      post.UserID,
-				Username:    post.Username,
-				Url:         post.Url,
-				PostType:    post.PostType,
-				PostStatus:  post.PostStatus,
-				PostParent:  post.PostParent,
-				MenuOrder:   post.MenuOrder,
-			})
-			if err != nil {
-				// Log error but don't fail the request - blocks were already saved
-				server.requestLog(c).Warn("failed to update post title from blocks", "post_id", postID, "error", err)
-			}
-		}
-	}
-
-	// Parse updated content for response
-	var updatedDoc BlockDocV1
-	if err := json.Unmarshal(result.Content, &updatedDoc); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse updated document"})
-		return
-	}
-
-	// Sync post_media associations for images in content. Skipped when the
-	// caller may not change a published post's links; publishPost syncs them
-	// from the published doc anyway.
-	if liveFieldsAllowed {
-		if err := server.syncPostMediaAssociations(c, postID, &updatedDoc); err != nil {
-			// Log error but don't fail the request - blocks were already saved
-			server.requestLog(c).Warn("failed to sync media associations", "post_id", postID, "error", err)
-		}
-	}
-
-	// Set new revision header
-	c.Header("X-Revision", fmt.Sprintf("%d", result.Revision))
-
-	c.JSON(http.StatusOK, BlockDocResponse{Doc: updatedDoc})
 }
 
 // publishPost handles POST /posts/:id/publish - create published snapshot
@@ -407,15 +271,13 @@ func (server *Server) publishPost(c *gin.Context) {
 		return
 	}
 
-	// Under Hocuspocus, edits reach block_doc only when the collab server
-	// stores (debounced). Make it store now, or the snapshot below could miss
-	// the last seconds of editing; if it can't, publish nothing (#206).
-	if server.config.UsesHocuspocus() {
-		if err := server.flushCollabDoc(c.Request.Context(), postID, requestIDFromContext(c)); err != nil {
-			server.requestLog(c).Warn("collab flush before publish failed", "post_id", postID, "error", err)
-			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "the collaboration server could not save the latest edits; nothing was published, try again"})
-			return
-		}
+	// Edits reach block_doc only when the collab server stores (debounced).
+	// Make it store now, or the snapshot below could miss the last seconds of
+	// editing; if it can't, publish nothing (#206).
+	if err := server.flushCollabDoc(c.Request.Context(), postID, requestIDFromContext(c)); err != nil {
+		server.requestLog(c).Warn("collab flush before publish failed", "post_id", postID, "error", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "the collaboration server could not save the latest edits; nothing was published, try again"})
+		return
 	}
 
 	// Get current working copy
@@ -470,13 +332,6 @@ func (server *Server) publishPost(c *gin.Context) {
 			// Log error but don't fail the request - version was already published
 			server.requestLog(c).Warn("failed to sync media associations on publish", "post_id", postID, "error", err)
 		}
-	}
-
-	// Best-effort: compact the y-websocket server's LevelDB log for this
-	// document. Squash failure is non-fatal and does not affect the publish
-	// response. Hocuspocus has no update log to compact.
-	if !server.config.UsesHocuspocus() {
-		server.triggerCollabSquash(postID, requestIDFromContext(c))
 	}
 
 	c.JSON(http.StatusOK, PublishResponse{

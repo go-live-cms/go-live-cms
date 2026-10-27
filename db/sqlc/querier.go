@@ -251,10 +251,6 @@ type Querier interface {
 	// collab server sends one only when the derived doc changed, so state-only
 	// stores (the seed, unchanged or invalid docs) leave it alone (#307).
 	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
-	// Sets changed_at itself, like UpdatePostBlockDocFromCollab: the title update
-	// the handler may run afterwards is skipped without a title, or for a
-	// contributor's published post (#307).
-	UpdatePostBlocksIfRevisionMatches(ctx context.Context, arg UpdatePostBlocksIfRevisionMatchesParams) (UpdatePostBlocksIfRevisionMatchesRow, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
 	UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) (Post, error)
 	UpdatePostType(ctx context.Context, arg UpdatePostTypeParams) (PostType, error)

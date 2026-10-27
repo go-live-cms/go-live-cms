@@ -50,10 +50,10 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.POST("/:id/media", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createPostMedia)
 		posts.DELETE("/:id/media/:media_id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePostMedia)
 
-		// Block Spec v1 operations (the working-copy GET stays role-free:
-		// any authenticated user may load the editor doc)
+		// Block Spec v1 operations. The working-copy GET stays role-free (any
+		// authenticated user may load the editor doc); only the collab server
+		// writes it (PUT /internal/posts/:id/collab, #206).
 		posts.GET("/:id/blocks", authMiddleware(server.tokenMaker, server.store), server.getPostBlocks)
-		posts.PUT("/:id/blocks", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updatePostBlocks)
 		posts.POST("/:id/publish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.publishPost)
 		posts.POST("/:id/unpublish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.unpublishPost)
 

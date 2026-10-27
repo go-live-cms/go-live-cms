@@ -2,8 +2,8 @@ package api
 
 import "fmt"
 
-// Structural limits for a Block Spec v1 document on PUT /posts/:id/blocks
-// (#139). The body size is capped separately (blockDocBodyLimit). These stop
+// Structural limits for a Block Spec v1 document written to block_doc (#139):
+// the collab server's store and POST /posts. The body size is capped separately (blockDocBodyLimit). These stop
 // documents that fit that cap but are expensive to store, sanitize and
 // render: a huge number of tiny blocks, or nesting deep enough to blow the
 // public renderer's recursion.

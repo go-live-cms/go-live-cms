@@ -107,8 +107,8 @@ func TestCreatePostAPI(t *testing.T) {
 			},
 		},
 		{
-			// Under Hocuspocus the admin sends a new post's body with the create
-			// (PUT /blocks is refused there); it becomes block_doc (#283).
+			// The admin sends a new post's body with the create; it becomes
+			// block_doc and the collab server seeds the live doc from it (#283).
 			name: "OKWithBlockDoc",
 			body: gin.H{
 				"title":       post.Title,

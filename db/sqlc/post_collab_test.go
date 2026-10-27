@@ -90,12 +90,10 @@ func TestStorePostCollabTx(t *testing.T) {
 	require.Equal(t, []byte{4, 5}, loaded.YdocState)
 	require.Equal(t, loaded.BlockRevision, loaded.YdocBlockRevision.Int64)
 
-	// A write around the collab server (the REST autosave) bumps the post's
-	// revision past the state's: the load can tell the state is stale.
-	_, err = testQueries.UpdatePostBlocksIfRevisionMatches(ctx, UpdatePostBlocksIfRevisionMatchesParams{
-		ID: post.ID, BlockDoc: doc, BlockRevision: loaded.BlockRevision,
-	})
-	require.NoError(t, err)
+	// A write around the collab server (a restored backup, a future import
+	// tool) bumps the post's revision past the state's: the load can tell the
+	// state is stale.
+	writeBlockDocAround(t, post.ID, doc)
 	loaded, err = testQueries.GetPostCollab(ctx, post.ID)
 	require.NoError(t, err)
 	require.Equal(t, startRevision+2, loaded.BlockRevision)
@@ -171,6 +169,16 @@ func setPostChangedAt(t *testing.T, postID int64, at time.Time) {
 	require.NoError(t, err)
 }
 
+// writeBlockDocAround writes block_doc the way anything other than the
+// collab server would (#206 forbids it in the app; tests use it to exercise the
+// revision guard and to give a post a working copy): new doc, revision + 1.
+func writeBlockDocAround(t *testing.T, postID int64, doc json.RawMessage) {
+	t.Helper()
+	_, err := testQueries.db.ExecContext(context.Background(),
+		`UPDATE posts SET block_doc = $2, block_revision = block_revision + 1, changed_at = now() WHERE id = $1`, postID, doc)
+	require.NoError(t, err)
+}
+
 func postChangedAt(t *testing.T, postID int64) time.Time {
 	t.Helper()
 	post, err := testQueries.GetPost(context.Background(), postID)
@@ -227,22 +235,6 @@ func TestStorePostCollabTxChangedAt(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.False(t, postChangedAt(t, post.ID).Before(before), "a store with block_doc didn't move changed_at")
-}
-
-// The REST blocks save (y-websocket, until P5) updates changed_at itself,
-// not only through the title update the handler may run after it (#307).
-func TestUpdatePostBlocksIfRevisionMatchesChangedAt(t *testing.T) {
-	post := createPostWithTransaction(t).Post
-	setPostChangedAt(t, post.ID, time.Date(2000, 1, 2, 3, 4, 5, 0, time.UTC))
-
-	before := dbNow(t)
-	_, err := testQueries.UpdatePostBlocksIfRevisionMatches(context.Background(), UpdatePostBlocksIfRevisionMatchesParams{
-		ID:            post.ID,
-		BlockDoc:      json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`),
-		BlockRevision: post.BlockRevision,
-	})
-	require.NoError(t, err)
-	require.False(t, postChangedAt(t, post.ID).Before(before))
 }
 
 func TestStorePostCollabTxMissingPost(t *testing.T) {

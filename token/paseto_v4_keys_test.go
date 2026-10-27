@@ -100,8 +100,8 @@ func signTicket(t *testing.T, maker *PasetoV4Maker, set func(tok *p.Token)) stri
 	return tok.V4Sign(maker.keys.PrivateKey, nil)
 }
 
-// VerifyWSTicket is the Go reference for websocket/access.js: a correctly
-// signed ticket still fails if any claim the WS server relies on is missing
+// VerifyWSTicket is the Go reference for web/collab-server/access.ts: a correctly
+// signed ticket still fails if any claim the collab server relies on is missing
 // or malformed.
 func TestWSTicketMalformedClaimsRejected(t *testing.T) {
 	maker := newTestV4Maker(t)
@@ -171,8 +171,9 @@ func TestWSTicketMalformedClaimsRejected(t *testing.T) {
 	})
 }
 
-// The WS server verifies tickets with the PEM this exports; it must be the
-// maker's real Ed25519 public key in standard SPKI form.
+// The collab server can verify tickets with the PEM this exports
+// (PASETO_V4_PUBLIC_PEM_FILE); it must be the maker's real Ed25519 public key in
+// standard SPKI form.
 func TestGetPublicKeyPEM(t *testing.T) {
 	maker := newTestV4Maker(t)
 

@@ -69,11 +69,13 @@ func TestCreateCollabTicket(t *testing.T) {
 			},
 		},
 		{
-			name:   "ContributorForbiddenOnOthersPost",
+			// A read-only live view (#206): the collab server asks the API whether
+			// the connection may write.
+			name:   "ContributorGetsTicketForOthersPost",
 			body:   gin.H{"doc": "post-12"},
 			caller: &contributor,
 			checkResponse: func(t *testing.T, _ *Server, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusForbidden, recorder.Code)
+				require.Equal(t, http.StatusOK, recorder.Code)
 			},
 		},
 		{

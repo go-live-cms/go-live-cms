@@ -466,7 +466,8 @@ func ExamplePasetoV4Maker_ParseRefresh() {
 // GetPublicKeyPEM returns the Ed25519 public key in PEM format for use by other services.
 //
 // This method exports the public key in standard PEM encoding that can be used
-// by external services (like the WebSocket server) to verify PASETO v4.public tokens.
+// by external services (like the collab server's PASETO_V4_PUBLIC_PEM_FILE) to verify
+// PASETO v4.public tokens.
 //
 // Example usage:
 //
@@ -475,7 +476,7 @@ func ExamplePasetoV4Maker_ParseRefresh() {
 //	if err != nil {
 //	    log.Fatal("Failed to export public key:", err)
 //	}
-//	fmt.Println("Public key for WebSocket server:")
+//	fmt.Println("Public key for the collab server:")
 //	fmt.Println(pemKey)
 //
 // The returned PEM can be used in Node.js with:

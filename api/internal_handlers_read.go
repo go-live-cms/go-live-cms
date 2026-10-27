@@ -13,10 +13,10 @@ import (
 // getInternalDocAccess tells the collab WebSocket server whether a user may
 // edit one collab document, for its per-connection check (#216, #223, #135).
 //
-// The WS server verifies the client's ticket itself and passes the ticket's
-// user_id, iat and doc. Everything is read from the database, never from the
-// ticket: the user's current role, and (for non-moderators) the post's owner,
-// decided by canEditPost exactly as PUT /posts/:id/blocks decides it.
+// The collab server verifies the client's ticket itself and passes the
+// ticket's user_id, iat and doc. Everything is read from the database, never
+// from the ticket: the user's current role, and (for non-moderators) the
+// post's owner, decided by canEditPost.
 // issued_at is required so a ticket issued before the user's latest password
 // change is refused here exactly as authMiddleware refuses such an access
 // token (issuedBeforePasswordChange).

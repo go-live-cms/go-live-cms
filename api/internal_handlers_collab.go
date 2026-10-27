@@ -52,11 +52,9 @@ type storePostCollabRequest struct {
 //
 // Revision guard: the state is returned only if it was stored against the
 // post's current block_revision. Otherwise something wrote block_doc around
-// the collab server (a y-websocket autosave before a cutover, a rollback),
+// the collab server (a restored backup, a manual fix, a future import tool),
 // the state no longer matches it, and the server must reseed from block_doc
 // under a new epoch. Omitting it makes that the only thing the server can do.
-//
-// Available under either COLLAB_BACKEND (it only reads).
 //
 // Path parameters:
 //   - id: Post's database primary key
@@ -104,11 +102,9 @@ func (server *Server) getInternalPostCollab(c *gin.Context) {
 // block_revision+1, syncs the content media links (unpublished posts only),
 // and stores the Yjs state against the new revision.
 //
-// block_doc gets the same structural check, sanitizing and limits as PUT
-// /posts/:id/blocks (prepareForStore), on top of the server's own Zod
-// validation. Only allowed under COLLAB_BACKEND=hocuspocus: under
-// y-websocket the editor's REST autosave owns block_doc, and two writers
-// would overwrite each other.
+// block_doc gets the structural check, sanitizing and limits of
+// prepareForStore, on top of the server's own Zod validation. This is the
+// only writer of block_doc for an existing post (#206).
 //
 // Path parameters:
 //   - id: Post's database primary key
@@ -123,15 +119,10 @@ func (server *Server) getInternalPostCollab(c *gin.Context) {
 //     base_revision on a state-only store
 //   - 401 Unauthorized: Missing or wrong shared secret
 //   - 404 Not Found: The post does not exist
-//   - 409 Conflict: Not under Hocuspocus, or base_revision is behind
+//   - 409 Conflict: base_revision is behind
 //   - 413 Request Entity Too Large: Body or block_doc over its limit
 //   - 500 Internal Server Error: Database failure
 func (server *Server) putInternalPostCollab(c *gin.Context) {
-	if !server.config.UsesHocuspocus() {
-		c.JSON(http.StatusConflict, gin.H{"error": "COLLAB_BACKEND is not hocuspocus"})
-		return
-	}
-
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || postID <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
@@ -174,7 +165,7 @@ func (server *Server) putInternalPostCollab(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal block document"})
 			return
 		}
-		// The same cap PUT /posts/:id/blocks has on its whole body.
+		// The same cap POST /posts has on its whole body.
 		if int64(len(blockDoc)) > blockDocBodyLimit {
 			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "block_doc is too large"})
 			return

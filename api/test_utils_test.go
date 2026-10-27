@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,7 +60,22 @@ func newTestConfig(t *testing.T) util.Config {
 		SMTPPort:      587,
 		MailFrom:      "GoLive CMS <no-reply@test.invalid>",
 		PublicBaseURL: testPublicBaseURL,
+		// Required by NewServer: every publish flushes the collab server first.
+		CollabInternalURL:    newFakeCollabServer(t),
+		CollabInternalSecret: testCollabInternalSecret,
 	}
+}
+
+// newFakeCollabServer is a collab server whose internal endpoints answer 200
+// to everything (a publish's flush: "stored, or not loaded"). Tests of the
+// flush itself use their own server (collab_publish_test.go).
+func newFakeCollabServer(t *testing.T) string {
+	t.Helper()
+	collab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(collab.Close)
+	return collab.URL
 }
 
 // stubRoleLookup permits authMiddleware's caller DB lookup (which requireRole
