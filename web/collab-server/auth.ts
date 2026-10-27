@@ -1,4 +1,5 @@
-// onAuthenticate (#206): the order of websocket/upgrade.js, on Hocuspocus's auth message.
+// onAuthenticate (#206): the order of the old y-websocket server's upgrade.js, on
+// Hocuspocus's auth message.
 //
 //   doc name (isCollabDocName) → ticket present → verifyTicket (sig, iss, aud, type,
 //   exp, doc === documentName) → burn the jti (TicketReplayGuard, before the lookup, so a

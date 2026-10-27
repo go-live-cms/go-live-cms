@@ -63,11 +63,7 @@ jobs:
           - image: web
             context: ./web
             file: ./web/Dockerfile
-            # The editor's collab backend is inlined at build time; it must match the
-            # API's COLLAB_BACKEND (compose.yaml, default hocuspocus since #284).
-            build-args: PUBLIC_COLLAB_BACKEND=hocuspocus
-          # The Hocuspocus collab server (#206), which replaced the y-websocket
-          # `websocket` image in #284. Releases before that still have theirs on GHCR.
+          # The Hocuspocus collab server (#206).
           - image: collab
             context: ./web
             file: ./web/collab-server/Dockerfile
@@ -98,7 +94,6 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
-          build-args: ${{ matrix.build-args }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -164,8 +159,7 @@ jobs:
           PASETO_V4_PRIVATE_KEY_HEX: ${{ secrets.PASETO_V4_PRIVATE_KEY_HEX }}
           PASETO_V4_LOCAL_KEY_HEX: ${{ secrets.PASETO_V4_LOCAL_KEY_HEX }}
           ROLE_LOOKUP_SECRET: ${{ secrets.ROLE_LOOKUP_SECRET }}
-          # Renamed from COLLAB_SQUASH_SECRET (#280); the old secret works until it's renamed.
-          COLLAB_INTERNAL_SECRET: ${{ secrets.COLLAB_INTERNAL_SECRET || secrets.COLLAB_SQUASH_SECRET }}
+          COLLAB_INTERNAL_SECRET: ${{ secrets.COLLAB_INTERNAL_SECRET }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |

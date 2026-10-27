@@ -1,4 +1,4 @@
-// Log-safe helpers for the collab server. Ported from websocket/logsafe.js (#220, #142).
+// Log-safe helpers for the collab server, ported from the old y-websocket server (#220, #142).
 //
 // Nothing here may log a ticket, the request URL or headers. These helpers build the
 // only request context that gets logged: the doc name plus an allowlist of non-secret

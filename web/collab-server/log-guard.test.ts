@@ -1,4 +1,4 @@
-// Ported from websocket/log-guard.test.js (#220, #254): no module of the collab server
+// Ported from the old y-websocket server's log guard (#220, #254): no module of the collab server
 // may log a ticket, a secret, or a request/socket (which carry headers). Scans source:
 // every log call (console.* / console[level] / logEvent / process.std{out,err}.write)
 // in every non-test .ts file here must not reference those, and console methods may not

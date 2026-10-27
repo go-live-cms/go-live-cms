@@ -1,10 +1,9 @@
 name: golive_cms
 
 # Production stack (#272). Only `caddy` publishes ports (80/443): it terminates TLS,
-# sends /collab to the Hocuspocus collab service (#206 P4, #284; it replaced the
-# y-websocket `websocket` service) and everything else to web, which forwards
-# /api/v1 and /uploads to the API. Postgres, the API and the collab server are reachable
-# only on the compose network.
+# sends /collab to the Hocuspocus collab service (#206) and everything else to web,
+# which forwards /api/v1 and /uploads to the API. Postgres, the API and the collab
+# server are reachable only on the compose network.
 #
 # Secrets come from a `.env` next to this file (never committed). Generate one with
 #   go run ./cmd/gen-prod-env -site cms.example.com > .env
@@ -62,7 +61,7 @@ services:
       API_PORT: ":8080"
       ACCESS_TOKEN_DURATION: "15m"
       REFRESH_TOKEN_DURATION: "24h"
-      # Required: shared with the collab WebSocket server's role lookup (#223).
+      # Required: shared with the collab server's access lookup and load/store (#223).
       # Plain interpolation (not :?) so `down`/`ps` still work without it; the API
       # itself refuses to start when it is empty.
       ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
@@ -90,15 +89,11 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       MAIL_FROM: "${MAIL_FROM}"
-      # API -> collab server calls (#206/#280). Under hocuspocus (the default since
-      # #284) every publish first flushes the doc at collab:1236 and answers 503 if it
-      # can't. The secret is the collab service's COLLAB_INTERNAL_SECRET; it falls
-      # back to the pre-#280 name so an older .env keeps working. COLLAB_BACKEND must
-      # match the web image's build arg PUBLIC_COLLAB_BACKEND. Rolling back to
-      # y-websocket means redeploying a pre-#284 release: docs/operations/collab-cutover.md.
-      COLLAB_BACKEND: "${COLLAB_BACKEND:-hocuspocus}"
+      # API -> collab server calls (#206/#280): every publish first flushes the doc at
+      # collab:1236 and answers 503 if it can't. The secret is the collab service's
+      # COLLAB_INTERNAL_SECRET. Required: the API refuses to start without both.
       COLLAB_INTERNAL_URL: "${COLLAB_INTERNAL_URL:-http://collab:1236}"
-      COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET:-${COLLAB_SQUASH_SECRET:-}}"
+      COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET}"
       # Browser requests reach the API as caddy -> web -> api. web appends its peer
       # (caddy) to X-Forwarded-For (web/src/middleware/apiProxy.ts), and caddy sets it
       # to the browser's IP. Trust exactly those two fixed addresses, so rate limits
@@ -179,7 +174,7 @@ services:
       # Required: the server exits at startup without any of these.
       INTERNAL_API_URL: http://api:8081
       ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
-      COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET:-${COLLAB_SQUASH_SECRET:-}}"
+      COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET}"
     depends_on:
       api:
         condition: service_healthy

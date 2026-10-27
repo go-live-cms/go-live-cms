@@ -41,21 +41,14 @@ services:
       API_PORT: ":8080"
       MAX_UPLOAD_SIZE: "50MB"
       UPLOAD_PATH: "/app/uploads/media"
-      # API -> collab server (#280): flush before publish under hocuspocus (the
-      # default since the P4 cutover, #284), squash after publish under y-websocket.
-      # The secret must match the collab service's COLLAB_INTERNAL_SECRET and the
-      # websocket service's SQUASH_SECRET. COLLAB_BACKEND also builds the editor for
-      # it (web's PUBLIC_COLLAB_BACKEND). Rolling back to y-websocket (until P5) is
-      # docs/operations/collab-cutover.md, "Rollback": clear ws_data first, then
-      #   COLLAB_BACKEND=y-websocket COLLAB_INTERNAL_URL=http://websocket:1234 \
-      #     docker compose -f compose.dev.yaml --profile y-websocket up -d
-      COLLAB_BACKEND: "${COLLAB_BACKEND:-hocuspocus}"
+      # API -> collab server (#206, #280): every publish flushes the doc first. The
+      # secret must match the collab service's COLLAB_INTERNAL_SECRET.
       COLLAB_INTERNAL_URL: "${COLLAB_INTERNAL_URL:-http://collab:1236}"
-      COLLAB_INTERNAL_SECRET: "dev-squash-secret"
-      # Required: the WS server's per-connection role lookup (#223)
+      COLLAB_INTERNAL_SECRET: "dev-collab-internal-secret"
+      # Required: the collab server's access lookup and load/store (#223)
       ROLE_LOOKUP_SECRET: "dev-role-lookup-secret"
       # Server-to-server listener (/internal/*). Deliberately NOT in `ports:`;
-      # only the collab (and websocket) service reaches it over the compose network.
+      # only the collab service reaches it over the compose network.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
       # Dev only: browser requests arrive through the web container's Vite proxy,
       # which sets X-Forwarded-For (xfwd in astro.config.mjs). Trust the private
@@ -104,56 +97,14 @@ services:
     environment:
       PUBLIC_API_URL: http://localhost:${HOST_API_PORT:-8080}/api/v1
       SERVER_API_URL: http://api:8080/api/v1
-      # The editor's collab backend (#206), from the same COLLAB_BACKEND as the API's.
-      PUBLIC_COLLAB_BACKEND: "${COLLAB_BACKEND:-hocuspocus}"
     volumes:
       - ./web:/app
       - /app/node_modules
     depends_on:
       - api
 
-  # The y-websocket server, retired by the Hocuspocus cutover (#206 P4, #284). Kept
-  # behind a profile until P5 deletes it, for the rollback path only
-  # (docs/operations/collab-cutover.md): it does not start without
-  # `--profile y-websocket`. Its ws_data volume is kept through the rollback window.
-  websocket:
-    profiles: ["y-websocket"]
-    build:
-      context: ./websocket
-      dockerfile: Dockerfile.dev
-    ports:
-      - "1234:1234"
-    env_file:
-      - ./websocket/.env
-    environment:
-      # Override for Docker reliability
-      - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true
-      - CHOKIDAR_INTERVAL=300
-      - DATA_PATH=/data/yjs
-      - SQUASH_SECRET=dev-squash-secret
-      # Per-connection access check (#216, #223, #135): GET ${INTERNAL_API_URL}/internal/users/:id/access
-      # on the API's unpublished internal listener, with ROLE_LOOKUP_SECRET (must match the
-      # api service's value). Tickets (#233) are verified and burned in the WS process.
-      - INTERNAL_API_URL=http://api:8081
-      - ROLE_LOOKUP_SECRET=dev-role-lookup-secret
-    volumes:
-      - ./websocket:/app
-      - /app/node_modules
-      # File-based PEM for reliable Docker env loading
-      - ./websocket/public.pem:/run/secrets/public.pem:ro
-      - ws_data:/data/yjs
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1234/"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    depends_on:
-      - api
-
-  # Hocuspocus collab server (#206): the editor's collab backend since the P4 cutover
-  # (#284), on ws://<page host>:1235. It runs the production bundle (one yjs instance,
-  # no node_modules), so rebuild after changing the server:
+  # Hocuspocus collab server (#206), on ws://<page host>:1235. It runs the production
+  # bundle (one yjs instance, no node_modules), so rebuild after changing the server:
   #   docker compose -f compose.dev.yaml up -d --build collab
   collab:
     build:
@@ -161,6 +112,10 @@ services:
       dockerfile: collab-server/Dockerfile
     ports:
       - "1235:1235"
+    # For PASETO_V4_PUBLIC_KEY_HEX and PASETO_ISSUER: tickets are signed with the API's
+    # key. The settings below override anything else app.env sets.
+    env_file:
+      - ./app.env
     environment:
       PORT: "1235"
       # Internal listener (/healthz, POST /internal/documents/:doc/flush for publish).
@@ -171,11 +126,7 @@ services:
       INTERNAL_API_URL: http://api:8081
       ROLE_LOOKUP_SECRET: dev-role-lookup-secret
       # The bearer secret the API sends to flush (its COLLAB_INTERNAL_SECRET, #280).
-      COLLAB_INTERNAL_SECRET: dev-squash-secret
-      PASETO_V4_PUBLIC_PEM_FILE: /run/secrets/public.pem
-      PASETO_ISSUER: golive.auth
-    volumes:
-      - ./websocket/public.pem:/run/secrets/public.pem:ro
+      COLLAB_INTERNAL_SECRET: dev-collab-internal-secret
     depends_on:
       - api
 
@@ -190,4 +141,3 @@ services:
 volumes:
   postgres_data:
   go_modules:
-  ws_data:

@@ -70,7 +70,7 @@ describe("internal listener", () => {
     expect((await post("/internal/documents/post-0/flush", `Bearer ${SECRET}`)).status).toBe(400)
     expect((await post("/internal/documents/%E0%A4%A/flush", `Bearer ${SECRET}`)).status).toBe(400)
     expect((await fetch(`${base}/internal/documents/post-12/flush`, { headers: { Authorization: `Bearer ${SECRET}` } })).status).toBe(405)
-    expect((await post("/internal/documents/post-12/squash", `Bearer ${SECRET}`)).status).toBe(404)
+    expect((await post("/internal/documents/post-12/unknown", `Bearer ${SECRET}`)).status).toBe(404)
     expect(flush).not.toHaveBeenCalled()
   })
 })

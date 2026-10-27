@@ -1,4 +1,4 @@
-// Ported from websocket/access.test.js (#216, #220, #223, #233, #135).
+// Ported from the old y-websocket server's access.test.js (#216, #220, #223, #233, #135).
 import { describe, it, expect } from "vitest"
 import { createPublicKey, randomUUID } from "node:crypto"
 import { V4 } from "paseto"
