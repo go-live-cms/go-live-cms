@@ -84,20 +84,58 @@ Any Linux VM with Docker Engine + the Compose plugin (v2.20+, for `up --wait`), 
    go run ./cmd/gen-prod-env -site cms.example.com > prod.env
    ```
    It prints fresh PASETO keys and random hex secrets. Never reuse `example.app.env`'s keys.
-3. **GitHub.** Settings → Environments → `production`: add required reviewers, then:
+   Its SMTP lines are placeholders: you fill those in from your mail provider (step 3).
+3. **GitHub.** Settings → Environments → `production`: add required reviewers, then add
+   the following. **This is the complete list:** every deploy rewrites
+   `/opt/golive/.env` (mode 600) from exactly these (`scripts/deploy/write-env.sh`), so
+   a setting edited on the VM by hand is gone after the next deploy. A required one that
+   is missing fails the deploy before it touches the VM, naming the variable.
+
+   **Required**
 
    | Kind | Name | Value |
    |------|------|-------|
    | variable | `SITE_ADDRESS` | your domain, e.g. `cms.example.com` |
-   | variable | `DEPLOY_PATH` | `/opt/golive` (default) |
    | secret | `POSTGRES_PASSWORD`, `PASETO_V4_PUBLIC_KEY_HEX`, `PASETO_V4_PRIVATE_KEY_HEX`, `PASETO_V4_LOCAL_KEY_HEX`, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` | from `prod.env` |
+   | variable | `SMTP_HOST` | your provider's SMTP server, e.g. `smtp.example.com` |
+   | variable | `MAIL_FROM` | the sender, e.g. `GoLive CMS <no-reply@cms.example.com>` (the provider must allow this address/domain) |
    | secret | `DEPLOY_HOST`, `DEPLOY_USER` | the VM's address, `deploy` |
    | secret | `DEPLOY_SSH_KEY` | the private key from step 1 |
    | secret | `DEPLOY_KNOWN_HOSTS` | `ssh-keyscan -t ed25519 <host>`, checked against the VM's real fingerprint |
 
+   **Optional** (unset means the default)
+
+   | Kind | Name | Default / when to set it |
+   |------|------|-------|
+   | variable | `DEPLOY_PATH` | `/opt/golive` |
+   | variable | `PUBLIC_BASE_URL` | `https://$SITE_ADDRESS`. The origin invitation and password reset links point at. |
+   | variable | `SITE_URL` | `https://$SITE_ADDRESS`. The origin of canonical URLs, robots.txt and the sitemap. |
+   | variable | `SMTP_PORT` | `587` |
+   | variable | `SMTP_TLS` | empty: implicit TLS on port 465, STARTTLS otherwise. `starttls` or `tls` to force one. |
+   | secret | `SMTP_USER`, `SMTP_PASS` | your provider's SMTP credentials (usually required by the provider) |
+   | variable | `CORS_ALLOWED_ORIGINS` | none. Only if another origin calls the API with credentials. |
+   | variable | `PUBLIC_API_URL` | none. Only if media is served from another origin (see "API URLs" above). |
+   | variable | `PASETO_ACCESS_KID`, `PASETO_REFRESH_KID`, `PASETO_PREVIOUS_KEYS_VALID_UNTIL` | during a [key rotation](key-rotation.md) only |
+   | secret | `PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX`, `PASETO_V4_PREVIOUS_LOCAL_KEY_HEX` | during a [key rotation](key-rotation.md) only |
+
+   Values can hold spaces, `<>`, `#` and `$` but not a single quote or a newline (the
+   `.env` holds them single-quoted). Rate limits, `TRUSTED_PROXIES` and the other API
+   settings are fixed in `compose.yaml` or use the API's defaults, so they aren't
+   configured here. CI's "CD .env covers compose.yaml" job (`scripts/deploy/check-env.sh`)
+   fails if `compose.yaml` starts reading a variable this list doesn't cover.
+
+   **Choosing an SMTP provider.** The site is invite-only, so the first admin can't add
+   anyone without working mail, and the API refuses to start in release mode without
+   `SMTP_HOST` and `MAIL_FROM`. Any transactional email service with SMTP works (Amazon
+   SES, Postmark, Mailgun, SendGrid, Resend, …). TLS is required: STARTTLS on 587 (a
+   server that doesn't offer it is an error, not a fallback to clear text) or implicit
+   TLS on 465, with a certificate valid for `SMTP_HOST`. `SMTP_TLS=none` is refused
+   except to a relay on loopback, which compose's network never is. Verify the sending
+   domain with the provider (SPF/DKIM), or resets land in spam. Details:
+   `api/CLAUDE.md`, "Invitations, password reset, mail".
+
    Then set the **repository** variable `DEPLOY_ENABLED=true`. Until it is set, CD only
-   pushes images. Delete `prod.env` afterwards; GitHub is now the source of truth, and
-   every deploy rewrites `/opt/golive/.env` (mode 600) from it.
+   pushes images. Delete `prod.env` afterwards; GitHub is now the source of truth.
 4. **First deploy.** Merge to `main` (or run the `cd` workflow manually with a sha CD
    already pushed). The first run creates the database and the volumes.
 5. **First admin account.** Release mode never seeds accounts, and registration isn't
@@ -180,6 +218,12 @@ failed migration (`dirty=true`)", or restore the pre-deploy backup, then deploy 
 go run ./cmd/gen-prod-env -site localhost > .env       # .env is gitignored
 docker compose -f compose.yaml up --build -d
 ```
+
+The API starts with `.env`'s placeholder SMTP settings (it checks them at startup but
+doesn't connect), but no email goes out. To see invitations and resets, point `SMTP_HOST`
+at a real provider, or at a local sink such as Mailpit with STARTTLS enabled: the API
+requires TLS outside debug mode and verifies the certificate, so give the API container
+the sink's CA (Go reads `SSL_CERT_FILE`).
 
 Open `https://localhost` and accept the warning for Caddy's local certificate. Create the
 first admin as in step 5. To skip TLS locally, set `SITE_ADDRESS=http://localhost`:

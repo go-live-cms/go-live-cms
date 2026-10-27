@@ -33,6 +33,10 @@ PASETO_V4_PREVIOUS_LOCAL_KEY_HEX=<old local key>     # optional: refresh tokens
 PASETO_PREVIOUS_KEYS_VALID_UNTIL=2026-12-01T00:00:00Z  # required with either key
 ```
 
+- In production, set these (and the new keys and KIDs) in the GitHub `production`
+  environment, not in the VM's `.env`: every deploy rewrites that file from GitHub
+  ([deploy.md](deploy.md), step 3). The previous keys are secrets, the cutoff and KIDs
+  variables. Then run a deploy.
 - Set only the key(s) you rotated. Either can be omitted.
 - `PASETO_PREVIOUS_KEYS_VALID_UNTIL` is RFC 3339. The API refuses to start if a previous
   key is set without it. After the cutoff the previous keys are ignored even if they are

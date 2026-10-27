@@ -52,11 +52,33 @@ func TestWriteEnvProducesUsableKeys(t *testing.T) {
 	var again bytes.Buffer
 	require.NoError(t, writeEnv(&again, rand.Reader, "cms.example.com"))
 	other := parseEnv(t, again.String())
-	for k, v := range env {
-		if k != "SITE_ADDRESS" {
-			require.NotEqual(t, v, other[k], k)
-		}
+	for _, k := range []string{"PASETO_V4_PUBLIC_KEY_HEX", "PASETO_V4_PRIVATE_KEY_HEX", "PASETO_V4_LOCAL_KEY_HEX",
+		"POSTGRES_PASSWORD", "ROLE_LOOKUP_SECRET", "COLLAB_INTERNAL_SECRET"} {
+		require.NotEqual(t, env[k], other[k], k)
 	}
+}
+
+// The API won't start in release mode without the mail settings and the public
+// origin (#148), so the file must have them (#314); the SMTP ones are placeholders.
+func TestWriteEnvIncludesMailSettings(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEnv(&buf, rand.Reader, "cms.example.com"))
+	env := parseEnv(t, buf.String())
+
+	require.Equal(t, "https://cms.example.com", env["PUBLIC_BASE_URL"])
+	require.Equal(t, "https://cms.example.com", env["SITE_URL"])
+	require.NotEmpty(t, env["SMTP_HOST"])
+	require.Equal(t, "starttls", env["SMTP_TLS"])
+	// Quoted: the sender has spaces and <>, which compose and sh read literally only then.
+	require.Equal(t, "'GoLive CMS <no-reply@example.com>'", env["MAIL_FROM"])
+	for _, k := range []string{"SMTP_PORT", "SMTP_USER", "SMTP_PASS"} {
+		require.Contains(t, env, k)
+	}
+
+	// A site address with a scheme is used as the origin as it is.
+	buf.Reset()
+	require.NoError(t, writeEnv(&buf, rand.Reader, "http://localhost"))
+	require.Equal(t, "http://localhost", parseEnv(t, buf.String())["PUBLIC_BASE_URL"])
 }
 
 type failingReader struct{}

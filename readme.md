@@ -120,6 +120,10 @@ to it (never committed). Generate one with fresh keys, never `example.app.env`'s
 go run ./cmd/gen-prod-env -site cms.example.com > .env
 ```
 
+Then replace its SMTP placeholders: outside debug mode the API won't start without mail
+settings (invitations and password resets). In production CD writes this file on every
+deploy from the GitHub `production` environment instead (deploy.md, step 3).
+
 #### Seeded dev accounts in production
 
 Versions before #228 always ran the API in debug mode, so every deployment got the
@@ -574,6 +578,7 @@ jobs run in parallel:
 | Web tests | `web` vitest on Node 22, plus the collab server's tests on Node 24 |
 | Web type check and build | `astro check` and `astro build` |
 | Docker image | builds the api, web and collab production images (no push); smoke-runs collab |
+| CD .env covers compose.yaml | `scripts/deploy/check-env.sh`: every variable `compose.yaml` reads is written by CD's `.env` writer and mapped in `cd.yml`, and `docker compose config` resolves with a CD-shaped `.env` |
 
 To reproduce locally before pushing:
 

@@ -150,6 +150,22 @@ jobs:
             echo "deploy=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # The .env writer from this workflow's own commit, not the deployed one, so its
+      # variable list always matches the env: mapping below (a rollback checks out an
+      # older sha, whose writer may list fewer).
+      - name: Check out the .env writer
+        if: steps.current.outputs.deploy == 'true'
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: cd-tools
+          sparse-checkout: scripts/deploy/write-env.sh
+          sparse-checkout-cone-mode: false
+
+      # Every deploy REPLACES the VM's .env with this, so every setting compose.yaml reads
+      # must be mapped here and listed in write-env.sh; CI's "CD .env covers compose.yaml"
+      # job (scripts/deploy/check-env.sh) fails otherwise (#314). Credentials are
+      # secrets, the rest variables: docs/operations/deploy.md, step 3.
       - name: Write .env and SSH config
         if: steps.current.outputs.deploy == 'true'
         env:
@@ -160,17 +176,32 @@ jobs:
           PASETO_V4_LOCAL_KEY_HEX: ${{ secrets.PASETO_V4_LOCAL_KEY_HEX }}
           ROLE_LOOKUP_SECRET: ${{ secrets.ROLE_LOOKUP_SECRET }}
           COLLAB_INTERNAL_SECRET: ${{ secrets.COLLAB_INTERNAL_SECRET }}
+          # Mail (#148): the API won't start in release mode without these.
+          # PUBLIC_BASE_URL and SITE_URL default to https://$SITE_ADDRESS.
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_TLS: ${{ vars.SMTP_TLS }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_FROM: ${{ vars.MAIL_FROM }}
+          # Optional; compose.yaml's defaults apply when unset.
+          CORS_ALLOWED_ORIGINS: ${{ vars.CORS_ALLOWED_ORIGINS }}
+          PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+          # Key rotation only (docs/operations/key-rotation.md).
+          PASETO_ACCESS_KID: ${{ vars.PASETO_ACCESS_KID }}
+          PASETO_REFRESH_KID: ${{ vars.PASETO_REFRESH_KID }}
+          PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX: ${{ secrets.PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX }}
+          PASETO_V4_PREVIOUS_LOCAL_KEY_HEX: ${{ secrets.PASETO_V4_PREVIOUS_LOCAL_KEY_HEX }}
+          PASETO_PREVIOUS_KEYS_VALID_UNTIL: ${{ vars.PASETO_PREVIOUS_KEYS_VALID_UNTIL }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           umask 077
           mkdir -p ~/.ssh
-          for v in SITE_ADDRESS POSTGRES_PASSWORD PASETO_V4_PUBLIC_KEY_HEX PASETO_V4_PRIVATE_KEY_HEX \
-                   PASETO_V4_LOCAL_KEY_HEX ROLE_LOOKUP_SECRET COLLAB_INTERNAL_SECRET; do
-            eval "val=\${$v}"
-            [ -n "$val" ] || { echo "::error::$v is not set in the production environment"; exit 1; }
-            printf '%s=%s\n' "$v" "$val" >> deploy.env
-          done
+          # Names the missing variables (never values) and fails when a required one is unset.
+          sh cd-tools/scripts/deploy/write-env.sh > deploy.env
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           # Pinned host key: never trust-on-first-use from a runner.
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
