@@ -2661,21 +2661,6 @@ func (mr *MockStoreMockRecorder) UpdatePostBlockDocFromCollab(arg0, arg1 interfa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostBlockDocFromCollab", reflect.TypeOf((*MockStore)(nil).UpdatePostBlockDocFromCollab), arg0, arg1)
 }
 
-// UpdatePostBlocksIfRevisionMatches mocks base method.
-func (m *MockStore) UpdatePostBlocksIfRevisionMatches(arg0 context.Context, arg1 db.UpdatePostBlocksIfRevisionMatchesParams) (db.UpdatePostBlocksIfRevisionMatchesRow, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdatePostBlocksIfRevisionMatches", arg0, arg1)
-	ret0, _ := ret[0].(db.UpdatePostBlocksIfRevisionMatchesRow)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// UpdatePostBlocksIfRevisionMatches indicates an expected call of UpdatePostBlocksIfRevisionMatches.
-func (mr *MockStoreMockRecorder) UpdatePostBlocksIfRevisionMatches(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostBlocksIfRevisionMatches", reflect.TypeOf((*MockStore)(nil).UpdatePostBlocksIfRevisionMatches), arg0, arg1)
-}
-
 // UpdatePostMediaTx mocks base method.
 func (m *MockStore) UpdatePostMediaTx(arg0 context.Context, arg1 db.UpdatePostMediaTxParams) error {
 	m.ctrl.T.Helper()

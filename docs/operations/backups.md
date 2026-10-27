@@ -11,17 +11,15 @@ and how schema migrations run in production. The scripts live in
 |------|-------|------------|--------------|
 | Users, posts (`block_doc`, `published_block_doc`, versions), media rows, taxonomies, settings, themes, sessions | Postgres (`postgres_data` volume) | **Yes** | `db.dump` (pg_dump custom format) |
 | Uploaded media files | `UPLOAD_PATH` (`/app/uploads/media`, `uploads` volume) | **Yes** | `media.tar.gz` |
-| Live Yjs state of editor documents (Hocuspocus, since #284) | Postgres `post_ydoc_state` | No: `block_doc` is canonical, and a missing or stale row reseeds from it | `db.dump` (it's a table) |
-| Live Yjs state before the Hocuspocus cutover (#284; dev rollback only until P5) | websocket `DATA_PATH` LevelDB (`ws_data` volume) | No, a safety net | `leveldb.tar.gz` (optional) |
-| Secrets: `app.env`, PASETO keys, `websocket/public.pem`, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` | host / secret store | Yes | **Not** by these scripts. Keep them in your secret manager. Without the PASETO keys a restore still works, but every session is invalidated. |
+| Live Yjs state of editor documents (the collab server, #206) | Postgres `post_ydoc_state` | No: `block_doc` is canonical, and a missing or stale row reseeds from it | `db.dump` (it's a table) |
+| Secrets: `app.env` / `.env`, PASETO keys, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET` | host / secret store | Yes | **Not** by these scripts. Keep them in your secret manager. Without the PASETO keys a restore still works, but every session is invalidated. |
 | Theme sources (`web/themes`) | git | Yes | git |
 
 Postgres and the media directory must be backed up **together**: media rows store the
 file's absolute path under `UPLOAD_PATH`, and a row without its file is a broken image.
-LevelDB is not needed for a correct restore: an editor that opens a document whose
-LevelDB state is empty seeds it from Postgres `block_doc`. Since the Hocuspocus cutover
-([collab-cutover.md](collab-cutover.md)) production has no LevelDB at all; the collab
-server keeps its Yjs state in Postgres, so `db.dump` covers it.
+The collab server keeps its Yjs state in Postgres, so `db.dump` covers it. (Before the
+Hocuspocus cutover, #284, it lived in a LevelDB volume, which these scripts could
+snapshot; #285 removed that.)
 
 ## Backing up
 
@@ -47,12 +45,11 @@ docker run --rm --network golive_cms_default --env-file /etc/golive/backup.env \
   postgres:12-alpine sh /scripts/backup.sh
 ```
 
-To also snapshot the collab server's LevelDB, mount its volume and set `WS_DATA_DIR`
-(e.g. `-v golive_cms_ws_data:/data/yjs:ro -e WS_DATA_DIR=/data/yjs`). On a host with the
-Postgres 12+ client tools the script runs directly as well (`sh scripts/backup/backup.sh`).
+On a host with the Postgres 12+ client tools the script runs directly as well
+(`sh scripts/backup/backup.sh`).
 
 Each run writes one set, `golive-<UTC timestamp>/`, holding `db.dump`, `media.tar.gz`,
-the optional `leveldb.tar.gz`, `backup.info` (schema migration version, server and
+`backup.info` (schema migration version, server and
 pg_dump versions) and `SHA256SUMS`. The set is built as `<name>.partial` and renamed
 only when every step succeeded. After that the oldest sets beyond `RETAIN` are deleted.
 Any failure exits non-zero and removes the partial set, so a cron/systemd wrapper can
@@ -62,9 +59,7 @@ alert on the exit code.
 consistent while the site stays online; no downtime is needed. The media archive is
 taken right after the dump. Media files are write-once, so uploads during the archive
 only add unreferenced files. The rare file deleted between the dump and the archive
-leaves a row whose file is missing. LevelDB is copied while the server writes to it, so
-the snapshot can be torn; the websocket server detects a broken log on load and clears
-it (`evaluatePersistedState`), and the editor then reseeds from Postgres.
+leaves a row whose file is missing.
 
 `MEDIA_DIR` is required (set `SKIP_MEDIA=1` for a database-only backup) so that a typo
 can't silently produce backups without media.
@@ -75,7 +70,6 @@ can't silently produce backups without media.
 |------|-------------|-----|
 | Database + media | **Hourly** for a site with daily editing, at least **daily** otherwise | The dump of a CMS-sized database takes seconds; the interval *is* your data-loss window (RPO). |
 | Retention | `RETAIN=48` hourly locally, plus daily sets kept 30 days and monthly sets kept 12 months off-host | Lets you go back past a bad edit or a bug that silently corrupted content days ago. |
-| LevelDB | Optional, daily is plenty | Only in-flight editor state that the 2s autosave has not written to Postgres yet. |
 | Restore test | Monthly, and after every Postgres major upgrade | An untested backup is a hope. |
 
 Example crontab (hourly, with an alert on failure; `notify-ops` is whatever you use):
@@ -102,13 +96,13 @@ losing the host. After each run, copy the new set off-host:
 
 ## Restoring
 
-`scripts/backup/restore.sh [--force] [--with-leveldb] <set-dir>` restores a set into a
+`scripts/backup/restore.sh [--force] <set-dir>` restores a set into a
 **fresh** database and **empty** media directory. Before it changes anything it:
 
 1. verifies `SHA256SUMS`, so a truncated or damaged set is rejected up front;
-2. checks every target and **refuses** if the database has any table or `MEDIA_DIR` /
-   `WS_DATA_DIR` has any file. `--force` replaces them instead: it drops the `public`
-   schema and empties the directories. Prefer a new database.
+2. checks every target and **refuses** if the database has any table or `MEDIA_DIR`
+   has any file. `--force` replaces them instead: it drops the `public` schema and
+   empties the directory. Prefer a new database.
 
 The dump is first rendered to SQL in `$TMPDIR` (needs about the uncompressed size of
 the database), then the `--force` schema reset and the whole restore run in **one**
@@ -116,15 +110,15 @@ transaction: any error rolls back to the database exactly as it was. Ownership a
 grants are not restored; objects belong to the `DB_SOURCE` user, which does not need
 to be a superuser (it must own the database).
 
-LevelDB: by default `WS_DATA_DIR` (if set) is left **empty**, so every document reseeds
-from the restored `block_doc`. That is the safe choice. `--with-leveldb` restores the
-set's snapshot instead. **Never** restore the database while keeping a *newer* LevelDB:
-the editor treats LevelDB as the live state, and the first autosave would write that
-newer (or possibly corrupt) state over the restored `block_doc`.
+Collab state: `post_ydoc_state` comes back with the rest of the database, consistent
+with the restored `block_doc` (the revision guard checks that on every load). Stop the
+collab server during a restore: it holds open documents in memory and would store them
+over the restored rows. Truncating `post_ydoc_state` after a restore is always safe:
+every document then reseeds from `block_doc` ([collab-cutover.md](collab-cutover.md)).
 
 ### Disaster recovery, step by step
 
-1. **Stop writers:** `docker compose stop api websocket web`.
+1. **Stop writers:** `docker compose stop api collab web`.
 2. **Pick the set** (newest good one; copy it back from off-host if needed) and check
    its `backup.info`: the schema migration version must be ≤ the version the API image
    you will run knows about.
@@ -132,13 +126,11 @@ newer (or possibly corrupt) state over the restored `block_doc`.
    database. Existing host: either create a new database and point `DB_SOURCE` at it
    (`docker compose exec postgres createdb -U root golive_cms_restored`), or plan to use
    `--force`.
-4. **Restore**, with the same volumes the API and websocket server use:
+4. **Restore**, with the same volume the API uses:
 
    ```sh
    docker run --rm --network golive_cms_default --env-file /etc/golive/backup.env \
-     -e WS_DATA_DIR=/data/yjs \
      -v golive_cms_uploads:/app/uploads \
-     -v golive_cms_ws_data:/data/yjs \
      -v /srv/golive-backups:/backups:ro \
      -v /srv/golive/scripts/backup:/scripts:ro \
      postgres:12-alpine sh /scripts/restore.sh /backups/golive-20261022T030700Z
@@ -157,8 +149,8 @@ newer (or possibly corrupt) state over the restored `block_doc`.
 ### What we can promise (RPO / RTO)
 
 - **RPO (data you can lose): one backup interval**, so ≤ 1 hour with hourly backups or
-  ≤ 24 hours with daily ones, plus any typing the editor had not autosaved yet (2s
-  debounce). There is no WAL archiving, so there is no point-in-time recovery between
+  ≤ 24 hours with daily ones, plus any typing the collab server had not stored yet (2s
+  debounce, 10s at most). There is no WAL archiving, so there is no point-in-time recovery between
   sets. If minutes matter, add continuous WAL archiving (pgBackRest or WAL-G) on top;
   these scripts stay useful as the simple, portable layer.
 - **RTO (time to be back up): about 1 hour** for a single-host deployment, assuming the
@@ -178,12 +170,12 @@ sh scripts/backup/test-restore.sh      # KEEP=1 to leave the stack up for poking
 
 It runs on its own compose project (`golive_restore_test`: tmpfs database, its own
 volumes, no published ports), so it never touches the dev stack. It migrates up, down
-and up again; loads fixture data (250 posts with `block_doc`, a media row and file, a
-LevelDB file); takes three backups with `RETAIN=2`; checks that failed backups exit
+and up again; loads fixture data (250 posts with `block_doc`, a stored Yjs state, a
+media row and file); takes three backups with `RETAIN=2`; checks that failed backups exit
 non-zero and leave nothing behind; checks that restore refuses a non-empty database and
 a damaged set; drops the database and deletes the media; restores; and compares every
-table's row count, a hash of all `block_doc`s, one post's `block_doc` and the media
-file's sha256. It also restores as a non-superuser into its own database, and checks
+table's row count, a hash of all `block_doc`s, the stored Yjs state, one post's
+`block_doc` and the media file's sha256. It also restores as a non-superuser into its own database, and checks
 that a `--force` restore which fails after dropping the schema rolls back to the old
 data. Finally it starts the real API in release mode on the restored data and
 checks that it serves the media file byte for byte and the restored post and media rows.

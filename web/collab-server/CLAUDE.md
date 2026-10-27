@@ -1,34 +1,30 @@
 # Collab server (Hocuspocus) — agent context
 
-The Hocuspocus 3 server that replaces `websocket/` (#206; this is P2, #282). TypeScript,
+The Hocuspocus 3 collab server (#206; built in P2, #282). TypeScript,
 ESM, **inside `web/`**: it shares web's lockfile, so `yjs`, TipTap and `@hocuspocus/*`
 match the editor by construction, and it imports the editor's own schema and Block Spec
 bridge (`gl-admin/lib/collaboration/{schema,fragmentBridge,blockBridge}.ts`,
 `gl-admin/lib/blocks-spec`). Read `gl-admin/lib/collaboration/CLAUDE.md` too.
 
-**Status:** the editor's collab server **by default** since the P4 cutover (#284): the
-`collab` service on **:1235** in `compose.dev.yaml`, and in prod `compose.yaml` behind
-Caddy's `/collab` (image `ghcr.io/go-live-cms/collab`, pushed by CD). The API runs
-`COLLAB_BACKEND=hocuspocus` with `COLLAB_INTERNAL_URL=http://collab:1236`, and the web
-build `PUBLIC_COLLAB_BACKEND=hocuspocus` (client side: `gl-admin/lib/collaboration/CLAUDE.md`).
-The y-websocket `websocket` service stays in dev behind the `y-websocket` profile for the
-rollback window, until P5. Cutover, verification and rollback:
-`docs/operations/collab-cutover.md`.
-- `leveldbDiff.ts` (+ `scripts/collab/leveldb-diff.mjs`, `leveldb-diff-dev.sh`): P4's
-  read-only dry run comparing each y-websocket LevelDB doc with what this server would
-  seed from `block_doc`. Not part of the server bundle; deleted in P5.
+**Status:** the editor's only collab server: the `collab` service on **:1235** in
+`compose.dev.yaml`, and in prod `compose.yaml` behind Caddy's `/collab` (image
+`ghcr.io/go-live-cms/collab`, pushed by CD). The API reaches it at
+`COLLAB_INTERNAL_URL=http://collab:1236` (client side:
+`gl-admin/lib/collaboration/CLAUDE.md`). It replaced the y-websocket server
+(`websocket/`, LevelDB) at the P4 cutover (#284); P5 (#285) deleted that, so there is no
+rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md`.
 
 | File | What |
 |------|------|
-| `access.ts` | Ported from `websocket/access.js`: `verifyTicket`, `TicketReplayGuard`, `ticketIdentity`, `fetchDocAccess`, `isCollabDocName`, plus `accessMode` (write / read / deny). |
+| `access.ts` | `verifyTicket`, `TicketReplayGuard`, `ticketIdentity`, `fetchDocAccess`, `isCollabDocName`, plus `accessMode` (write / read / deny). |
 | `auth.ts` | `onAuthenticate` (`createAuthenticate`, deps injected). |
 | `api.ts` | Client for the API's internal listener (#280 contract). |
 | `load.ts` | `onLoadDocument`: restore stored state, or seed from `block_doc`. |
 | `store.ts` | `onStoreDocument` pipeline (`prepareStore`). |
 | `server.ts` | `createCollabServer`: the hooks wired into a Hocuspocus `Server`, plus `flush`. |
 | `internal.ts` | Internal HTTP listener: `/healthz`, flush. |
-| `logsafe.ts` | Ported `logEvent`, `requestIdFrom`, `docNameForLog`, `clientContextForLog`. |
-| `probe.ts`, `build.mjs`, `main.ts` | Single-instance probe, esbuild bundle, entry point. |
+| `logsafe.ts` | `logEvent`, `requestIdFrom`, `docNameForLog`, `clientContextForLog`. |
+| `probe.ts`, `build.mjs`, `singleYjsInstance.mjs`, `main.ts` | Single-instance probe, esbuild bundle and its yjs plugin, entry point. |
 
 Tests: `npx vitest run --project collab-server` (from `web/`; plain Node env).
 `testkit.ts` has signed tickets, `FakeCollabApi` (the #280 contract in memory, and over
@@ -36,9 +32,9 @@ HTTP for the process test) and a `HocuspocusProvider` client helper.
 
 ## Auth (`auth.ts`)
 
-Same order and rules as `websocket/upgrade.js` (see `websocket/CLAUDE.md` → Auth for the
-history: #216, #223, #233, #135). The ticket now arrives in Hocuspocus's first **auth
-message**, not the URL, so no proxy log ever sees it.
+Same order and rules the old y-websocket server had (history: #216, #223, #233, #135).
+The ticket arrives in Hocuspocus's first **auth message**, not the URL, so no proxy log
+ever sees it.
 
 doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, aud
 `golive.admin-ws`, `ws_ticket`, exp, `doc === documentName`) → **burn the jti**
@@ -68,8 +64,8 @@ doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, au
   and the seed is PUT right away (state + epoch only) so the epoch is durable. A failed
   seed PUT is retried like a failed store (and blocks the unload), or the next load would
   reseed with yet another epoch.
-- The old client's `blocks` map / `blocks_order` array are emptied (`meta.restore_id`
-  is left alone).
+- The pre-#206 client's `blocks` map / `blocks_order` array are emptied if a stored doc
+  still has them (`meta.restore_id` is left alone).
 - **`block_doc` may be `{}`** (posts that never had blocks: most seeded posts, posts
   created without a body). `normalizeBlockDoc` (`api.ts`, and again in `loadIntoDoc` for
   callers that bypass it) maps only `null`/`{}` to `null`, which seeds an empty fragment.
@@ -124,7 +120,7 @@ Own port (`INTERNAL_PORT`, default 1236), **never published**.
 
 ## Logging
 
-Ported from `websocket/logsafe.js` (#142, #155, #220, #254): one JSON object per line via
+(#142, #155, #220, #254) One JSON object per line via
 `logEvent`. Events: `ws_connect`, `ws_close`, `ws_deny`, `collab_load`,
 `collab_load_failed`, `collab_store`,
 `collab_store_invalid`, `collab_store_empty_skipped`, `collab_store_unconvertible`,
@@ -135,11 +131,12 @@ Ported from `websocket/logsafe.js` (#142, #155, #220, #254): one JSON object per
   on those identifiers (and on aliasing `console`). Log client context only through
   `clientContextForLog`.
 
-## Single yjs instance (THE hazard; see `websocket/CLAUDE.md`'s top gotcha)
+## Single yjs instance (THE hazard; rule 13 in `gl-admin/lib/collaboration/CLAUDE.md`)
 
 Two yjs builds in one process (ESM `yjs.mjs` + CJS `yjs.cjs`) have separate class
 registries; cross-instance `Y.applyUpdate` silently corrupted live docs in the 2026-06
-saga. Guards:
+saga, in the old y-websocket server (an ESM `import "yjs"` plus y-websocket's CJS
+`require("yjs")`; `npm ls` still showed one deduped copy). Guards:
 - **The image runs the esbuild bundle** (`build.mjs`, `platform=node`, `format=esm`) with
   **no node_modules**. Its `single-yjs-instance` plugin resolves every `require()` of
   `yjs`, `lib0/*` and `y-protocols/*` as an ESM import, and the build **fails** unless
@@ -153,14 +150,14 @@ saga. Guards:
   the image (probe, no warning, healthy).
 - In-process vitest resolves one yjs for everything, so it **can't** catch this; that's
   what the process test is for. Treat the warning as a release blocker.
-- Never add a dependency that bundles its own yjs, or `y-websocket`'s `bin/utils` /
-  `y-leveldb` (the old CJS sources).
+- Never add a dependency that bundles its own yjs or loads it through CJS `require`
+  outside the bundle (y-websocket's `bin/utils` and `y-leveldb` did, before #285).
 
 ## Versions
 
 `@hocuspocus/server` and `@hocuspocus/provider` are pinned **exact** (`3.4.4`) in
-`web/package.json`; their peer ranges accept `yjs` `13.6.31`. `yjs` stays in lockstep
-with `websocket/` until that is deleted (P5). `paseto` `3.1.4` (same as `websocket/`).
+`web/package.json`; their peer ranges accept `yjs` `13.6.31`, which (like `y-protocols`)
+is pinned exact in the same file (rule 8). `paseto` `3.1.4`.
 
 ## Environment (`main.ts`)
 
@@ -168,7 +165,9 @@ with `websocket/` until that is deleted (P5). `paseto` `3.1.4` (same as `websock
 (required; the API's internal listener and its secret), `COLLAB_INTERNAL_SECRET`
 (required; what the API sends to flush), `PASETO_V4_PUBLIC_KEY_HEX` or
 `PASETO_V4_PUBLIC_PEM_FILE`, `PASETO_ISSUER` (`golive.auth`),
-`COLLAB_STORE_DEBOUNCE_MS` / `COLLAB_STORE_MAX_DEBOUNCE_MS`. It exits 1 on anything
+`COLLAB_STORE_DEBOUNCE_MS` / `COLLAB_STORE_MAX_DEBOUNCE_MS`. In dev compose, the one-shot
+`collab-key` service copies only the public key and issuer out of `app.env` (which also
+holds the API's private keys) into a volume the `collab` command sources. It exits 1 on anything
 missing. SIGTERM closes all connections (storing every doc) for up to 10s, then exits.
 
 Dev: `docker compose -f compose.dev.yaml up -d --build collab` (the service runs the

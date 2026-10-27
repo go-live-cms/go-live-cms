@@ -11,10 +11,10 @@
 #      fails (non-zero, no leftover set) on a bad config or unreachable DB;
 #   3. restore.sh refuses to overwrite a non-empty database without --force;
 #   4. after wiping the database and media, restore.sh brings back identical
-#      row counts, an identical post block_doc and the same schema version;
-#   5. --force --with-leveldb replaces existing data and restores LevelDB; a
-#      least-privilege user can restore; a --force restore that fails midway
-#      rolls back to the old data;
+#      row counts, an identical post block_doc, the collab server's stored Yjs
+#      state (post_ydoc_state) and the same schema version;
+#   5. --force replaces existing data; a least-privilege user can restore; a
+#      --force restore that fails midway rolls back to the old data;
 #   6. the real API (release mode, so the seeded-account guard runs) starts on
 #      the restored data and serves the restored media file byte for byte.
 
@@ -64,6 +64,7 @@ row_counts() {
 fingerprint() {
 	row_counts
 	psql_q "SELECT 'posts.block_doc md5|' || md5(string_agg(id || ':' || block_doc::text, ',' ORDER BY id)) FROM posts"
+	psql_q "SELECT 'post_ydoc_state|' || coalesce(string_agg(encode(state, 'hex') || ' ' || epoch || ' r' || block_revision, ',' ORDER BY post_id), '') FROM post_ydoc_state"
 	psql_q "SELECT 'schema_migrations|' || version || ' dirty=' || dirty FROM schema_migrations"
 }
 media_sha() { in_tools 'sha256sum /app/uploads/media/restore-test.bin' | cut -d' ' -f1; }
@@ -82,7 +83,7 @@ compose run --rm -T migrate down -all
 	fail "tables left behind after migrate down -all"
 compose run --rm -T migrate up
 
-step "fixture data: 1 user, 250 posts with block_doc, 1 media row + file, a LevelDB file"
+step "fixture data: 1 user, 250 posts with block_doc, a stored Yjs state, 1 media row + file"
 compose exec -T postgres psql -U root -d golive_cms -X -q -v ON_ERROR_STOP=1 <<'SQL'
 INSERT INTO users (username, full_name, email, hashed_password, role)
 VALUES ('restore-tester', 'Restore Tester', 'restore@example.test', '$2a$10$not.a.real.hash', 'admin');
@@ -105,9 +106,14 @@ FROM users WHERE username = 'restore-tester';
 
 INSERT INTO post_media (post_id, media_id)
 SELECT (SELECT id FROM posts WHERE slug = 'restore-42'), (SELECT id FROM media WHERE name = 'restore-test');
+
+-- The collab server's live Yjs state lives in Postgres since #206, so the dump
+-- must carry it (bytes and the revision guard's block_revision).
+INSERT INTO post_ydoc_state (post_id, state, epoch, block_revision)
+SELECT id, decode('0102030405ff00', 'hex'), '6f1c1a52-6a0e-4c0f-9c1e-2b7a5d9f0a11', block_revision
+FROM posts WHERE slug = 'restore-42';
 SQL
-in_tools 'mkdir -p /app/uploads/media && head -c 65536 /dev/urandom > /app/uploads/media/restore-test.bin &&
-	echo leveldb-fixture > /data/yjs/000001.log'
+in_tools 'mkdir -p /app/uploads/media && head -c 65536 /dev/urandom > /app/uploads/media/restore-test.bin'
 
 expected=$(fingerprint)
 expected_post=$(psql_q "SELECT block_doc::text FROM posts WHERE slug = 'restore-42'")
@@ -145,10 +151,10 @@ in_tools "cp -R $latest /backups/damaged && printf x >> /backups/damaged/db.dump
 expect_fail "restore of a damaged set" "checksum mismatch" 'sh /scripts/restore.sh /backups/damaged'
 in_tools 'rm -rf /backups/damaged'
 
-step "wipe: drop the database, delete media and LevelDB"
+step "wipe: drop the database, delete media"
 compose exec -T postgres dropdb -U root golive_cms
 compose exec -T postgres createdb -U root golive_cms
-in_tools 'rm -rf /app/uploads/media /data/yjs/* && ls -A /app/uploads /data/yjs'
+in_tools 'rm -rf /app/uploads/media && ls -A /app/uploads'
 [ "$(psql_q "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")" = 0 ] || fail "wipe left tables"
 
 step "restore into the fresh database and empty media dir"
@@ -164,13 +170,12 @@ $actual"
 [ "$(psql_q "SELECT block_doc::text FROM posts WHERE slug = 'restore-42'")" = "$expected_post" ] ||
 	fail "post restore-42 block_doc differs"
 [ "$(media_sha)" = "$expected_sha" ] || fail "restored media file differs"
-[ -z "$(in_tools 'ls -A /data/yjs' | tr -d '\r')" ] || fail "LevelDB dir should stay empty without --with-leveldb"
 echo "identical: $(echo "$actual" | wc -l | tr -d ' ') fingerprint lines, post block_doc, media sha256 $expected_sha"
 
 step "restore as a least-privilege user (owns its database, not schema public)"
 psql_q "CREATE ROLE restorer LOGIN PASSWORD 'restorer'" >/dev/null
 compose exec -T postgres createdb -U root -O restorer golive_np
-in_tools "DB_SOURCE='postgresql://restorer:restorer@postgres:5432/golive_np?sslmode=disable' SKIP_MEDIA=1 WS_DATA_DIR= sh /scripts/restore.sh $latest"
+in_tools "DB_SOURCE='postgresql://restorer:restorer@postgres:5432/golive_np?sslmode=disable' SKIP_MEDIA=1 sh /scripts/restore.sh $latest"
 [ "$(compose exec -T postgres psql -U root -d golive_np -X -A -t -c 'SELECT count(*) FROM posts' | tr -d '\r')" = 250 ] ||
 	fail "least-privilege restore is incomplete"
 
@@ -186,10 +191,9 @@ psql_q "DROP EVENT TRIGGER block_create_table; DROP SCHEMA blocker CASCADE;" >/d
 [ "$(fingerprint)" = "$expected" ] || fail "a failed --force restore changed the database"
 [ "$(media_sha)" = "$expected_sha" ] || fail "a failed --force restore touched the media"
 
-step "restore --force --with-leveldb over the restored data"
-in_tools "sh /scripts/restore.sh --force --with-leveldb $latest"
+step "restore --force over the restored data"
+in_tools "sh /scripts/restore.sh --force $latest"
 [ "$(fingerprint)" = "$expected" ] || fail "--force restore differs"
-[ "$(in_tools 'cat /data/yjs/000001.log' | tr -d '\r')" = leveldb-fixture ] || fail "LevelDB snapshot not restored"
 
 step "API (release mode) starts on the restored data and serves the media"
 compose up -d --wait api

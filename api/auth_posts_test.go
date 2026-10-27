@@ -69,8 +69,10 @@ func liveFieldsAllowed(a postPermActor, post db.Post) bool {
 	return a.moderator || (a.owner && post.PostStatus != "published")
 }
 
-func workingCopyAllowed(a postPermActor, _ db.Post) bool {
-	return a.moderator || a.owner
+// readAllowed: every content role may watch a post's working copy (a
+// read-only collab connection unless canEditPost, #206).
+func readAllowed(postPermActor, db.Post) bool {
+	return true
 }
 
 func moderatorOnly(a postPermActor, _ db.Post) bool {
@@ -78,7 +80,6 @@ func moderatorOnly(a postPermActor, _ db.Post) bool {
 }
 
 func postPermRoutes() []postPermRoute {
-	emptyDoc := json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
 	return []postPermRoute{
 		{
 			name:    "UpdatePost",
@@ -125,23 +126,6 @@ func postPermRoutes() []postPermRoute {
 			stubs: func(store *mockdb.MockStore, p db.Post, allowed bool) {
 				store.EXPECT().GetPost(gomock.Any(), p.ID).Return(p, nil).AnyTimes()
 				store.EXPECT().CreatePostMedia(gomock.Any(), gomock.Any()).Times(timesIf(allowed)).Return(db.PostMedium{PostID: p.ID, MediaID: 5}, nil)
-			},
-		},
-		{
-			name:    "SaveBlocks",
-			method:  http.MethodPut,
-			path:    func(p db.Post) string { return fmt.Sprintf("/api/v1/posts/%d/blocks", p.ID) },
-			body:    func(db.Post) any { return gin.H{"doc": emptyDoc} },
-			header:  map[string]string{"If-Match": "1"},
-			allowed: workingCopyAllowed,
-			okCode:  http.StatusOK,
-			stubs: func(store *mockdb.MockStore, p db.Post, allowed bool) {
-				store.EXPECT().GetPost(gomock.Any(), p.ID).Return(p, nil).AnyTimes()
-				store.EXPECT().UpdatePostBlocksIfRevisionMatches(gomock.Any(), gomock.Any()).Times(timesIf(allowed)).
-					Return(db.UpdatePostBlocksIfRevisionMatchesRow{Content: emptyDoc, Revision: 2}, nil)
-				// Skipped for an owner on a published post (live links); see the
-				// dedicated test below.
-				store.EXPECT().GetMediaByPostWithOrder(gomock.Any(), p.ID).AnyTimes().Return(nil, nil)
 			},
 		},
 		{
@@ -194,7 +178,7 @@ func postPermRoutes() []postPermRoute {
 			method:  http.MethodPost,
 			path:    func(db.Post) string { return "/api/v1/collab/tickets" },
 			body:    func(p db.Post) any { return gin.H{"doc": fmt.Sprintf("post-%d", p.ID)} },
-			allowed: workingCopyAllowed,
+			allowed: readAllowed,
 			okCode:  http.StatusOK,
 			stubs: func(store *mockdb.MockStore, p db.Post, _ bool) {
 				store.EXPECT().GetPost(gomock.Any(), p.ID).Return(p, nil).AnyTimes()
@@ -296,15 +280,12 @@ func TestPostPermissionsMissingPost(t *testing.T) {
 	contributor := db.User{ID: 5, Username: "c", Role: RoleContributor}
 	store := mockdb.NewMockStore(ctrl)
 	store.EXPECT().GetPost(gomock.Any(), int64(404)).Return(db.Post{}, sql.ErrNoRows).Times(1)
-	store.EXPECT().UpdatePostBlocksIfRevisionMatches(gomock.Any(), gomock.Any()).Times(0)
+	store.EXPECT().DeletePostMedia(gomock.Any(), gomock.Any()).Times(0)
 	stubRoleLookup(store, contributor)
 
 	server := newTestServer(t, store)
-	recorder := servePostPermRequest(t, server, contributor, http.MethodPut, "/api/v1/posts/404/blocks",
-		func(db.Post) any {
-			return gin.H{"doc": json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)}
-		},
-		db.Post{}, map[string]string{"If-Match": "1"})
+	recorder := servePostPermRequest(t, server, contributor, http.MethodDelete, "/api/v1/posts/404/media/5",
+		nil, db.Post{}, nil)
 	require.Equal(t, http.StatusNotFound, recorder.Code)
 }
 
@@ -385,79 +366,6 @@ func TestUpdatePostStatusAsContributor(t *testing.T) {
 			require.Equal(t, tc.want, recorder.Code, recorder.Body.String())
 		})
 	}
-}
-
-// A contributor's block save on their published post reaches the working copy
-// (which goes live only on publish) but never the live fields: a changed title
-// is refused outright (403, nothing saved) rather than dropped behind a 200,
-// the unchanged title every autosave sends is fine, and post_media links are
-// left for publishPost to sync. The post is loaded once.
-func TestSaveBlocksOnPublishedPostAsContributor(t *testing.T) {
-	contributor := db.User{ID: 51, Username: "contrib", Role: RoleContributor}
-	post := db.Post{ID: 9, UserID: contributor.ID, PostStatus: "published", Title: "Live title"}
-	emptyDoc := json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
-
-	for _, tc := range []struct {
-		name  string
-		title string
-		want  int
-	}{
-		{name: "ChangedTitleRefused", title: "Sneaky new title", want: http.StatusForbidden},
-		{name: "UnchangedTitleSaves", title: post.Title, want: http.StatusOK},
-		{name: "NoTitleSaves", title: "", want: http.StatusOK},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			saved := tc.want == http.StatusOK
-			store := mockdb.NewMockStore(ctrl)
-			store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil).Times(1)
-			store.EXPECT().UpdatePostBlocksIfRevisionMatches(gomock.Any(), gomock.Any()).Times(timesIf(saved)).
-				Return(db.UpdatePostBlocksIfRevisionMatchesRow{Content: emptyDoc, Revision: 2}, nil)
-			store.EXPECT().UpdatePost(gomock.Any(), gomock.Any()).Times(0)
-			store.EXPECT().GetMediaByPostWithOrder(gomock.Any(), gomock.Any()).Times(0)
-			stubRoleLookup(store, contributor)
-
-			body := gin.H{"doc": emptyDoc}
-			if tc.title != "" {
-				body["title"] = tc.title
-			}
-			server := newTestServer(t, store)
-			recorder := servePostPermRequest(t, server, contributor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d/blocks", post.ID),
-				func(db.Post) any { return body }, post, map[string]string{"If-Match": "1"})
-			require.Equal(t, tc.want, recorder.Code, recorder.Body.String())
-		})
-	}
-}
-
-// On their own draft a contributor's block save still renames the post and
-// syncs its media links, reusing the post it loaded for the owner check.
-func TestSaveBlocksOnDraftAsContributor(t *testing.T) {
-	contributor := db.User{ID: 52, Username: "contrib", Role: RoleContributor}
-	post := db.Post{ID: 10, UserID: contributor.ID, PostStatus: "draft", Title: "Old title"}
-	emptyDoc := json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	store := mockdb.NewMockStore(ctrl)
-	store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil).Times(1)
-	store.EXPECT().UpdatePostBlocksIfRevisionMatches(gomock.Any(), gomock.Any()).Times(1).
-		Return(db.UpdatePostBlocksIfRevisionMatchesRow{Content: emptyDoc, Revision: 2}, nil)
-	store.EXPECT().UpdatePost(gomock.Any(), gomock.Any()).Times(1).
-		DoAndReturn(func(_ any, arg db.UpdatePostParams) (db.Post, error) {
-			require.Equal(t, "New title", arg.Title)
-			require.Equal(t, post.UserID, arg.UserID)
-			return post, nil
-		})
-	store.EXPECT().GetMediaByPostWithOrder(gomock.Any(), post.ID).Times(1).Return(nil, nil)
-	stubRoleLookup(store, contributor)
-
-	server := newTestServer(t, store)
-	recorder := servePostPermRequest(t, server, contributor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d/blocks", post.ID),
-		func(db.Post) any { return gin.H{"doc": emptyDoc, "title": "New title"} }, post, map[string]string{"If-Match": "1"})
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 }
 
 // A contributor may nest a post only under a post they can edit; moderators

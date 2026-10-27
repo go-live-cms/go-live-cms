@@ -129,34 +129,26 @@ type Config struct {
 	// debug mode (GIN_MODE=debug) so local HTTP works. Every other mode forces Secure.
 	CookieSecure bool `mapstructure:"COOKIE_SECURE"`
 
-	// CollabBackend selects the collaboration server (#206): "hocuspocus"
-	// (default since the P4 cutover, #284) or "y-websocket" (rollback only,
-	// removed in P5). It is deployment-wide and must match the web build's
-	// PUBLIC_COLLAB_BACKEND. Under "hocuspocus" the collab server owns
-	// block_doc: PUT /posts/:id/blocks answers 409, publish flushes the
-	// document first, and contributors get read-only tickets.
-	CollabBackend string `mapstructure:"COLLAB_BACKEND"`
-
-	// CollabInternalURL is the base URL of the collab server's internal HTTP
-	// endpoints, used for the API's server-to-server calls to it: squash after
-	// publish (y-websocket) or flush before publish (hocuspocus).
-	// Example: "http://collab:1236" (Docker) or "http://localhost:1236" (local dev);
-	// "http://websocket:1234" under y-websocket.
+	// CollabInternalURL is the base URL of the collab (Hocuspocus) server's
+	// internal HTTP endpoints, used for the API's server-to-server calls to it:
+	// the flush before a publish (#206). Required (NewServer checks).
+	// Example: "http://collab:1236" (Docker) or "http://localhost:1236" (local dev).
 	CollabInternalURL string `mapstructure:"COLLAB_INTERNAL_URL"`
 
 	// CollabInternalSecret is the shared secret sent as "Authorization: Bearer
-	// <secret>" on those calls. Must match the collab server's copy
-	// (SQUASH_SECRET in websocket/.env).
+	// <secret>" on those calls. Must match the collab server's
+	// COLLAB_INTERNAL_SECRET.
 	CollabInternalSecret string `mapstructure:"COLLAB_INTERNAL_SECRET"`
 
 	// InternalServerAddress is the bind address of the separate server-to-server
 	// listener (e.g. "0.0.0.0:8081") that serves /internal/* routes. Never publish
-	// this port; only the collab WS server on the private network should reach it.
+	// this port; only the collab server on the private network should reach it.
 	InternalServerAddress string `mapstructure:"INTERNAL_SERVER_ADDRESS"`
 
-	// RoleLookupSecret is the shared secret the collab WebSocket server sends as
-	// "Authorization: Bearer <secret>" to GET /internal/users/:id/access, its
-	// per-connection access check. Must match ROLE_LOOKUP_SECRET in websocket/.env.
+	// RoleLookupSecret is the shared secret the collab server sends as
+	// "Authorization: Bearer <secret>" on its internal calls (GET
+	// /internal/users/:id/access, its per-connection access check, and the
+	// /internal/posts/:id/collab load and store). Must match its ROLE_LOOKUP_SECRET.
 	// Required: NewServer refuses to start without it (no default).
 	RoleLookupSecret string `mapstructure:"ROLE_LOOKUP_SECRET"`
 
@@ -299,12 +291,9 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("SEED_ADMIN_USER", "")
 	viper.SetDefault("SEED_ADMIN_PASS", "")
 
-	// Collaborative editing server. Under COLLAB_BACKEND=hocuspocus (the default
-	// since #284) the URL and secret are required (NewServer checks): publish
-	// can't flush without them. Under y-websocket they are optional (squash is
-	// silently skipped if either is unset). Both default to empty rather than
-	// to a guessed address, so a missing setting fails at startup.
-	viper.SetDefault("COLLAB_BACKEND", CollabBackendHocuspocus)
+	// Collaborative editing server. The URL and secret are required (NewServer
+	// checks): publish can't flush without them. Both default to empty rather
+	// than to a guessed address, so a missing setting fails at startup.
 	viper.SetDefault("COLLAB_INTERNAL_URL", "")
 	viper.SetDefault("COLLAB_INTERNAL_SECRET", "")
 
@@ -376,13 +365,6 @@ func LoadConfig(path string) (config Config, err error) {
 	default:
 		return config, fmt.Errorf("invalid GIN_MODE %q: must be %q, %q or %q",
 			config.GinMode, GinModeDebug, GinModeRelease, GinModeTest)
-	}
-
-	switch config.CollabBackend {
-	case CollabBackendYWebsocket, CollabBackendHocuspocus:
-	default:
-		return config, fmt.Errorf("invalid COLLAB_BACKEND %q: must be %q or %q",
-			config.CollabBackend, CollabBackendYWebsocket, CollabBackendHocuspocus)
 	}
 
 	if _, err = config.MaxUploadBytes(); err != nil {
@@ -481,19 +463,6 @@ const (
 // Secure flag from auth cookies.
 func (c Config) IsDebugMode() bool {
 	return c.GinMode == GinModeDebug
-}
-
-// Collaboration servers accepted by COLLAB_BACKEND (#206).
-const (
-	CollabBackendYWebsocket = "y-websocket"
-	CollabBackendHocuspocus = "hocuspocus"
-)
-
-// UsesHocuspocus reports whether the Hocuspocus collab server owns block_doc
-// (COLLAB_BACKEND=hocuspocus, LoadConfig's default). Anything else, including
-// the zero Config in tests, is the y-websocket behaviour (kept until P5).
-func (c Config) UsesHocuspocus() bool {
-	return c.CollabBackend == CollabBackendHocuspocus
 }
 
 // Mail drivers accepted by MAIL_DRIVER (see Config.MailDriver).

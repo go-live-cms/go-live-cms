@@ -19,10 +19,9 @@ import (
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
-// Behaviour under COLLAB_BACKEND=hocuspocus (#206 / #280): publish flushes
-// the collab server first, PUT /blocks is refused, and contributors get
-// read-only tickets. The y-websocket defaults are covered by the existing
-// tests, which run with a zero COLLAB_BACKEND.
+// The API's side of the collab server (#206 / #280): publish flushes the
+// collab server first, only the collab server writes block_doc (PUT
+// /posts/:id/blocks is gone, #285), and contributors get read-only tickets.
 
 var publishEditor = db.User{ID: 1, Username: "testuser", Role: RoleEditor}
 
@@ -84,7 +83,7 @@ func TestPublishFlushesCollab(t *testing.T) {
 			stubRoleLookup(store, publishEditor)
 
 			// A trailing slash on the URL is trimmed.
-			server := newHocuspocusTestServer(t, store, collab.URL+"/")
+			server := newCollabTestServer(t, store, collab.URL+"/")
 			recorder := publishRequest(t, server, 1)
 			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 			var resp PublishResponse
@@ -144,7 +143,7 @@ func TestPublishFlushFailureIs503(t *testing.T) {
 			store.EXPECT().SetPublishedVersionOnPost(gomock.Any(), gomock.Any()).Times(0)
 			stubRoleLookup(store, publishEditor)
 
-			server := newHocuspocusTestServer(t, store, tc.url)
+			server := newCollabTestServer(t, store, tc.url)
 			server.collabFlushTimeout = 200 * time.Millisecond
 
 			start := time.Now()
@@ -159,41 +158,14 @@ func TestCollabFlushTimeoutDefault(t *testing.T) {
 	require.Equal(t, 5*time.Second, newTestServer(t, nil).collabFlushTimeout)
 }
 
-// Under y-websocket, publish never calls the collab server before reading
-// (squash, if configured, runs after and can't fail it).
-func TestPublishWithoutHocuspocusDoesNotFlush(t *testing.T) {
-	// Only squash may arrive, and only after the read (checked below).
-	var calls atomic.Int32
-	collab := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer collab.Close()
-
+// PUT /posts/:id/blocks is gone (#285): only the collab server writes
+// block_doc, so nothing a client sends here can reach the store.
+func TestPutPostBlocksRemoved(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
-	expectPublishWrites(store, func() { require.Zero(t, calls.Load()) })
 	stubRoleLookup(store, publishEditor)
 
-	config := newTestConfig(t)
-	config.CollabInternalURL = collab.URL
-	config.CollabInternalSecret = testCollabInternalSecret
-	server, err := NewServer(config, store)
-	require.NoError(t, err)
-
-	recorder := publishRequest(t, server, 1)
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-}
-
-// PUT /posts/:id/blocks is closed under Hocuspocus, so a tab still running the
-// old autosave can't overwrite what the collab server stored.
-func TestUpdatePostBlocksConflictUnderHocuspocus(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mockdb.NewMockStore(ctrl)
-	store.EXPECT().UpdatePostBlocksIfRevisionMatches(gomock.Any(), gomock.Any()).Times(0)
-	stubRoleLookup(store, publishEditor)
-
-	server := newHocuspocusTestServer(t, store, "http://collab.invalid")
+	server := newTestServer(t, store)
 	body, err := json.Marshal(gin.H{"doc": gin.H{"doc_version": 1, "blocks_order": []string{}, "blocks": gin.H{}}})
 	require.NoError(t, err)
 	request, err := http.NewRequest(http.MethodPut, "/api/v1/posts/1/blocks", bytes.NewReader(body))
@@ -204,19 +176,17 @@ func TestUpdatePostBlocksConflictUnderHocuspocus(t *testing.T) {
 
 	recorder := httptest.NewRecorder()
 	server.router.ServeHTTP(recorder, request)
-	require.Equal(t, http.StatusConflict, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "managed by collaboration server")
+	require.Equal(t, http.StatusNotFound, recorder.Code)
 }
 
-// GET /posts/:id/blocks stays open under Hocuspocus (removed only in P5 is
-// the PUT; the GET stays).
-func TestGetPostBlocksUnderHocuspocus(t *testing.T) {
+// GET /posts/:id/blocks stays: the read-only REST view and revisions use it.
+func TestGetPostBlocksStaysOpen(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
 	store.EXPECT().GetPostBlocks(gomock.Any(), int64(1)).Times(1).Return(db.GetPostBlocksRow{Content: validBlockDoc(), Revision: 2}, nil)
 	stubRoleLookup(store, publishEditor)
 
-	server := newHocuspocusTestServer(t, store, "http://collab.invalid")
+	server := newCollabTestServer(t, store, "http://collab.invalid")
 	request, err := http.NewRequest(http.MethodGet, "/api/v1/posts/1/blocks", nil)
 	require.NoError(t, err)
 	addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, publishEditor.ID, publishEditor.Username, time.Minute)
@@ -225,10 +195,10 @@ func TestGetPostBlocksUnderHocuspocus(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code)
 }
 
-// TestCreateCollabTicketHocuspocus: contributors may watch any existing post
+// TestCreateCollabTicketReadAccess: contributors may watch any existing post
 // live (the collab server makes it read-only unless can_edit); the ticket is
 // still bound to the doc and carries no role.
-func TestCreateCollabTicketHocuspocus(t *testing.T) {
+func TestCreateCollabTicketReadAccess(t *testing.T) {
 	contributor := randomUserNew()
 	contributor.ID = 70
 	contributor.Role = RoleContributor
@@ -257,7 +227,7 @@ func TestCreateCollabTicketHocuspocus(t *testing.T) {
 			store.EXPECT().GetPost(gomock.Any(), int64(13)).Return(db.Post{ID: 13, UserID: contributor.ID}, nil).AnyTimes()
 			store.EXPECT().GetPost(gomock.Any(), int64(14)).Return(db.Post{}, sql.ErrNoRows).AnyTimes()
 
-			server := newHocuspocusTestServer(t, store, "http://collab.invalid")
+			server := newCollabTestServer(t, store, "http://collab.invalid")
 			recorder := postCollabTicket(t, server, gin.H{"doc": tc.doc}, &tc.caller)
 			require.Equal(t, tc.wantStatus, recorder.Code, recorder.Body.String())
 			if tc.wantStatus != http.StatusOK {

@@ -12,7 +12,6 @@ import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { useCollabPresence } from "@gl-admin/components/editor/utils/useCollabPresence"
 import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
-import { usesHocuspocus } from "@gl-admin/lib/collaboration/backend"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 import "@gl-admin/assets/styles/components/Toast.scss"
 
@@ -109,17 +108,16 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const contentReadOnly = !access.content
   const detailsReadOnly = !access.details
   const canPublish = access.publish
-  // Under Hocuspocus (#206 P3) a user who can't edit the post still gets the live doc,
-  // read-only (the server makes that connection read-only); y-websocket rejects them.
-  const collabEnabled = mode === "edit" && roleVerified && (!contentReadOnly || usesHocuspocus())
+  // A user who can't edit the post still gets the live doc, read-only (the collab server
+  // makes that connection read-only).
+  const collabEnabled = mode === "edit" && roleVerified
 
   const { status: collabStatus, users: collabUsers } = useCollabPresence(initialData?.id, collabEnabled)
 
-  // Under Hocuspocus the title no longer rides on the blocks autosave (PUT /blocks is 409
-  // there; the collab server saves the content only), so it's saved on its own, debounced
-  // like the old autosave, through PUT /posts/:id. Only for users who may change it.
+  // The collab server saves the content only, so the title is saved on its own, debounced,
+  // through PUT /posts/:id. Only for users who may change it.
   const savedTitleRef = useRef(initialData?.title ?? "")
-  const titleSaveable = usesHocuspocus() && mode === "edit" && roleVerified && !detailsReadOnly && !!initialData?.id
+  const titleSaveable = mode === "edit" && roleVerified && !detailsReadOnly && !!initialData?.id
   const saveTitle = async (): Promise<void> => {
     const title = formData.title.trim()
     if (!titleSaveable || !initialData?.id || title === savedTitleRef.current || title.length < 3) return
@@ -368,8 +366,12 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       const fullUrl = `${baseUrl}/${postType}/${formData.slug}`
 
       if (mode === "create") {
-        // Hocuspocus: the body as Block Spec v1, sent with the create (and reused below).
-        const initialBlockDoc = usesHocuspocus() && formData.content ? htmlToBlockDoc(formData.content) : null
+        // The body as Block Spec v1, sent with the create.
+        const initialBlockDoc = formData.content ? htmlToBlockDoc(formData.content) : null
+        // With a body, publishing is a separate step (publishPost snapshots the body and
+        // sets the status itself), so the post is created as a draft and only goes public
+        // once that succeeds. An empty post is published by the create.
+        const publishAfterCreate = isPublish && !!initialBlockDoc
         const postData: CreatePostRequest = {
           title: formData.title,
           url: fullUrl,
@@ -377,17 +379,15 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           content: formData.content,
           description: description,
           author_ids: [authState.user.id],
-          post_status: isPublish ? "published" : formData.post_status,
+          post_status: publishAfterCreate ? "draft" : isPublish ? "published" : formData.post_status,
           post_type: postType,
           menu_order: 0,
-          // Hocuspocus: the body goes in with the post (PUT /blocks is 409 there); the
-          // collab server seeds the doc from it on first open.
+          // The body goes in with the post; the collab server seeds the doc from it on
+          // first open.
           ...(initialBlockDoc ? { block_doc: initialBlockDoc } : {}),
         }
 
         const result = await createPost(postData)
-        const successMessage = `${getContentTypeName(postType)} ${isPublish ? "published" : "saved"} successfully!`
-        showSuccess(successMessage)
         setSaveStatusState("saved")
 
         console.log("📝 Post created successfully:", {
@@ -398,42 +398,21 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           contentPreview: formData.content?.substring(0, 100),
         })
 
-        // Convert HTML content to blocks and save immediately
-        if (formData.content) {
+        let published = isPublish
+        if (publishAfterCreate) {
           try {
-            console.log("🔄 Converting HTML to blocks...")
-            const blockDoc = initialBlockDoc ?? htmlToBlockDoc(formData.content)
-            console.log("✅ Blocks generated:", {
-              blocksCount: Object.keys(blockDoc.blocks).length,
-              blocksOrder: blockDoc.blocks_order.length,
-              blockDoc,
-            })
-
             const token = authManager.getAccessToken()
-            if (token) {
-              blockAPIClient.setAuthToken(token)
-              console.log("💾 Saving blocks to post", result.post.id)
-              if (!usesHocuspocus()) {
-                const saveResult = await blockAPIClient.updatePostBlocks(result.post.id, blockDoc, 1)
-                console.log("✅ Blocks saved successfully to block_doc:", saveResult)
-              }
-
-              // If published, also publish the blocks (copies block_doc → published_block_doc)
-              if (isPublish) {
-                console.log("📤 Publishing blocks (copying to published_block_doc)...")
-                const publishResult = await blockAPIClient.publishPost(result.post.id)
-                console.log("✅ Blocks published:", publishResult)
-              }
-            } else {
-              console.error("❌ No auth token available for saving blocks")
-            }
+            if (token) blockAPIClient.setAuthToken(token)
+            await blockAPIClient.publishPost(result.post.id)
           } catch (error) {
-            console.error("❌ Failed to save initial blocks:", error)
-            showError("Warning: Content may not have been saved properly")
-            // Don't fail the entire operation if block save fails
+            // The post exists as a draft; it can be published from the editor.
+            published = false
+            console.error("❌ Failed to publish the new post:", error)
+            showError("Saved as a draft, but publishing failed. Try publishing again from the editor.")
           }
-        } else {
-          console.warn("⚠️ No content to save - formData.content is empty")
+        }
+        if (published || !isPublish) {
+          showSuccess(`${getContentTypeName(postType)} ${published ? "published" : "saved"} successfully!`)
         }
 
         if (onSuccess) {

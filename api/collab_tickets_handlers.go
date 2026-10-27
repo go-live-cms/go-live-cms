@@ -18,15 +18,14 @@ type collabTicketMaker interface {
 // createCollabTicket mints a collab ticket for the caller and one document.
 //
 // Authentication: Bearer access token. Admins and editors may get a ticket
-// for any post. Contributors only for their own (canEditPost, #135) under
-// y-websocket; under Hocuspocus for any post whose working copy they may read
-// (canReadPostBlocks), a read-only live view unless they may edit it. The
-// ticket carries no role either way: the collab server asks the API.
+// for any post, contributors for any post whose working copy they may read
+// (canReadPostBlocks, #135, #206): a read-only live view unless they may edit
+// it. The ticket carries no role: the collab server asks the API.
 //
 // Returns:
 //   - 200 OK: { "ticket": "v4.public…", "expires_at": "…" }
 //   - 400 Bad Request: missing or malformed doc name
-//   - 401/403: see authMiddleware, requireContentAuthor and canEditPost
+//   - 401/403: see authMiddleware, requireContentAuthor and canReadPostBlocks
 //   - 404 Not Found: a contributor asked for a post that doesn't exist
 func (server *Server) createCollabTicket(c *gin.Context) {
 	var req createCollabTicketRequest
@@ -39,16 +38,10 @@ func (server *Server) createCollabTicket(c *gin.Context) {
 		return
 	}
 
-	// y-websocket: the same per-post rule the WS server re-checks on connect
-	// (internal access endpoint); failing early here saves the editor a doomed
-	// connect. Hocuspocus also serves read-only connections, so anyone who may
+	// The collab server also serves read-only connections, so anyone who may
 	// read the working copy gets a ticket; the server makes the connection
 	// read-only when the access endpoint answers can_edit=false (#206).
-	rule := canEditPost
-	if server.config.UsesHocuspocus() {
-		rule = canReadPostBlocks
-	}
-	if !server.authorizePost(c, postID, rule) {
+	if !server.authorizePost(c, postID, canReadPostBlocks) {
 		return
 	}
 

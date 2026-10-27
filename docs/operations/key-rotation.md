@@ -7,8 +7,10 @@ The API holds three PASETO v4 keys (see `util/config.go`):
 | Ed25519 private + public | `PASETO_V4_PRIVATE_KEY_HEX`, `PASETO_V4_PUBLIC_KEY_HEX` | access tokens (`v4.public`) and collab tickets | `ACCESS_TOKEN_DURATION` (default 15m); tickets 30s |
 | Symmetric local | `PASETO_V4_LOCAL_KEY_HEX` | refresh tokens (`v4.local`) | `REFRESH_TOKEN_DURATION` (default 720h) |
 
-The websocket server verifies collab tickets with the same public key, given to it as
-PEM (`PASETO_V4_PUBLIC_PEM`, `_PEM_B64` or `_PEM_FILE`).
+The collab server (`collab` service) verifies collab tickets with the same public key:
+`PASETO_V4_PUBLIC_KEY_HEX` (prod `compose.yaml` passes it from `.env`; in dev the
+`collab-key` service copies it from `app.env` on every `up`), or a PEM file in
+`PASETO_V4_PUBLIC_PEM_FILE`.
 
 ## Policy
 
@@ -47,8 +49,8 @@ PASETO_PREVIOUS_KEYS_VALID_UNTIL=2026-12-01T00:00:00Z  # required with either ke
 1. Generate the new key(s).
 2. Deploy the API with the new keys as the current ones, the old ones in the
    `PASETO_V4_PREVIOUS_*` variables, a cutoff, and new KIDs.
-3. Restart the websocket server with the new public key **at the same time** as the API.
-   Tickets are signed with the new key from the moment the API restarts, and the WS
+3. Restart the collab server with the new public key **at the same time** as the API.
+   Tickets are signed with the new key from the moment the API restarts, and the collab
    server only knows one key, so until both run the new key, opening an editor fails
    (it retries; nothing is lost).
 4. After the cutoff, remove the `PASETO_V4_PREVIOUS_*` and

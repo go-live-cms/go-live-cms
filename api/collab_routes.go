@@ -13,8 +13,8 @@ import (
 )
 
 // registerCollabRoutes configures:
-//   - POST /collab/tickets (access token; canEditPost on the doc's post, or
-//     canReadPostBlocks under COLLAB_BACKEND=hocuspocus): mint a ticket
+//   - POST /collab/tickets (access token; canReadPostBlocks on the doc's
+//     post): mint a ticket
 func (server *Server) registerCollabRoutes(v1 *gin.RouterGroup) {
 	collab := v1.Group("/collab")
 

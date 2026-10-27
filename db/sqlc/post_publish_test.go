@@ -47,14 +47,7 @@ func TestPublishCreatesVersionsAndSnapshot(t *testing.T) {
 	post := createPostWithTransaction(t).Post
 	other := createPostWithTransaction(t).Post
 
-	writeBlocks := func(doc json.RawMessage) {
-		current, err := testQueries.GetPostBlocks(ctx, post.ID)
-		require.NoError(t, err)
-		_, err = testQueries.UpdatePostBlocksIfRevisionMatches(ctx, UpdatePostBlocksIfRevisionMatchesParams{
-			ID: post.ID, BlockDoc: doc, BlockRevision: current.Revision,
-		})
-		require.NoError(t, err)
-	}
+	writeBlocks := func(doc json.RawMessage) { writeBlockDocAround(t, post.ID, doc) }
 
 	next, err := testQueries.GetNextVersionNoForPost(ctx, post.ID)
 	require.NoError(t, err)
@@ -135,12 +128,7 @@ func TestUnpublishKeepsHistory(t *testing.T) {
 	post := createPostWithTransaction(t).Post
 
 	doc := json.RawMessage(`{"doc_version":1,"blocks_order":["a"],"blocks":{"a":{"id":"a","type":"paragraph","attrs":{"text":"live"}}}}`)
-	current, err := testQueries.GetPostBlocks(ctx, post.ID)
-	require.NoError(t, err)
-	_, err = testQueries.UpdatePostBlocksIfRevisionMatches(ctx, UpdatePostBlocksIfRevisionMatchesParams{
-		ID: post.ID, BlockDoc: doc, BlockRevision: current.Revision,
-	})
-	require.NoError(t, err)
+	writeBlockDocAround(t, post.ID, doc)
 	v1 := publishPost(t, post.ID, post.UserID, "")
 
 	unpublished, err := testQueries.UnpublishPost(ctx, post.ID)
@@ -184,41 +172,5 @@ func TestUnpublishKeepsHistory(t *testing.T) {
 	require.Equal(t, v2.ID, again.PublishedVersionID.Int64)
 
 	_, err = testQueries.UnpublishPost(ctx, -1)
-	require.ErrorIs(t, err, sql.ErrNoRows)
-}
-
-// TestBlockRevisionGuard covers the optimistic-concurrency check that keeps a
-// stale editor tab from overwriting newer blocks.
-func TestBlockRevisionGuard(t *testing.T) {
-	ctx := context.Background()
-	post := createPostWithTransaction(t).Post
-
-	start, err := testQueries.GetPostBlocks(ctx, post.ID)
-	require.NoError(t, err)
-
-	first := json.RawMessage(`{"version":1,"blocks":[{"id":"x","type":"paragraph","data":{"text":"mine"}}]}`)
-	row, err := testQueries.UpdatePostBlocksIfRevisionMatches(ctx, UpdatePostBlocksIfRevisionMatchesParams{
-		ID: post.ID, BlockDoc: first, BlockRevision: start.Revision,
-	})
-	require.NoError(t, err)
-	require.Equal(t, start.Revision+1, row.Revision)
-	require.JSONEq(t, string(first), string(row.Content))
-
-	// A writer still holding the old revision is refused and changes nothing.
-	stale := json.RawMessage(`{"version":1,"blocks":[]}`)
-	_, err = testQueries.UpdatePostBlocksIfRevisionMatches(ctx, UpdatePostBlocksIfRevisionMatchesParams{
-		ID: post.ID, BlockDoc: stale, BlockRevision: start.Revision,
-	})
-	require.ErrorIs(t, err, sql.ErrNoRows)
-
-	current, err := testQueries.GetPostBlocks(ctx, post.ID)
-	require.NoError(t, err)
-	require.Equal(t, start.Revision+1, current.Revision)
-	require.JSONEq(t, string(first), string(current.Content))
-
-	// A missing post looks the same as a revision conflict to this query.
-	_, err = testQueries.UpdatePostBlocksIfRevisionMatches(ctx, UpdatePostBlocksIfRevisionMatchesParams{
-		ID: -1, BlockDoc: stale, BlockRevision: start.Revision,
-	})
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }

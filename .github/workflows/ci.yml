@@ -229,9 +229,7 @@ jobs:
           # how the "20" alias happens to resolve on the runner.
           node-version: "22"
           cache: npm
-          cache-dependency-path: |
-            web/package-lock.json
-            websocket/package-lock.json
+          cache-dependency-path: web/package-lock.json
 
       - name: Install web deps
         working-directory: web
@@ -254,14 +252,6 @@ jobs:
             echo "::error::Unresolvable or case-mismatched imports in web/ (see above)"
             exit 1
           fi
-
-      - name: Install websocket deps
-        working-directory: websocket
-        run: npm ci
-
-      - name: Run websocket tests
-        working-directory: websocket
-        run: npm test
 
   # The collab server's tests on Node 24, the version its image runs (web-tests above
   # runs them on Node 22). process.test.ts spawns the esbuild bundle, so this also
@@ -311,17 +301,8 @@ jobs:
         working-directory: web
         run: npm run check
 
-      # Default build: the Hocuspocus editor (#284).
       - name: Build
         working-directory: web
-        run: npm run build
-
-      # The y-websocket editor must keep building until P5 deletes it: it's the
-      # rollback path (docs/operations/collab-cutover.md).
-      - name: Build (y-websocket, rollback)
-        working-directory: web
-        env:
-          PUBLIC_COLLAB_BACKEND: y-websocket
         run: npm run build
 
   docker:
@@ -338,13 +319,6 @@ jobs:
           - image: web
             context: web
             file: web/Dockerfile
-            # Same build arg as cd.yml, so CD reuses these layers.
-            build-args: PUBLIC_COLLAB_BACKEND=hocuspocus
-          # Still built until P5 deletes it (#206): retired from compose.yaml and CD by
-          # the cutover (#284), kept in compose.dev.yaml for the rollback window.
-          - image: websocket
-            context: websocket
-            file: websocket/Dockerfile
           - image: collab
             context: web
             file: web/collab-server/Dockerfile
@@ -361,7 +335,6 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
-          build-args: ${{ matrix.build-args }}
           push: false
           load: ${{ matrix.image == 'collab' }}
           tags: golive-${{ matrix.image }}:ci

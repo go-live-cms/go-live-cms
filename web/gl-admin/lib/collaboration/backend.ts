@@ -1,22 +1,4 @@
-// Which collaboration server this build talks to (#206 P3, #283).
-//
-// PUBLIC_COLLAB_BACKEND is read at BUILD time (Astro inlines PUBLIC_* vars), and it is
-// deployment-wide, never per user: two backends serving one post would fork the doc. It
-// must match the API's COLLAB_BACKEND.
-//   - "hocuspocus" (default since the P4 cutover, #284): HocuspocusCollaboration +
-//     CollabSaveStatus; the server seeds and saves.
-//   - "y-websocket": CollaborationProvider + BlockPersistenceManager (REST autosave). Only
-//     for the rollback window (docs/operations/collab-cutover.md); P5 deletes it.
-
-export type CollabBackend = "y-websocket" | "hocuspocus"
-
-export function parseCollabBackend(value: unknown): CollabBackend {
-  return value === "y-websocket" ? "y-websocket" : "hocuspocus"
-}
-
-export const COLLAB_BACKEND: CollabBackend = parseCollabBackend(import.meta.env.PUBLIC_COLLAB_BACKEND)
-
-export const usesHocuspocus = (): boolean => COLLAB_BACKEND === "hocuspocus"
+// Where the collaboration server (Hocuspocus, web/collab-server/, #206) is reached.
 
 /**
  * The Hocuspocus server's WebSocket URL.

@@ -16,9 +16,10 @@ import { EDITOR_FRAGMENT, seedFragment, type DroppedBlocks } from "../gl-admin/l
 import { normalizeBlockDoc, type CollabRecord } from "./api"
 
 /**
- * Server-owned metadata, persisted inside the doc: `epoch` and `dropped`. (The old
- * client also keeps `restore_id` here; the keys don't collide.) The pre-Hocuspocus Block
- * Spec mirror (BlockDocManager's `blocks` map and `blocks_order` array) is emptied on load.
+ * Server-owned metadata, persisted inside the doc: `epoch` and `dropped`. (The client
+ * before #206 kept `restore_id` here too; the keys don't collide.) That client's Block
+ * Spec mirror (the `blocks` map and `blocks_order` array) is emptied on load, if a doc
+ * still has one.
  */
 export const META_MAP = "meta"
 

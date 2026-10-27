@@ -36,11 +36,9 @@ services:
       DB_SOURCE: *db-source
       BACKUP_DIR: /backups
       MEDIA_DIR: /app/uploads/media
-      WS_DATA_DIR: /data/yjs
     volumes:
       - .:/scripts:ro
       - uploads:/app/uploads
-      - ws_data:/data/yjs
       - backups:/backups
     entrypoint: ["sh"]
 
@@ -84,7 +82,6 @@ services:
 
 volumes:
   uploads:
-  ws_data:
   backups:
   # External so the script's `down -v` keeps them (it creates them first).
   gomod:

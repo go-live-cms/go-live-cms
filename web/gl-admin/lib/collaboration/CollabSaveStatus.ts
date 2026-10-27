@@ -2,8 +2,7 @@ import type * as Y from "yjs"
 import type { DroppedBlocks } from "./fragmentBridge"
 import { META_MAP, type StoreMessage } from "./HocuspocusCollaboration"
 
-// Save status for the Hocuspocus path (#206 P3, #283). It replaces
-// BlockPersistenceManager there: the client saves nothing. The collab server stores the
+// Save status for the editor (#206). The client saves nothing. The collab server stores the
 // doc (debounced) and broadcasts the result to every client:
 //   - a local edit                  → "saving" (not stored yet);
 //   - `stored`                      → "saved", unless block_doc was "kept-invalid": the

@@ -1,12 +1,10 @@
 import { describe, it, expect, afterEach } from "vitest"
-import * as Y from "yjs"
 import { Editor } from "@tiptap/core"
 import StarterKit from "@tiptap/starter-kit"
 import { ySyncPluginKey } from "@tiptap/y-tiptap"
 import type { Node as PMNode } from "prosemirror-model"
 import { BlockIdExtension } from "./BlockIdExtension"
 import { pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
-import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
 
 // Headless editor (no DOM mount) running the real BlockIdExtension plugin, so the
 // tests exercise appendTransaction exactly as the admin editor does (#238).
@@ -111,7 +109,7 @@ describe("BlockIdExtension — list items (#238)", () => {
     expect(listItemIds(ed.state.doc)).toEqual([ITEM_A, null])
   })
 
-  it("makes repeated saves of an edited list identical, so the second save is a Yjs no-op", () => {
+  it("makes repeated conversions of an edited list identical, so the store sees no change", () => {
     const ed = makeEditor(listDoc("hello"))
     ed.commands.setTextSelection(8)
     ed.commands.splitListItem("listItem")
@@ -122,14 +120,5 @@ describe("BlockIdExtension — list items (#238)", () => {
     expect(second).toEqual(first)
     // The block ids are the editor's own, not minted by pmToBlockDoc.
     expect(first.blocks[LIST_ID].children).toEqual(listItemIds(ed.state.doc))
-
-    const ydoc = new Y.Doc()
-    const manager = new BlockDocManager(ydoc)
-    manager.setBlockDocV1(first)
-
-    let updates = 0
-    ydoc.on("update", () => updates++)
-    manager.setBlockDocV1(pmToBlockDoc(ed.state.doc))
-    expect(updates).toBe(0)
   })
 })

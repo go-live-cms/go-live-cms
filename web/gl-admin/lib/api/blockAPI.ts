@@ -52,9 +52,8 @@ export class BlockAPIClient {
     return { credentials: "include", ...init }
   }
 
-  // fetch with auth headers + cookies. A 401 becomes UnauthorizedError (the collab
-  // persistence layer suspends on it); any other non-2xx becomes
-  // Error("Failed to <what>: <statusText>").
+  // fetch with auth headers + cookies. A 401 becomes UnauthorizedError; any other non-2xx
+  // becomes Error("Failed to <what>: <statusText>").
   private async request(path: string, what: string, init: RequestInit = {}): Promise<Response> {
     const response = await fetch(`${this.baseURL}${path}`, this.buildInit({ headers: this.getHeaders(), ...init }))
 
@@ -69,60 +68,11 @@ export class BlockAPIClient {
     return response
   }
 
-  // Get working copy of post blocks
-  async getPostBlocks(postId: number): Promise<{ doc: BlockDocV1; revision: number }> {
+  // Get the working copy (read-only: only the collab server writes it)
+  async getPostBlocks(postId: number): Promise<{ doc: BlockDocV1 }> {
     const response = await this.request(`/posts/${postId}/blocks`, "get post blocks")
-
     const data = await response.json()
-    const revision = parseInt(response.headers.get("X-Revision") || "0")
-
-    return {
-      doc: data.doc,
-      revision,
-    }
-  }  // Update working copy with optimistic concurrency
-  async updatePostBlocks(
-    postId: number,
-    doc: BlockDocV1,
-    revision: number,
-    title?: string
-  ): Promise<{ doc: BlockDocV1; revision: number }> {
-    const body: any = { doc }
-    if (title) {
-      body.title = title
-    }
-
-    const response = await fetch(
-      `${this.baseURL}/posts/${postId}/blocks`,
-      this.buildInit({
-        method: "PUT",
-        headers: {
-          ...this.getHeaders(),
-          "If-Match": revision.toString(),
-        },
-        body: JSON.stringify(body),
-      })
-    )
-
-    if (response.status === 412) {
-      throw new ConflictError("Revision conflict - document was modified by another user")
-    }
-
-    if (response.status === 401) {
-      throw new UnauthorizedError()
-    }
-
-    if (!response.ok) {
-      throw new Error(`Failed to update post blocks: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-    const newRevision = parseInt(response.headers.get("X-Revision") || "0")
-
-    return {
-      doc: data.doc,
-      revision: newRevision,
-    }
+    return { doc: data.doc }
   }
 
   // Publish current working copy
@@ -158,7 +108,9 @@ export class BlockAPIClient {
   async getVersion(postId: number, versionNo: number): Promise<PostVersion> {
     const response = await this.request(`/posts/${postId}/versions/${versionNo}`, `get version ${versionNo}`)
     return response.json()
-  }  // Get published blocks (for preview/SSR)
+  }
+
+  // Get published blocks (for preview/SSR)
   async getPublishedPostBlocks(postId: number): Promise<{ doc: BlockDocV1 }> {
     const response = await fetch(`/public/posts/${postId}/blocks`)
 
@@ -167,14 +119,6 @@ export class BlockAPIClient {
     }
 
     return response.json()
-  }
-}
-
-// Custom error for revision conflicts
-export class ConflictError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = "ConflictError"
   }
 }
 

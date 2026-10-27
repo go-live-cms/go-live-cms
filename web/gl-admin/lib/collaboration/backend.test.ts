@@ -1,15 +1,7 @@
 import { describe, it, expect } from "vitest"
-import { hocuspocusUrl, parseCollabBackend } from "./backend"
+import { hocuspocusUrl } from "./backend"
 
-describe("collab backend flag (#206 P3, P4)", () => {
-  it("defaults to hocuspocus; only the exact value selects y-websocket (rollback)", () => {
-    expect(parseCollabBackend(undefined)).toBe("hocuspocus")
-    expect(parseCollabBackend("")).toBe("hocuspocus")
-    expect(parseCollabBackend("Y-Websocket")).toBe("hocuspocus")
-    expect(parseCollabBackend("hocuspocus")).toBe("hocuspocus")
-    expect(parseCollabBackend("y-websocket")).toBe("y-websocket")
-  })
-
+describe("collab server URL (#206)", () => {
   it("dev: port 1235 on the page's own host name (localhost and 127.0.0.1 logins both reach it)", () => {
     expect(hocuspocusUrl({ protocol: "http:", host: "localhost:4321", hostname: "localhost" }, { DEV: true })).toBe(
       "ws://localhost:1235"

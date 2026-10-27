@@ -108,20 +108,21 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		slog.Warn("PASETO_PREVIOUS_KEYS_VALID_UNTIL is in the past: previous PASETO keys are ignored",
 			"valid_until", previousUntil.Format(time.RFC3339))
 	}
-	// The collab WS server can't authorize any connection without the internal
-	// role lookup, so refuse to start rather than silently lock every editor out.
-	// Trimmed once here (the WS server trims its copy too), so stray whitespace in
-	// app.env can't make the two sides disagree and turn every lookup into a 401.
+	// The collab server can't authorize any connection without the internal
+	// access lookup, so refuse to start rather than silently lock every editor
+	// out. Trimmed once here (the collab server trims its copy too), so stray
+	// whitespace in app.env can't make the two sides disagree and turn every
+	// lookup into a 401.
 	config.RoleLookupSecret = strings.TrimSpace(config.RoleLookupSecret)
 	if config.RoleLookupSecret == "" {
-		return nil, errors.New("ROLE_LOOKUP_SECRET is required (shared with the collab WebSocket server)")
+		return nil, errors.New("ROLE_LOOKUP_SECRET is required (shared with the collab server)")
 	}
-	// Under Hocuspocus every publish flushes the collab server first and fails
-	// (503) when it can't, so a missing URL or secret would break publishing.
+	// Every publish flushes the collab server first and fails (503) when it
+	// can't, so a missing URL or secret would break publishing.
 	config.CollabInternalURL = strings.TrimRight(strings.TrimSpace(config.CollabInternalURL), "/")
 	config.CollabInternalSecret = strings.TrimSpace(config.CollabInternalSecret)
-	if config.UsesHocuspocus() && (config.CollabInternalURL == "" || config.CollabInternalSecret == "") {
-		return nil, errors.New("COLLAB_BACKEND=hocuspocus requires COLLAB_INTERNAL_URL and COLLAB_INTERNAL_SECRET")
+	if config.CollabInternalURL == "" || config.CollabInternalSecret == "" {
+		return nil, errors.New("COLLAB_INTERNAL_URL and COLLAB_INTERNAL_SECRET are required (the collab server's internal endpoints)")
 	}
 	limits, err := newRateLimits(config)
 	if err != nil {

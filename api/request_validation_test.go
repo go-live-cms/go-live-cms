@@ -231,9 +231,17 @@ func TestUpdateUserUsernameFormat(t *testing.T) {
 	require.Contains(t, decodeErrorBody(t, recorder).Fields, "username")
 }
 
+// blockDocBody is a valid POST /posts body carrying doc as its initial
+// block_doc, the one public route that still accepts a block document.
 func blockDocBody(t *testing.T, doc map[string]any) []byte {
 	t.Helper()
-	body, err := json.Marshal(map[string]any{"doc": doc})
+	body, err := json.Marshal(map[string]any{
+		"title":       "Limits",
+		"description": "A post body at the limits",
+		"url":         "https://example.com/limits",
+		"author_ids":  []int64{validationTestUser("editor").ID},
+		"block_doc":   doc,
+	})
 	require.NoError(t, err)
 	return body
 }
@@ -247,7 +255,9 @@ func nestedPM(depth int) map[string]any {
 	return node
 }
 
-func TestUpdatePostBlocksLimits(t *testing.T) {
+// Block document limits (#139) on POST /posts's initial block_doc; the collab
+// server's store gets the same prepareForStore (internal_collab_test.go).
+func TestCreatePostBlockDocLimits(t *testing.T) {
 	manyBlocks := map[string]any{}
 	order := []string{}
 	for i := 0; i <= maxBlockDocBlocks; i++ {
@@ -285,19 +295,14 @@ func TestUpdatePostBlocksLimits(t *testing.T) {
 			code: http.StatusBadRequest,
 		},
 		{
-			name: "TitleTooLong",
-			body: []byte(`{"doc":{"doc_version":1,"blocks_order":[],"blocks":{}},"title":"` + strings.Repeat("t", 256) + `"}`),
-			code: http.StatusBadRequest,
-		},
-		{
 			name: "UnknownField",
-			body: []byte(`{"doc":{"doc_version":1,"blocks_order":[],"blocks":{},"extra":1}}`),
+			body: blockDocBody(t, map[string]any{"doc_version": 1, "blocks_order": []string{}, "blocks": map[string]any{}, "extra": 1}),
 			code: http.StatusBadRequest,
 		},
 		{
 			name: "BodyTooLarge",
-			body: []byte(`{"doc":{"doc_version":1,"blocks_order":[],"blocks":{"a":{"type":"p","text":"` +
-				strings.Repeat("x", int(blockDocBodyLimit)) + `"}}}}`),
+			body: blockDocBody(t, map[string]any{"doc_version": 1, "blocks_order": []string{},
+				"blocks": map[string]any{"a": map[string]any{"type": "p", "text": strings.Repeat("x", int(blockDocBodyLimit))}}}),
 			code: http.StatusRequestEntityTooLarge,
 		},
 	}
@@ -309,12 +314,11 @@ func TestUpdatePostBlocksLimits(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			user := validationTestUser("editor")
 			stubRoleLookup(store, user)
-			store.EXPECT().UpdatePostBlocksIfRevisionMatches(gomock.Any(), gomock.Any()).Times(0)
+			store.EXPECT().CreatePostTx(gomock.Any(), gomock.Any()).Times(0)
 
 			server := newTestServer(t, store)
-			request, err := http.NewRequest(http.MethodPut, "/api/v1/posts/1/blocks", bytes.NewReader(tc.body))
+			request, err := http.NewRequest(http.MethodPost, "/api/v1/posts", bytes.NewReader(tc.body))
 			require.NoError(t, err)
-			request.Header.Set("If-Match", "1")
 			addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
 			recorder := httptest.NewRecorder()
 			server.router.ServeHTTP(recorder, request)

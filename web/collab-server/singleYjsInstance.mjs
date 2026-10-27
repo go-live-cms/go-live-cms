@@ -1,5 +1,5 @@
-// esbuild plugin shared by every bundle that runs collab code in Node: the collab server
-// (build.mjs) and the P4 LevelDB diff (scripts/collab/leveldb-diff.mjs).
+// esbuild plugin for every bundle that runs collab code in Node (today the collab server,
+// build.mjs).
 //
 // The 2026-06 data-loss saga was yjs evaluated TWICE in one process (an ESM
 // `import "yjs"` → yjs.mjs and a dependency's CJS `require("yjs")` → yjs.cjs), two class

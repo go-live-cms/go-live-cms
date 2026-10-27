@@ -17,7 +17,7 @@ const (
 	// defaultBodyLimit fits any JSON request except a block document.
 	defaultBodyLimit int64 = 1 << 20 // 1 MiB
 
-	// blockDocBodyLimit is for PUT /posts/:id/blocks. Images are references
+	// blockDocBodyLimit is for POST /posts with a block_doc. Images are references
 	// (mediaId/src; the editor disables data: URLs), so real documents are a
 	// few hundred KB at most.
 	blockDocBodyLimit int64 = 4 << 20 // 4 MiB
@@ -26,7 +26,6 @@ const (
 // bodyLimitOverrides maps "METHOD route-template" to its body limit; 0 means
 // the handler sets its own.
 var bodyLimitOverrides = map[string]int64{
-	"PUT /api/v1/posts/:id/blocks":   blockDocBodyLimit,
 	"POST /api/v1/posts":             blockDocBodyLimit, // may carry the initial block_doc (#283)
 	"POST /api/v1/media":             0,
 	"POST /api/v1/media/batch":       0,

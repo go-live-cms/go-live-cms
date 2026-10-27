@@ -1,6 +1,7 @@
-// Ticket auth + per-document access for collab connections. Ported from
-// websocket/access.js (#216, #220, #223, #233, #135); the logic is the same, only the
-// transport changed: Hocuspocus carries the ticket in its first auth message, not the URL.
+// Ticket auth + per-document access for collab connections. Ported from the old
+// y-websocket server's access.js (#216, #220, #223, #233, #135; deleted in #285); the
+// logic is the same, only the transport changed: Hocuspocus carries the ticket in its
+// first auth message, not the URL.
 //
 // The editor never sends its access token to this server. Before each connect it asks
 // the API for a ticket, a v4.public PASETO with audience golive.admin-ws, token_type

@@ -7,7 +7,7 @@ A full-stack CMS built with Go (Gin), PostgreSQL, and Astro.
 ```bash
 git clone <repo>
 cd go-live-cms
-./scripts/gen-ws-env.sh          # ⚠️  REQUIRED: Generates auth keys
+cp example.app.env app.env       # dev config; the collab server gets its public key from it too
 make devbuild
 ```
 
@@ -108,8 +108,8 @@ make prodlogs      # View production logs
 ```
 
 `compose.yaml` is the production stack: Caddy (TLS, the only published service, routes
-`/collab` to the collab server and everything else to web), web, the collab WebSocket
-server, the API and Postgres. CD deploys it to a single VM from GHCR images. Setup,
+`/collab` to the collab server and everything else to web), web, the collab
+(Hocuspocus) server, the API and Postgres. CD deploys it to a single VM from GHCR images. Setup,
 secrets, the first admin account, deploys, rollback and the build-time theme rule:
 **[docs/operations/deploy.md](docs/operations/deploy.md)**.
 
@@ -251,9 +251,10 @@ user can quote it in a bug report. The API logs one line per request: JSON in re
 mode, readable text in debug mode, with the request id, method, route template (never
 the raw path or query string), status, latency and the caller's user id. Headers,
 cookies, tokens, passwords and request bodies are never logged, and client IPs only in
-debug mode. The collab WebSocket server logs `ws_upgrade` / `ws_connect` / `ws_deny` /
-`ws_close` as JSON lines, and forwards its request id to the API's role lookup, so both
-sides of a connection can be found by one id.
+debug mode. The collab server logs `ws_connect` / `ws_deny` / `ws_close`
+(and `collab_load` / `collab_store` / `collab_flush`) as JSON lines, and forwards its
+request id to the API's internal access lookup, so both sides of a connection can be found
+by one id.
 
 Error tracking (Sentry and the like) plugs in through `api.ErrorReporter`
 (`server.SetErrorReporter`). It receives recovered panics and 5xx responses. The
@@ -570,9 +571,9 @@ jobs run in parallel:
 | Go lint | `go vet`, `gofmt -l` (fails on unformatted files), golangci-lint (`.golangci.yml`) |
 | sqlc in sync | `sqlc diff`: `db/sqlc` must match `db/query` + `db/migration` (regenerate with `make sqlc`) |
 | Migrations up/down/up | every up, then every down (nothing may be left behind), then up again with an identical schema dump |
-| Web tests | `web` vitest and `websocket` `node --test` |
+| Web tests | `web` vitest on Node 22, plus the collab server's tests on Node 24 |
 | Web type check and build | `astro check` and `astro build` |
-| Docker image | builds the api, web (Hocuspocus editor), collab and websocket production images (no push); smoke-runs collab |
+| Docker image | builds the api, web and collab production images (no push); smoke-runs collab |
 
 To reproduce locally before pushing:
 

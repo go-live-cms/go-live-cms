@@ -44,9 +44,7 @@ describe("TipTap base CSS ships with the editor styles (#305)", () => {
     expect(read("../../../assets/styles/components/editor/editor.scss")).toMatch(/@use "\.\/tiptap-base"/)
   })
 
-  it("both editors turn off TipTap's injection (a destroyed editor removes the shared tag)", () => {
-    for (const file of ["../Editor.tsx", "../HocuspocusEditor.tsx"]) {
-      expect(read(file)).toMatch(/injectCSS:\s*false/)
-    }
+  it("the editor turns off TipTap's injection (a destroyed editor removes the shared tag)", () => {
+    expect(read("../Editor.tsx")).toMatch(/injectCSS:\s*false/)
   })
 })

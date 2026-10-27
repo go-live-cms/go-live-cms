@@ -63,8 +63,8 @@ export const BlockIdExtension = Extension.create({
           // Stamp top-level nodes AND list items (#238). pmToBlockDoc stores every
           // listItem of a list as its own block, so an item without a stable id (a new
           // item from Enter, paste, or toggling a list has none, or a duplicate copied
-          // on split) got a freshly minted id on EVERY save, and setBlockDocV1 then
-          // deleted + re-inserted it and rewrote the list's children each time (rule 2).
+          // on split) got a freshly minted id on EVERY save, so every save rewrote the
+          // item and the list's children (before #206 that also churned the Yjs mirror).
           // Ids are deduped across the whole doc, in document order, like pmToBlockDoc.
           // setNodeMarkup doesn't change node sizes, so newState positions stay valid.
           newState.doc.descendants((node, pos, parent) => {

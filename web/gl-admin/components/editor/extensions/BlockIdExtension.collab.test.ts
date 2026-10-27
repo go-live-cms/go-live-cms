@@ -8,7 +8,7 @@ import { canonical } from "@gl-admin/lib/collaboration/fragmentBridge.fixtures"
 import type { HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { startRelay, waitFor, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 
-// BlockIdExtension between two editors on the Hocuspocus relay (#206 P3, #283; rule 7):
+// BlockIdExtension between two editors on the collab relay (#206, rule 7):
 // the structural edits that wedged the old server (Enter-split, paragraph → heading, list
 // toggles) give every node a unique id on the peer that made it, the other peer takes
 // them as they are (no re-stamping, no loop), and the server stores those same ids.

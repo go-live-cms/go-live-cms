@@ -1,13 +1,13 @@
 #!/bin/sh
-# Back up GoLive CMS: a consistent Postgres dump, the uploaded media, and
-# (optionally) the collab server's LevelDB volume.
+# Back up GoLive CMS: a consistent Postgres dump and the uploaded media. The
+# collab server's live Yjs state is in Postgres (post_ydoc_state), so the dump
+# covers it.
 #
 # Each run writes one timestamped backup set:
 #
 #   $BACKUP_DIR/golive-20261022T031500Z/
 #     db.dump          pg_dump custom format (restore with restore.sh / pg_restore)
 #     media.tar.gz     contents of MEDIA_DIR (unless SKIP_MEDIA=1)
-#     leveldb.tar.gz   contents of WS_DATA_DIR (only when WS_DATA_DIR is set)
 #     backup.info      when, which schema migration, tool versions
 #     SHA256SUMS       checksums of the files above (restore.sh verifies them)
 #
@@ -22,7 +22,6 @@
 #   BACKUP_DIR    where backup sets go (default ./backups)
 #   MEDIA_DIR     the API's UPLOAD_PATH directory (e.g. /app/uploads/media).
 #                 Required unless SKIP_MEDIA=1, so media is never skipped by accident.
-#   WS_DATA_DIR   optional: the websocket server's DATA_PATH (LevelDB) to snapshot
 #   RETAIN        number of complete backup sets to keep (default 7, 0 = keep all)
 #
 # Needs: sh, pg_dump/pg_restore/psql no older than the server (the
@@ -35,7 +34,6 @@ BACKUP_DIR=${BACKUP_DIR:-./backups}
 RETAIN=${RETAIN:-7}
 SKIP_MEDIA=${SKIP_MEDIA:-0}
 MEDIA_DIR=${MEDIA_DIR:-}
-WS_DATA_DIR=${WS_DATA_DIR:-}
 
 log() { printf '%s backup: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 die() { log "ERROR: $*"; exit 1; }
@@ -47,9 +45,6 @@ esac
 if [ "$SKIP_MEDIA" != 1 ]; then
 	[ -n "$MEDIA_DIR" ] || die "MEDIA_DIR is not set (set it to the API's UPLOAD_PATH, or SKIP_MEDIA=1 to back up the database only)"
 	[ -d "$MEDIA_DIR" ] || die "MEDIA_DIR '$MEDIA_DIR' is not a directory"
-fi
-if [ -n "$WS_DATA_DIR" ] && [ ! -d "$WS_DATA_DIR" ]; then
-	die "WS_DATA_DIR '$WS_DATA_DIR' is not a directory"
 fi
 
 for tool in pg_dump pg_restore psql tar gzip sha256sum; do
@@ -123,29 +118,12 @@ else
 	tar -C "$MEDIA_DIR" -czf "$work/media.tar.gz" . || die "media archive failed"
 fi
 
-# 3. Collab LevelDB (optional). It is only a safety net for in-flight Yjs state;
-# Postgres block_doc is canonical. The live server may change files while tar
-# reads them; a torn snapshot is detected and cleared by the server on load
-# (evaluatePersistedState). GNU tar exits 1 for "file changed as we read it",
-# which is expected here; 2 is a real failure.
-if [ -n "$WS_DATA_DIR" ]; then
-	log "snapshotting LevelDB from $WS_DATA_DIR"
-	rc=0
-	tar -C "$WS_DATA_DIR" -czf "$work/leveldb.tar.gz" . || rc=$?
-	case $rc in
-		0) ;;
-		1) log "WARNING: LevelDB changed while archiving; the snapshot may be torn" ;;
-		*) die "LevelDB archive failed" ;;
-	esac
-fi
-
 {
 	echo "created_at=$stamp"
 	echo "schema_migration=$migration"
 	echo "server_version=$server_version"
 	echo "pg_dump_version=$(pg_dump --version)"
 	echo "media=$([ "$SKIP_MEDIA" = 1 ] && echo skipped || echo included)"
-	echo "leveldb=$([ -n "$WS_DATA_DIR" ] && echo included || echo skipped)"
 } >"$work/backup.info"
 
 (cd "$work" && sha256sum -- * >SHA256SUMS) || die "writing checksums failed"
@@ -153,7 +131,7 @@ fi
 mv "$work" "$final" || die "cannot rename $work to $final"
 log "complete: $final ($(du -sk "$final" | cut -f1) KiB, migration $migration)"
 
-# 4. Retention: keep the newest $RETAIN complete sets. Names sort by time.
+# 3. Retention: keep the newest $RETAIN complete sets. Names sort by time.
 if [ "$RETAIN" -gt 0 ]; then
 	total=0
 	for d in "$BACKUP_DIR"/golive-*Z; do

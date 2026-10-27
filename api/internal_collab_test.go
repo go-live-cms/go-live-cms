@@ -19,18 +19,16 @@ import (
 
 	mockdb "github.com/go-live-cms/go-live-cms/db/mock"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
-	"github.com/go-live-cms/go-live-cms/util"
 )
 
 const testCollabInternalSecret = "test-collab-internal-secret"
 
-// newHocuspocusTestServer is newTestServer with COLLAB_BACKEND=hocuspocus and
-// the collab server's internal endpoints at collabURL.
-func newHocuspocusTestServer(t *testing.T, store db.Store, collabURL string) *Server {
+// newCollabTestServer is newTestServer with the collab server's internal
+// endpoints at collabURL.
+func newCollabTestServer(t *testing.T, store db.Store, collabURL string) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	config := newTestConfig(t)
-	config.CollabBackend = util.CollabBackendHocuspocus
 	config.CollabInternalURL = collabURL
 	config.CollabInternalSecret = testCollabInternalSecret
 	server, err := NewServer(config, store)
@@ -243,7 +241,7 @@ func TestPutInternalPostCollab(t *testing.T) {
 						require.Equal(t, []int64{12}, arg.MediaIDs)
 
 						// Structural check: duplicate ids deduplicated, and the
-						// same sanitizing PUT /blocks does.
+						// sanitizing as every block_doc write.
 						var doc BlockDocV1
 						require.NoError(t, json.Unmarshal(arg.BlockDoc, &doc))
 						require.Equal(t, []string{"a", "img"}, doc.BlocksOrder)
@@ -354,7 +352,7 @@ func TestPutInternalPostCollab(t *testing.T) {
 			},
 		},
 		{
-			// Within the body limit, but over what PUT /blocks accepts.
+			// Within the body limit, but over what POST /posts accepts.
 			name: "OversizeBlockDoc",
 			body: collabStoreBody(t, map[string]any{"block_doc": map[string]any{
 				"doc_version":  1,
@@ -437,30 +435,17 @@ func TestPutInternalPostCollab(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 
-			server := newHocuspocusTestServer(t, store, "http://collab.invalid")
+			server := newCollabTestServer(t, store, "http://collab.invalid")
 			tc.checkResponse(t, internalCollabRequest(t, server, http.MethodPut, path, tc.body, tc.authorization))
 		})
 	}
-}
-
-// Under y-websocket the editor's REST autosave owns block_doc; the internal
-// store must not become a second writer.
-func TestPutInternalPostCollabRequiresHocuspocus(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	store := mockdb.NewMockStore(ctrl)
-	store.EXPECT().StorePostCollabTx(gomock.Any(), gomock.Any()).Times(0)
-
-	server := newTestServer(t, store)
-	recorder := internalCollabRequest(t, server, http.MethodPut, "/internal/posts/7/collab",
-		collabStoreBody(t, nil), "Bearer "+testRoleLookupSecret)
-	require.Equal(t, http.StatusConflict, recorder.Code)
 }
 
 // The collab routes live on the internal listener only.
 func TestInternalCollabRoutesNotOnPublicRouter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	store := mockdb.NewMockStore(ctrl)
-	server := newHocuspocusTestServer(t, store, "http://collab.invalid")
+	server := newCollabTestServer(t, store, "http://collab.invalid")
 
 	for _, path := range []string{"/internal/posts/7/collab", "/api/v1/internal/posts/7/collab"} {
 		for _, method := range []string{http.MethodGet, http.MethodPut} {
@@ -474,23 +459,19 @@ func TestInternalCollabRoutesNotOnPublicRouter(t *testing.T) {
 	}
 }
 
-func TestNewServerHocuspocusRequiresCollabInternalConfig(t *testing.T) {
+func TestNewServerRequiresCollabInternalConfig(t *testing.T) {
 	for _, tc := range []struct{ name, url, secret string }{
+		{name: "MissingBoth"},
 		{name: "MissingURL", secret: testCollabInternalSecret},
 		{name: "MissingSecret", url: "http://collab:1235"},
 		{name: "BlankSecret", url: "http://collab:1235", secret: "  "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			config := newTestConfig(t)
-			config.CollabBackend = util.CollabBackendHocuspocus
 			config.CollabInternalURL = tc.url
 			config.CollabInternalSecret = tc.secret
 			_, err := NewServer(config, nil)
 			require.ErrorContains(t, err, "COLLAB_INTERNAL_URL")
 		})
 	}
-
-	// y-websocket keeps them optional (squash is just skipped).
-	_, err := NewServer(newTestConfig(t), nil)
-	require.NoError(t, err)
 }
