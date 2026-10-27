@@ -7,7 +7,7 @@ A full-stack CMS built with Go (Gin), PostgreSQL, and Astro.
 ```bash
 git clone <repo>
 cd go-live-cms
-cp example.app.env app.env       # dev config; the collab server reads its public key from it too
+cp example.app.env app.env       # dev config; the collab server gets its public key from it too
 make devbuild
 ```
 

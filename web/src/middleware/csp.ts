@@ -15,7 +15,6 @@ export interface AdminCspOptions {
   // PUBLIC_API_URL. The browser normally calls the API same-origin (/api/v1, /uploads via
   // the proxy), but absolute media URLs point at this origin.
   apiUrl?: string
-  dev: boolean
   // The collab server for this page (#206, backend.ts hocuspocusUrl). In dev it is another
   // port (ws://<host>:1235), which 'self' doesn't cover.
   collabUrl?: string
@@ -36,7 +35,7 @@ function wsOriginOf(origin: string): string {
   return origin.replace(/^http/, "ws")
 }
 
-export function buildAdminCsp({ nonce, pageOrigin, apiUrl, dev, collabUrl }: AdminCspOptions): string {
+export function buildAdminCsp({ nonce, pageOrigin, apiUrl, collabUrl }: AdminCspOptions): string {
   const apiOrigin = originOf(apiUrl)
   const collabOrigin = originOf(collabUrl)
   const extra = (list: (string | null)[]) => list.filter((s): s is string => !!s && s !== pageOrigin)

@@ -16,7 +16,6 @@ describe("buildAdminCsp", () => {
       nonce: "abc",
       pageOrigin: "https://cms.example.com",
       apiUrl: "https://api.example.com/api/v1",
-      dev: false,
     }),
   )
 
@@ -39,14 +38,14 @@ describe("buildAdminCsp", () => {
 
   it("does not duplicate the API origin when it is the page origin", () => {
     const csp = directives(
-      buildAdminCsp({ nonce: "n", pageOrigin: "http://localhost:4321", apiUrl: "http://localhost:4321/api/v1", dev: false }),
+      buildAdminCsp({ nonce: "n", pageOrigin: "http://localhost:4321", apiUrl: "http://localhost:4321/api/v1" }),
     )
     expect(csp["connect-src"]).toEqual(["'self'", "ws://localhost:4321"])
   })
 
-  it("in dev, allows Vite's HMR socket but not the retired y-websocket port", () => {
+  it("allows the page's own ws origin (dev: Vite HMR) but not the retired y-websocket port", () => {
     const dev = directives(
-      buildAdminCsp({ nonce: "n", pageOrigin: "http://localhost:4321", apiUrl: "http://localhost:8080/api/v1", dev: true }),
+      buildAdminCsp({ nonce: "n", pageOrigin: "http://localhost:4321", apiUrl: "http://localhost:8080/api/v1" }),
     )
     expect(dev["connect-src"]).not.toContain("ws://localhost:1234")
     expect(dev["connect-src"]).toContain("ws://localhost:4321") // Vite HMR
@@ -54,12 +53,12 @@ describe("buildAdminCsp", () => {
 
   it("adds the collab origin when it isn't the page's own (#206)", () => {
     const dev = directives(
-      buildAdminCsp({ nonce: "n", pageOrigin: "http://127.0.0.1:4321", dev: true, collabUrl: "ws://127.0.0.1:1235" }),
+      buildAdminCsp({ nonce: "n", pageOrigin: "http://127.0.0.1:4321", collabUrl: "ws://127.0.0.1:1235" }),
     )
     expect(dev["connect-src"]).toContain("ws://127.0.0.1:1235")
     // Production: wss://<host>/collab is the page's own ws origin, listed once.
     const prod = directives(
-      buildAdminCsp({ nonce: "n", pageOrigin: "https://cms.example.com", dev: false, collabUrl: "wss://cms.example.com/collab" }),
+      buildAdminCsp({ nonce: "n", pageOrigin: "https://cms.example.com", collabUrl: "wss://cms.example.com/collab" }),
     )
     expect(prod["connect-src"]).toEqual(["'self'", "wss://cms.example.com"])
   })
@@ -75,7 +74,7 @@ describe("addNonceToScripts", () => {
 })
 
 describe("applyAdminCsp", () => {
-  const opts = { pageOrigin: "http://localhost:4321", dev: false }
+  const opts = { pageOrigin: "http://localhost:4321" }
 
   it("sets the header and the matching nonce on HTML responses", async () => {
     const res = await applyAdminCsp(

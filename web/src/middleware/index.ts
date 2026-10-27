@@ -153,7 +153,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return applyAdminCsp(withRobotsHeader(await next(), url.pathname), {
       pageOrigin: url.origin,
       apiUrl: process.env.PUBLIC_API_URL || import.meta.env.PUBLIC_API_URL,
-      dev: import.meta.env.DEV,
       collabUrl: hocuspocusUrl(url),
       // Escape hatch for rolling out to a new deployment: ADMIN_CSP_REPORT_ONLY=1.
       reportOnly: process.env.ADMIN_CSP_REPORT_ONLY === "1",

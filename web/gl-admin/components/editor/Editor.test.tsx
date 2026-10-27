@@ -117,7 +117,6 @@ beforeEach(async () => {
   tiptapExtensionRegistry.clear()
   vi.mocked(blockAPIClient.getPostBlocks).mockResolvedValue({
     doc: { doc_version: 1, blocks_order: ["intro-block-0001"], blocks: { "intro-block-0001": doc.blocks["intro-block-0001"] } },
-    revision: 3,
   } as any)
   vi.mocked(blockAPIClient.publishPost).mockResolvedValue({ versionId: 1, versionNo: 1 })
   container = document.createElement("div")

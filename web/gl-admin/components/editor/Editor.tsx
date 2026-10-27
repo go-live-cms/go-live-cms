@@ -184,7 +184,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   }, [value, editor, collab, readOnly])
 
   // Not bound because the doc has types this editor can't build: show the REST working
-  // copy (GET /blocks stays under Hocuspocus). No Yjs involved.
+  // copy (GET /posts/:id/blocks). No Yjs involved.
   const staticLoadedRef = useRef<{ editor: typeof editor; postId: number } | null>(null)
   useEffect(() => {
     if (!editor || !readOnly || !postId || collab) return

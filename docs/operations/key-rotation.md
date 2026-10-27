@@ -8,8 +8,9 @@ The API holds three PASETO v4 keys (see `util/config.go`):
 | Symmetric local | `PASETO_V4_LOCAL_KEY_HEX` | refresh tokens (`v4.local`) | `REFRESH_TOKEN_DURATION` (default 720h) |
 
 The collab server (`collab` service) verifies collab tickets with the same public key:
-`PASETO_V4_PUBLIC_KEY_HEX` (prod `compose.yaml` passes it from `.env`; dev reads it from
-`app.env`), or a PEM file in `PASETO_V4_PUBLIC_PEM_FILE`.
+`PASETO_V4_PUBLIC_KEY_HEX` (prod `compose.yaml` passes it from `.env`; in dev the
+`collab-key` service copies it from `app.env` on every `up`), or a PEM file in
+`PASETO_V4_PUBLIC_PEM_FILE`.
 
 ## Policy
 

@@ -147,6 +147,48 @@ func TestCreatePostAPI(t *testing.T) {
 			},
 		},
 		{
+			// The sanitizer (#188) runs on the initial body too: a javascript: href
+			// never reaches block_doc (and from there a published snapshot).
+			name: "SanitizesBlockDoc",
+			body: gin.H{
+				"title":       post.Title,
+				"description": post.Description,
+				"url":         post.Url,
+				"author_ids":  []int64{user.ID},
+				"block_doc": gin.H{
+					"doc_version":  1,
+					"blocks_order": []string{"link-block-00001"},
+					"blocks": gin.H{
+						"link-block-00001": gin.H{"id": "link-block-00001", "type": "paragraph", "version": 1, "attrs": gin.H{"pm": gin.H{
+							"type": "paragraph",
+							"content": []gin.H{{"type": "text", "text": "click", "marks": []gin.H{
+								{"type": "link", "attrs": gin.H{"href": "javascript:alert(1)"}},
+							}}},
+						}}},
+					},
+				},
+			},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().CheckURLExists(gomock.Any(), gomock.Eq(post.Url)).Times(1).Return(false, nil)
+				store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).Times(1).Return(false, nil)
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				store.EXPECT().
+					CreatePostTx(gomock.Any(), gomock.Any()).
+					Times(1).
+					DoAndReturn(func(_ context.Context, arg db.CreatePostTxParams) (db.CreatePostTxResult, error) {
+						require.Contains(t, string(arg.BlockDoc), "click")
+						require.NotContains(t, string(arg.BlockDoc), "javascript:")
+						return db.CreatePostTxResult{Post: post}, nil
+					})
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusCreated, recorder.Code)
+			},
+		},
+		{
 			name: "InvalidBlockDoc",
 			body: gin.H{
 				"title":       post.Title,

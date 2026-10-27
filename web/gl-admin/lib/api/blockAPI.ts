@@ -68,17 +68,11 @@ export class BlockAPIClient {
     return response
   }
 
-  // Get working copy of post blocks
-  async getPostBlocks(postId: number): Promise<{ doc: BlockDocV1; revision: number }> {
+  // Get the working copy (read-only: only the collab server writes it)
+  async getPostBlocks(postId: number): Promise<{ doc: BlockDocV1 }> {
     const response = await this.request(`/posts/${postId}/blocks`, "get post blocks")
-
     const data = await response.json()
-    const revision = parseInt(response.headers.get("X-Revision") || "0")
-
-    return {
-      doc: data.doc,
-      revision,
-    }
+    return { doc: data.doc }
   }
 
   // Publish current working copy

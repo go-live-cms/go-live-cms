@@ -164,8 +164,10 @@ is pinned exact in the same file (rule 8). `paseto` `3.1.4`.
 `PORT` (1235), `HOST`, `INTERNAL_PORT` (1236), `INTERNAL_API_URL` + `ROLE_LOOKUP_SECRET`
 (required; the API's internal listener and its secret), `COLLAB_INTERNAL_SECRET`
 (required; what the API sends to flush), `PASETO_V4_PUBLIC_KEY_HEX` or
-`PASETO_V4_PUBLIC_PEM_FILE` (dev compose reads the hex from `app.env`), `PASETO_ISSUER` (`golive.auth`),
-`COLLAB_STORE_DEBOUNCE_MS` / `COLLAB_STORE_MAX_DEBOUNCE_MS`. It exits 1 on anything
+`PASETO_V4_PUBLIC_PEM_FILE`, `PASETO_ISSUER` (`golive.auth`),
+`COLLAB_STORE_DEBOUNCE_MS` / `COLLAB_STORE_MAX_DEBOUNCE_MS`. In dev compose, the one-shot
+`collab-key` service copies only the public key and issuer out of `app.env` (which also
+holds the API's private keys) into a volume the `collab` command sources. It exits 1 on anything
 missing. SIGTERM closes all connections (storing every doc) for up to 10s, then exits.
 
 Dev: `docker compose -f compose.dev.yaml up -d --build collab` (the service runs the

@@ -368,6 +368,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       if (mode === "create") {
         // The body as Block Spec v1, sent with the create.
         const initialBlockDoc = formData.content ? htmlToBlockDoc(formData.content) : null
+        // With a body, publishing is a separate step (publishPost snapshots the body and
+        // sets the status itself), so the post is created as a draft and only goes public
+        // once that succeeds. An empty post is published by the create.
+        const publishAfterCreate = isPublish && !!initialBlockDoc
         const postData: CreatePostRequest = {
           title: formData.title,
           url: fullUrl,
@@ -375,7 +379,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           content: formData.content,
           description: description,
           author_ids: [authState.user.id],
-          post_status: isPublish ? "published" : formData.post_status,
+          post_status: publishAfterCreate ? "draft" : isPublish ? "published" : formData.post_status,
           post_type: postType,
           menu_order: 0,
           // The body goes in with the post; the collab server seeds the doc from it on
@@ -384,8 +388,6 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         }
 
         const result = await createPost(postData)
-        const successMessage = `${getContentTypeName(postType)} ${isPublish ? "published" : "saved"} successfully!`
-        showSuccess(successMessage)
         setSaveStatusState("saved")
 
         console.log("📝 Post created successfully:", {
@@ -396,17 +398,21 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           contentPreview: formData.content?.substring(0, 100),
         })
 
-        // Publishing on create: copy the block_doc sent above to the published snapshot.
-        if (isPublish && initialBlockDoc) {
+        let published = isPublish
+        if (publishAfterCreate) {
           try {
             const token = authManager.getAccessToken()
             if (token) blockAPIClient.setAuthToken(token)
             await blockAPIClient.publishPost(result.post.id)
           } catch (error) {
-            console.error("❌ Failed to publish the initial blocks:", error)
-            showError("Warning: Content may not have been published properly")
-            // Don't fail the entire operation if publishing the blocks fails
+            // The post exists as a draft; it can be published from the editor.
+            published = false
+            console.error("❌ Failed to publish the new post:", error)
+            showError("Saved as a draft, but publishing failed. Try publishing again from the editor.")
           }
+        }
+        if (published || !isPublish) {
+          showSuccess(`${getContentTypeName(postType)} ${published ? "published" : "saved"} successfully!`)
         }
 
         if (onSuccess) {
