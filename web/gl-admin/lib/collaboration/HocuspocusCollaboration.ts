@@ -2,9 +2,7 @@ import * as Y from "yjs"
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider"
 import { collabDebug, collabDebugEnabled, contentFingerprint, fragmentStructure } from "./debug"
 
-// The client side of the Hocuspocus collab server (#206 P3, #283; server:
-// web/collab-server). Used only when the build sets PUBLIC_COLLAB_BACKEND=hocuspocus
-// (backend.ts); CollaborationProvider.ts is the y-websocket path.
+// The client side of the Hocuspocus collab server (#206; server: web/collab-server).
 //
 // The client is a bound editor and nothing else: it never seeds the doc and never saves
 // content. The server seeds a new doc from posts.block_doc and stores both the Yjs state

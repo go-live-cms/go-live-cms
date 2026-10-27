@@ -9,9 +9,8 @@ import { EDITOR_FRAGMENT } from "@gl-admin/lib/collaboration/schemaGuard"
 import { startRelay, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 import { acquireHocuspocus, releaseHocuspocus } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { tiptapExtensionRegistry } from "./utils/extensionRegistry"
-import type { EditorRef } from "./Editor"
 
-// The Hocuspocus editor (#206 P3, #283), mounted for real against the in-process collab
+// The editor (#206 P3, #283), mounted for real against the in-process collab
 // server: the theme gate, the schema gate (rule 10: theme extensions must be registered
 // before Collaboration binds), no client seeding, the live read-only view, a stale-epoch
 // remount, publish without a client save, and restore through the editor.
@@ -38,7 +37,6 @@ vi.mock("@gl-admin/lib/api/blockAPI", () => ({
   blockAPIClient: {
     setAuthToken: vi.fn(),
     getPostBlocks: vi.fn(),
-    updatePostBlocks: vi.fn(),
     publishPost: vi.fn(),
   },
 }))
@@ -57,7 +55,7 @@ vi.mock("./ui/CharacterCount", () => ({ default: () => null }))
 vi.mock("./ui/LinkModal", () => ({ default: () => null }))
 
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
-import HocuspocusEditor from "./HocuspocusEditor"
+import Editor, { type EditorRef } from "./Editor"
 
 const Callout = Node.create({
   name: "callout",
@@ -138,12 +136,12 @@ afterEach(async () => {
 async function mount(props: { readOnly?: boolean } = {}) {
   const ref = createRef<EditorRef>()
   await act(async () => {
-    root.render(<HocuspocusEditor ref={ref} value="" onChange={() => {}} postId={POST} {...props} />)
+    root.render(<Editor ref={ref} value="" onChange={() => {}} postId={POST} {...props} />)
   })
   return ref
 }
 
-describe("HocuspocusEditor", () => {
+describe("Editor", () => {
   it("doesn't connect before the theme has loaded", async () => {
     state.themeLoaded = false
     await mount()
@@ -160,7 +158,6 @@ describe("HocuspocusEditor", () => {
     expect(container.querySelector(".editor-blocked-notice")).toBeNull()
     // The server's fragment still has exactly the seeded blocks (no client seed on top).
     expect(serverFragment().toArray().slice(0, 2).map((el) => (el as Y.XmlElement).nodeName)).toEqual(["paragraph", "callout"])
-    expect(blockAPIClient.updatePostBlocks).not.toHaveBeenCalled()
   })
 
   it("without the theme extension: doesn't bind (the callout survives), shows REST read-only, and refuses writes", async () => {
@@ -196,7 +193,7 @@ describe("HocuspocusEditor", () => {
     await act(async () => {
       root.render(
         <StrictMode>
-          <HocuspocusEditor ref={ref} value="" onChange={() => {}} postId={POST} onSaveSuccess={(r) => saves.push(r)} />
+          <Editor ref={ref} value="" onChange={() => {}} postId={POST} onSaveSuccess={(r) => saves.push(r)} />
         </StrictMode>
       )
     })
@@ -216,7 +213,6 @@ describe("HocuspocusEditor", () => {
     const result = await act(async () => ref.current!.publish())
     expect(result).toEqual({ versionId: 1, versionNo: 1 })
     expect(blockAPIClient.publishPost).toHaveBeenCalledWith(POST)
-    expect(blockAPIClient.updatePostBlocks).not.toHaveBeenCalled()
   })
 
   it("remounts on a fresh doc after stale-epoch (block_doc was written around the server)", async () => {

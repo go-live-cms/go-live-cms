@@ -120,7 +120,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
         const awareness = collabProvider.provider.awareness
         baseExtensions.push(CursorAwareness.configure({ awareness }))
       } else {
-        console.warn("CollaborationProvider not fully initialized, skipping collaboration extensions")
+        console.warn("Collaboration provider not fully initialized, skipping collaboration extensions")
       }
     }
 

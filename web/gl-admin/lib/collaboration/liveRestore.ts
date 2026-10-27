@@ -7,7 +7,7 @@ import type { DroppedBlocks } from "./fragmentBridge"
 import { META_MAP } from "./HocuspocusCollaboration"
 
 /**
- * Restore a stored version (#136) on the Hocuspocus path (#206 P3). Rule 9 holds: it
+ * Restore a stored version (#136) through the live doc (#206). Rule 9 holds: it
  * goes through the editor, never around it. `setEditorBlockDoc` replaces the content,
  * the ySyncPlugin mirrors that into the shared fragment, and every peer gets it as an
  * ordinary edit. The collab server then stores it like any edit; there is no PUT.

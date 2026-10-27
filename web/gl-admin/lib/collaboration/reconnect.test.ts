@@ -4,24 +4,24 @@ import * as Y from "yjs"
 /**
  * Headless convergence harness for the collaborative editor's sync model.
  *
- * It models the client and server as two real Y.Docs plus a "LevelDB" snapshot,
+ * It models the client and server as two real Y.Docs plus the server's persisted state
+ * (post_ydoc_state),
  * and exercises the disconnect → reconnect → server-restart sequences that broke
  * the live editor. It asserts the CRDT-level invariants the real system relies on:
  *   - reconnect/resync never loses or reverts client content
- *   - a server restart that restores from LevelDB converges to the client's content
- *   - a server restart whose snapshot is cleared (the probe-and-clear path) still
- *     recovers because the connected client re-populates the server
- *   - repeated resync ticks (the 2s "heartbeat") are idempotent once converged
+ *   - a server restart that restores its stored state converges to the client's content
+ *   - a server restart whose snapshot is cleared still recovers because the connected
+ *     client re-populates the server
+ *   - repeated sync rounds are idempotent once converged
  *
- * NOTE: this covers the SYNC + SERVER-RESTORE model headlessly. The editor-binding
- * level (TipTap setContent on reconnect) is guarded by hasInitializedRef in
- * Editor.tsx + the idempotent initialize() covered in BlockPersistenceManager.test,
- * and confirmed end-to-end via the debug instrumentation in Docker.
+ * NOTE: this covers the SYNC + SERVER-RESTORE model headlessly, at the CRDT level. The
+ * same sequences against the real Hocuspocus server and provider are in
+ * reconnect.hocuspocus.test.ts.
  */
 class CollabHarness {
   client = new Y.Doc()
   server = new Y.Doc()
-  private snapshot: Uint8Array | null = null // models the server's LevelDB store
+  private snapshot: Uint8Array | null = null // models the server's stored Yjs state
 
   clientText() {
     return this.client.getText("content").toString()
@@ -49,20 +49,20 @@ class CollabHarness {
     this.persist()
   }
 
-  /** Models the server's incremental LevelDB persistence. */
+  /** Models the server's store of the full Yjs state. */
   private persist() {
     this.snapshot = Y.encodeStateAsUpdate(this.server)
   }
 
   /**
    * Models a server process restart.
-   * - clearedSnapshot=true models the bindState probe-and-clear path (server comes
-   *   back with NO restored state and must rebuild from the connected client).
+   * - clearedSnapshot=true: the server comes back with NO restored state and must
+   *   rebuild from the connected client.
    */
   restartServer({ clearedSnapshot = false } = {}) {
     this.server = new Y.Doc()
     if (this.snapshot && !clearedSnapshot) {
-      Y.applyUpdate(this.server, this.snapshot) // LevelDB restore
+      Y.applyUpdate(this.server, this.snapshot) // stored-state restore
     }
   }
 }
@@ -85,13 +85,13 @@ describe("reconnect convergence — offline edits", () => {
   })
 })
 
-describe("reconnect convergence — server restart with LevelDB restore", () => {
+describe("reconnect convergence — server restart with stored-state restore", () => {
   it("restores content and converges with the client", () => {
     const h = new CollabHarness()
     h.typeOnClient("persisted content")
-    h.sync() // server persists to LevelDB
+    h.sync() // server persists its state
 
-    h.restartServer() // restore from LevelDB
+    h.restartServer() // restore the stored state
     expect(h.serverText()).toBe("persisted content")
 
     h.sync()
@@ -104,7 +104,7 @@ describe("reconnect convergence — server restart with LevelDB restore", () => 
     h.typeOnClient("saved.")
     h.sync()
 
-    // user keeps typing; this reaches the server (and LevelDB) via sync
+    // user keeps typing; this reaches the server (and its store) via sync
     h.typeOnClient("inflight")
     h.sync()
 
@@ -114,7 +114,7 @@ describe("reconnect convergence — server restart with LevelDB restore", () => 
     expect(h.serverText()).toBe("saved.inflight")
   })
 
-  it("recovers even if the restart comes back with a CLEARED snapshot (probe-and-clear)", () => {
+  it("recovers even if the restart comes back with a CLEARED snapshot", () => {
     const h = new CollabHarness()
     h.typeOnClient("important")
     h.sync()
@@ -130,14 +130,14 @@ describe("reconnect convergence — server restart with LevelDB restore", () => 
   })
 })
 
-describe("reconnect convergence — heartbeat idempotency", () => {
+describe("reconnect convergence — repeated sync idempotency", () => {
   it("repeated resync ticks do not revert or duplicate content once converged", () => {
     const h = new CollabHarness()
     h.typeOnClient("stable text")
     h.sync()
     h.restartServer()
 
-    // simulate the 2s resync 'heartbeat' firing many times
+    // many sync rounds in a row
     for (let i = 0; i < 10; i++) h.sync()
 
     expect(h.clientText()).toBe("stable text")

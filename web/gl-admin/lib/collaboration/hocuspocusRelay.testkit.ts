@@ -1,7 +1,7 @@
 // Test helper (not app code): the real Hocuspocus collab server in-process, with the
 // #280 API faked in memory (web/collab-server/testkit.ts), and the editor's real client
 // (HocuspocusCollaboration) connecting to it over WebSockets. The client-side
-// collaboration tests use it as their relay on the Hocuspocus path (#206 P3, #283).
+// collaboration tests use it as their relay (#206 P3, #283).
 //
 // Like every in-process test, it can't reproduce the dual yjs instance hazard (one yjs
 // for everything); web/collab-server/process.test.ts covers that.

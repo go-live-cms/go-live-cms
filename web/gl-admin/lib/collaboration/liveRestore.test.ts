@@ -12,7 +12,7 @@ import { restoreVersionLive } from "./liveRestore"
 import { startRelay, waitFor, type Relay } from "./hocuspocusRelay.testkit"
 import { textOf } from "./testHelpers"
 
-// Restoring a version on the Hocuspocus path (#136, rule 9; #206 P3): through the editor,
+// Restoring a version (#136, rule 9; #206): through the editor,
 // then the server's store persists it. No PUT, no forceSave.
 
 let relay: Relay

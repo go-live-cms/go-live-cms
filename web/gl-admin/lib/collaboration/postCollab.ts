@@ -3,10 +3,9 @@ import { createCollabTicket } from "../api/collab"
 import { hocuspocusUrl } from "./backend"
 import { acquireHocuspocus, HocuspocusCollaboration, releaseHocuspocus } from "./HocuspocusCollaboration"
 
-// The app's Hocuspocus connection for a post (PUBLIC_COLLAB_BACKEND=hocuspocus): the
-// server URL for this page, tickets from POST /collab/tickets, the signed-in user's
-// cursor label. HocuspocusCollaboration itself takes these as options so tests can
-// point it at an in-process server.
+// The app's Hocuspocus connection for a post: the server URL for this page, tickets from
+// POST /collab/tickets, the signed-in user's cursor label. HocuspocusCollaboration itself
+// takes these as options so tests can point it at an in-process server.
 
 const COLORS = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8", "#F7DC6F"]
 

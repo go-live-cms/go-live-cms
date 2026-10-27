@@ -2,7 +2,7 @@ import { Node as PMNode, Schema } from "prosemirror-model"
 import type { BlockDocV1, Block, BlockID } from "../blocks-spec"
 import type { Editor } from "@tiptap/core"
 
-// Simple ID generator - matches BlockDocManager
+// Simple block id generator
 let idCounter = 0
 function generateId(): string {
   // Add counter to ensure uniqueness even if called multiple times in same millisecond
@@ -263,10 +263,10 @@ export function blockDocToPM(doc: BlockDocV1, schema: Schema): PMNode {
  * schema.nodeFromJSON doesn't check content expressions (#213), so every top-level
  * block (and every list child, see listItemsToPM) is built and check()ed on its own.
  * A block that fails to build or check is dropped and reported rather than failing the
- * whole doc: if setEditorBlockDoc fails, initialize() has already seeded the block
- * maps, the editor stays empty, and the next autosave would overwrite the entire
- * working copy. Dropped blocks are hidden from the editor, NOT deleted:
- * BlockPersistenceManager merges them back into every save (restoreDroppedBlocks).
+ * whole doc: an editor left empty would have its next store overwrite the entire
+ * working copy. Dropped blocks are hidden from the editor, NOT deleted: the collab
+ * server keeps the record in `meta.dropped` and merges them back into every store
+ * (restoreDroppedBlocks).
  * The doc-level `block+` rule is not checked: an empty block doc stays an empty PM doc.
  */
 export function blockDocToPMWithReport(doc: BlockDocV1, schema: Schema): { node: PMNode; dropped: DroppedBlock[] } {
@@ -340,9 +340,9 @@ export function restoreDroppedBlocks(current: BlockDocV1, source: BlockDocV1, dr
 
 /**
  * Render a Block Spec v1 doc (or a PM doc already built from one) into an editor
- * without firing TipTap's "update" event. Shared by BlockPersistenceManager.initialize
- * (collab seed) and the read-only editor view. With collaboration on, the ySyncPlugin
- * still mirrors this into Yjs regardless of emitUpdate. Returns false (and logs) if the
+ * without firing TipTap's "update" event. Used by a version restore (liveRestore.ts) and
+ * the static read-only view. With collaboration on, the ySyncPlugin still mirrors this
+ * into Yjs regardless of emitUpdate. Returns false (and logs) if the
  * content can't be applied.
  */
 export function setEditorBlockDoc(editor: Editor, doc: BlockDocV1 | PMNode): boolean {
@@ -557,8 +557,8 @@ function convertListChildren(
 /**
  * Id for the listItem synthesized into an empty list. Derived from the list id, NOT
  * random: BlockIdExtension only stamps top-level nodes, so an item without an id would
- * be re-minted by pmToBlockDoc on every save and setBlockDocV1 would churn Yjs each
- * time (rule 2). The suffix alone is 10 characters, so the id always passes
+ * be re-minted by pmToBlockDoc on every store, and the stored block_doc would change
+ * each time. The suffix alone is 10 characters, so the id always passes
  * pmToBlockDoc's length >= 10 check, however short the list id is.
  */
 export function synthesizedItemId(listId: BlockID): BlockID {

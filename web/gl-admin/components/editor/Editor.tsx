@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
-import { CollaborationProvider } from "@gl-admin/lib/collaboration/CollaborationProvider"
-import { BlockDocManager } from "@gl-admin/lib/collaboration/BlockDocManager"
-import { BlockPersistenceManager } from "@gl-admin/lib/collaboration/BlockPersistenceManager"
-import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
+import { getSchema } from "@tiptap/core"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
-import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
-import { createTestScript } from "@gl-admin/lib/test/blockSpecTest"
 import { authManager } from "@gl-admin/lib/auth"
-import { applyLink, openLinkModal } from "./utils/linkManager"
+import { setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
+import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { CollabSaveStatus, type SaveState } from "@gl-admin/lib/collaboration/CollabSaveStatus"
+import type { HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
+import { restoreVersionLive } from "@gl-admin/lib/collaboration/liveRestore"
+import { acquirePostCollab, releasePostCollab } from "@gl-admin/lib/collaboration/postCollab"
+import {
+  EDITOR_FRAGMENT,
+  describeUnbuildableTypes,
+  findUnbuildableTypes,
+  type UnbuildableTypes,
+} from "@gl-admin/lib/collaboration/schemaGuard"
 import { useTheme } from "@gl-admin/contexts/ThemeContext"
+import { applyLink, openLinkModal } from "./utils/linkManager"
 import LinkModal from "./ui/LinkModal"
 import BubbleMenu from "./ui/BubbleMenu"
 import BlockTypeToolbar from "./ui/BlockTypeToolbar"
@@ -17,16 +24,25 @@ import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
-import { getSchema } from "@tiptap/core"
-import {
-  EDITOR_FRAGMENT,
-  describeUnbuildableTypes,
-  findUnbuildableTypes,
-  type UnbuildableTypes,
-} from "@gl-admin/lib/collaboration/schemaGuard"
-import { usesHocuspocus } from "@gl-admin/lib/collaboration/backend"
-import HocuspocusEditor from "./HocuspocusEditor"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
+
+// The post editor (#206). It is a bound editor: it never seeds the doc and never saves
+// content. The collab server (web/collab-server/) seeds a new doc from block_doc and
+// stores every change, debounced (gl-admin/lib/collaboration/CLAUDE.md).
+//   - Save status comes from the server's `stored` / `store_failed` messages
+//     (CollabSaveStatus), and the "blocks can't be shown" notice from `meta.dropped`.
+//   - Anyone who may read the post's blocks gets the live doc. A user who can't edit it
+//     (a contributor on someone else's post) gets a live read-only view: the editor is not
+//     editable, and the server drops that connection's updates anyway.
+//   - Publish doesn't save first: it waits until the server has every local edit, then
+//     the API flushes the collab server before snapshotting block_doc.
+//   - Restore goes through the editor (rule 9) and waits for the store that includes it.
+//   - On `stale-epoch` (the server reseeded the doc), the Y.Doc is dropped and the editor
+//     remounts on a fresh one.
+//   - Theme extensions are registered before Collaboration binds: the theme gate waits for
+//     the theme, and the schema gate (rule 10) checks the synced fragment against the
+//     schema the editor will have. Unbuildable types → no binding at all (y-tiptap would
+//     delete them for everyone), a static view from REST instead.
 
 export type EditorProps = {
   value: string
@@ -38,7 +54,7 @@ export type EditorProps = {
   postId?: number
   title?: string
   enableCollaboration?: boolean
-  // Block Spec v1 persistence callbacks
+  // Save / publish callbacks (save status comes from the collab server)
   onSaveStart?: () => void
   onSaveSuccess?: (revision: number) => void
   onSaveError?: (error: Error) => void
@@ -47,18 +63,17 @@ export type EditorProps = {
   onPublishError?: (error: Error) => void
 }
 
-type Props = EditorProps
-
-// Set by the schema gate when the shared doc holds types this editor can't build: the
-// editor is opened read-only and saving/publishing must fail loudly, not no-op.
-type InnerProps = Props & { unbuildable?: UnbuildableTypes }
-
 export interface EditorRef {
   forceSave: () => Promise<void>
   publish: () => Promise<{ versionId: number; versionNo: number } | undefined>
   // Load a stored version into the working copy through the editor (#136)
   restoreVersion: (doc: BlockDocV1) => Promise<{ saved: boolean }>
   getSaveStatus: () => { isSaving: boolean; isPublishing: boolean; saveStatus: "saved" | "saving" | "error" | null }
+}
+
+type InnerProps = EditorProps & {
+  collab: HocuspocusCollaboration | null
+  unbuildable?: UnbuildableTypes
 }
 
 const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
@@ -70,129 +85,64 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     minChars,
     maxChars,
     postId,
-    title,
-    enableCollaboration = true,
     onSaveStart,
     onSaveSuccess,
     onSaveError,
     onPublishStart,
     onPublishSuccess,
     onPublishError,
+    collab,
     unbuildable,
   },
   ref
 ) {
-  const { isThemeLoaded } = useTheme()
-  const [isSaving, setIsSaving] = useState(false)
   const [isPublishing, setIsPublishing] = useState(false)
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | null>(null)
-  const persistenceRef = useRef<BlockPersistenceManager | null>(null)
-  // Tracks the postId that persistenceRef.current was created for, so we can
-  // detect navigation between posts (/content/edit/1 → /content/edit/2) where
-  // React Router reuses the same Editor instance with a new postId prop. Without
-  // this, the manager bound to the OLD postId would keep saving the user's edits
-  // to the previous post — a data-corruption bug.
-  const persistencePostIdRef = useRef<number | null>(null)
-  const titleRef = useRef<string | undefined>(title)
-  // Guard: the initial-content load (setContent from API) must run EXACTLY ONCE.
-  // The provider's "synced" event re-fires on every reconnect, and this effect
-  // re-subscribes on every keystroke (value is in its deps). Without this guard,
-  // each reconnect would re-run setContent and clobber the user's in-progress typing.
-  // Reset to false whenever postId changes so the new post loads its content.
-  const hasInitializedRef = useRef(false)
-  // The parent's save callbacks, read when a save starts or ends. PostForm passes them
-  // inline, so as useMemo deps they rebuilt the persistence manager on every parent
-  // render, and a rebuilt manager is never initialized (#284).
-  const saveCallbacksRef = useRef({ onSaveStart, onSaveSuccess, onSaveError })
-  saveCallbacksRef.current = { onSaveStart, onSaveSuccess, onSaveError }
-
-  // Link modal state (from main)
+  const [saveState, setSaveState] = useState<SaveState>(null)
+  const [droppedCount, setDroppedCount] = useState(0)
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
   const [url, setUrl] = useState("")
 
-  // Collaboration provider - wait for theme to load
-  const collabProvider = useMemo(() => {
-    if (!isThemeLoaded) return null
-    if (postId && enableCollaboration && !readOnly) {
-      return CollaborationProvider.getInstance(postId)
-    }
-    return null
-  }, [postId, enableCollaboration, readOnly, isThemeLoaded])
+  // Kept current in refs: the save-status subscription lives as long as the connection.
+  const callbacks = useRef({ onSaveStart, onSaveSuccess, onSaveError })
+  callbacks.current = { onSaveStart, onSaveSuccess, onSaveError }
 
-  // Block document manager
-  const blockDocManager = useMemo(() => {
-    if (collabProvider?.doc) {
-      return new BlockDocManager(collabProvider.doc)
-    }
-    return null
-  }, [collabProvider])
-
-  // Block persistence manager
-  const persistenceManager = useMemo(() => {
-    if (blockDocManager && postId && !readOnly) {
-      // If the cached manager was created for a different postId (route
-      // navigation /content/edit/1 → /content/edit/2 without unmount), tear it
-      // down so we don't save edits for the new post to the previous post's ID.
-      // Also reset the run-once init guard so the new post loads its content.
-      if (persistenceRef.current && persistencePostIdRef.current !== postId) {
-        persistenceRef.current.destroy()
-        persistenceRef.current = null
-        hasInitializedRef.current = false
-      }
-
-      if (!persistenceRef.current) {
-        const token = authManager.getAccessToken() || undefined
-        const manager = new BlockPersistenceManager(postId, blockDocManager, token, title)
-
-        const handleSaveStart = () => {
-          setIsSaving(true)
-          setSaveStatus("saving")
-          saveCallbacksRef.current.onSaveStart?.()
-        }
-
-        const handleSaveSuccess = (revision: number) => {
-          setIsSaving(false)
-          setSaveStatus("saved")
-          setTimeout(() => setSaveStatus(null), 3000)
-          saveCallbacksRef.current.onSaveSuccess?.(revision)
-        }
-
-        const handleSaveError = (error: Error) => {
-          setIsSaving(false)
-          setSaveStatus("error")
-          console.error("Save failed:", error)
-          setTimeout(() => setSaveStatus(null), 5000)
-          saveCallbacksRef.current.onSaveError?.(error)
-        }
-
-        manager.setCallbacks({
-          onSaveStart: handleSaveStart,
-          onSaveSuccess: handleSaveSuccess,
-          onSaveError: handleSaveError,
-        })
-
-        persistenceRef.current = manager
-        persistencePostIdRef.current = postId
-      }
-      return persistenceRef.current
-    }
-    return null
-  }, [blockDocManager, postId, readOnly])
-
-  // Update titleRef when title changes (no autosave)
+  // Created by the effect that destroys it, not in useMemo: StrictMode runs effects
+  // mount → cleanup → mount, and a memoized instance would be destroyed by the first cleanup
+  // and then used dead (no doc listener, no subscribers).
+  const [saveStatus, setSaveStatusTracker] = useState<CollabSaveStatus | null>(null)
   useEffect(() => {
-    titleRef.current = title
-  }, [title])
+    if (!collab) return
+    const status = new CollabSaveStatus(collab)
+    setSaveStatusTracker(status)
+    let clearTimer: ReturnType<typeof setTimeout> | undefined
+    const off = status.subscribe(({ state, error, revision }) => {
+      clearTimeout(clearTimer)
+      setSaveState(state)
+      if (state === "saving") callbacks.current.onSaveStart?.()
+      if (state === "saved") {
+        callbacks.current.onSaveSuccess?.(revision ?? 0)
+        clearTimer = setTimeout(() => setSaveState(null), 3000)
+      }
+      if (state === "error") {
+        console.error("Save failed:", error)
+        callbacks.current.onSaveError?.(error ?? new Error("Save failed"))
+      }
+    })
+    const offDropped = status.watchDroppedBlocks((entries) => setDroppedCount(entries.length))
+    return () => {
+      clearTimeout(clearTimer)
+      off()
+      offDropped()
+      status.destroy()
+      setSaveStatusTracker(null)
+    }
+  }, [collab])
 
-  // Editor extensions - include link modal setters for Ctrl+K support
-  // Re-compute extensions after theme loads to include theme extensions
-  const extensions = useMemo(() => {
-    const exts = getExtensions({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen })()
-    console.log(`[Editor] Computing extensions (theme loaded: ${isThemeLoaded}), count: ${exts.length}`)
-    return exts
-  }, [collabProvider, maxChars, placeholder, isThemeLoaded])
+  const extensions = useMemo(
+    () => getExtensions({ collabProvider: collab, maxChars, placeholder, setUrl, setIsLinkModalOpen })(),
+    [collab, maxChars, placeholder]
+  )
 
-  // Initialize Editor - only after theme loads to prevent schema errors
   const editor = useEditor(
     {
       editable: !readOnly,
@@ -200,81 +150,98 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       // ships in editor.scss instead (_tiptap-base.scss, #305).
       injectCSS: false,
       extensions,
-      content: !collabProvider ? value || "<p></p>" : undefined,
-      // autofocus disabled to prevent race condition with BubbleMenu during mount
-      // (docView is null when focus fires, causing coordsAtPos crash)
-      // We focus manually via useEffect below
+      // Bound to the collab doc: content comes from the server, never from here.
+      content: !collab ? value || "<p></p>" : undefined,
       autofocus: false,
       onUpdate({ editor }) {
         const html = editor.getHTML()
         const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, " ")
-        // Defer to avoid "Cannot update component while rendering another" warning
         queueMicrotask(() => onChange(html, text))
       },
-      editorProps: {
-        attributes: {
-          class: "gl-content-editor notion-editor-content",
-        },
-      },
+      editorProps: { attributes: { class: "gl-content-editor notion-editor-content" } },
     },
-    // Do NOT include `value` here — it changes on every keystroke via onUpdate→onChange,
-    // which would destroy and recreate the editor on every keypress.
-    // External value changes are handled by the setContent effect below.
-    [extensions, readOnly, collabProvider]
+    [extensions, readOnly, collab]
   )
 
-  // Focus editor after mount (deferred to avoid BubbleMenu coordsAtPos crash)
   useEffect(() => {
     if (!editor || readOnly) return
-    // Wait for next frame to ensure the view's docView is initialized
     const raf = requestAnimationFrame(() => {
       try {
         editor.commands.focus("end")
       } catch {
-        // Silently ignore if editor was destroyed before focus
+        // destroyed before focus
       }
     })
     return () => cancelAnimationFrame(raf)
   }, [editor, readOnly])
 
-  // Force save function
-  const handleForceSave = async () => {
-    if (!persistenceManager || isSaving || !editor || !blockDocManager) return
-
-    // Mirror current editor state to BlockDoc before saving
-    try {
-      const blockDoc = pmToBlockDoc(editor.state.doc)
-      blockDocManager.setBlockDocV1(blockDoc)
-    } catch (error) {
-      console.error("Failed to mirror before save:", error)
+  // No collab doc (create mode): the form's value is the content.
+  useEffect(() => {
+    if (!editor || collab) return
+    if (value !== editor.getHTML() && !readOnly) {
+      editor.commands.setContent(value || "<p></p>", { emitUpdate: false })
     }
+  }, [value, editor, collab, readOnly])
 
-    // Update title just before saving
-    if (titleRef.current) {
-      persistenceManager.setTitle(titleRef.current)
+  // Not bound because the doc has types this editor can't build: show the REST working
+  // copy (GET /blocks stays under Hocuspocus). No Yjs involved.
+  const staticLoadedRef = useRef<{ editor: typeof editor; postId: number } | null>(null)
+  useEffect(() => {
+    if (!editor || !readOnly || !postId || collab) return
+    const loaded = () => staticLoadedRef.current?.editor === editor && staticLoadedRef.current?.postId === postId
+    if (loaded()) return
+    let cancelled = false
+    let inFlight = false
+    const load = async () => {
+      if (cancelled || inFlight || loaded()) return
+      inFlight = true
+      try {
+        const token = authManager.getAccessToken()
+        if (token) blockAPIClient.setAuthToken(token)
+        const { doc } = await blockAPIClient.getPostBlocks(postId)
+        if (cancelled || editor.isDestroyed) return
+        if (doc.blocks_order.length > 0) setEditorBlockDoc(editor, doc)
+        staticLoadedRef.current = { editor, postId }
+      } catch (error) {
+        console.error("[Editor] Failed to load read-only content:", error)
+      } finally {
+        inFlight = false
+      }
     }
-    await persistenceManager.forceSave()
-  }
+    load()
+    const unsubscribe = authManager.subscribe((state) => {
+      if (state.accessToken) load()
+    })
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [editor, readOnly, postId, collab])
 
-  // Expose functions via ref
   const blockedError = () =>
     new Error(`Editing is disabled: this post has blocks the editor can't load (${describeUnbuildableTypes(unbuildable!)})`)
+
   useImperativeHandle(
     ref,
     () => ({
+      // Content saves itself on the server; "Save" waits until it has.
       forceSave: async () => {
         if (unbuildable) throw blockedError()
-        await handleForceSave()
+        if (readOnly || !saveStatus) return
+        await saveStatus.settled()
       },
       publish: async () => {
         if (unbuildable) throw blockedError()
-        if (!persistenceManager || !postId || isPublishing) return undefined
-
+        if (!postId || isPublishing || readOnly) return undefined
         setIsPublishing(true)
         onPublishStart?.()
-
         try {
-          const result = await persistenceManager.publish()
+          // The API flushes the collab server before reading block_doc; make sure the
+          // server has every edit typed here first.
+          await saveStatus?.whenAcknowledged()
+          const token = authManager.getAccessToken()
+          if (token) blockAPIClient.setAuthToken(token)
+          const result = await blockAPIClient.publishPost(postId)
           onPublishSuccess?.(result)
           return result
         } catch (error) {
@@ -287,264 +254,52 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       },
       restoreVersion: async (doc) => {
         if (unbuildable) throw blockedError()
-        // Only a live collaborative editor can restore: the restore must reach the
-        // shared Yjs doc (see BlockPersistenceManager.restoreVersion).
-        if (!persistenceManager) throw new Error("Restoring needs the collaborative editor")
-        if (titleRef.current) {
-          persistenceManager.setTitle(titleRef.current)
-        }
-        return persistenceManager.restoreVersion(doc)
+        if (!collab || !saveStatus || !editor || readOnly) throw new Error("Restoring needs the collaborative editor")
+        const { saved } = await restoreVersionLive(editor, doc, collab.doc, saveStatus)
+        return { saved }
       },
-      getSaveStatus: () => ({ isSaving, isPublishing, saveStatus }),
+      getSaveStatus: () => ({ isSaving: saveState === "saving", isPublishing, saveStatus: saveState }),
     }),
-    [persistenceManager, postId, isSaving, isPublishing, saveStatus, onPublishStart, onPublishSuccess, onPublishError, unbuildable]
+    [collab, saveStatus, editor, postId, readOnly, isPublishing, saveState, onPublishStart, onPublishSuccess, onPublishError, unbuildable]
   )
 
-  // Apply link function (from main)
   const applyLinkWithModal = useCallback(() => {
     if (!editor) return
     applyLink(editor, url, setIsLinkModalOpen)
   }, [editor, url])
 
-  // Open link modal function (from main)
   const openLinkModalWithEditor = useCallback(() => {
     if (!editor) return
     openLinkModal(editor, setUrl, setIsLinkModalOpen)
   }, [editor])
 
-  // Keyboard shortcut for opening link modal (from main)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) return
-      if (!editor) return
-
+      if (!editor || readOnly) return
       const selection = editor.state.selection
       if (selection.empty || selection.from === selection.to) return
-
       e.preventDefault()
       openLinkModalWithEditor()
     }
-
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [editor, openLinkModalWithEditor])
-
-  // Collaboration content sync
-  useEffect(() => {
-    if (!editor || !collabProvider) return
-    const onSynced = async (isSynced: boolean) => {
-      if (!isSynced) return
-
-      // Run the initial-content load only once for this editor instance.
-      // "synced" re-fires on every reconnect; re-running setContent below would
-      // overwrite unsaved edits (the "heartbeat" that deletes in-progress typing).
-      if (hasInitializedRef.current) {
-        if (import.meta.env.DEV) console.debug("[Editor] onSynced re-fired — skipping (already initialized)")
-        return
-      }
-      hasInitializedRef.current = true
-      if (import.meta.env.DEV) console.debug("[Editor] onSynced — running one-time content load")
-
-      // There is no longer a client-side IndexedDB cache; the WS "synced" event we are
-      // inside is the single signal that the server's authoritative Yjs state has loaded
-      // into the doc. So `whenSynced` resolves immediately and the emptiness checks below
-      // reflect the real, fully-restored state — we only seed from the REST working copy
-      // when the server genuinely has nothing. (await kept for API symmetry / future use.)
-      try {
-        await collabProvider.whenSynced
-      } catch {
-        /* ignore — proceed with whatever state we have */
-      }
-      if (editor.isDestroyed) return
-
-      const frag = collabProvider.doc.getXmlFragment("default")
-      const emptyShared = frag.length === 0
-      const emptyLocal = editor.isEmpty
-
-      if (isSynced && emptyShared && emptyLocal && value && value !== "<p></p>") {
-        editor.commands.setContent(value, { emitUpdate: false })
-      }
-
-      if (blockDocManager) {
-        const blockDoc = blockDocManager.getBlockDocV1()
-        const hasBlockDoc = blockDoc.blocks_order.length > 0 || Object.keys(blockDoc.blocks).length > 0
-
-        if (!hasBlockDoc) {
-          if (!editor.isEmpty) {
-            const snapshot = pmToBlockDoc(editor.state.doc)
-            blockDocManager.setBlockDocV1(snapshot)
-          } else {
-            blockDocManager.initializeDoc()
-          }
-        }
-      }
-
-      // Set editor instance and initialize persistence manager if available
-      if (persistenceManager) {
-        persistenceManager.setEditor(editor)
-
-        // Provide sync callback so persistence manager can sync editor state before save/publish
-        persistenceManager.setSyncCallback(() => {
-          if (!blockDocManager) return
-          try {
-            const blockDoc = pmToBlockDoc(editor.state.doc)
-            blockDocManager.setBlockDocV1(blockDoc)
-          } catch (error) {
-            console.error("Failed to sync editor to BlockDoc:", error)
-          }
-        })
-
-        persistenceManager.initialize()
-      }
-
-      collabProvider.provider.off("sync", onSynced)
-    }
-
-    collabProvider.provider.on("sync", onSynced)
-    // The schema gate (below) waits for the first sync before mounting this editor, so
-    // the provider has usually synced already and won't emit `sync` again until a
-    // reconnect. Run the load now in that case; it's still after the WS sync (rule 3b).
-    if (collabProvider.provider.synced) onSynced(true)
-    return () => collabProvider.provider.off("sync", onSynced)
-  }, [editor, collabProvider, value, blockDocManager, persistenceManager])
-
-  // Autosave trigger: notify the persistence manager on every editor edit.
-  // The manager debounces and mirrors editor → BlockDoc once per save (see
-  // BlockPersistenceManager.notifyEditorChange / performSave). Without this,
-  // typing never reaches the working copy (block_doc) — only publish did.
-  useEffect(() => {
-    if (!editor || !persistenceManager) return
-    const handleEditorUpdate = () => persistenceManager.notifyEditorChange()
-    editor.on("update", handleEditorUpdate)
-    return () => {
-      editor.off("update", handleEditorUpdate)
-    }
-  }, [editor, persistenceManager])
-
-  // External content changes (e.g. loading existing post)
-  useEffect(() => {
-    if (!editor) return
-    const current = editor.getHTML()
-
-    if (value !== current && !collabProvider) {
-      editor.commands.setContent(value || "<p></p>", {
-        emitUpdate: false,
-      })
-    }
-  }, [value, editor, collabProvider])
-
-  // Read-only view (e.g. contributors, #216): no collaboration provider and no
-  // persistence manager, so nothing else loads the post's blocks. Load the REST working
-  // copy and render it. No Yjs is involved on this path.
-  // The guard is keyed by editor instance AND postId: if useEditor rebuilds the editor
-  // (deps change), the new, empty instance must load again.
-  const readOnlyLoadedRef = useRef<{ editor: typeof editor; postId: number } | null>(null)
-  useEffect(() => {
-    if (!editor || !readOnly || !postId || collabProvider) return
-    const loaded = () => readOnlyLoadedRef.current?.editor === editor && readOnlyLoadedRef.current?.postId === postId
-    if (loaded()) return
-
-    // Marked loaded only on success, so a cancelled run (StrictMode's mount/unmount/
-    // mount) or a failed fetch doesn't block the next attempt.
-    let cancelled = false
-    let inFlight = false
-    const load = async () => {
-      if (cancelled || inFlight || loaded()) return
-      inFlight = true
-      try {
-        const token = authManager.getAccessToken()
-        if (token) blockAPIClient.setAuthToken(token)
-        const { doc } = await blockAPIClient.getPostBlocks(postId)
-        if (cancelled || editor.isDestroyed) return
-        if (doc.blocks_order.length > 0) setEditorBlockDoc(editor, doc)
-        readOnlyLoadedRef.current = { editor, postId }
-      } catch (error) {
-        console.error("[Editor] Failed to load read-only content:", error)
-      } finally {
-        inFlight = false
-      }
-    }
-
-    load()
-    // An expired token makes the first fetch fail with 401. The auth manager notifies
-    // subscribers after it refreshes the token, so retry then (mirrors the persistence
-    // manager's suspend-on-401 / resume-on-new-token behavior).
-    const unsubscribe = authManager.subscribe((state) => {
-      if (state.accessToken) load()
-    })
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-  }, [editor, readOnly, postId, collabProvider])
-
-  // Cleanup collaboration provider on unmount
-  useEffect(() => {
-    if (!postId || !collabProvider) return
-    return () => {
-      CollaborationProvider.release(postId)
-    }
-  }, [postId, collabProvider])
-
-  // Cleanup persistence manager on unmount. destroy() only cancels a pending debounce,
-  // so the ref is deliberately NOT cleared: StrictMode (dev) runs this cleanup once
-  // right after mount, and a cleared ref let the next useMemo recompute build a second
-  // manager that was never initialized, which silently dropped every autosave (found in
-  // #284's rollback test). A real unmount discards the ref anyway; a postId change is
-  // handled above.
-  useEffect(() => {
-    return () => {
-      persistenceRef.current?.destroy()
-    }
-  }, [])
-
-  // Subscribe to auth changes and update persistence manager token
-  useEffect(() => {
-    if (!persistenceRef.current) return
-
-    const unsubscribe = authManager?.subscribe?.((state: any) => {
-      const newToken = state?.accessToken ?? null
-      persistenceRef.current?.setAuthToken(newToken)
-    })
-
-    return () => {
-      if (typeof unsubscribe === "function") {
-        unsubscribe()
-      }
-    }
-  }, [])
+  }, [editor, readOnly, openLinkModalWithEditor])
 
   if (!editor) return null
 
-  if (import.meta.env.DEV && blockDocManager) {
-    ;(window as any).blockDocManager = blockDocManager
-    const w = window as any
-    if (!w.__blockSpecTestLoaded) {
-      w.__blockSpecTestLoaded = true
-      createTestScript()
-    }
-  }
-
-  // Show loading state while theme is loading or editor is initializing
-  if (!isThemeLoaded || !editor) {
-    return (
-      <div className="notion-editor">
-        <div
-          className="editor-wrapper"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "200px" }}
-        >
-          <p style={{ color: "#999" }}>{!isThemeLoaded ? "Loading theme..." : "Initializing editor..."}</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="notion-editor">
-      <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />
-      <BlockTypeToolbar editor={editor} />
-      <DragHandle editor={editor} />
-      <MediaSelector editor={editor} postId={postId} />
+      {droppedCount > 0 && (
+        <div className="editor-blocked-notice" role="status">
+          {droppedCount} block{droppedCount === 1 ? "" : "s"} of this post can't be shown in the editor. They are
+          kept in the saved document.
+        </div>
+      )}
+      {!readOnly && <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />}
+      {!readOnly && <BlockTypeToolbar editor={editor} />}
+      {!readOnly && <DragHandle editor={editor} />}
+      {!readOnly && <MediaSelector editor={editor} postId={postId} />}
 
       <div className="editor-wrapper">
         <EditorContent editor={editor} />
@@ -564,24 +319,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   )
 })
 
-// Theme gate: only mount the editor once the theme (and its TipTap block/extension
-// registry) has loaded, so the editor is created exactly ONCE with the full extension
-// set. Previously the editor was built with base extensions before the theme loaded and
-// then recreated when `isThemeLoaded` flipped (extensions + collabProvider are in the
-// useEditor deps), causing a double create in production (#198). This must be a separate
-// wrapper component — an early return before `useEditor` inside EditorInner would change
-// the hook count between renders and violate the Rules of Hooks.
-// Exported by name so its tests keep covering the y-websocket path now that the default
-// export is HocuspocusEditor (P4, #284).
-export const YWebsocketEditor = forwardRef<EditorRef, Props>(function Editor(props, ref) {
-  const { isThemeLoaded } = useTheme()
-
-  if (!isThemeLoaded) return <EditorPlaceholder text="Loading theme…" />
-
-  return <SchemaGate ref={ref} {...props} />
-})
-
-function EditorPlaceholder({ text }: { text: string }) {
+function Placeholder({ text }: { text: string }) {
   return (
     <div className="notion-editor">
       <div
@@ -594,29 +332,31 @@ function EditorPlaceholder({ text }: { text: string }) {
   )
 }
 
-// Schema gate (#206/#274): y-tiptap DELETES any Y element its schema can't build
-// (unknown node type or mark, e.g. a block from a theme that failed to load or is no
-// longer active), for every peer, and the next autosave persists the loss. So before an
-// editor binds Collaboration, wait for the first WS sync and check the shared fragment
-// against the schema the editor would get. If anything can't be built, open the editor
-// read-only instead (no Collaboration binding, REST working copy, like contributors) and
-// say which types are missing. The provider is acquired here only to read the doc; the
-// editor acquires its own reference.
-const SchemaGate = forwardRef<EditorRef, Props>(function SchemaGate(props, ref) {
+type Gate = { collab: HocuspocusCollaboration; unbuildable: UnbuildableTypes | null }
+
+// Connects (after the theme gate), waits for the first sync, checks the fragment against
+// the schema the editor will get (rule 10), then mounts the bound editor. A stale-epoch
+// refusal (the server reseeded) bumps `generation`: release the dead connection and start
+// over on a fresh Y.Doc.
+const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref) {
   const { postId, enableCollaboration = true, readOnly = false } = props
-  const collaborating = !!postId && enableCollaboration && !readOnly
-  const [check, setCheck] = useState<{ postId: number; unbuildable: UnbuildableTypes | null } | null>(null)
+  const live = !!postId && enableCollaboration
+  const [generation, setGeneration] = useState(0)
+  const [gate, setGate] = useState<Gate | null>(null)
 
   useEffect(() => {
-    if (!collaborating || !postId) return
-    const collab = CollaborationProvider.getInstance(postId)
-    let done = false
-    const onSynced = (isSynced: boolean) => {
-      if (!isSynced || done) return
-      done = true
-      collab.provider.off("sync", onSynced)
-      // Same extension list the editor computes (theme extensions come from the
-      // registry); Collaboration adds no node or mark types.
+    if (!live || !postId) return
+    const collab = acquirePostCollab(postId)
+    let cancelled = false
+    const offStale = collab.onStale(() => {
+      if (cancelled) return
+      setGate(null)
+      setGeneration((g) => g + 1)
+    })
+    collab.whenSynced().then(() => {
+      if (cancelled || collab.stale) return
+      // The extensions the editor computes (theme ones from the registry, registered by
+      // now); Collaboration adds no node or mark types.
       const schema = getSchema(getExtensions({ collabProvider: null })())
       const unbuildable = findUnbuildableTypes(collab.doc.getXmlFragment(EDITOR_FRAGMENT), schema)
       if (unbuildable) {
@@ -624,34 +364,45 @@ const SchemaGate = forwardRef<EditorRef, Props>(function SchemaGate(props, ref) 
           `[Editor] Not binding collaboration: the shared doc has types this editor can't build (${describeUnbuildableTypes(unbuildable)}). Opening read-only.`
         )
       }
-      setCheck({ postId, unbuildable })
-    }
-    collab.provider.on("sync", onSynced)
-    if (collab.provider.synced) onSynced(true)
+      setGate({ collab, unbuildable })
+    })
     return () => {
-      collab.provider.off("sync", onSynced)
-      CollaborationProvider.release(postId)
+      cancelled = true
+      offStale()
+      setGate(null)
+      releasePostCollab(collab)
     }
-  }, [collaborating, postId])
+  }, [live, postId, generation])
 
-  if (!collaborating) return <EditorInner ref={ref} {...props} />
-  if (check?.postId !== postId) return <EditorPlaceholder text="Connecting…" />
-  if (!check.unbuildable) return <EditorInner ref={ref} {...props} />
-
+  if (!live) return <EditorInner ref={ref} {...props} collab={null} />
+  if (!gate || gate.collab.postId !== postId || gate.collab.stale) return <Placeholder text="Connecting…" />
+  if (!gate.unbuildable) {
+    return (
+      <EditorInner
+        key={generation}
+        ref={ref}
+        {...props}
+        collab={gate.collab}
+        readOnly={readOnly || gate.collab.readOnly}
+      />
+    )
+  }
   return (
     <>
       <div className="editor-blocked-notice" role="alert">
-        <strong>This post is open read-only.</strong> It contains{" "}
-        {describeUnbuildableTypes(check.unbuildable)} that the editor can't load, usually because the theme that
-        provides them failed to load or is no longer active. Editing here would delete them for everyone, so editing
-        is disabled until that theme is available. Those blocks are hidden below but kept in the post.
+        <strong>This post is open read-only.</strong> It contains {describeUnbuildableTypes(gate.unbuildable)} that the
+        editor can't load, usually because the theme that provides them failed to load or is no longer active. Editing
+        here would delete them for everyone, so editing is disabled until that theme is available. Those blocks are
+        hidden below but kept in the post.
       </div>
-      <EditorInner ref={ref} {...props} readOnly unbuildable={check.unbuildable} />
+      <EditorInner ref={ref} {...props} readOnly collab={null} unbuildable={gate.unbuildable} />
     </>
   )
 })
 
-// The collab backend is fixed at build time (PUBLIC_COLLAB_BACKEND, backend.ts). Under
-// Hocuspocus the editor never seeds or saves (HocuspocusEditor.tsx); everything above is
-// the y-websocket path, unchanged until P5 removes it.
-export default usesHocuspocus() ? HocuspocusEditor : YWebsocketEditor
+export default forwardRef<EditorRef, EditorProps>(function Editor(props, ref) {
+  const { isThemeLoaded } = useTheme()
+  // Theme first: its node types must be registered before Collaboration binds.
+  if (!isThemeLoaded) return <Placeholder text="Loading theme…" />
+  return <LiveGate ref={ref} {...props} />
+})

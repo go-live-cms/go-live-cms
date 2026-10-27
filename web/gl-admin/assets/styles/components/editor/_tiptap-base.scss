@@ -7,8 +7,7 @@
 // deps change), the first one's destroy deletes the stylesheet the live editor still
 // needs, and the admin ran with no base CSS. Without its separator rule our content
 // `img { margin: 1em 0 }` gave a remote caret at the end of a line ~2 extra lines.
-// Both editors (Editor.tsx, HocuspocusEditor.tsx) set `injectCSS: false` and rely on
-// this file instead. Re-copy it when bumping TipTap (web/CLAUDE.md "Upgrading TipTap").
+// The editor (Editor.tsx) sets `injectCSS: false` and relies on this file instead. Re-copy it when bumping TipTap (web/CLAUDE.md "Upgrading TipTap").
 
 .ProseMirror {
   position: relative;

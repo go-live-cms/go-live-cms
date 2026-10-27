@@ -10,7 +10,7 @@ import { applyAdminCsp, isAccountPagePath, isAdminPath } from "./csp"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { shouldNoindex } from "../lib/seo"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
-import { hocuspocusUrl, usesHocuspocus } from "../../gl-admin/lib/collaboration/backend"
+import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
 
 // Themes are bundled at build time (#272): Vite resolves these globs when the image is
 // built (lazily: nothing loads until called), so a theme copied in later has no entry.
@@ -154,7 +154,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
       pageOrigin: url.origin,
       apiUrl: process.env.PUBLIC_API_URL || import.meta.env.PUBLIC_API_URL,
       dev: import.meta.env.DEV,
-      collabUrl: usesHocuspocus() ? hocuspocusUrl(url) : undefined,
+      collabUrl: hocuspocusUrl(url),
       // Escape hatch for rolling out to a new deployment: ADMIN_CSP_REPORT_ONLY=1.
       reportOnly: process.env.ADMIN_CSP_REPORT_ONLY === "1",
     })

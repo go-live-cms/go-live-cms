@@ -6,10 +6,9 @@ import { CollabSaveStatus } from "./CollabSaveStatus"
 import { acquireHocuspocus, releaseHocuspocus, type HocuspocusCollaboration } from "./HocuspocusCollaboration"
 import { startRelay, waitFor, type Relay } from "./hocuspocusRelay.testkit"
 
-// The convergence harness of reconnect.test.ts, on the Hocuspocus path (#206 P3, #283):
-// the real collab server in-process and two real clients (HocuspocusCollaboration, the
-// editor's provider) over WebSockets. Unlike the y-websocket model, the server owns
-// seeding and storing; these pin what the client relies on:
+// The convergence harness of reconnect.test.ts, against the real stack (#206): the
+// collab server in-process and two real clients (HocuspocusCollaboration, the editor's
+// provider) over WebSockets. The server owns seeding and storing; these pin what the client relies on:
 //   - two providers converge, both ways;
 //   - the client never seeds or writes on sync (the server seeded);
 //   - a server restart (state stored, reloaded) loses and duplicates nothing, including

@@ -18,8 +18,7 @@ export interface CreatePostRequest {
   author_ids: number[]
   media_ids?: number[]
   taxonomy_ids?: number[]
-  // The initial body (Hocuspocus, #206 P3): the collab server seeds the doc from it. Under
-  // y-websocket the form PUTs /blocks after creating instead.
+  // The initial body (#206): the collab server seeds the doc from it on first open.
   block_doc?: BlockDocV1
 }
 

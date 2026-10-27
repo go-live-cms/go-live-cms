@@ -674,7 +674,7 @@ describe("blockBridge — additional edge cases", () => {
       expect(textOf(item)).toBeUndefined()
     })
 
-    it("the synthesized item's id is stable across loads and saves (no Yjs churn, rule 2)", () => {
+    it("the synthesized item's id is stable across loads and saves (no churn on every store)", () => {
       const a = id()
       const doc: BlockDocV1 = {
         doc_version: 1,

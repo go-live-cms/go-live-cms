@@ -44,15 +44,15 @@ describe("buildAdminCsp", () => {
     expect(csp["connect-src"]).toEqual(["'self'", "ws://localhost:4321"])
   })
 
-  it("adds the dev collab server only in dev", () => {
+  it("in dev, allows Vite's HMR socket but not the retired y-websocket port", () => {
     const dev = directives(
       buildAdminCsp({ nonce: "n", pageOrigin: "http://localhost:4321", apiUrl: "http://localhost:8080/api/v1", dev: true }),
     )
-    expect(dev["connect-src"]).toContain("ws://localhost:1234")
+    expect(dev["connect-src"]).not.toContain("ws://localhost:1234")
     expect(dev["connect-src"]).toContain("ws://localhost:4321") // Vite HMR
   })
 
-  it("adds the Hocuspocus collab origin when it isn't the page's own (#206 P3)", () => {
+  it("adds the collab origin when it isn't the page's own (#206)", () => {
     const dev = directives(
       buildAdminCsp({ nonce: "n", pageOrigin: "http://127.0.0.1:4321", dev: true, collabUrl: "ws://127.0.0.1:1235" }),
     )
