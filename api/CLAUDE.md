@@ -35,14 +35,14 @@ and no code. `post_types.go` is not one of them: it contains code.
 
 PASETO v4: asymmetric (`PASETO_V4_PUBLIC/PRIVATE_KEY_HEX`) for access tokens, local
 symmetric (`PASETO_V4_LOCAL_KEY_HEX`) for refresh. Issuer/audience/KIDs in `util/config.go`.
-The WebSocket server never sees access tokens (#233). The editor exchanges its access
-token for a **collab ticket** at `POST /collab/tickets` (`canEditPost` on the doc's post): v4.public, signed
+The collab server never sees access tokens (#233). The editor exchanges its access
+token for a **collab ticket** at `POST /collab/tickets` (`canReadPostBlocks` on the doc's post): v4.public, signed
 with the access key, audience `golive.admin-ws`, `token_type: ws_ticket`, `doc` claim,
 30s TTL (`token/ws_ticket.go`, `collab_*.go`). `VerifyToken` rejects tickets, so they're
-not bearer tokens. The API never accepts a ticket back: the WS server verifies it
-locally, burns its jti (single use, in the WS process), and asks the internal access
+not bearer tokens. The API never accepts a ticket back: the collab server verifies it
+locally, burns its jti (single use, in the collab process), and asks the internal access
 endpoint below whether the user may edit that doc (#223, #135). The ticket never leaves
-the WS server.
+the collab server.
 
 - **`authMiddleware` loads the caller's DB row on every authenticated request** and
   caches it under `authorization_user`. Get it with `server.callerUser(c)`; don't
@@ -55,14 +55,14 @@ the WS server.
   of `auth_roles.go`. Model: **ownership** (`posts.user_id` is the owner).
   - Admins/editors (`canModeratePosts`) may do anything to any post.
   - Contributors may create posts, but only drafts authored by themselves
-    (`canCreatePost`). They may edit their own posts' **working copy** (`PUT
-    /blocks`, the collab socket: `canEditPost`) at any status.
+    (`canCreatePost`). They may edit their own posts' **working copy** (a read-write
+    collab connection: `canEditPost`) at any status, and watch any post's live,
+    read-only (`canReadPostBlocks`).
   - The **live** fields (PUT `/posts/:id`, meta, featured image, media links, DELETE)
     only while their post isn't published (`canEditPostDetails`). Otherwise they could
     change or remove published content without the publish permission. For the same
-    reason a blocks PUT on their published post refuses a changed title (403, nothing
-    saved; the unchanged title every autosave sends is fine) and doesn't sync
-    `post_media` (publish does), and PUT `/posts/:id` refuses a `post_status` change
+    reason the collab store doesn't sync a published post's `post_media` (publish does),
+    and PUT `/posts/:id` refuses a `post_status` change
     (403) from anyone who can't publish. A `post_parent` must be a post the caller can
     edit (`canEditPost`).
   - Publish/unpublish/revisions stay `requireContentEditor`.
@@ -130,38 +130,34 @@ the WS server.
   unique values (UUID/UnixNano suffixes) and restore global state such as the
   active theme with `t.Cleanup`.
 
-## Collaboration backend: `COLLAB_BACKEND` (#206, #280)
+## Collaboration server (#206, #280)
 
-`hocuspocus` (`LoadConfig`'s default since the P4 cutover, #284) or `y-websocket` (rollback
-only until P5; `util.Config.UsesHocuspocus()`; `LoadConfig` rejects anything else, and the
-zero `Config` in tests is still y-websocket, so handler tests opt into Hocuspocus
-explicitly). It is deployment-wide and must match web's `PUBLIC_COLLAB_BACKEND`. Under
-hocuspocus `NewServer` requires `COLLAB_INTERNAL_URL` + `COLLAB_INTERNAL_SECRET`. Cutover
-and rollback: `docs/operations/collab-cutover.md`.
+The Hocuspocus collab server (`web/collab-server/`) is the only collaboration backend and
+the **only writer of `block_doc`** for an existing post. Until P5 (#285) a
+`COLLAB_BACKEND` flag also allowed the old y-websocket server, whose clients autosaved
+through `PUT /posts/:id/blocks` and whose LevelDB was squashed after a publish; the flag,
+that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_URL` +
+`COLLAB_INTERNAL_SECRET` (handler tests get a fake collab server that answers 200 from
+`newTestConfig`; `newCollabTestServer` points at your own). History and the guards:
+`docs/operations/collab-cutover.md`.
 
 - **API → collab calls** (`collab_internal_client.go`) use `COLLAB_INTERNAL_URL` +
-  `COLLAB_INTERNAL_SECRET` (Bearer; renamed from `COLLAB_SERVER_URL` /
-  `COLLAB_SQUASH_SECRET`). `NewServer` trims both (URL also of trailing `/`) and, under
-  hocuspocus, refuses to start without them. The secret is NOT the one the collab
-  server sends to the API (that's `ROLE_LOOKUP_SECRET`).
-  - y-websocket: after a publish, `triggerCollabSquash` fires a **best-effort** goroutine
-    to `/_internal/documents/post-<id>/squash` (LevelDB compaction). Skipped if either
-    setting is unset; never blocks/fails the publish.
-  - hocuspocus: **before** reading `block_doc`, publish calls
-    `POST /internal/documents/post-<id>/flush` synchronously (`collabFlushTimeout`, 5s).
-    200 = stored or not loaded. Anything else (down, timeout, non-200) → **503**, nothing
-    published, so a snapshot never misses the last debounced edits. No squash.
+  `COLLAB_INTERNAL_SECRET` (Bearer). `NewServer` trims both (URL also of trailing `/`)
+  and refuses to start without them. The secret is NOT the one the collab server sends to
+  the API (that's `ROLE_LOOKUP_SECRET`). **Before** reading `block_doc`, publish calls
+  `POST /internal/documents/post-<id>/flush` synchronously (`collabFlushTimeout`, 5s).
+  200 = stored or not loaded. Anything else (down, timeout, non-200) → **503**, nothing
+  published, so a snapshot never misses the last debounced edits.
 - **Collab → API** (internal listener, `ROLE_LOOKUP_SECRET`, `internal_handlers_collab.go`):
   - `GET /internal/posts/:id/collab` → `{block_doc, block_revision, ydoc_state?, epoch?}`
     (`ydoc_state` base64). **Revision guard is applied here:** the state is returned only
     if `post_ydoc_state.block_revision == posts.block_revision`; otherwise something wrote
     `block_doc` around the collab server and the state is omitted, so the server reseeds
-    under a new epoch. Works under either backend (read-only).
+    under a new epoch.
   - `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?, base_revision?}`
-    → `{block_revision, epoch}`. **Hocuspocus only** (409 otherwise: two block_doc writers).
-    16 MiB body (`collabStoreBodyLimit`), `block_doc` itself ≤ 4 MiB, and the same
-    `prepareForStore` as `PUT /blocks` (limits, dedupe `blocks_order`, sanitize, v1 +
-    order integrity). `block_doc` omitted/null = store the Yjs state only (server-side
+    → `{block_revision, epoch}`. 16 MiB body (`collabStoreBodyLimit`), `block_doc` itself
+    ≤ 4 MiB, and `prepareForStore` (limits, dedupe `blocks_order`, sanitize, v1 + order
+    integrity). `block_doc` omitted/null = store the Yjs state only (server-side
     validation failed), revision unchanged; that **requires `base_revision`** (400
     otherwise), or a stale state could be stamped with the current revision and pass the
     guard. `base_revision` behind → 409. 404 for a missing post.
@@ -171,16 +167,17 @@ and rollback: `docs/operations/collab-cutover.md`.
     unknown media ids skipped, featured image untouched; **only while unpublished**, publish
     syncs them otherwise), upsert `post_ydoc_state` (`000020`) at the new revision with
     `last_editor_id` (NULL if the user is gone).
-- **`PUT /posts/:id/blocks` answers 409 `managed by collaboration server`** under
-  hocuspocus (an old tab can't overwrite). GET stays. Removed in P5.
+- **`GET /posts/:id/blocks`** (any signed-in user) and `/versions[/:no]` stay: the static
+  read-only view and revisions use them. A stored `{}` comes back as a well-formed empty
+  doc (`parseStoredBlockDoc`, #304). There is no write route for the working copy.
 - **`POST /posts` takes an optional `block_doc`** (#283): the new post's initial body, with
-  the same `prepareForStore` checks and the 4 MiB body limit. Under hocuspocus the admin
-  sends the body this way (it can't PUT /blocks); the collab server seeds the doc from it
-  on first open. Nothing is live yet, so this isn't a write around the collab server.
-- **Tickets:** under hocuspocus `POST /collab/tickets` uses `canReadPostBlocks` (any content
-  role, any existing post) instead of `canEditPost`: contributors get a read-only live
-  view of others' posts. The ticket still carries no role; the server asks
-  `/internal/users/:id/access` and makes `can_edit: false` connections read-only.
+  the same `prepareForStore` checks and the 4 MiB body limit. The collab server seeds the
+  doc from it on first open. Nothing is live yet, so this isn't a write around the collab
+  server.
+- **Tickets:** `POST /collab/tickets` uses `canReadPostBlocks` (any content role, any
+  existing post): contributors get a read-only live view of others' posts. The ticket
+  carries no role; the server asks `/internal/users/:id/access` and makes `can_edit:
+  false` connections read-only.
 
 ## Gin mode, dev seeding, CORS
 
@@ -269,7 +266,7 @@ and rollback: `docs/operations/collab-cutover.md`.
   `setting_key` (meta/setting keys), `max_bytes=N` (passwords: bcrypt reads 72 bytes).
   URLs use `http_url` (http/https only). Give every string a `max`.
 - **Body limits** (`request_limits.go`): 1 MiB default on `/api/v1` and `/public`, 4 MiB
-  for `PUT /posts/:id/blocks`, uploads exempt (they cap themselves). The internal listener
+  for `POST /posts` (it may carry a `block_doc`), uploads exempt (they cap themselves). The internal listener
   has no group limit; `PUT /internal/posts/:id/collab` caps itself (16 MiB). A new upload route
   must be added to `bodyLimitOverrides` with 0. Block docs also get
   `checkLimits` (block count, block id length, JSON depth).
@@ -304,14 +301,13 @@ and rollback: `docs/operations/collab-cutover.md`.
   Dev compose trusts the private Docker ranges because the Vite proxy sets XFF.
 - The internal listener is not limited on purpose (see the `ratelimit.go` header).
 
-## Collaboration integration (WS access lookup, #223, #135)
+## Collaboration integration (access lookup, #223, #135)
 
 - `GET /internal/users/:id/access?doc=post-<id>&issued_at=<unix>` (`internal_routes.go`,
-  `internal_handlers_read.go`) is the WS server's per-connection check. It answers
+  `internal_handlers_read.go`) is the collab server's per-connection check. It answers
   `{role, can_edit}`, where `can_edit` is `canEditPost` for that post (moderators skip
   the post lookup). 404 if the user, or for a contributor the post, is gone. It replaced
-  the role-only `/internal/users/:id/role`; Hocuspocus's `onAuthenticate` (#206) should
-  call this same endpoint.
+  the role-only `/internal/users/:id/role`; Hocuspocus's `onAuthenticate` (#206) calls it.
 - **It is on a separate listener, not under `/api/v1`.** `newInternalRouter` builds its
   own Gin engine and `main.go` serves it with `StartInternal(INTERNAL_SERVER_ADDRESS)`
   (default `0.0.0.0:8081`). Never publish that port (compose doesn't). The public
@@ -319,14 +315,14 @@ and rollback: `docs/operations/collab-cutover.md`.
   server-to-server route there, not on `v1`.
 - It is
   authenticated with `Authorization: Bearer <ROLE_LOOKUP_SECRET>` (constant-time
-  compare), **not** `authMiddleware`, so it works with WS-only tickets
-  (`golive.admin-ws`, `token_type: ws_ticket`, #233). The WS server passes the
+  compare), **not** `authMiddleware`, so it works with collab-only tickets
+  (`golive.admin-ws`, `token_type: ws_ticket`, #233). The collab server passes the
   ticket's `user_id`, `iat` and `doc`. It reads the role (and owner) from the DB and
   refuses (403) tickets issued before the user's latest password change.
 - `ROLE_LOOKUP_SECRET` is **required**: `NewServer` errors without it. It has no
   default, so `LoadConfig` binds it with `viper.BindEnv`. Without that, viper's
   `Unmarshal` drops env-only keys it doesn't know (see `util/config_test.go`).
-  `NewServer` trims it once, and the WS server trims its copy too, so stray whitespace
+  `NewServer` trims it once, and the collab server trims its copy too, so stray whitespace
   in `app.env` can't make the two sides disagree.
 
 ## Observability (#142, #155)
@@ -338,8 +334,8 @@ and rollback: `docs/operations/collab-cutover.md`.
   kept only from a peer in `TRUSTED_PROXIES` (public router) or on the internal
   listener; anything else gets a UUID, so clients can't choose their ids. Read it with `requestIDFromContext(c)`. `requestIDErrorWriter`
   splices `"request_id"` into every JSON error body (status ≥ 400), so handlers keep
-  returning plain `gin.H{"error": ...}`. It's forwarded on the collab squash/flush calls; the
-  WS server sends its own on the internal role lookup.
+  returning plain `gin.H{"error": ...}`. It's forwarded on the collab flush call; the
+  collab server sends its own on its internal calls.
 - **Logging is `log/slog`.** `NewLogger` (JSON in release/test, text in debug) is
   installed by `main.go` with `slog.SetDefault`, which also captures the `log` package.
   In handlers use `server.requestLog(c).Warn(...)` (adds the request id). Don't use
@@ -378,7 +374,7 @@ and rollback: `docs/operations/collab-cutover.md`.
   `published_version_id` (versions stay). `/public/posts/:id/blocks` and the SSR post
   page 404 unless the status is `published`. **There is no restore endpoint on
   purpose:** never write `block_doc` from the server while editors may be connected;
-  the editor restores through Yjs and saves with the normal PUT (under hocuspocus the
-  collab server's store persists it instead). The only server-side `block_doc` writer
-  allowed is the collab server's `PUT /internal/posts/:id/collab`.
+  the editor restores through Yjs and the collab server's store persists it. The only
+  `block_doc` writer for an existing post is the collab server's
+  `PUT /internal/posts/:id/collab`.
 </content>

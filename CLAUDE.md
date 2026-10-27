@@ -6,8 +6,7 @@ processes + Postgres, run via Docker Compose.
 | Process | Port | Stack | Dir |
 |---------|------|-------|-----|
 | API | 8080 (+ 8081 internal, never published) | Go, Gin, sqlc, PASETO v4 | `api/`, `db/`, `token/`, `util/` |
-| Hocuspocus collab (the editor's default since the P4 cutover, #206/#284) | 1235 (+ 1236 internal) | Node, Hocuspocus, esbuild bundle | `web/collab-server/` |
-| WebSocket collab (retired; dev rollback only, profile `y-websocket`, deleted in P5) | 1234 | Node, y-websocket, Yjs, LevelDB | `websocket/` |
+| Collab (Hocuspocus, #206) | 1235 (+ 1236 internal) | Node, Hocuspocus, Yjs, esbuild bundle | `web/collab-server/` |
 | Web | 4321 | Astro SSR + React admin SPA | `web/` |
 | DB | 5432 | PostgreSQL 12 | `db/migration/` |
 
@@ -17,11 +16,11 @@ service (80/443, TLS), `/collab` → the Hocuspocus `collab` service, everything
 (`.github/workflows/cd.yml`) pushes `ghcr.io/go-live-cms/{api,web,collab}:<sha>` and deploys
 to one VM with `scripts/deploy/deploy.sh` (backup → migrate with the new image → `up
 --wait`). Runbooks: `docs/operations/deploy.md`, `docs/operations/collab-cutover.md`
-(y-websocket → Hocuspocus cutover and rollback). No production deployment exists yet.
+(the collab guards, reseeding, and the history of the y-websocket → Hocuspocus move). No
+production deployment exists yet.
 
 Scoped context lives in nested `CLAUDE.md` files — read the one for the area you're
-working in: `api/`, `web/`, `web/gl-admin/lib/collaboration/`, `websocket/`,
-`web/collab-server/`.
+working in: `api/`, `web/`, `web/gl-admin/lib/collaboration/`, `web/collab-server/`.
 
 ---
 
@@ -34,7 +33,7 @@ working in: `api/`, `web/`, `web/gl-admin/lib/collaboration/`, `websocket/`,
   not just what changed. Past tense, imperative subject line.
 - **Commit/push only when asked.** When on a feature branch it's fine to commit there.
 - Don't `git add -A` blindly — stage the specific files you changed (the user keeps
-  local-only files like `websocket/.env` with debug toggles; `.env` is gitignored).
+  local-only files like `app.env` and a root `.env`; both are gitignored).
 
 ---
 
@@ -92,9 +91,6 @@ make devseed                  # dev seed into the running stack (go run ./cmd/se
 npm test                      # vitest run (headless editor/collab tests)
 npm run dev                   # astro dev
 
-# WebSocket (run from websocket/)
-npm test                      # node --test
-
 # Backups (docs/operations/backups.md). Scratch compose project, never the dev data;
 # also proves migrations go up/down/up. CI job: backup-restore.
 sh scripts/backup/test-restore.sh
@@ -102,7 +98,6 @@ sh scripts/backup/test-restore.sh
 # Full stack (dev)
 docker compose -f compose.dev.yaml up -d
 docker compose -f compose.dev.yaml restart collab      # e.g. to test reconnects
-sh scripts/collab/leveldb-diff-dev.sh                  # P4 dry run: legacy LevelDB vs block_doc (read-only)
 
 # Production stack locally (secrets in a gitignored .env; use another -p to keep it
 # apart from real volumes). Release mode: no seeded accounts, see deploy.md step 5.
@@ -118,9 +113,12 @@ docker compose -f compose.yaml up --build -d
   `web/gl-admin/lib/collaboration/CLAUDE.md` before touching it.
 - **The 2026-06 collab data-loss saga is RESOLVED** (PR #204): a stack of five real
   bugs, the decisive one being a **dual yjs instance (ESM+CJS double-load) inside the
-  websocket server** — `npm ls` showed one deduped copy, but the ESM `import` and
+  old y-websocket server** — `npm ls` showed one deduped copy, but the ESM `import` and
   y-websocket's CJS `require` each evaluated their own build, and cross-instance
-  `Y.applyUpdate` corrupted live docs. Details + guards: `websocket/CLAUDE.md` (top
-  gotcha) and `web/gl-admin/lib/collaboration/CLAUDE.md` (hard rules 0–9). `yjs` is
-  pinned `13.6.31` exact in BOTH `web/` and `websocket/` — keep them in lockstep.
+  `Y.applyUpdate` corrupted live docs. Guards today: `web/collab-server/CLAUDE.md`
+  (single yjs instance) and `web/gl-admin/lib/collaboration/CLAUDE.md` (hard rules).
+- **The Hocuspocus migration (#206) is complete** (P5, #285, 2026-10): `websocket/`
+  (y-websocket, LevelDB, squash), the client autosave and `PUT /posts/:id/blocks` are
+  gone, and there is no y-websocket rollback. Only the collab server writes
+  `block_doc`. `yjs` is pinned `13.6.31` exact in `web/`, the only package that uses it.
 </content>

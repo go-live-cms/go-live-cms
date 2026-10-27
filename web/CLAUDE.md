@@ -25,15 +25,17 @@ Defined in `tsconfig.json` **and** `astro.config.mjs` **and** `vitest.config.ts`
   `gl-admin/lib/collaboration/blockBridge.test.ts` for the pattern (StarterKit +
   TextAlign + ImageWithMediaId + **BlockIdExtension**, which supplies the
   `data-block-id` global attr the bridge needs).
-- Yjs runs natively in Node — managers are tested against a real `new Y.Doc()`.
+- Yjs runs natively in Node — collab code is tested against a real `new Y.Doc()` and the
+  real collab server in-process (`hocuspocusRelay.testkit.ts`).
 - CI runs `npm test` on **Node 22** (`.github/workflows/ci.yml` `web-tests` job).
   jsdom 29 needs Node ≥20.19, hence 22.
 
 ## Editor lives under `gl-admin/`
 
-The collaborative editor and its persistence/sync layer are the most fragile part of
-the codebase. **Before editing anything under `gl-admin/components/editor/` or
-`gl-admin/lib/collaboration/`, read `gl-admin/lib/collaboration/CLAUDE.md`.**
+The collaborative editor and its sync layer (with the collab server in `collab-server/`)
+are the most fragile part of the codebase. **Before editing anything under
+`gl-admin/components/editor/`, `gl-admin/lib/collaboration/` or `collab-server/`, read
+`gl-admin/lib/collaboration/CLAUDE.md`.**
 
 ## Misc
 
@@ -43,8 +45,8 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
   early. `/auth/*` endpoints are excluded (there a 401 means bad credentials). A
   failed refresh clears auth, except a **429** (API rate limit, #190): then the user
   stays signed in and `authManager` retries after `Retry-After` (`RefreshError`).
-  `blockAPI.ts` does NOT go through this: it throws `UnauthorizedError` to the collab
-  persistence layer.
+  `blockAPI.ts` (block reads, publish, versions) does NOT go through this: it throws
+  `UnauthorizedError` to its caller.
 
 - TipTap is on **v3** (breaking from v2). `setContent`'s 2nd arg is an options object
   `{ emitUpdate }` — NOT the v2 boolean. `emitUpdate:false` only suppresses TipTap's
@@ -52,11 +54,12 @@ the codebase. **Before editing anything under `gl-admin/components/editor/` or
 - StarterKit's bundled undo/redo is **disabled when collaborating** (`undoRedo:
   collabProvider ? false : undefined` in `editor/utils/extensions.ts`, #197) —
   Collaboration ships its own Yjs-aware history. Keep it for non-collab editors.
-- **`yjs` is pinned to `13.6.31` (exact, no `^`) and must match `websocket/`'s pin.**
-  The two packages have separate lockfiles; loose ranges drifted apart once and
-  contributed to collab data corruption. See
-  `gl-admin/lib/collaboration/CLAUDE.md` rule 8 and `websocket/CLAUDE.md`'s top gotcha
-  (dual ESM/CJS instance) before touching any yjs-family dependency.
+- **`yjs` is pinned to `13.6.31` (exact, no `^`), and `web/` is the only package that
+  uses it:** the editor and the collab server share this lockfile. Loose ranges (when
+  `websocket/` had its own lockfile, before #285) drifted apart once and contributed to
+  collab data corruption. See `gl-admin/lib/collaboration/CLAUDE.md` rule 8 and the
+  single-instance section of `collab-server/CLAUDE.md` before touching any yjs-family
+  dependency.
 - **Production `/api/v1` + `/uploads` forwarding (#143):** the browser calls the API
   same-origin. In dev the Vite proxy (`astro.config.mjs`) forwards those paths; the
   production image runs the standalone `@astrojs/node` server, which has no Vite, so
@@ -114,8 +117,8 @@ Known-good set, last reviewed 2026-10 (web test suite + two-user collab test):
   resolves to a version other than the declared `@tiptap/core` — e.g. a new transitive
   package a bump added but `overrides` doesn't list.
 - One exception on its own release line (no `3.4.2` exists): `@tiptap/y-tiptap` `3.0.0`.
-- `prosemirror-utils` `1.2.2` is pinned exact too. `y-websocket` `2.1.0` and
-  `y-protocols` `1.0.7` are pinned exact here and `y-websocket` in `websocket/` (rule 8).
+- `prosemirror-utils` `1.2.2` is pinned exact too, and `y-protocols` `1.0.7` (rule 8;
+  Hocuspocus and y-tiptap depend on it, keep one deduped copy).
 - `@hocuspocus/server` / `@hocuspocus/provider` `3.4.4` and `paseto` `3.1.4` are pinned
   exact for the collab server in `collab-server/` (#206; read its `CLAUDE.md`). It is
   bundled with esbuild (`npm run build:collab`) and tested as its own vitest project
@@ -141,21 +144,21 @@ Upgrades are a deliberate, standalone PR — never part of an unrelated change.
    (`isChangeOrigin`, sync plugin meta, undo/redo — StarterKit's `undoRedo` must stay
    disabled when collaborating), and drag-handle/node-range changes (block reordering).
 4. **Run the web test suite**: `docker compose -f compose.dev.yaml exec -T web npx
-   vitest run` (blockBridge round-trips, BlockId, persistence manager).
+   vitest run` (blockBridge round-trips, BlockId, the collab tests).
 5. **Manual editor pass**: create, edit, save and reload every block type; drag a block
    to reorder; slash menu, bubble menu, character count.
 6. **Two-user collab test**: log in as two users in separate browser contexts on the
    same post; type in both and check both see each other's edits and cursors; reload
    both and confirm nothing was lost or duplicated; publish and check the public page.
-   Watch the websocket container logs for errors while doing it.
-7. **Keep `yjs` / `y-websocket` / `y-protocols` in lockstep with `websocket/`** — never
-   change them as a side effect of a TipTap bump (see rule 8 in
-   `gl-admin/lib/collaboration/CLAUDE.md`). If a new `y-tiptap` needs a newer `yjs`,
-   bump `web/` and `websocket/` together in the same PR.
+   Watch the collab container logs (from the top) for errors while doing it.
+7. **Never change `yjs` / `y-protocols` / `@hocuspocus/*` as a side effect of a TipTap
+   bump** (rule 8 in `gl-admin/lib/collaboration/CLAUDE.md`). If a new `y-tiptap` needs a
+   newer `yjs`, bump it deliberately, check `npm ls yjs y-protocols` shows one copy each,
+   and run the collab server's process test (single instance).
 8. **Re-copy TipTap's base stylesheet** into
    `gl-admin/assets/styles/components/editor/_tiptap-base.scss` from the new
    `@tiptap/core` (`src/style.ts`, or the `var style =` string in `dist/index.js`). The
-   editors run with `injectCSS: false` because a destroyed editor removes TipTap's shared
+   editor runs with `injectCSS: false` because a destroyed editor removes TipTap's shared
    `<style>` tag (#305), so nothing else picks up changes to it.
 9. Update the version and review date at the top of this section.
 </content>
