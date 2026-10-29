@@ -1,0 +1,41 @@
+---
+/**
+ * Site footer (#345). The "Published with GoLive" credit is the only place GoLive's
+ * mark appears on a site: the logo as is (web/gl-admin/assets/icons/logoIcon.svg), in
+ * the text colour.
+ *
+ * Hidden until their issues land: the topic columns (category archives, #348), footer
+ * menus such as Legal (#347) and the tagline under the title (#330).
+ */
+import { NAV_ITEMS } from '../lib/nav'
+
+interface Props {
+  siteTitle: string
+}
+
+const { siteTitle } = Astro.props
+const year = new Date().getFullYear()
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <a href="/" class="site-title">{siteTitle}</a>
+      </div>
+      <nav class="footer-col" aria-labelledby="footer-site">
+        <h2 id="footer-site">Site</h2>
+        {NAV_ITEMS.map((item) => <a href={item.href}>{item.label}</a>)}
+        <a href="/rss.xml">RSS feed</a>
+      </nav>
+    </div>
+    <div class="footer-bottom">
+      <span>© {year} {siteTitle}</span>
+      <a href="https://github.com/go-live-cms/go-live-cms" class="golive-credit">
+        Published with
+        <svg width="16" height="16" viewBox="0 0 66 67" fill="currentColor" aria-hidden="true"><path fill-opacity="0.54" d="M56.2781 23.2597L56.2781 61.6391L44.6394 61.6391C44.6394 49.9296 44.6394 43.3646 44.6394 31.6552L27.307 31.6552L27.307 23.2597L56.2781 23.2597Z"></path><path d="M36.8942 19.2537C36.7128 18.5565 36.4267 17.9447 36.036 17.4185C35.6453 16.8791 35.1568 16.4252 34.5707 16.0568C33.9985 15.6753 33.3287 15.3924 32.5611 15.2083C31.8076 15.0109 30.9772 14.9122 30.0701 14.9122C28.1164 14.9122 26.4487 15.353 25.0672 16.2344C23.6995 17.1159 22.6529 18.3854 21.9272 20.0431C21.2155 21.7008 20.8596 23.7005 20.8596 26.0423C20.8596 28.4103 21.2015 30.4364 21.8854 32.1203C22.5692 33.8043 23.5879 35.0936 24.9416 35.9882C26.2952 36.8828 27.9768 37.3301 29.9864 37.3301C31.7587 37.3301 33.231 37.0867 34.4032 36.6C35.5894 36.1132 36.4756 35.4225 37.0617 34.5279C37.6478 33.6333 37.9409 32.5808 37.9409 31.3704L39.7441 31.6488H27.3041L27.3041 23.2718H49.1609V29.3576C49.1609 33.0413 48.3306 36.1921 46.6699 38.8102C45.0232 41.4151 42.7485 43.4148 39.8458 44.8093C36.9571 46.1907 33.6427 46.8814 29.9027 46.8814C25.73 46.8814 22.0668 46.046 18.9129 44.3752C15.759 42.7044 13.2959 40.3231 11.5236 37.2315C9.7652 34.1398 8.88602 30.4627 8.88602 26.2001C8.88602 22.8585 9.42329 19.8984 10.4979 17.3198C11.5864 14.7412 13.0935 12.5639 15.0194 10.7878C16.9452 8.99861 19.1711 7.65011 21.697 6.74234C24.2229 5.82142 26.9302 5.36096 29.8189 5.36096C32.3588 5.36096 34.7172 5.70302 36.8942 6.38713C39.0852 7.05809 41.018 8.01848 42.6927 9.2683C44.3813 10.505 45.7419 11.9719 46.7746 13.669C47.8073 15.3661 48.4353 17.2277 48.6585 19.2537H36.8942Z"></path></svg>
+        <span>GoLive</span>
+      </a>
+    </div>
+  </div>
+</footer>

@@ -1,7 +1,7 @@
 ---
 import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl, getPostTaxonomyTerms } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
-import { metaDescription, normalizeUrlStructure, postLastmod, postPath, toW3cDate, type SeoMeta } from '../../lib/seo'
+import { metaDescription, normalizeUrlStructure, postLastmod, postPath, publicImageUrl, resolveSiteUrl, toW3cDate, type SeoMeta } from '../../lib/seo'
 import { SITE_TITLE } from '../../consts'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 
@@ -276,4 +276,6 @@ const seo: SeoMeta = {
   description={description}
   seo={seo}
   terms={terms}
+  featuredImage={publicImageUrl(resolveSiteUrl(Astro.url), featuredImage) ?? null}
+  siteTitle={settings?.site_title || SITE_TITLE}
 />

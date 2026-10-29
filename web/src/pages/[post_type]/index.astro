@@ -1,53 +1,18 @@
 ---
-import BaseHead from '@/components/BaseHead.astro'
-import Header from '@/layouts/Header.astro'
-import Footer from '@/layouts/Footer.astro'
-import FormattedDate from '@/components/FormattedDate.astro'
-import TipTapContent from '@/components/TipTapContent.astro'
-import { SITE_TITLE, SITE_DESCRIPTION } from '../../consts'
-import { getPostsByType, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
+/**
+ * A public post type's list, e.g. /post (#345), rendered by the active theme's
+ * layouts/archive layout (the default theme's when it has none).
+ */
+import { getPostTypes, getPublicPostTypeNames } from '../../lib/api'
+import { loadPostList, pageNumber } from '../../lib/postList'
+import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
+import { resolveSiteUrl } from '../../lib/seo'
 
-export async function getStaticPaths() {
-  // Dynamically fetch active post types from the API
-  let postTypes = ['post', 'page'] // fallback
-  try {
-    const types = await getPostTypes()
-    if (types && types.length > 0) {
-      postTypes = types.map(t => t.name)
-      console.log('Discovered post types for listing:', postTypes)
-    }
-  } catch (error) {
-    console.warn('Could not fetch post types, using defaults:', error)
-  }
-  
-  const paths: Array<{
-    params: { post_type: string }
-    props: { postType: string; totalPosts: number | undefined }
-  }> = []
-  
-  for (const postType of postTypes) {
-    try {
-      const { data: posts, meta } = await getPostsByType(postType, { 
-        status: 'published',
-        limit: 1 
-      })
-      
-      if (posts.length > 0) {
-        paths.push({
-          params: { 'post_type': postType },
-          props: { postType, totalPosts: meta.total }
-        })
-      }
-    } catch (error) {
-      console.warn(`No posts found for type: ${postType}`)
-    }
-  }
-  
-  return paths
-}
+export const prerender = false
 
-const { 'post_type': postType } = Astro.params as { post_type: string }
-const { totalPosts } = Astro.props as { postType: string; totalPosts: number | undefined }
+const archiveLayouts = import.meta.glob('../../../themes/*/layouts/archive/*.astro')
+
+const { post_type: postType } = Astro.params as { post_type: string }
 
 // Every unknown single-segment URL (/foo) lands on this route, so it must 404
 // unless the segment is a public post type. If the type list can't be
@@ -62,67 +27,32 @@ if (publicTypes && !publicTypes.includes(postType)) {
   return new Response(null, { status: 404 })
 }
 
-const { data: posts, meta } = await getPostsByType(postType, {
-  status: 'published',
-  sort: 'date_desc',
-  limit: 20
-})
+let label: string | undefined
+try {
+  label = (await getPostTypes()).find((t) => t.name === postType)?.label
+} catch {
+  // Fall back to the type's name below.
+}
+const heading = label || (postType === 'page' ? 'Pages' : `${postType.charAt(0).toUpperCase()}${postType.slice(1)}s`)
 
-const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
-const pluralType = postType === 'page' ? 'Pages' : `${displayType}s`
+const page = pageNumber(Astro.url.searchParams.get('page'))
+const list = await loadPostList(postType, page, `/${postType}`, resolveSiteUrl(Astro.url))
+if (page > 1 && list.posts.length === 0) {
+  return new Response(null, { status: 404 })
+}
+
+const themeSlug = Astro.locals.activeTheme || 'default'
+const Layout = await loadThemeLayout(archiveLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'archive'))
+if (!Layout) {
+  throw new Error('No archive layout in this build')
+}
+const title = `${heading}${page > 1 ? ` · Page ${page}` : ''} | ${list.siteTitle}`
 ---
 
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <BaseHead 
-      title={`${pluralType} | ${SITE_TITLE}`} 
-      description={`Browse all ${pluralType.toLowerCase()} on ${SITE_TITLE}`} 
-    />
-  </head>
-  <body>
-    <Header />
-    <main>
-      <section>
-        <h1>{pluralType}</h1>
-        {posts.length > 0 && (
-          <p>Showing {posts.length} of {meta.total} {pluralType.toLowerCase()}</p>
-        )}
-
-        {posts.length === 0 ? (
-          <div class="empty-state">
-            <h2>No {pluralType.toLowerCase()} yet</h2>
-            <p>Nothing has been published here so far. Check back soon.</p>
-            <a href="/">Go to the homepage</a>
-          </div>
-        ) : (
-          <ul>
-            {posts.map((post: any) => (
-              <li>
-                <a href={`/${postType}/${post.id}`}>
-                  {post.featured_image && (
-                    <img src={post.featured_image} alt={post.title} />
-                  )}
-                  <h4 class="title">{post.title}</h4>
-                  <p class="date">
-                    <FormattedDate date={new Date(post.created_at)} />
-                  </p>
-                  {post.description && (
-                    <TipTapContent content={post.description} class="excerpt" />
-                  )}
-                </a>
-              </li>
-            ))}
-          </ul>
-        )}
-        
-        {(meta.total ?? 0) > posts.length && (
-          <div class="pagination">
-            <a href={`/${postType}/?page=2`}>Load More</a>
-          </div>
-        )}
-      </section>
-    </main>
-    <Footer />
-  </body>
-</html>
+<Layout
+  title={title}
+  description={`Everything published in ${heading} on ${list.siteTitle}`}
+  heading={heading}
+  postType={postType}
+  list={list}
+/>

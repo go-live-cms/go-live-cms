@@ -30,6 +30,7 @@ export default defineConfig({
           include: [
             "gl-admin/**/*.{test,spec}.{ts,tsx}",
             "src/**/*.{test,spec}.{ts,tsx}",
+            "themes/**/*.{test,spec}.{ts,tsx}",
           ],
           // Keep test runs from scanning node_modules / build output.
           exclude: ["node_modules/**", "dist/**", ".astro/**", "**/*.astro.test.ts"],

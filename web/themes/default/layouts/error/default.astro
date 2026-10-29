@@ -4,25 +4,73 @@
  * Used for the public 404 and 500 pages (src/pages/404.astro, 500.astro) while
  * this theme is active. Themes can provide their own layouts/error/{status}.astro
  * or layouts/error/default.astro; themes without one get src/layouts/ErrorLayout.astro.
+ *
+ * #345: the 404 lists the latest posts; its search form waits for #145. The 500 makes no
+ * API call of its own (the API being down is a common cause), only base's settings
+ * lookup, which gives up after a moment.
  */
 import BaseLayout from '../base.astro'
-import Header from '@/layouts/Header.astro'
-import Footer from '@/layouts/Footer.astro'
-import ErrorContent from '@/components/ErrorContent.astro'
-import { SITE_TITLE } from '@/consts'
+import { getPostsByType } from '@/lib/api'
+import { normalizeUrlStructure, postPath } from '@/lib/seo'
+import { getSiteSettings } from '@/lib/siteSettings'
+import type { Post } from '@gl-admin/lib/api/types'
 
 interface Props {
   status: number
   title: string
   message: string
+  // Only set in development (see 500.astro); never rendered in production.
   detail?: string
 }
 
-const { title, message } = Astro.props
+const { status, title, message, detail } = Astro.props
+const is404 = status === 404
+const site = await getSiteSettings()
+
+let recent: Post[] = []
+if (is404) {
+  try {
+    recent = (await getPostsByType('post', { status: 'published', sort: 'date_desc', limit: 3 })).data
+  } catch (error) {
+    console.warn('[theme] Could not fetch recent posts for the 404 page:', error)
+  }
+}
+const structure = normalizeUrlStructure(site.urlStructure)
 ---
 
-<BaseLayout title={`${title} | ${SITE_TITLE}`} description={message} seo={{ noindex: true }}>
-  <Header />
-  <ErrorContent {...Astro.props} />
-  <Footer />
+<BaseLayout title={`${title} | ${site.title}`} description={message} seo={{ noindex: true }} siteTitle={site.title}>
+  <div class="container">
+    <div class="measure error-page">
+      <span class="eyebrow eyebrow--mono">Error {status}</span>
+      {is404 ? (
+        <>
+          <h1 class="title">This page isn’t here</h1>
+          <p class="dek">The link may be old, or the post may have moved. Start again from the front page.</p>
+          <div class="button-row">
+            <a href="/" class="btn btn-secondary">Go to the front page</a>
+          </div>
+          {recent.length > 0 && (
+            <section aria-labelledby="recent-404" class="error-recent">
+              <h2 id="recent-404" class="section-title">Recent posts</h2>
+              <ul class="link-list">
+                {recent.map((post) => (
+                  <li><a href={postPath({ ...post, post_type: post.post_type || 'post' }, structure)}>{post.title}</a></li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      ) : (
+        <>
+          <h1 class="title">Something went wrong on our side</h1>
+          <p class="dek">This page didn’t load. It wasn’t anything you did. Try again in a moment.</p>
+          <div class="button-row">
+            <a href={Astro.url.pathname} class="btn btn-primary">Try again</a>
+            <a href="/" class="btn btn-secondary">Go to the front page</a>
+          </div>
+        </>
+      )}
+      {detail && <pre class="error-detail">{detail}</pre>}
+    </div>
+  </div>
 </BaseLayout>

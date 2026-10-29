@@ -1,156 +1,62 @@
 # Default Theme for Go Live CMS
 
-The default theme for Go Live CMS, featuring multiple layout variants and full dark mode support.
-
-## Features
-
-✅ Multiple layout variants for posts and pages
-✅ Dark mode support with manual color schemes
-✅ Responsive design
-✅ Type-safe configuration
-✅ Child theme support ready
-✅ Clean, modern design
+The theme a new site starts with (#345), built from the "GoLive Default Theme" design
+canvas: a serif for reading (Literata), a sans for everything around it (Inter), one
+green for anything you can click, light and dark.
 
 ## Structure
 
 ```
 themes/default/
-├── theme.config.ts          # Theme configuration
-├── layouts/
-│   ├── base.astro          # Base HTML structure
-│   ├── post/
-│   │   ├── default.astro   # Clean, centered post layout
-│   │   ├── sidebar.astro   # Two-column with sidebar
-│   │   └── wide.astro      # Full-width content
-│   └── page/
-│       ├── default.astro   # Standard page layout
-│       └── fullwidth.astro # Full-width page with hero
-```
-
-## Layout Variants
-
-### Post Layouts
-
-**Default** - Clean, centered layout ideal for blog posts
-
-- Max width: 800px
-- Focused reading experience
-- Featured image support
-- Author and date metadata
-
-**Sidebar** - Two-column layout with sidebar
-
-- Main content + 300px sidebar
-- Sticky sidebar on desktop
-- Responsive (stacks on mobile)
-- Perfect for additional context
-
-**Wide** - Full-width immersive layout
-
-- Max width: 1400px
-- Large hero image (500px height)
-- Ideal for photo essays, portfolios
-- Dramatic visual impact
-
-### Page Layouts
-
-**Default** - Standard page layout
-
-- Max width: 1000px
-- Clean header with title
-- Suitable for most static pages
-
-**Fullwidth** - Edge-to-edge layout
-
-- Gradient hero header
-- Full-width content sections
-- Perfect for landing pages
-
-## Dark Mode
-
-The theme includes full dark mode support with manually crafted color schemes:
-
-### Light Mode
-
-- Primary: `#3b82f6` (blue-500)
-- Background: `#ffffff`
-- Text: `#0f172a` (slate-900)
-
-### Dark Mode
-
-- Primary: `#60a5fa` (blue-400, lighter for contrast)
-- Background: `#0f172a` (slate-900)
-- Text: `#f1f5f9` (slate-100)
-
-### User Preferences
-
-Users can choose from three modes:
-
-- **Light** - Always light theme
-- **Dark** - Always dark theme
-- **System** - Respects OS preference (default)
-
-Preference is stored in `localStorage` as `gl-theme-preference`.
-
-## Customization (Phase 2)
-
-The theme is built to support customization through the admin panel:
-
-- Color schemes
-- Typography
-- Layout selection per post
-- Logo and branding
-
-## Development
-
-### Creating a Child Theme
-
-```typescript
-// themes/my-theme/theme.config.ts
-export default {
-  name: "My Custom Theme",
-  parent: "default",
-  version: "1.0.0",
-
-  // Override specific colors
-  colors: {
-    light: {
-      primary: "220 38 38", // red-600
-    },
-  },
-
-  // Inherit everything else from parent
-}
-```
-
-Then override specific layouts:
-
-```
-themes/my-theme/
-├── theme.config.ts
+├── theme.config.ts        # Tokens (colours, type, widths, spacing, radius) + layouts
+├── tokens.ts              # Tokens -> CSS custom properties (inlined by base.astro)
+├── styles/theme.css       # Plain CSS, served as is; reads only var(--...)
+├── fonts/                 # Self-hosted woff2 (latin) + each family's OFL.txt
+├── scripts/theme-init.js  # Light / Dark / System switch and the phone menu
+├── components/            # Header, footer, byline, post header, list item, ...
+├── lib/                   # Pure helpers (byline names, reading time, avatar, nav)
 └── layouts/
-    └── post/
-        └── sidebar.astro  # Custom sidebar layout
+    ├── base.astro         # <head>, header, footer
+    ├── home/default.astro       # Front page (/)
+    ├── archive/default.astro    # A post type's list (/post)
+    ├── post/{default,sidebar,wide}.astro
+    ├── page/{default,fullwidth}.astro
+    └── error/default.astro      # 404 and 500
 ```
 
-## CSS Variables
+The post layout is chosen per post type on the admin Themes screen (`layout_variants`,
+read by `getPostLayoutVariant`).
 
-The theme exposes CSS variables for easy customization:
+## Fonts
 
-```css
-:root {
-  --color-primary: <RGB values> --color-background: <RGB values> --color-text: <RGB values> --font-base: <font stack>
-    --font-heading: <font stack> --container-width: 1200px --gutter: 2rem;
-}
-```
+Literata (variable, opsz + wght), Inter 400–700 and JetBrains Mono 400/500, latin
+subsets from @fontsource 5.3.0, served from `/themes/default/fonts/`. Readers' browsers
+make no requests to font CDNs. Each family's SIL Open Font License is beside its files.
 
-## Browser Support
+## Light, dark, system
 
-- Chrome/Edge (latest 2 versions)
-- Firefox (latest 2 versions)
-- Safari (latest 2 versions)
-- Mobile browsers (iOS Safari, Chrome Mobile)
+Readers pick Light, Dark or System from the header (and the phone menu); the choice is
+stored under `darkMode.storageKey`. `scripts/theme-init.js` loads from `<head>` as a plain
+`<script src>`, so the theme is set before the first paint and it works under a CSP of
+`script-src 'self'`. Without JavaScript the page follows the system setting.
+
+## Hidden until their issues land
+
+The design shows these; the theme leaves them out rather than faking them:
+
+| Part | Issue |
+|------|-------|
+| Image captions, wide / full images, quote citations (styles are ready) | #346 |
+| Navigation menus (the header has the title and Posts) | #347 |
+| Category and tag archives, category eyebrows, linked tags | #348 |
+| Numbered pagination (Newer / Older for now) | #349 |
+| Author pages and author cards | #350 |
+| Related and older/newer posts, table of contents | #351 |
+| Search | #145 |
+| Tagline and site logo | #330 |
+
+GoLive's own mark appears only in the footer's "Published with GoLive" credit.
 
 ## License
 
-MIT
+MIT (the fonts are under the SIL Open Font License 1.1).

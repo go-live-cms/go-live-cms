@@ -1,0 +1,63 @@
+---
+/**
+ * Front page (#345): the latest post as a feature, then the rest of the page of posts.
+ * The design's headline and dek are the site's tagline (#330); until it exists the
+ * heading is the site title. Pages after the first are a plain list.
+ */
+import BaseLayout from '../base.astro'
+import PostByline from '../../components/PostByline.astro'
+import PostListItem from '../../components/PostListItem.astro'
+import Pagination from '../../components/Pagination.astro'
+import { metaDescription } from '@/lib/seo'
+import type { PostListData } from '@/lib/postList'
+
+interface Props {
+  title: string
+  description: string
+  list: PostListData
+}
+
+const { title, description, list } = Astro.props
+const [feature, ...rest] = list.page === 1 ? list.posts : [undefined, ...list.posts]
+const featureExcerpt = feature ? metaDescription(feature.post.description, 260) : ''
+---
+
+<BaseLayout title={title} description={description} current="home" siteTitle={list.siteTitle}>
+  <div class="container">
+    <header class="home-header">
+      <h1 class="title">{list.siteTitle}</h1>
+      {list.page > 1 && <p class="dek">Page {list.page}</p>}
+    </header>
+
+    {list.posts.length === 0 && (
+      <p class="empty-state dek">Nothing has been published yet.</p>
+    )}
+
+    {feature && (
+      <article class:list={['feature', { 'has-media': !!feature.image }]}>
+        {feature.image && (
+          <a href={feature.href} tabindex="-1" aria-hidden="true">
+            <img class="media" src={feature.image} alt="" fetchpriority="high" decoding="async" />
+          </a>
+        )}
+        <div class="feature-body">
+          <span class="eyebrow">Latest</span>
+          <h2 class="title feature-title"><a href={feature.href}>{feature.post.title}</a></h2>
+          {featureExcerpt && <p class="post-item-excerpt feature-excerpt">{featureExcerpt}</p>}
+          <PostByline post={feature.post} />
+        </div>
+      </article>
+    )}
+
+    {rest.length > 0 && (
+      <section aria-labelledby="more-posts">
+        <h2 id="more-posts" class="section-title list-heading">{list.page === 1 ? 'More posts' : 'Posts'}</h2>
+        <ul class="post-list">
+          {rest.map((item) => item && <PostListItem item={item} />)}
+        </ul>
+      </section>
+    )}
+
+    <Pagination links={list.links} />
+  </div>
+</BaseLayout>
