@@ -20,7 +20,7 @@ const { title, description, heading, postType, list } = Astro.props
 const count = list.total === 1 ? '1 item' : `${list.total} items`
 ---
 
-<BaseLayout title={title} description={description} current={postType === 'post' ? 'posts' : undefined} siteTitle={list.siteTitle}>
+<BaseLayout title={title} description={description} siteTitle={list.siteTitle}>
   <div class="container">
     <header class="archive-header">
       <h1 class="title">{heading}</h1>

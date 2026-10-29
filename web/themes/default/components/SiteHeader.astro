@@ -3,31 +3,65 @@
  * Site header (#345): the site's title as text, the main nav, the theme switch and,
  * at phone width, a menu with the same nav and the same three theme choices.
  *
- * Hidden until their issues land: menus (#347; the nav is the links that exist today),
- * search (#145) and a site logo (#330, it would replace the title text). GoLive's own
- * mark never appears here, only in the footer credit.
+ * The nav is the menu assigned to the theme's "primary" location (#347). Without one
+ * the header shows the site title only. A top-level link with children gets a
+ * disclosure button that opens them (scripts/theme-init.js; hover and focus open it
+ * without JavaScript); the phone menu lists the children under their parent.
+ *
+ * Hidden until their issues land: search (#145) and a site logo (#330, it would
+ * replace the title text). GoLive's own mark never appears here, only in the footer
+ * credit.
  */
 import ThemeSwitch from './ThemeSwitch.astro'
-import { NAV_ITEMS, type NavKey } from '../lib/nav'
+import type { MenuLink } from '@/lib/menus'
 
 interface Props {
   siteTitle: string
-  current?: NavKey
+  // The primary menu's links, current page marked (withCurrent); empty = no menu.
+  menu?: MenuLink[]
+  // The page being viewed is the front page.
+  isHome?: boolean
 }
 
-const { siteTitle, current } = Astro.props
-const ariaCurrent = (key: NavKey) => (key === current ? 'page' : undefined)
+const { siteTitle, menu = [], isHome = false } = Astro.props
+const ariaCurrent = (link: MenuLink) => (link.current ? 'page' : undefined)
+const homeCurrent = isHome ? 'page' : undefined
+// A parent whose child is the current page is marked too (not aria-current).
+const holdsCurrent = (link: MenuLink) => link.current || link.children.some((child) => child.current)
 ---
 
 <a href="#content" class="skip-link">Skip to content</a>
 <header class="site-header">
   <div class="container site-header-inner">
-    <a href="/" class="site-title" aria-current={ariaCurrent('home')}>{siteTitle}</a>
-    <nav class="site-nav" aria-label="Main">
-      {NAV_ITEMS.map((item) => (
-        <a href={item.href} aria-current={ariaCurrent(item.key)}>{item.label}</a>
-      ))}
-    </nav>
+    <a href="/" class="site-title" aria-current={homeCurrent}>{siteTitle}</a>
+    {menu.length > 0 && (
+      <nav class="site-nav" aria-label="Main">
+        {menu.map((link) =>
+          link.children.length === 0 ? (
+            <a href={link.url} aria-current={ariaCurrent(link)}>{link.label}</a>
+          ) : (
+            <div class="nav-group" data-nav-group data-current={holdsCurrent(link) ? 'true' : undefined}>
+              <a href={link.url} aria-current={ariaCurrent(link)}>{link.label}</a>
+              <button
+                type="button"
+                class="nav-sub-toggle"
+                aria-expanded="false"
+                aria-controls={`nav-sub-${link.id}`}
+                aria-label={`${link.label}: more links`}
+                data-nav-sub-toggle
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <ul id={`nav-sub-${link.id}`} class="nav-submenu" role="list">
+                {link.children.map((child) => (
+                  <li><a href={child.url} aria-current={ariaCurrent(child)}>{child.label}</a></li>
+                ))}
+              </ul>
+            </div>
+          )
+        )}
+      </nav>
+    )}
     <div class="header-actions">
       <div class="theme-menu hide-mobile">
         <button
@@ -68,9 +102,18 @@ const ariaCurrent = (key: NavKey) => (key === current ? 'page' : undefined)
     </button>
   </div>
   <nav aria-label="Main">
-    <a href="/" aria-current={ariaCurrent('home')}>Home</a>
-    {NAV_ITEMS.map((item) => (
-      <a href={item.href} aria-current={ariaCurrent(item.key)}>{item.label}</a>
+    <a href="/" aria-current={homeCurrent}>Home</a>
+    {menu.map((link) => (
+      <>
+        <a href={link.url} aria-current={ariaCurrent(link)}>{link.label}</a>
+        {link.children.length > 0 && (
+          <ul class="mobile-submenu" role="list">
+            {link.children.map((child) => (
+              <li><a href={child.url} aria-current={ariaCurrent(child)}>{child.label}</a></li>
+            ))}
+          </ul>
+        )}
+      </>
     ))}
   </nav>
   <div class="mobile-menu-section">

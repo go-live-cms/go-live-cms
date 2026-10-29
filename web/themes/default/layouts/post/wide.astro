@@ -26,7 +26,7 @@ interface Props {
 const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
 ---
 
-<BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
+<BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
   <article class="post post--wide">
     <div class="container">
       <PostHeader post={post} class="wide" centered />
