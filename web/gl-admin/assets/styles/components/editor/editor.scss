@@ -307,6 +307,15 @@
     display: block;
   }
 
+  // Nothing to add in a read-only editor. Also covers a demotion (#313), which changes
+  // `contenteditable` without re-rendering the node views, and beats the display rules
+  // above, which would otherwise override the views' [hidden].
+  // stylelint-disable-next-line selector-class-pattern
+  &[contenteditable="false"] .ProseMirror-selectednode > .editor-image__add-caption,
+  &[contenteditable="false"] blockquote > .editor-quote__cite.is-empty {
+    display: none;
+  }
+
   hr {
     background: var(--border-color);
     border: 0;

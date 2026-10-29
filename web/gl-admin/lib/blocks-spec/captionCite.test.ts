@@ -82,4 +82,8 @@ describe("normalizeCite", () => {
     expect(normalizeCite(7)).toBeNull()
     expect([...normalizeCite("😀".repeat(CITE_MAX_LENGTH + 5))!].length).toBe(CITE_MAX_LENGTH)
   })
+
+  it("turns control characters into spaces, as the API sanitizer does", () => {
+    expect(normalizeCite("\tAda\tLovelace\u0000\n")).toBe("Ada Lovelace")
+  })
 })

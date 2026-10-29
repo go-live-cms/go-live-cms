@@ -2,7 +2,7 @@ import { Extension, type Editor } from "@tiptap/core"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import { NodeSelection, Plugin, PluginKey, TextSelection } from "@tiptap/pm/state"
 import { Decoration, DecorationSet, type EditorView, type NodeView } from "@tiptap/pm/view"
-import { CITE_MAX_LENGTH, isImageAlign } from "@gl-admin/lib/blocks-spec"
+import { CITE_MAX_LENGTH, capCite, isImageAlign } from "@gl-admin/lib/blocks-spec"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
 
@@ -30,6 +30,7 @@ export const BlockNodeViews = Extension.create({
           },
           // Marks the quote the cursor is in, so its empty citation field shows.
           decorations: (state) => {
+            if (!editor.isEditable) return null
             const { $from } = state.selection
             for (let depth = $from.depth; depth > 0; depth--) {
               if ($from.node(depth).type.name === "blockquote") {
@@ -92,6 +93,9 @@ class ImageView implements NodeView {
     })
     this.addCaption.addEventListener("mousedown", (event) => event.preventDefault())
     this.addCaption.addEventListener("click", () => {
+      // `editable` can change without an update (a demotion, #313): a read-only
+      // connection's edits are dropped by the server and would never sync.
+      if (!this.view.editable) return
       const pos = this.getPos()
       if (pos === undefined) return
       this.editor.chain().focus().setNodeSelection(pos).toggleImageCaption().run()
@@ -150,7 +154,8 @@ class QuoteView implements NodeView {
     this.citeWrap.contentEditable = "false"
     this.input = document.createElement("input")
     this.input.type = "text"
-    this.input.maxLength = CITE_MAX_LENGTH
+    // Two UTF-16 units per code point at most; capCite enforces the real cap.
+    this.input.maxLength = CITE_MAX_LENGTH * 2
     this.input.placeholder = "Add a citation"
     this.input.setAttribute("aria-label", "Quote citation")
     this.citeWrap.append(this.input)
@@ -165,7 +170,10 @@ class QuoteView implements NodeView {
       const pos = this.getPos()
       const current = pos === undefined ? null : this.view.state.doc.nodeAt(pos)
       if (pos === undefined || !current) return
-      const cite = this.input.value.slice(0, CITE_MAX_LENGTH) || null
+      // The cap counts code points; the field's maxLength (UTF-16 units) is only a backstop.
+      const capped = capCite(this.input.value)
+      if (capped !== this.input.value) this.input.value = capped
+      const cite = capped || null
       if (cite === (current.attrs.cite ?? null)) return
       this.view.dispatch(this.view.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, cite }))
     })

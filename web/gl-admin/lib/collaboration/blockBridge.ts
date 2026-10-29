@@ -1,7 +1,7 @@
 import { Node as PMNode, Schema } from "prosemirror-model"
 import {
   BLOCKQUOTE_BLOCK_VERSION,
-  CAPTION_MARKS,
+  captionRuns,
   IMAGE_BLOCK_VERSION,
   isImageAlign,
   normalizeCite,
@@ -245,18 +245,21 @@ function captionOf(image: PMNode): CaptionText[] | undefined {
 }
 
 /**
- * The caption's runs as the `imageCaption` node's content: text only, and only the
- * caption marks, so a caption the schema can't hold costs its marks, not the image.
+ * The caption's runs as the `imageCaption` node's content: text only, only the caption
+ * marks, and only the mark attrs `schema` declares (nodeFromJSON throws on any other),
+ * so a caption the schema can't hold costs its marks or attrs, not the image.
  */
-function captionToPM(caption: unknown): any[] {
-  if (!Array.isArray(caption)) return []
-  const marks = new Set<string>(CAPTION_MARKS)
-  return caption
-    .filter((run) => run?.type === "text" && typeof run.text === "string" && run.text !== "")
-    .map((run) => {
-      const kept = Array.isArray(run.marks) ? run.marks.filter((mark: any) => marks.has(mark?.type)) : []
-      return kept.length > 0 ? { type: "text", text: run.text, marks: kept } : { type: "text", text: run.text }
-    })
+function captionToPM(caption: unknown, schema: Schema): any[] {
+  return captionRuns(caption).map((run) => {
+    const marks = run.marks
+      ?.filter((mark) => schema.marks[mark.type])
+      .map((mark) => {
+        const declared = schema.marks[mark.type].spec.attrs ?? {}
+        const attrs = Object.fromEntries(Object.entries(mark.attrs ?? {}).filter(([name]) => name in declared))
+        return Object.keys(attrs).length > 0 ? { type: mark.type, attrs } : { type: mark.type }
+      })
+    return marks && marks.length > 0 ? { ...run, marks } : { type: "text", text: run.text }
+  })
 }
 
 /**
@@ -481,7 +484,7 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       }
 
     case "image": {
-      const caption = captionToPM(block.attrs.caption)
+      const caption = captionToPM(block.attrs.caption, ctx.schema)
       return {
         type: "image",
         attrs: {

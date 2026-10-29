@@ -1,18 +1,8 @@
 import React, { useContext } from "react"
-import { CAPTION_MARKS, isImageAlign } from "@gl-admin/lib/blocks-spec"
-import type { BlockComponentProps, PMNode } from "../types"
+import { captionRuns, isImageAlign } from "@gl-admin/lib/blocks-spec"
+import type { BlockComponentProps } from "../types"
 import { renderContent } from "../utils/contentRenderer"
 import { blockMediaFor, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
-
-const captionMarks = new Set<string>(CAPTION_MARKS)
-
-/** The caption's text runs with only the caption marks (the API sanitizer strips the rest too). */
-function captionRuns(caption: unknown): PMNode[] {
-  if (!Array.isArray(caption)) return []
-  return caption
-    .filter((run): run is PMNode => run?.type === "text" && typeof run.text === "string" && run.text !== "")
-    .map((run) => ({ ...run, marks: run.marks?.filter((mark) => captionMarks.has(mark.type)) }))
-}
 
 const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
   const attrs = block.attrs as Record<string, unknown>
@@ -45,6 +35,7 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
   )
 
   // Caption and width (#346). An image with neither stays a bare <img>, as before.
+  // Only text runs and caption marks (the API sanitizer strips the rest too).
   const caption = captionRuns(attrs?.caption)
   const align = isImageAlign(attrs?.align) && attrs.align !== "inline" ? attrs.align : null
   if (caption.length === 0 && !align) return img

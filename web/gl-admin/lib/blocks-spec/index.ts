@@ -49,11 +49,35 @@ export const CAPTION_MARKS = ["bold", "italic", "link"] as const
 /** Longest quote citation, in code points (runes in the API's sanitizer). */
 export const CITE_MAX_LENGTH = 300
 
-/** A citation as stored: trimmed, at most CITE_MAX_LENGTH code points, null when empty. */
+/** At most CITE_MAX_LENGTH code points (an editor field's maxLength counts UTF-16 units). */
+export function capCite(value: string): string {
+  const points = [...value]
+  return points.length > CITE_MAX_LENGTH ? points.slice(0, CITE_MAX_LENGTH).join("") : value
+}
+
+/**
+ * A citation as stored, exactly as the API sanitizer makes it: control characters as
+ * spaces, trimmed, at most CITE_MAX_LENGTH code points, null when empty.
+ */
 export function normalizeCite(value: unknown): string | null {
   if (typeof value !== "string") return null
-  const cite = [...value.trim()].slice(0, CITE_MAX_LENGTH).join("").trim()
+  const cite = capCite(value.replace(/\p{Cc}/gu, " ").trim()).trim()
   return cite === "" ? null : cite
+}
+
+/**
+ * A caption's runs as they may be shown or stored: non-empty text runs with only the
+ * caption marks. Used by the bridge and the public renderer.
+ */
+export function captionRuns(caption: unknown): CaptionText[] {
+  if (!Array.isArray(caption)) return []
+  const allowed = new Set<string>(CAPTION_MARKS)
+  return caption
+    .filter((run) => run?.type === "text" && typeof run.text === "string" && run.text !== "")
+    .map((run): CaptionText => {
+      const marks = Array.isArray(run.marks) ? run.marks.filter((mark: any) => allowed.has(mark?.type)) : []
+      return marks.length > 0 ? { type: "text", text: run.text, marks } : { type: "text", text: run.text }
+    })
 }
 
 /**

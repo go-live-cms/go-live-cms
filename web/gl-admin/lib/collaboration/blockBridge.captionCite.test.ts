@@ -112,6 +112,22 @@ describe("image caption and width (#346)", () => {
     ])
   })
 
+  it("a link attr the schema doesn't declare costs that attr, not the image", () => {
+    const { node, dropped } = blockDocToPMWithReport(
+      docOf({
+        id: A,
+        type: "image",
+        version: 2,
+        attrs: { src: "/m/a.png", caption: [{ type: "text", text: "x", marks: [{ type: "link", attrs: { href: "https://e.com", foo: 1 } }] }] },
+      }),
+      schema,
+    )
+    expect(dropped).toEqual([])
+    const mark = (pmToBlockDoc(node).blocks[A].attrs as any).caption[0].marks[0]
+    expect(mark.attrs.href).toBe("https://e.com")
+    expect(mark.attrs).not.toHaveProperty("foo")
+  })
+
   it("parses a <figure> with a <figcaption> into an image with its caption", () => {
     const json = generateJSON(
       '<figure data-align="full"><img src="/m/a.png" alt="a" data-media-id="7"><figcaption>By <strong>Ada</strong></figcaption></figure>',

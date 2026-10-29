@@ -6,7 +6,7 @@ import { NodeSelection } from "@tiptap/pm/state"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 import { canonical } from "@gl-admin/lib/collaboration/fragmentBridge.fixtures"
 import { startRelay, waitFor, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
-import { validateBlockDoc, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { CITE_MAX_LENGTH, validateBlockDoc, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { BlockNodeViews } from "./BlockNodeViews"
 
 // Image caption + width and quote citation (#346) in the editor: the commands, the
@@ -193,6 +193,22 @@ describe("node views (#346)", () => {
     input.value = "nope"
     input.dispatchEvent(new Event("input", { bubbles: true }))
     expect(editor.state.doc.nodeAt(posOf(editor, "blockquote"))!.attrs.cite).toBeNull()
+  })
+
+  it("Add caption does nothing once the editor turned read-only (a demotion)", () => {
+    const editor = editorWithSeed()
+    const add = editor.view.dom.querySelector(".editor-image__add-caption") as HTMLButtonElement
+    editor.setEditable(false)
+    add.click()
+    expect(editor.state.doc.nodeAt(posOf(editor, "image"))!.childCount).toBe(0)
+  })
+
+  it("the cite field caps at CITE_MAX_LENGTH code points, not UTF-16 units", () => {
+    const editor = editorWithSeed()
+    const input = editor.view.dom.querySelector(".editor-quote__cite input") as HTMLInputElement
+    input.value = "😀".repeat(CITE_MAX_LENGTH + 3)
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    expect([...editor.state.doc.nodeAt(posOf(editor, "blockquote"))!.attrs.cite].length).toBe(CITE_MAX_LENGTH)
   })
 })
 

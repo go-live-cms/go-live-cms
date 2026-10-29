@@ -15,6 +15,12 @@ declare module "@tiptap/core" {
   }
 }
 
+/** An <img>'s `data-media-id` as the number the media sync needs, else null. */
+function mediaIdFromHTML(img: Element): number | null {
+  const value = img.getAttribute("data-media-id")
+  return value && /^\d+$/.test(value) ? Number(value) : null
+}
+
 /**
  * The image the selection is on (a NodeSelection) or in (the cursor in its caption).
  */
@@ -108,10 +114,7 @@ export const ImageWithMediaId = Image.extend({
         default: null,
         // A number, like the attr the media picker sets: Block Spec v1 and the API's
         // media sync only accept numeric ids.
-        parseHTML: (element) => {
-          const value = element.getAttribute("data-media-id")
-          return value && /^\d+$/.test(value) ? Number(value) : null
-        },
+        parseHTML: (element) => mediaIdFromHTML(element),
         renderHTML: (attributes) => {
           if (!attributes.mediaId) {
             return {}
@@ -152,7 +155,7 @@ export const ImageWithMediaId = Image.extend({
             src,
             alt: img.getAttribute("alt"),
             title: img.getAttribute("title"),
-            mediaId: /^\d+$/.test(img.getAttribute("data-media-id") ?? "") ? Number(img.getAttribute("data-media-id")) : null,
+            mediaId: mediaIdFromHTML(img),
           }
         },
       },
