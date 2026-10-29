@@ -9,6 +9,7 @@
 // works), and POSTs it to the API.
 import { ApiError, apiErrorFromResponse } from "./api/errors"
 import { passwordRule } from "./passwordRules"
+import { presenceColor } from "./presence"
 import { FULL_NAME_MAX, FULL_NAME_MIN, USERNAME_MAX, USERNAME_MIN, retryHint, validateNewPassword } from "./profile"
 import { USER_ROLE_OPTIONS } from "./roles"
 
@@ -178,15 +179,9 @@ export function roleDescription(role: string): string | null {
   return description ? `${description} An administrator can change your role later.` : null
 }
 
-// "an Editor", "a Contributor".
-export function withArticle(label: string): string {
-  return `${/^[aeiou]/i.test(label) ? "an" : "a"} ${label}`
-}
-
-// The inviter's avatar colour, the way Avatar.tsx picks it (id % 8). Not
-// imported: that module is React, and these pages have none.
-export function presenceColor(id: number): string {
-  return `var(--presence-${(Math.abs(Math.trunc(id)) % 8) + 1})`
+// "an" for "Editor", "a" for "Contributor".
+export function indefiniteArticle(label: string): "a" | "an" {
+  return /^[aeiou]/i.test(label) ? "an" : "a"
 }
 
 // --- Page wiring ------------------------------------------------------------
@@ -257,10 +252,12 @@ export function formUi(doc: Document, form: HTMLFormElement, idleLabel: string, 
   }
 
   return {
-    showError(message: string) {
+    // fields: false for an error about the page rather than what was typed
+    // (a failed invitation preview), so untouched fields don't turn red.
+    showError(message: string, { fields = true }: { fields?: boolean } = {}) {
       errorText.textContent = message
       error.hidden = false
-      setInvalid(true)
+      setInvalid(fields)
       // A live region only speaks when its text changes: clear, then set.
       win.clearTimeout(announceTimer)
       announcer.textContent = ""
@@ -437,7 +434,7 @@ export async function mountAcceptInvitePage(
     // why the details are missing. Submitting reports its own errors.
     const summary = doc.getElementById("inviteSummary")
     if (summary) summary.textContent = "Choose a username and password to finish setting up your account."
-    ui.showError(describeAccountError(err))
+    ui.showError(describeAccountError(err), { fields: false })
   }
 }
 
@@ -449,8 +446,7 @@ function showInvitation(doc: Document, invite: InvitationPreview) {
     const role = doc.createElement("strong")
     role.textContent = roleLabel(invite.role)
     const lead = invite.invited_by?.name ? `${invite.invited_by.name} invited you as ` : "You've been invited as "
-    const article = withArticle(role.textContent).split(" ")[0]
-    summary.replaceChildren(`${lead}${article} `, role, ".")
+    summary.replaceChildren(`${lead}${indefiniteArticle(role.textContent)} `, role, ".")
   }
 
   const avatar = doc.getElementById("inviterAvatar")

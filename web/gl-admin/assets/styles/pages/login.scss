@@ -137,6 +137,26 @@ body:has(.gl-admin-login) {
     }
   }
 
+  // A field with a link on its label row ("Forgot password?"). The link is
+  // last in the markup, so it is reached after the input, not before it.
+  &__with-link {
+    display: grid;
+    grid-template-columns: 1fr auto;
+
+    .gl-input__label {
+      grid-area: 1 / 1;
+    }
+
+    .gl-input__field {
+      grid-area: 2 / 1 / 3 / 3;
+    }
+  }
+
+  &__field-link {
+    align-self: center;
+    grid-area: 1 / 2;
+  }
+
   // A password input with its Show / Hide button inside the same box.
   &__password {
     display: flex;

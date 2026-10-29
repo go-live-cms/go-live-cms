@@ -37,11 +37,10 @@ import { SITE_TITLE } from "@/consts"
         />
       </div>
 
-      <div class="gl-input">
-        <div class="gl-field__label-row">
-          <label class="gl-input__label" for="password">Password</label>
-          <a class="gl-admin-login__link gl-admin-login__link--small" href="/forgot-password">Forgot password?</a>
-        </div>
+      <!-- The link comes after the input so Tab goes username → password;
+           CSS puts it on the label row, as in the design. -->
+      <div class="gl-input gl-admin-login__with-link">
+        <label class="gl-input__label" for="password">Password</label>
         <input
           class="gl-input__field"
           type="password"
@@ -50,6 +49,7 @@ import { SITE_TITLE } from "@/consts"
           required
           autocomplete="current-password"
         />
+        <a class="gl-admin-login__link gl-admin-login__link--small gl-admin-login__field-link" href="/forgot-password">Forgot password?</a>
       </div>
     </div>
 

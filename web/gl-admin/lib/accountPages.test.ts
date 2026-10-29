@@ -395,6 +395,8 @@ describe("accept invitation page", () => {
     expect(form.hidden).toBe(false)
     expect(visible("linkInvalid")).toBe(false)
     expect(errorText()).toBe("Too many attempts. Try again in 20 seconds.")
+    // About the page, not what was typed: no field turns red.
+    expect(form.querySelector("[aria-invalid]")).toBeNull()
   })
 
   it("shows the invalid-link panel up front for a dead link", async () => {

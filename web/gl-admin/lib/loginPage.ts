@@ -5,6 +5,7 @@
 // start one in every test.
 import type { AuthManager } from "./auth"
 import { formUi } from "./accountPages"
+import { retryAfterHint } from "./profile"
 
 export type LoginResult = {
   success: boolean
@@ -45,21 +46,18 @@ export function signOutNotice(search: string): string | null {
   return SIGN_OUT_NOTICES[new URLSearchParams(search).get("reason") ?? ""] ?? null
 }
 
-// The "try again" half of a 429 message, from Retry-After (seconds).
-export function waitHint(seconds: number | null | undefined): string {
-  if (seconds == null || seconds <= 0) return "Wait a moment and try again."
-  if (seconds < 90) return `Try again in ${seconds} second${seconds === 1 ? "" : "s"}.`
-  const minutes = Math.ceil(seconds / 60)
-  return `Try again in ${minutes} minutes.`
-}
-
 // authManager.login returns the HTTP status when the API answered, and the
 // raw message otherwise (the browser's fetch error when the API can't be
 // reached). Never show those messages.
 export function describeLoginError(result: Omit<LoginResult, "success">): string {
   const { status, error, retryAfterSeconds } = result
   if (status === 401) return "That username and password don't match. Check both, or reset your password."
-  if (status === 429) return `Too many sign-in attempts. ${waitHint(retryAfterSeconds)}`
+  if (status === 429) return `Too many sign-in attempts. ${retryAfterHint(retryAfterSeconds)}`
+  // LoginUserRequest's binding: a username that isn't alphanumeric (someone
+  // typing their email, say), or a password shorter than any real one.
+  if (status === 400) {
+    return "That username and password don't match. Usernames are letters and numbers only; check both, or reset your password."
+  }
   if (error && /failed to fetch|networkerror|load failed|network request failed/i.test(error)) {
     return "Can't reach the server. Check your connection and try again."
   }

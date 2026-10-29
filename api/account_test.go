@@ -556,7 +556,8 @@ func TestPreviewInvitationAPI(t *testing.T) {
 			want string
 		}{
 			{"username fallback", db.User{ID: 7, Username: "ana"}, nil, `"invited_by":{"id":7,"name":"ana"}`},
-			{"lookup fails", db.User{}, sql.ErrNoRows, `"invited_by":null`},
+			{"inviter deleted", db.User{}, sql.ErrNoRows, `"invited_by":null`},
+			{"lookup fails", db.User{}, sql.ErrConnDone, `"invited_by":null`},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				ctrl := gomock.NewController(t)

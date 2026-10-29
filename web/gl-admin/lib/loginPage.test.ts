@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { describeLoginError, mountLoginPage, redirectTarget, signOutNotice, waitHint, type LoginResult } from "./loginPage"
+import { describeLoginError, mountLoginPage, redirectTarget, signOutNotice, type LoginResult } from "./loginPage"
 
 describe("describeLoginError", () => {
   it("says the credentials don't match on a 401", () => {
@@ -9,25 +9,21 @@ describe("describeLoginError", () => {
   })
 
   it("honours Retry-After on a 429", () => {
+    // Same wording as the other account pages (profile.ts retryAfterHint).
     expect(describeLoginError({ status: 429, retryAfterSeconds: 42 })).toBe("Too many sign-in attempts. Try again in 42 seconds.")
     expect(describeLoginError({ status: 429, retryAfterSeconds: 1 })).toBe("Too many sign-in attempts. Try again in 1 second.")
-    expect(describeLoginError({ status: 429, retryAfterSeconds: 600 })).toBe("Too many sign-in attempts. Try again in 10 minutes.")
-    expect(describeLoginError({ status: 429 })).toBe("Too many sign-in attempts. Wait a moment and try again.")
+    expect(describeLoginError({ status: 429 })).toBe("Too many sign-in attempts. Please wait a minute and try again.")
+  })
+
+  it("explains a rejected username format instead of a generic failure", () => {
+    expect(describeLoginError({ status: 400, error: "username must be alphanumeric" })).toMatch(/letters and numbers only/)
   })
 
   it("never shows the raw error", () => {
     expect(describeLoginError({ error: "Failed to fetch" })).toMatch(/Can't reach the server/)
     expect(describeLoginError({ error: "NetworkError when attempting to fetch resource." })).toMatch(/Can't reach the server/)
     expect(describeLoginError({ status: 502, error: "<html>Bad gateway</html>" })).toMatch(/on the server/)
-    expect(describeLoginError({ status: 400, error: "username must be alphanumeric" })).toBe("Sign in failed. Please try again.")
-  })
-})
-
-describe("waitHint", () => {
-  it("rounds long waits up to minutes", () => {
-    expect(waitHint(0)).toBe("Wait a moment and try again.")
-    expect(waitHint(89)).toBe("Try again in 89 seconds.")
-    expect(waitHint(91)).toBe("Try again in 2 minutes.")
+    expect(describeLoginError({ status: 418, error: "teapot" })).toBe("Sign in failed. Please try again.")
   })
 })
 

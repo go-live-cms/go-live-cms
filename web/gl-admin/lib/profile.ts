@@ -89,7 +89,12 @@ export function validatePasswordChange(fields: PasswordFields): string | null {
 
 // The "try again" half of a 429 message, from Retry-After.
 export function retryHint(err: ApiError): string {
-  const seconds = err.retryAfterSeconds
+  return retryAfterHint(err.retryAfterSeconds)
+}
+
+// The same from the Retry-After seconds alone (authManager.login returns them
+// without the ApiError).
+export function retryAfterHint(seconds: number | null | undefined): string {
   if (seconds == null) return "Please wait a minute and try again."
   if (seconds === 0) return "Please try again."
   return seconds === 1 ? "Try again in 1 second." : `Try again in ${seconds} seconds.`
