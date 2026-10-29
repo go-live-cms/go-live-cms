@@ -3,6 +3,7 @@
 @use "./admin";
 @use "./tokens";
 @include tokens.emit;
+@include variables.emit;
 
 :root {
   font-size: 16px;
@@ -34,4 +35,10 @@ samp {
 
 #admin {
   position: relative;
+}
+// Keyboard focus (#144): a 2px ring on every interactive element. Components that
+// draw their own focus state (inputs' edge and halo) still keep this outline.
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { getSettings, updateSettings, type Settings } from "@gl-admin/lib/api/settings"
 import { authManager } from "@gl-admin/lib/auth"
-import { toast } from "sonner"
+import { toast } from "@gl-admin/components/ui/Toast"
 import Button from "@gl-admin/components/ui/Button"
 
 const SettingsPage: React.FC = () => {

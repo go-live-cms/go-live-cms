@@ -1,0 +1,45 @@
+// Avatars (#338): a circle in the user's presence colour with a white initial
+// (white passes 4.5:1 on all eight). Stacks overlap by 6px with a ring of the page.
+
+.gl-avatar {
+  --avatar-size: 24px;
+
+  border-radius: var(--radius-full);
+  color: #ffffff;
+  display: inline-grid;
+  flex: none;
+  font-size: calc(var(--avatar-size) * 0.45);
+  font-weight: 600;
+  height: var(--avatar-size);
+  line-height: 1;
+  overflow: hidden;
+  place-items: center;
+  user-select: none;
+  width: var(--avatar-size);
+
+  img {
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+  }
+
+  &--more {
+    background: var(--background-active);
+    color: var(--text-primary);
+    font-size: calc(var(--avatar-size) * 0.4);
+  }
+}
+
+.gl-avatar-stack {
+  display: inline-flex;
+
+  .gl-avatar {
+    box-shadow: 0 0 0 2px var(--background);
+    height: var(--avatar-size);
+    width: var(--avatar-size);
+
+    + .gl-avatar {
+      margin-left: -6px;
+    }
+  }
+}

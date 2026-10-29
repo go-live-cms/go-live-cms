@@ -1,0 +1,204 @@
+// Checkbox, radio and switch (#338). 16px boxes with a control-border edge, filled
+// with accent-solid when on; the switch is 36×20 with a 16px knob.
+
+.gl-checkbox,
+.gl-radio {
+  appearance: none;
+  background: var(--background);
+  border: 1px solid var(--control-border);
+  cursor: pointer;
+  display: grid;
+  flex: none;
+  height: 16px;
+  margin: 0;
+  place-content: center;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+  width: 16px;
+
+  &::before {
+    content: "";
+    transform: scale(0);
+    transition: transform var(--duration-fast) var(--ease-out);
+  }
+
+  &:checked,
+  &:indeterminate {
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+
+    &::before {
+      transform: scale(1);
+    }
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.gl-checkbox {
+  border-radius: var(--radius-sm);
+
+  // A tick, drawn as a rotated L in accent-on.
+  &::before {
+    border: solid var(--accent-on);
+    border-width: 0 2px 2px 0;
+    height: 8px;
+    margin-top: -2px;
+    rotate: 45deg;
+    width: 4px;
+  }
+
+  &:indeterminate::before {
+    border-width: 0 0 2px;
+    height: 0;
+    margin-top: 0;
+    rotate: 0deg;
+    width: 8px;
+  }
+}
+
+.gl-radio {
+  border-radius: var(--radius-full);
+
+  &::before {
+    background: var(--accent-on);
+    border-radius: var(--radius-full);
+    height: 6px;
+    width: 6px;
+  }
+}
+
+// A box or radio with its label (and optional description) to the right.
+.gl-choice {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  min-height: 28px;
+
+  .gl-checkbox,
+  .gl-radio {
+    margin-top: 2px;
+  }
+
+  &.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__label {
+    font-size: var(--type-body);
+    font-weight: 500;
+    line-height: var(--type-body-lh);
+  }
+
+  &__description {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+}
+
+.gl-radio-group {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+
+  &__legend {
+    font-size: var(--type-label);
+    font-weight: 500;
+    line-height: var(--type-label-lh);
+    margin-bottom: 6px;
+    padding: 0;
+  }
+
+  &--card .gl-choice {
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 10px var(--space-3);
+    transition:
+      background var(--duration-fast) var(--ease-out),
+      border-color var(--duration-fast) var(--ease-out);
+
+    &:hover {
+      background: var(--background-subtle);
+    }
+
+    &.is-checked {
+      background: var(--accent-subtle);
+      border-color: var(--accent-border);
+    }
+
+    &:has(:focus-visible) {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+}
+
+.gl-switch {
+  background: var(--control-border);
+  border: 0;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  flex: none;
+  height: 20px;
+  padding: 0;
+  position: relative;
+  transition: background var(--duration-fast) var(--ease-out);
+  width: 36px;
+
+  &[aria-checked="true"] {
+    background: var(--accent-solid);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &__knob {
+    background: #ffffff;
+    border-radius: var(--radius-full);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 30%);
+    height: 16px;
+    left: 2px;
+    position: absolute;
+    top: 2px;
+    transition: left var(--duration-fast) var(--ease-out);
+    width: 16px;
+  }
+
+  &[aria-checked="true"] .gl-switch__knob {
+    left: 18px;
+  }
+}
+
+.gl-switch-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-4);
+
+  &.is-disabled {
+    opacity: 0.5;
+
+    .gl-switch {
+      opacity: 1;
+    }
+  }
+}

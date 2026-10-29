@@ -1,0 +1,76 @@
+// Status pills (#338): 22px, the -label colour on the -bg fill, a 6px dot first.
+
+.gl-pill {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  font-size: var(--type-footnote);
+  font-weight: 500;
+  gap: 5px;
+  height: 22px;
+  line-height: var(--type-footnote-lh);
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+
+  // global.scss colours every element; let the text follow the pill.
+  * {
+    color: inherit;
+  }
+
+  &__dot {
+    background: currentcolor;
+    border-radius: var(--radius-full);
+    flex: none;
+    height: 6px;
+    width: 6px;
+  }
+
+  &__icon {
+    display: inline-flex;
+
+    svg,
+    img {
+      height: 12px;
+      width: 12px;
+    }
+  }
+
+  &--success {
+    background: var(--success-bg);
+    color: var(--success-label);
+  }
+
+  &--warning {
+    background: var(--warning-bg);
+    color: var(--warning-label);
+  }
+
+  &--info {
+    background: var(--info-bg);
+    color: var(--info-text);
+  }
+
+  &--danger {
+    background: var(--danger-bg);
+    color: var(--danger-text);
+  }
+
+  &--accent {
+    background: var(--accent-subtle);
+    color: var(--text-selected);
+  }
+
+  &--neutral {
+    background: var(--background-active);
+    color: var(--text-secondary);
+  }
+
+  &--outline {
+    background: transparent;
+    border-color: var(--control-border);
+    color: var(--text-secondary);
+  }
+}

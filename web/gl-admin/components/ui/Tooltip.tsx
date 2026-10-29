@@ -1,88 +1,64 @@
-import React, { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
-import "@gl-admin/assets/styles/components/ui/tooltip.scss";
+import { cloneElement, isValidElement, useRef, useState, type ReactElement, type ReactNode } from "react"
+import { createPortal } from "react-dom"
+import { useEscape, useFloating, useStableId } from "@gl-admin/components/ui/a11y"
+import "@gl-admin/assets/styles/components/ui/tooltip.scss"
 
-type Placement = "top" | "bottom" | "left" | "right";
+type Placement = "top" | "bottom" | "left" | "right"
 
 interface TooltipProps {
-    content: React.ReactNode;
-    placement?: Placement;
-    enabled?: boolean;
-    children: React.ReactElement;
+  content: ReactNode
+  // A second, dimmer line ("Editing · Click to jump to cursor").
+  detail?: ReactNode
+  placement?: Placement
+  enabled?: boolean
+  children: ReactElement
 }
 
-const Tooltip: React.FC<TooltipProps> = ({
-    content,
-    placement = "right",
-    enabled = true,
-    children,
-}) => {
-    const [visible, setVisible] = useState(false);
-    const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-    const childRef = useRef<HTMLDivElement>(null);
-    const tooltipRef = useRef<HTMLDivElement>(null);
+// A short label shown on hover and on keyboard focus (#144), hidden by Escape.
+// Supplements a visible or aria-label name; never the only place information lives.
+// It renders into #admin (outside any overflow-hidden parent) and takes the theme of
+// the element it describes.
+export default function Tooltip({ content, detail, placement = "right", enabled = true, children }: TooltipProps) {
+  const [visible, setVisible] = useState(false)
+  const targetRef = useRef<HTMLDivElement>(null)
+  const tipRef = useRef<HTMLDivElement>(null)
+  const id = useStableId("tooltip")
+  const shown = enabled && visible
+  const { style } = useFloating(targetRef, tipRef, shown, placement, { gap: 8 })
 
-    useEffect(() => {
-        if (visible && childRef.current && tooltipRef.current) {
-            const rect = childRef.current.getBoundingClientRect();
-            const tooltipRect = tooltipRef.current.getBoundingClientRect();
+  useEscape(shown, () => setVisible(false))
 
-            let top = rect.top + window.scrollY;
-            let left = rect.left + window.scrollX;
+  const host = typeof document !== "undefined" ? (document.getElementById("admin") ?? document.body) : null
+  const theme = targetRef.current?.closest("[data-theme]")?.getAttribute("data-theme") ?? undefined
 
-            switch (placement) {
-                case "top":
-                    top -= tooltipRect.height + 8;
-                    left += rect.width / 2 - tooltipRect.width / 2;
-                    break;
-                case "bottom":
-                    top += rect.height + 8;
-                    left += rect.width / 2 - tooltipRect.width / 2;
-                    break;
-                case "left":
-                    left -= tooltipRect.width + 8;
-                    top += rect.height / 2 - tooltipRect.height / 2;
-                    break;
-                case "right":
-                default:
-                    left += rect.width + 8;
-                    top += rect.height / 2 - tooltipRect.height / 2;
-                    break;
-            }
+  // Point the child at the tooltip when it's a DOM element (custom components may
+  // not pass the attribute through).
+  const child =
+    enabled && isValidElement(children) && typeof children.type === "string"
+      ? cloneElement(children as ReactElement<{ "aria-describedby"?: string }>, { "aria-describedby": shown ? id : undefined })
+      : children
 
-            setCoords({ top, left });
-        }
-    }, [visible, placement, content]);
-
-    const adminDiv = document.getElementById("admin");
-
-    return (
-        <>
-            <div
-                className="gl-tooltip-target"
-                ref={childRef}
-                onMouseEnter={() => setVisible(true)}
-                onMouseLeave={() => setVisible(false)}
-            >
-                {children}
-            </div>
-            {adminDiv && enabled &&
-                createPortal(
-                    <div
-                        className={`gl-tooltip ${visible ? "visible" : ""}`}
-                        ref={tooltipRef}
-                        style={{
-                            top: coords.top,
-                            left: coords.left,
-                        }}
-                    >
-                        {content}
-                    </div>,
-                    adminDiv
-                )
-            }
-        </>
-    );
-};
-
-export default Tooltip;
+  return (
+    <>
+      <div
+        className="gl-tooltip-target"
+        ref={targetRef}
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+      >
+        {child}
+      </div>
+      {host &&
+        shown &&
+        createPortal(
+          <div ref={tipRef} id={id} role="tooltip" className="gl-tooltip" data-theme={theme} style={style}>
+            <span className="gl-tooltip__label">{content}</span>
+            {detail && <span className="gl-tooltip__detail">{detail}</span>}
+          </div>,
+          host
+        )}
+    </>
+  )
+}

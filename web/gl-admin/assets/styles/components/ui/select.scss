@@ -1,155 +1,178 @@
-@use "@gl-admin/assets/styles/variables";
+@use "@gl-admin/assets/styles/mixins";
+@use "./input";
 
-.gl-select {
-  font-family: inherit;
-  position: relative;
+// Select, FilterSelect and Combobox (#338): a 36px control box (32px for filters)
+// with a chevron, and a floating listbox of 32px rows with a check on the selection.
 
-  &__label {
-    color: var(--text-secondary);
-    display: block;
-    font-size: 0.95em;
-    margin-bottom: 4px;
+.gl-select__trigger {
+  @include input.control-box;
+
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-2) 0 10px;
+  text-align: left;
+
+  &:focus-visible,
+  &[aria-expanded="true"] {
+    @include input.control-focus;
   }
 
-  &__placeholder {
-    color: var(--text-primary);
-    min-width: 1.5rem;
-    text-align: center;
+  &[aria-invalid="true"] {
+    @include input.control-invalid;
   }
 
-  &__selected {
+  &:disabled {
+    background: var(--background-subtle);
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.gl-select__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &.is-placeholder {
+    color: var(--text-placeholder);
+  }
+}
+
+.gl-select__chevron {
+  color: var(--text-secondary);
+  flex: none;
+  transition: rotate var(--duration-moderate) var(--ease-out);
+
+  [aria-expanded="true"] > & {
+    rotate: 180deg;
+  }
+}
+
+.gl-filter-select {
+  display: inline-flex;
+
+  &__control {
     align-items: center;
     background: var(--background);
-    border-radius: 4px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
     cursor: pointer;
-    display: flex;
-    justify-content: center;
-    padding: .5rem 1rem .5rem .5rem;
-    position: relative;
-    user-select: none;
+    display: inline-flex;
+    font-family: inherit;
+    font-size: var(--type-body);
+    font-weight: 500;
+    gap: 6px;
+    height: 32px;
+    line-height: var(--type-body-lh);
+    padding: 0 var(--space-2) 0 10px;
+    transition: background var(--duration-fast) var(--ease-out);
+    white-space: nowrap;
 
-    &:hover {
+    &:not(:disabled):hover,
+    &[aria-expanded="true"] {
       background: var(--background-hover);
     }
 
-    &:focus {
-      border-color: var(--selected-border-color);
-      outline: none;
-    }
-
-    &--disabled {
-      background: var(--select-disabled-background);
-      color: var(--select-disabled-color);
+    &:disabled {
       cursor: not-allowed;
+      opacity: 0.5;
     }
-
   }
 
-  &__options {
-    background: var(--background);
-    border: 1px solid var(--border-color);
-    border-radius: 0 0 4px 4px;
-    box-shadow: var(--select-box-shadow);
-    color: var(--text-primary);
-    height: fit-content;
-    left: 0;
-    margin-top: 2px;
-    max-height: 200px;
-    overflow-y: auto;
-    position: absolute;
-    right: 0;
-    z-index: 10;
+  &__prefix {
+    color: var(--text-secondary);
+    font-weight: 400;
   }
+}
+
+.gl-combobox__control {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+
+.gl-combobox__input {
+  padding-right: 32px;
+}
+
+.gl-combobox__toggle {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  height: 100%;
+  padding: 0;
+  place-items: center;
+  position: absolute;
+  right: 0;
+  width: 32px;
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.gl-listbox {
+  @include mixins.floating-surface;
+
+  animation: gl-listbox-in var(--duration-base) var(--ease-out);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-height: min(320px, 50vh);
+  max-width: calc(100vw - 16px);
+  overflow-y: auto;
+  padding: 6px;
 
   &__option {
-        cursor: pointer;
-        padding: 8px;
-        transition: background 0.15s;
+    @include mixins.menu-row;
 
-        &:hover {
-          background: var(--background-hover);
-        }
-
-        &--selected {
-          background: var(--select-option-selected-background);
-          color: var(--select-option-selected-color);
-          font-weight: 500;
-        }
+    &[aria-selected="true"] .gl-listbox__label {
+      font-weight: 500;
+    }
   }
 
-  &--bordered {
-    --height: 3.4rem;
-    --radius: 0.25rem;
-    --pad-x: 0.875rem;
-    --pad-y: 0.625rem;
+  &__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    padding: var(--space-1) 0;
+  }
 
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius);
-    height: var(--height);
-    transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  &__description {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
 
-    &.is-focused {
-      border-color: var(--input-focused-border-color);
-      box-shadow: var(--input-focused-box-shadow);
-    }
+  &__check {
+    color: var(--text-selected);
+    flex: none;
+  }
 
-    .gl-select__label {
-      color: var(--input-label-color);
-      display: block;
-      font-size: 1rem;
-      left: var(--pad-x);
-      margin-bottom: 0;
-      pointer-events: none;
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      transition:
-        transform 140ms ease,
-        top 140ms ease,
-        font-size 140ms ease,
-        color 140ms ease;
-      white-space: nowrap;
-    }
+  &__empty {
+    color: var(--text-secondary);
+    padding: var(--space-2);
+  }
+}
 
-    &.is-focused .gl-select__label,
-    &.is-filled .gl-select__label {
-      color: var(--input-active-color);
-      font-size: 0.8rem;
-      top: 0.25rem;
-      transform: none;
-    }
+@keyframes gl-listbox-in {
+  from {
+    opacity: 0;
+  }
+}
 
-    .gl-select__selected {
-      background: transparent;
-      border-radius: 0;
-      height: 100%;
-      justify-content: flex-start;
-      padding: var(--pad-y) var(--pad-x);
-      padding-right: 2rem;
-      padding-top: calc(var(--pad-y) + 0.625rem);
+// An unlabelled select (rows per page) sizes to its value, not to the row.
+.gl-select:not(:has(> .gl-field__label)) {
+  width: auto;
 
-      &:hover {
-        background: transparent;
-      }
-
-      & > :last-child {
-        position: absolute;
-        right: var(--pad-x);
-        top: 50%;
-        transform: translateY(-50%);
-      }
-    }
-
-    .gl-select__placeholder {
-      font-size: 0.875rem;
-      font-weight: 600;
-      text-align: left;
-    }
-
-    .gl-select__options {
-      border-radius: 0 0 var(--radius) var(--radius);
-      margin-top: 0;
-      top: 100%;
-    }
+  .gl-select__trigger {
+    min-width: 80px;
   }
 }

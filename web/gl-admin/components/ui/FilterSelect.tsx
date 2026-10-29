@@ -1,83 +1,67 @@
-import React from "react";
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext";
-import { useSelect } from "@gl-admin/utils/select";
-import Icon from "@gl-admin/components/ui/Icon";
-import "@gl-admin/assets/styles/components/ui/filter-select.scss";
-
-type Option = {
-    label: string;
-    value: string;
-};
+import type { FC } from "react"
+import { useFloating, useStableId } from "@gl-admin/components/ui/a11y"
+import { Listbox, optionId, useSelectListbox, type SelectOption } from "@gl-admin/components/ui/Select"
+import Skeleton from "@gl-admin/components/ui/Skeleton"
+import { ChevronDownIcon } from "@gl-admin/components/ui/icons"
+import "@gl-admin/assets/styles/components/ui/select.scss"
 
 interface FilterSelectProps {
-    options: Option[];
-    value: string;
-    onChange: (value: string) => void;
-    prefix?: string;
-    disabled?: boolean;
-    loading?: boolean;
+  options: SelectOption[]
+  value: string
+  onChange: (value: string) => void
+  // Names the filter, shown before the value ("Status: Published").
+  prefix?: string
+  disabled?: boolean
+  loading?: boolean
 }
 
-const FilterSelect: React.FC<FilterSelectProps> = ({
-    options,
-    value,
-    onChange,
-    prefix,
-    disabled = false,
-    loading = false,
-}) => {
-    const {
-        open,
-        setOpen,
-        optionsStyle,
-        ref,
-        handleSelectClick,
-    } = useSelect(disabled);
-    const { isDark } = useGoLive();
-    const iconColor = isDark ? "#FFFFFF" : "#333536";
-    const selectedOption = options.find(opt => opt.value === value);
+// A compact select for list filters and sorting, sized like a 32px secondary button.
+// Same keyboard as Select.
+const FilterSelect: FC<FilterSelectProps> = ({ options, value, onChange, prefix, disabled = false, loading = false }) => {
+  const listId = useStableId("filter")
+  const lb = useSelectListbox(options, value, onChange, disabled)
+  const { style } = useFloating(lb.triggerRef, lb.listRef, lb.open, "bottom-start", { matchWidth: true })
+  const selected = options.find((opt) => opt.value === value)
 
-    if (loading) {
-        return <div className="gl-filter-select skeleton" />;
-    }
+  if (loading) {
+    return <Skeleton width={120} height={32} className="gl-filter-select gl-filter-select--loading" />
+  }
 
-    return (
-        <div className="gl-filter-select" ref={ref}>
-            <div
-                className={`gl-filter-select__control${disabled ? " disabled" : ""}`}
-                onClick={handleSelectClick}
-                tabIndex={0}
-                role="button"
-                aria-disabled={disabled}
-            >
-                {prefix && <span className="gl-filter-select__prefix">{prefix}</span>}
-                <span className="gl-filter-select__value">
-                    {selectedOption ? selectedOption.label : "Select..."}
-                </span>
-                <Icon name="dropdown" mirror_vertically={open} color={iconColor} width="7px" height="4.3px" />
-            </div>
-            {open && (
-                <div className="gl-filter-select__options" style={optionsStyle}>
-                    {options.map(opt => (
-                        <div
-                            key={opt.value}
-                            className={`gl-filter-select__option${opt.value === value ? " selected" : ""}`}
-                            onClick={() => {
-                                onChange(opt.value);
-                                setOpen(false);
-                            }}
-                            tabIndex={0}
-                            role="option"
-                            aria-selected={opt.value === value}
-                        >
-                            {opt.label}
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
+  return (
+    <div className="gl-filter-select">
+      <button
+        ref={lb.triggerRef}
+        type="button"
+        role="combobox"
+        className="gl-filter-select__control"
+        aria-haspopup="listbox"
+        aria-expanded={lb.open}
+        aria-controls={lb.open ? listId : undefined}
+        aria-activedescendant={lb.open && lb.active >= 0 ? optionId(listId, lb.active) : undefined}
+        aria-label={prefix ? `${prefix} ${selected?.label ?? ""}`.trim() : undefined}
+        disabled={disabled}
+        onClick={lb.toggle}
+        onKeyDown={lb.onKeyDown}
+      >
+        {prefix && <span className="gl-filter-select__prefix">{prefix}</span>}
+        <span className="gl-filter-select__value">{selected ? selected.label : "Select…"}</span>
+        <ChevronDownIcon size={14} className="gl-select__chevron" />
+      </button>
+      {lb.open && (
+        <Listbox
+          ref={lb.listRef}
+          id={listId}
+          label={prefix}
+          options={options}
+          value={value}
+          activeIndex={lb.active}
+          onPick={lb.pick}
+          onHover={lb.setActive}
+          style={style}
+        />
+      )}
+    </div>
+  )
+}
 
-export default FilterSelect;
-
+export default FilterSelect

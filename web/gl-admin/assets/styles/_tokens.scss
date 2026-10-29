@@ -206,7 +206,7 @@
 // The :root blocks. Only entry stylesheets include this (global.scss for the admin,
 // pages/login.scss for the account pages): variables.scss is @used by every component
 // stylesheet, so emitting here at module level would copy the tokens into each one.
-// Dark comes from variables.scss's dark-tokens mixin.
+// Dark (and the legacy tokens) come from variables.emit, included next to this.
 @mixin emit {
     :root {
         @include static;
@@ -223,6 +223,7 @@
             --duration-base: 0ms;
             --duration-moderate: 0ms;
             --duration-slow: 0ms;
+            --skeleton-pulse: paused; // mixins.skeleton-bg
         }
     }
 }

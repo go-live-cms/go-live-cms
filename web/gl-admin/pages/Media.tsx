@@ -9,6 +9,7 @@ import GLAdminButton from "@gl-admin/components/ui/Button"
 import Icon from "@gl-admin/components/ui/Icon"
 import MediaEditModal from "@gl-admin/components/media/MediaEditModal"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import { toast } from "@gl-admin/components/ui/Toast"
 import { canCreateContent } from "@gl-admin/lib/roles"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
 
@@ -284,11 +285,7 @@ const Media: React.FC = () => {
     }
   }
 
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null)
-  const showToast = (message: string, type: "success" | "error" | "info" = "info") => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 4700)
-  }
+  const showToast = (message: string, type: "success" | "error" | "info" = "info") => toast[type](message)
 
   const [showUploadArea, setShowUploadArea] = useState(false)
   const [uploadAreaActive, setUploadAreaActive] = useState(false)
@@ -584,8 +581,6 @@ const Media: React.FC = () => {
             )}
           </div>
         )}
-
-        {toast && <div className={`toast toast--${toast.type}`}>{toast.message}</div>}
 
         <MediaEditModal
           isOpen={isEditModalOpen}

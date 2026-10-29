@@ -1,0 +1,93 @@
+// Inline notices (#338): an 8px-radius box on the tone's -bg, icon in the tone's
+// text colour, message in the label colour (text-primary for info and danger).
+
+.gl-notice {
+  align-items: flex-start;
+  border-radius: 8px;
+  display: flex;
+  font-size: var(--type-body);
+  gap: 10px;
+  line-height: var(--type-body-lh);
+  padding: var(--space-3) 14px;
+
+  &__icon {
+    display: inline-flex;
+    flex: none;
+    margin-top: 1px;
+  }
+
+  &__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__title {
+    font-weight: 600;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  &__dismiss {
+    margin: -2px -6px 0 0;
+
+    &,
+    &:not(:disabled):hover {
+      color: inherit;
+    }
+  }
+
+  &--inline &__body {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  &--inline &__text {
+    flex: 1;
+  }
+
+  &--info {
+    background: var(--info-bg);
+
+    .gl-notice__icon {
+      color: var(--info-text);
+    }
+  }
+
+  &--warning {
+    background: var(--warning-bg);
+
+    &,
+    * {
+      color: var(--warning-label);
+    }
+  }
+
+  &--danger {
+    background: var(--danger-bg);
+    border: 1px solid var(--danger-text);
+
+    .gl-notice__icon,
+    .gl-notice__title {
+      color: var(--danger-text);
+    }
+  }
+
+  // Buttons in a notice sit on its fill.
+  .gl-button--secondary {
+    background: var(--background);
+  }
+}

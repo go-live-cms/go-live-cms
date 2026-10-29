@@ -1,27 +1,42 @@
-@use "gl-admin/assets/styles/variables";
+// Tooltips (#338): inverted, 12/16 text, 6px radius, the top layer.
 
+// A real box (not display: contents): the tooltip is positioned against it.
 .gl-tooltip-target {
-    display: inline-block;
-    height: inherit;
-    position: relative;
-    width: inherit;
+  display: inline-block;
+  height: inherit;
+  position: relative;
+  width: inherit;
 }
 
 .gl-tooltip {
-    background: var(--tooltip-background);
-    border-radius: 4px;
-    box-shadow: var(--tooltip-box-shadow);
-    color: var(--tooltip-color);
-    font-size: 13px;
-    opacity: 0;
-    padding: 6px 12px;
-    pointer-events: none;
-    position: absolute;
-    transition: opacity 0.2s;
-    white-space: nowrap;
-    z-index: 9999;
+  animation: gl-tooltip-in var(--duration-fast) var(--ease-out);
+  background: var(--tooltip-background);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  font-size: var(--type-footnote);
+  line-height: var(--type-footnote-lh);
+  max-width: 280px;
+  padding: 6px 10px;
+  pointer-events: none;
+  z-index: var(--z-tooltip);
 
-    &.visible {
-        opacity: 1;
-    }
+  &,
+  * {
+    color: var(--tooltip-color);
+  }
+
+  &__label {
+    font-weight: 500;
+  }
+
+  &__detail {
+    opacity: 0.8;
+  }
+}
+
+@keyframes gl-tooltip-in {
+  from {
+    opacity: 0;
+  }
 }

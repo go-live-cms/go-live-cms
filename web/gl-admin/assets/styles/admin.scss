@@ -242,9 +242,9 @@ section.admin-main {
 
 .admin-error {
   background: var(--sidebar-background);
-  border: 1px solid var(--input-invalid-border-color);
+  border: 1px solid var(--danger-text);
   border-radius: 8px;
-  color: var(--input-invalid-color);
+  color: var(--danger-text);
   margin: 2rem 0;
   padding: 1rem;
   text-align: center;
@@ -344,7 +344,7 @@ section.admin-main {
         }
 
         &.delete {
-          background: var(--input-invalid-color);
+          background: var(--danger-text);
           color: var(--text-primary);
         }
       }

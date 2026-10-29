@@ -1,0 +1,106 @@
+// The dev-only component gallery (#338).
+
+.gl-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-7) 40px var(--space-8);
+
+  &__page-title {
+    font-size: var(--type-title);
+    font-weight: 600;
+    line-height: var(--type-title-lh);
+    margin: 0;
+  }
+
+  &__lead {
+    color: var(--text-secondary);
+    margin: var(--space-1) 0 0;
+  }
+
+  &__grid {
+    display: grid;
+    gap: var(--space-6);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  }
+
+  &__panel {
+    background: var(--background);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-xl);
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-width: 0;
+    padding: var(--space-6);
+  }
+
+  &__title {
+    font-size: var(--type-subtitle);
+    font-weight: 600;
+    line-height: var(--type-subtitle-lh);
+    margin: 0;
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  &__heading {
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    font-weight: 600;
+    line-height: var(--type-label-lh);
+    margin: 0;
+  }
+
+  &__row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  &__stack,
+  &__wide {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    width: 100%;
+  }
+
+  &__stack {
+    max-width: 420px;
+  }
+
+  &__form {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    gap: 0;
+    overflow: hidden;
+
+    > .gl-input {
+      padding: var(--space-4);
+    }
+
+    .gl-unsaved-bar {
+      padding: var(--space-3) var(--space-4);
+    }
+  }
+
+  &__plain {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-md);
+    cursor: default;
+    display: inline-flex;
+    font-family: inherit;
+    font-size: var(--type-body);
+    gap: var(--space-2);
+    padding: var(--space-1);
+  }
+}

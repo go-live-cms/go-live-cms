@@ -1,0 +1,26 @@
+@use "@gl-admin/assets/styles/mixins";
+
+.gl-skeleton {
+  @include mixins.skeleton-bg;
+
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+
+  &--text {
+    display: block;
+    height: 12px;
+    width: 100%;
+  }
+
+  &--circle {
+    border-radius: var(--radius-full);
+  }
+
+  &--pill {
+    border-radius: var(--radius-full);
+    height: 22px;
+    width: 80px;
+  }
+}

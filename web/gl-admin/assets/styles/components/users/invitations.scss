@@ -20,10 +20,10 @@
   }
 
   &__error {
-    background: var(--input-invalid-background);
-    border: 1px solid var(--input-invalid-border-color);
+    background: var(--danger-bg);
+    border: 1px solid var(--danger-text);
     border-radius: var(--border-radius);
-    color: var(--input-invalid-color);
+    color: var(--danger-text);
     font-size: 0.875rem;
     font-weight: 500;
     margin: 0;
@@ -84,7 +84,7 @@
     font-size: 0.875rem;
 
     &.is-expired {
-      color: var(--input-invalid-color);
+      color: var(--danger-text);
     }
   }
 
