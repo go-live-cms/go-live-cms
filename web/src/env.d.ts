@@ -25,6 +25,9 @@ declare namespace App {
     themeVersion?: string
     themeName?: string
 
+    // A list route's page number when /page/N/ is rewritten to its first page (#349).
+    listPageNumber?: number
+
     // User authentication
     user?: any
 

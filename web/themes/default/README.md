@@ -49,7 +49,6 @@ The design shows these; the theme leaves them out rather than faking them:
 | Image captions, wide / full images, quote citations (styles are ready) | #346 |
 | Navigation menus (the header has the title and Posts) | #347 |
 | Category and tag archives, category eyebrows, linked tags | #348 |
-| Numbered pagination (Newer / Older for now) | #349 |
 | Author pages and author cards | #350 |
 | Related and older/newer posts, table of contents | #351 |
 | Search | #145 |

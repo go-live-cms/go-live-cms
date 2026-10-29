@@ -1,5 +1,6 @@
 import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse, TaxonomyTerm, TaxonomyType } from "../../gl-admin/lib/api/types"
-import { SERVER_API_URL } from "../../gl-admin/lib/server-api-url"
+import { SERVER_API_URL, SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
+import type { Pagination } from "./pagination"
 
 const API_BASE = typeof window === "undefined" ? SERVER_API_URL : "/api/v1"
 
@@ -183,6 +184,23 @@ export async function getPublicPostTypeNames(): Promise<string[]> {
 
 export async function getPostsByType(type: string, params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
   return getPosts({ ...params, type })
+}
+
+export interface PublicPostPage {
+  posts: Post[]
+  pagination: Pagination
+}
+
+// One numbered page of a public post type's published posts, posts_per_page at a
+// time (#349, GET /public/posts/type/:type). null when the API has no such page: the
+// type isn't public or the page is past the end. Other failures throw.
+export async function getPublicPostsPage(type: string, page: number): Promise<PublicPostPage | null> {
+  const query = page > 1 ? `?page=${page}` : ""
+  const response = await fetch(`${SERVER_MEDIA_URL}/public/posts/type/${encodeURIComponent(type)}${query}`)
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(`HTTP ${response.status} listing ${type} posts`)
+  const body = await response.json()
+  return { posts: body.posts || [], pagination: body.pagination }
 }
 
 export async function getPublishedPosts(params: PostQueryParams = {}): Promise<ApiResponse<Post>> {

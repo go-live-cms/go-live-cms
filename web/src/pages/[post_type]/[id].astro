@@ -2,6 +2,7 @@
 import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl, getPostTaxonomyTerms } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
+import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
 import { metaDescription, normalizeUrlStructure, postLastmod, postPath, publicImageUrl, resolveSiteUrl, toW3cDate, type SeoMeta } from '../../lib/seo'
 import { SITE_TITLE } from '../../consts'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
@@ -81,7 +82,24 @@ try {
 } catch (error) {
   console.warn('Could not fetch post types:', error)
 }
-if (publicTypes && !publicTypes.includes(postType)) {
+const typeIsPublic = !publicTypes || publicTypes.includes(postType)
+
+// /page/N/ is also page N of the front page (#349). Pages keep their URLs: a published
+// page with id N wins, and only otherwise is it the front page's (rendered by
+// src/pages/index.astro, with the page number in Astro.locals). Before the type check,
+// so the front page pages even with the page type switched off.
+if (postType === 'page' && parsePageSegment(id) !== null) {
+  const existing = typeIsPublic ? await getPostById(id).catch(() => null) : null
+  const isPage = existing?.post?.post_status === 'published' && existing.post.post_type === 'page'
+  if (!isPage) {
+    const request = resolveListRequest(Astro.url, '/', id)
+    if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+    if (request.kind === 'notFound') return new Response(null, { status: 404 })
+    Astro.locals.listPageNumber = request.page
+    return Astro.rewrite('/')
+  }
+}
+if (!typeIsPublic) {
   return new Response(null, { status: 404 })
 }
 

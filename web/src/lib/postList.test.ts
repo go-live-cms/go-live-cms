@@ -1,35 +1,16 @@
-import { describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Post } from "@gl-admin/lib/api/types"
-import { listedThumbnail, pageLinks, pageNumber } from "./postList"
+import { listedThumbnail, listSeo, loadPostList } from "./postList"
 import { postLayoutCandidates, themeLayoutCandidates } from "./themeLayout"
 
-describe("pageNumber", () => {
-  it("reads ?page=, 1 for anything else", () => {
-    expect(pageNumber("3")).toBe(3)
-    expect(pageNumber(null)).toBe(1)
-    expect(pageNumber("1")).toBe(1)
-    expect(pageNumber("0")).toBe(1)
-    expect(pageNumber("-2")).toBe(1)
-    expect(pageNumber("2.5")).toBe(1)
-    expect(pageNumber("abc")).toBe(1)
-  })
-})
-
-describe("pageLinks", () => {
-  it("has no links when everything fits on one page", () => {
-    expect(pageLinks("/", 1, 10, 7)).toEqual({ newer: undefined, older: undefined })
-  })
-
-  it("links older pages from the first and newer back to the bare path", () => {
-    expect(pageLinks("/post", 1, 10, 25)).toEqual({ newer: undefined, older: "/post?page=2" })
-    expect(pageLinks("/post", 2, 10, 25)).toEqual({ newer: "/post", older: "/post?page=3" })
-    expect(pageLinks("/post", 3, 10, 25)).toEqual({ newer: "/post?page=2", older: undefined })
-  })
-
-  it("points newer at the last page from past the end", () => {
-    expect(pageLinks("/", 9, 10, 25).newer).toBe("/?page=3")
-  })
-})
+const getPublicPostsPage = vi.fn()
+vi.mock("./api", () => ({
+  getPublicPostsPage: (...args: unknown[]) => getPublicPostsPage(...args),
+  getFeaturedImageUrl: async () => null,
+}))
+vi.mock("./siteSettings", () => ({
+  getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 2, urlStructure: "slug" }),
+}))
 
 describe("themeLayoutCandidates", () => {
   it("tries the theme's variant, its default, then the default theme's", () => {
@@ -77,5 +58,40 @@ describe("listedThumbnail", () => {
   it("leaves an old filesystem path to the featured-image endpoint", () => {
     expect(listedThumbnail(row({ _thumbnail_url: "./uploads/media/a.jpg" }))).toBeUndefined()
     expect(listedThumbnail(row({ _thumbnail_url: "/app/uploads/media/a.jpg" }))).toBeUndefined()
+  })
+})
+
+describe("loadPostList", () => {
+  const row = (id: number) => ({ id, slug: `p${id}`, post_type: "post", title: `Post ${id}` }) as unknown as Post
+  beforeEach(() => getPublicPostsPage.mockReset())
+
+  it("takes the page and its totals from the API, with clean newer/older links", async () => {
+    getPublicPostsPage.mockResolvedValue({ posts: [row(3), row(4)], pagination: { page: 2, per_page: 2, total: 5, total_pages: 3 } })
+    const list = await loadPostList("post", 2, "/post", "https://example.org")
+    expect(getPublicPostsPage).toHaveBeenCalledWith("post", 2)
+    expect(list).toMatchObject({ page: 2, total: 5, totalPages: 3, basePath: "/post", siteTitle: "Field Notes" })
+    expect(list?.posts.map((p) => p.href)).toEqual(["/post/p3", "/post/p4"])
+    expect(list?.links).toEqual({ newer: "/post", older: "/post/page/3/" })
+  })
+
+  it("is null for a page past the end (the API 404s it), so the route 404s", async () => {
+    getPublicPostsPage.mockResolvedValue(null)
+    expect(await loadPostList("post", 4, "/", "https://example.org")).toBeNull()
+  })
+
+  it("still has a first page when the API lists nothing", async () => {
+    getPublicPostsPage.mockResolvedValue(null)
+    expect(await loadPostList("post", 1, "/", "https://example.org")).toMatchObject({ posts: [], total: 0, totalPages: 0, links: {} })
+  })
+})
+
+describe("listSeo", () => {
+  it("canonicalizes each page and links its neighbours", () => {
+    expect(listSeo({ page: 1, basePath: "/", links: { older: "/page/2/" } })).toEqual({ canonical: "/", prev: undefined, next: "/page/2/" })
+    expect(listSeo({ page: 2, basePath: "/post", links: { newer: "/post", older: "/post/page/3/" } })).toEqual({
+      canonical: "/post/page/2/",
+      prev: "/post",
+      next: "/post/page/3/",
+    })
   })
 })

@@ -23,6 +23,8 @@ const {
   title,
   description,
   canonical,
+  prev,
+  next,
   image,
   type = 'website',
   noindex = false,
@@ -43,6 +45,8 @@ const imageUrl = publicImageUrl(siteUrl, image)
 ) : (
   <link rel="canonical" href={canonicalUrl} />
 )}
+{prev && <link rel="prev" href={absoluteUrl(siteUrl, prev)} />}
+{next && <link rel="next" href={absoluteUrl(siteUrl, next)} />}
 <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
 
 <meta property="og:type" content={type} />

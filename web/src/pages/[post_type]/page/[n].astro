@@ -1,0 +1,19 @@
+---
+/**
+ * Page N of a post type's list, /{post_type}/page/N/ (#349). Rendered by
+ * ../index.astro (one archive route), with the page number in Astro.locals;
+ * /page/1/ and ?page= redirect, anything else not a page number 404s.
+ */
+import { resolveListRequest } from '../../../lib/pagination'
+
+export const prerender = false
+
+const { post_type: postType, n } = Astro.params as { post_type: string; n: string }
+const basePath = `/${postType}`
+
+const request = resolveListRequest(Astro.url, basePath, n)
+if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+if (request.kind === 'notFound') return new Response(null, { status: 404 })
+Astro.locals.listPageNumber = request.page
+return Astro.rewrite(basePath)
+---

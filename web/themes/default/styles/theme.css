@@ -777,8 +777,29 @@ body {
   background: var(--color-surface-2);
   color: var(--color-text);
 }
+.site a.page-link[aria-current="page"] {
+  background: var(--color-secondary);
+  color: var(--color-background);
+  font-weight: 600;
+}
 .page-link[aria-disabled="true"] {
   color: var(--color-text-muted);
+}
+/* "Page 1 of 5" stands in for the numbers on a phone. */
+.page-status {
+  display: none;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+@media (max-width: 640px) {
+  .pagination .page-num {
+    display: none;
+  }
+  .pagination .page-status {
+    display: inline-flex;
+  }
 }
 
 /* ---------- prose: content blocks as published ---------- */
