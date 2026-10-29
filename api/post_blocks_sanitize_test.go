@@ -1,7 +1,9 @@
 package api
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 )
@@ -209,4 +211,171 @@ func TestIsSafeColor(t *testing.T) {
 	require.True(t, isSafeColor("transparent"))
 	require.False(t, isSafeColor("red;url(x)"))
 	require.False(t, isSafeColor("url(javascript:alert(1))"))
+}
+
+// singleBlock builds a one-block doc of the given type and attrs.
+func singleBlock(blockType string, attrs map[string]interface{}) *BlockDocV1 {
+	return &BlockDocV1{
+		DocVersion:  1,
+		BlocksOrder: []string{"b1"},
+		Blocks: map[string]interface{}{
+			"b1": map[string]interface{}{"id": "b1", "type": blockType, "version": 2, "attrs": attrs},
+		},
+	}
+}
+
+func attrsOf(doc *BlockDocV1) map[string]interface{} {
+	return doc.Blocks["b1"].(map[string]interface{})["attrs"].(map[string]interface{})
+}
+
+func captionRun(text string, marks ...interface{}) map[string]interface{} {
+	run := map[string]interface{}{"type": "text", "text": text}
+	if len(marks) > 0 {
+		run["marks"] = marks
+	}
+	return run
+}
+
+func mark(markType string, attrs map[string]interface{}) map[string]interface{} {
+	m := map[string]interface{}{"type": markType}
+	if attrs != nil {
+		m["attrs"] = attrs
+	}
+	return m
+}
+
+// #346: image caption and width.
+func TestSanitize_ImageCaption(t *testing.T) {
+	t.Run("keeps bold, italic and safe links", func(t *testing.T) {
+		caption := []interface{}{
+			captionRun("Photo by "),
+			captionRun("Ada", mark("bold", nil), mark("link", map[string]interface{}{"href": "https://example.com"})),
+			captionRun(" 2026", mark("italic", nil)),
+		}
+		doc := singleBlock("image", map[string]interface{}{"src": "/uploads/a.png", "caption": caption})
+		doc.sanitize()
+		got := attrsOf(doc)["caption"].([]interface{})
+		require.Len(t, got, 3)
+		require.Len(t, got[1].(map[string]interface{})["marks"], 2)
+		require.Len(t, got[2].(map[string]interface{})["marks"], 1)
+	})
+
+	t.Run("strips marks a caption can't carry, unsafe links and on* attrs", func(t *testing.T) {
+		caption := []interface{}{
+			captionRun("a", mark("underline", nil), mark("code", nil), mark("italic", map[string]interface{}{"onclick": "x"})),
+			captionRun("b", mark("highlight", map[string]interface{}{"color": "red"}), mark("link", map[string]interface{}{"href": "javascript:alert(1)"})),
+		}
+		doc := singleBlock("image", map[string]interface{}{"caption": caption})
+		doc.sanitize()
+		got := attrsOf(doc)["caption"].([]interface{})
+		require.Len(t, got, 2)
+		a := got[0].(map[string]interface{})
+		require.Equal(t, "a", a["text"])
+		marks := a["marks"].([]interface{})
+		require.Len(t, marks, 1)
+		require.Equal(t, "italic", marks[0].(map[string]interface{})["type"])
+		require.NotContains(t, marks[0].(map[string]interface{})["attrs"], "onclick")
+		b := got[1].(map[string]interface{})
+		require.Equal(t, "b", b["text"])
+		require.NotContains(t, b, "marks", "no allowed mark left")
+	})
+
+	t.Run("drops runs that aren't text, and extra keys on runs", func(t *testing.T) {
+		caption := []interface{}{
+			map[string]interface{}{"type": "hardBreak"},
+			map[string]interface{}{"type": "script", "text": "alert(1)"},
+			map[string]interface{}{"type": "text", "text": ""},
+			map[string]interface{}{"type": "text", "text": 5},
+			"loose string",
+			map[string]interface{}{"type": "text", "text": "kept", "attrs": map[string]interface{}{"onload": "x"}},
+		}
+		doc := singleBlock("image", map[string]interface{}{"caption": caption})
+		doc.sanitize()
+		got := attrsOf(doc)["caption"].([]interface{})
+		require.Equal(t, []interface{}{map[string]interface{}{"type": "text", "text": "kept"}}, got)
+	})
+
+	t.Run("removes a caption that isn't a list, or ends up empty", func(t *testing.T) {
+		for _, caption := range []interface{}{"<b>html</b>", map[string]interface{}{"type": "text"}, []interface{}{}, []interface{}{map[string]interface{}{"type": "hardBreak"}}} {
+			doc := singleBlock("image", map[string]interface{}{"caption": caption})
+			doc.sanitize()
+			require.NotContains(t, attrsOf(doc), "caption", "caption %v", caption)
+		}
+	})
+}
+
+func TestSanitize_ImageAlign(t *testing.T) {
+	t.Run("keeps the widths", func(t *testing.T) {
+		for _, align := range []string{"inline", "wide", "full"} {
+			doc := singleBlock("image", map[string]interface{}{"align": align})
+			doc.sanitize()
+			require.Equal(t, align, attrsOf(doc)["align"])
+		}
+	})
+
+	t.Run("drops anything else, so the image renders inline", func(t *testing.T) {
+		for _, align := range []interface{}{"huge", "WIDE", "left", "", 1, nil, []interface{}{"wide"}} {
+			doc := singleBlock("image", map[string]interface{}{"align": align})
+			doc.sanitize()
+			require.NotContains(t, attrsOf(doc), "align", "align %v", align)
+		}
+	})
+
+	t.Run("leaves other block types' attrs of the same name alone", func(t *testing.T) {
+		doc := singleBlock("callout", map[string]interface{}{"align": "left", "caption": "theme text", "cite": 7})
+		doc.sanitize()
+		require.Equal(t, map[string]interface{}{"align": "left", "caption": "theme text", "cite": 7}, attrsOf(doc))
+	})
+}
+
+// #346: quote citation.
+func TestSanitize_BlockquoteCite(t *testing.T) {
+	quote := func(cite interface{}) *BlockDocV1 {
+		return singleBlock("blockquote", map[string]interface{}{"text": "q", "cite": cite})
+	}
+
+	t.Run("keeps plain text, trimmed, with control characters as spaces", func(t *testing.T) {
+		doc := quote("  Ada\tLovelace\n ")
+		doc.sanitize()
+		require.Equal(t, "Ada Lovelace", attrsOf(doc)["cite"])
+
+		doc = quote("<b>not html</b>")
+		doc.sanitize()
+		require.Equal(t, "<b>not html</b>", attrsOf(doc)["cite"], "stays text; the renderer escapes it")
+	})
+
+	t.Run("caps an overlong cite at citeMaxRunes runes", func(t *testing.T) {
+		doc := quote(strings.Repeat("é", citeMaxRunes+50))
+		doc.sanitize()
+		require.Equal(t, citeMaxRunes, utf8.RuneCountInString(attrsOf(doc)["cite"].(string)))
+
+		doc = quote(strings.Repeat("x", citeMaxRunes))
+		doc.sanitize()
+		require.Len(t, attrsOf(doc)["cite"], citeMaxRunes, "exactly the cap is kept")
+	})
+
+	t.Run("removes a blank or non-string cite", func(t *testing.T) {
+		for _, cite := range []interface{}{"", "   \n", 42, map[string]interface{}{"text": "x"}, []interface{}{"x"}} {
+			doc := quote(cite)
+			doc.sanitize()
+			require.NotContains(t, attrsOf(doc), "cite", "cite %v", cite)
+		}
+	})
+
+	t.Run("removes a cite from the stored pm node", func(t *testing.T) {
+		doc := singleBlock("blockquote", map[string]interface{}{
+			"cite": "Ada",
+			"pm":   map[string]interface{}{"type": "blockquote", "attrs": map[string]interface{}{"cite": "other", "data-block-id": "b1"}},
+		})
+		doc.sanitize()
+		pmAttrs := attrsOf(doc)["pm"].(map[string]interface{})["attrs"].(map[string]interface{})
+		require.Equal(t, map[string]interface{}{"data-block-id": "b1"}, pmAttrs)
+		require.Equal(t, "Ada", attrsOf(doc)["cite"])
+	})
+
+	t.Run("an old quote without cite is unchanged", func(t *testing.T) {
+		doc := singleBlock("blockquote", map[string]interface{}{"text": "q"})
+		doc.sanitize()
+		require.Equal(t, map[string]interface{}{"text": "q"}, attrsOf(doc))
+	})
 }

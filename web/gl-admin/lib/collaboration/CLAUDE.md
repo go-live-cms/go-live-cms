@@ -241,6 +241,40 @@ kept so references in code stay valid.
 - **Cycles:** `listItemsToPM` tracks the lists being converted. A list that (directly or
   through another list) contains itself throws at the child that closes the cycle, so
   that child is dropped and reported like any other bad child.
+- **Image caption + width, quote citation (#346): image and blockquote are Block Spec
+  v2** (`IMAGE_BLOCK_VERSION`, `BLOCKQUOTE_BLOCK_VERSION`); readers take v1 and v2, a
+  missing attr is its default, so old docs load and render as before.
+  - **Caption = a child node, not an attribute.** `image` has `content:
+    "imageCaption?"` (`isolating`); `imageCaption` is `text*` with marks `bold italic
+    link` (`CAPTION_MARKS`), brought in by `ImageWithMediaId.addExtensions`. A child so two
+    people typing in one caption merge per character in Yjs (an attr is last-writer-wins
+    on the whole string), and not the image's own inline content, which would make the
+    image a textblock that turn-into/setBlockType could replace. No caption = **no child**
+    (every pre-#346 image, so old Yjs docs stay schema-valid); the toolbar/"Add caption"
+    inserts an empty one, Backspace in an empty one removes it, Enter leaves it.
+  - **Block Spec:** `attrs.caption` is the child's content as PM JSON (`CaptionText[]`:
+    text runs with caption marks). `pmToBlockDoc` leaves it out when there's no child or
+    it's empty; `blockDocToPM` builds the child only for a non-empty caption and keeps
+    only text runs and caption marks (a bad mark costs the mark, not the image).
+  - `align` (`"inline" | "wide" | "full"`, `IMAGE_ALIGNS`) is an image attr; stored only
+    when not `inline`, and an unknown value loads as `inline`.
+  - `cite` is a plain-text `blockquote` attr (`QuoteCitation`, a global attribute like
+    TextAlign), last writer wins. Canonical in the block's `attrs.cite`, **never in its
+    `pm`** (stripped on the way out, ignored on the way in); stored trimmed and capped
+    at `CITE_MAX_LENGTH` code points (`normalizeCite`), absent when blank. The editor
+    field stores it as typed (trimming there would eat spaces mid-word).
+  - Defaults left out = an untouched old image/quote stores only `version: 2` more.
+  - The editor's views are `components/editor/extensions/BlockNodeViews.ts` (a plugin's
+    `nodeViews` prop, so the schema extensions stay DOM-free); the view selects the image
+    on mousedown (it isn't a leaf any more, so ProseMirror wouldn't).
+  - **Stale clients:** an editor bundle from before #346 has no `imageCaption` type and
+    no `align`/`cite` attrs: y-tiptap deletes the caption element (rule 10's uncovered
+    case) and drops the attrs when it rewrites that node. Reload open admin tabs after
+    deploying this.
+  - Tests: `blockBridge.captionCite.test.ts`, `blocks-spec/captionCite.test.ts`,
+    `components/editor/extensions/captionCite.collab.test.ts` (commands, keys, views, two
+    users on the relay + stored `block_doc`); API side `TestSanitize_Image*` /
+    `TestSanitize_BlockquoteCite`.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema; keep them in sync). The server's store runs `validateBlockDoc` (#214)
   before writing `block_doc`. A **known** block type must match its own Zod schema; only

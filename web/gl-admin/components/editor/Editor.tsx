@@ -20,6 +20,7 @@ import { applyLink, openLinkModal } from "./utils/linkManager"
 import LinkModal from "./ui/LinkModal"
 import BubbleMenu from "./ui/BubbleMenu"
 import BlockTypeToolbar from "./ui/BlockTypeToolbar"
+import ImageToolbar from "./ui/ImageToolbar"
 import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
@@ -321,6 +322,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       )}
       {!readOnly && <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />}
       {!readOnly && <BlockTypeToolbar editor={editor} />}
+      {!readOnly && <ImageToolbar editor={editor} />}
       {!readOnly && <DragHandle editor={editor} />}
       {!readOnly && <MediaSelector editor={editor} postId={postId} />}
 

@@ -1,6 +1,18 @@
 import React, { useContext } from "react"
-import type { BlockComponentProps } from "../types"
+import { CAPTION_MARKS, isImageAlign } from "@gl-admin/lib/blocks-spec"
+import type { BlockComponentProps, PMNode } from "../types"
+import { renderContent } from "../utils/contentRenderer"
 import { blockMediaFor, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
+
+const captionMarks = new Set<string>(CAPTION_MARKS)
+
+/** The caption's text runs with only the caption marks (the API sanitizer strips the rest too). */
+function captionRuns(caption: unknown): PMNode[] {
+  if (!Array.isArray(caption)) return []
+  return caption
+    .filter((run): run is PMNode => run?.type === "text" && typeof run.text === "string" && run.text !== "")
+    .map((run) => ({ ...run, marks: run.marks?.filter((mark) => captionMarks.has(mark.type)) }))
+}
 
 const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
   const attrs = block.attrs as Record<string, unknown>
@@ -16,7 +28,7 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
   // don't make it wait for lazy loading.
   const eager = isFirstImageBlock(doc, block.id)
 
-  return (
+  const img = (
     <img
       key={block.id}
       src={image.src}
@@ -30,6 +42,18 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
       alt={alt}
       title={title}
     />
+  )
+
+  // Caption and width (#346). An image with neither stays a bare <img>, as before.
+  const caption = captionRuns(attrs?.caption)
+  const align = isImageAlign(attrs?.align) && attrs.align !== "inline" ? attrs.align : null
+  if (caption.length === 0 && !align) return img
+
+  return (
+    <figure key={block.id} className={align ? `align-${align}` : undefined}>
+      {img}
+      {caption.length > 0 && <figcaption>{renderContent(caption)}</figcaption>}
+    </figure>
   )
 }
 

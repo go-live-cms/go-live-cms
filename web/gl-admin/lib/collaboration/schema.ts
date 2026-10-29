@@ -7,6 +7,7 @@ import { createLowlight, common } from "lowlight"
 import { Schema, type MarkSpec, type NodeSpec } from "prosemirror-model"
 import { ImageWithMediaId } from "../../components/editor/extensions/ImageWithMediaId"
 import { BlockIdExtension } from "../../components/editor/extensions/BlockIdExtension"
+import { QuoteCitation } from "../../components/editor/extensions/QuoteCitation"
 
 const lowlight = createLowlight(common)
 
@@ -53,6 +54,7 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
       },
     }),
     textAlign: TextAlign.configure({ types: ["heading", "paragraph"] }),
+    quoteCitation: QuoteCitation,
     blockId: BlockIdExtension,
   }
 }

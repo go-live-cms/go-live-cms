@@ -3,6 +3,8 @@ import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import { getTurnIntoCommandOptions } from "../blocks"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
 import CommandSelect, { type CommandSelectOption } from "../ui/CommandSelect"
+import { NodeSelection } from "@tiptap/pm/state"
+import { CAPTION_MARKS } from "@gl-admin/lib/blocks-spec"
 
 /** Safely check if editor view is mounted (TipTap v3 throws on .view access) */
 function isViewMounted(editor: any): boolean {
@@ -55,18 +57,21 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
 
   if (!editor) return null
 
-  const mark = (name: string, label: string, run: () => void, content: ReactNode, style?: CSSProperties) => (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={editor.isActive(name)}
-      className="editor-toolbar__button"
-      style={style}
-      onClick={run}
-    >
-      {content}
-    </button>
-  )
+  // In an image caption (#346): no "turn into", and only the marks a caption allows.
+  const inCaption = editor.state.selection.$from.parent.type.name === "imageCaption"
+  const mark = (name: string, label: string, run: () => void, content: ReactNode, style?: CSSProperties) =>
+    inCaption && !(CAPTION_MARKS as readonly string[]).includes(name) ? null : (
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={editor.isActive(name)}
+        className="editor-toolbar__button"
+        style={style}
+        onClick={run}
+      >
+        {content}
+      </button>
+    )
 
   return (
     <TipTapBubbleMenu
@@ -75,25 +80,32 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
       shouldShow={({ editor: e }) => {
         // Prevent positioning when view is not fully mounted (avoids domFromPos null error)
         if (!isViewMounted(e)) return false
+        // A selected image has its own toolbar (ImageToolbar, #346).
+        const { selection } = e.state
+        if (selection instanceof NodeSelection && selection.node.type.name === "image") return false
         // Default: show when there's a text selection
-        const { from, to } = e.state.selection
+        const { from, to } = selection
         return from !== to
       }}
       {...props}
     >
       <div role="toolbar" aria-label="Format text" className="editor-toolbar__group">
-        <CommandSelect
-          options={turnIntoOptions}
-          value={turnInto}
-          label="Turn into"
-          onChange={(option: CommandSelectOption) => {
-            if (!editor) return
-            const val = option.value as TurnIntoValue
-            setTurnInto(val)
-            applyTurnInto(editor, val, turnIntoOptions)
-          }}
-        />
-        <span aria-hidden="true" className="editor-toolbar__divider" />
+        {!inCaption && (
+          <>
+            <CommandSelect
+              options={turnIntoOptions}
+              value={turnInto}
+              label="Turn into"
+              onChange={(option: CommandSelectOption) => {
+                if (!editor) return
+                const val = option.value as TurnIntoValue
+                setTurnInto(val)
+                applyTurnInto(editor, val, turnIntoOptions)
+              }}
+            />
+            <span aria-hidden="true" className="editor-toolbar__divider" />
+          </>
+        )}
         {mark("bold", "Bold", () => editor.chain().focus().toggleBold().run(), "B", { fontWeight: 700 })}
         {mark("italic", "Italic", () => editor.chain().focus().toggleItalic().run(), "i", {
           fontFamily: "Georgia, serif",

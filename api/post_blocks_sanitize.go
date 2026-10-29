@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // Server-side sanitization of Block Spec v1 documents (issue #188).
@@ -68,6 +69,113 @@ func sanitizeBlock(block map[string]interface{}) {
 	if pm, ok := attrs["pm"].(map[string]interface{}); ok {
 		sanitizePMNode(pm)
 	}
+
+	// Attrs of the core blocks' v2 (#346). Theme blocks may use the same names
+	// for other things, so only these types are touched.
+	switch block["type"] {
+	case "image":
+		sanitizeImageAttrs(attrs)
+	case "blockquote":
+		sanitizeBlockquoteAttrs(attrs)
+	}
+}
+
+// Image widths (Block Spec `IMAGE_ALIGNS`). Absent means "inline".
+var imageAligns = map[string]bool{"inline": true, "wide": true, "full": true}
+
+// Marks a caption may carry (Block Spec `CAPTION_MARKS`).
+var captionMarks = map[string]bool{"bold": true, "italic": true, "link": true}
+
+// citeMaxRunes caps a quote citation (Block Spec `CITE_MAX_LENGTH`, also in code points).
+const citeMaxRunes = 300
+
+// sanitizeImageAttrs enforces the align enum (an unknown width is dropped, so the
+// image renders inline) and reduces the caption to text runs with caption marks.
+func sanitizeImageAttrs(attrs map[string]interface{}) {
+	if align, present := attrs["align"]; present {
+		if s, ok := align.(string); !ok || !imageAligns[s] {
+			delete(attrs, "align")
+		}
+	}
+
+	raw, present := attrs["caption"]
+	if !present {
+		return
+	}
+	runs, ok := raw.([]interface{})
+	if !ok {
+		delete(attrs, "caption")
+		return
+	}
+	kept := make([]interface{}, 0, len(runs))
+	for _, r := range runs {
+		run, ok := r.(map[string]interface{})
+		if !ok || run["type"] != "text" {
+			continue
+		}
+		text, ok := run["text"].(string)
+		if !ok || text == "" {
+			continue
+		}
+		clean := map[string]interface{}{"type": "text", "text": text}
+		if marks, ok := run["marks"].([]interface{}); ok {
+			allowed := make([]interface{}, 0, len(marks))
+			for _, m := range marks {
+				if mark, ok := m.(map[string]interface{}); ok && captionMarks[stringOf(mark["type"])] {
+					allowed = append(allowed, mark)
+				}
+			}
+			if allowed = sanitizeMarks(allowed); len(allowed) > 0 {
+				clean["marks"] = allowed
+			}
+		}
+		kept = append(kept, clean)
+	}
+	if len(kept) == 0 {
+		delete(attrs, "caption")
+		return
+	}
+	attrs["caption"] = kept
+}
+
+// sanitizeBlockquoteAttrs makes `cite` plain text: control characters become
+// spaces, it's trimmed and capped at citeMaxRunes, and an empty one is dropped.
+// A `cite` inside the stored pm node is removed: the block's own is the only one.
+func sanitizeBlockquoteAttrs(attrs map[string]interface{}) {
+	if pm, ok := attrs["pm"].(map[string]interface{}); ok {
+		if pmAttrs, ok := pm["attrs"].(map[string]interface{}); ok {
+			delete(pmAttrs, "cite")
+		}
+	}
+
+	raw, present := attrs["cite"]
+	if !present {
+		return
+	}
+	cite, ok := raw.(string)
+	if !ok {
+		delete(attrs, "cite")
+		return
+	}
+	cite = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, cite))
+	if runes := []rune(cite); len(runes) > citeMaxRunes {
+		cite = strings.TrimSpace(string(runes[:citeMaxRunes]))
+	}
+	if cite == "" {
+		delete(attrs, "cite")
+		return
+	}
+	attrs["cite"] = cite
+}
+
+func stringOf(v interface{}) string {
+	s, _ := v.(string)
+	return s
 }
 
 // sanitizePMNode recursively sanitises a ProseMirror node map in place.

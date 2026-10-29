@@ -18,12 +18,52 @@ export type KnownBlockType =
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
 
-export interface BaseBlock<T extends string = string, A = Record<string, unknown>> {
+export interface BaseBlock<T extends string = string, A = Record<string, unknown>, V extends number = 1> {
   id: BlockID
   type: T
-  version: 1
+  /** The block's attrs version. Only image and blockquote have a v2 (#346). */
+  version: V
   attrs: A
   children?: BlockID[]
+}
+
+/**
+ * Block versions the editor writes (#346). Image v2 adds `caption` and `align`,
+ * blockquote v2 adds `cite`. Readers accept v1 and v2, with or without the new attrs:
+ * a missing attr means its default, so an old block renders exactly as before.
+ */
+export const IMAGE_BLOCK_VERSION = 2
+export const BLOCKQUOTE_BLOCK_VERSION = 2
+
+/** Image widths (#346): the content column, the theme's `wideWidth`, full bleed. */
+export const IMAGE_ALIGNS = ["inline", "wide", "full"] as const
+export type ImageAlign = (typeof IMAGE_ALIGNS)[number]
+
+export function isImageAlign(value: unknown): value is ImageAlign {
+  return typeof value === "string" && (IMAGE_ALIGNS as readonly string[]).includes(value)
+}
+
+/** The marks a caption may carry, here and in the API sanitizer (`captionMarks`). */
+export const CAPTION_MARKS = ["bold", "italic", "link"] as const
+
+/** Longest quote citation, in code points (runes in the API's sanitizer). */
+export const CITE_MAX_LENGTH = 300
+
+/** A citation as stored: trimmed, at most CITE_MAX_LENGTH code points, null when empty. */
+export function normalizeCite(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const cite = [...value.trim()].slice(0, CITE_MAX_LENGTH).join("").trim()
+  return cite === "" ? null : cite
+}
+
+/**
+ * One run of caption text: the `imageCaption` node's content (`text*`) as ProseMirror
+ * JSON. Only bold, italic and link marks.
+ */
+export interface CaptionText {
+  type: "text"
+  text: string
+  marks?: { type: (typeof CAPTION_MARKS)[number]; attrs?: Record<string, unknown> }[]
 }
 
 export type ParagraphBlock = BaseBlock<
@@ -50,7 +90,10 @@ export type BlockquoteBlock = BaseBlock<
   {
     pm?: any
     text?: string
-  }
+    /** Plain-text attribution, rendered as `<cite>`. Absent: none. */
+    cite?: string
+  },
+  1 | 2
 >
 
 export type CodeBlock = BaseBlock<
@@ -70,7 +113,12 @@ export type ImageBlock = BaseBlock<
     alt?: string
     title?: string
     src?: string
-  }
+    /** Rich caption (bold, italic, link). Absent: no caption. */
+    caption?: CaptionText[]
+    /** Absent: "inline". */
+    align?: ImageAlign
+  },
+  1 | 2
 >
 
 export type BulletListBlock = BaseBlock<"bullet_list", {}>
@@ -140,11 +188,19 @@ export const zHeading = zBase.extend({
   }),
 })
 
+// Image and blockquote have a v2 (#346); readers take both.
+const zVersion1or2 = z.union([z.literal(1), z.literal(2)])
+
 export const zBlockquote = zBase.extend({
   type: z.literal("blockquote"),
+  version: zVersion1or2,
   attrs: z.object({
     pm: z.any().optional(),
     text: z.string().optional(),
+    cite: z
+      .string()
+      .refine((cite) => [...cite].length <= CITE_MAX_LENGTH, `at most ${CITE_MAX_LENGTH} characters`)
+      .optional(),
   }),
 })
 
@@ -161,13 +217,30 @@ export const zDivider = zBase.extend({
   attrs: z.object({}),
 })
 
+export const zCaptionText = z.object({
+  type: z.literal("text"),
+  // ProseMirror has no empty text nodes.
+  text: z.string().min(1),
+  marks: z
+    .array(
+      z.object({
+        type: z.enum(CAPTION_MARKS),
+        attrs: z.record(z.unknown()).optional(),
+      }),
+    )
+    .optional(),
+})
+
 export const zImage = zBase.extend({
   type: z.literal("image"),
+  version: zVersion1or2,
   attrs: z.object({
     mediaId: z.number().optional(),
     alt: z.string().optional(),
     title: z.string().optional(),
     src: z.string().optional(),
+    caption: z.array(zCaptionText).optional(),
+    align: z.enum(IMAGE_ALIGNS).optional(),
   }),
 })
 

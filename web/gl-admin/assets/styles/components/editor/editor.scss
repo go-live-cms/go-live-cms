@@ -164,6 +164,149 @@
     max-width: 100%;
   }
 
+  // An image block (#346): the figure from BlockNodeViews, its width and its caption.
+  // Wide and full reach into the canvas padding; the theme decides the real widths.
+  .editor-image__figure {
+    margin: 12px 0;
+    position: relative;
+
+    img {
+      cursor: default;
+      display: block;
+      margin: 0;
+    }
+
+    // A selected image (a NodeSelection) also holds the DOM selection, now that it isn't
+    // a leaf: don't paint the text-selection tint over the picture; the outline shows it.
+    // stylelint-disable-next-line selector-class-pattern
+    &.ProseMirror-selectednode ::selection {
+      background: transparent;
+    }
+
+    &[data-align="wide"],
+    &[data-align="full"] {
+      img {
+        width: 100%;
+      }
+
+      &::after {
+        @include mixins.floating-surface;
+
+        color: var(--text-secondary);
+        font-size: var(--type-footnote);
+        left: var(--space-2);
+        line-height: 1;
+        padding: var(--space-1) var(--space-2);
+        pointer-events: none;
+        position: absolute;
+        top: var(--space-2);
+      }
+    }
+
+    &[data-align="wide"] {
+      margin-inline: -24px;
+
+      &::after {
+        content: "Wide";
+      }
+    }
+
+    &[data-align="full"] {
+      margin-inline: -48px;
+
+      &::after {
+        content: "Full width";
+      }
+    }
+
+    @media (width <= 768px) {
+      &[data-align="wide"],
+      &[data-align="full"] {
+        margin-inline: calc(-1 * var(--space-4));
+      }
+    }
+  }
+
+  .editor-image__caption {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    margin: 0;
+    padding: var(--space-2) 0 0;
+    text-align: center;
+
+    &.is-empty::before {
+      float: none;
+    }
+  }
+
+  .editor-image__add-caption {
+    background: transparent;
+    border: 0;
+    border-radius: 5px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: none;
+    font: inherit;
+    font-size: var(--type-footnote);
+    margin: var(--space-1) auto 0;
+    padding: var(--space-1) var(--space-2);
+
+    &:hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: -2px;
+    }
+  }
+
+  // Offered on the selected image only.
+  // stylelint-disable-next-line selector-class-pattern
+  .ProseMirror-selectednode > .editor-image__add-caption:not([hidden]) {
+    display: block;
+  }
+
+  // The quote's citation field (#346): shown when it has one, or the cursor is in the
+  // quote, or on hover.
+  .editor-quote__cite {
+    margin-top: var(--space-1);
+
+    &.is-empty {
+      display: none;
+
+      &:focus-within {
+        display: block;
+      }
+    }
+
+    input {
+      background: transparent;
+      border: 0;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      font: inherit;
+      font-size: 0.875em;
+      outline: none;
+      padding: 2px 0;
+      width: 100%;
+
+      &::placeholder {
+        color: var(--text-placeholder);
+      }
+
+      &:focus-visible {
+        box-shadow: 0 0 0 2px var(--focus-ring);
+      }
+    }
+  }
+
+  blockquote.has-selection > .editor-quote__cite.is-empty,
+  blockquote:hover > .editor-quote__cite.is-empty {
+    display: block;
+  }
+
   hr {
     background: var(--border-color);
     border: 0;
