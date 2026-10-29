@@ -13,10 +13,6 @@ import (
 // publishedStatus is the only status the public lists show.
 const publishedStatus = "published"
 
-// anyUser is the user_id filter's "everyone". sqlc types that parameter as
-// interface{}, and a nil one is SQL NULL, which matches no row.
-const anyUser int64 = 0
-
 // getPublicPostsByType handles GET /public/posts/type/:type?page=N (#349): one
 // page of a public post type's published posts, newest first, posts_per_page
 // at a time, with the total for numbered pages (pagination.go). A type that
@@ -47,7 +43,6 @@ func (server *Server) getPublicPostsByType(c *gin.Context) {
 	total, err := server.store.CountFilteredPosts(ctx, db.CountFilteredPostsParams{
 		PostType:   postType,
 		PostStatus: publishedStatus,
-		UserID:     anyUser,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts"})
@@ -62,7 +57,6 @@ func (server *Server) getPublicPostsByType(c *gin.Context) {
 	posts, err := server.store.ListPostsWithMeta(ctx, db.ListPostsWithMetaParams{
 		PostType:      postType,
 		PostStatus:    publishedStatus,
-		UserID:        anyUser,
 		SortColumn:    "created_at",
 		SortDirection: sortDesc,
 		OffsetCount:   req.offset(),
