@@ -9,8 +9,9 @@ import BlockRenderer from '@/components/BlockRenderer'
 import PostHeader from '../../components/PostHeader.astro'
 import FeaturedImage from '../../components/FeaturedImage.astro'
 import PostTerms from '../../components/PostTerms.astro'
+import AuthorCards from '../../components/AuthorCards.astro'
 import { WIDE_IMAGE_SIZES } from '../../lib/imageSizes'
-import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -19,26 +20,29 @@ interface Props {
   description: string
   seo?: SeoMeta
   terms?: TaxonomyTerm[]
+  // "Written by" (#350): the credited authors, in byline order.
+  authors?: AuthorProfile[]
   featuredImage?: string | null
   siteTitle?: string
 }
 
-const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
+const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle } = Astro.props
 ---
 
 <BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
   <article class="post post--wide">
     <div class="container">
-      <PostHeader post={post} class="wide" centered />
+      <PostHeader post={post} authors={authors} class="wide" centered />
     </div>
     <FeaturedImage src={featuredImage} variant="full" />
     <div class="container">
       <div class="prose measure">
         {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={WIDE_IMAGE_SIZES} />}
       </div>
-      {terms && terms.length > 0 && (
+      {((terms && terms.length > 0) || authors.length > 0) && (
         <footer class="post-end measure">
           <PostTerms terms={terms} />
+          <AuthorCards authors={authors} />
         </footer>
       )}
     </div>

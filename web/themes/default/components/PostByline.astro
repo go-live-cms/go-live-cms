@@ -1,23 +1,24 @@
 ---
 /**
- * Byline (#345): author initials, names, date and reading time. Author names aren't
- * links until author pages exist (#350).
+ * Byline (#345): author initials, names, date and reading time. Credited authors'
+ * names link to their author pages (#350); a post with no byline shows its owner,
+ * unlinked (they may have no page).
  */
-import type { Post } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post } from '@gl-admin/lib/api/types'
 import { avatarColor, initial } from '../lib/avatar'
-import { authorNames, joinNames, readingMinutes } from '../lib/posts'
+import { bylinePeople, nameSeparator } from '../lib/authors'
+import { readingMinutes } from '../lib/posts'
 
 interface Props {
   post: Post
+  // The post page passes the "Written by" authors; lists use the row's own byline.
+  authors?: AuthorProfile[]
   // "list": one line under a list item; "post": two lines in a post header.
   variant?: 'list' | 'post'
 }
 
-const { post, variant = 'list' } = Astro.props
-const people = post.authors?.length
-  ? post.authors.map((a) => ({ id: a.id, name: a.full_name?.trim() || a.username }))
-  : [{ id: post.user_id, name: post.username }]
-const names = joinNames(authorNames(post))
+const { post, authors, variant = 'list' } = Astro.props
+const people = bylinePeople(authors?.length ? authors : post.authors, post)
 const date = new Date(post.created_at)
 const valid = !Number.isNaN(date.getTime())
 const minutes = readingMinutes(post.published_blocks)
@@ -29,12 +30,16 @@ const shortDate = { year: 'numeric', month: 'short', day: 'numeric' } as const
 <div class={`byline meta byline--${variant}`}>
   <span class="avatars" aria-hidden="true">
     {people.slice(0, 3).map((p) => (
-      <span class="avatar" style={`width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px;background:${avatarColor(p.id)}`}>{initial(p.name)}</span>
+      <span class="avatar" style={`width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px;background:${avatarColor(p.key)}`}>{initial(p.name)}</span>
     ))}
   </span>
   {variant === 'post' ? (
     <span class="byline-text">
-      {names && <span>By {names}</span>}
+      {people.length > 0 && (
+        <span>By {people.map((p, i) => (
+          <>{nameSeparator(i, people.length)}{p.href ? <a href={p.href}>{p.name}</a> : p.name}</>
+        ))}</span>
+      )}
       <span>
         {valid && <time datetime={date.toISOString()}>{date.toLocaleDateString('en-US', longDate)}</time>}
         {minutes && <> · {minutes} min read</>}
@@ -42,8 +47,10 @@ const shortDate = { year: 'numeric', month: 'short', day: 'numeric' } as const
     </span>
   ) : (
     <span>
-      {names}
-      {valid && <> · <time datetime={date.toISOString()}>{date.toLocaleDateString('en-US', shortDate)}</time></>}
+      {people.map((p, i) => (
+        <>{nameSeparator(i, people.length)}{p.href ? <a href={p.href}>{p.name}</a> : p.name}</>
+      ))}
+      {valid && <>{people.length > 0 && ' · '}<time datetime={date.toISOString()}>{date.toLocaleDateString('en-US', shortDate)}</time></>}
       {minutes && <> · {minutes} min read</>}
     </span>
   )}

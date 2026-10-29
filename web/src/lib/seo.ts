@@ -214,6 +214,14 @@ export interface SitemapSource {
   // One page of published posts of a type, in a stable order (id ascending)
   // so offsets don't shift when a post is published mid-walk.
   getPublishedPosts(type: string, limit: number, offset: number): Promise<Post[]>
+  // Every author with a page (#350) and their newest post's time. Optional: a source
+  // without it lists no author pages.
+  getAuthors?(): Promise<{ username: string; last_modified?: string }[]>
+}
+
+// An author's page (#350).
+export function authorPath(username: string): string {
+  return `/author/${encodeURIComponent(username)}`
 }
 
 const PAGE_SIZE = 100 // the API caps limit at 100
@@ -225,7 +233,7 @@ export const MAX_SITEMAP_URLS = 50_000
 // and every published post at its canonical URL with lastmod from changed_at.
 // Only public types are listed, so admin routes never appear, and only
 // published posts (drafts, including unpublished posts, and archived posts are
-// skipped even if the API returned them).
+// skipped even if the API returned them). Author pages (#350) come last.
 export async function collectSitemapEntries(siteUrl: string, source: SitemapSource): Promise<SitemapEntry[]> {
   const [types, structure] = await Promise.all([source.getPublicPostTypeNames(), source.getUrlStructure()])
   // Types are fetched in parallel (each still pages sequentially), then joined
@@ -250,5 +258,8 @@ export async function collectSitemapEntries(siteUrl: string, source: SitemapSour
     }),
   )
 
-  return [{ loc: absoluteUrl(siteUrl, "/") }, ...perType.flat()].slice(0, MAX_SITEMAP_URLS)
+  const authors = (await source.getAuthors?.()) ?? []
+  const authorEntries = authors.map((a) => ({ loc: absoluteUrl(siteUrl, authorPath(a.username)), lastmod: toW3cDate(a.last_modified) }))
+
+  return [{ loc: absoluteUrl(siteUrl, "/") }, ...perType.flat(), ...authorEntries].slice(0, MAX_SITEMAP_URLS)
 }

@@ -3,8 +3,9 @@ import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
 import { metaDescription, normalizeUrlStructure, postLastmod, postPath, publicImageUrl, resolveSiteUrl, toW3cDate, type SeoMeta } from '../../lib/seo'
+import { getPostAuthors } from '../../lib/authorPage'
 import { SITE_TITLE } from '../../consts'
-import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 
 // WordPress-style: Auto-discover all theme layouts using glob imports
 // This allows dropping in new themes without modifying code
@@ -202,6 +203,15 @@ try {
   console.warn(`Could not fetch terms for ${postType} ${fullPost.id}:`, error)
 }
 
+// The byline and "Written by" cards (#350): credited authors with their bios. A failed
+// lookup renders the post with its owner in the byline and no cards.
+let authors: AuthorProfile[] = []
+try {
+  authors = await getPostAuthors(fullPost.id)
+} catch (error) {
+  console.warn(`Could not fetch authors for ${postType} ${fullPost.id}:`, error)
+}
+
 // Get layout variant for this post
 const layoutVariant = await getPostLayoutVariant(fullPost, postType)
 
@@ -258,6 +268,7 @@ const seo: SeoMeta = {
   description={description}
   seo={seo}
   terms={terms}
+  authors={authors}
   featuredImage={publicImageUrl(resolveSiteUrl(Astro.url), featuredImage) ?? null}
   siteTitle={settings?.site_title || SITE_TITLE}
 />

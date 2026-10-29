@@ -166,6 +166,14 @@ are the most fragile part of the codebase. **Before editing anything under
   `lib/postList.ts`. Parts without a backend stay hidden (table in
   `themes/default/README.md`). `/themes/active` returns `settings` as an object (it was
   base64 before, so `layout_variants` never applied).
+- **Author pages (#350):** `/author/{username}` (`src/pages/author/[username].astro`, the
+  theme's `layouts/author`, data from `src/lib/authorPage.ts`). The API's `/public/authors`
+  routes return only `AuthorProfile` (name, username, avatar, bio, website) and 404 anyone
+  not credited (`user_posts`) on a published post of a public type, the same 404 as an
+  unknown username. The post route fetches `/public/posts/:id/authors` for the byline and
+  the "Written by" cards; credited names link to their pages, an owner shown as a fallback
+  doesn't. Avatar colours are keyed by username. The sitemap lists author pages last. Bio
+  and website are edited on Profile (`lib/profile.ts` mirrors the API's checks).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

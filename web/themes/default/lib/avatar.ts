@@ -4,8 +4,16 @@
  */
 export const AVATAR_COLORS = ["#6550b9", "#2a7e3b", "#a1305a", "#0b68b8", "#9a4a12", "#5b5a55"]
 
-export function avatarColor(id: number | undefined): string {
-  const n = Number.isInteger(id) ? Math.abs(id as number) : 0
+// Keyed by username (#350): the public author profile has no id, and an author's
+// colour must match between bylines, "Written by" cards and their page. A number
+// (an owner's id when a post has no byline) still works.
+export function avatarColor(key: number | string | undefined): string {
+  let n = 0
+  if (typeof key === "string") {
+    for (const ch of key) n = (n * 31 + (ch.codePointAt(0) ?? 0)) >>> 0
+  } else if (Number.isInteger(key)) {
+    n = Math.abs(key as number)
+  }
   return AVATAR_COLORS[n % AVATAR_COLORS.length]
 }
 
