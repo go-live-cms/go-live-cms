@@ -24,6 +24,10 @@ import Notice from "@gl-admin/components/ui/Notice"
 import UnsavedChangesBar from "@gl-admin/components/ui/UnsavedChangesBar"
 import PostStatus from "@gl-admin/components/ui/PostStatus"
 import { DocumentIcon, MoreIcon, PlusIcon, SearchIcon } from "@gl-admin/components/ui/icons"
+import { SidebarNav } from "@gl-admin/components/sidebar/Sidebar"
+import { buildNavigation } from "@gl-admin/components/sidebar/nav"
+import { ForbiddenPage, NotFoundPage, ServerErrorPage } from "@gl-admin/components/errors/ErrorPages"
+import type { TaxonomyType } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/pages/ui-gallery.scss"
 
 // Dev-only (#338): every shared component, side by side in the light and dark themes.
@@ -55,6 +59,18 @@ const ROWS: Row[] = [
   { id: 3, title: "Analytics for every post", status: "published", authors: [3], edited: "Yesterday" },
   { id: 4, title: "Beta sign-up is open", status: "archived", authors: [4], edited: "Aug 12" },
 ]
+
+const TAXONOMIES = [
+  { name: "category", label: "Categories" },
+  { name: "tag", label: "Tags" },
+] as TaxonomyType[]
+
+// The shell (#339) as each role sees it, on the Posts › Categories page.
+const SHELLS = (["admin", "contributor"] as const).map((role) => ({
+  role,
+  sections: buildNavigation({ role, taxonomyTypes: TAXONOMIES }),
+  current: role === "admin" ? "taxonomy-category" : "type-post",
+}))
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -294,6 +310,28 @@ function Panel({ theme }: { theme: "light" | "dark" }) {
               toast.success("Settings saved")
             }}
           />
+        </div>
+      </Section>
+
+      <Section title="Sidebar (admin, contributor)">
+        {SHELLS.map((s) => (
+          <div key={s.role} className="gl-gallery__shell" role="group" aria-label={`Sidebar as ${s.role}`}>
+            <SidebarNav sections={s.sections} current={s.current} />
+          </div>
+        ))}
+      </Section>
+
+      <Section title="Error pages">
+        <div className="gl-gallery__wide">
+          <div className="gl-gallery__frame">
+            <NotFoundPage />
+          </div>
+          <div className="gl-gallery__frame">
+            <ForbiddenPage area="Settings" />
+          </div>
+          <div className="gl-gallery__frame">
+            <ServerErrorPage status={503} requestId="7f3a91c2-4e0b-4d6a-9c1e-2b8f5d3a6e10" onRetry={() => toast.info("Try again")} />
+          </div>
         </div>
       </Section>
 

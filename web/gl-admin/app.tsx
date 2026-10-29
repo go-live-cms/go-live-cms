@@ -1,9 +1,11 @@
-import { StrictMode, Suspense, lazy, useEffect } from "react"
+import { StrictMode, Suspense, lazy, useEffect, type ReactNode } from "react"
 import { BrowserRouter, Routes, Route, useLocation, useParams } from "react-router-dom"
 import { GoLiveProvider } from "./contexts/GoLiveContext"
 import { ThemeProvider } from "./contexts/ThemeContext"
 import AuthGuard from "@gl-admin/components/AuthGuard"
 import ErrorBoundary from "@gl-admin/components/ErrorBoundary"
+import RequireRole from "@gl-admin/components/RequireRole"
+import { isSiteAdmin } from "@gl-admin/lib/roles"
 import Sidebar from "@gl-admin/components/sidebar/Sidebar"
 import { Toaster } from "@gl-admin/components/ui/Toast"
 import "@gl-admin/assets/styles/global.scss"
@@ -54,6 +56,14 @@ function SidebarFallback() {
   )
 }
 
+function AdminOnly({ area, children }: { area: string; children: ReactNode }) {
+  return (
+    <RequireRole allow={isSiteAdmin} area={area}>
+      {children}
+    </RequireRole>
+  )
+}
+
 function AppLayout() {
   const routeClasses = useRouteClasses()
   const { pathname } = useLocation()
@@ -80,12 +90,13 @@ function AppLayout() {
                 <Route path="/content/edit/:id" element={<EditContent />} />
                 <Route path="/media" element={<Media />} />
                 <Route path="/taxonomies" element={<Taxonomies />} />
-                <Route path="/themes" element={<Themes />} />
-                <Route path="/users" element={<Users />} />
-                <Route path="/users/new" element={<NewUser />} />
-                <Route path="/users/edit/:id" element={<EditUser />} />
+                {/* Admin-only pages (requireSiteAdmin in the API): others get the 403. */}
+                <Route path="/themes" element={<AdminOnly area="Themes"><Themes /></AdminOnly>} />
+                <Route path="/users" element={<AdminOnly area="Users"><Users /></AdminOnly>} />
+                <Route path="/users/new" element={<AdminOnly area="Users"><NewUser /></AdminOnly>} />
+                <Route path="/users/edit/:id" element={<AdminOnly area="Users"><EditUser /></AdminOnly>} />
                 <Route path="/profile" element={<Profile />} />
-                <Route path="/settings" element={<Settings />} />
+                <Route path="/settings" element={<AdminOnly area="Settings"><Settings /></AdminOnly>} />
                 {UiGallery && <Route path="/dev/ui" element={<UiGallery />} />}
               </Routes>
             </Suspense>

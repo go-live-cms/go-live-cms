@@ -1,7 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react"
-import EmptyState from "@gl-admin/components/ui/EmptyState"
-import Button from "@gl-admin/components/ui/Button"
-import { errorMessage } from "@gl-admin/lib/api/errors"
+import { ErrorPage } from "@gl-admin/components/errors/ErrorPages"
+import { isChunkLoadError } from "@gl-admin/lib/errorPages"
 
 type ErrorBoundaryProps = {
   children: ReactNode
@@ -16,7 +15,8 @@ type ErrorBoundaryState = {
 }
 
 // Catches render errors in admin pages so one broken page shows a friendly
-// fallback instead of unmounting the whole admin (sidebar included).
+// fallback instead of unmounting the whole admin (sidebar included). An ApiError a
+// page throws gets its page (#339): 404, 403, or the generic one with the error ID.
 export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null }
 
@@ -34,11 +34,12 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     }
   }
 
-  retry = () => this.setState({ error: null })
-
-  // A lazily loaded page whose chunk failed to download (e.g. after a
-  // deploy) stays failed until the page is reloaded.
-  reload = () => window.location.reload()
+  // A lazily loaded page whose chunk failed to download (e.g. after a deploy)
+  // stays failed until the page is reloaded, so Try again reloads for those.
+  retry = () => {
+    if (isChunkLoadError(this.state.error)) window.location.reload()
+    else this.setState({ error: null })
+  }
 
   render() {
     const { error } = this.state
@@ -49,22 +50,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
     return (
       <div className="gl-error-boundary">
-        <EmptyState
-          variant="error"
-          icon="close"
-          title="Something went wrong"
-          description={errorMessage(error, "This page hit an unexpected problem. Try again, or reload the page.")}
-          action={
-            <>
-              <Button variation="primary" onClick={this.retry}>
-                Try again
-              </Button>
-              <Button variation="flat" onClick={this.reload}>
-                Reload page
-              </Button>
-            </>
-          }
-        />
+        <ErrorPage error={error} onRetry={this.retry} />
         {detail && <pre className="gl-error-boundary__detail">{detail}</pre>}
       </div>
     )

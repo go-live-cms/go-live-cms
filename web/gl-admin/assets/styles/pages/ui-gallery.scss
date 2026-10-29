@@ -104,3 +104,28 @@
     padding: var(--space-1);
   }
 }
+
+// #339: the sidebar at its real width, and the error pages in a bordered frame.
+.gl-gallery__shell {
+  background: var(--sidebar-background);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  min-height: 560px;
+  overflow: hidden;
+  width: 248px;
+
+  > .gl-sidebar {
+    flex: 1;
+  }
+}
+
+.gl-gallery__frame {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0 var(--space-4);
+
+  .gl-error-page {
+    min-height: 0;
+  }
+}

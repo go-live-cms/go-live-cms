@@ -1,316 +1,264 @@
-import React, { useState, useRef, useEffect, useCallback } from "react"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import { Link, useLocation } from "react-router-dom"
-import { extractSvgPath, Icon } from "@gl-admin/components/ui/Icon"
-import SidebarItem from "@gl-admin/components/sidebar/SidebarItem"
-import Tooltip from "@gl-admin/components/ui/Tooltip"
-import SidebarUserProfile from "./SidebarUserProfile"
+import { useEffect, useId, useMemo, useState, type MouseEvent } from "react"
+import { Link, useLocation, useNavigate } from "react-router-dom"
+import { extractSvgPath } from "@gl-admin/components/ui/Icon"
+import { IconButton } from "@gl-admin/components/ui/Button"
+import Drawer from "@gl-admin/components/ui/Drawer"
+import Avatar from "@gl-admin/components/ui/Avatar"
+import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
+import { MoreIcon, PlusIcon } from "@gl-admin/components/ui/icons"
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
+import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
+import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
+import { authManager } from "@gl-admin/lib/auth"
+import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
+import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
+import { USER_ROLE_OPTIONS, canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
+import { activeKey, buildNavigation, parentOf, type NavItem, type NavSection } from "./nav"
+import NavIcon, { ChevronRightIcon, MenuIcon } from "./NavIcon"
 import "@gl-admin/assets/styles/components/sidebar/sidebar.scss"
 
-import type { Navigation, Section, IconPath } from "@gl-admin/types/sidebar"
-import type { PostType } from "@gl-admin/lib/api/types"
+// The app shell's navigation (#339): a fixed sidebar on desktop; at phone width a top
+// bar whose menu button opens the same sidebar as an off-canvas drawer (Drawer: focus
+// trapped inside, Escape or the scrim closes it, focus goes back to the button).
 
-const ORIGINAL_WIDTH = 26 * 16
-const MIN_WIDTH = ORIGINAL_WIDTH * 0.8
-const MAX_WIDTH = ORIGINAL_WIDTH * 1.2
-// Must match the drawer breakpoint in sidebar.scss
-const MOBILE_QUERY = "(width <= 768px)"
-const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+// Must match the breakpoint in sidebar.scss.
+export const MOBILE_QUERY = "(width <= 768px)"
 
-// Keeps Tab / Shift+Tab cycling inside the open drawer
-function trapFocus(e: KeyboardEvent, container: HTMLElement) {
-  const items = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => el.getClientRects().length > 0
-  )
-  if (items.length === 0) return
-
-  const first = items[0]
-  const last = items[items.length - 1]
-  const active = document.activeElement
-
-  if (!container.contains(active)) {
-    e.preventDefault()
-    first.focus()
-  } else if (e.shiftKey && active === first) {
-    e.preventDefault()
-    last.focus()
-  } else if (!e.shiftKey && active === last) {
-    e.preventDefault()
-    first.focus()
-  }
+// The logo's gradient and clip-path ids, made unique per copy: the phone bar, the
+// sidebar and the gallery can show it more than once, and a url(#id) that resolves to
+// a copy inside a display:none parent paints nothing.
+function logoMarkup(suffix: string): string {
+  return extractSvgPath(GLIcon)
+    .replace(/id="([^"]+)"/g, `id="$1-${suffix}"`)
+    .replace(/url\(#([^)]+)\)/g, `url(#$1-${suffix})`)
 }
 
-function BrandLink({ className, headingTag: Heading = "h1" }: { className: string; headingTag?: "h1" | "span" }) {
+function Brand() {
+  const suffix = useId().replace(/[^a-zA-Z0-9_-]/g, "")
+  const markup = useMemo(() => logoMarkup(suffix), [suffix])
   return (
-    <Link to="/" className={className}>
+    <Link to="/" className="gl-sidebar__brand">
       <svg
-        width="35"
-        height="35"
+        width="28"
+        height="28"
         viewBox="0 0 35 35"
-        className="logo"
-        dangerouslySetInnerHTML={{ __html: extractSvgPath(GLIcon) }}
+        className="gl-sidebar__logo"
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: markup }}
       />
-      <Heading>
+      <span className="gl-sidebar__brand-name">
         <b>Go</b>Live
-      </Heading>
+      </span>
     </Link>
   )
 }
 
-// Static sections that don't change
-const topSection: Section[] = [
-  { icon: "dashboard" as IconPath, name: "Dashboard", link: "/" },
-  { icon: "new-tab" as IconPath, name: "View site", link: "/", type: "external" },
-]
-
-const bottomSections: Section[][] = [
-  [
-    { icon: "media" as IconPath, name: "Media", link: "/media/" },
-    { icon: "options" as IconPath, name: "Taxonomies", link: "/taxonomies/" },
-    { icon: "plugins" as IconPath, name: "Plugins", link: "/plugins/" },
-    { icon: "paintbrush" as IconPath, name: "Themes", link: "/themes/" },
-  ],
-  [
-    { icon: "user" as IconPath, name: "Users", link: "/users/" },
-    { icon: "settings" as IconPath, name: "Settings", link: "/settings/" }
-  ]
-];
-
-// Default content section (used before API loads)
-const defaultContentSection: Section[] = [
-  { icon: "content" as IconPath, name: "All content", link: "/content" },
-  { icon: "page" as IconPath, name: "Pages", link: "/content/pages/" },
-  { icon: "post" as IconPath, name: "Posts", link: "/content/posts/" },
-]
-
-// Map post type names to icons (fallback to "content" icon)
-const POST_TYPE_ICONS: Record<string, string> = {
-  post: "post",
-  page: "page",
+function NavLink({ item, current, nested = false }: { item: NavItem; current: string | null; nested?: boolean }) {
+  const isCurrent = item.key === current
+  return (
+    <Link
+      to={item.to}
+      className={`gl-sidebar__link${nested ? " gl-sidebar__link--nested" : ""}${isCurrent ? " is-current" : ""}`}
+      aria-current={isCurrent ? "page" : undefined}
+    >
+      {!nested && <NavIcon name={item.icon} />}
+      <span className="gl-sidebar__label">{item.label}</span>
+    </Link>
+  )
 }
 
-function buildContentSection(postTypes: PostType[]): Section[] {
-  const items: Section[] = [{ icon: "content" as IconPath, name: "All content", link: "/content" }]
-
-  // Sort by menu_position (nulls last), then alphabetical
-  const sorted = [...postTypes].sort((a, b) => {
-    const posA = a.menu_position ?? 999
-    const posB = b.menu_position ?? 999
-    if (posA !== posB) return posA - posB
-    return a.label.localeCompare(b.label)
-  })
-
-  for (const pt of sorted) {
-    items.push({
-      icon: (POST_TYPE_ICONS[pt.name] || "content") as IconPath,
-      name: pt.label,
-      link: `/content/${pt.name}/`,
-    })
-  }
-
-  return items
-}
-
-const Sidebar: React.FC = () => {
-  const location = useLocation()
-  const { isDark } = useGoLive()
-  const navIconColor = isDark ? "#FFFFFF" : "#46484A"
-  const initialWidth = parseInt(localStorage.getItem("sidebarWidth") || "") || ORIGINAL_WIDTH
-  const [sidebarWidth, setSidebarWidth] = useState(`${initialWidth}px`)
-  const [isClosed, setIsClosed] = useState(localStorage.getItem("sidebarState") === "true" || false)
-  const [contentSection, setContentSection] = useState<Section[]>(defaultContentSection)
-  // Off-canvas drawer state, only used below the mobile breakpoint (sidebar.scss)
-  const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const resizing = useRef(false)
-  const menuButtonRef = useRef<HTMLButtonElement>(null)
-  const closeButtonRef = useRef<HTMLButtonElement>(null)
-  const navRef = useRef<HTMLElement>(null)
-
-  // Fetch post types to build dynamic content section
-  useEffect(() => {
-    getPostTypes()
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setContentSection(buildContentSection(data))
-        }
-      })
-      .catch((err) => {
-        console.warn("Failed to fetch post types for sidebar:", err)
-      })
-  }, [])
-
-  const navigation: Navigation = [topSection, contentSection, ...bottomSections]
-
-  useEffect(() => {
-    localStorage.setItem("sidebarWidth", sidebarWidth)
-  }, [sidebarWidth])
-
-  useEffect(() => {
-    localStorage.setItem("sidebarState", isClosed.toString())
-  }, [isClosed])
-
-  const closeMobileMenu = useCallback(() => {
-    setIsMobileOpen(false)
-    menuButtonRef.current?.focus()
-  }, [])
-
-  // Close the drawer after back/forward navigation
-  useEffect(() => {
-    setIsMobileOpen(false)
-  }, [location.pathname])
-
-  useEffect(() => {
-    if (!isMobileOpen) return
-
-    closeButtonRef.current?.focus()
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      const nav = navRef.current
-      if (!nav) return
-      // While the user menu is open, Escape closes that instead (SidebarUserProfile)
-      if (e.key === "Escape" && !nav.querySelector(".sidebar-popup.open")) closeMobileMenu()
-      if (e.key === "Tab") trapFocus(e, nav)
-    }
-    // The drawer only exists below the breakpoint; drop it if the viewport grows
-    const mobileQuery = window.matchMedia(MOBILE_QUERY)
-    const onQueryChange = () => {
-      if (!mobileQuery.matches) setIsMobileOpen(false)
-    }
-
-    window.addEventListener("keydown", onKeyDown)
-    mobileQuery.addEventListener("change", onQueryChange)
-    return () => {
-      window.removeEventListener("keydown", onKeyDown)
-      mobileQuery.removeEventListener("change", onQueryChange)
-    }
-  }, [isMobileOpen, closeMobileMenu])
-
-  // Links to the current page don't change location, so close on any link click
-  const handleNavClick = (e: React.MouseEvent) => {
-    if (isMobileOpen && (e.target as Element).closest("a")) closeMobileMenu()
-  }
-
-  const handleResizeStart = (e: React.MouseEvent) => {
-    resizing.current = true
-    document.body.style.cursor = "ew-resize"
-
-    const startX = e.clientX
-    const startWidth = parseInt(sidebarWidth)
-
-    let animationFrameId: number | null = null
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      if (!resizing.current) return
-
-      if (animationFrameId) return
-
-      animationFrameId = window.requestAnimationFrame(() => {
-        let newWidth = startWidth + (moveEvent.clientX - startX)
-        newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth))
-        setSidebarWidth(`${newWidth}px`)
-        animationFrameId = null
-      })
-    }
-
-    const onMouseUp = () => {
-      resizing.current = false
-      document.body.style.cursor = ""
-      window.removeEventListener("mousemove", onMouseMove)
-      window.removeEventListener("mouseup", onMouseUp)
-      if (animationFrameId) {
-        window.cancelAnimationFrame(animationFrameId)
-        animationFrameId = null
-      }
-    }
-
-    window.addEventListener("mousemove", onMouseMove)
-    window.addEventListener("mouseup", onMouseUp)
-  }
-
-  const isActiveLink = (section: Section) => {
-    return (
-      ((location.pathname === section.link && section.link !== "/") ||
-        (location.pathname === "/" && section.name === "Dashboard")) &&
-      section.type !== "external"
-    )
-  }
+function NavGroup({ item, current }: { item: NavItem; current: string | null }) {
+  const [open, setOpen] = useState(true)
+  const id = `gl-nav-${item.key}`
+  const inside = item.children!.some((c) => c.key === current)
 
   return (
     <>
-    <header className="admin-mobile-bar">
-      <button
-        type="button"
-        ref={menuButtonRef}
-        className="admin-mobile-bar__toggle"
-        aria-label="Open menu"
-        aria-controls="admin-sidebar"
-        aria-expanded={isMobileOpen}
-        onClick={() => setIsMobileOpen(true)}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      </button>
-      <BrandLink className="admin-mobile-bar__logo" headingTag="span" />
-    </header>
-    <div
-      className={`admin-sidebar-backdrop${isMobileOpen ? " open" : ""}`}
-      onClick={closeMobileMenu}
-      aria-hidden="true"
-    />
-    <nav
-      id="admin-sidebar"
-      ref={navRef}
-      className={`admin-sidebar${isClosed ? " closed" : ""}${isMobileOpen ? " mobile-open" : ""}`}
-      style={{ width: sidebarWidth }}
-      role={isMobileOpen ? "dialog" : undefined}
-      aria-modal={isMobileOpen || undefined}
-      aria-label="Admin navigation"
-      onClick={handleNavClick}
-    >
-      <button
-        type="button"
-        ref={closeButtonRef}
-        className="admin-sidebar__close"
-        aria-label="Close menu"
-        onClick={closeMobileMenu}
-      >
-        <Icon name="close" color={navIconColor} width="20px" height="20px" />
-      </button>
-      <BrandLink className="admin-sidebar__head" />
-      <div className="admin-sidebar__nav">
-        {navigation.map((section, i) => (
-          <React.Fragment key={`sidebar-section-wrapper-${i}`}>
-            <div className="admin-sidebar__nav_section" key={`sidebar-section-${i}`}>
-              {section.map((item, j) => (
-                <Tooltip content={item.name} key={`sidebar-item-${j}`} enabled={isClosed && !isMobileOpen}>
-                  <SidebarItem
-                    iconPath={item.icon}
-                    name={item.name}
-                    link={item.link}
-                    type={item?.type}
-                    key={item.name}
-                    isActive={isActiveLink(item)}
-                  />
-                </Tooltip>
-              ))}
-            </div>
-            {i !== navigation.length - 1 && <hr className="admin-sidebar__divider" />}
-          </React.Fragment>
-        ))}
+      <div className={`gl-sidebar__group${inside ? " is-inside" : ""}`}>
+        <Link to={item.to} className="gl-sidebar__link gl-sidebar__link--group">
+          <NavIcon name={item.icon} />
+          <span className="gl-sidebar__label">{item.label}</span>
+        </Link>
+        <button
+          type="button"
+          className="gl-sidebar__toggle"
+          aria-expanded={open}
+          aria-controls={id}
+          aria-label={`${item.label} sections`}
+          onClick={() => setOpen(!open)}
+        >
+          <ChevronRightIcon className="gl-sidebar__chevron" />
+        </button>
       </div>
-      <div className="admin-sidebar__bottom">
-        <SidebarUserProfile />
-      </div>
-      <div className="admin-sidebar__controller" onClick={() => setIsClosed(!isClosed)}>
-        <Icon name="next" color={navIconColor} height="16px" mirror_horizontally={!isClosed} />
-      </div>
-      <div className="admin-sidebar__resize-handle" onMouseDown={handleResizeStart}></div>
-    </nav>
+      {open && (
+        <div id={id} className="gl-sidebar__children">
+          {item.children!.map((child) => (
+            <NavLink key={child.key} item={child} current={current} nested />
+          ))}
+        </div>
+      )}
     </>
   )
 }
 
-export default Sidebar
+function UserMenu() {
+  const user = useAuthUser()
+  const navigate = useNavigate()
+  if (!user) return null
+  const role = USER_ROLE_OPTIONS.find((r) => r.value === user.role?.toLowerCase())?.label ?? user.role
+  const name = user.full_name || user.username
+
+  return (
+    <Menu
+      label="Account"
+      placement="top-start"
+      className="gl-sidebar__user-menu"
+      trigger={(props) => (
+        <button {...props} type="button" className="gl-sidebar__user" aria-label={`Account: ${name}, ${role}`}>
+          <Avatar user={{ id: user.id, name }} size={28} decorative />
+          <span className="gl-sidebar__user-text">
+            <span className="gl-sidebar__user-name">{name}</span>
+            <span className="gl-sidebar__user-role">{role}</span>
+          </span>
+          <MoreIcon className="gl-sidebar__user-more" />
+        </button>
+      )}
+    >
+      <MenuItem onSelect={() => navigate("/profile")}>My profile</MenuItem>
+      <MenuItem onSelect={() => window.open("/", "_blank", "noopener,noreferrer")}>View site</MenuItem>
+      <MenuSeparator />
+      {/* AuthGuard sends the signed-out user to the login page. */}
+      <MenuItem onSelect={() => void authManager.logout()}>Log out</MenuItem>
+    </Menu>
+  )
+}
+
+type SidebarNavProps = {
+  sections: NavSection[]
+  current: string | null
+}
+
+// The sidebar's content, shared by the desktop column and the phone drawer.
+export function SidebarNav({ sections, current }: SidebarNavProps) {
+  return (
+    <div className="gl-sidebar">
+      <Brand />
+      <nav className="gl-sidebar__nav" aria-label="Admin">
+        {sections.map((section) => (
+          <div key={section.key} className="gl-sidebar__section">
+            {section.label && <span className="gl-sidebar__heading">{section.label}</span>}
+            {section.items.map((item) =>
+              item.children ? (
+                <NavGroup key={item.key} item={item} current={current} />
+              ) : (
+                <NavLink key={item.key} item={item} current={current} />
+              )
+            )}
+          </div>
+        ))}
+      </nav>
+      <div className="gl-sidebar__footer">
+        <UserMenu />
+      </div>
+    </div>
+  )
+}
+
+function useMediaQuery(query: string): boolean {
+  const get = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(query).matches
+  const [matches, setMatches] = useState(get)
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return
+    const list = window.matchMedia(query)
+    const onChange = () => setMatches(list.matches)
+    onChange()
+    list.addEventListener("change", onChange)
+    return () => list.removeEventListener("change", onChange)
+  }, [query])
+  return matches
+}
+
+export default function Sidebar() {
+  const location = useLocation()
+  const role = useCurrentRole()
+  const isMobile = useMediaQuery(MOBILE_QUERY)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [postTypes, setPostTypes] = useState<PostType[] | undefined>()
+  const [taxonomyTypes, setTaxonomyTypes] = useState<TaxonomyType[]>([])
+  const canManageTerms = isContentModerator(role)
+
+  useEffect(() => {
+    getPostTypes()
+      .then(({ data }) => data.length > 0 && setPostTypes(data))
+      .catch((err) => console.warn("Failed to fetch post types for the sidebar:", err))
+  }, [])
+
+  useEffect(() => {
+    if (!canManageTerms) return
+    getTaxonomyTypes()
+      .then(({ data }) => setTaxonomyTypes(data))
+      .catch((err) => console.warn("Failed to fetch taxonomy types for the sidebar:", err))
+  }, [canManageTerms])
+
+  const sections = useMemo(() => buildNavigation({ role, postTypes, taxonomyTypes }), [role, postTypes, taxonomyTypes])
+  const current = activeKey(sections, location.pathname, location.search)
+  const currentItem = parentOf(sections, current)
+  const title = (currentItem?.children?.find((c) => c.key === current) ?? currentItem)?.label
+
+  // Any navigation closes the drawer: a link click, back/forward, the profile item.
+  useEffect(() => {
+    setDrawerOpen(false)
+  }, [location.pathname, location.search])
+
+  // The drawer only exists at phone width; drop it if the viewport grows.
+  useEffect(() => {
+    if (!isMobile) setDrawerOpen(false)
+  }, [isMobile])
+
+  // A click on the link to the page you're on doesn't change location; close anyway.
+  const onDrawerClick = (e: MouseEvent) => {
+    if ((e.target as Element).closest("a[href]")) setDrawerOpen(false)
+  }
+
+  const nav = <SidebarNav sections={sections} current={current} />
+
+  return (
+    <>
+      <header className="gl-mobile-bar">
+        <IconButton
+          className="gl-mobile-bar__toggle"
+          aria-label="Open menu"
+          aria-expanded={drawerOpen}
+          aria-controls={drawerOpen ? "gl-nav-drawer" : undefined}
+          icon={<MenuIcon />}
+          onClick={() => setDrawerOpen(true)}
+        />
+        {title ? <span className="gl-mobile-bar__title">{title}</span> : <span className="gl-mobile-bar__title"><Brand /></span>}
+        {canCreateContent(role) && (
+          <Link to="/content/post/new" className="gl-mobile-bar__new" aria-label="New post">
+            <PlusIcon size={20} className="gl-mobile-bar__new-icon" />
+          </Link>
+        )}
+      </header>
+      {!isMobile && <aside className="gl-shell__sidebar">{nav}</aside>}
+      {isMobile && (
+        <Drawer
+          id="gl-nav-drawer"
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          title="Menu"
+          closeLabel="Close menu"
+          side="left"
+          width={300}
+          bare
+          className="gl-nav-drawer"
+        >
+          <div className="gl-nav-drawer__body" onClick={onDrawerClick}>
+            {nav}
+          </div>
+        </Drawer>
+      )}
+    </>
+  )
+}

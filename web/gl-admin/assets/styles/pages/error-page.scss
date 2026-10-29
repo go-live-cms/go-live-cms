@@ -1,0 +1,98 @@
+// Full-page errors (#339): 404, 403 and the generic one with a copyable error ID.
+
+.gl-error-page {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  min-height: 70vh;
+  padding: var(--space-8) var(--space-6);
+
+  @media (width <= 768px) {
+    align-items: flex-start;
+    padding: var(--space-7) 0;
+  }
+
+  &__body {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    max-width: 440px;
+    width: 100%;
+  }
+
+  &__code {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--type-label);
+    line-height: var(--type-label-lh);
+    margin: 0;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: 100%;
+  }
+
+  &__title {
+    font-size: var(--type-title-lg);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: var(--type-title-lg-lh);
+    margin: 0;
+  }
+
+  &__message {
+    color: var(--text-secondary);
+    font-size: var(--type-body);
+    line-height: var(--type-body-lh);
+    margin: 0;
+  }
+
+  &__path {
+    background: var(--background-hover);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: var(--type-label);
+    padding: 0 var(--space-1);
+    word-break: break-all;
+  }
+
+  &__id {
+    align-items: center;
+    background: var(--background-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-sizing: border-box;
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    min-height: 40px;
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+    width: 100%;
+  }
+
+  &__id-label {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__id-value {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--type-label);
+    min-width: 0;
+    overflow-wrap: anywhere;
+    user-select: all;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
