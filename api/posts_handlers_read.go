@@ -7,7 +7,7 @@
 //   - limit/offset: pagination (max 100)
 //   - sort: created_at|changed_at|title|id|menu_order (legacy date_desc etc. still work)
 //   - order: asc|desc (default depends on the column; see resolvePostSort)
-//   - type, status, user_id: filtering
+//   - type, user_id: filtering; status: one status or a comma list (draft,published)
 //   - with_meta: true|false, meta_level: basic|all|full
 package api
 
@@ -184,6 +184,38 @@ func (server *Server) getPosts(c *gin.Context) {
 			},
 		})
 	}
+}
+
+// getPostCounts handles GET /posts/counts: how many posts have each status,
+// for the admin list's tabs (#340). Takes the list's type and user_id filters.
+// Public like GET /posts, whose meta.total already gives the same numbers.
+func (server *Server) getPostCounts(c *gin.Context) {
+	var userID int64
+	if s := c.Query("user_id"); s != "" {
+		uid, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id parameter"})
+			return
+		}
+		userID = uid
+	}
+
+	rows, err := server.store.CountPostsByStatus(c.Request.Context(), db.CountPostsByStatusParams{
+		PostType: c.Query("type"),
+		UserID:   userID,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts"})
+		return
+	}
+
+	counts := make(map[string]int64, len(rows))
+	var total int64
+	for _, row := range rows {
+		counts[row.PostStatus] = row.Total
+		total += row.Total
+	}
+	c.JSON(http.StatusOK, gin.H{"counts": counts, "total": total})
 }
 
 // getPostByID handles GET /posts/:id

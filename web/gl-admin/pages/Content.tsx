@@ -1,307 +1,327 @@
-import React, { useState, useEffect, useCallback } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import Listing from "@gl-admin/layouts/Listing"
-import { getPosts } from "@gl-admin/lib/api/posts"
-import { getUsers } from "@gl-admin/lib/api/users"
+import { getPostCounts, getPosts } from "@gl-admin/lib/api/posts"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import Pagination from "@gl-admin/components/ui/Pagination"
-import PostTitle from "@gl-admin/components/ui/PostTitle"
-import DateTime from "@gl-admin/components/ui/DateTime"
 import PostStatus from "@gl-admin/components/ui/PostStatus"
 import PostType from "@gl-admin/components/ui/PostType"
-import FilterSelect from "@gl-admin/components/ui/FilterSelect"
+import Tabs from "@gl-admin/components/ui/Tabs"
 import Button from "@gl-admin/components/ui/Button"
-import Icon from "@gl-admin/components/ui/Icon"
+import Notice from "@gl-admin/components/ui/Notice"
+import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
+import { DocumentIcon, PlusIcon } from "@gl-admin/components/ui/icons"
+import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
+import { AccessCell, ListHeader, RowActionsCell, SortMenu } from "@gl-admin/components/content/ListParts"
+import Pages from "@gl-admin/pages/Pages"
 import NotFound from "@gl-admin/pages/NotFound"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { canCreateContent } from "@gl-admin/lib/roles"
-import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
-import type { Post, ApiMeta, PostType as PostTypeInfo } from "@gl-admin/lib/api/types"
-import type { PostQueryParams } from "@gl-admin/lib/api/posts"
+import { canCreateContent, isContentModerator, type PermissionUser } from "@gl-admin/lib/roles"
+import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
+import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
+import { useListParams } from "@gl-admin/lib/hooks/useListParams"
+import {
+  SORT_OPTIONS,
+  findSort,
+  findTab,
+  listTabs,
+  postAccess,
+  tabCount,
+  totalCount,
+  type StatusCounts,
+} from "@gl-admin/lib/contentList"
+import { postPath } from "@/lib/seo"
+import type { ApiMeta, Post, PostType as PostTypeInfo } from "@gl-admin/lib/api/types"
+import "@gl-admin/assets/styles/pages/content-list.scss"
 
-type ContentProps = {
-  title?: string
-  query?: Partial<PostQueryParams>
-}
+// The posts list (#340): status tabs with counts, sort, status pills, byline avatars and
+// last edited; contributors get a "Your access" column. Hierarchical types (Pages) get
+// the tree in Pages.tsx instead.
+//
+// Hidden until their issues land: search and the Author / Category / Tag filters, bulk
+// selection and actions, Import (#150), Trash (#327), Scheduled (#147), "Changes not
+// published" (#326) and the Category column.
 
-const Content: React.FC<ContentProps> = ({ query: queryProp, title }) => {
-  const navigate = useNavigate()
+type ContentProps = { title?: string }
+
+export default function Content({ title }: ContentProps) {
   const { typeName } = useParams<{ typeName?: string }>()
-  const { isDark, baseTitle } = useGoLive()
-  const [postTypesList, setPostTypesList] = useState<PostTypeInfo[]>([])
+  const [postTypes, setPostTypes] = useState<PostTypeInfo[]>([])
   const [postTypesLoaded, setPostTypesLoaded] = useState(false)
-  // Every content role may create posts; contributors get drafts they own (#135).
-  const canCreate = canCreateContent(useCurrentRole())
-  const [loadingUsers, setLoadingUsers] = useState(false)
-  const [authorOptions, setAuthorOptions] = useState<{ label: string; value: string }[]>([
-    { label: "All authors", value: "" },
-  ])
-  const initialFilters = (() => {
-    const base = { user_id: "", type: typeName || "", sort: "", order: "", status: "" }
-    if (queryProp) {
-      const stringFilters = Object.fromEntries(
-        Object.entries(queryProp).map(([key, value]) => [key, value !== undefined ? String(value) : ""])
-      )
-      return { ...base, ...stringFilters }
-    }
-    return base
-  })()
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>(initialFilters)
-  const getInitialColumns = () => {
-    const cols: TableColumnWithRender<Post>[] = [
-      { key: "title", name: "Post", width: "34.8125rem", render: (_, row) => <PostTitle value={row} /> },
-      {
-        key: "post_status",
-        name: "Status",
-        width: "10rem",
-        render: (_, row) => <PostStatus status={row?.post_status || null} iconPath={row?.post_status || null} />,
-      },
-      {
-        key: "created_at",
-        name: "Created at",
-        width: "10.75rem",
-        render: (_, row) => <DateTime value={row?.created_at || null} />,
-      },
-    ]
-    if (!queryProp && !typeName) {
-      cols.push({
-        key: "post_type",
-        name: "Type",
-        width: "10rem",
-        render: (_, row) => <PostType type={row?.post_type || null} iconPath={row?.post_type || null} />,
-      })
-    }
-    return cols
-  }
-  const columns: TableColumnWithRender<Post>[] = getInitialColumns()
-  const iconColor = isDark ? "#000000" : "#FFFFFF"
-
-  const getAuthorOptions = async () => {
-    const authors = await getAuthors()
-    const authorOptions =
-      authors?.map((author) => ({
-        label: author.full_name || author.username,
-        value: String(author.id),
-      })) || []
-    return [{ label: "All authors", value: "" }, ...authorOptions]
-  }
-
-  const getAuthors = async () => {
-    try {
-      setLoadingUsers(true)
-      const response = await getUsers()
-      return response.data
-    } catch (e) {
-      console.error("Error loading users:", e)
-    } finally {
-      setLoadingUsers(false)
-    }
-    return []
-  }
-
-  const getAddButtonName = () => {
-    const type = typeName || queryProp?.type
-    if (type) {
-      const pt = postTypesList.find((p) => p.name === type)
-      if (pt) return `New ${pt.label.replace(/s$/, "")}`
-      return `New ${type.charAt(0).toUpperCase() + type.slice(1)}`
-    }
-    return "New Post"
-  }
-
-  const clearFilters = () => {
-    setSelectedFilters({ user_id: "", status: "", type: "", sort: "", order: "" })
-  }
-
-  const handleNewPost = () => {
-    const type = typeName || queryProp?.type || "post"
-    navigate(`/content/${type}/new`)
-  }
-
-  const handleRowDoubleClick = (post: Post) => {
-    navigate(`/content/edit/${post.id}`)
-  }
-
-  const fetchData = useCallback(
-    async ({ limit, offset, ...query }: ApiMeta & PostQueryParams) => {
-      const mergedParams = {
-        limit,
-        offset,
-        with_meta: true,
-        meta_level: "basic",
-        ...query,
-        ...selectedFilters,
-      }
-
-      const filteredParams = Object.fromEntries(
-        Object.entries(mergedParams).filter(([_, value]) => value !== "" && value !== undefined)
-      )
-
-      const response = await getPosts(filteredParams)
-      return { data: response.data, total: response.meta.total || 0 }
-    },
-    [selectedFilters]
-  )
 
   useEffect(() => {
-    // Derive page title from route param or prop
-    const pageTitle = typeName
-      ? postTypesList.find((p) => p.name === typeName)?.label ||
-        typeName.charAt(0).toUpperCase() + typeName.slice(1) + "s"
-      : title || "Content"
-    document.title = `${baseTitle} ${pageTitle}`
-
-    const fetchAuthorOptions = async () => {
-      const options = await getAuthorOptions()
-      setAuthorOptions(options)
-    }
-    fetchAuthorOptions()
-
-    // Fetch post types for filter dropdown
     getPostTypes()
-      .then(({ data }) => {
-        if (data && data.length > 0) setPostTypesList(data)
-        setPostTypesLoaded(true)
-      })
+      .then(({ data }) => setPostTypes(data ?? []))
       .catch(() => {})
-  }, [typeName])
+      .finally(() => setPostTypesLoaded(true))
+  }, [])
 
-  const filters = (
-    <>
-      {selectedFilters.user_id || selectedFilters.status || selectedFilters.type || selectedFilters.sort || selectedFilters.order ? (
-        <div className="gl-clear-filters" onClick={clearFilters}>
-          Clear filters
-        </div>
-      ) : null}
-      <FilterSelect
-        options={authorOptions}
-        prefix="Author:"
-        value={selectedFilters.user_id}
-        loading={loadingUsers}
-        onChange={(value) => setSelectedFilters({ ...selectedFilters, user_id: value })}
-      />
-      <FilterSelect
-        options={[
-          { label: "All status", value: "" },
-          { label: "Published", value: "published" },
-          { label: "Draft", value: "draft" },
-        ]}
-        prefix="View:"
-        value={selectedFilters.status}
-        onChange={(value) => setSelectedFilters({ ...selectedFilters, status: value })}
-      />
-      {!queryProp?.type && !typeName && (
-        <FilterSelect
-          options={[
-            { label: "All types", value: "" },
-            ...postTypesList.map((pt) => ({ label: pt.label, value: pt.name })),
-          ]}
-          prefix="View:"
-          value={selectedFilters.type}
-          onChange={(value) => setSelectedFilters({ ...selectedFilters, type: value })}
-        />
-      )}
-      <FilterSelect
-        options={[
-          { label: "Created", value: "" },
-          { label: "Updated", value: "changed_at" },
-          { label: "Title", value: "title" },
-        ]}
-        value={selectedFilters.sort}
-        onChange={(value) => setSelectedFilters({ ...selectedFilters, sort: value })}
-        prefix="Sort by:"
-      />
-      <FilterSelect
-        options={[
-          // Empty lets the API pick: newest first for dates, A-Z for titles.
-          { label: "Default", value: "" },
-          { label: "Ascending", value: "asc" },
-          { label: "Descending", value: "desc" },
-        ]}
-        value={selectedFilters.order}
-        onChange={(value) => setSelectedFilters({ ...selectedFilters, order: value })}
-        prefix="Order:"
-      />
-      {canCreate && (
-        <Button onClick={handleNewPost} className="gl-admin-media__new-media-btn">
-          <Icon name="add" color={iconColor} width="14" height="14" /> {getAddButtonName()}
-        </Button>
-      )}
-    </>
-  )
-
-  const displayTitle = typeName
-    ? postTypesList.find((p) => p.name === typeName)?.label ||
-      typeName.charAt(0).toUpperCase() + typeName.slice(1) + "s"
-    : title || "Content"
+  const postType = postTypes.find((p) => p.name === typeName)
 
   // /content/<something that isn't a post type>
-  if (typeName && postTypesLoaded && postTypesList.length > 0 && !postTypesList.some((p) => p.name === typeName)) {
-    return <NotFound />
+  if (typeName && postTypesLoaded && postTypes.length > 0 && !postType) return <NotFound />
+
+  // Only posts and pages are known to be flat or a tree before /post-types answers;
+  // wait for it for any other type rather than load the wrong list first.
+  if (typeName && typeName !== "post" && typeName !== "page" && !postTypesLoaded) return null
+
+  if (typeName && (postType?.hierarchical ?? typeName === "page")) {
+    return <Pages typeName={typeName} postType={postType} />
+  }
+  return <PostsList typeName={typeName} postType={postType} title={title} />
+}
+
+function typeLabels(typeName: string | undefined, postType: PostTypeInfo | undefined, title?: string) {
+  if (!typeName) return { plural: title || "Content", singular: "post" }
+  const plural = postType?.label || typeName.charAt(0).toUpperCase() + typeName.slice(1) + "s"
+  return { plural, singular: plural.replace(/s$/, "").toLowerCase() }
+}
+
+type ListProps = { typeName?: string; postType?: PostTypeInfo; title?: string }
+
+function PostsList({ typeName, postType, title }: ListProps) {
+  const navigate = useNavigate()
+  const { baseTitle } = useGoLive()
+  const user = useAuthUser()
+  const role = user?.role
+  const moderator = isContentModerator(role)
+  const canCreate = canCreateContent(role)
+  const settings = useSiteSettings()
+  const [params, setParam] = useListParams()
+  const tabs = listTabs(role)
+  const tab = findTab(tabs, params.get("view"))
+  const sort = findSort(params.get("sort"))
+  const { plural, singular } = typeLabels(typeName, postType, title)
+  const newType = typeName || "post"
+
+  const [counts, setCounts] = useState<StatusCounts | null>(null)
+  const [mineCounts, setMineCounts] = useState<StatusCounts | null>(null)
+  // Counts that failed to load leave the tabs without numbers (not "0", not the empty state).
+  const [countsFailed, setCountsFailed] = useState(false)
+  const [refresh, setRefresh] = useState(0)
+  const retryList = useRef<() => void>(() => {})
+
+  useEffect(() => {
+    document.title = `${baseTitle} ${plural}`
+  }, [baseTitle, plural])
+
+  useEffect(() => {
+    let live = true
+    setCountsFailed(false)
+    getPostCounts({ type: typeName })
+      .then((r) => live && setCounts(r.counts))
+      .catch(() => live && setCountsFailed(true))
+    if (!moderator && user?.id) {
+      getPostCounts({ type: typeName, user_id: user.id })
+        .then((r) => live && setMineCounts(r.counts))
+        .catch(() => live && setCountsFailed(true))
+    }
+    return () => {
+      live = false
+    }
+  }, [typeName, moderator, user?.id, refresh])
+
+  const changed = () => {
+    setRefresh((n) => n + 1)
+    retryList.current()
   }
 
-  const hasFilters = Boolean(selectedFilters.user_id || selectedFilters.status || (!typeName && selectedFilters.type))
-  const singularName = getAddButtonName().replace(/^New /, "")
-  const emptyIcon = (typeName || queryProp?.type) === "page" ? "page" : "post"
-
-  const emptyState = hasFilters ? (
-    <EmptyState
-      icon="search"
-      title="Nothing matches these filters"
-      description="Try a different author, status or type."
-      action={
-        <Button variation="flat" onClick={clearFilters}>
-          Clear filters
-        </Button>
-      }
-    />
-  ) : (
-    <EmptyState
-      icon={emptyIcon}
-      title={`No ${displayTitle.toLowerCase()} yet`}
-      description={
-        canCreate
-          ? `Create your first ${singularName.toLowerCase()} to get started.`
-          : "Nothing has been created here yet. Your role can't create content; ask an administrator."
-      }
-      action={
-        canCreate && (
-          <Button variation="primary" onClick={handleNewPost}>
-            <Icon name="add" color="white" width="14" height="14" /> Create your first {singularName.toLowerCase()}
-          </Button>
-        )
-      }
-    />
+  const query = useMemo(
+    () => ({
+      type: typeName || "",
+      status: tab.status,
+      user_id: tab.mine && user?.id ? String(user.id) : "",
+      sort: sort.sort,
+      order: sort.order,
+    }),
+    [typeName, tab.status, tab.mine, user?.id, sort.sort, sort.order]
   )
 
+  const fetchData = useCallback(async ({ limit, offset, ...q }: ApiMeta & typeof query) => {
+    const filtered = Object.fromEntries(Object.entries(q).filter(([, v]) => v !== ""))
+    const response = await getPosts({ limit, offset, with_meta: true, meta_level: "basic", ...filtered })
+    return { data: response.data, total: response.meta.total || 0 }
+  }, [])
+
+  const open = (post: Post) => navigate(`/content/edit/${post.id}`)
+  const structure = settings?.post_url_structure ?? "id"
+  const total = totalCount(counts)
+
+  const columns: TableColumnWithRender<Post>[] = [
+    {
+      key: "title",
+      name: "Title",
+      render: (_, row) =>
+        row ? (
+          <div className="gl-content-list__title">
+            <Link to={`/content/edit/${row.id}`} className="gl-content-list__link">
+              {row.title || "Untitled"}
+            </Link>
+            <span className="gl-content-list__path">{postPath(row, structure)}</span>
+          </div>
+        ) : (
+          <div className="gl-content-list__title">
+            <Skeleton shape="text" width="60%" />
+            <Skeleton shape="text" width={140} height={8} />
+          </div>
+        ),
+    },
+    {
+      key: "post_status",
+      name: "Status",
+      width: "9.5rem",
+      render: (_, row) => <PostStatus status={row?.post_status || null} iconPath={row?.post_status || null} />,
+    },
+    { key: "authors", name: "Authors", width: "6rem", render: (_, row) => <Byline post={row} /> },
+    { key: "changed_at", name: "Last edited", width: "8.5rem", render: (_, row) => <LastEdited post={row} /> },
+  ]
+  if (!typeName) {
+    columns.splice(2, 0, {
+      key: "post_type",
+      name: "Type",
+      width: "8rem",
+      render: (_, row) => <PostType type={row?.post_type || null} iconPath={row?.post_type || null} />,
+    })
+  }
+  if (!moderator) {
+    columns.push({ key: "user_id", name: "Your access", width: "16rem", render: (_, row) => <AccessCell post={row} user={user} /> })
+  }
+  columns.push({
+    key: "id",
+    name: "Actions",
+    width: moderator ? "3.5rem" : "8.5rem",
+    render: (_, row) => row && <RowActionsCell post={row} user={user} onOpen={open} onChanged={changed} noun={singular} />,
+  })
+
+  const newButton = canCreate && (
+    <Button variant="primary" icon={<PlusIcon />} onClick={() => navigate(`/content/${newType}/new`)}
+      // The mobile bar has its own New post button.
+      className={newType === "post" ? "gl-content-list__new" : undefined}
+    >
+      {moderator ? `New ${singular}` : "New draft"}
+    </Button>
+  )
+
+  if (total === 0) {
+    return (
+      <section className="gl-content-list">
+        <ListHeader title={plural} actions={newButton} />
+        <EmptyState
+          className="gl-content-list__empty"
+          icon={<DocumentIcon size={24} />}
+          title={`No ${plural.toLowerCase()} yet`}
+          description={
+            canCreate
+              ? `Write your first ${singular}.`
+              : "Nothing has been written here yet. Your role can't create content; ask an administrator."
+          }
+          action={
+            canCreate && (
+              <Button variant="primary" size="lg" onClick={() => navigate(`/content/${newType}/new`)}>
+                Write a {singular}
+              </Button>
+            )
+          }
+        />
+      </section>
+    )
+  }
+
   return (
-    <Listing title={displayTitle} actions={filters}>
-      <Pagination fetchData={fetchData} query={selectedFilters || {}}>
+    <section className={`gl-content-list${moderator ? "" : " gl-content-list--contributor"}`}>
+      <ListHeader title={plural} actions={newButton} />
+
+      {!moderator && (
+        <Notice tone="info">
+          As a contributor you can edit the {plural.toLowerCase()} you own, at any status. Editors publish them. Everything
+          else opens view-only, including {plural.toLowerCase()} that only list you as an author.
+        </Notice>
+      )}
+
+      <Tabs
+        label="Views"
+        activation="manual"
+        tabs={tabs.map((t) => ({ id: t.id, label: t.label, count: countsFailed ? undefined : tabCount(t, counts, mineCounts) }))}
+        value={tab.id}
+        onChange={(id) => setParam("view", id, tabs[0].id)}
+      />
+
+      <div className="gl-content-list__toolbar">
+        <SortMenu value={sort.id} onChange={(id) => setParam("sort", id, SORT_OPTIONS[0].id)} />
+      </div>
+
+      <Pagination fetchData={fetchData} query={query} limitOptions={[10, 25, 50]}>
         {({ data, loading, error, retry }) => {
+          retryList.current = retry
           if (error) {
             return (
               <EmptyState
                 variant="error"
                 icon="close"
-                title={`Couldn't load ${displayTitle.toLowerCase()}`}
+                title={`Couldn't load ${plural.toLowerCase()}`}
                 description={errorMessage(error)}
                 action={
-                  <Button variation="primary" onClick={retry}>
+                  <Button variant="primary" onClick={retry}>
                     Try again
                   </Button>
                 }
               />
             )
           }
-          if (!loading && data.length === 0) return emptyState
-          return <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
+          if (!loading && data.length === 0) {
+            return (
+              <EmptyState
+                compact
+                icon={<DocumentIcon size={24} />}
+                title={`Nothing in ${tab.label}`}
+                description={`No ${plural.toLowerCase()} here right now.`}
+              />
+            )
+          }
+          return (
+            <>
+              {loading && (
+                <span role="status" className="gl-content-list__sr">
+                  Loading {plural.toLowerCase()}…
+                </span>
+              )}
+              <div className="gl-content-list__table">
+                <Table aria-label={plural} columns={columns} data={data} loading={loading} />
+              </div>
+              <PostCards posts={loading ? null : data} structure={structure} user={moderator ? null : user} />
+            </>
+          )
         }}
       </Pagination>
-    </Listing>
+    </section>
   )
 }
 
-export default Content
+// Phone width: the table becomes a list of links (the 375 board).
+// `user` is set for contributors, whose cards also say whether they can edit.
+function PostCards({ posts, structure, user }: { posts: Post[] | null; structure: "id" | "slug"; user: PermissionUser | null }) {
+  if (!posts) return null
+  return (
+    <ul className="gl-post-cards">
+      {posts.map((post) => (
+        <li key={post.id}>
+          <Link to={`/content/edit/${post.id}`} className="gl-post-cards__link">
+            <span className="gl-post-cards__title">{post.title || "Untitled"}</span>
+            <span className="gl-post-cards__meta">
+              <PostStatus status={post.post_status} iconPath={post.post_status} />
+              <Byline post={post} size={20} />
+              <LastEdited post={post} />
+            </span>
+            {user && (
+              <span className="gl-post-cards__access">{postAccess(user, post).canEdit ? "Can edit" : "View only"}</span>
+            )}
+            <span className="gl-content-list__sr">{postPath(post, structure)}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  )
+}
+

@@ -65,7 +65,7 @@ GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.usern
 SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
-    AND (@post_status::text = '' OR post_status = @post_status)
+    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id = 0 OR user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
@@ -131,11 +131,22 @@ SELECT
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
         WHERE pm.post_id = p.id
-    ) as meta
+    ) as meta,
+    -- The byline (#340): every user_posts author in credit order, for the
+    -- admin list's avatars. Public fields only (no email or role).
+    (
+        SELECT COALESCE(
+            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name) ORDER BY up."order", u.id),
+            '[]'::jsonb
+        )
+        FROM user_posts up
+        JOIN users u ON u.id = up.user_id
+        WHERE up.post_id = p.id
+    )::jsonb as authors
 FROM posts p
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = @post_status)
+    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
@@ -160,13 +171,23 @@ OFFSET @offset_count;
 SELECT COUNT(*) AS total FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
-    AND (@post_status::text = '' OR post_status = @post_status)
+    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id = 0 OR user_id = @user_id);
+
+-- name: CountPostsByStatus :many
+-- The admin list's status tabs (#340): one count per status, with the list's
+-- type and owner filters.
+SELECT post_status, COUNT(*) AS total FROM posts
+WHERE
+    (@post_type::text = '' OR post_type = @post_type)
+    AND (@user_id::bigint = 0 OR user_id = @user_id)
+GROUP BY post_status
+ORDER BY post_status;
 
 -- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts
 WHERE post_type = @post_type
-    AND (@post_status::text = '' OR post_status = @post_status);
+    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')));
 
 
 -- name: ListPostsWithAllMeta :many
@@ -204,7 +225,7 @@ LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = @post_status)
+    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.

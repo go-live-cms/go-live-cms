@@ -47,6 +47,13 @@ function Pagination<T, Q>({
     setError(null)
     fetchData({ limit, offset, ...query }, token)
       .then((res) => {
+        // The page emptied under us (its last rows were deleted or moved to another
+        // tab): go to what is now the last page instead of showing an empty one.
+        const lastPage = Math.max(0, Math.ceil(res.total / limit) - 1) * limit
+        if (isMounted && res.data.length === 0 && offset > lastPage) {
+          setOffset(lastPage)
+          return
+        }
         if (isMounted) {
           setData(res.data)
           setTotal(res.total)

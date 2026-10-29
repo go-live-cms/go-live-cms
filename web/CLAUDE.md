@@ -106,6 +106,13 @@ are the most fragile part of the codebase. **Before editing anything under
   (`lib/errorPages.ts`) maps an `ApiError` to 404 / 403 / the generic page, whose error
   ID is `ApiError.requestId` (the API's `request_id`). Pages that fail their main load
   render `<ErrorPage error={…}>` or throw into the `ErrorBoundary`, which does the same.
+- **Posts, Pages and Home (#340):** the list rules (status tabs and counts, the
+  contributor's "Your access", row actions, sort, "last edited") live in
+  `lib/contentList.ts`, the Pages tree in `lib/pageTree.ts` (both tested). Counts come from
+  `GET /posts/counts`; `status` takes a comma list, and "All" is `draft,published`
+  (archived posts are left out). List rows fetched with `with_meta=true` carry `authors`
+  (user_posts). Hierarchical types render `pages/Pages.tsx`, which loads every page for
+  the tree. Features without a backend yet stay hidden (comments at the top of each page).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 
