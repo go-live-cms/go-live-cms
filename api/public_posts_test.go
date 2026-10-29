@@ -32,10 +32,10 @@ func listRows(n int) []db.ListPostsWithMetaRow {
 }
 
 func TestGetPublicPostsByType(t *testing.T) {
-	countParams := db.CountFilteredPostsParams{PostType: "post", PostStatus: "published", UserID: int64(0)}
+	countParams := db.CountFilteredPostsParams{PostType: "post", PostStatus: "published"}
 	listParams := func(offset, limit int32) db.ListPostsWithMetaParams {
 		return db.ListPostsWithMetaParams{
-			PostType: "post", PostStatus: "published", UserID: int64(0),
+			PostType: "post", PostStatus: "published",
 			SortColumn: "created_at", SortDirection: "desc",
 			OffsetCount: offset, LimitCount: limit,
 		}

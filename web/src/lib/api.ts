@@ -93,6 +93,15 @@ export async function getPostById(id: string | number): Promise<{ post: Post }> 
   return apiCall(`/posts/${id}`)
 }
 
+// The post with this id, or null when the API answers 404. Other failures throw, so
+// a caller can tell "no such post" from "the API is down".
+export async function findPostById(id: string | number): Promise<Post | null> {
+  const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(String(id))}`)
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error(`HTTP ${response.status} loading post ${id}`)
+  return (await response.json()).post ?? null
+}
+
 export async function getPostBySlug(slug: string): Promise<{ post: Post }> {
   return apiCall(`/posts/slug/${slug}`)
 }

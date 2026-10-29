@@ -66,7 +66,7 @@ SELECT id, title, description, user_id, username, url, post_type, post_status, p
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
     AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id = 0 OR user_id = @user_id)  -- Add user filter
+    AND (@user_id::bigint = 0 OR user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -147,7 +147,7 @@ FROM posts p
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
+    AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -172,7 +172,7 @@ SELECT COUNT(*) AS total FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
     AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id = 0 OR user_id = @user_id);
+    AND (@user_id::bigint = 0 OR user_id = @user_id);
 
 -- name: CountPostsByStatus :many
 -- The admin list's status tabs (#340): one count per status, with the list's
@@ -226,7 +226,7 @@ LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
+    AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts

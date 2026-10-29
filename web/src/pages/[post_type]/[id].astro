@@ -1,5 +1,5 @@
 ---
-import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl, getPostTaxonomyTerms } from '../../lib/api'
+import { getPostsByType, getPostById, findPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl, getPostTaxonomyTerms } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
 import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
@@ -87,13 +87,17 @@ const typeIsPublic = !publicTypes || publicTypes.includes(postType)
 // /page/N/ is also page N of the front page (#349). Pages keep their URLs: a published
 // page with id N wins, and only otherwise is it the front page's (rendered by
 // src/pages/index.astro, with the page number in Astro.locals). Before the type check,
-// so the front page pages even with the page type switched off.
+// so the front page pages even with the page type switched off. Only a 404 means "no
+// such page": an API error must not turn a real page's URL into a list (it throws, 500).
+let pagePost: Post | undefined
 if (postType === 'page' && parsePageSegment(id) !== null) {
-  const existing = typeIsPublic ? await getPostById(id).catch(() => null) : null
-  const isPage = existing?.post?.post_status === 'published' && existing.post.post_type === 'page'
-  if (!isPage) {
+  const existing = typeIsPublic ? await findPostById(id) : null
+  if (existing?.post_status === 'published' && existing.post_type === 'page') {
+    pagePost = existing
+  } else {
     const request = resolveListRequest(Astro.url, '/', id)
-    if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+    // Temporary: whether /page/N is a page can change when one is published.
+    if (request.kind === 'redirect') return Astro.redirect(request.location, 302)
     if (request.kind === 'notFound') return new Response(null, { status: 404 })
     Astro.locals.listPageNumber = request.page
     return Astro.rewrite('/')
@@ -103,12 +107,13 @@ if (!typeIsPublic) {
   return new Response(null, { status: 404 })
 }
 
-let fullPost: Post | undefined = post
+// A page found above is already fresh: don't fetch it again.
+let fullPost: Post | undefined = post ?? pagePost
 
 // Determine if ID is numeric (ID-based) or not (slug-based)
 const isNumeric = /^\d+$/.test(id)
 
-if (!post) {
+if (!fullPost) {
   console.error(`Post not found in props for ${postType} ID/slug:`, id)
   
   try {

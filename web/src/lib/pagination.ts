@@ -34,7 +34,7 @@ export function pagePath(basePath: string, n: number): string {
 // Newer is the page before (lists run newest first), Older the one after.
 export function pageLinks(basePath: string, page: number, totalPages: number): PageLinks {
   return {
-    newer: page > 1 ? pagePath(basePath, Math.min(page - 1, Math.max(totalPages, 1))) : undefined,
+    newer: page > 1 ? pagePath(basePath, page - 1) : undefined,
     older: page < totalPages ? pagePath(basePath, page + 1) : undefined,
   }
 }

@@ -133,7 +133,9 @@ func TestListPostsWithMetaAuthors(t *testing.T) {
 }
 
 // The public lists (#349) count with the page query's filters: only the type's
-// published posts, and the pages together hold exactly total rows.
+// published posts, and the pages together hold exactly total rows. UserID is left
+// unset on purpose: before user_id was cast to bigint, sqlc typed it interface{}
+// and the zero value went out as NULL, which matched no row.
 func TestPublishedTotalMatchesPages(t *testing.T) {
 	postType := fmt.Sprintf("pagetotal-%d", time.Now().UnixNano())
 	owner := createTestUser(t)
@@ -141,7 +143,7 @@ func TestPublishedTotalMatchesPages(t *testing.T) {
 	createStatusFixtures(t, postType+"-x", owner, []string{"published", "published"}) // another type
 
 	total, err := testQueries.CountFilteredPosts(context.Background(), CountFilteredPostsParams{
-		PostType: postType, PostStatus: "published", UserID: int64(0),
+		PostType: postType, PostStatus: "published",
 	})
 	require.NoError(t, err)
 	require.Equal(t, int64(5), total)
@@ -150,7 +152,7 @@ func TestPublishedTotalMatchesPages(t *testing.T) {
 	const perPage = 2
 	for offset := int32(0); offset < 8; offset += perPage {
 		rows, err := testQueries.ListPostsWithMeta(context.Background(), ListPostsWithMetaParams{
-			PostType: postType, PostStatus: "published", UserID: int64(0),
+			PostType: postType, PostStatus: "published",
 			SortColumn: "created_at", SortDirection: "desc", OffsetCount: offset, LimitCount: perPage,
 		})
 		require.NoError(t, err)

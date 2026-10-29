@@ -32,7 +32,7 @@ const slots = pageWindow(page, totalPages)
         <a href={pagePath(basePath, slot)} class="page-link page-num">{slot}</a>
       ),
     )}
-    <span class="page-status">Page {Math.min(page, totalPages)} of {totalPages}</span>
+    <span class="page-status">Page {page} of {totalPages}</span>
     {links.older ? <a href={links.older} class="page-link" rel="next">Older →</a> : <span class="page-link" aria-disabled="true">Older →</span>}
   </nav>
 )}
