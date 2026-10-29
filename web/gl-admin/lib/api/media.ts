@@ -2,7 +2,7 @@ import type { FocalPoint, Media, MediaSortOption, MediaVariantName, PaginationPa
 import { apiCall, authenticatedFetch, getMediaURL } from "../api"
 import { apiErrorFromResponse, friendlyApiMessage } from "./errors"
 import { buildUrl } from "./utils"
-import type { Post } from "./types"
+import type { MediaPostLink } from "../mediaLibrary"
 
 export interface MediaQueryParams extends PaginationParams {
   sort?: MediaSortOption
@@ -90,12 +90,12 @@ export async function deleteMedia(id: number, token?: string): Promise<any> {
   return response.json()
 }
 
-export async function getMediaPosts(mediaId: number): Promise<ApiResponse<Post>> {
+// getMediaPosts lists the posts linking media `mediaId` through post_media: its
+// featured image (media_order 0) and the image blocks the collab store syncs (> 0).
+// A post using it both ways has a row for each; see usedInRows in lib/mediaLibrary.ts.
+export async function getMediaPosts(mediaId: number): Promise<MediaPostLink[]> {
   const response = await apiCall(`/media/${mediaId}/posts`)
-  return {
-    data: response.posts || [],
-    meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
-  }
+  return response.posts || []
 }
 
 export class MediaUploadError extends Error {

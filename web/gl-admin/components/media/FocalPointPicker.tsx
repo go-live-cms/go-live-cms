@@ -1,5 +1,7 @@
 import React from "react"
 import type { FocalPoint } from "@gl-admin/lib/types"
+import { CROP_PREVIEWS, focalObjectPosition } from "@gl-admin/lib/mediaLibrary"
+import "@gl-admin/assets/styles/components/media/focal-point.scss"
 
 // The focal point (#255) is the part of an image to keep in view when the
 // public site crops it (object-fit: cover + object-position). It is stored as
@@ -85,14 +87,45 @@ const FocalPointPicker: React.FC<Props> = ({ src, alt, value, onChange, classNam
     >
       <img src={src} alt={alt} className="focal-point-picker__image" draggable={false} />
       {value && (
-        <span
-          className="focal-point-picker__marker"
-          style={{ left: `${value.x * 100}%`, top: `${value.y * 100}%` }}
-          aria-hidden="true"
-        />
+        <>
+          <span
+            className="focal-point-picker__marker"
+            style={{ left: `${value.x * 100}%`, top: `${value.y * 100}%` }}
+            aria-hidden="true"
+          />
+          <span
+            className="focal-point-picker__dot"
+            style={{ left: `${value.x * 100}%`, top: `${value.y * 100}%` }}
+            aria-hidden="true"
+          />
+        </>
       )}
     </div>
   )
 }
 
 export default FocalPointPicker
+
+// FocalCropPreviews shows how themes crop the image around the point: the same
+// object-fit: cover + object-position the public ImageBlock uses.
+export const FocalCropPreviews: React.FC<{ src: string; value: FocalPoint | null }> = ({ src, value }) => (
+  <div className="focal-crops">
+    <span className="focal-crops__label" id="focal-crops-label">
+      How it crops
+    </span>
+    <div className="focal-crops__list" role="list" aria-labelledby="focal-crops-label">
+      {CROP_PREVIEWS.map((crop) => (
+        <figure key={crop.label} className="focal-crops__item" role="listitem">
+          <img
+            src={src}
+            alt=""
+            className="focal-crops__image"
+            style={{ width: crop.width, height: crop.height, objectPosition: focalObjectPosition(value) }}
+            draggable={false}
+          />
+          <figcaption className="focal-crops__caption">{crop.label}</figcaption>
+        </figure>
+      ))}
+    </div>
+  </div>
+)

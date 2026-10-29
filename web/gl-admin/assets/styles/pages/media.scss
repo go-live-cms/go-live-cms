@@ -1,392 +1,642 @@
-@use "@gl-admin/assets/styles/variables";
-@use "@gl-admin/assets/styles/mixins";
+// The media library and media detail pages (#342): the "Media library", "Media · empty",
+// "Media · loading" and "Media detail" boards. Tiles and the grid are in
+// components/media/media-card.scss, the focal point picker in focal-point.scss.
 
-.gl-admin {
-  &-media {
-    // Wraps so the bulk-select count or a narrow viewport can't push the
-    // buttons off-screen.
-    &-header {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      justify-content: space-between;
+.gl-media-page {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-6);
+  margin: 0 auto;
+  max-width: 1440px;
+  width: 100%;
+}
 
-      &-right {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-      }
+.gl-media {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
 
-      &-left {
-        align-items: center;
-        display: flex;
-        gap: 2rem;
-      }
+  // A file dragged over a library that already has files.
+  &.is-drag-over {
+    border-radius: var(--radius-xl);
+    outline: 2px dashed var(--accent-border);
+    outline-offset: var(--space-2);
+  }
 
-      &__filters {
-        align-items: center;
-        display: flex;
-        gap: 2rem;
-      }
+  &__header {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
 
-      &__search {
-        align-items: center;
-        display: flex;
-        gap: 0;
-
-        &-input {
-          border: 1px solid var(--border-color);
-          border-radius: 4px 0 0 4px;
-          border-right: none;
-          font-size: 0.9rem;
-          min-width: 200px;
-          padding: 0.5rem 1rem;
-          transition: border-color 0.2s ease;
-
-          &:focus {
-            border-color: var(--selected-border-color);
-            outline: none;
-          }
-
-          &::placeholder {
-            color: var(--text-quinary);
-          }
-        }
-
-        &-btn {
-          align-items: center;
-          background: #0073aa;
-          border: 1px solid #0073aa;
-          border-radius: 0 4px 4px 0;
-          color: white;
-          cursor: pointer;
-          display: flex;
-          justify-content: center;
-          padding: 0.5rem 1rem;
-          transition: background-color 0.2s ease;
-
-          &:hover:not(:disabled) {
-            background: #005a87;
-          }
-
-          &:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-          }
-        }
-      }
-
-      &__button-wrapper {
-        align-items: center;
-        display: flex;
-        gap: 1rem;
-      }
-
-      &__filter,
-      &__sort {
-        background: none;
-        border: none;
-        color: inherit;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: inherit;
-        font-weight: inherit;
-        line-height: inherit;
-
-        &-label {
-          margin-right: 0.5rem;
-        }
-
-        &-wrapper {
-          color: var(--text-secondary);
-          font-family: inherit;
-          font-size: 1rem;
-          font-style: normal;
-          font-weight: 500;
-          line-height: 145%;
-        }
-      }
-    }
-
-    &__upload-area {
-      background: #ebeae7;
-      border-radius: 8px;
-      box-shadow: var(--box-shadow) inset;
-      height: 0;
-      margin: 2.5rem 0;
-      opacity: 0;
-      overflow: hidden;
-      padding: 0 2rem;
-      text-align: center;
-      transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease 0.1s,
-        padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      transition: all 0.3s ease;
-
-      &--active {
-        height: auto;
-        margin: 2.5rem 0 5rem;
-        min-height: 200px;
-        opacity: 1;
-        padding: 2rem;
-      }
-
-      &--animating {
-        height: 200px;
-      }
-
-      &--dragover {
-        background: var(--upload-area-dragover-background);
-        border: 2px solid var(--upload-area-dragover-border-color);
-        transform: scale(1.02);
-        transition: background 0.2s ease, border 0.2s ease, transform 0.2s ease,
-          height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      &-header {
-        h3 {
-          color: #1d2327;
-          font-size: 1.5rem;
-          font-weight: 600;
-          margin: 0 0 1rem;
-          transform: translateY(10px);
-          transition: transform 0.3s ease 0.2s;
-        }
-
-        > div {
-          align-items: center;
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-          transform: translateY(10px);
-          transition: transform 0.3s ease 0.25s;
-
-          span {
-            color: var(--text-quaternary);
-            font-size: 1rem;
-            font-weight: 500;
-          }
-        }
-
-        small {
-          color: var(--text-quaternary);
-          display: block;
-          font-size: 0.875rem;
-          margin-top: 1rem;
-          transform: translateY(10px);
-          transition: transform 0.3s ease 0.3s;
-        }
-      }
-
-      &--active &-header {
-        h3,
-        > div,
-        small {
-          transform: translateY(0);
-        }
-      }
-
-      &-button-wrapper {
-        align-items: center;
-        display: flex;
-        gap: 0.75rem;
-      }
-    }
-
-    &__upload-progress {
-      background: var(--background);
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      margin: 1rem 0;
-      padding: 1rem;
-
-      &--active {
-        display: block !important;
-      }
-    }
-
-    &__progress-item {
-      align-items: center;
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 0.75rem;
-      padding: 0.5rem 0;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-
-    &__progress-info {
-      flex: 1;
-      min-width: 0;
-
-      .gl-admin-media__file-name {
-        color: var(--text-primary);
-        display: block;
-        font-weight: 500;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .gl-admin-media__file-size {
-        color: var(--text-quaternary);
-        display: block;
-        font-size: 0.875rem;
-        margin-top: 0.25rem;
-      }
-    }
-
-    &__progress-bar {
-      background: var(--sidebar-background);
-      border-radius: 2px;
-      flex: 2;
-      height: 8px;
-      overflow: hidden;
-      position: relative;
-
-      .gl-admin-media__progress-fill {
-        background: #00a32a;
-        height: 100%;
-        transition: width 0.3s ease;
-        width: 0%;
-
-        &--error {
-          background: #d63638;
-        }
-
-        &--warning {
-          background: #dba617;
-        }
-      }
-    }
-
-    &__progress-status {
-      color: var(--text-quaternary);
-      font-size: 0.875rem;
-      font-weight: 500;
-      min-width: 80px;
-      text-align: right;
-
-      &--success {
-        color: #00a32a;
-      }
-
-      &--error {
-        color: #d63638;
-      }
-
-      &--warning {
-        color: #dba617;
-      }
-    }
-
-    // Cards keep a minimum width and the grid drops columns as space shrinks,
-    // instead of a fixed column count that squashes cards at narrow widths.
-    // min() lets a single card shrink below the minimum on very narrow screens.
-    &__grid {
-      --media-card-min-width: 12.5rem;
-
-      display: grid;
-      gap: 1rem;
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--media-card-min-width)), 1fr));
-      padding: 1rem;
-    }
-
-    &__container {
-      margin-top: 4.2rem;
-
-      &--with-upload {
-        .empty-state {
-          display: none;
-        }
-      }
-    }
-
-    &__load-more-section {
-      align-items: center;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      margin-top: 2rem;
-      padding: 2rem 0;
-    }
-
-    &__pagination-info {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-    }
-
-    &__load-more-btn {
-      min-width: 120px;
-
-      &:disabled {
-        cursor: not-allowed;
-        opacity: 0.6;
-      }
-    }
-
-    &__end-message {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-      font-style: italic;
+    h1 {
+      font-size: var(--type-title);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: var(--type-title-lh);
       margin: 0;
     }
   }
+
+  &__count {
+    color: var(--text-secondary);
+  }
+
+  &__spacer {
+    flex: 1;
+  }
+
+  &__toolbar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 32px;
+  }
+
+  &__bulk-count {
+    font-weight: 500;
+    padding-right: var(--space-2);
+  }
+
+  &__search {
+    align-items: center;
+    background: var(--background);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+    color: var(--text-secondary);
+    display: flex;
+    flex: 1 1 220px;
+    gap: var(--space-2);
+    height: 32px;
+    max-width: 320px;
+    padding: 0 10px;
+
+    svg {
+      flex: none;
+    }
+
+    input {
+      background: transparent;
+      border: 0;
+      color: var(--text-primary);
+      flex: 1;
+      font: inherit;
+      min-width: 0;
+      outline: none;
+
+      &::placeholder {
+        color: var(--text-placeholder);
+      }
+    }
+
+    &:focus-within {
+      border-color: var(--focus-ring);
+      box-shadow: 0 0 0 1px var(--focus-ring);
+    }
+  }
+
+  &__more {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4) 0;
+  }
+
+  &__more-info {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+  }
+
+  // The segmented type filter scrolls sideways rather than wrap mid-control.
+  .gl-segmented {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  @media (width <= 768px) {
+    &__search {
+      flex-basis: 100%;
+      max-width: none;
+    }
+  }
 }
 
-// admin-main's fixed 6.25rem side padding leaves the grid no room on narrow
-// screens; scale it down on the media route so cards keep a usable width.
-@media (width <= 1200px) {
-  section.admin-main.admin-main--media {
-    padding: 2rem;
+// The empty library: a drop target with one action.
+.gl-media-dropzone {
+  align-items: center;
+  background: var(--background-subtle);
+  border: 1.5px dashed var(--control-border);
+  border-radius: var(--radius-xl);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  justify-content: center;
+  min-height: 480px;
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+
+  &.is-over {
+    background: var(--accent-subtle);
+    border-color: var(--accent-border);
   }
 
-  .gl-admin-media-header {
-    &__filters,
-    &__button-wrapper {
-      flex-wrap: wrap;
-      gap: 1rem;
+  &__icon {
+    align-items: center;
+    background: var(--accent-subtle);
+    border-radius: var(--radius-xl);
+    color: var(--text-selected);
+    display: flex;
+    height: 48px;
+    justify-content: center;
+    width: 48px;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    max-width: 440px;
+
+    h2 {
+      font-size: var(--type-subtitle);
+      font-weight: 600;
+      line-height: var(--type-subtitle-lh);
+      margin: 0;
     }
+
+    p {
+      color: var(--text-secondary);
+      margin: 0;
+    }
+  }
+
+  @media (width <= 768px) {
+    min-height: 320px;
   }
 }
 
-@media (width <= 768px) {
-  section.admin-main.admin-main--media {
-    padding: 1.5rem 0.75rem;
+// The side panel beside the grid; at phone width it's a Drawer instead.
+.gl-media-panel {
+  background: var(--background);
+  border-left: 1px solid var(--border-color);
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 320px;
+  flex-direction: column;
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  position: sticky;
+  top: 0;
+
+  &__header {
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    gap: var(--space-2);
+    height: 48px;
+    padding: 0 var(--space-2) 0 var(--space-4);
   }
 
-  // Keep room for the bulk-select checkbox, which sits 8px outside the card.
-  .gl-admin-media__grid {
-    padding: 1rem 0.5rem;
+  &__title {
+    flex: 1;
+    font-size: var(--type-body);
+    font-weight: 600;
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .gl-admin-media-header {
+  &__edit {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    display: flex;
+    font-size: var(--type-label);
+    font-weight: 500;
+    height: 28px;
+    padding: 0 var(--space-2);
+    text-decoration: none;
+    white-space: nowrap;
+
+    &:hover {
+      background: var(--background-hover);
+    }
+  }
+
+  &__body {
+    display: flex;
     flex-direction: column;
-
-    &-right {
-      align-items: flex-start;
-      flex-direction: column;
-      width: 100%;
-    }
-
-    &__filters,
-    &__filter-wrapper,
-    &__sort-wrapper,
-    &__button-wrapper {
-      max-width: 100%;
-      min-width: 0;
-    }
-
-    &__filter {
-      max-width: 100%;
-      min-width: 0;
-      width: 100%;
-    }
+    gap: var(--space-5);
+    padding: var(--space-4);
   }
 
-  .gl-admin-media__upload-area-button-wrapper {
-    flex-direction: column;
+  &__preview {
+    align-items: center;
+    aspect-ratio: 16 / 10;
+    background: var(--background-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 0 0 1px var(--border-color);
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  &__image {
+    display: block;
+    height: 100%;
+    object-fit: contain;
     width: 100%;
+  }
+
+  &__actions {
+    display: flex;
+    gap: var(--space-2);
+
+    > .gl-button:not(.gl-button--icon-only) {
+      flex: 1;
+      min-width: 0;
+      padding-inline: var(--space-2);
+    }
+  }
+
+  &__delete {
+    color: var(--danger-text);
+  }
+
+  &__alt {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  &__alt-actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  &__label {
+    font-size: var(--type-label);
+    font-weight: 500;
+  }
+
+  &__value {
+    color: var(--text-secondary);
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+// The Drawer version's body: the panel's sections without the column chrome.
+.gl-drawer .gl-media-panel__body {
+  padding: 0;
+}
+
+.gl-drawer .gl-media-panel__edit {
+  justify-content: center;
+}
+
+// Type / Size / Dimensions / Uploaded.
+.gl-media-facts {
+  display: grid;
+  font-size: var(--type-label);
+  gap: var(--space-2) var(--space-4);
+  grid-template-columns: auto 1fr;
+  margin: 0;
+
+  dt {
+    color: var(--text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &--stacked {
+    gap: var(--space-1);
+    grid-template-columns: 1fr;
+
+    dd + dt {
+      margin-top: var(--space-3);
+    }
+  }
+}
+
+.gl-used-in {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__heading {
+    font-size: var(--type-label);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &--compact &__heading {
+    font-weight: 500;
+  }
+
+  &__note {
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    margin: 0;
+  }
+
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__link {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    display: flex;
+    gap: 10px;
+    margin: 0 calc(-1 * var(--space-2));
+    min-height: 44px;
+    padding: var(--space-1) var(--space-2);
+    text-decoration: none;
+
+    &:hover {
+      background: var(--background-hover);
+    }
+
+    .gl-pill {
+      white-space: nowrap;
+    }
+  }
+
+  &--compact &__link {
+    font-size: var(--type-label);
+    min-height: 32px;
+  }
+
+  &__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__how {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+}
+
+// Media detail.
+.gl-media-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin: 0 auto;
+  max-width: 1200px;
+  width: 100%;
+
+  &__bar {
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 48px;
+    padding-bottom: var(--space-3);
+  }
+
+  &__crumbs {
+    align-items: center;
+    display: flex;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  &__crumb {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    display: flex;
+    height: 28px;
+    padding: 0 6px;
+    text-decoration: none;
+
+    &:hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+  }
+
+  &__sep {
+    color: var(--text-placeholder);
+  }
+
+  &__name {
+    font-size: var(--type-body);
+    font-weight: 400;
+    margin: 0;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 6px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // The format tag, inline instead of on a thumbnail.
+  &__tag.gl-media-tile__tag {
+    box-shadow: none;
+    flex: none;
+    position: static;
+  }
+
+  &__delete {
+    color: var(--danger-text);
+  }
+
+  &__columns {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-7);
+  }
+
+  &__visual {
+    display: flex;
+    flex: 999 1 480px;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 720px;
+    min-width: 0;
+  }
+
+  &__section-head {
+    align-items: baseline;
+    display: flex;
+    gap: var(--space-3);
+    justify-content: space-between;
+
+    h2 {
+      font-size: var(--type-subtitle);
+      font-weight: 600;
+      line-height: var(--type-subtitle-lh);
+      margin: 0;
+    }
+  }
+
+  &__focal-value {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--type-footnote);
+  }
+
+  &__hint {
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  &__file {
+    align-items: center;
+    background: var(--background-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 0 0 1px var(--border-color);
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    justify-content: center;
+    min-height: 240px;
+    overflow-wrap: anywhere;
+    padding: var(--space-5);
+    text-align: center;
+  }
+
+  &__side {
+    display: flex;
+    flex: 1 1 340px;
+    flex-direction: column;
+    gap: 18px;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  &__save {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  &__rule {
+    background: var(--border-color);
+    border: 0;
+    height: 1px;
+    margin: 0;
+    width: 100%;
+  }
+
+  @media (width <= 768px) {
+    gap: var(--space-5);
+
+    &__columns {
+      gap: var(--space-6);
+    }
+
+    // Download and Delete stay on the breadcrumb's line if they fit, else wrap under it.
+    &__crumbs {
+      flex: 1 1 100%;
+    }
+  }
+}
+
+.gl-media-replace {
+  align-items: center;
+  border: 1px dashed var(--control-border);
+  border-radius: var(--radius-xl);
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: 14px var(--space-4);
+
+  > svg {
+    flex: none;
+  }
+
+  &__text {
+    display: flex;
+    flex: 1 1 220px;
+    flex-direction: column;
+  }
+
+  &__title {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  &__hint {
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__progress {
+    accent-color: var(--accent-solid);
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  &__error {
+    color: var(--danger-text);
+    flex-basis: 100%;
+    font-size: var(--type-label);
+    margin: 0;
+  }
+}
+
+// Below 1100px the panel would squeeze the grid; it overlays as a Drawer at phone
+// width (Media.tsx), and between the two the grid simply gets narrower.
+@media (width <= 1100px) {
+  .gl-media-page {
+    gap: var(--space-4);
+  }
+
+  .gl-media-panel {
+    flex-basis: 280px;
   }
 }

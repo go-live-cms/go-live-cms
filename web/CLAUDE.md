@@ -71,7 +71,7 @@ are the most fragile part of the codebase. **Before editing anything under
   (`thumb`/`medium`/`large`, each `{path,width,height,…}`; absent when the image is
   smaller) and `focal_point` (`{x,y}` 0..1 or null). Admin grids/pickers use
   `getMediaVariantPreviewURL(media, size)` (falls back to larger, then the original);
-  the edit modal sets the focal point with `FocalPointPicker`. Image blocks keep
+  the media detail page sets the focal point with `FocalPointPicker`. Image blocks keep
   storing the original `src`; the public `ImageBlock` reads the API-attached
   `doc.media[mediaId]` (`blocks/utils/responsiveImage.ts`) for `srcset`/`sizes`/
   `width`/`height`/`object-position`, all URLs through `safeImageSrc`.
@@ -121,6 +121,13 @@ are the most fragile part of the codebase. **Before editing anything under
   warns on unload while the provider has unsynced changes or the connection is down. Editor
   styles use the design tokens only (never `prefers-color-scheme`). Features in the design
   without a backend stay hidden (comments at the top of each file; table on #341).
+- **Media library and detail (#342):** `/media` (grid, side panel for `?file=id`, at
+  ≤768px a Drawer) and `/media/:id` (focal point with crop previews, Replace, fields,
+  "Used in"). The rules (kinds, tags, filters, "Used in" rows, object-position) live in
+  `lib/mediaLibrary.ts` (tested). "Used in" is `GET /media/:id/posts`, i.e. `post_media`:
+  the featured image (order 0) and the image blocks the collab store syncs (> 0), merged
+  per post. Write access is `canWriteMedia` (`lib/roles.ts`). Hidden until #325: the
+  "No alt text" tag/filter and "Decorative image".
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

@@ -1,0 +1,96 @@
+// The focal point picker and its crop previews (#255, restyled in #342).
+
+.focal-point-picker {
+  // The box is the image itself (no letterboxing), so a click's position inside it is
+  // the point on the image.
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px var(--border-color);
+  display: inline-block;
+  line-height: 0;
+  max-width: 100%;
+  overflow: hidden;
+  position: relative;
+
+  &--editable {
+    cursor: crosshair;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+  }
+
+  &__image {
+    display: block;
+    max-height: 520px;
+    max-width: 100%;
+    user-select: none;
+  }
+
+  &__marker,
+  &__dot {
+    border-radius: var(--radius-full);
+    box-sizing: border-box;
+    pointer-events: none;
+    position: absolute;
+    transform: translate(-50%, -50%);
+  }
+
+  // White on a dark outline: visible on any photo.
+  &__marker {
+    border: 2px solid #ffffff;
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 50%),
+      inset 0 0 0 1px rgb(0 0 0 / 50%);
+    height: 36px;
+    width: 36px;
+  }
+
+  &__dot {
+    background: #ffffff;
+    box-shadow: 0 0 0 1px rgb(0 0 0 / 50%);
+    height: 6px;
+    width: 6px;
+  }
+}
+
+.focal-crops {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+
+  &__label {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    font-weight: 500;
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__list {
+    align-items: flex-end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+  }
+
+  &__image {
+    background: var(--background-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 0 0 1px var(--border-color);
+    display: block;
+    object-fit: cover;
+  }
+
+  &__caption {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+}

@@ -60,6 +60,13 @@ export function canEditPost(user: PermissionUser | null | undefined, post: Permi
     return user.role?.toLowerCase() === "contributor" && post.user_id === user.id
 }
 
+// Editing, replacing or deleting a media file. Mirrors requireContentAuthor plus
+// canWriteMedia in api/auth_roles.go: moderators any file, contributors their own.
+export function canWriteMedia(user: PermissionUser | null | undefined, media: { user_id: number }): boolean {
+    if (!user || !canCreateContent(user.role)) return false
+    return isContentModerator(user.role) || media.user_id === user.id
+}
+
 // Live fields (title, slug, excerpt, featured image, …). Mirrors canEditPostDetails:
 // a contributor may change them only while their post isn't published.
 export function canEditPostDetails(user: PermissionUser | null | undefined, post: PermissionPost): boolean {

@@ -34,6 +34,7 @@ const NotFound = lazy(() => import("@gl-admin/pages/NotFound"))
 const Dashboard = lazy(() => import("@gl-admin/pages/Dashboard"))
 const ContentComponent = lazy(() => import("@gl-admin/pages/Content"))
 const Media = lazy(() => import("@gl-admin/pages/Media"))
+const MediaDetail = lazy(() => import("@gl-admin/pages/MediaDetail"))
 const Taxonomies = lazy(() => import("@gl-admin/pages/Taxonomies"))
 const Users = lazy(() => import("@gl-admin/pages/Users"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
@@ -89,6 +90,7 @@ function AppLayout() {
                 <Route path="/content/:typeName/new" element={<NewContent />} />
                 <Route path="/content/edit/:id" element={<EditContent />} />
                 <Route path="/media" element={<Media />} />
+                <Route path="/media/:id" element={<MediaDetail />} />
                 <Route path="/taxonomies" element={<Taxonomies />} />
                 {/* Admin-only pages (requireSiteAdmin in the API): others get the 403. */}
                 <Route path="/themes" element={<AdminOnly area="Themes"><Themes /></AdminOnly>} />
