@@ -9,6 +9,7 @@ import { CursorAwareness } from "./cursorAwareness"
 import { getSlashCommandItems } from "../blocks"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
+import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 
@@ -51,7 +52,9 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
         : []),
       schema.image,
       schema.textAlign,
+      schema.quoteCitation,
       schema.blockId,
+      BlockNodeViews,
       PasteSanitizer,
       Placeholder.configure({
         includeChildren: true,
@@ -66,6 +69,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               return ""
             case "image":
               return ""
+            case "imageCaption":
+              return "Write a caption…"
             case "heading":
               return headingLabel(node.attrs?.level)
             case "listItem":
@@ -87,6 +92,9 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       CharacterCount.configure({ limit: maxChars }),
       SlashCommandExtension.configure({
         suggestion: {
+          // No block commands inside an image caption (#346): it holds text only.
+          allow: ({ state, range }: { state: any; range: { from: number } }) =>
+            state.doc.resolve(range.from).parent.type.name !== "imageCaption",
           items: ({ query }: { query: string }) => {
             return getSlashCommandItems()
               .filter((item) => {

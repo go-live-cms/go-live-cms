@@ -113,7 +113,10 @@ export class MediaBlockManager {
     const imageNode = resolvedPos.nodeAfter
 
     if (imageNode && imageNode.type.name === "image") {
+      // Keep the other attrs (the width, #346); the caption is the node's content and
+      // stays too. The media's description is not copied into the caption.
       const transaction = state.tr.setNodeMarkup(imagePosition, imageNode.type, {
+        ...imageNode.attrs,
         src: imageUrl,
         alt: media.alt || media.description || "",
         title: media.name || "",

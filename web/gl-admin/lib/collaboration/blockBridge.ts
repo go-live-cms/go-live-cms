@@ -1,5 +1,15 @@
 import { Node as PMNode, Schema } from "prosemirror-model"
-import type { BlockDocV1, Block, BlockID } from "../blocks-spec"
+import {
+  BLOCKQUOTE_BLOCK_VERSION,
+  captionRuns,
+  IMAGE_BLOCK_VERSION,
+  isImageAlign,
+  normalizeCite,
+  type BlockDocV1,
+  type Block,
+  type BlockID,
+  type CaptionText,
+} from "../blocks-spec"
 import type { Editor } from "@tiptap/core"
 
 // Simple block id generator
@@ -115,16 +125,22 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         },
       }
 
-    case "blockquote":
+    case "blockquote": {
+      // `cite` is the block's attr, not the pm node's: the stored pm stays what it was
+      // before #346, and a pm `cite` can't disagree with it.
+      const pm = node.toJSON()
+      const { cite, ...pmAttrs } = pm.attrs ?? {}
       return {
         id,
         type: "blockquote",
-        version: 1,
+        version: BLOCKQUOTE_BLOCK_VERSION,
         attrs: {
-          pm: node.toJSON(),
+          pm: { ...pm, attrs: pmAttrs },
           text: node.textContent || undefined,
+          cite: normalizeCite(cite) ?? undefined,
         },
       }
+    }
 
     case "codeBlock":
       return {
@@ -149,12 +165,16 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
       return {
         id,
         type: "image",
-        version: 1,
+        version: IMAGE_BLOCK_VERSION,
         attrs: {
           src: node.attrs.src || undefined,
           alt: node.attrs.alt || undefined,
           title: node.attrs.title || undefined,
           mediaId: mediaIdOf(node.attrs.mediaId),
+          // Defaults are left out (#346), so an image nobody captioned or widened
+          // stores what it stored before.
+          caption: captionOf(node),
+          align: node.attrs.align !== "inline" && isImageAlign(node.attrs.align) ? node.attrs.align : undefined,
         },
       }
 
@@ -212,6 +232,34 @@ function mediaIdOf(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value.trim())
   return undefined
+}
+
+/**
+ * An image's caption for Block Spec (#346): the text runs of its `imageCaption` child,
+ * as ProseMirror JSON. Undefined when it has none or it's empty.
+ */
+function captionOf(image: PMNode): CaptionText[] | undefined {
+  const caption = image.firstChild
+  if (!caption || caption.type.name !== "imageCaption" || caption.content.size === 0) return undefined
+  return caption.content.toJSON() as CaptionText[]
+}
+
+/**
+ * The caption's runs as the `imageCaption` node's content: text only, only the caption
+ * marks, and only the mark attrs `schema` declares (nodeFromJSON throws on any other),
+ * so a caption the schema can't hold costs its marks or attrs, not the image.
+ */
+function captionToPM(caption: unknown, schema: Schema): any[] {
+  return captionRuns(caption).map((run) => {
+    const marks = run.marks
+      ?.filter((mark) => schema.marks[mark.type])
+      .map((mark) => {
+        const declared = schema.marks[mark.type].spec.attrs ?? {}
+        const attrs = Object.fromEntries(Object.entries(mark.attrs ?? {}).filter(([name]) => name in declared))
+        return Object.keys(attrs).length > 0 ? { type: mark.type, attrs } : { type: mark.type }
+      })
+    return marks && marks.length > 0 ? { ...run, marks } : { type: "text", text: run.text }
+  })
 }
 
 /**
@@ -395,16 +443,21 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
         content: block.attrs.text ? [{ type: "text", text: block.attrs.text }] : [],
       }
 
-    case "blockquote":
+    case "blockquote": {
+      // The block's `cite` wins over anything a pm node carries (see pmNodeToBlock). Set
+      // only when there is one: a schema without QuoteCitation still builds the quote.
+      const cite = normalizeCite(block.attrs.cite)
+      const citeAttrs = cite ? { cite } : {}
       if (block.attrs.pm) {
+        const { cite: _pmCite, ...pmAttrs } = block.attrs.pm.attrs ?? {}
         return {
           ...block.attrs.pm,
-          attrs: { ...block.attrs.pm.attrs, ...baseAttrs },
+          attrs: { ...pmAttrs, ...baseAttrs, ...citeAttrs },
         }
       }
       return {
         type: "blockquote",
-        attrs: baseAttrs,
+        attrs: { ...baseAttrs, ...citeAttrs },
         content: [
           {
             type: "paragraph",
@@ -412,6 +465,7 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
           },
         ],
       }
+    }
 
     case "code_block":
       return {
@@ -429,7 +483,8 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
         attrs: baseAttrs,
       }
 
-    case "image":
+    case "image": {
+      const caption = captionToPM(block.attrs.caption, ctx.schema)
       return {
         type: "image",
         attrs: {
@@ -438,8 +493,13 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
           alt: block.attrs.alt,
           title: block.attrs.title,
           mediaId: block.attrs.mediaId,
+          // Left to the schema's default ("inline") unless it's another valid width.
+          ...(isImageAlign(block.attrs.align) && block.attrs.align !== "inline" ? { align: block.attrs.align } : {}),
         },
+        // No caption, no child: an image without one looks exactly as before #346.
+        ...(caption.length > 0 ? { content: [{ type: "imageCaption", content: caption }] } : {}),
       }
+    }
 
     case "bullet_list":
       return {

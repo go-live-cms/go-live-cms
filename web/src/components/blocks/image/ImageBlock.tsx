@@ -1,5 +1,7 @@
 import React, { useContext } from "react"
+import { captionRuns, isImageAlign } from "@gl-admin/lib/blocks-spec"
 import type { BlockComponentProps } from "../types"
+import { renderContent } from "../utils/contentRenderer"
 import { blockMediaFor, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
 
 const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
@@ -16,7 +18,7 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
   // don't make it wait for lazy loading.
   const eager = isFirstImageBlock(doc, block.id)
 
-  return (
+  const img = (
     <img
       key={block.id}
       src={image.src}
@@ -30,6 +32,19 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
       alt={alt}
       title={title}
     />
+  )
+
+  // Caption and width (#346). An image with neither stays a bare <img>, as before.
+  // Only text runs and caption marks (the API sanitizer strips the rest too).
+  const caption = captionRuns(attrs?.caption)
+  const align = isImageAlign(attrs?.align) && attrs.align !== "inline" ? attrs.align : null
+  if (caption.length === 0 && !align) return img
+
+  return (
+    <figure key={block.id} className={align ? `align-${align}` : undefined}>
+      {img}
+      {caption.length > 0 && <figcaption>{renderContent(caption)}</figcaption>}
+    </figure>
   )
 }
 

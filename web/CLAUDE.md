@@ -147,6 +147,14 @@ are the most fragile part of the codebase. **Before editing anything under
   `lib/passwordRules.ts` (import-free, so pages render the hint server-side);
   `passwordRules.test.ts` fails if the API's `min=` differs. The invite preview returns
   `invited_by` `{id, name}` or null.
+- **Image caption/width, quote citation (#346):** image and blockquote are Block Spec v2
+  (`caption`, `align`; `cite`); the mapping and its rules are in
+  `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge notes). Public markup, which the
+  theme styles: an image with neither a caption nor a width stays a bare `<img>`;
+  otherwise `<figure class="align-wide|align-full">` (no class for inline) with
+  `<figcaption>`, and `<cite>` as the last child of `<blockquote>`. The image toolbar is
+  `components/editor/ui/ImageToolbar.tsx` (shown on a selected image; the text bubble
+  menu hides then, and in a caption shows only bold/italic/link).
 - **Default public theme (#345):** tokens live in `themes/default/theme.config.ts` and
   become CSS custom properties in `base.astro` (`tokens.ts`); `styles/theme.css` is plain
   CSS served as is and only reads `var(--…)` (`tokens.test.ts` checks 4.5:1 in both

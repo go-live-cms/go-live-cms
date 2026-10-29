@@ -121,6 +121,9 @@ export interface BlockConfig<TAttrs = any> {
   /** Block type identifier (matches Block.type) */
   type: string
 
+  /** The newest Block.version this renderer reads (older ones too). Default 1. */
+  version?: number
+
   /** Display name for the block */
   name: string
 
