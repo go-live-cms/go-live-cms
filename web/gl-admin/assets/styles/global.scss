@@ -6,15 +6,28 @@
   font-size: 16px;
 }
 
+// Default text is text-primary: the legacy text-secondary was near-black, but in
+// the design tokens it is slate-11, kept for meta and helper text.
 * {
   box-sizing: border-box;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   transition: 0.2s;
 }
 
 body {
   background: var(--background);
-  font-family: Inter, sans-serif;
+  font-family: var(--font-sans);
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono);
+}
+
+::selection {
+  background: var(--text-selection);
 }
 
 #admin {
