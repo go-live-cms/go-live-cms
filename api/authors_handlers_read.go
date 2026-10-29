@@ -79,7 +79,8 @@ func (server *Server) getPublicAuthor(c *gin.Context) {
 
 // listPublicAuthorPosts handles GET /public/authors/:username/posts?limit=&offset=:
 // the published posts the author is credited on, newest first, in the shape of
-// GET /posts?with_meta=true (rows carry meta and authors).
+// GET /posts?with_meta=true (rows carry meta and authors), plus the author, so
+// the author page needs this one call.
 func (server *Server) listPublicAuthorPosts(c *gin.Context) {
 	limit, offset, ok := parseLimitOffset(c, authorPostsDefaultLimit, authorPostsMaxLimit)
 	if !ok {
@@ -106,7 +107,8 @@ func (server *Server) listPublicAuthorPosts(c *gin.Context) {
 		posts[i] = toPostWithMetaResponse(db.ListPostsWithMetaRow(row))
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"posts": posts,
+		"author": authorProfileFromRow(author),
+		"posts":  posts,
 		"meta": gin.H{
 			"total":  author.PostCount,
 			"limit":  limit,

@@ -6,8 +6,8 @@ import { authorPath } from "@/lib/seo"
 
 export interface BylinePerson {
   name: string
-  // Avatar colour key: the username when we know it, else the owner's id.
-  key: string | number
+  // Avatar colour key: always the username, so a person keeps one colour everywhere.
+  key: string
   // The author page, for credited authors only (they're the ones with a page).
   href?: string
 }
@@ -27,7 +27,7 @@ export function bylinePeople(
   if (credited && credited.length > 0) {
     return credited.map((a) => ({ name: displayName(a), key: a.username, href: authorPath(a.username) }))
   }
-  return owner.username ? [{ name: owner.username, key: owner.user_id ?? owner.username }] : []
+  return owner.username ? [{ name: owner.username, key: owner.username }] : []
 }
 
 // What goes before the i-th of n names: "", ", " or " and " ("Ana, Luan and Priya").

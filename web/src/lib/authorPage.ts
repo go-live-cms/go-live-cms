@@ -18,23 +18,28 @@ export interface AuthorPageData {
   list: PostListData
 }
 
+
+// Like siteSettings: an unreachable API fails the call after a moment instead of
+// hanging the page (the post route then renders without the cards).
+const PUBLIC_API_TIMEOUT_MS = 5000
+
 // GET {API}/public{path}: the JSON body, or null for a 404. Anything else throws.
 async function getPublic<T>(path: string): Promise<T | null> {
-  const response = await fetch(`${SERVER_MEDIA_URL}/public${path}`, { headers: { Accept: "application/json" } })
+  const response = await fetch(`${SERVER_MEDIA_URL}/public${path}`, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(PUBLIC_API_TIMEOUT_MS),
+  })
   if (response.status === 404) return null
   if (!response.ok) throw new Error(`GET /public${path}: HTTP ${response.status}`)
   return (await response.json()) as T
 }
 
-export async function getPublicAuthor(username: string): Promise<{ author: AuthorProfile; post_count: number } | null> {
-  return getPublic(`/authors/${encodeURIComponent(username)}`)
-}
-
+// One page of an author's posts, with the author: null when they have no page.
 export async function getAuthorPosts(
   username: string,
   limit: number,
   offset: number,
-): Promise<{ posts: Post[]; meta: { total: number } } | null> {
+): Promise<{ author: AuthorProfile; posts: Post[]; meta: { total: number } } | null> {
   return getPublic(`/authors/${encodeURIComponent(username)}/posts?limit=${limit}&offset=${offset}`)
 }
 
@@ -57,19 +62,19 @@ export async function getPublicAuthors(): Promise<{ username: string; last_modif
 }
 
 // The author page's data, or null when the username has no page (unknown, or not
-// credited on anything published: the API answers both the same).
+// credited on anything published: the API answers both the same). The posts route
+// carries the author and the total, so this is one API call after the settings.
 export async function loadAuthorPage(username: string, page: number, siteUrl: string): Promise<AuthorPageData | null> {
-  const [profile, site] = await Promise.all([getPublicAuthor(username), getSiteSettings()])
-  if (!profile) return null
+  const site = await getSiteSettings()
   const perPage = site.postsPerPage
   const result = await getAuthorPosts(username, perPage, (page - 1) * perPage)
   if (!result) return null
   const structure = normalizeUrlStructure(site.urlStructure)
   const posts = await toListedPosts(result.posts ?? [], "post", structure, siteUrl)
-  const total = result.meta?.total ?? profile.post_count
+  const total = result.meta?.total ?? posts.length
   return {
-    author: profile.author,
-    postCount: profile.post_count,
+    author: result.author,
+    postCount: total,
     list: { posts, total, page, links: pageLinks(authorPath(username), page, perPage, total), siteTitle: site.title },
   }
 }

@@ -19,7 +19,8 @@ describe("bylinePeople", () => {
   })
 
   it("falls back to the owner, unlinked: they may not be credited on anything", () => {
-    expect(bylinePeople([], { user_id: 7, username: "owner" })).toEqual([{ name: "owner", key: 7 }])
+    // Keyed by username like credited authors, so the owner's colour matches theirs.
+    expect(bylinePeople([], { user_id: 7, username: "owner" })).toEqual([{ name: "owner", key: "owner" }])
     expect(bylinePeople(undefined, {})).toEqual([])
   })
 })

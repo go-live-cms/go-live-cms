@@ -33,11 +33,8 @@ describe("authorPath", () => {
 
 describe("loadAuthorPage", () => {
   it("loads the profile and one page of posts at their slug URLs", async () => {
-    const fetchMock = vi.fn(async (url: string) =>
-      url.includes("/posts?")
-        ? json(200, { posts: [row(3), row(4)], meta: { total: 5 } })
-        : json(200, { author, post_count: 5 }),
-    )
+    // One call: the posts route carries the author and the total.
+    const fetchMock = vi.fn(async () => json(200, { author, posts: [row(3), row(4)], meta: { total: 5 } }))
     vi.stubGlobal("fetch", fetchMock)
     const data = await loadAuthorPage("ana", 2, "https://example.org")
     expect(data?.author).toEqual(author)
@@ -45,7 +42,9 @@ describe("loadAuthorPage", () => {
     expect(data?.list.posts.map((p) => p.href)).toEqual(["/post/post-3", "/post/post-4"])
     expect(data?.list.links).toEqual({ newer: "/author/ana", older: "/author/ana?page=3" })
     expect(data?.list.siteTitle).toBe("Field Notes")
-    expect(fetchMock.mock.calls.map((c) => c[0])).toContain(`${SERVER_MEDIA_URL}/public/authors/ana/posts?limit=2&offset=2`)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect((fetchMock.mock.calls[0] as unknown[])[0]).toBe(`${SERVER_MEDIA_URL}/public/authors/ana/posts?limit=2&offset=2`)
+    expect(((fetchMock.mock.calls[0] as unknown[])[1] as RequestInit).signal).toBeInstanceOf(AbortSignal)
   })
 
   it("is null when the API has no page for the username (unknown or uncredited alike)", async () => {

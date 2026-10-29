@@ -235,6 +235,11 @@ export const MAX_SITEMAP_URLS = 50_000
 // published posts (drafts, including unpublished posts, and archived posts are
 // skipped even if the API returned them). Author pages (#350) come last.
 export async function collectSitemapEntries(siteUrl: string, source: SitemapSource): Promise<SitemapEntry[]> {
+  // Independent of the posts walk, so it runs alongside it.
+  const authorsPromise = source.getAuthors?.() ?? Promise.resolve([])
+  // If the posts walk fails first, its error is the one reported; don't leave this
+  // rejection unhandled meanwhile (awaiting it below still rethrows).
+  authorsPromise.catch(() => {})
   const [types, structure] = await Promise.all([source.getPublicPostTypeNames(), source.getUrlStructure()])
   // Types are fetched in parallel (each still pages sequentially), then joined
   // in the API's type order.
@@ -258,7 +263,7 @@ export async function collectSitemapEntries(siteUrl: string, source: SitemapSour
     }),
   )
 
-  const authors = (await source.getAuthors?.()) ?? []
+  const authors = await authorsPromise
   const authorEntries = authors.map((a) => ({ loc: absoluteUrl(siteUrl, authorPath(a.username)), lastmod: toW3cDate(a.last_modified) }))
 
   return [{ loc: absoluteUrl(siteUrl, "/") }, ...perType.flat(), ...authorEntries].slice(0, MAX_SITEMAP_URLS)

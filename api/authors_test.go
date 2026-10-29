@@ -185,8 +185,9 @@ func TestListPublicAuthorPostsAPI(t *testing.T) {
 		recorder := getPublic(t, store, "/public/authors/anacosta/posts?limit=5&offset=10")
 		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 		var body struct {
-			Posts []PostWithMetaResponse `json:"posts"`
-			Meta  struct {
+			Author json.RawMessage        `json:"author"`
+			Posts  []PostWithMetaResponse `json:"posts"`
+			Meta   struct {
 				Total  int64 `json:"total"`
 				Limit  int64 `json:"limit"`
 				Offset int64 `json:"offset"`
@@ -194,6 +195,7 @@ func TestListPublicAuthorPostsAPI(t *testing.T) {
 			} `json:"meta"`
 		}
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+		requireOnlyAuthorKeys(t, body.Author)
 		require.Len(t, body.Posts, 1)
 		require.Equal(t, "Hello", body.Posts[0].Title)
 		require.Equal(t, []PostAuthorResponse{{ID: 42, Username: "anacosta", FullName: "Ana Costa"}}, body.Posts[0].Authors)
