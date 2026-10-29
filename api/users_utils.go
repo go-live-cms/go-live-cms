@@ -19,8 +19,10 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -109,4 +111,55 @@ func checkUsernameFormat(c *gin.Context, username string) bool {
 		"fields": gin.H{"username": "must contain only letters and digits"},
 	})
 	return false
+}
+
+// bioMaxChars is the author bio's limit (#350), in characters (code points,
+// as Postgres' char_length and the profile form count them).
+const bioMaxChars = 300
+
+// rejectProfileField writes a field error in bindJSON's format.
+func rejectProfileField(c *gin.Context, field, message string) {
+	c.JSON(http.StatusBadRequest, gin.H{
+		"error":  field + " " + message,
+		"fields": gin.H{field: message},
+	})
+}
+
+// normalizeBio trims the bio and checks it's plain text of at most
+// bioMaxChars. nil (field absent) stays NULL, which keeps the stored value.
+func normalizeBio(c *gin.Context, bio *string) (sql.NullString, bool) {
+	if bio == nil {
+		return sql.NullString{}, true
+	}
+	text := strings.TrimSpace(strings.ReplaceAll(*bio, "\r\n", "\n"))
+	if !utf8.ValidString(text) {
+		rejectProfileField(c, "bio", "must be valid text")
+		return sql.NullString{}, false
+	}
+	for _, r := range text {
+		// Line breaks and tabs are text; other control characters aren't.
+		if (r < 0x20 && r != '\n' && r != '\t') || r == 0x7f {
+			rejectProfileField(c, "bio", "must be plain text")
+			return sql.NullString{}, false
+		}
+	}
+	if utf8.RuneCountInString(text) > bioMaxChars {
+		rejectProfileField(c, "bio", "must be at most 300 characters")
+		return sql.NullString{}, false
+	}
+	return sql.NullString{String: text, Valid: true}, true
+}
+
+// normalizeWebsite trims the website and checks it's an http(s) URL; "" clears
+// it and nil (absent) keeps the stored value.
+func normalizeWebsite(c *gin.Context, website *string) (sql.NullString, bool) {
+	if website == nil {
+		return sql.NullString{}, true
+	}
+	url := strings.TrimSpace(*website)
+	if url != "" && binding.Validator.Engine().(*validator.Validate).Var(url, "http_url") != nil {
+		rejectProfileField(c, "website", "must be an http or https URL")
+		return sql.NullString{}, false
+	}
+	return sql.NullString{String: url, Valid: true}, true
 }

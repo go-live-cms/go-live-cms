@@ -55,6 +55,8 @@ type CreateUserRequest struct {
 //     (and checks it) when a user changes their own password; it is ignored
 //     for an admin resetting someone else's.
 //   - Role: Must be one of admin, editor, contributor if provided (admin-only modification)
+//   - Bio: plain text, at most 300 characters once trimmed (” clears it)
+//   - Website: an http or https URL, at most 2048 characters (” clears it)
 //
 // Access control: Users can update all fields except role. Admins can update any field.
 type UpdateUserRequest struct {
@@ -64,6 +66,11 @@ type UpdateUserRequest struct {
 	Password        string `json:"password" binding:"omitempty,min=6,max_bytes=72"`
 	CurrentPassword string `json:"current_password" binding:"max_bytes=72"`
 	Role            string `json:"role" binding:"omitempty,oneof=admin editor contributor"`
+	// Author profile (#350). Absent keeps the stored value; "" clears it. The bio
+	// is plain text, at most 300 characters after trimming (checked by the
+	// handler); the website must be an http(s) URL.
+	Bio     *string `json:"bio" binding:"omitempty,max=1000"`
+	Website *string `json:"website" binding:"omitempty,max=2048"`
 }
 
 // DeleteUserRequest defines options for user account deletion.

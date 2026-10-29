@@ -48,7 +48,10 @@ SET
     email = COALESCE($4, email),
     hashed_password = COALESCE($5, hashed_password),
     password_changed_at = COALESCE($6, password_changed_at),
-    role = COALESCE($7, role)
+    role = COALESCE($7, role),
+    -- NULL keeps the stored value (#350); '' clears it.
+    bio = COALESCE(sqlc.narg(bio), bio),
+    website = COALESCE(sqlc.narg(website), website)
 WHERE id = $1
 RETURNING *;
 
