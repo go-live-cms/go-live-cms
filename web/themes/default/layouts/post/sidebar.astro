@@ -1,16 +1,22 @@
 ---
 /**
- * Post Layout with Sidebar (#345): the reading column with a sidebar beside it.
- * The design's sidebar holds a table of contents (#351) and the category's other posts
- * (#348, #351); until those land it holds what exists: dates, reading time and terms.
+ * Post Layout with Sidebar (#345): the reading column with a sidebar beside it. The
+ * sidebar holds "On this page" (the post's H2s and H3s, from three headings up) and
+ * the category's other posts (#351); a post with neither shows its dates and reading
+ * time there instead. The "All <category>" link waits for category archives (#348).
  */
 import BaseLayout from '../base.astro'
 import BlockRenderer from '@/components/BlockRenderer'
 import PostHeader from '../../components/PostHeader.astro'
 import FeaturedImage from '../../components/FeaturedImage.astro'
-import PostTerms from '../../components/PostTerms.astro'
+import PostEnd from '../../components/PostEnd.astro'
+import RelatedPosts from '../../components/RelatedPosts.astro'
+import TableOfContents from '../../components/TableOfContents.astro'
 import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
-import { readingMinutes } from '../../lib/posts'
+import { readingMinutes, THEME_ELEMENT_IDS } from '../../lib/posts'
+import { headingAnchors, tableOfContents } from '@/components/blocks/utils/headingAnchors'
+import { loadPostEnd } from '@/lib/relatedPosts'
+import { resolveSiteUrl } from '@/lib/seo'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
@@ -25,6 +31,9 @@ interface Props {
 }
 
 const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
+const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
+const toc = tableOfContents(headings)
+const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { inCategory: true })
 
 const dateOf = (value: string) => {
   const d = new Date(value)
@@ -36,6 +45,7 @@ const changed = dateOf(post.changed_at)
 const updated = changed && published && changed.toDateString() !== published.toDateString() ? changed : null
 const minutes = readingMinutes(post.published_blocks)
 const format = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+const showFacts = toc.length === 0 && !end.inCategory
 ---
 
 <BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
@@ -45,35 +55,49 @@ const format = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', mon
         <PostHeader post={post} />
         <FeaturedImage src={featuredImage} variant="column" />
         <div class="prose">
-          {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} />}
+          {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} headings={headings} />}
         </div>
+        <PostEnd postType={post.post_type} terms={terms} end={end} />
       </article>
 
       <aside class="post-aside" aria-label="About this post">
         <div class="post-aside-inner">
-          <dl class="post-facts">
-            {published && (
-              <div>
-                <dt class="section-title">Published</dt>
-                <dd><time datetime={published.toISOString()}>{format(published)}</time></dd>
-              </div>
-            )}
-            {updated && (
-              <div>
-                <dt class="section-title">Updated</dt>
-                <dd><time datetime={updated.toISOString()}>{format(updated)}</time></dd>
-              </div>
-            )}
-            {minutes && (
-              <div>
-                <dt class="section-title">Reading time</dt>
-                <dd>{minutes} min</dd>
-              </div>
-            )}
-          </dl>
-          <PostTerms terms={terms} />
+          <TableOfContents entries={toc} />
+          {end.inCategory && (
+            <section class="aside-list" aria-labelledby="in-category">
+              <h2 id="in-category" class="section-title">In {end.inCategory.term.name}</h2>
+              <ul class="aside-links">
+                {end.inCategory.posts.map((item) => (
+                  <li><a href={item.href}>{item.post.title}</a></li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {showFacts && (
+            <dl class="post-facts">
+              {published && (
+                <div>
+                  <dt class="section-title">Published</dt>
+                  <dd><time datetime={published.toISOString()}>{format(published)}</time></dd>
+                </div>
+              )}
+              {updated && (
+                <div>
+                  <dt class="section-title">Updated</dt>
+                  <dd><time datetime={updated.toISOString()}>{format(updated)}</time></dd>
+                </div>
+              )}
+              {minutes && (
+                <div>
+                  <dt class="section-title">Reading time</dt>
+                  <dd>{minutes} min</dd>
+                </div>
+              )}
+            </dl>
+          )}
         </div>
       </aside>
     </div>
+    <RelatedPosts posts={end.related} />
   </div>
 </BaseLayout>

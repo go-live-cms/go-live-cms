@@ -5,7 +5,7 @@
  */
 import type { Post } from "@gl-admin/lib/api/types"
 import { getFeaturedImageUrl, getPostsByType } from "./api"
-import { normalizeUrlStructure, postPath, publicImageUrl } from "./seo"
+import { normalizeUrlStructure, postPath, publicImageUrl, type UrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
 
 export interface ListedPost {
@@ -65,19 +65,20 @@ export async function loadPostList(postType: string, page: number, basePath: str
     with_meta: true,
     meta_level: "basic",
   })
-  const posts = await Promise.all(
-    data.map(async (post): Promise<ListedPost> => {
-      // with_meta rows carry the featured image URL; only rows whose stored value is an
-      // old filesystem path (before #201) need the featured-image endpoint to map it.
-      const stored = listedThumbnail(post)
-      const url = stored !== undefined ? stored : await getFeaturedImageUrl(post.id).catch(() => null)
-      return {
-        post,
-        href: postPath({ ...post, post_type: post.post_type || postType }, structure),
-        image: publicImageUrl(siteUrl, url) ?? null,
-      }
-    }),
-  )
+  const posts = await Promise.all(data.map((post) => toListedPost(post, postType, structure, siteUrl)))
   const total = meta.total ?? posts.length
   return { posts, total, page, links: pageLinks(basePath, page, perPage, total), siteTitle: site.title }
+}
+
+// A with_meta row (a list row, or a related/adjacent post, #351) with its link and image.
+export async function toListedPost(post: Post, postType: string, structure: UrlStructure, siteUrl: string): Promise<ListedPost> {
+  // with_meta rows carry the featured image URL; only rows whose stored value is an
+  // old filesystem path (before #201) need the featured-image endpoint to map it.
+  const stored = listedThumbnail(post)
+  const url = stored !== undefined ? stored : await getFeaturedImageUrl(post.id).catch(() => null)
+  return {
+    post,
+    href: postPath({ ...post, post_type: post.post_type || postType }, structure),
+    image: publicImageUrl(siteUrl, url) ?? null,
+  }
 }

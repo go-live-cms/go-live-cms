@@ -1065,6 +1065,83 @@ body {
   margin-right: 4px;
 }
 
+/* Heading anchors (#351): a jump to #id lands below the sticky header. */
+.prose :is(h1, h2, h3, h4, h5, h6)[id] {
+  scroll-margin-top: calc(var(--header-height) + var(--space-5));
+}
+
+/* Older / newer posts (#351). */
+.post-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: var(--space-4);
+}
+.site a.post-nav-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--color-secondary);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+.site a.post-nav-link:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-secondary);
+}
+.post-nav-link span {
+  font-size: var(--size-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+.post-nav-link.is-next {
+  text-align: right;
+}
+
+/* "More to read" (#351). */
+.related-posts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-9);
+  padding-top: var(--space-7);
+  border-top: 1px solid var(--color-border);
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: var(--space-6);
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.card .media {
+  aspect-ratio: 3 / 2;
+}
+.card-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--size-lg);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  text-wrap: balance;
+}
+.site .card-title a {
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+.site .card-title a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-primary);
+}
+
 /* The wide post layout: images and code at the wide width beside the reading column. */
 .post--wide .prose > .block-content > :is(img, pre) {
   width: min(var(--wide-width), 100vw - 2 * var(--container-gutter));
@@ -1102,6 +1179,62 @@ body {
   margin: 2px 0 0;
   color: var(--color-text);
 }
+
+/* "On this page" (#351): H2s, H3s indented under them. */
+.toc-block,
+.aside-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.toc {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-left: 1px solid var(--color-border);
+}
+.toc--nested {
+  border-left: 0;
+  margin-top: 2px;
+}
+.site .toc a {
+  display: block;
+  padding: 6px 0 6px 14px;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.site .toc--nested a {
+  padding-left: 28px;
+}
+.site .toc a:hover,
+.site .toc a:focus-visible {
+  color: var(--color-text);
+  border-left-color: var(--color-border-strong);
+}
+
+/* The category's other posts in the sidebar (#351). */
+.aside-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.site .aside-links a {
+  color: var(--color-secondary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.site .aside-links a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-primary);
+}
 @media (max-width: 1000px) {
   .post-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -1112,6 +1245,13 @@ body {
     padding-top: var(--space-7);
     margin-top: var(--space-7);
     border-top: 1px solid var(--color-border);
+  }
+  /* Below the article a table of contents has nothing left to jump to. */
+  .post-aside .toc-block {
+    display: none;
+  }
+  .post-aside:not(:has(.post-aside-inner > :not(.toc-block))) {
+    display: none;
   }
 }
 

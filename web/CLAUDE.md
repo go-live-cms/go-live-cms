@@ -166,6 +166,12 @@ are the most fragile part of the codebase. **Before editing anything under
   `lib/postList.ts`. Parts without a backend stay hidden (table in
   `themes/default/README.md`). `/themes/active` returns `settings` as an object (it was
   base64 before, so `layout_variants` never applied).
+- **Heading anchors, related/adjacent posts (#351):** `BlockRenderer` gives every heading an
+  `id` from `blocks/utils/headingAnchors.ts` (slug of the text, Latin accents dropped, other
+  scripts kept, `-2`/`-3` for repeats, reserved ids skipped); a layout that also builds a
+  table of contents passes its `headings` so both agree. Older/newer and related posts come
+  from the API's `/public/posts/:id/adjacent` and `/related` through `lib/relatedPosts.ts`
+  (`loadPostEnd`, every part fails soft).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

@@ -1,5 +1,5 @@
 import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse, TaxonomyTerm, TaxonomyType } from "../../gl-admin/lib/api/types"
-import { SERVER_API_URL } from "../../gl-admin/lib/server-api-url"
+import { SERVER_API_URL, SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 
 const API_BASE = typeof window === "undefined" ? SERVER_API_URL : "/api/v1"
 
@@ -111,6 +111,35 @@ export async function getTaxonomyTypes(): Promise<TaxonomyType[]> {
 export async function getPostTaxonomyTerms(postId: string | number): Promise<TaxonomyTerm[]> {
   const response = await apiCall(`/posts/${postId}/taxonomy-terms`)
   return response.taxonomy_terms || []
+}
+
+// Older/newer and related posts (#351). These live on the API's /public group (for
+// SSR), not under /api/v1. Rows are with_meta list rows (meta, authors).
+export interface AdjacentPosts {
+  previous: Post | null
+  next: Post | null
+}
+
+async function publicApiCall(endpoint: string) {
+  const response = await fetch(`${SERVER_MEDIA_URL}/public${endpoint}`)
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.json()
+}
+
+export async function getAdjacentPosts(postId: string | number): Promise<AdjacentPosts> {
+  const data = await publicApiCall(`/posts/${postId}/adjacent`)
+  return { previous: data?.previous ?? null, next: data?.next ?? null }
+}
+
+// taxonomy limits the shared terms to one taxonomy (e.g. "category") and then returns
+// only posts sharing one; without it the latest posts fill in.
+export async function getRelatedPosts(postId: string | number, params: { limit?: number; taxonomy?: string } = {}): Promise<Post[]> {
+  const query = new URLSearchParams()
+  if (params.limit) query.set("limit", String(params.limit))
+  if (params.taxonomy) query.set("taxonomy", params.taxonomy)
+  const qs = query.toString()
+  const data = await publicApiCall(`/posts/${postId}/related${qs ? `?${qs}` : ""}`)
+  return Array.isArray(data?.posts) ? data.posts : []
 }
 
 export async function getSettings(): Promise<any> {

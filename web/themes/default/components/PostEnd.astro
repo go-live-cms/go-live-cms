@@ -1,0 +1,26 @@
+---
+/**
+ * The end of a post (#351): its terms, then older / newer links. "More to read" sits
+ * below the article (RelatedPosts), at the container's width.
+ */
+import PostTerms from './PostTerms.astro'
+import PostNav from './PostNav.astro'
+import { archiveLink } from '../lib/posts'
+import type { TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { PostEndData } from '@/lib/relatedPosts'
+
+interface Props {
+  postType: string
+  terms?: TaxonomyTerm[]
+  end: PostEndData
+  class?: string
+}
+
+const { postType, terms, end, class: className } = Astro.props
+const archive = archiveLink(postType)
+---
+
+<footer class:list={['post-end', className]}>
+  <PostTerms terms={terms} />
+  <PostNav previous={end.previous} next={end.next} archiveHref={archive.href} archiveLabel={archive.label} />
+</footer>

@@ -1,15 +1,20 @@
 ---
 /**
- * Default Post Layout (#345): one reading column, the featured image at wide width.
- * Hidden until their issues land: author cards (#350), older/newer and related posts
- * (#351).
+ * Default Post Layout (#345): one reading column, the featured image at wide width,
+ * then terms, older / newer posts and "More to read" (#351).
+ * Hidden until its issue lands: author cards (#350).
  */
 import BaseLayout from '../base.astro'
 import BlockRenderer from '@/components/BlockRenderer'
 import PostHeader from '../../components/PostHeader.astro'
 import FeaturedImage from '../../components/FeaturedImage.astro'
-import PostTerms from '../../components/PostTerms.astro'
+import PostEnd from '../../components/PostEnd.astro'
+import RelatedPosts from '../../components/RelatedPosts.astro'
 import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
+import { THEME_ELEMENT_IDS } from '../../lib/posts'
+import { headingAnchors } from '@/components/blocks/utils/headingAnchors'
+import { loadPostEnd } from '@/lib/relatedPosts'
+import { resolveSiteUrl } from '@/lib/seo'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
@@ -24,6 +29,8 @@ interface Props {
 }
 
 const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
+const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
+const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url))
 ---
 
 <BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
@@ -32,13 +39,10 @@ const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro
       <PostHeader post={post} class="measure" />
       <FeaturedImage src={featuredImage} variant="wide" />
       <div class="prose measure">
-        {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} />}
+        {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} headings={headings} />}
       </div>
-      {terms && terms.length > 0 && (
-        <footer class="post-end measure">
-          <PostTerms terms={terms} />
-        </footer>
-      )}
+      <PostEnd postType={post.post_type} terms={terms} end={end} class="measure" />
     </article>
+    <RelatedPosts posts={end.related} />
   </div>
 </BaseLayout>
