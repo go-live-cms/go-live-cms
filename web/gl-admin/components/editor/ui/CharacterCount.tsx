@@ -1,20 +1,21 @@
 import type { Editor as TiptapEditor } from "@tiptap/core"
 
 export default function CharacterCount({ editor, maxChars, minChars }: { editor: TiptapEditor, maxChars?: number, minChars?: number }) {
+    const count = editor.storage.characterCount.characters()
 
     return (
         <div className="editor-meta">
-            <span className="char-count">{editor.storage.characterCount.characters()} characters</span>
+            <span className="char-count">{count} characters</span>
             {typeof minChars === "number" && (
-                <span className="char-limit">
+                <span className={`char-limit${count < minChars ? " is-out-of-range" : ""}`}>
                     min {minChars}
-                    {editor.storage.characterCount.characters() < minChars ? " • too short" : ""}
+                    {count < minChars ? " · too short" : ""}
                 </span>
             )}
             {typeof maxChars === "number" && (
-                <span className="char-limit">
+                <span className={`char-limit${count > maxChars ? " is-out-of-range" : ""}`}>
                     max {maxChars}
-                    {editor.storage.characterCount.characters() > maxChars ? " • too long" : ""}
+                    {count > maxChars ? " · too long" : ""}
                 </span>
             )}
         </div>

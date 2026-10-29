@@ -2,6 +2,9 @@ import { useState, useCallback } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { DragHandle as TipTapDragHandle } from "@tiptap/extension-drag-handle-react"
 
+// The block handle in the gutter ("Post editor": the hovered block). Drag to move. The
+// design's "add block below" button and block menu (Duplicate, Move to, …, #356) aren't
+// built yet.
 export default function DragHandle({ editor }: { editor: TiptapEditor }) {
     const [showDrag, setShowDrag] = useState(false)
 
@@ -17,19 +20,15 @@ export default function DragHandle({ editor }: { editor: TiptapEditor }) {
 
     return (
         <TipTapDragHandle editor={editor} onNodeChange={onDragHandleNodeChange}>
-            <div
-                className={[
-                    'flex items-center justify-center text-md text-white leading-none',
-                    'h-6 w-5 mr-1.5 rounded border border-gray-600 cursor-grab select-none',
-                    'bg-gray-800 hover:bg-gray-700 transition-delay-500',
-                    'duration-200',
-                    showDrag ? 'opacity-80 pointer-events-auto' : 'opacity-0 pointer-events-non',
-                ].join(' ')}
-                title="Drag to move block"
-                onMouseDown={(e) => (e.currentTarget.style.cursor = 'grabbing')}
-                onMouseUp={(e) => (e.currentTarget.style.cursor = 'grab')}
-            >
-                ⋮⋮
+            <div className={`editor-drag-handle${showDrag ? "" : " is-hidden"}`} title="Drag to move">
+                <svg width="14" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="9" cy="6" r="1.6" />
+                    <circle cx="9" cy="12" r="1.6" />
+                    <circle cx="9" cy="18" r="1.6" />
+                    <circle cx="15" cy="6" r="1.6" />
+                    <circle cx="15" cy="12" r="1.6" />
+                    <circle cx="15" cy="18" r="1.6" />
+                </svg>
             </div>
         </TipTapDragHandle>
     )

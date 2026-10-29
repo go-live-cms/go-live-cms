@@ -1,0 +1,199 @@
+// The editor's top bar (#341): 48px, sticky, one divider under it. Wraps at phone
+// width (the breadcrumb on its own line, the actions under it).
+
+.editor-top-bar {
+  align-items: center;
+  background: var(--background);
+  border-bottom: 1px solid var(--border-color);
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 6px var(--space-3) 6px var(--space-4);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+
+  &__crumbs {
+    align-items: center;
+    display: flex;
+    font-size: var(--type-body);
+    gap: var(--space-1);
+    line-height: var(--type-body-lh);
+    min-width: 0;
+  }
+
+  &__crumb-link {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    display: flex;
+    height: 28px;
+    padding: 0 6px;
+    text-decoration: none;
+    white-space: nowrap;
+
+    &:hover {
+      background: var(--background-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &__crumb-sep {
+    color: var(--text-placeholder);
+  }
+
+  &__crumb-title {
+    color: var(--text-primary);
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 6px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__crumbs .gl-pill {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  &__spacer {
+    flex: 1;
+  }
+
+  &__actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  // What is happening to your edits.
+  &__save {
+    align-items: center;
+    color: var(--text-secondary);
+    display: inline-flex;
+    font-size: var(--type-label);
+    gap: 6px;
+    line-height: var(--type-label-lh);
+    padding-right: var(--space-1);
+    white-space: nowrap;
+
+    &:empty {
+      display: none;
+    }
+
+    &--reconnecting {
+      background: var(--warning-bg);
+      border-radius: var(--radius-full);
+      color: var(--warning-label);
+      font-size: var(--type-footnote);
+      font-weight: 500;
+      height: 24px;
+      padding: 0 var(--space-2);
+    }
+
+    &--offline {
+      color: var(--warning-text);
+      font-weight: 500;
+    }
+
+    &--error {
+      color: var(--danger-text);
+      font-weight: 500;
+    }
+  }
+
+  &__spin {
+    animation: editor-spin 0.9s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+  }
+
+  // Other people's avatars fade while the connection is down.
+  &__people {
+    padding-right: var(--space-1);
+    transition: opacity var(--duration-moderate) var(--ease-out);
+
+    &.is-paused {
+      opacity: 0.45;
+    }
+  }
+
+  .gl-button--icon-only.is-pressed {
+    background: var(--background-active);
+    color: var(--text-primary);
+  }
+
+  // Publish / Update with its menu.
+  &__split {
+    display: flex;
+  }
+
+  &__split-main:not(:last-child) {
+    border-bottom-right-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  &__split-toggle {
+    background: var(--accent-solid-hover);
+    border: 0;
+    border-left: 1px solid rgb(255 255 255 / 35%);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    color: var(--accent-on);
+    cursor: pointer;
+    display: grid;
+    height: 32px;
+    place-items: center;
+    width: 30px;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &__publish-menu {
+    width: 300px;
+  }
+
+  @media (width <= 768px) {
+    padding: 6px var(--space-3);
+
+    &__crumbs {
+      flex: 1 1 100%;
+    }
+
+    &__spacer {
+      display: none;
+    }
+
+    &__actions {
+      flex: 1 1 100%;
+      justify-content: flex-end;
+    }
+
+    // Icon only on a phone; the link keeps its name (aria-label).
+    &__view .gl-button__label {
+      display: none;
+    }
+  }
+}
+
+@keyframes editor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

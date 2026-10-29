@@ -1,4 +1,5 @@
 import type { BlockDocV1 } from "../blocks-spec"
+import { ApiError } from "./errors"
 
 // A published snapshot from post_versions (#136)
 export interface PostVersionSummary {
@@ -53,7 +54,7 @@ export class BlockAPIClient {
   }
 
   // fetch with auth headers + cookies. A 401 becomes UnauthorizedError; any other non-2xx
-  // becomes Error("Failed to <what>: <statusText>").
+  // becomes ApiError("Failed to <what>: <statusText>") with the status and request id.
   private async request(path: string, what: string, init: RequestInit = {}): Promise<Response> {
     const response = await fetch(`${this.baseURL}${path}`, this.buildInit({ headers: this.getHeaders(), ...init }))
 
@@ -62,7 +63,9 @@ export class BlockAPIClient {
     }
 
     if (!response.ok) {
-      throw new Error(`Failed to ${what}: ${response.statusText}`)
+      // An ApiError so callers can tell a 503 (publish: the collab flush failed) apart and
+      // show the error ID; the message stays the same.
+      throw new ApiError(`Failed to ${what}: ${response.statusText}`, response.status, null, null, null, response.headers.get("X-Request-ID"))
     }
 
     return response

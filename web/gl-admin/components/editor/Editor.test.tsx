@@ -172,15 +172,15 @@ describe("Editor", () => {
     await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
     expect(pm()!.getAttribute("contenteditable")).toBe("true")
-    expect(container.querySelector(".editor-blocked-notice")).toBeNull()
+    expect(container.querySelector(".editor-notice")).toBeNull()
     // The server's fragment still has exactly the seeded blocks (no client seed on top).
     expect(serverFragment().toArray().slice(0, 2).map((el) => (el as Y.XmlElement).nodeName)).toEqual(["paragraph", "callout"])
   })
 
   it("without the theme extension: doesn't bind (the callout survives), shows REST read-only, and refuses writes", async () => {
     const ref = await mount()
-    await until(() => !!container.querySelector(".editor-blocked-notice"), "the blocked notice")
-    expect(container.querySelector(".editor-blocked-notice")!.textContent).toContain("callout")
+    await until(() => !!container.querySelector(".editor-notice"), "the blocked notice")
+    expect(container.querySelector(".editor-notice")!.textContent).toContain("callout")
     expect(pm()!.getAttribute("contenteditable")).toBe("false")
     await until(() => !!pm()?.textContent?.includes("Intro"), "the REST copy")
     expect(serverFragment().toArray().map((el) => (el as Y.XmlElement).nodeName)).toContain("callout")
@@ -244,7 +244,7 @@ describe("Editor", () => {
     relay.api.users.set("2", { role: "contributor" })
     await act(async () => relay.clock.advance(RECHECK_MS))
     await until(() => pm()?.getAttribute("contenteditable") === "false", "the editor to turn view-only")
-    expect(container.querySelector(".editor-blocked-notice")!.textContent).toContain("now view-only")
+    expect(container.querySelector(".editor-notice")!.textContent).toContain("changed to view-only")
     // The form re-reads the user's role on this (PostForm).
     expect(onAccessChange).toHaveBeenCalledWith({ readOnly: true, reason: "demoted", revoked: false })
     expect(pm()!.textContent).toContain("Careful")
@@ -256,7 +256,7 @@ describe("Editor", () => {
     relay.api.users.set("2", { role: "editor" })
     await act(async () => relay.clock.advance(RECHECK_MS))
     await until(() => pm()?.getAttribute("contenteditable") === "true", "the editor to be editable again")
-    expect(container.querySelector(".editor-blocked-notice")).toBeNull()
+    expect(container.querySelector(".editor-notice")).toBeNull()
   })
 
   it("shows 'session ended, sign in again' when the server revokes the session", async () => {
@@ -268,9 +268,10 @@ describe("Editor", () => {
 
     relay.api.passwordChangedAt.set("2", Math.floor(Date.now() / 1000) + 1)
     await act(async () => relay.clock.advance(RECHECK_MS))
-    await until(() => !!container.querySelector("[role=alert]"), "the session-ended notice")
-    const notice = container.querySelector("[role=alert]")!
-    expect(notice.textContent).toContain("Your editing session has ended")
+    await until(() => !!container.querySelector("[role=alertdialog]"), "the session-ended dialog")
+    const notice = container.querySelector("[role=alertdialog]")!
+    expect(notice.textContent).toContain("Your session ended")
+    expect(notice.textContent).toContain("Sign in again to keep editing.")
     expect(pm()!.getAttribute("contenteditable")).toBe("false")
     expect(pm()!.textContent).toContain("Careful")
 

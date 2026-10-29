@@ -4,7 +4,8 @@ export const headingBlocks: Block[] = [
   {
     title: "Heading",
     description: "Section heading (use toolbar to change level)",
-    icon: "📝",
+    icon: "H",
+    hint: "##",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run()
     },

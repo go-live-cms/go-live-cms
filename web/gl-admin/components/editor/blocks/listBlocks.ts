@@ -5,6 +5,7 @@ export const listBlocks: Block[] = [
     title: "Bullet List",
     description: "Create a simple bullet list",
     icon: "•",
+    hint: "-",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleBulletList().run()
     },
@@ -17,6 +18,7 @@ export const listBlocks: Block[] = [
     title: "Numbered List",
     description: "Create a numbered list",
     icon: "1.",
+    hint: "1.",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleOrderedList().run()
     },

@@ -24,6 +24,9 @@ import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
+import Notice from "@gl-admin/components/ui/Notice"
+import Modal from "@gl-admin/components/ui/Modal"
+import Button from "@gl-admin/components/ui/Button"
 import "@gl-admin/assets/styles/components/editor/editor.scss"
 
 // The post editor (#206). It is a bound editor: it never seeds the doc and never saves
@@ -111,6 +114,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   const [isPublishing, setIsPublishing] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>(null)
   const [droppedCount, setDroppedCount] = useState(0)
+  // The count the user dismissed: a different count (a restore) shows the notice again.
+  const [droppedDismissed, setDroppedDismissed] = useState(0)
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
   const [url, setUrl] = useState("")
 
@@ -302,11 +307,17 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
 
   return (
     <div className="notion-editor">
-      {droppedCount > 0 && (
-        <div className="editor-blocked-notice" role="status">
-          {droppedCount} block{droppedCount === 1 ? "" : "s"} of this post can't be shown in the editor. They are
-          kept in the saved document.
-        </div>
+      {droppedCount > 0 && droppedCount !== droppedDismissed && (
+        <Notice
+          tone="warning"
+          live="status"
+          className="editor-notice"
+          title={`${droppedCount} block${droppedCount === 1 ? "" : "s"} can't be shown here`}
+          onDismiss={() => setDroppedDismissed(droppedCount)}
+        >
+          The editor doesn't support {droppedCount === 1 ? "it" : "them"} yet. {droppedCount === 1 ? "It's" : "They're"}{" "}
+          kept in the post, where {droppedCount === 1 ? "it was" : "they were"}.
+        </Notice>
       )}
       {!readOnly && <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />}
       {!readOnly && <BlockTypeToolbar editor={editor} />}
@@ -331,14 +342,18 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   )
 })
 
+// Opening the post: the content's shape, until it's connected ("Editor connection
+// states" 1). The text is for screen readers.
 function Placeholder({ text }: { text: string }) {
   return (
     <div className="notion-editor">
-      <div
-        className="editor-wrapper"
-        style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "200px" }}
-      >
-        <p style={{ color: "#999" }}>{text}</p>
+      <div className="editor-wrapper editor-loading" aria-busy="true">
+        <span className="editor-loading__label">{text}</span>
+        {[96, 90, 60, 0, 40, 94, 82].map((width, i) =>
+          width === 0 ? null : (
+            <span key={i} aria-hidden="true" className={`editor-loading__line${i === 4 ? " editor-loading__line--heading" : ""}`} style={{ width: `${width}%` }} />
+          )
+        )}
       </div>
     </div>
   )
@@ -346,33 +361,79 @@ function Placeholder({ text }: { text: string }) {
 
 type Gate = { collab: HocuspocusCollaboration; unbuildable: UnbuildableTypes | null }
 
+const signInAgain = () => void authManager.logout("session-expired")
+
 // What the server's access re-check changed while the editor was open (#313).
 function AccessNotice({ access }: { access: CollabAccess }) {
+  // Dismissed per change: the next access message is a new object.
+  const [dismissed, setDismissed] = useState<CollabAccess | null>(null)
   if (access.revoked) {
+    const email = authManager.getState().user?.email
     return (
-      <div className="editor-blocked-notice" role="alert">
-        <strong>Your editing session has ended.</strong> Your access to this post changed, or your password was changed
-        or reset. The post is shown read-only below; changes made after that point weren't saved.{" "}
-        <button type="button" className="editor-notice-action" onClick={() => void authManager.logout("session-expired")}>
-          Sign in again
-        </button>
-      </div>
+      <>
+        <Modal
+          isOpen={dismissed !== access}
+          onClose={() => setDismissed(access)}
+          role="alertdialog"
+          size="small"
+          title="Your session ended"
+          description="Sign in again to keep editing."
+          showCloseButton={false}
+          closeOnBackdrop={false}
+          footer={
+            <Button variant="primary" size="lg" onClick={signInAgain}>
+              Sign in again
+            </Button>
+          }
+        >
+          <p className="editor-session-ended__why">
+            Your access to this post changed, or your password was changed or reset. Changes made after that weren't saved.
+          </p>
+          {email && <p className="editor-session-ended__account">{email}</p>}
+        </Modal>
+        {dismissed === access && (
+          <Notice
+            tone="danger"
+            live="alert"
+            inline
+            className="editor-notice"
+            title="Your session ended"
+            actions={
+              <Button variant="secondary" size="sm" onClick={signInAgain}>
+                Sign in again
+              </Button>
+            }
+          >
+            The post is shown read-only. Changes made after that weren't saved.
+          </Notice>
+        )}
+      </>
     )
   }
-  if (access.reason === "demoted") {
+  if (access.reason === "demoted" && dismissed !== access) {
     return (
-      <div className="editor-blocked-notice" role="status">
-        <strong>This post is now view-only for you.</strong> Your access to it changed while it was open. You still see
-        live changes from others; anything you typed after the change wasn't saved.
-      </div>
+      <Notice
+        tone="info"
+        live="status"
+        inline
+        className="editor-notice editor-notice--banner"
+        title="Your access changed to view-only"
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => setDismissed(access)}>
+            OK
+          </Button>
+        }
+      >
+        Your access to this post changed while it was open. You still see live changes from others; anything you typed
+        after the change wasn't saved.
+      </Notice>
     )
   }
   if (access.reason === "unverified") {
     return (
-      <div className="editor-blocked-notice" role="status">
-        <strong>Editing is paused.</strong> The server can't confirm your access right now. Editing resumes on its own
-        once it can.
-      </div>
+      <Notice tone="warning" live="status" className="editor-notice editor-notice--banner" title="Editing is paused">
+        The server can't confirm your access right now. Editing resumes on its own once it can.
+      </Notice>
     )
   }
   return null
@@ -453,12 +514,11 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
   }
   return (
     <>
-      <div className="editor-blocked-notice" role="alert">
-        <strong>This post is open read-only.</strong> It contains {describeUnbuildableTypes(gate.unbuildable)} that the
-        editor can't load, usually because the theme that provides them failed to load or is no longer active. Editing
-        here would delete them for everyone, so editing is disabled until that theme is available. Those blocks are
-        hidden below but kept in the post.
-      </div>
+      <Notice tone="warning" live="alert" className="editor-notice editor-notice--banner" title="This post is open read-only">
+        It contains {describeUnbuildableTypes(gate.unbuildable)} that the editor can't load, usually because the theme
+        that provides them failed to load or is no longer active. Editing here would delete them for everyone, so editing
+        is off until that theme is available. Those blocks are hidden below but kept in the post.
+      </Notice>
       {access?.revoked && <AccessNotice access={access} />}
       <EditorInner ref={ref} {...props} readOnly collab={null} unbuildable={gate.unbuildable} />
     </>

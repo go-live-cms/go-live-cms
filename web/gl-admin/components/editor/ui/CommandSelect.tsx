@@ -1,6 +1,5 @@
 import React from "react"
-import Icon from "@gl-admin/components/ui/Icon"
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
+import { CheckIcon, ChevronDownIcon } from "@gl-admin/components/ui/icons"
 import { useSelect } from "@gl-admin/utils/select"
 
 export type CommandSelectOption = {
@@ -18,6 +17,7 @@ export type CommandSelectProps = {
     disabled?: boolean
 }
 
+// The "Text ▾" picker in the editor's toolbars (#341: styled like the design's menus).
 export const CommandSelect: React.FC<CommandSelectProps> = ({
     options,
     value,
@@ -34,34 +34,36 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
     } = useSelect(disabled)
 
     const selected = options.find((opt) => opt.value === value)
-    const { isDark } = useGoLive()
-    const iconColor = isDark ? "#FFFFFF" : "#333536"
 
     return (
-        <div className="text-white relative hover:bg-gray-700/60 rounded-md select-none text-sm flex items-center cursor-pointer" ref={ref} style={{ position: "relative" }}>
-            <div
-                className={`flex items-center gap-1.5 py-1 px-2 ${disabled ? "text-gray-300" : ""}`}
-                onClick={handleSelectClick}
-                tabIndex={0}
-                role="button"
-                aria-disabled={disabled}
+        <div className="editor-select" ref={ref}>
+            <button
+                type="button"
+                className="editor-select__trigger"
+                // useSelect reads only the pointer position.
+                onClick={(e) => handleSelectClick(e as unknown as React.MouseEvent<HTMLDivElement>)}
+                disabled={disabled}
+                aria-haspopup="listbox"
+                aria-expanded={open}
+                aria-label={label ? `${label}: ${selected?.label ?? "none"}` : undefined}
             >
-                <span className="text-gray-200">
-                    {selected ? selected.label : "Select..."}
-                </span>
-                <Icon className="mt-[1px]" name="dropdown" mirror_vertically={open} color={iconColor} width="12px" height="6.3px" />
-            </div>
+                {selected ? selected.label : "Select…"}
+                <ChevronDownIcon size={12} />
+            </button>
             {open && !disabled && (
-                <div
-                    className="absolute p-2 py-2 mt-1 bg-gray-800 select-none border border-gray-700 shadow rounded-sm text-sm"
-                    style={optionsStyle}
-                >
-                    <label className="p-1 pb-2 text-gray-400 block">{label}</label>
+                <div className="editor-select__list" role="listbox" aria-label={label || "Block type"} style={optionsStyle}>
+                    {label && <span className="editor-select__label" aria-hidden="true">{label}</span>}
                     {options.map((opt) => (
                         <div
                             key={opt.value}
-                            className="hover:bg-gray-700 rounded-sm min-w-[180px] p-1 flex gap-1 items-center text-nowrap"
+                            className="editor-select__option"
                             onClick={() => {
+                                onChange(opt)
+                                setOpen(false)
+                            }}
+                            onKeyDown={(e) => {
+                                if (e.key !== "Enter" && e.key !== " ") return
+                                e.preventDefault()
                                 onChange(opt)
                                 setOpen(false)
                             }}
@@ -69,9 +71,13 @@ export const CommandSelect: React.FC<CommandSelectProps> = ({
                             role="option"
                             aria-selected={opt.value === value}
                         >
-                            {opt.label_icon && <span className="text-md w-4 flex items-center justify-center">{opt.label_icon}</span>}
+                            {opt.label_icon && <span className="editor-select__glyph" aria-hidden="true">{opt.label_icon}</span>}
                             {opt.label}
-                            {opt.value === value && <span className="ml-auto text-gray-400">✔️</span>}
+                            {opt.value === value && (
+                                <span className="editor-select__check" aria-hidden="true">
+                                    <CheckIcon size={14} />
+                                </span>
+                            )}
                         </div>
                     ))}
                 </div>

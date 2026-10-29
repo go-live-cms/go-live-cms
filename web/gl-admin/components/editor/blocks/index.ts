@@ -9,6 +9,10 @@ export type Block = {
   title: string
   icon: string
   description: string
+  // Markdown shortcut shown in the slash menu ("##", "-").
+  hint?: string
+  // The slash menu's section; basic blocks by default.
+  group?: "media"
   aliases: string[]
   command: ({ editor, range }: any) => void
   turnInto?: ({ editor }: any) => void
@@ -70,6 +74,8 @@ export const getSlashCommandItems = (): SlashCommandItem[] => {
       title: cmd.title,
       icon: cmd.icon,
       description: cmd.description,
+      hint: cmd.hint,
+      group: cmd.group,
       aliases: cmd.aliases,
       command: cmd.command,
     }))

@@ -1,203 +1,155 @@
+// Featured image in the post settings panel (#341: on the design tokens; it used to
+// switch on prefers-color-scheme, which ignored the admin's theme).
+
 .gl-featured-image {
-  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 
   &__header {
+    align-items: center;
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.75rem;
   }
 
   &__title {
-    font-size: 1rem;
-    font-weight: 600;
+    color: var(--text-primary);
+    font-size: var(--type-label);
+    font-weight: 500;
+    line-height: var(--type-label-lh);
     margin: 0;
-    color: var(--gl-text-primary, #1a1a1a);
   }
 
   &__remove {
     background: none;
-    border: none;
-    color: var(--gl-danger-color, #dc3545);
+    border: 0;
+    border-radius: var(--radius-md);
+    color: var(--danger-text);
     cursor: pointer;
-    font-size: 0.85rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    font: inherit;
+    font-size: var(--type-label);
+    font-weight: 500;
+    height: 28px;
+    padding: 0 var(--space-2);
 
     &:hover {
-      background: var(--gl-danger-bg-color, #f8d7da);
-      color: var(--gl-danger-hover-color, #c82333);
+      background: var(--danger-bg);
     }
 
     &:disabled {
-      opacity: 0.6;
       cursor: not-allowed;
+      opacity: 0.5;
     }
   }
 
   &__content {
-    border: 1px solid var(--gl-border-color, #e0e0e0);
+    background: var(--background-subtle);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     overflow: hidden;
-    background: var(--gl-bg-secondary, #f8f9fa);
+  }
+
+  &__image {
+    display: block;
+    height: 180px;
+    object-fit: cover;
+    width: 100%;
+  }
+
+  &__overlay {
+    align-items: center;
+    background: var(--scrim);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    opacity: 0;
+    position: absolute;
+    transition: opacity var(--duration-fast) var(--ease-out);
   }
 
   &__preview {
     cursor: pointer;
     position: relative;
-    transition: all 0.2s ease;
 
-    &:hover {
-      .gl-featured-image__overlay {
-        opacity: 1;
-      }
-
-      .gl-featured-image__image {
-        transform: scale(1.02);
-      }
+    &:hover .gl-featured-image__overlay {
+      opacity: 1;
     }
   }
 
-  &__image {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.2s ease;
-  }
-
-  &__overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  }
-
   &__overlay-text {
-    color: white;
-    font-size: 0.9rem;
+    color: #ffffff;
+    font-size: var(--type-label);
     font-weight: 500;
   }
 
   &__info {
-    padding: 0.75rem;
-    border-top: 1px solid var(--gl-border-color, #e0e0e0);
+    border-top: 1px solid var(--border-color);
+    padding: var(--space-2) var(--space-3);
   }
 
   &__name {
-    margin: 0 0 0.25rem 0;
-    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-size: var(--type-label);
     font-weight: 500;
-    color: var(--gl-text-primary, #1a1a1a);
-    line-height: 1.3;
+    line-height: var(--type-label-lh);
+    margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   &__dimensions {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
     margin: 0;
-    font-size: 0.8rem;
-    color: var(--gl-text-secondary, #666);
   }
 
+  // "Drop an image or browse media": a dashed 112px box.
   &__placeholder {
-    padding: 2rem 1rem;
-    text-align: center;
+    align-items: center;
+    background: var(--background-subtle);
+    border: 1px dashed var(--control-border);
+    border-radius: 8px;
+    box-sizing: border-box;
     cursor: pointer;
-    transition: all 0.2s ease;
-    border: 2px dashed var(--gl-border-color, #e0e0e0);
-    margin: 1px;
-    border-radius: 7px;
+    display: flex;
+    justify-content: center;
+    min-height: 112px;
+    padding: var(--space-4);
+    text-align: center;
+    transition: background var(--duration-fast) var(--ease-out);
 
-    &:hover:not(&--disabled) {
-      border-color: var(--gl-primary-color, #007cba);
-      background: var(--gl-primary-bg-color, #f0f8ff);
+    &:hover:not(.gl-featured-image__placeholder--disabled) {
+      background: var(--background-hover);
     }
 
     &--disabled {
       cursor: not-allowed;
-      opacity: 0.6;
+      opacity: 0.5;
     }
   }
 
   &__placeholder-content {
+    align-items: center;
+    color: var(--text-secondary);
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
+    gap: 6px;
   }
 
   &__placeholder-icon {
-    color: var(--gl-text-tertiary, #999);
-    opacity: 0.6;
-
-    .gl-featured-image__placeholder:hover:not(.gl-featured-image__placeholder--disabled) & {
-      color: var(--gl-primary-color, #007cba);
-      opacity: 1;
-    }
+    color: var(--text-secondary);
   }
 
   &__placeholder-text {
+    color: var(--text-secondary);
+    font-size: var(--type-label);
     margin: 0;
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: var(--gl-text-primary, #1a1a1a);
   }
 
   &__placeholder-hint {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
     margin: 0;
-    font-size: 0.8rem;
-    color: var(--gl-text-secondary, #666);
-  }
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .gl-featured-image {
-    &__title {
-      color: var(--gl-text-primary, #fff);
-    }
-
-    &__content {
-      background: var(--gl-bg-primary, #2d3748);
-      border-color: var(--gl-border-color, #4a5568);
-    }
-
-    &__info {
-      border-color: var(--gl-border-color, #4a5568);
-    }
-
-    &__name {
-      color: var(--gl-text-primary, #fff);
-    }
-
-    &__dimensions {
-      color: var(--gl-text-secondary, #a0aec0);
-    }
-
-    &__placeholder {
-      border-color: var(--gl-border-color, #4a5568);
-
-      &:hover:not(&--disabled) {
-        background: var(--gl-bg-secondary, #1a202c);
-      }
-    }
-
-    &__placeholder-text {
-      color: var(--gl-text-primary, #fff);
-    }
-
-    &__placeholder-hint {
-      color: var(--gl-text-secondary, #a0aec0);
-    }
   }
 }
