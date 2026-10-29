@@ -1,158 +1,219 @@
-import React, { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import Button from "@gl-admin/components/ui/Button"
-import { getPosts } from "@gl-admin/lib/api/posts"
-import { getUsers } from "@gl-admin/lib/api/users"
-import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
+import PostStatus from "@gl-admin/components/ui/PostStatus"
+import Skeleton from "@gl-admin/components/ui/Skeleton"
+import EmptyState from "@gl-admin/components/ui/EmptyState"
+import { ChevronRightIcon, DocumentIcon, PageIcon, PencilIcon, UploadIcon } from "@gl-admin/components/ui/icons"
+import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
+import { getPostCounts, getPosts } from "@gl-admin/lib/api/posts"
 import { getMedia } from "@gl-admin/lib/api/media"
-import type { Post, User, TaxonomyType, Media } from "@gl-admin/lib/types"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import { canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
+import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
+import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
+import { ACTIVE_STATUSES } from "@gl-admin/lib/contentList"
+import type { Post } from "@gl-admin/lib/api/types"
+import "@gl-admin/assets/styles/pages/home.scss"
 
-const Dashboard: React.FC = () => {
-  const { baseTitle } = useGoLive();
-  const [totalPosts, setTotalPosts] = useState(0)
-  const [totalUsers, setTotalUsers] = useState(0)
-  const [totalTaxonomies, setTotalTaxonomies] = useState(0)
-  const [totalMedia, setTotalMedia] = useState(0)
-  const [recentPosts, setRecentPosts] = useState<Post[]>([])
-  const [recentUsers, setRecentUsers] = useState<User[]>([])
-  const [error, setError] = useState<string | null>(null)
+// Home (#9, #340): quick actions, the posts you were working on, drafts and counts.
+// The design's "Needs attention" and "Activity" sections, presence on the recent cards
+// and "from a template" wait for #324, #326, #325, #323 and #322.
+
+export function greeting(date: Date = new Date()): string {
+  const h = date.getHours()
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"
+}
+
+type HomeData = {
+  recent: Post[]
+  drafts: Post[]
+  counts: { published: number; drafts: number; pages: number; media: number }
+}
+
+export default function Dashboard() {
+  const { baseTitle } = useGoLive()
+  const user = useAuthUser()
+  const settings = useSiteSettings()
+  const [data, setData] = useState<HomeData | null>(null)
+  const [error, setError] = useState<unknown>(null)
+  const canCreate = canCreateContent(user?.role)
+  // Contributors' Home is about their own posts; editors see the whole site's.
+  const own = !isContentModerator(user?.role)
+  const mine = own && user?.id ? { user_id: user.id } : {}
 
   useEffect(() => {
-    document.title = `${baseTitle} Dashboard`;
+    document.title = `${baseTitle} Home`
+  }, [baseTitle])
 
-    const fetchData = async () => {
-      try {
-        const [postsResponse, usersResponse, taxonomiesResponse, mediaResponse] = await Promise.all([
-          getPosts(),
-          getUsers(),
-          getTaxonomyTypes(),
-          getMedia(),
-        ])
-
-        setTotalPosts(postsResponse.meta.total || 0)
-        setTotalUsers(usersResponse.meta.total || 0)
-        setTotalTaxonomies(taxonomiesResponse.meta.total || 0)
-        setTotalMedia(mediaResponse.meta.total || 0)
-
-        setRecentPosts(postsResponse.data.slice(0, 5))
-        setRecentUsers(usersResponse.data.slice(0, 5))
-      } catch (e) {
-        setError(errorMessage(e, "Failed to fetch admin data"))
-        console.error("Admin dashboard error:", e)
-      }
+  useEffect(() => {
+    let live = true
+    const list = { with_meta: true, meta_level: "basic", sort: "changed_at", order: "desc" } as const
+    Promise.all([
+      getPosts({ ...list, ...mine, status: ACTIVE_STATUSES, limit: 3 }),
+      getPosts({ ...list, ...mine, type: "post", status: "draft", limit: 5 }),
+      getPostCounts({ type: "post", ...mine }),
+      getPostCounts({ type: "page", ...mine }),
+      getMedia({ limit: 1 }),
+    ])
+      .then(([recent, drafts, posts, pages, media]) => {
+        if (!live) return
+        setData({
+          recent: recent.data,
+          drafts: drafts.data,
+          counts: {
+            published: posts.counts.published ?? 0,
+            drafts: posts.counts.draft ?? 0,
+            pages: (pages.counts.published ?? 0) + (pages.counts.draft ?? 0),
+            media: media.meta.total ?? 0,
+          },
+        })
+      })
+      .catch((e) => live && setError(e))
+    return () => {
+      live = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.role])
 
-    fetchData()
-  }, [])
+  const firstName = (user?.full_name || user?.username || "").trim().split(/\s+/)[0]
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
 
   return (
-    <>
-      <Button variation="primary" onClick={() => console.log("Clicked!")}>
-        Add Item
-      </Button>
-      <div className="admin-header">
-        <h1>🚀 Admin Dashboard</h1>
-        <p>Manage your Go Live CMS content and settings</p>
-      </div>
+    <div className="gl-home">
+      <header className="gl-home__header">
+        <h1>
+          {greeting()}
+          {firstName && `, ${firstName}`}
+        </h1>
+        <p>
+          {today}
+          {settings?.site_title && ` · ${settings.site_title}`}
+        </p>
+      </header>
 
-      {error && (
-        <div className="admin-error">
-          <strong>Dashboard Error:</strong> {error}
-          <br />
-          <small>Make sure your Go backend is running on port 8080</small>
-        </div>
+      {canCreate && (
+        <section aria-label="Create" className="gl-home__create">
+          <QuickAction to="/content/post/new" icon={<PencilIcon />} accent title="New post" detail="Start a blank post" />
+          <QuickAction to="/content/page/new" icon={<PageIcon />} title="New page" detail="For About, Pricing, Docs" />
+          <QuickAction to="/media" icon={<UploadIcon />} title="Upload media" detail="Images, video and files" />
+        </section>
       )}
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-number">{totalPosts}</div>
-          <div className="stat-label">Total Posts</div>
-          <a href="/posts" className="stat-link">
-            Manage Posts
-          </a>
-        </div>
-        <div className="stat-card">
-          <div className="stat-number">{totalUsers}</div>
-          <div className="stat-label">Total Users</div>
-          <a href="/users" className="stat-link">
-            Manage Users
-          </a>
-        </div>
-        <div className="stat-card">
-          <div className="stat-number">{totalTaxonomies}</div>
-          <div className="stat-label">Taxonomies</div>
-          <Link to="/taxonomies" className="stat-link">
-            Manage Taxonomies
-          </Link>
-        </div>
-        <div className="stat-card">
-          <div className="stat-number">{totalMedia}</div>
-          <div className="stat-label">Media Files</div>
-          <a href="/media" className="stat-link">
-            Media Library
-          </a>
-        </div>
-      </div>
-
-      <div className="admin-sections">
-        <div className="admin-section">
-          <h2>📝 Recent Posts</h2>
-          {recentPosts.length > 0 ? (
-            recentPosts.map((post) => (
-              <div className="recent-item" key={post.id}>
-                <div className="recent-item-info">
-                  <h4>{post.title}</h4>
-                  <p>By {post.username}</p>
-                </div>
-                <div className="recent-item-date">{new Date(post.created_at).toLocaleDateString()}</div>
+      {error ? (
+        <EmptyState variant="error" icon="close" title="Couldn't load your content" description={errorMessage(error)} />
+      ) : (
+        <>
+          <section className="gl-home__section" aria-labelledby="home-recent" aria-busy={!data || undefined}>
+            <h2 id="home-recent">Continue where you left off</h2>
+            {data && data.recent.length === 0 ? (
+              <EmptyState compact icon={<DocumentIcon size={24} />} title="Nothing to continue yet" description="Posts and pages you edit show up here." />
+            ) : (
+              <div className="gl-home__recent">
+                {(data?.recent ?? [null, null, null]).map((post, i) => (
+                  <RecentCard key={post?.id ?? i} post={post} />
+                ))}
               </div>
-            ))
-          ) : (
-            <p>No recent posts found.</p>
-          )}
-        </div>
+            )}
+          </section>
 
-        <div className="admin-section">
-          <h2>👥 Recent Users</h2>
-          {recentUsers.length > 0 ? (
-            recentUsers.map((user) => (
-              <div className="recent-item" key={user.id}>
-                <div className="recent-item-info">
-                  <h4>{user.full_name}</h4>
-                  <p>
-                    @{user.username} • {user.role}
-                  </p>
-                </div>
-                <div className="recent-item-date">{new Date(user.created_at).toLocaleDateString()}</div>
+          <div className="gl-home__columns">
+            <section className="gl-home__section" aria-labelledby="home-drafts" aria-busy={!data || undefined}>
+              <div className="gl-home__section-heading">
+                <h2 id="home-drafts">{own ? "Your drafts" : "Drafts"}</h2>
+                <Link to={own ? "/content/post?view=mine" : "/content/post?view=draft"} className="gl-home__more">
+                  View all
+                </Link>
               </div>
-            ))
-          ) : (
-            <p>No recent users found.</p>
-          )}
-        </div>
+              {data && data.drafts.length === 0 ? (
+                <EmptyState compact title="No drafts" description="Every post is published or archived." />
+              ) : (
+                <ul className="gl-home__list">
+                  {(data?.drafts ?? [null, null, null]).map((post, i) => (
+                    <li key={post?.id ?? i}>
+                      {post ? (
+                        <Link to={`/content/edit/${post.id}`} className="gl-home__row">
+                          <span className="gl-home__row-text">
+                            <span className="gl-home__row-title">{post.title || "Untitled"}</span>
+                            <span className="gl-home__row-detail">
+                              <LastEdited post={post} phrase />
+                            </span>
+                          </span>
+                          <Byline post={post} size={20} />
+                          <ChevronRightIcon className="gl-home__chevron" />
+                        </Link>
+                      ) : (
+                        <span className="gl-home__row">
+                          <Skeleton shape="text" width="60%" />
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
-        <div className="admin-section quick-actions">
-          <h2>⚡ Quick Actions</h2>
-          <div className="action-buttons">
-            <a href="/gl-admin/posts/new" className="action-button">
-              Create New Post
-            </a>
-            <a href="/gl-admin/users/new" className="action-button">
-              Add User
-            </a>
-            <a href="/gl-admin/media/upload" className="action-button secondary">
-              Upload Media
-            </a>
-            <a href="/gl-admin/settings" className="action-button secondary">
-              Settings
-            </a>
+            <section className="gl-home__section" aria-labelledby="home-counts">
+              <h2 id="home-counts">At a glance</h2>
+              <dl className="gl-home__counts">
+                <Count label={own ? "Your published posts" : "Published posts"} value={data?.counts.published} to={own ? "/content/post?view=mine" : "/content/post?view=published"} />
+                <Count label={own ? "Your drafts" : "Drafts"} value={data?.counts.drafts} to={own ? "/content/post?view=mine" : "/content/post?view=draft"} />
+                <Count label={own ? "Your pages" : "Pages"} value={data?.counts.pages} to="/content/page" />
+                <Count label="Media files" value={data?.counts.media} to="/media" />
+              </dl>
+            </section>
           </div>
-        </div>
-      </div>
-    </>
+        </>
+      )}
+    </div>
   )
 }
 
-export default Dashboard
+function QuickAction({ to, icon, title, detail, accent = false }: { to: string; icon: ReactNode; title: string; detail: string; accent?: boolean }) {
+  return (
+    <Link to={to} className="gl-home__action">
+      <span className={`gl-home__action-icon${accent ? " gl-home__action-icon--accent" : ""}`} aria-hidden="true">
+        {icon}
+      </span>
+      <span className="gl-home__action-text">
+        <span className="gl-home__action-title">{title}</span>
+        <span className="gl-home__action-detail">{detail}</span>
+      </span>
+    </Link>
+  )
+}
+
+function RecentCard({ post }: { post: Post | null }) {
+  if (!post) {
+    return (
+      <div className="gl-home__card" aria-hidden="true">
+        <Skeleton shape="pill" />
+        <Skeleton shape="text" width="80%" />
+        <Skeleton shape="text" width="40%" />
+      </div>
+    )
+  }
+  return (
+    <Link to={`/content/edit/${post.id}`} className="gl-home__card">
+      <PostStatus status={post.post_status} iconPath={post.post_status} />
+      <span className="gl-home__card-title">{post.title || "Untitled"}</span>
+      <span className="gl-home__card-meta">
+        <Byline post={post} size={20} />
+        <span>
+          <LastEdited post={post} phrase />
+        </span>
+      </span>
+    </Link>
+  )
+}
+
+function Count({ label, value, to }: { label: string; value: number | undefined; to: string }) {
+  return (
+    <div className="gl-home__count">
+      <dt>
+        <Link to={to}>{label}</Link>
+      </dt>
+      <dd>{value === undefined ? <Skeleton width={32} height={24} /> : value}</dd>
+    </div>
+  )
+}

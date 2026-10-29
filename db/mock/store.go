@@ -200,6 +200,21 @@ func (mr *MockStoreMockRecorder) CountPasswordResetTokensSince(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPasswordResetTokensSince", reflect.TypeOf((*MockStore)(nil).CountPasswordResetTokensSince), arg0, arg1)
 }
 
+// CountPostsByStatus mocks base method.
+func (m *MockStore) CountPostsByStatus(arg0 context.Context, arg1 db.CountPostsByStatusParams) ([]db.CountPostsByStatusRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountPostsByStatus", arg0, arg1)
+	ret0, _ := ret[0].([]db.CountPostsByStatusRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountPostsByStatus indicates an expected call of CountPostsByStatus.
+func (mr *MockStoreMockRecorder) CountPostsByStatus(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPostsByStatus", reflect.TypeOf((*MockStore)(nil).CountPostsByStatus), arg0, arg1)
+}
+
 // CountPostsByTaxonomyTerm mocks base method.
 func (m *MockStore) CountPostsByTaxonomyTerm(arg0 context.Context, arg1 int64) (int64, error) {
 	m.ctrl.T.Helper()

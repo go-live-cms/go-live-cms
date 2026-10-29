@@ -46,7 +46,7 @@ const countFilteredPosts = `-- name: CountFilteredPosts :one
 SELECT COUNT(*) AS total FROM posts
 WHERE 
     ($1::text = '' OR post_type = $1)
-    AND ($2::text = '' OR post_status = $2)
+    AND ($2::text = '' OR post_status = ANY(string_to_array($2::text, ',')))
     AND ($3 = 0 OR user_id = $3)
 `
 
@@ -61,6 +61,50 @@ func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPosts
 	var total int64
 	err := row.Scan(&total)
 	return total, err
+}
+
+const countPostsByStatus = `-- name: CountPostsByStatus :many
+SELECT post_status, COUNT(*) AS total FROM posts
+WHERE
+    ($1::text = '' OR post_type = $1)
+    AND ($2::bigint = 0 OR user_id = $2)
+GROUP BY post_status
+ORDER BY post_status
+`
+
+type CountPostsByStatusParams struct {
+	PostType string `json:"post_type"`
+	UserID   int64  `json:"user_id"`
+}
+
+type CountPostsByStatusRow struct {
+	PostStatus string `json:"post_status"`
+	Total      int64  `json:"total"`
+}
+
+// The admin list's status tabs (#340): one count per status, with the list's
+// type and owner filters.
+func (q *Queries) CountPostsByStatus(ctx context.Context, arg CountPostsByStatusParams) ([]CountPostsByStatusRow, error) {
+	rows, err := q.db.QueryContext(ctx, countPostsByStatus, arg.PostType, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountPostsByStatusRow{}
+	for rows.Next() {
+		var i CountPostsByStatusRow
+		if err := rows.Scan(&i.PostStatus, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const countPostsByType = `-- name: CountPostsByType :one
@@ -78,7 +122,7 @@ func (q *Queries) CountPostsByType(ctx context.Context, postType string) (int64,
 const countPostsByTypeFiltered = `-- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts
 WHERE post_type = $1
-    AND ($2::text = '' OR post_status = $2)
+    AND ($2::text = '' OR post_status = ANY(string_to_array($2::text, ',')))
 `
 
 type CountPostsByTypeFilteredParams struct {
@@ -390,7 +434,7 @@ const listPosts = `-- name: ListPosts :many
 SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug FROM posts
 WHERE 
     ($1::text = '' OR post_type = $1)
-    AND ($2::text = '' OR post_status = $2)
+    AND ($2::text = '' OR post_status = ANY(string_to_array($2::text, ',')))
     AND ($3 = 0 OR user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
@@ -520,7 +564,7 @@ LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     ($1::text = '' OR p.post_type = $1)
-    AND ($2::text = '' OR p.post_status = $2)
+    AND ($2::text = '' OR p.post_status = ANY(string_to_array($2::text, ',')))
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
@@ -631,11 +675,22 @@ SELECT
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
         WHERE pm.post_id = p.id
-    ) as meta
+    ) as meta,
+    -- The byline (#340): every user_posts author in credit order, for the
+    -- admin list's avatars. Public fields only (no email or role).
+    (
+        SELECT COALESCE(
+            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name) ORDER BY up."order", u.id),
+            '[]'::jsonb
+        )
+        FROM user_posts up
+        JOIN users u ON u.id = up.user_id
+        WHERE up.post_id = p.id
+    )::jsonb as authors
 FROM posts p
 WHERE 
     ($1::text = '' OR p.post_type = $1)
-    AND ($2::text = '' OR p.post_status = $2)
+    AND ($2::text = '' OR p.post_status = ANY(string_to_array($2::text, ',')))
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
@@ -679,6 +734,7 @@ type ListPostsWithMetaRow struct {
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug              string                `json:"slug"`
 	Meta              interface{}           `json:"meta"`
+	Authors           json.RawMessage       `json:"authors"`
 }
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
@@ -718,6 +774,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.Meta,
+			&i.Authors,
 		); err != nil {
 			return nil, err
 		}

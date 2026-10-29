@@ -3,7 +3,7 @@
 // Registers all post-related HTTP routes, with auth middleware applied selectively.
 //
 // Route Structure
-//   - Public reads: GET /posts, /posts/:id, /posts/type/:type, /posts/user/:id
+//   - Public reads: GET /posts, /posts/counts, /posts/:id, /posts/type/:type, /posts/user/:id
 //   - Protected writes: POST/PUT/DELETE /posts (require Bearer auth)
 //   - Post meta: /posts/:id/meta (GET public, POST/DELETE protected)
 //   - Featured images: /posts/:id/featured-image (GET public, POST/DELETE protected)
@@ -23,6 +23,7 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 	{
 		// Public reads (put static routes before the greedy :id route)
 		posts.GET("", server.getPosts)
+		posts.GET("/counts", server.getPostCounts)
 		posts.GET("/type/:type", server.getPostsByType)
 		posts.GET("/user/:id", server.getPostsByUser)
 		posts.GET("/slug/:slug", server.getPostBySlug)

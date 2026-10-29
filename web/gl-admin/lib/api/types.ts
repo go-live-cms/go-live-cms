@@ -125,6 +125,21 @@ export interface Post {
   menu_order: number
   created_at: string
   changed_at: string
+  // Every credited author (user_posts) in byline order; only list rows fetched
+  // with with_meta=true&meta_level=basic carry it (#340).
+  authors?: PostAuthor[]
+}
+
+export interface PostAuthor {
+  id: number
+  username: string
+  full_name: string
+}
+
+// GET /posts/counts: posts per status (draft, published, archived, ...).
+export interface PostStatusCounts {
+  counts: Record<string, number>
+  total: number
 }
 
 export interface User {

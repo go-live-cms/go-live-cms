@@ -1,4 +1,12 @@
-import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse, TaxonomyTerm } from "./types"
+import type {
+  Post,
+  PostSortOption,
+  PostStatusCounts,
+  SortOrder,
+  PaginationParams,
+  ApiResponse,
+  TaxonomyTerm,
+} from "./types"
 import { apiCall, authenticatedFetch } from "../api"
 import { apiErrorFromResponse } from "./errors"
 import { buildUrl } from "./utils"
@@ -26,7 +34,7 @@ export interface PostQueryParams extends PaginationParams {
   sort?: PostSortOption
   order?: SortOrder
   type?: string // post type name
-  status?: string
+  status?: string // one status, or a comma list ("draft,published")
   user_id?: string | number
   with_meta?: boolean
   meta_level?: string // 'basic' | 'full' | 'all'
@@ -39,6 +47,14 @@ export async function getPosts(params: PostQueryParams = {}): Promise<ApiRespons
     data: response.posts || [],
     meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
   }
+}
+
+// How many posts have each status, with the list's type and owner filters (#340).
+export async function getPostCounts(
+  params: { type?: string; user_id?: string | number } = {}
+): Promise<PostStatusCounts> {
+  const response = await apiCall(buildUrl("/posts/counts", params))
+  return { counts: response.counts || {}, total: response.total || 0 }
 }
 
 export async function getPostById(id: string | number): Promise<{ post: Post }> {

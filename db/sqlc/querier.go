@@ -29,6 +29,9 @@ type Querier interface {
 	ClaimUserInvitation(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	CountPasswordResetTokensSince(ctx context.Context, arg CountPasswordResetTokensSinceParams) (int64, error)
+	// The admin list's status tabs (#340): one count per status, with the list's
+	// type and owner filters.
+	CountPostsByStatus(ctx context.Context, arg CountPostsByStatusParams) ([]CountPostsByStatusRow, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
 	CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error)

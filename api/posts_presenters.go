@@ -52,6 +52,15 @@ type PostWithMetaResponse struct {
 	ChangedAt       time.Time              `json:"changed_at"`
 	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
 	Meta            map[string]interface{} `json:"meta,omitempty"`
+	// Every credited author (user_posts), in byline order (#340).
+	Authors []PostAuthorResponse `json:"authors"`
+}
+
+// PostAuthorResponse is one byline entry: public fields only.
+type PostAuthorResponse struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	FullName string `json:"full_name"`
 }
 
 // PostWithAllMetaResponse includes post, author, and post-type meta
@@ -179,7 +188,18 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 		ChangedAt:       post.ChangedAt,
 		PublishedBlocks: publishedBlocks,
 		Meta:            metaMap,
+		Authors:         decodePostAuthors(post.Authors),
 	}
+}
+
+// decodePostAuthors reads the authors column; [] when it's empty or invalid.
+func decodePostAuthors(data []byte) []PostAuthorResponse {
+	var authors []PostAuthorResponse
+	decodeJSONBestEffort(data, &authors)
+	if authors == nil {
+		return []PostAuthorResponse{}
+	}
+	return authors
 }
 
 // toPostWithAllMetaResponse converts ListPostsWithAllMetaRow to API response with full meta

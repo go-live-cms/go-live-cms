@@ -1,0 +1,296 @@
+@use "@gl-admin/assets/styles/mixins";
+
+// Posts and Pages lists (#340): header, tabs, toolbar, the table's cells, the
+// contributor's access column and, at phone width, a list of links instead of the table.
+
+.gl-content-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0 auto;
+  max-width: 1120px;
+  width: 100%;
+
+  &__header {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+
+    h1 {
+      flex: 1;
+      font-size: var(--type-title);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: var(--type-title-lh);
+      margin: 0;
+    }
+  }
+
+  &__header-actions {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  &__toolbar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    justify-content: flex-end;
+  }
+
+  &__title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    // In the table: never squeezed to a few letters a line; the box scrolls instead.
+    td > & {
+      min-width: 12rem;
+    }
+  }
+
+  &__link {
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__path {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    overflow-wrap: anywhere;
+
+    &--mono {
+      font-family: var(--font-mono);
+    }
+  }
+
+  &__actions {
+    align-items: center;
+    display: flex;
+    gap: var(--space-1);
+    justify-content: flex-end;
+  }
+
+  &__empty {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-xl);
+    padding: 96px var(--space-6);
+  }
+
+  &__sr {
+    @include mixins.visually-hidden;
+  }
+
+  // Below this the table scrolls sideways inside its box (.gl-table-scroll).
+  .gl-table {
+    min-width: 640px;
+  }
+
+  // The "Your access" column needs the room (the contributor board's 880px).
+  &--contributor .gl-table {
+    min-width: 880px;
+  }
+
+  // The status pill never wraps.
+  .gl-pill {
+    white-space: nowrap;
+  }
+}
+
+.gl-last-edited {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+// "Your access" (contributors).
+.gl-access {
+  display: inline-flex;
+  font-weight: 500;
+
+  &--edit {
+    align-items: center;
+    color: var(--success-text);
+    gap: 6px;
+
+    svg {
+      flex: none;
+    }
+  }
+
+  &--view {
+    color: var(--text-secondary);
+    flex-direction: column;
+    font-weight: 400;
+  }
+
+  &__line {
+    align-items: center;
+    color: inherit;
+    display: inline-flex;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  &__why {
+    color: inherit;
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    padding-left: 20px;
+  }
+}
+
+// Pages tree.
+.gl-page-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  min-width: 14rem;
+
+  &__branch {
+    color: var(--text-placeholder);
+  }
+
+  &__icon {
+    color: var(--text-secondary);
+    flex: none;
+  }
+
+  &__parent {
+    color: inherit;
+    font-family: var(--font-sans);
+  }
+}
+
+// Tree / List: two radios drawn as a segmented control.
+.gl-segmented {
+  background: var(--background-hover);
+  border: 0;
+  border-radius: var(--radius-lg);
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+
+  &__option {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    font-size: var(--type-label);
+    font-weight: 500;
+    height: 28px;
+    padding: 0 var(--space-3);
+    position: relative;
+
+    input {
+      @include mixins.visually-hidden;
+    }
+
+    &.is-checked {
+      background: var(--background);
+      box-shadow: var(--card-shadow), 0 0 0 1px var(--border-color);
+      color: var(--text-primary);
+    }
+
+    &:has(input:focus-visible) {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+}
+
+// Phone width: links instead of the table (the 375 board).
+.gl-post-cards {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  &__link {
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--space-3) var(--space-4);
+    text-decoration: none;
+
+    &:hover {
+      background: var(--background-subtle);
+    }
+  }
+
+  &__title {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 22px;
+  }
+
+  &__meta {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: var(--type-footnote);
+    gap: var(--space-2);
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__access {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+}
+
+@media (width <= 768px) {
+  .gl-content-list {
+    gap: var(--space-4);
+
+    // The mobile bar shows the page title and a New post button.
+    &__header h1 {
+      @include mixins.visually-hidden;
+    }
+
+    &__header:has(.gl-content-list__new) {
+      display: none;
+    }
+
+    &__table {
+      display: none;
+    }
+
+    // The tabs scroll sideways instead of wrapping.
+    .gl-tabs__list {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .gl-tabs__tab {
+      flex: none;
+      height: 44px;
+    }
+  }
+
+  .gl-post-cards {
+    border-top: 1px solid var(--border-color);
+    display: block;
+    margin: 0 calc(-1 * var(--space-4));
+  }
+}
