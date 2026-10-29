@@ -15,6 +15,13 @@ type DrawerProps = {
   // Panel width; capped at the viewport less 48px.
   width?: number | string
   initialFocus?: RefObject<HTMLElement | null>
+  // No header: `title` only names the dialog, the content fills the panel, and the
+  // close button floats on the scrim beside it (the phone-width sidebar).
+  bare?: boolean
+  // Names the close button ("Close menu").
+  closeLabel?: string
+  id?: string
+  className?: string
 }
 
 // A modal side panel (the phone-width sidebar, version history). Same keyboard rules
@@ -28,6 +35,10 @@ export default function Drawer({
   side = "right",
   width = 400,
   initialFocus,
+  bare = false,
+  closeLabel = "Close",
+  id: givenId,
+  className = "",
 }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null)
   const id = useStableId("drawer")
@@ -38,6 +49,8 @@ export default function Drawer({
 
   if (!isOpen) return null
 
+  const close = <IconButton onClick={onClose} aria-label={closeLabel} icon={<CloseIcon />} className={bare ? "gl-drawer__float-close" : ""} />
+
   return (
     <div
       className={`gl-drawer-overlay gl-drawer-overlay--${side}`}
@@ -47,20 +60,26 @@ export default function Drawer({
     >
       <div
         ref={ref}
+        id={givenId}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={`${id}-title`}
+        aria-labelledby={bare ? undefined : `${id}-title`}
+        aria-label={bare ? title : undefined}
         tabIndex={-1}
-        className={`gl-drawer gl-drawer--${side}`}
+        className={`gl-drawer gl-drawer--${side}${bare ? " gl-drawer--bare" : ""} ${className}`}
         style={{ width }}
       >
-        <div className="gl-drawer__header">
-          <h2 id={`${id}-title`} className="gl-drawer__title">
-            {title}
-          </h2>
-          <IconButton onClick={onClose} aria-label="Close" icon={<CloseIcon />} />
-        </div>
+        {!bare && (
+          <div className="gl-drawer__header">
+            <h2 id={`${id}-title`} className="gl-drawer__title">
+              {title}
+            </h2>
+            {close}
+          </div>
+        )}
         <div className="gl-drawer__content">{children}</div>
+        {/* Last in the panel, so Tab reaches it after the content. */}
+        {bare && close}
         {footer && <div className="gl-drawer__footer">{footer}</div>}
       </div>
     </div>

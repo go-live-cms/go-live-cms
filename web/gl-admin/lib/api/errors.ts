@@ -13,7 +13,10 @@ export class ApiError extends Error {
     // The API's machine-readable {"code": ...}, when present.
     readonly code: string | null = null,
     // The API's own {"error": ...} text, if the body had one.
-    readonly serverMessage: string | null = null
+    readonly serverMessage: string | null = null,
+    // The API's {"request_id": ...} (or the X-Request-ID header): the error ID a user
+    // can report, which matches the API's log line for the request.
+    readonly requestId: string | null = null
   ) {
     super(message)
     this.name = "ApiError"
@@ -77,18 +80,23 @@ export async function apiErrorFromResponse(
 ): Promise<ApiError> {
   let serverMessage: string | null = null
   let code: string | null = null
+  let requestId: string | null = null
   try {
     const text = await response.text()
     const parsed = JSON.parse(text)
     if (parsed && typeof parsed.error === "string") serverMessage = parsed.error
     if (parsed && typeof parsed.code === "string") code = parsed.code
+    if (parsed && typeof parsed.request_id === "string" && parsed.request_id) requestId = parsed.request_id
   } catch {
     // Not JSON (or no body): never show the raw text.
   }
+  // A non-JSON error (a proxy's HTML page) has no body field; the API sets the header
+  // on every response it answers.
+  requestId ??= response.headers.get("X-Request-ID") || null
   const retryAfter = Number.parseInt(response.headers.get("Retry-After") ?? "", 10)
   const retryAfterSeconds = Number.isFinite(retryAfter) ? retryAfter : null
   const message = friendlyApiMessage(response.status, { ...options, serverMessage, retryAfterSeconds })
-  return new ApiError(message, response.status, retryAfterSeconds, code, serverMessage)
+  return new ApiError(message, response.status, retryAfterSeconds, code, serverMessage, requestId)
 }
 
 // fetch() rejects with a TypeError when the server can't be reached at all;

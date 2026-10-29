@@ -1,292 +1,319 @@
-@use "@gl-admin/assets/styles/variables";
+// The app shell's sidebar and phone top bar (#339), from the redesign's "Sidebar
+// (shared)", "375 · Posts" and "375 · Sidebar open" boards. The drawer itself is the
+// shared Drawer (modal.scss), on --z-drawer.
 
-.admin-sidebar {
-    background: var(--sidebar-background);
-    box-shadow: var(--box-shadow);
+$mobile: 768px; // MOBILE_QUERY in Sidebar.tsx
+
+.gl-shell__sidebar {
+  background: var(--sidebar-background);
+  border-right: 1px solid var(--border-color);
+  box-sizing: border-box;
+  flex: none;
+  height: 100vh;
+  overflow-y: auto;
+  position: sticky;
+  top: 0;
+  width: 248px;
+
+  @media (width <= $mobile) {
+    display: none;
+  }
+}
+
+.gl-sidebar {
+  box-sizing: border-box;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans);
+  font-size: var(--type-body);
+  gap: var(--space-4);
+  line-height: var(--type-body-lh);
+  min-height: 100%;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+
+  &__brand {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    display: inline-flex;
+    gap: 10px;
+    height: 40px;
+    padding: 0 var(--space-2);
+    text-decoration: none;
+
+    &:hover {
+      background: var(--background-hover);
+    }
+  }
+
+  &__logo {
+    flex: none;
+  }
+
+  &__brand-name {
+    color: var(--text-primary);
+    font-size: var(--type-subtitle);
+    font-weight: 600;
+
+    b {
+      color: inherit;
+      font-weight: 700;
+    }
+  }
+
+  &__nav {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    padding-top: var(--top-white-space);
-    position: relative;
-    user-select: none;
-
-    &__resize-handle {
-      background: transparent;
-      cursor: ew-resize;
-      height: 100%;
-      position: absolute;
-      right: 0;
-      top: 0;
-      transition: background var(--transition-duration);
-      width: 0.25rem;
-      z-index: 2;
-
-      &:hover {
-        background: var(--sidebar-resize-handle-background);
-      }
-    }
-
-    &__controller {
-      align-items: center;
-      background: var(--sidebar-popup-background);
-      border: 1px solid var(--border-color);
-      border-radius: 100%;
-      display: flex;
-      height: 2rem;
-      justify-content: center;
-      opacity: 0;
-      padding: .5rem;
-      pointer-events: none;
-      position: absolute;
-      right: -1rem;
-      top: 1.6rem;
-      transform: translateX(-.5rem);
-      transition: background 0.2s;
-      transition: .2s;
-      width: 2rem;
-      z-index: 99;
-
-      &:hover {
-        background: var(--sidebar-background-hover);
-      }
-    }
-
-    &:hover .admin-sidebar__controller {
-      opacity: 1;
-      pointer-events: all;
-      transform: translateX(0);
-    }
-
-    &__head {
-      align-items: center;
-      display: flex;
-      flex-shrink: 0;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-      margin-left: 1rem;
-      padding: .4rem;
-      text-decoration: none;
-      width: 8rem;
-
-      &:hover svg {
-        filter: var(--logo-glow);
-        transition: filter 0.2s;
-      }
-
-      h1 {
-        color: var(--text-primary);
-        font-size: 1.125rem;
-        font-style: normal;
-        font-weight: 600;
-        line-height: 150%;
-      }
-
-      &:hover h1 {
-        padding-left: .2rem;
-      }
-    }
-
-    &__nav {
-      align-items: flex-start;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      overflow-y: auto;
-      padding: 0 1rem;
-
-      hr {
-        background: var(--border-color);
-        border: none;
-        height: 1px;
-        width: 100%;
-      }
-
-      &_section {
-        align-items: flex-start;
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        width: 100%;
-      }
-    }
-
-    &__bottom {
-      border-top: 1px solid var(--border-color);
-      margin-top: auto;
-    }
-
-    // Collapsed rail is desktop-only; the mobile drawer always shows labels
-    @media (width > 768px) {
-    &.closed {
-      width: 4.25rem!important;
-
-      .admin-sidebar__head {
-        margin-left: .55rem;
-
-        h1 {
-          display: none;
-        }
-      }
-
-      .admin-sidebar__resize-handle {
-        display: none;
-      }
-
-      .admin-sidebar__nav {
-          overflow: hidden;
-
-          &_section .sidebar-item {
-            padding: 0;
-            width: fit-content;
-
-            &__name {
-              display: none;
-            }
-          }
-      }
-
-      .sidebar-user-profile {
-        width: fit-content;
-
-        & > .user-profile {
-          padding: .8rem;
-          padding-top: 3.8rem;
-
-          & > .user-profile__name {
-            display: none;
-          }
-
-          & .user-profile__icon {
-            bottom: 2rem;
-            left: 50%;
-            top: unset;
-            transform: translateX(-55%);
-          }
-        }
-      }
-    }
-    }
-
-    &__close {
-      display: none;
-    }
+    gap: var(--space-4);
   }
 
-// Mobile: the sidebar becomes an off-canvas drawer opened from .admin-mobile-bar
-.admin-mobile-bar,
-.admin-sidebar-backdrop {
-  display: none;
-}
-
-@mixin icon-button {
-  align-items: center;
-  background: none;
-  border: none;
-  border-radius: 0.25rem;
-  color: var(--text-primary);
-  cursor: pointer;
-  display: flex;
-  height: 2.5rem;
-  justify-content: center;
-  width: 2.5rem;
-
-  &:hover {
-    background: var(--sidebar-background-hover);
-  }
-}
-
-@media (width <= 768px) {
-  .admin-mobile-bar {
-    align-items: center;
-    background: var(--sidebar-background);
-    box-shadow: var(--box-shadow);
+  &__section {
     display: flex;
-    flex-shrink: 0;
-    gap: 0.5rem;
-    height: 3.5rem;
-    padding: 0 0.5rem;
+    flex-direction: column;
+    gap: 2px;
+  }
 
-    &__toggle {
-      @include icon-button;
+  &__heading {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    font-size: var(--type-footnote);
+    font-weight: 500;
+    height: 24px;
+    padding: 0 var(--space-2);
+  }
+
+  &__link {
+    align-items: center;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    display: flex;
+    gap: 10px;
+    min-height: 32px;
+    padding: 0 var(--space-2);
+    text-decoration: none;
+    transition: background var(--duration-fast) var(--ease-out);
+
+    svg {
+      color: inherit;
+      flex: none;
     }
 
-    &__logo {
-      align-items: center;
+    &:hover {
+      background: var(--background-hover);
       color: var(--text-primary);
-      display: flex;
-      font-size: 1.125rem;
-      font-weight: 600;
-      gap: 0.5rem;
-      text-decoration: none;
+    }
 
-      .logo {
-        height: 1.75rem;
-        width: 1.75rem;
+    &.is-current {
+      background: var(--background-active);
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    &--nested {
+      min-height: 30px;
+    }
+
+    &--group {
+      flex: 1;
+      min-width: 0;
+      padding-right: 0;
+
+      &:hover {
+        background: transparent;
       }
     }
   }
 
-  .admin-sidebar-backdrop {
-    background: rgb(0 0 0 / 50%);
-    display: block;
-    inset: 0;
-    opacity: 0;
-    pointer-events: none;
-    position: fixed;
-    transition: opacity var(--transition-duration);
-    z-index: 100;
+  &__label {
+    color: inherit;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
-    &.open {
-      opacity: 1;
-      pointer-events: auto;
+  // Posts: the link and its disclosure share one hover row.
+  &__group {
+    align-items: center;
+    border-radius: var(--radius-md);
+    display: flex;
+    gap: 2px;
+    padding-right: var(--space-1);
+
+    &:hover {
+      background: var(--background-hover);
+
+      .gl-sidebar__link {
+        color: var(--text-primary);
+      }
+    }
+
+    &.is-inside .gl-sidebar__link {
+      color: var(--text-primary);
+      font-weight: 500;
     }
   }
 
-  // !important beats the inline resize width
-  .admin-sidebar {
-    height: 100dvh;
-    left: 0;
-    max-width: 85vw;
-    position: fixed;
-    top: 0;
-    transform: translateX(-100%);
-    // Hidden (and out of the tab order) once the slide-out finishes
-    transition: transform var(--transition-duration), visibility 0s var(--transition-duration);
-    visibility: hidden;
-    width: 18rem !important;
-    z-index: 101;
+  &__chevron {
+    color: inherit;
+    transition: transform var(--duration-moderate) var(--ease-out);
+  }
 
-    &.mobile-open {
-      transform: translateX(0);
-      // Visible immediately so the close button can take focus on open
-      transition: transform var(--transition-duration), visibility 0s;
-      visibility: visible;
+  &__toggle {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: grid;
+    flex: none;
+    height: 24px;
+    place-items: center;
+    width: 24px;
+
+    &:hover {
+      background: var(--background-active);
     }
 
-    .admin-sidebar__controller,
-    .admin-sidebar__resize-handle {
-      display: none;
+    &[aria-expanded="true"] .gl-sidebar__chevron {
+      transform: rotate(90deg);
+    }
+  }
+
+  &__children {
+    border-left: 1px solid var(--border-strong);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-left: 15px;
+    padding-left: var(--space-2);
+  }
+
+  &__footer {
+    margin-top: auto;
+  }
+
+  &__user {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0 var(--space-2);
+    text-align: left;
+    width: 100%;
+
+    &:hover,
+    &[aria-expanded="true"] {
+      background: var(--background-hover);
     }
 
-    .admin-sidebar__close {
-      @include icon-button;
+  }
 
-      position: absolute;
-      right: 0.5rem;
-      top: 0.5rem;
-    }
+  &__user-more {
+    color: inherit;
+    flex: none;
+  }
 
-    // The user menu opens beside the sidebar on desktop; inside the drawer it
-    // opens upward so it can't stick out past the viewport.
-    .admin-sidebar__bottom {
-      position: relative;
-    }
+  &__user-text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
 
-    .sidebar-popup {
-      bottom: calc(100% + 0.5rem);
-      left: 0.5rem;
-      right: 0.5rem;
-      width: auto;
-    }
+  &__user-name {
+    font-weight: 500;
+    line-height: 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__user-role {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
   }
 }
+
+.gl-sidebar__user-menu {
+  min-width: 220px;
+}
+
+// The phone drawer: the sidebar fills the panel, on the sidebar background.
+.gl-nav-drawer {
+  background: var(--sidebar-background);
+
+  &__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 100%;
+  }
+}
+
+// Phone top bar: menu button, page title, New post.
+.gl-mobile-bar {
+  display: none;
+
+  @media (width <= $mobile) {
+    align-items: center;
+    background: var(--background);
+    border-bottom: 1px solid var(--border-color);
+    box-sizing: border-box;
+    display: flex;
+    flex: none;
+    gap: var(--space-1);
+    height: 56px;
+    padding: 0 6px;
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
+  }
+
+  &__toggle {
+    height: 44px;
+    width: 44px;
+  }
+
+  &__title {
+    flex: 1;
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 24px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__new {
+    background: var(--accent-solid);
+    border-radius: 8px;
+    color: var(--accent-on);
+    display: grid;
+    flex: none;
+    height: 40px;
+    margin-right: 2px;
+    place-items: center;
+    width: 40px;
+
+    &:hover {
+      background: var(--accent-solid-hover);
+    }
+  }
+
+  &__new-icon {
+    color: inherit;
+  }
+}
+

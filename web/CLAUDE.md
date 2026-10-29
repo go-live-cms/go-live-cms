@@ -98,6 +98,14 @@ are the most fragile part of the codebase. **Before editing anything under
   env); the other tests stay in the plain `unit` project. Without `SITE_URL`,
   robots/sitemap are sent `private, no-store` (the URL came from the Host header);
   the sitemap is cached in memory for 10 minutes.
+- **App shell (#339):** the sidebar's links come from `components/sidebar/nav.ts`
+  (`buildNavigation`, role-filtered with `lib/roles.ts`; tested in `nav.test.ts`). At
+  ≤768px it's the shared `Drawer` (`bare`), so focus trap, Escape and focus return are
+  Drawer's. Admin-only pages are wrapped in `RequireRole` in `app.tsx` (the 403 page).
+  Full-page errors live in `components/errors/ErrorPages.tsx`; `errorPageFor`
+  (`lib/errorPages.ts`) maps an `ApiError` to 404 / 403 / the generic page, whose error
+  ID is `ApiError.requestId` (the API's `request_id`). Pages that fail their main load
+  render `<ErrorPage error={…}>` or throw into the `ErrorBoundary`, which does the same.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

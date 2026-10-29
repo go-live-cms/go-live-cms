@@ -89,11 +89,6 @@
         @include dark-tokens;
     }
 
-    :root[data-theme="dark"] .admin-sidebar {
-        border-right: 1px solid var(--border-color)!important;
-        box-shadow: none!important;
-    }
-
     // Dark mode scrollbar
     :root[data-theme="dark"] ::-webkit-scrollbar {
         background: var(--background);

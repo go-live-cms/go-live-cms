@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { getPostById } from "@gl-admin/lib/api/posts"
 import type { Post } from "@gl-admin/lib/api/types"
 import PostForm from "@gl-admin/components/forms/PostForm"
+import { ErrorPage, NotFoundPage } from "@gl-admin/components/errors/ErrorPages"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 
 export default function EditContent() {
@@ -11,6 +12,9 @@ export default function EditContent() {
   const [post, setPost] = useState<Post | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // The post couldn't be loaded: the 404, 403 or generic error page (#339).
+  const [loadError, setLoadError] = useState<unknown>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -20,19 +24,20 @@ export default function EditContent() {
         return
       }
 
+      setLoadError(null)
       try {
         const response = await getPostById(id)
         setPost(response.post)
       } catch (err) {
         console.error("Error fetching content:", err)
-        setError("Failed to load content")
+        setLoadError(err)
       } finally {
         setLoading(false)
       }
     }
 
     fetchPost()
-  }, [id])
+  }, [id, attempt])
 
   const handleSuccess = (updatedPost: Post) => {
     setPost(updatedPost)
@@ -61,6 +66,20 @@ export default function EditContent() {
     )
   }
 
+  if (loadError) {
+    return (
+      <ErrorPage
+        error={loadError}
+        onRetry={() => {
+          setLoading(true)
+          setAttempt((n) => n + 1)
+        }}
+      />
+    )
+  }
+
+  if (!post) return <NotFoundPage />
+
   if (error) {
     return (
       <div className="post-form-page">
@@ -68,20 +87,6 @@ export default function EditContent() {
           <h1>Error</h1>
         </div>
         <div className="message error">{error}</div>
-        <button onClick={() => navigate("/content")} className="btn btn-secondary">
-          Back to Content
-        </button>
-      </div>
-    )
-  }
-
-  if (!post) {
-    return (
-      <div className="post-form-page">
-        <div className="page-header">
-          <h1>Content Not Found</h1>
-        </div>
-        <div className="message error">The requested content could not be found.</div>
         <button onClick={() => navigate("/content")} className="btn btn-secondary">
           Back to Content
         </button>
