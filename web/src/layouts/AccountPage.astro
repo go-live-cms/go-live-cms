@@ -1,7 +1,9 @@
 ---
-// Shell of the signed-out account pages (forgot/reset password, accept
-// invite), matching /login: the same card, logo and styles. Their logic is in
-// gl-admin/lib/accountPages.ts; each page's <script> only mounts it.
+// Shell of the signed-out account pages (/login, forgot/reset password, accept
+// invite; redesign #344): the logo above one card, an optional line below it.
+// Each page puts its views (a form, then result panels) in the card. Their
+// logic is in gl-admin/lib/accountPages.ts and loginPage.ts; each page's
+// <script> only mounts it (no inline script, admin CSP #161).
 import Head from "@/layouts/Page/Head.astro"
 import { SITE_TITLE } from "@/consts"
 import GLLogo from "@gl-admin/assets/gl-logo.svg?raw"
@@ -9,13 +11,13 @@ import "@gl-admin/assets/styles/pages/login.scss"
 
 interface Props {
   title: string
-  heading: string
-  subtitle: string
+  description: string
 }
 
-const { title, heading, subtitle } = Astro.props
+const { title, description } = Astro.props
 
-// Emailed links hold a token (in the fragment, but be safe): never cache the page.
+// Emailed links hold a token (in the fragment, but be safe), and /login may
+// carry a redirect: never cache these pages.
 Astro.response.headers.set("Cache-Control", "no-store")
 ---
 
@@ -23,25 +25,22 @@ Astro.response.headers.set("Cache-Control", "no-store")
 <html lang="en">
 <head>
 <!-- noindex: Head then emits robots noindex and no canonical/og:url (#137). -->
-<Head title={`${title} - ${SITE_TITLE}`} description={subtitle} noindex>
+<Head title={`${title} - ${SITE_TITLE}`} description={description} noindex>
   <meta name="referrer" content="no-referrer" />
 </Head>
 </head>
 <body>
-<main class="gl-admin-login">
-  <div class="gl-admin-login__card">
-    <header class="gl-admin-login__header">
-      <span class="gl-admin-login__logo" aria-hidden="true" set:html={GLLogo} />
-      <h1 class="gl-admin-login__title">{heading}</h1>
-      <p class="gl-admin-login__subtitle" id="pageSubtitle">{subtitle}</p>
-    </header>
+<div class="gl-admin-login">
+  <p class="gl-admin-login__brand">
+    <span class="gl-admin-login__logo" aria-hidden="true" set:html={GLLogo} />
+    GoLive
+  </p>
 
-    <p id="errorMessage" class="gl-admin-login__error" hidden></p>
-    <!-- Always rendered so screen readers announce every new error. -->
-    <div id="errorAnnouncer" class="gl-admin-login__announcer" role="alert" aria-atomic="true"></div>
-
+  <main class="gl-admin-login__card">
     <slot />
-  </div>
-</main>
+  </main>
+
+  <slot name="after" />
+</div>
 </body>
 </html>

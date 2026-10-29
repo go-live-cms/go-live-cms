@@ -8,6 +8,7 @@
 // address bar and history into this tab's session storage (so a reload still
 // works), and POSTs it to the API.
 import { ApiError, apiErrorFromResponse } from "./api/errors"
+import { passwordRule } from "./passwordRules"
 import { FULL_NAME_MAX, FULL_NAME_MIN, USERNAME_MAX, USERNAME_MIN, retryHint, validateNewPassword } from "./profile"
 import { USER_ROLE_OPTIONS } from "./roles"
 
@@ -45,6 +46,8 @@ export interface InvitationPreview {
   email: string
   role: string
   expires_at: string
+  // Null when the inviter's account is gone (or the API couldn't load it).
+  invited_by?: { id: number; name: string } | null
 }
 
 export function previewInvitation(token: string): Promise<InvitationPreview> {
@@ -162,36 +165,100 @@ export function roleLabel(role: string): string {
   return USER_ROLE_OPTIONS.find((o) => o.value === role)?.label ?? role
 }
 
+// What each role may do, for the accept page. Mirrors api/auth_roles.go and
+// api/auth_posts.go (see lib/roles.ts).
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  admin: "Administrators can do everything, including managing users, settings and themes.",
+  editor: "Editors write, edit and publish any post or page.",
+  contributor: "Contributors write drafts and upload media; an editor or administrator publishes them.",
+}
+
+export function roleDescription(role: string): string | null {
+  const description = ROLE_DESCRIPTIONS[role]
+  return description ? `${description} An administrator can change your role later.` : null
+}
+
+// "an Editor", "a Contributor".
+export function withArticle(label: string): string {
+  return `${/^[aeiou]/i.test(label) ? "an" : "a"} ${label}`
+}
+
+// The inviter's avatar colour, the way Avatar.tsx picks it (id % 8). Not
+// imported: that module is React, and these pages have none.
+export function presenceColor(id: number): string {
+  return `var(--presence-${(Math.abs(Math.trunc(id)) % 8) + 1})`
+}
+
 // --- Page wiring ------------------------------------------------------------
 
-// The shared form chrome of the account pages (same markup as /login): an
-// error box mirrored to a live region, and a submit button with a spinner.
-function formUi(doc: Document, form: HTMLFormElement, idleLabel: string, busyLabel: string) {
+// Keeps each [data-password-rule="<input id>"] hint in step with its input:
+// the count while it is short, a check once it is long enough.
+export function wirePasswordRules(doc: Document): void {
+  for (const rule of Array.from(doc.querySelectorAll<HTMLElement>("[data-password-rule]"))) {
+    const input = doc.getElementById(rule.dataset.passwordRule!) as HTMLInputElement | null
+    if (!input) continue
+    const text = rule.querySelector<HTMLElement>("[data-rule-text]") ?? rule
+    const update = () => {
+      const { met, text: label } = passwordRule(input.value)
+      rule.classList.toggle("is-met", met)
+      text.textContent = label
+    }
+    input.addEventListener("input", update)
+    update()
+  }
+}
+
+// Show / Hide buttons next to password fields ([data-password-toggle] = the
+// input's id). The visible word is the action, so it is also the name
+// ("Show password"), not a pressed state.
+export function wirePasswordToggles(doc: Document): void {
+  for (const button of Array.from(doc.querySelectorAll<HTMLButtonElement>("[data-password-toggle]"))) {
+    const input = doc.getElementById(button.dataset.passwordToggle!) as HTMLInputElement | null
+    if (!input) continue
+    const word = button.querySelector<HTMLElement>("[data-toggle-text]") ?? button
+    button.addEventListener("click", () => {
+      const show = input.type === "password"
+      input.type = show ? "text" : "password"
+      word.textContent = show ? "Hide" : "Show"
+    })
+  }
+}
+
+// The shared form chrome of the account pages and /login: an error notice
+// (its text in [data-error-text]) mirrored to a live region, and a submit
+// button with a spinner.
+export function formUi(doc: Document, form: HTMLFormElement, idleLabel: string, busyLabel: string) {
   const error = doc.getElementById("errorMessage") as HTMLElement
+  const errorText = error.querySelector<HTMLElement>("[data-error-text]") ?? error
   const announcer = doc.getElementById("errorAnnouncer") as HTMLElement
   const button = form.querySelector<HTMLButtonElement>("button[type=submit]")!
   const label = button.querySelector<HTMLElement>("[data-label]")
   const spinner = button.querySelector<HTMLElement>("[data-spinner]")
-  const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input"))
+  // A read-only field (the invitation's email) is never what was wrong.
+  const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input")).filter((i) => !i.readOnly)
   const win = doc.defaultView!
   let announceTimer: number | undefined
 
+  // Adds or removes the error from each input's aria-describedby, keeping
+  // what the markup put there (a password field's hint).
   const setInvalid = (invalid: boolean) => {
     for (const input of inputs) {
       input.closest(".gl-input")?.classList.toggle("is-invalid", invalid)
+      const ids = (input.getAttribute("aria-describedby") ?? "").split(/\s+/).filter((id) => id && id !== "errorMessage")
       if (invalid) {
         input.setAttribute("aria-invalid", "true")
-        input.setAttribute("aria-describedby", "errorMessage")
+        ids.unshift("errorMessage")
       } else {
         input.removeAttribute("aria-invalid")
-        input.removeAttribute("aria-describedby")
       }
+      if (ids.length) input.setAttribute("aria-describedby", ids.join(" "))
+      else input.removeAttribute("aria-describedby")
     }
   }
 
   return {
     showError(message: string) {
-      error.textContent = message
+      errorText.textContent = message
       error.hidden = false
       setInvalid(true)
       // A live region only speaks when its text changes: clear, then set.
@@ -203,7 +270,7 @@ function formUi(doc: Document, form: HTMLFormElement, idleLabel: string, busyLab
     },
     hideError() {
       error.hidden = true
-      error.textContent = ""
+      errorText.textContent = ""
       setInvalid(false)
     },
     setLoading(loading: boolean) {
@@ -253,9 +320,23 @@ export function mountForgotPasswordPage(doc: Document = document): void {
       return
     }
     // Same text whether or not the email has an account (the API doesn't say).
+    ui.setLoading(false)
     form.hidden = true
+    const sentTo = doc.getElementById("sentTo")
+    if (sentTo) sentTo.textContent = email
     const sent = doc.getElementById("resetSent")
-    if (sent) sent.hidden = false
+    if (sent) {
+      sent.hidden = false
+      sent.querySelector<HTMLElement>("h1")?.focus()
+    }
+  })
+
+  // "Try another email": back to the form, the address kept for editing.
+  doc.getElementById("tryAnotherEmail")?.addEventListener("click", () => {
+    const sent = doc.getElementById("resetSent")
+    if (sent) sent.hidden = true
+    form.hidden = false
+    doc.getElementById("email")?.focus()
   })
 }
 
@@ -263,6 +344,8 @@ export function mountResetPasswordPage(doc: Document = document, navigate: Navig
   const win = doc.defaultView!
   const form = doc.getElementById("resetForm") as HTMLFormElement
   const ui = formUi(doc, form, "Set new password", "Saving…")
+  wirePasswordRules(doc)
+  wirePasswordToggles(doc)
   const token = takeLinkToken(win)
   if (!token) {
     showInvalidLink(doc, form)
@@ -301,7 +384,10 @@ export async function mountAcceptInvitePage(
 ): Promise<void> {
   const win = doc.defaultView!
   const form = doc.getElementById("acceptForm") as HTMLFormElement
-  const ui = formUi(doc, form, "Create account", "Creating account…")
+  const submitLabel = form.querySelector<HTMLElement>("[data-label]")?.textContent?.trim() || "Create account"
+  const ui = formUi(doc, form, submitLabel, "Creating account…")
+  wirePasswordRules(doc)
+  wirePasswordToggles(doc)
   const token = takeLinkToken(win)
   if (!token) {
     showInvalidLink(doc, form)
@@ -338,16 +424,52 @@ export async function mountAcceptInvitePage(
     navigate("/login?reason=invite-accepted")
   })
 
-  // Show who the invitation is for; a dead link gets the invalid panel now
-  // rather than after the form is filled in.
+  // Show who the invitation is from and for; a dead link gets the invalid
+  // panel now rather than after the form is filled in.
   try {
-    const invite = await previewInvitation(token)
-    const summary = doc.getElementById("inviteSummary")
-    if (summary) {
-      summary.textContent = `You've been invited as ${roleLabel(invite.role)} (${invite.email}). Choose a username and password to finish.`
-    }
+    showInvitation(doc, await previewInvitation(token))
   } catch (err) {
-    if (isInvalidLinkError(err)) showInvalidLink(doc, form)
-    // Other failures (network, 429): leave the form; submitting will report it.
+    if (isInvalidLinkError(err)) {
+      showInvalidLink(doc, form)
+      return
+    }
+    // Other failures (network, 429): keep the form, which still works, and say
+    // why the details are missing. Submitting reports its own errors.
+    const summary = doc.getElementById("inviteSummary")
+    if (summary) summary.textContent = "Choose a username and password to finish setting up your account."
+    ui.showError(describeAccountError(err))
+  }
+}
+
+// Fills in the accept page's header from the preview: "<inviter> invited you
+// as an <role>.", the role's description, and the (fixed) email.
+function showInvitation(doc: Document, invite: InvitationPreview) {
+  const summary = doc.getElementById("inviteSummary")
+  if (summary) {
+    const role = doc.createElement("strong")
+    role.textContent = roleLabel(invite.role)
+    const lead = invite.invited_by?.name ? `${invite.invited_by.name} invited you as ` : "You've been invited as "
+    const article = withArticle(role.textContent).split(" ")[0]
+    summary.replaceChildren(`${lead}${article} `, role, ".")
+  }
+
+  const avatar = doc.getElementById("inviterAvatar")
+  if (avatar && invite.invited_by?.name) {
+    avatar.textContent = (invite.invited_by.name.trim()[0] ?? "?").toUpperCase()
+    avatar.style.background = presenceColor(invite.invited_by.id)
+    avatar.hidden = false
+  }
+
+  const description = roleDescription(invite.role)
+  const descriptionBox = doc.getElementById("roleDescription")
+  if (descriptionBox && description) {
+    descriptionBox.textContent = description
+    descriptionBox.hidden = false
+  }
+
+  const email = doc.getElementById("inviteEmail") as HTMLInputElement | null
+  if (email) {
+    email.value = invite.email
+    email.closest<HTMLElement>("[data-invite-email]")?.removeAttribute("hidden")
   }
 }

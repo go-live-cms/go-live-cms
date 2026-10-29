@@ -1,215 +1,70 @@
 ---
-import Head from "@/layouts/Page/Head.astro"
+import AccountPage from "@/layouts/AccountPage.astro"
+import AccountError from "@/components/account/AccountError.astro"
 import { SITE_TITLE } from "@/consts"
-import GLLogo from "@gl-admin/assets/gl-logo.svg?raw"
-import "@gl-admin/assets/styles/pages/login.scss"
 ---
 
-<!doctype html>
-<html lang="en">
-<head>
-<!-- Head renders only the <head> contents; this page owns the document skeleton. -->
-<Head title={`Sign in - ${SITE_TITLE}`} description="Sign in to the GoLive admin" noindex />
-</head>
-<body>
-<main class="gl-admin-login">
-  <form class="gl-admin-login__card" id="loginForm" novalidate>
+<AccountPage title="Sign in" description="Sign in to the GoLive admin">
+  <form class="gl-admin-login__view" id="loginForm" novalidate>
     <header class="gl-admin-login__header">
-      <span class="gl-admin-login__logo" aria-hidden="true" set:html={GLLogo} />
       <h1 class="gl-admin-login__title">Sign in</h1>
-      <p class="gl-admin-login__subtitle">Access the GoLive admin dashboard</p>
+      <p class="gl-admin-login__subtitle">to {SITE_TITLE}</p>
     </header>
 
-    <p id="noticeMessage" class="gl-admin-login__notice" role="status" hidden></p>
-    <p id="errorMessage" class="gl-admin-login__error" hidden></p>
-    <!-- Always rendered so screen readers announce every new error (see announce()). -->
-    <div id="errorAnnouncer" class="gl-admin-login__announcer" role="alert" aria-atomic="true"></div>
+    <!-- Why the admin signed this tab out (?reason=, lib/loginPage.ts). -->
+    <div id="noticeMessage" class="gl-notice gl-notice--info" role="status" hidden>
+      <span class="gl-notice__icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+          ><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg
+        >
+      </span>
+      <span class="gl-notice__text" data-notice-text></span>
+    </div>
+    <AccountError />
 
     <div class="gl-admin-login__fields">
       <div class="gl-input">
+        <label class="gl-input__label" for="username">Username</label>
         <input
           class="gl-input__field"
           type="text"
           id="username"
           name="username"
-          placeholder=" "
           required
           autocomplete="username"
           autocapitalize="none"
           spellcheck="false"
         />
-        <label class="gl-input__label" for="username">Username</label>
       </div>
 
       <div class="gl-input">
+        <div class="gl-field__label-row">
+          <label class="gl-input__label" for="password">Password</label>
+          <a class="gl-admin-login__link gl-admin-login__link--small" href="/forgot-password">Forgot password?</a>
+        </div>
         <input
           class="gl-input__field"
           type="password"
           id="password"
           name="password"
-          placeholder=" "
           required
           autocomplete="current-password"
         />
-        <label class="gl-input__label" for="password">Password</label>
       </div>
     </div>
 
-    <button type="submit" class="button primary gl-admin-login__submit" id="loginButton">
-      <span class="gl-admin-login__spinner" id="buttonLoading" aria-hidden="true" hidden></span>
-      <span id="buttonText">Sign in</span>
+    <button type="submit" class="gl-button gl-button--primary gl-admin-login__submit">
+      <span class="gl-button__spinner" data-spinner aria-hidden="true" hidden></span>
+      <span data-label>Sign in</span>
     </button>
-    <p class="gl-admin-login__footer"><a class="gl-admin-login__link" href="/forgot-password">Forgot your password?</a></p>
   </form>
-</main>
 
-  <script>
-    import { authManager } from "@gl-admin/lib/auth.ts"
+  <p class="gl-admin-login__after" slot="after">Don't have an account? Ask an admin to invite you.</p>
+</AccountPage>
 
-    const form = document.getElementById("loginForm") as HTMLFormElement
-    const errorMessage = document.getElementById("errorMessage") as HTMLParagraphElement
-    const errorAnnouncer = document.getElementById("errorAnnouncer") as HTMLDivElement
-    const loginButton = document.getElementById("loginButton") as HTMLButtonElement
-    const buttonText = document.getElementById("buttonText") as HTMLSpanElement
-    const buttonLoading = document.getElementById("buttonLoading") as HTMLSpanElement
-    const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input"))
+<script>
+  import { authManager } from "@gl-admin/lib/auth"
+  import { mountLoginPage } from "@gl-admin/lib/loginPage"
 
-    // ?redirect= comes from AuthGuard (the page the user was on), but anyone can
-    // craft a login link with it. Only follow same-origin paths, so the page can't
-    // be used to bounce a freshly signed-in user to another site or a javascript: URL.
-    function redirectTarget(): string {
-      const fallback = "/gl-admin"
-      const raw = new URLSearchParams(window.location.search).get("redirect")
-      if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) return fallback
-      try {
-        const url = new URL(raw, window.location.origin)
-        if (url.origin !== window.location.origin) return fallback
-        return url.pathname + url.search + url.hash
-      } catch {
-        return fallback
-      }
-    }
-
-    // The access token isn't stored, so "already signed in?" means a refresh
-    // cookie that still works. Only try when the last session left its display
-    // user behind; a failed restore clears it, so this can't loop with AuthGuard.
-    if (authManager.getDisplayUser()) {
-      authManager.restoreSession().then((restored) => {
-        if (restored) window.location.href = redirectTarget()
-      })
-    }
-
-    // Set by the admin's AuthGuard when it signs the user out (lib/auth.ts
-    // SignOutReason), or by the account pages (lib/accountPages.ts). Only
-    // known reasons are shown; the text is ours.
-    const SIGN_OUT_NOTICES: Record<string, string> = {
-      "password-changed": "Your password was changed. Sign in with your new password.",
-      "session-expired": "Your session has expired. Please sign in again.",
-      "password-reset": "Your password was reset and every session signed out. Sign in with your new password.",
-      "invite-accepted": "Your account is ready. Sign in with your new username and password.",
-    }
-    const notice = SIGN_OUT_NOTICES[new URLSearchParams(window.location.search).get("reason") ?? ""]
-    if (notice) {
-      const noticeMessage = document.getElementById("noticeMessage") as HTMLParagraphElement
-      noticeMessage.textContent = notice
-      noticeMessage.hidden = false
-    }
-
-    function setInvalid(invalid: boolean) {
-      for (const input of inputs) {
-        input.closest(".gl-input")?.classList.toggle("is-invalid", invalid)
-        if (invalid) {
-          input.setAttribute("aria-invalid", "true")
-          input.setAttribute("aria-describedby", "errorMessage")
-        } else {
-          input.removeAttribute("aria-invalid")
-          input.removeAttribute("aria-describedby")
-        }
-      }
-    }
-
-    // A live region only speaks when its content changes, so a second identical
-    // error would be silent. Clear it, then set the text on a later frame.
-    let announceTimer: number | undefined
-    function announce(message: string) {
-      window.clearTimeout(announceTimer)
-      errorAnnouncer.textContent = ""
-      announceTimer = window.setTimeout(() => {
-        errorAnnouncer.textContent = message
-      }, 100)
-    }
-
-    function showError(message: string) {
-      errorMessage.textContent = message
-      errorMessage.hidden = false
-      setInvalid(true)
-      announce(message)
-    }
-
-    function hideError() {
-      errorMessage.hidden = true
-      errorMessage.textContent = ""
-      setInvalid(false)
-    }
-
-    // authManager.login returns the HTTP status when the API answered, and the
-    // raw message otherwise (the browser's fetch error when the API can't be
-    // reached). Never show those messages.
-    function friendlyError(status?: number, error?: string): string {
-      if (status === 401) return "Incorrect username or password."
-      if (status === 429) return "Too many sign-in attempts. Wait a moment and try again."
-      if (error && /failed to fetch|networkerror|load failed|network request failed/i.test(error)) {
-        return "Can't reach the server. Check your connection and try again."
-      }
-      return "Sign in failed. Please try again."
-    }
-
-    function setLoading(loading: boolean) {
-      loginButton.disabled = loading
-      loginButton.setAttribute("aria-busy", String(loading))
-      buttonLoading.hidden = !loading
-      buttonText.textContent = loading ? "Signing in…" : "Sign in"
-    }
-
-    // Coming Back from the admin restores this page from the bfcache with the
-    // loading state still set; reset it so the form is usable again.
-    window.addEventListener("pageshow", (e) => {
-      if (e.persisted) setLoading(false)
-    })
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault()
-      hideError()
-
-      const formData = new FormData(form)
-      const username = (formData.get("username") as string).trim()
-      const password = formData.get("password") as string
-
-      if (!username || !password) {
-        showError("Enter your username and password.")
-        ;(username ? inputs[1] : inputs[0]).focus()
-        return
-      }
-
-      setLoading(true)
-
-      let result: { success: boolean; error?: string; status?: number }
-      try {
-        result = await authManager.login(username, password)
-      } catch (error) {
-        result = { success: false, error: error instanceof Error ? error.message : undefined }
-      }
-
-      if (result.success) {
-        // Stay in the loading state while the admin loads, so the button
-        // can't be clicked again and send a second login.
-        window.location.href = redirectTarget()
-        return
-      }
-
-      setLoading(false)
-      showError(friendlyError(result.status, result.error))
-    })
-  </script>
-</body>
-</html>
+  mountLoginPage(document, authManager)
+</script>

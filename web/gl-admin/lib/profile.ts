@@ -3,12 +3,13 @@
 // source of truth: these only catch mistakes before a round trip.
 import { ApiError } from "./api"
 import type { AuthManager } from "./auth"
+import { PASSWORD_MIN } from "./passwordRules"
 
+export { PASSWORD_MIN }
 export const USERNAME_MIN = 3
 export const USERNAME_MAX = 50
 export const FULL_NAME_MIN = 2
 export const FULL_NAME_MAX = 100
-export const PASSWORD_MIN = 6
 
 export type ProfileFields = {
   username: string

@@ -1,0 +1,16 @@
+---
+// The account pages' error notice (#338's danger notice, written by hand: these
+// pages have no React). formUi (gl-admin/lib/accountPages.ts) fills
+// [data-error-text] and mirrors it to the announcer, which is always rendered so
+// screen readers hear every new error, even a repeat.
+---
+
+<div id="errorMessage" class="gl-notice gl-notice--danger" hidden>
+  <span class="gl-notice__icon" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+      ><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4M12 16h.01"></path></svg
+    >
+  </span>
+  <span class="gl-notice__text" data-error-text></span>
+</div>
+<div id="errorAnnouncer" class="gl-visually-hidden" role="alert" aria-atomic="true"></div>

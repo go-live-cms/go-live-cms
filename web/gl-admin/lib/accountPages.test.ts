@@ -19,10 +19,13 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
 // The markup the Astro pages render (web/src/layouts/AccountPage.astro + page).
 function renderPage(formId: string, fields: string[], extra = "") {
   document.body.innerHTML = `
-    <p id="errorMessage" hidden></p>
-    <div id="errorAnnouncer"></div>
     <form id="${formId}">
+      <span id="inviterAvatar" hidden></span>
       <p id="inviteSummary"></p>
+      <p id="roleDescription" hidden></p>
+      <div id="errorMessage" hidden><span data-error-text></span></div>
+      <div id="errorAnnouncer"></div>
+      <div class="gl-input" id="inviteEmailRow" data-invite-email hidden><input id="inviteEmail" readonly /></div>
       ${fields.map((name) => `<div class="gl-input"><input name="${name}" id="${name}" /></div>`).join("")}
       <button type="submit"><span data-spinner hidden></span><span data-label>Go</span></button>
     </form>
@@ -148,6 +151,91 @@ describe("forgot password page", () => {
     expect(errorText()).toMatch(/30 seconds/)
     expect(visible("resetSent")).toBe(false)
   })
+
+  it("names the address it sent to, and goes back to the form for another", async () => {
+    const form = renderPage(
+      "forgotForm",
+      ["email"],
+      `<section id="resetSent" hidden><h1 tabindex="-1">Check</h1><strong id="sentTo"></strong>
+       <button type="button" id="tryAnotherEmail">try another email</button></section>`
+    )
+    mountForgotPasswordPage(document)
+    fetchMock.mockResolvedValue(json(200, { message: "ok" }))
+    fill({ email: "jane@example.com" })
+    await submit(form)
+
+    expect(document.getElementById("sentTo")!.textContent).toBe("jane@example.com")
+    expect(document.activeElement?.tagName).toBe("H1")
+
+    document.getElementById("tryAnotherEmail")!.click()
+    expect(form.hidden).toBe(false)
+    expect(visible("resetSent")).toBe(false)
+    expect(document.activeElement?.id).toBe("email")
+    expect((document.getElementById("email") as HTMLInputElement).value).toBe("jane@example.com")
+    expect(form.querySelector("button")!.disabled).toBe(false)
+  })
+})
+
+describe("password fields", () => {
+  function renderPasswordField() {
+    setUrl(`/reset-password#token=${TOKEN}`)
+    const form = renderPage(
+      "resetForm",
+      ["confirm_password"],
+      `<div class="gl-input" id="pwField"><input id="pw" name="password" type="password" aria-describedby="pw-rule" />
+       <button type="button" data-password-toggle="pw"><span data-toggle-text>Show</span></button>
+       <p id="pw-rule" data-password-rule="pw"><span data-rule-text></span></p></div>`
+    )
+    form.prepend(document.getElementById("pwField")!)
+    mountResetPasswordPage(document, vi.fn())
+    return document.getElementById("pw") as HTMLInputElement
+  }
+
+  function type(input: HTMLInputElement, value: string) {
+    input.value = value
+    input.dispatchEvent(new Event("input"))
+  }
+
+  it("counts towards the API's minimum, then shows it met", () => {
+    const input = renderPasswordField()
+    const rule = document.getElementById("pw-rule")!
+    expect(rule.textContent).toBe("At least 6 characters")
+    type(input, "abc")
+    expect(rule.textContent).toBe("At least 6 characters (3 so far)")
+    expect(rule.classList.contains("is-met")).toBe(false)
+    type(input, "abcdef")
+    expect(rule.textContent).toBe("At least 6 characters")
+    expect(rule.classList.contains("is-met")).toBe(true)
+  })
+
+  it("shows and hides the password", () => {
+    const input = renderPasswordField()
+    const button = document.querySelector<HTMLButtonElement>("[data-password-toggle]")!
+    button.click()
+    expect(input.type).toBe("text")
+    expect(button.textContent).toBe("Hide")
+    button.click()
+    expect(input.type).toBe("password")
+    expect(button.textContent).toBe("Show")
+  })
+
+  it("keeps the hint described while an error comes and goes", async () => {
+    const input = renderPasswordField()
+    const form = document.getElementById("resetForm") as HTMLFormElement
+    await submit(form) // too short
+    expect(input.getAttribute("aria-describedby")).toBe("errorMessage pw-rule")
+    expect(input.getAttribute("aria-invalid")).toBe("true")
+    // A second error: hideError ran first, so still exactly one of each.
+    await submit(form)
+    expect(input.getAttribute("aria-describedby")).toBe("errorMessage pw-rule")
+    // Fixed: the error leaves, the hint stays.
+    fetchMock.mockResolvedValue(json(200, { message: "ok" }))
+    fill({ pw: "long-enough", confirm_password: "long-enough" })
+    await submit(form)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(input.getAttribute("aria-describedby")).toBe("pw-rule")
+    expect(input.hasAttribute("aria-invalid")).toBe(false)
+  })
 })
 
 describe("reset password page", () => {
@@ -259,7 +347,12 @@ describe("accept invitation page", () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/invitations/preview")
     expect(sentBody(0)).toEqual({ token: TOKEN })
-    expect(document.getElementById("inviteSummary")!.textContent).toContain("Editor (new@example.com)")
+    expect(document.getElementById("inviteSummary")!.textContent).toBe("You've been invited as an Editor.")
+    expect((document.getElementById("inviteEmail") as HTMLInputElement).value).toBe("new@example.com")
+    expect(visible("inviteEmailRow")).toBe(true)
+    expect(document.getElementById("roleDescription")!.textContent).toMatch(/^Editors write, edit and publish/)
+    // No inviter (deleted, or an older API): no avatar.
+    expect(visible("inviterAvatar")).toBe(false)
 
     fetchMock.mockResolvedValueOnce(json(201, { user: { id: 1 } }))
     fill(valid)
@@ -269,6 +362,39 @@ describe("accept invitation page", () => {
     // Trimmed, and no role or email: the invitation decides those.
     expect(sentBody(1)).toEqual({ token: TOKEN, username: "newbie", full_name: "New Person", password: "secret-1" })
     expect(navigate).toHaveBeenCalledWith("/login?reason=invite-accepted")
+  })
+
+  it("names the inviter, with their avatar", async () => {
+    setUrl(`/accept-invite#token=${TOKEN}`)
+    renderPage("acceptForm", fields)
+    fetchMock.mockResolvedValueOnce(
+      json(200, {
+        email: "new@example.com",
+        role: "admin",
+        expires_at: "2030-01-01T00:00:00Z",
+        invited_by: { id: 9, name: "Ana Costa" },
+      })
+    )
+    await mountAcceptInvitePage(document, vi.fn())
+
+    const summary = document.getElementById("inviteSummary")!
+    expect(summary.textContent).toBe("Ana Costa invited you as an Administrator.")
+    // The role is emphasised as an element, not as markup in a string.
+    expect(summary.querySelector("strong")!.textContent).toBe("Administrator")
+    const avatar = document.getElementById("inviterAvatar")!
+    expect(avatar.hidden).toBe(false)
+    expect(avatar.textContent).toBe("A")
+    expect(avatar.style.background).toBe("var(--presence-2)")
+  })
+
+  it("keeps the form and says why when the preview is rate limited", async () => {
+    setUrl(`/accept-invite#token=${TOKEN}`)
+    const form = renderPage("acceptForm", fields)
+    fetchMock.mockResolvedValueOnce(json(429, { error: "too many requests" }, { "Retry-After": "20" }))
+    await mountAcceptInvitePage(document, vi.fn())
+    expect(form.hidden).toBe(false)
+    expect(visible("linkInvalid")).toBe(false)
+    expect(errorText()).toBe("Too many attempts. Try again in 20 seconds.")
   })
 
   it("shows the invalid-link panel up front for a dead link", async () => {

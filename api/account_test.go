@@ -532,6 +532,45 @@ func TestPreviewInvitationAPI(t *testing.T) {
 		require.Equal(t, http.StatusOK, recorder.Code)
 		require.Contains(t, recorder.Body.String(), `"email":"d@example.com"`)
 		require.Contains(t, recorder.Body.String(), `"role":"editor"`)
+		require.Contains(t, recorder.Body.String(), `"invited_by":null`)
+	})
+
+	t.Run("with its inviter", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		store.EXPECT().GetValidUserInvitationByTokenHash(gomock.Any(), hash).
+			Return(db.UserInvitation{ID: 3, Email: "d@example.com", Role: "editor", InvitedBy: sql.NullInt64{Int64: 7, Valid: true}, ExpiresAt: time.Now().Add(time.Hour)}, nil)
+		store.EXPECT().GetUser(gomock.Any(), int64(7)).Return(db.User{ID: 7, Username: "ana", FullName: "Ana Costa"}, nil)
+		server, _ := newAccountTestServer(t, store)
+
+		recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/invitations/preview", gin.H{"token": token}, nil)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Contains(t, recorder.Body.String(), `"invited_by":{"id":7,"name":"Ana Costa"}`)
+	})
+
+	t.Run("inviter without a full name or gone", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			user db.User
+			err  error
+			want string
+		}{
+			{"username fallback", db.User{ID: 7, Username: "ana"}, nil, `"invited_by":{"id":7,"name":"ana"}`},
+			{"lookup fails", db.User{}, sql.ErrNoRows, `"invited_by":null`},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				store := mockdb.NewMockStore(ctrl)
+				store.EXPECT().GetValidUserInvitationByTokenHash(gomock.Any(), hash).
+					Return(db.UserInvitation{ID: 3, Email: "d@example.com", Role: "editor", InvitedBy: sql.NullInt64{Int64: 7, Valid: true}, ExpiresAt: time.Now().Add(time.Hour)}, nil)
+				store.EXPECT().GetUser(gomock.Any(), int64(7)).Return(tc.user, tc.err)
+				server, _ := newAccountTestServer(t, store)
+
+				recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/invitations/preview", gin.H{"token": token}, nil)
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.Contains(t, recorder.Body.String(), tc.want)
+			})
+		}
 	})
 
 	t.Run("expired, used, revoked or unknown", func(t *testing.T) {
