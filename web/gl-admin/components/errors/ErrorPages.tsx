@@ -1,11 +1,12 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useId, useState, type ReactNode } from "react"
 import { Link, useLocation } from "react-router-dom"
 import Button, { buttonClassName } from "@gl-admin/components/ui/Button"
 import { toast } from "@gl-admin/components/ui/Toast"
+import { CopyIcon } from "@gl-admin/components/ui/icons"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { authManager } from "@gl-admin/lib/auth"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
-import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
+import { roleLabel } from "@gl-admin/lib/roles"
 import { errorPageFor, forbiddenReason } from "@gl-admin/lib/errorPages"
 import "@gl-admin/assets/styles/pages/error-page.scss"
 
@@ -24,8 +25,14 @@ type ErrorLayoutProps = {
 function ErrorLayout({ code, title, children, actions }: ErrorLayoutProps) {
   const { baseTitle } = useGoLive()
 
+  // Put the old title back on the way out, so a page that recovers (Try again) and
+  // sets none of its own doesn't keep this one.
   useEffect(() => {
+    const previous = document.title
     document.title = `${baseTitle} ${title}`
+    return () => {
+      document.title = previous
+    }
   }, [baseTitle, title])
 
   return (
@@ -81,7 +88,8 @@ type ForbiddenPageProps = {
 
 export function ForbiddenPage({ area, serverMessage = null }: ForbiddenPageProps) {
   const user = useAuthUser()
-  const roleLabel = USER_ROLE_OPTIONS.find((r) => r.value === user?.role?.toLowerCase())?.label.toLowerCase()
+  const name = user?.full_name || user?.username
+  const role = roleLabel(user?.role)?.toLowerCase()
 
   return (
     <ErrorLayout
@@ -99,7 +107,7 @@ export function ForbiddenPage({ area, serverMessage = null }: ForbiddenPageProps
     >
       <p className="gl-error-page__message">
         {forbiddenReason(area, serverMessage)}
-        {user?.full_name && roleLabel && ` You’re signed in as ${user.full_name}, ${withArticle(roleLabel)}.`}
+        {name && role && ` You’re signed in as ${name}, ${withArticle(role)}.`}
       </p>
     </ErrorLayout>
   )
@@ -107,6 +115,14 @@ export function ForbiddenPage({ area, serverMessage = null }: ForbiddenPageProps
 
 function ErrorId({ id }: { id: string }) {
   const [copied, setCopied] = useState(false)
+  const labelId = useId()
+
+  // Back to "Copy" after a moment, so copying again doesn't look done already.
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 2000)
+    return () => window.clearTimeout(timer)
+  }, [copied])
 
   const copy = async () => {
     try {
@@ -121,33 +137,28 @@ function ErrorId({ id }: { id: string }) {
 
   return (
     <div className="gl-error-page__id">
-      <span className="gl-error-page__id-label" id="gl-error-id-label">
+      <span className="gl-error-page__id-label" id={labelId}>
         Error ID
       </span>
-      <code className="gl-error-page__id-value" aria-labelledby="gl-error-id-label">
+      <code className="gl-error-page__id-value" aria-labelledby={labelId}>
         {id}
       </code>
-      <Button variant="ghost" size="md" onClick={copy} icon={<CopyIcon />}>
+      <Button variant="ghost" size="md" onClick={copy} icon={<CopyIcon size={14} />}>
         {copied ? "Copied" : "Copy"}
       </Button>
     </div>
   )
 }
 
-const CopyIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-    <rect x="9" y="9" width="12" height="12" rx="2" />
-    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
-  </svg>
-)
-
 type ServerErrorPageProps = {
   status?: number | null
   requestId?: string | null
+  // A 4xx's own explanation, in place of "it wasn't anything you did".
+  message?: string | null
   onRetry?: () => void
 }
 
-export function ServerErrorPage({ status = null, requestId = null, onRetry }: ServerErrorPageProps) {
+export function ServerErrorPage({ status = null, requestId = null, message = null, onRetry }: ServerErrorPageProps) {
   return (
     <ErrorLayout
       code={status ? `Error ${status}` : "Error"}
@@ -162,7 +173,8 @@ export function ServerErrorPage({ status = null, requestId = null, onRetry }: Se
       }
     >
       <p className="gl-error-page__message">
-        GoLive couldn’t load this page. It wasn’t anything you did. Try again; if it keeps happening, send
+        {message ? `${message} ` : "GoLive couldn’t load this page. It wasn’t anything you did. "}
+        Try again; if it keeps happening, send
         {requestId ? " the error ID below " : " what you were doing "}
         to whoever runs your GoLive.
       </p>
@@ -178,5 +190,5 @@ export function ErrorPage({ error, onRetry }: { error: unknown; onRetry?: () => 
   const info = errorPageFor(error)
   if (info.kind === "not-found") return <NotFoundPage />
   if (info.kind === "forbidden") return <ForbiddenPage serverMessage={info.serverMessage} />
-  return <ServerErrorPage status={info.status} requestId={info.requestId} onRetry={onRetry} />
+  return <ServerErrorPage status={info.status} requestId={info.requestId} message={info.message} onRetry={onRetry} />
 }

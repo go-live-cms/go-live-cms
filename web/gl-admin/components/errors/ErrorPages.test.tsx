@@ -39,19 +39,29 @@ describe("errorPageFor", () => {
   it("maps a 5xx to the generic page with the request_id as the error ID", async () => {
     const err = await apiErrorFromResponse(json(503, { error: "database unavailable", request_id: "7f3a-91c2-4e0b" }))
     expect(err.requestId).toBe("7f3a-91c2-4e0b")
-    expect(errorPageFor(err)).toEqual({ kind: "error", status: 503, requestId: "7f3a-91c2-4e0b" })
+    expect(errorPageFor(err)).toEqual({ kind: "error", status: 503, requestId: "7f3a-91c2-4e0b", message: null })
   })
 
   it("falls back to the X-Request-ID header when the body isn't the API's JSON", async () => {
     const err = await apiErrorFromResponse(
       new Response("<html>Bad Gateway</html>", { status: 502, headers: { "content-type": "text/html", "X-Request-ID": "hdr-1" } })
     )
-    expect(errorPageFor(err)).toEqual({ kind: "error", status: 502, requestId: "hdr-1" })
+    expect(errorPageFor(err)).toEqual({ kind: "error", status: 502, requestId: "hdr-1", message: null })
   })
 
   it("maps an API 404 to the not-found page, and a crash to the generic page without an ID", () => {
     expect(errorPageFor(new ApiError("gone", 404))).toEqual({ kind: "not-found" })
-    expect(errorPageFor(new TypeError("x is undefined"))).toEqual({ kind: "error", status: null, requestId: null })
+    expect(errorPageFor(new TypeError("x is undefined"))).toEqual({ kind: "error", status: null, requestId: null, message: null })
+  })
+
+  it("keeps a 4xx's own explanation instead of blaming the server", async () => {
+    const err = await apiErrorFromResponse(json(429, { error: "too many requests", request_id: "rl-1" }, { "Retry-After": "5" }))
+    expect(errorPageFor(err)).toEqual({
+      kind: "error",
+      status: 429,
+      requestId: "rl-1",
+      message: "You're doing that too often. Please wait 5 seconds and try again.",
+    })
   })
 
   it("recognises a failed lazy-page download", () => {
@@ -140,6 +150,21 @@ describe("error pages", () => {
 
     act(() => buttons.find((b) => b.textContent === "Try again")!.click())
     expect(onRetry).toHaveBeenCalled()
+  })
+
+  it("shows a 4xx's message rather than the server-error text", () => {
+    render(<ErrorPage error={new ApiError("That URL is already used by another post.", 409)} />, "/x")
+    expect(text()).toContain("Error 409")
+    expect(text()).toContain("That URL is already used by another post.")
+    expect(text()).not.toContain("wasn’t anything you did")
+  })
+
+  it("puts the page title back when the error page goes away", () => {
+    document.title = "GoLive Admin | Editor"
+    render(<ErrorPage error={new Error("boom")} />, "/x")
+    expect(document.title).toBe("GoLive Admin | Something went wrong")
+    act(() => root.render(<p>recovered</p>))
+    expect(document.title).toBe("GoLive Admin | Editor")
   })
 
   it("hides the error ID box when there's no request_id", () => {

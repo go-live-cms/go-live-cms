@@ -5,7 +5,7 @@ import { IconButton } from "@gl-admin/components/ui/Button"
 import Drawer from "@gl-admin/components/ui/Drawer"
 import Avatar from "@gl-admin/components/ui/Avatar"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
-import { MoreIcon, PlusIcon } from "@gl-admin/components/ui/icons"
+import { ChevronRightIcon, MenuIcon, MoreIcon, PlusIcon } from "@gl-admin/components/ui/icons"
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
@@ -13,9 +13,9 @@ import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
-import { USER_ROLE_OPTIONS, canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
+import { canCreateContent, isContentModerator, roleLabel } from "@gl-admin/lib/roles"
 import { activeKey, buildNavigation, parentOf, type NavItem, type NavSection } from "./nav"
-import NavIcon, { ChevronRightIcon, MenuIcon } from "./NavIcon"
+import NavIcon from "./NavIcon"
 import "@gl-admin/assets/styles/components/sidebar/sidebar.scss"
 
 // The app shell's navigation (#339): a fixed sidebar on desktop; at phone width a top
@@ -88,7 +88,7 @@ function NavGroup({ item, current }: { item: NavItem; current: string | null }) 
           aria-label={`${item.label} sections`}
           onClick={() => setOpen(!open)}
         >
-          <ChevronRightIcon className="gl-sidebar__chevron" />
+          <ChevronRightIcon size={14} className="gl-sidebar__chevron" />
         </button>
       </div>
       {open && (
@@ -106,7 +106,7 @@ function UserMenu() {
   const user = useAuthUser()
   const navigate = useNavigate()
   if (!user) return null
-  const role = USER_ROLE_OPTIONS.find((r) => r.value === user.role?.toLowerCase())?.label ?? user.role
+  const role = roleLabel(user.role)
   const name = user.full_name || user.username
 
   return (
@@ -217,7 +217,9 @@ export default function Sidebar() {
   }, [isMobile])
 
   // A click on the link to the page you're on doesn't change location; close anyway.
+  // Not for a modified click (new tab or window): the page stays.
   const onDrawerClick = (e: MouseEvent) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
     if ((e.target as Element).closest("a[href]")) setDrawerOpen(false)
   }
 
@@ -231,7 +233,7 @@ export default function Sidebar() {
           aria-label="Open menu"
           aria-expanded={drawerOpen}
           aria-controls={drawerOpen ? "gl-nav-drawer" : undefined}
-          icon={<MenuIcon />}
+          icon={<MenuIcon size={20} />}
           onClick={() => setDrawerOpen(true)}
         />
         {title ? <span className="gl-mobile-bar__title">{title}</span> : <span className="gl-mobile-bar__title"><Brand /></span>}

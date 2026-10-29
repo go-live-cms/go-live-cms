@@ -49,8 +49,10 @@ export function sortPostTypes(postTypes: PostType[]): PostType[] {
 // A taxonomy type doesn't say which post type it's for. Seeded names follow
 // `<type>_<taxonomy>` for anything but posts (page_category), so those go under
 // their type and the rest (category, tag) under Posts.
+// The longest matching name wins, so case_study_tag belongs to case_study, not case.
 function taxonomyOwner(taxonomy: TaxonomyType, typeNames: string[]): string {
-  return typeNames.find((name) => name !== "post" && taxonomy.name.startsWith(`${name}_`)) ?? "post"
+  const owners = typeNames.filter((name) => name !== "post" && taxonomy.name.startsWith(`${name}_`))
+  return owners.sort((a, b) => b.length - a.length)[0] ?? "post"
 }
 
 // Only categories and tags get a menu entry, as in the design; any other taxonomy type

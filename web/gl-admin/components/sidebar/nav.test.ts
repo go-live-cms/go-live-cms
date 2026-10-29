@@ -67,6 +67,20 @@ describe("buildNavigation", () => {
     expect(content.items[1].children!.map((c) => c.label)).toEqual(["All pages", "Page Categories"])
     expect(posts.children![1].to).toBe("/taxonomies?type=category")
   })
+
+  it("gives a taxonomy to the longest matching post type name", () => {
+    const nav = buildNavigation({
+      role: "admin",
+      postTypes: [
+        { name: "case", label: "Cases", menu_position: 1 },
+        { name: "case_study", label: "Case studies", menu_position: 2 },
+      ] as PostType[],
+      taxonomyTypes: [{ name: "case_study_tag", label: "Study tags" }] as TaxonomyType[],
+    })
+    const [cases, studies] = nav[1].items
+    expect(cases.children).toBeUndefined()
+    expect(studies.children!.map((c) => c.label)).toEqual(["All case studies", "Study tags"])
+  })
 })
 
 describe("activeKey", () => {

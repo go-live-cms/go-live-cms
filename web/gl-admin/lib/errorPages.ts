@@ -13,6 +13,9 @@ export type ErrorPageInfo =
       status: number | null
       // The API's request_id, shown as a copyable error ID.
       requestId: string | null
+      // For a 4xx (bad request, conflict, rate limit) the ApiError's own sentence,
+      // since "it wasn't anything you did" isn't true; null for a 5xx or a crash.
+      message: string | null
     }
 
 // A lazily loaded page whose chunk failed to download (after a deploy, say) stays
@@ -32,9 +35,14 @@ export function errorPageFor(error: unknown): ErrorPageInfo {
       const reason = error.serverMessage && error.serverMessage.toLowerCase() !== "forbidden" ? error.message : null
       return { kind: "forbidden", serverMessage: reason }
     }
-    return { kind: "error", status: error.status, requestId: error.requestId }
+    return {
+      kind: "error",
+      status: error.status,
+      requestId: error.requestId,
+      message: error.status < 500 ? error.message : null,
+    }
   }
-  return { kind: "error", status: null, requestId: null }
+  return { kind: "error", status: null, requestId: null, message: null }
 }
 
 // "Settings are open to admins only." for the router guard; the signed-in user is

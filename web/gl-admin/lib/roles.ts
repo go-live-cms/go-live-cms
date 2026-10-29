@@ -6,6 +6,11 @@ export const USER_ROLE_OPTIONS = [
     { value: "admin", label: "Administrator" },
 ]
 
+// "Administrator" for "admin"; an unknown role is shown as stored.
+export function roleLabel(role?: string | null): string | undefined {
+    return USER_ROLE_OPTIONS.find((r) => r.value === role?.toLowerCase())?.label ?? role ?? undefined
+}
+
 // Everything below is a UI hint only: the stored user's role can be stale after a
 // demotion. The API (api/auth_roles.go, api/auth_posts.go) and the WS server (which asks
 // the API) enforce the real checks against the DB.
