@@ -104,12 +104,16 @@ export function htmlToBlockDoc(html: string): BlockDocV1 {
         blocksOrder.push(id)
         break
 
-      case "img":
+      case "img": {
+        // The media id links the block to its file (srcset, focal point, post_media);
+        // a number, as Block Spec v1 and the API's media sync expect.
+        const mediaId = (element.getAttribute("data-media-id") ?? "").trim()
         blocks[id] = {
           id,
           type: "image",
           version: 1,
           attrs: {
+            ...(/^\d+$/.test(mediaId) ? { mediaId: Number(mediaId) } : {}),
             src: element.getAttribute("src") || undefined,
             alt: element.getAttribute("alt") || undefined,
             title: element.getAttribute("title") || undefined,
@@ -117,6 +121,7 @@ export function htmlToBlockDoc(html: string): BlockDocV1 {
         }
         blocksOrder.push(id)
         break
+      }
 
       case "ul": {
         const ulId = id

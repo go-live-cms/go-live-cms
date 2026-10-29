@@ -1,21 +1,74 @@
-@use "@gl-admin/assets/styles/variables";
 @use "@gl-admin/assets/styles/mixins";
 
-.gl-admin-media-card {
-  border: 1.2px solid var(--border-color);
-  border-radius: 4.703px;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-width: 0;
-  overflow: hidden;
-  position: relative;
+// The media library grid and its tiles (#342, the "Media library" board).
 
-  &__type-badge {
-    left: 14px;
-    position: absolute;
-    top: 14px;
-    z-index: 1;
+.gl-media-sr {
+  @include mixins.visually-hidden;
+}
+
+.gl-media-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(176px, 100%), 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  > li {
+    display: flex;
+    min-width: 0;
+  }
+
+  // Two columns at phone width (the 375 board), tiles shrink instead of stacking.
+  @media (width <= 480px) {
+    gap: var(--space-3);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.gl-media-tile {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  font: inherit;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+
+  @at-root button#{&} {
+    cursor: pointer;
+  }
+
+  &__thumb {
+    align-items: center;
+    aspect-ratio: 4 / 3;
+    background: var(--background-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: inset 0 0 0 1px var(--border-color);
+    box-sizing: border-box;
+    color: var(--text-secondary);
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+
+    &--video {
+      background: var(--warning-bg);
+    }
+
+    &--audio,
+    &--vector {
+      background: var(--info-bg);
+    }
+
+    &--file {
+      background: var(--background-hover);
+    }
   }
 
   &__image {
@@ -25,100 +78,169 @@
     width: 100%;
   }
 
-  // The thumbnail scales with the card width at a fixed ratio, so every card in
-  // a row has the same shape whatever the image's own dimensions are.
-  &__thumbnail {
-    aspect-ratio: 4 / 3;
-    flex-shrink: 0;
+  &__tag,
+  &__badge {
+    align-items: center;
+    border-radius: var(--radius-sm);
+    display: flex;
+    font-size: 11px;
+    font-weight: 600;
+    height: 20px;
+    left: var(--space-2);
+    line-height: 1;
+    padding: 0 6px;
+    position: absolute;
+  }
+
+  // Colour by kind, text the format. The tag sits on a 1px ring of the page colour so it
+  // reads over any photo.
+  &__tag {
+    background: var(--background-active);
+    box-shadow: 0 0 0 1px var(--background);
+    color: var(--text-primary);
+    letter-spacing: 0.03em;
+    top: var(--space-2);
+
+    &--image {
+      background: var(--success-bg);
+      color: var(--success-label);
+    }
+
+    &--video {
+      background: var(--warning-bg);
+      color: var(--warning-label);
+    }
+
+    &--vector,
+    &--audio {
+      background: var(--info-bg);
+      color: var(--info-text);
+    }
+  }
+
+  // A video's length.
+  &__badge {
+    background: var(--tooltip-background);
+    bottom: var(--space-2);
+    color: var(--tooltip-color);
+  }
+
+  &__check {
+    align-items: center;
+    background: var(--background);
+    border: 1.5px solid var(--control-border);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+    color: var(--accent-on);
+    display: flex;
+    height: 20px;
+    justify-content: center;
+    position: absolute;
+    right: var(--space-2);
+    top: var(--space-2);
+    width: 20px;
+
+    &.is-checked {
+      background: var(--accent-solid);
+      border-color: var(--accent-solid);
+    }
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__meta {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &--skeleton &__thumb {
+    box-shadow: none;
+    height: auto;
+  }
+
+  &--upload &__thumb {
+    background: var(--accent-subtle);
+    border: 1px dashed var(--accent-border);
+    box-shadow: none;
+    color: var(--text-selected);
+    flex-direction: column;
+    gap: 10px;
+    padding: var(--space-4);
+  }
+
+  &--upload.is-failed &__thumb {
+    background: var(--danger-bg);
+    border-color: var(--danger-text);
+    color: var(--danger-text);
+  }
+
+  &--upload.is-failed &__meta {
+    color: var(--danger-text);
+    white-space: normal;
+  }
+
+  @at-root button#{&}:hover &__thumb {
+    box-shadow: inset 0 0 0 1px var(--border-strong);
+  }
+
+  &:focus-visible {
+    outline: none;
+
+    .gl-media-tile__thumb {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+  }
+
+  &.is-pressed .gl-media-tile__thumb {
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 4px var(--selected-border-color);
+  }
+
+  // Indeterminate: createMedia has no progress events.
+  &__progress {
+    background: var(--accent-subtle-hover);
+    border-radius: 2px;
+    height: 4px;
     overflow: hidden;
     position: relative;
     width: 100%;
 
-    &.skeleton {
-      @include mixins.skeleton-bg;
-
-      border-radius: 8px;
+    > span {
+      animation: gl-media-upload 1.2s var(--ease-in-out) infinite;
+      animation-play-state: var(--skeleton-pulse, running);
+      background: var(--accent-solid);
+      height: 100%;
+      left: 0;
+      position: absolute;
+      width: 40%;
     }
   }
+}
 
-  &__content {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    min-width: 0;
-    padding: 14px;
+@keyframes gl-media-upload {
+  from {
+    transform: translateX(-100%);
   }
 
-  &__title {
-    color: var(--text-primary);
-    font-family: inherit;
-    font-size: 16px;
-    font-style: normal;
-    font-weight: 500;
-    line-height: 145%;
-    margin: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    &.skeleton {
-      @include mixins.skeleton-bg;
-
-      border-radius: 4px;
-      height: 1.2em;
-      margin-bottom: 0.5rem;
-      width: 80%;
-    }
-  }
-
-  &__meta {
-    color: var(--text-quaternary);
-    display: flex;
-    flex-flow: row wrap;
-    font-size: 14px;
-    font-weight: 500;
-    gap: 0 14px;
-    line-height: 145%;
-
-    &.skeleton {
-      @include mixins.skeleton-bg;
-
-      border-radius: 4px;
-      height: 1em;
-      width: 60%;
-    }
-  }
-
-  &-wrapper {
-    min-width: 0;
-    position: relative;
-
-    &--selectable {
-      cursor: pointer;
-
-      &:hover {
-        box-shadow: var(--media-card-box-shadow-hover);
-        transform: translateY(-2px);
-      }
-    }
-
-    &--selected {
-      .gl-admin-media-card {
-        border: 1.2px solid var(--selected-border-color);
-      }
-    }
-  }
-
-  &__checkbox {
-    position: absolute;
-    right: -8px;
-    top: -8px;
-    z-index: 10;
-
-    input[type="checkbox"] {
-      accent-color: var(--selected-border-color);
-      height: 20px;
-      width: 20px;
-    }
+  to {
+    transform: translateX(250%);
   }
 }
