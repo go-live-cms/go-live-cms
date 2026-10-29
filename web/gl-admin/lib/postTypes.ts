@@ -66,7 +66,10 @@ export function nameFromLabel(label: string): string {
 
 const NAME_PATTERN = /^[a-z0-9_-]+$/
 
-export function validatePostTypeDraft(draft: PostTypeDraft, creating: boolean): string | null {
+// takenNames: the types already listed. POST /post-types upserts, so creating one with
+// an existing name would silently overwrite it. (Inactive types aren't listed; the API
+// still upserts those.)
+export function validatePostTypeDraft(draft: PostTypeDraft, creating: boolean, takenNames: string[] = []): string | null {
   const label = draft.label.trim()
   if ([...label].length < 2 || [...label].length > 100) return "The label needs 2 to 100 characters."
   if (creating) {
@@ -74,6 +77,9 @@ export function validatePostTypeDraft(draft: PostTypeDraft, creating: boolean): 
       return "The name needs 2 to 50 lowercase letters, numbers, hyphens or underscores."
     }
     if (isBuiltInPostType(draft.name)) return `“${draft.name}” is built in. Choose another name.`
+    if (takenNames.includes(draft.name)) {
+      return `There's already a post type named “${draft.name}”. Edit it instead, or choose another name.`
+    }
   }
   if (draft.menu_position !== "" && !/^\d{1,4}$/.test(draft.menu_position)) {
     return "The menu position must be a whole number from 0 to 9999."

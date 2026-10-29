@@ -1,4 +1,5 @@
 import type { TaxonomyTerm } from "@gl-admin/lib/api/types"
+import { plural } from "@gl-admin/utils/formatting"
 
 // Pure helpers for the Taxonomies screen and the post sidebar's term pickers (#167).
 
@@ -67,8 +68,6 @@ export function parentOptions(terms: TaxonomyTerm[], editingId?: number): TermNo
 export function childCount(terms: TaxonomyTerm[], id: number): number {
   return terms.filter((t) => t.parent_id === id).length
 }
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 // What deleting a term will do, for the confirmation dialog. Post assignments
 // are removed with the term; child terms move to the top level (the parent_id

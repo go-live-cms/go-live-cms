@@ -154,6 +154,7 @@ export default function PostTypes() {
           <PostTypeForm
             key={editing?.name ?? "new"}
             postType={editing}
+            takenNames={types.map((t) => t.name)}
             onCancel={() => setOpen(null)}
             onSaved={(saved) => {
               setOpen(saved.name)
@@ -169,11 +170,13 @@ export default function PostTypes() {
 type FormProps = {
   // The type being edited; undefined creates one.
   postType?: PostType
+  // Names already in use, so a create can't overwrite one (the API upserts).
+  takenNames: string[]
   onCancel: () => void
   onSaved: (postType: PostType) => void
 }
 
-function PostTypeForm({ postType, onCancel, onSaved }: FormProps) {
+function PostTypeForm({ postType, takenNames, onCancel, onSaved }: FormProps) {
   const creating = !postType
   const [draft, setDraft] = useState<PostTypeDraft>(() => (postType ? draftFromPostType(postType) : newPostTypeDraft()))
   // Until the name is typed, it follows the label.
@@ -189,12 +192,12 @@ function PostTypeForm({ postType, onCancel, onSaved }: FormProps) {
   const toggleField = (value: string, on: boolean) =>
     set({ supports: on ? [...draft.supports, value] : draft.supports.filter((s) => s !== value) })
 
-  // Fields a theme registered that the form doesn't know; kept and shown as they are.
+  // Values the form doesn't name (a theme's, or ones like author and media); kept as they are.
   const otherFields = draft.supports.filter((s) => !SUPPORT_FIELDS.some((f) => f.value === s))
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const invalid = validatePostTypeDraft(draft, creating)
+    const invalid = validatePostTypeDraft(draft, creating, takenNames)
     if (invalid) {
       setError(invalid)
       return
@@ -281,7 +284,7 @@ function PostTypeForm({ postType, onCancel, onSaved }: FormProps) {
         optional
         inputMode="numeric"
         containerClassName="gl-post-types__position"
-        hint="Lower numbers come first in the sidebar. Empty puts it last."
+        hint="Lower numbers come first in the sidebar: Posts are 5, Pages 20. Empty counts as 0, the top."
         value={draft.menu_position}
         onChange={(e) => set({ menu_position: e.target.value.trim() })}
       />
@@ -299,7 +302,7 @@ function PostTypeForm({ postType, onCancel, onSaved }: FormProps) {
             />
           ))}
           {otherFields.map((value) => (
-            <Checkbox key={value} label={value} description="Added by a theme" checked onChange={(on) => toggleField(value, on)} />
+            <Checkbox key={value} label={value} checked onChange={(on) => toggleField(value, on)} />
           ))}
         </div>
       </fieldset>

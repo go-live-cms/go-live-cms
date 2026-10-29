@@ -83,6 +83,12 @@ describe("validatePostTypeDraft", () => {
     expect(validatePostTypeDraft({ ...valid, menu_position: "-1" }, true)).toMatch(/menu position/)
     expect(validatePostTypeDraft({ ...valid, menu_position: "12" }, true)).toBeNull()
   })
+
+  it("refuses to create over an existing type, since POST upserts", () => {
+    expect(validatePostTypeDraft(valid, true, ["post", "event"])).toMatch(/already a post type named “event”/)
+    // Editing keeps its own name.
+    expect(validatePostTypeDraft(valid, false, ["event"])).toBeNull()
+  })
 })
 
 it("nameFromLabel follows the API's identifier rule", () => {

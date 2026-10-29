@@ -15,7 +15,7 @@ import type { User, ApiMeta } from "@gl-admin/lib/api/types"
 import { AuthManager } from "@gl-admin/lib/auth"
 import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { formatDate } from "@gl-admin/utils/formatting"
+import { formatDate, plural } from "@gl-admin/utils/formatting"
 import InviteUserModal from "@gl-admin/components/users/InviteUserModal"
 import PendingInvitations from "@gl-admin/components/users/PendingInvitations"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
@@ -39,8 +39,6 @@ const SORT_OPTIONS = [
     { label: "Role A–Z", value: "role_asc" },
     { label: "Role Z–A", value: "role_desc" },
 ]
-
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 const Users: React.FC = () => {
     const accessToken = AuthManager.getInstance().getAccessToken() || ""

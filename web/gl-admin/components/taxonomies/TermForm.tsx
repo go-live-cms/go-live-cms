@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useState } from "react"
 import Button from "@gl-admin/components/ui/Button"
 import Input from "@gl-admin/components/ui/Input"
 import Textarea from "@gl-admin/components/ui/Textarea"
@@ -26,10 +26,11 @@ const NO_PARENT = ""
 // description and, for hierarchical types, its parent. The API validates the parent
 // and the slug again.
 export default function TermForm({ type, terms, term, onCancel, onSaved, onDelete }: TermFormProps) {
-  const [name, setName] = useState("")
-  const [slug, setSlug] = useState("")
-  const [description, setDescription] = useState("")
-  const [parentId, setParentId] = useState(NO_PARENT)
+  // The page keys this form by term, so these start from the term picked.
+  const [name, setName] = useState(term?.name ?? "")
+  const [slug, setSlug] = useState(term?.slug ?? "")
+  const [description, setDescription] = useState(term?.description ?? "")
+  const [parentId, setParentId] = useState(term?.parent_id ? String(term.parent_id) : NO_PARENT)
   const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState<string | null>(null)
   const [slugError, setSlugError] = useState<string | null>(null)
@@ -45,8 +46,6 @@ export default function TermForm({ type, terms, term, onCancel, onSaved, onDelet
     setFormError(null)
   }
 
-  // Only for another term: a reload of the list hands in a new object for the same one.
-  useEffect(reset, [term?.id])
 
   const options = [
     { value: NO_PARENT, label: "None (top level)" },

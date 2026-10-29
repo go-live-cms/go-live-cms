@@ -18,6 +18,7 @@ import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import { ExternalIcon } from "@gl-admin/components/ui/icons"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import { plural } from "@gl-admin/utils/formatting"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/themes.scss"
 
@@ -49,7 +50,9 @@ const ThemesPage: React.FC = () => {
     fetchData()
   }, [baseTitle])
 
-  const fetchData = async () => {
+  // refresh: reloading after an activation or a save. A failure then is a toast, not the
+  // error page in place of themes that are still on screen.
+  const fetchData = async (refresh = false) => {
     try {
       setLoadError(null)
       const token = authManager.getState().accessToken || undefined
@@ -65,7 +68,8 @@ const ThemesPage: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to fetch themes:", error)
-      setLoadError(error)
+      if (refresh) toast.error(`Couldn't reload the themes. ${errorMessage(error)}`)
+      else setLoadError(error)
     } finally {
       setLoading(false)
     }
@@ -77,7 +81,7 @@ const ThemesPage: React.FC = () => {
       const token = authManager.getState().accessToken || undefined
       await activateTheme(theme.id, token)
       toast.success(`${theme.name} is now your theme`)
-      await fetchData()
+      await fetchData(true)
     } catch (error) {
       console.error("Failed to activate theme:", error)
       toast.error(`Couldn't activate ${theme.name}. ${errorMessage(error)}`)
@@ -114,7 +118,7 @@ const ThemesPage: React.FC = () => {
 
       toast.success("Layouts saved")
       setCustomizerOpen(false)
-      await fetchData()
+      await fetchData(true)
     } catch (error) {
       console.error("Failed to save layout settings:", error)
       toast.error(`Couldn't save the layouts. ${errorMessage(error)}`)
@@ -156,7 +160,7 @@ const ThemesPage: React.FC = () => {
           title="Couldn't load themes"
           description={errorMessage(loadError)}
           action={
-            <Button variant="primary" onClick={fetchData}>
+            <Button variant="primary" onClick={() => fetchData()}>
               Try again
             </Button>
           }
@@ -284,12 +288,10 @@ const ThemesPage: React.FC = () => {
   )
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
-
 // The theme's thumbnail.jpg, or a drawn stand-in when it has none.
 function ThemePreview({ theme, className }: { theme: Theme; className: string }) {
+  // Each preview is keyed by its theme, so this never carries over to another one.
   const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [theme.slug])
   return (
     <div className={`gl-theme-preview ${className}`}>
       {failed ? (
