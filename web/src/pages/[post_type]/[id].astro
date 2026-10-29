@@ -1,7 +1,8 @@
 ---
 import { getPostsByType, getPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl, getPostTaxonomyTerms } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
-import { metaDescription, normalizeUrlStructure, postLastmod, postPath, toW3cDate, type SeoMeta } from '../../lib/seo'
+import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
+import { metaDescription, normalizeUrlStructure, postLastmod, postPath, publicImageUrl, resolveSiteUrl, toW3cDate, type SeoMeta } from '../../lib/seo'
 import { SITE_TITLE } from '../../consts'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 
@@ -209,32 +210,13 @@ const activeTheme = await getActiveTheme()
 const themeSlug = activeTheme.slug
 console.log(`🎨 Active theme: ${activeTheme.name} (${themeSlug}), layout variant: ${layoutVariant}`)
 
-// Layout fallback chain:
-// 1. themes/{theme}/layouts/{postType}/{variant}.astro  (exact match)
-// 2. themes/{theme}/layouts/post/{variant}.astro        (generic post layout)
-// 3. themes/default/layouts/{postType}/{variant}.astro  (default theme, exact type)
-// 4. themes/default/layouts/post/default.astro          (ultimate fallback)
-let LayoutComponent
-const fallbackChain = [
-  `../../../themes/${themeSlug}/layouts/${postType}/${layoutVariant}.astro`,
-  `../../../themes/${themeSlug}/layouts/post/${layoutVariant}.astro`,
-  `../../../themes/${themeSlug}/layouts/post/default.astro`,
-  `../../../themes/default/layouts/${postType}/${layoutVariant}.astro`,
-  `../../../themes/default/layouts/post/default.astro`,
-]
-
-for (const candidatePath of fallbackChain) {
-  if (allLayouts[candidatePath]) {
-    try {
-      const layoutModule = await allLayouts[candidatePath]() as any
-      LayoutComponent = layoutModule.default
-      console.log(`✓ Loaded layout: ${candidatePath}`)
-      break
-    } catch (error) {
-      console.warn(`Failed to load layout ${candidatePath}:`, error)
-    }
-  }
-}
+// Layout fallback chain (lib/themeLayout.ts): the type's own layouts/{postType}/{variant}
+// (never home/archive/error, which hold page layouts), the theme's layouts/post ones, then
+// the default theme's.
+const LayoutComponent = await loadThemeLayout(
+  allLayouts,
+  postLayoutCandidates("../../../themes", themeSlug, postType, layoutVariant),
+)
 
 if (!LayoutComponent) {
   console.error(`No layout found for ${postType}/${layoutVariant} in any fallback`)
@@ -276,4 +258,6 @@ const seo: SeoMeta = {
   description={description}
   seo={seo}
   terms={terms}
+  featuredImage={publicImageUrl(resolveSiteUrl(Astro.url), featuredImage) ?? null}
+  siteTitle={settings?.site_title || SITE_TITLE}
 />

@@ -1,12 +1,13 @@
 ---
 /**
- * Full Width Page Layout
- * Edge-to-edge layout for landing pages, portfolios, etc.
+ * Full Width Page Layout (#345): a centred title band across the page, then the
+ * content, where images an author marks wide or full width (#346) break out of the text
+ * column.
  */
 import BaseLayout from '../base.astro'
-import Header from '@/layouts/Header.astro'
-import Footer from '@/layouts/Footer.astro'
 import BlockRenderer from '@/components/BlockRenderer'
+import { WIDE_IMAGE_SIZES } from '../../lib/imageSizes'
+import { metaDescription } from '@/lib/seo'
 import type { Post } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
@@ -15,78 +16,25 @@ interface Props {
   title: string
   description: string
   seo?: SeoMeta
+  siteTitle?: string
 }
 
-const { post, title, description, seo } = Astro.props
+const { post, title, description, seo, siteTitle } = Astro.props
+const dek = metaDescription(post.description, 400)
 ---
 
-<BaseLayout title={title} description={description} seo={seo}>
-  <Header />
-  
-  <main class="page-layout-fullwidth">
-    <article class="page-container-fullwidth">
-      <header class="page-header">
-        <div class="header-inner">
-          <h1 class="page-title">{post.title}</h1>
-        </div>
-      </header>
-      
-      <div class="page-content">
-        {post.published_blocks && (
-          <BlockRenderer doc={post.published_blocks} imageSizes="100vw" client:load />
-        )}
+<BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
+  <article class="page page--full">
+    <header class="page-band">
+      <div class="container page-band-inner">
+        <h1 class="title">{post.title}</h1>
+        {dek && <p class="dek">{dek}</p>}
       </div>
-    </article>
-  </main>
-  
-  <Footer />
+    </header>
+    <div class="container">
+      <div class="prose measure page-body">
+        {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={WIDE_IMAGE_SIZES} />}
+      </div>
+    </div>
+  </article>
 </BaseLayout>
-
-<style>
-  .page-layout-fullwidth {
-    min-height: 80vh;
-  }
-  
-  .page-container-fullwidth {
-    width: 100%;
-  }
-  
-  .page-header {
-    background: linear-gradient(135deg, rgb(var(--color-primary)), rgb(var(--color-accent)));
-    padding: 4rem 0;
-    margin-bottom: 0;
-  }
-  
-  .header-inner {
-    max-width: var(--container-width);
-    margin: 0 auto;
-    padding: 0 var(--gutter);
-  }
-  
-  .page-title {
-    font-family: var(--font-heading);
-    font-size: 3.5rem;
-    line-height: 1.2;
-    margin: 0;
-    color: white;
-  }
-  
-  .page-content {
-    font-size: 1.125rem;
-    line-height: 1.7;
-  }
-  
-  @media (max-width: 768px) {
-    .page-header {
-      padding: 3rem 0;
-    }
-    
-    .header-inner {
-      padding: 0 1rem;
-    }
-    
-    .page-title {
-      font-size: 2.25rem;
-    }
-  }
-</style>

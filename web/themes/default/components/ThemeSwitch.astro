@@ -1,0 +1,26 @@
+---
+/**
+ * Light / Dark / System choice (#345). The same three buttons in the header's menu and
+ * in the phone menu; scripts/theme-init.js applies the choice and keeps aria-pressed in
+ * sync on every copy. Hidden until that script runs (it sets data-js on <html>).
+ */
+interface Props {
+  // "menu": a list in the header's popover; "segmented": the phone menu's control.
+  variant: "menu" | "segmented"
+}
+
+const { variant } = Astro.props
+const choices = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "system", label: "System" },
+]
+---
+
+<div class={`theme-choices theme-choices--${variant}`}>
+  {choices.map((choice) => (
+    <button type="button" class="theme-choice" data-theme-choice={choice.value} aria-pressed="false">
+      {choice.label}
+    </button>
+  ))}
+</div>

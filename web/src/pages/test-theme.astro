@@ -3,6 +3,8 @@ import { loadThemeConfig, getActiveThemeId } from '@/lib/theme-loader'
 
 const themeId = await getActiveThemeId()
 const config = await loadThemeConfig(themeId)
+// Colours are hex in the default theme (#345) and "R G B" triplets in older themes.
+const css = (value: string) => (value.startsWith("#") ? value : `rgb(${value})`)
 ---
 
 <!DOCTYPE html>
@@ -57,16 +59,16 @@ const config = await loadThemeConfig(themeId)
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
     <div>
       <h4>Light Mode</h4>
-      <div style="padding: 10px; background: rgb({config.colors.light.background}); color: rgb({config.colors.light.text});">
-        <p style="color: rgb({config.colors.light.primary});">Primary: {config.colors.light.primary}</p>
+      <div style={`padding: 10px; background: ${css(config.colors.light.background)}; color: ${css(config.colors.light.text)};`}>
+        <p style={`color: ${css(config.colors.light.primary)};`}>Primary: {config.colors.light.primary}</p>
         <p>Text: {config.colors.light.text}</p>
         <p>Background: {config.colors.light.background}</p>
       </div>
     </div>
     <div>
       <h4>Dark Mode</h4>
-      <div style="padding: 10px; background: rgb({config.colors.dark.background}); color: rgb({config.colors.dark.text});">
-        <p style="color: rgb({config.colors.dark.primary});">Primary: {config.colors.dark.primary}</p>
+      <div style={`padding: 10px; background: ${css(config.colors.dark.background)}; color: ${css(config.colors.dark.text)};`}>
+        <p style={`color: ${css(config.colors.dark.primary)};`}>Primary: {config.colors.dark.primary}</p>
         <p>Text: {config.colors.dark.text}</p>
         <p>Background: {config.colors.dark.background}</p>
       </div>

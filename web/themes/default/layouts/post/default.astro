@@ -1,14 +1,15 @@
 ---
 /**
- * Default Post Layout
- * Clean, centered layout for blog posts
+ * Default Post Layout (#345): one reading column, the featured image at wide width.
+ * Hidden until their issues land: author cards (#350), older/newer and related posts
+ * (#351).
  */
 import BaseLayout from '../base.astro'
-import Header from '@/layouts/Header.astro'
-import Footer from '@/layouts/Footer.astro'
-import FormattedDate from '@/components/FormattedDate.astro'
 import BlockRenderer from '@/components/BlockRenderer'
+import PostHeader from '../../components/PostHeader.astro'
+import FeaturedImage from '../../components/FeaturedImage.astro'
 import PostTerms from '../../components/PostTerms.astro'
+import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
@@ -18,40 +19,26 @@ interface Props {
   description: string
   seo?: SeoMeta
   terms?: TaxonomyTerm[]
+  featuredImage?: string | null
+  siteTitle?: string
 }
 
-const { post, title, description, seo, terms } = Astro.props
+const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
 ---
 
-<BaseLayout title={title} description={description} seo={seo}>
-  <Header />
-  
-  <main class="post-layout-default">
-    <article class="post-container">
-      <header class="post-header">
-        {post.featured_image && (
-          <img 
-            src={post.featured_image} 
-            alt={post.title}
-            class="featured-image"
-          />
-        )}
-        <h1 class="post-title">{post.title}</h1>
-        
-        <div class="post-meta">
-          <FormattedDate date={new Date(post.created_at)} />
-          <span class="author">by {post.username}</span>
-        </div>
-        <PostTerms terms={terms} />
-      </header>
-      
-      <div class="post-content">
-        {post.published_blocks && (
-          <BlockRenderer doc={post.published_blocks} client:load />
-        )}
+<BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
+  <div class="container">
+    <article class="post post--default">
+      <PostHeader post={post} class="measure" />
+      <FeaturedImage src={featuredImage} variant="wide" />
+      <div class="prose measure">
+        {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} />}
       </div>
+      {terms && terms.length > 0 && (
+        <footer class="post-end measure">
+          <PostTerms terms={terms} />
+        </footer>
+      )}
     </article>
-  </main>
-  
-  <Footer />
+  </div>
 </BaseLayout>

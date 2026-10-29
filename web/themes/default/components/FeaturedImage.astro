@@ -1,0 +1,20 @@
+---
+/**
+ * A post's featured image (#345): wide in the default layout, column width in the
+ * sidebar layout, full bleed in the wide layout. The featured-image endpoint gives only
+ * the URL (no variants or focal point), so there is no srcset, and the image is
+ * decorative (alt="") beside the title it illustrates.
+ */
+interface Props {
+  src?: string | null
+  variant: 'wide' | 'column' | 'full'
+}
+
+const { src, variant } = Astro.props
+---
+
+{src && (
+  <figure class:list={['post-featured', `post-featured--${variant}`]}>
+    <img src={src} alt="" fetchpriority="high" decoding="async" />
+  </figure>
+)}

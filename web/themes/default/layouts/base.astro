@@ -1,80 +1,79 @@
 ---
 /**
- * Base Layout - Shared HTML structure
- * All theme layouts should extend this
+ * Base Layout - the page shell every default-theme layout uses (#345): <head> (SEO,
+ * tokens, fonts, styles, the theme script), the site header and footer.
  */
 import themeConfig from '../theme.config'
-import '@/assets/styles/global.css'
+import { themeCssVariables } from '../tokens'
+import { getSiteSettings } from '@/lib/siteSettings'
+import SiteHeader from '../components/SiteHeader.astro'
+import SiteFooter from '../components/SiteFooter.astro'
 import SeoHead from '@/components/SeoHead.astro'
 import type { SeoMeta } from '@/lib/seo'
+import type { NavKey } from '../lib/nav'
 
 interface Props {
   title: string
   description: string
-  theme?: 'light' | 'dark' | 'system'
   // Canonical/OG/robots tags (#137), passed by the post route through the layouts.
   seo?: SeoMeta
+  // The nav entry for this page (aria-current), if any.
+  current?: NavKey
+  // Settings the caller already fetched; base fetches them otherwise.
+  siteTitle?: string
 }
 
-const { title, description, theme = 'light', seo = {} } = Astro.props
+const { title, description, seo = {}, current } = Astro.props
+const siteTitle = Astro.props.siteTitle ?? (await getSiteSettings()).title
 
 // WordPress-style: Get theme assets registered in theme.config.ts
 const themeAssets = Astro.locals.themeAssets || {}
 // Backward compatibility fallback
 const legacyCssPath = Astro.locals.themeCssPath
+const tokens = themeCssVariables(themeConfig)
 ---
 
 <!doctype html>
-<html lang="en" data-theme={theme}>
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" />
     <meta name="generator" content={Astro.generator} />
     <SeoHead title={title} description={description} {...seo} />
-    
-    <!-- WordPress-style: Render theme-registered stylesheets (wp_enqueue_style equivalent) -->
+    <link rel="alternate" type="application/rss+xml" title={siteTitle} href="/rss.xml" />
+
+    {/* Sets data-theme before the first paint. A plain <script src>, not inline, so it
+        works under a CSP of script-src 'self'. */}
+    <script src="/themes/default/scripts/theme-init.js" data-storage-key={themeConfig.darkMode.storageKey} is:inline></script>
+
+    <link rel="preload" href="/themes/default/fonts/literata/literata-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/themes/default/fonts/inter/inter-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <style is:inline set:html={tokens}></style>
+
     {themeAssets.styles?.map((style: any) => (
       <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
     ))}
-    
-    <!-- Backward compatibility: legacy CSS path -->
     {!themeAssets.styles?.length && legacyCssPath && (
       <link rel="stylesheet" href={legacyCssPath} />
     )}
-    
-    <!-- Theme preference handler (prevents FOUC) -->
-    <script is:inline>
-      // Immediately apply theme preference before render
-      (function() {
-        const storageKey = 'gl-theme-preference'
-        const stored = localStorage.getItem(storageKey) || 'light'
-        
-        let theme = stored
-        if (stored === 'system') {
-          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-        }
-        
-        document.documentElement.setAttribute('data-theme', theme)
-      })()
-    </script>
-    
+
     <slot name="head" />
   </head>
   <body>
-    <!-- Debug: Theme indicator -->
-    <div style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: #2563eb; color: white; padding: 8px 16px; border-radius: 6px; font-family: monospace; font-size: 12px; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
-      🎨 {themeConfig.name} v{themeConfig.version}
+    <div class="site">
+      <SiteHeader siteTitle={siteTitle} current={current} />
+      <main id="content" class="site-main" tabindex="-1">
+        <slot />
+      </main>
+      <SiteFooter siteTitle={siteTitle} />
     </div>
-    
-    <slot />
     <slot name="footer-scripts" />
-    
-    <!-- WordPress-style: Render theme-registered scripts (wp_enqueue_script equivalent) -->
+
     {themeAssets.scripts?.map((script: any) => (
-      <script 
-        src={script.src} 
-        defer={script.defer} 
+      <script
+        src={script.src}
+        defer={script.defer}
         async={script.async}
         type={script.type}
       ></script>

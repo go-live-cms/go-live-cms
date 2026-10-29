@@ -1,0 +1,32 @@
+---
+/**
+ * One row of a post list (#345): title, excerpt, byline and the featured image. The
+ * category eyebrow above the title links to an archive, so it waits for #348.
+ */
+import type { ListedPost } from '@/lib/postList'
+import { metaDescription } from '@/lib/seo'
+import PostByline from './PostByline.astro'
+
+interface Props {
+  item: ListedPost
+  headingLevel?: 2 | 3
+}
+
+const { item, headingLevel = 3 } = Astro.props
+const { post, href, image } = item
+const excerpt = metaDescription(post.description, 220)
+const Heading = `h${headingLevel}` as 'h2' | 'h3'
+---
+
+<li class:list={['post-item', { 'has-media': !!image }]}>
+  <div class="post-item-body">
+    <Heading class="post-item-title"><a href={href}>{post.title}</a></Heading>
+    {excerpt && <p class="post-item-excerpt">{excerpt}</p>}
+    <PostByline post={post} />
+  </div>
+  {image && (
+    <a href={href} tabindex="-1" aria-hidden="true" class="post-item-media">
+      <img class="media" src={image} alt="" loading="lazy" decoding="async" />
+    </a>
+  )}
+</li>
