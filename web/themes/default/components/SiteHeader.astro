@@ -1,0 +1,82 @@
+---
+/**
+ * Site header (#345): the site's title as text, the main nav, the theme switch and,
+ * at phone width, a menu with the same nav and the same three theme choices.
+ *
+ * Hidden until their issues land: menus (#347; the nav is the links that exist today),
+ * search (#145) and a site logo (#330, it would replace the title text). GoLive's own
+ * mark never appears here, only in the footer credit.
+ */
+import ThemeSwitch from './ThemeSwitch.astro'
+import { NAV_ITEMS, type NavKey } from '../lib/nav'
+
+interface Props {
+  siteTitle: string
+  current?: NavKey
+}
+
+const { siteTitle, current } = Astro.props
+const ariaCurrent = (key: NavKey) => (key === current ? 'page' : undefined)
+---
+
+<a href="#content" class="skip-link">Skip to content</a>
+<header class="site-header">
+  <div class="container site-header-inner">
+    <a href="/" class="site-title" aria-current={ariaCurrent('home')}>{siteTitle}</a>
+    <nav class="site-nav" aria-label="Main">
+      {NAV_ITEMS.map((item) => (
+        <a href={item.href} aria-current={ariaCurrent(item.key)}>{item.label}</a>
+      ))}
+    </nav>
+    <div class="header-actions">
+      <div class="theme-menu hide-mobile">
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label="Theme"
+          aria-expanded="false"
+          aria-controls="theme-menu"
+          data-theme-menu-toggle
+        >
+          <svg class="icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+          <svg class="icon-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg>
+          <svg class="icon-system" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>
+        </button>
+        <div id="theme-menu" class="theme-popover" role="group" aria-label="Theme" hidden>
+          <ThemeSwitch variant="menu" />
+        </div>
+      </div>
+      <button
+        type="button"
+        class="icon-btn menu-btn"
+        aria-label="Open menu"
+        aria-expanded="false"
+        aria-controls="site-menu"
+        data-site-menu-open
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<dialog id="site-menu" class="mobile-menu" aria-label="Menu" data-site-menu>
+  <div class="container site-header-inner mobile-menu-bar">
+    <a href="/" class="site-title">{siteTitle}</a>
+    <button type="button" class="icon-btn" aria-label="Close menu" data-site-menu-close>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+    </button>
+  </div>
+  <nav aria-label="Main">
+    <a href="/" aria-current={ariaCurrent('home')}>Home</a>
+    {NAV_ITEMS.map((item) => (
+      <a href={item.href} aria-current={ariaCurrent(item.key)}>{item.label}</a>
+    ))}
+  </nav>
+  <div class="mobile-menu-section">
+    <fieldset class="appearance">
+      <legend class="section-title">Appearance</legend>
+      <ThemeSwitch variant="segmented" />
+    </fieldset>
+  </div>
+</dialog>

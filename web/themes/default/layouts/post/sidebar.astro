@@ -1,14 +1,16 @@
 ---
 /**
- * Post Layout with Sidebar
- * Two-column layout with sidebar for additional content
+ * Post Layout with Sidebar (#345): the reading column with a sidebar beside it.
+ * The design's sidebar holds a table of contents (#351) and the category's other posts
+ * (#348, #351); until those land it holds what exists: dates, reading time and terms.
  */
 import BaseLayout from '../base.astro'
-import Header from '@/layouts/Header.astro'
-import Footer from '@/layouts/Footer.astro'
-import FormattedDate from '@/components/FormattedDate.astro'
 import BlockRenderer from '@/components/BlockRenderer'
+import PostHeader from '../../components/PostHeader.astro'
+import FeaturedImage from '../../components/FeaturedImage.astro'
 import PostTerms from '../../components/PostTerms.astro'
+import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
+import { readingMinutes } from '../../lib/posts'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
@@ -18,49 +20,60 @@ interface Props {
   description: string
   seo?: SeoMeta
   terms?: TaxonomyTerm[]
+  featuredImage?: string | null
+  siteTitle?: string
 }
 
-const { post, title, description, seo, terms } = Astro.props
+const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
+
+const dateOf = (value: string) => {
+  const d = new Date(value)
+  // The API sends 0001-01-01 for a post that was never changed.
+  return Number.isNaN(d.getTime()) || d.getFullYear() < 1970 ? null : d
+}
+const published = dateOf(post.created_at)
+const changed = dateOf(post.changed_at)
+const updated = changed && published && changed.toDateString() !== published.toDateString() ? changed : null
+const minutes = readingMinutes(post.published_blocks)
+const format = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 ---
 
-<BaseLayout title={title} description={description} seo={seo}>
-  <Header />
-  
-  <main class="post-layout-sidebar">
-    <div class="layout-container">
-      <article class="post-main">
-        <header class="post-header">
-          {post.featured_image && (
-            <img 
-              src={post.featured_image} 
-              alt={post.title}
-              class="featured-image"
-            />
-          )}
-          <h1 class="post-title">{post.title}</h1>
-          
-          <div class="post-meta">
-            <FormattedDate date={new Date(post.created_at)} />
-            <span class="author">by {post.username}</span>
-          </div>
-          <PostTerms terms={terms} />
-        </header>
-        
-        <div class="post-content">
-          {post.published_blocks && (
-            <BlockRenderer doc={post.published_blocks} client:load />
-          )}
+<BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
+  <div class="container">
+    <div class="post-grid">
+      <article class="post post--sidebar">
+        <PostHeader post={post} />
+        <FeaturedImage src={featuredImage} variant="column" />
+        <div class="prose">
+          {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} />}
         </div>
       </article>
-      
-      <aside class="post-sidebar">
-        <div class="sidebar-widget">
-          <h3>About</h3>
-          <p>Sidebar content goes here. This could include author info, related posts, categories, etc.</p>
+
+      <aside class="post-aside" aria-label="About this post">
+        <div class="post-aside-inner">
+          <dl class="post-facts">
+            {published && (
+              <div>
+                <dt class="section-title">Published</dt>
+                <dd><time datetime={published.toISOString()}>{format(published)}</time></dd>
+              </div>
+            )}
+            {updated && (
+              <div>
+                <dt class="section-title">Updated</dt>
+                <dd><time datetime={updated.toISOString()}>{format(updated)}</time></dd>
+              </div>
+            )}
+            {minutes && (
+              <div>
+                <dt class="section-title">Reading time</dt>
+                <dd>{minutes} min</dd>
+              </div>
+            )}
+          </dl>
+          <PostTerms terms={terms} />
         </div>
       </aside>
     </div>
-  </main>
-  
-  <Footer />
+  </div>
 </BaseLayout>

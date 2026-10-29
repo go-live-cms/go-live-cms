@@ -1,12 +1,11 @@
 ---
 /**
- * Default Page Layout
- * Standard layout for static pages
+ * Default Page Layout (#345): the title and excerpt over one reading column.
  */
 import BaseLayout from '../base.astro'
-import Header from '@/layouts/Header.astro'
-import Footer from '@/layouts/Footer.astro'
 import BlockRenderer from '@/components/BlockRenderer'
+import PostHeader from '../../components/PostHeader.astro'
+import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
 import type { Post } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
@@ -15,68 +14,19 @@ interface Props {
   title: string
   description: string
   seo?: SeoMeta
+  siteTitle?: string
 }
 
-const { post, title, description, seo } = Astro.props
+const { post, title, description, seo, siteTitle } = Astro.props
 ---
 
-<BaseLayout title={title} description={description} seo={seo}>
-  <Header />
-  
-  <main class="page-layout-default">
-    <article class="page-container">
-      <header class="page-header">
-        <h1 class="page-title">{post.title}</h1>
-      </header>
-      
-      <div class="page-content">
-        {post.published_blocks && (
-          <BlockRenderer doc={post.published_blocks} client:load />
-        )}
+<BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
+  <div class="container">
+    <article class="page page--default">
+      <PostHeader post={post} class="measure" showByline={false} />
+      <div class="prose measure page-body">
+        {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} />}
       </div>
     </article>
-  </main>
-  
-  <Footer />
+  </div>
 </BaseLayout>
-
-<style>
-  .page-layout-default {
-    min-height: 80vh;
-  }
-  
-  .page-container {
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: var(--gutter);
-  }
-  
-  .page-header {
-    margin-bottom: 3rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid rgb(var(--color-border));
-  }
-  
-  .page-title {
-    font-family: var(--font-heading);
-    font-size: 3rem;
-    line-height: 1.2;
-    margin: 0;
-    color: rgb(var(--color-text));
-  }
-  
-  .page-content {
-    font-size: 1.125rem;
-    line-height: 1.7;
-  }
-  
-  @media (max-width: 768px) {
-    .page-container {
-      padding: 1rem;
-    }
-    
-    .page-title {
-      font-size: 2rem;
-    }
-  }
-</style>

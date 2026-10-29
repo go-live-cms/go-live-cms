@@ -1,14 +1,15 @@
 ---
 /**
- * Wide Post Layout
- * Full-width content layout for immersive reading
+ * Wide Post Layout (#345): a centred title, the featured image full bleed, and images
+ * and code blocks at the wide width beside a reading column of text. Images an author
+ * marks full width (#346, `align`) run edge to edge.
  */
 import BaseLayout from '../base.astro'
-import Header from '@/layouts/Header.astro'
-import Footer from '@/layouts/Footer.astro'
-import FormattedDate from '@/components/FormattedDate.astro'
 import BlockRenderer from '@/components/BlockRenderer'
+import PostHeader from '../../components/PostHeader.astro'
+import FeaturedImage from '../../components/FeaturedImage.astro'
 import PostTerms from '../../components/PostTerms.astro'
+import { WIDE_IMAGE_SIZES } from '../../lib/imageSizes'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
@@ -18,42 +19,28 @@ interface Props {
   description: string
   seo?: SeoMeta
   terms?: TaxonomyTerm[]
+  featuredImage?: string | null
+  siteTitle?: string
 }
 
-const { post, title, description, seo, terms } = Astro.props
+const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
 ---
 
-<BaseLayout title={title} description={description} seo={seo}>
-  <Header />
-  
-  <main class="post-layout-wide">
-    <article class="post-container-wide">
-      <header class="post-header">
-        {post.featured_image && (
-          <img 
-            src={post.featured_image} 
-            alt={post.title}
-            class="featured-image"
-          />
-        )}
-        <div class="header-content">
-          <h1 class="post-title">{post.title}</h1>
-          
-          <div class="post-meta">
-            <FormattedDate date={new Date(post.created_at)} />
-            <span class="author">by {post.username}</span>
-          </div>
-          <PostTerms terms={terms} />
-        </div>
-      </header>
-      
-      <div class="post-content">
-        {post.published_blocks && (
-          <BlockRenderer doc={post.published_blocks} imageSizes="100vw" client:load />
-        )}
+<BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
+  <article class="post post--wide">
+    <div class="container">
+      <PostHeader post={post} class="wide" centered />
+    </div>
+    <FeaturedImage src={featuredImage} variant="full" />
+    <div class="container">
+      <div class="prose measure">
+        {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={WIDE_IMAGE_SIZES} />}
       </div>
-    </article>
-  </main>
-  
-  <Footer />
+      {terms && terms.length > 0 && (
+        <footer class="post-end measure">
+          <PostTerms terms={terms} />
+        </footer>
+      )}
+    </div>
+  </article>
 </BaseLayout>

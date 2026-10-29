@@ -1125,23 +1125,40 @@ The full config format supports design tokens for colors, typography, and layout
 
 ### Colors
 
-Define light and dark palettes using space-separated RGB values:
+Each palette is a set of hex colours. The default theme (#345) uses these keys; the
+seven after `accent` are optional, so older themes that reuse the interface still
+type-check:
 
 ```typescript
 colors: {
   light: {
-    primary: "59 130 246",     // Use in CSS: rgb(var(--color-primary))
-    background: "255 255 255",
-    text: "15 23 42",
-    // ... etc
+    primary: "#1b7760",      // links, buttons, focus
+    secondary: "#1d3b31",    // headings, site title
+    background: "#fdfdfc",
+    surface: "#f9f9f8",
+    text: "#21201c",
+    textMuted: "#63635e",
+    border: "#dad9d6",
+    accent: "#ffc53d",       // never carries text
+    primaryHover: "#145a48",
+    onPrimary: "#ffffff",
+    primarySubtle: "#e6f7ed",
+    surface2: "#f1f0ef",
+    borderStrong: "#8d8d86",
+    highlight: "#ffe7b3",
+    focus: "#1b7760",
   },
-  dark: {
-    primary: "96 165 250",
-    background: "15 23 42",
-    text: "241 245 249",
-  },
+  dark: { /* the same keys */ },
 }
 ```
+
+`typography` adds `lineHeight` (tight, snug, normal, relaxed), `layout` adds
+`contentWidth`, `wideWidth` and `headerHeight`, and `spacing` / `radius` are scales. The
+default theme turns all of them into CSS custom properties in `base.astro`
+(`themes/default/tokens.ts`: `--color-text-muted`, `--color-surface-2`, `--size-2xl`,
+`--leading-relaxed`, `--space-6`, `--radius-md`, …), so its stylesheet only reads
+`var(--…)`. `themes/default/tokens.test.ts` checks every text pairing for 4.5:1 in both
+palettes.
 
 ### Dark Mode
 
@@ -1156,20 +1173,16 @@ darkMode: {
 }
 ```
 
-Example FOUC-prevention script (include in `<head>`):
+Set the theme before the first paint with a plain, render-blocking `<script src>` in
+`<head>`, not an inline script, so it also works under a Content-Security-Policy of
+`script-src 'self'`. The default theme's `scripts/theme-init.js` does this and wires
+its Light / Dark / System switch:
 
-```html
-<script is:inline>
-  ;(function () {
-    const stored = localStorage.getItem("gl-theme-preference") || "light"
-    let theme = stored
-    if (stored === "system") {
-      theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-    }
-    document.documentElement.setAttribute("data-theme", theme)
-  })()
-</script>
+```astro
+<script src="/themes/default/scripts/theme-init.js" data-storage-key="gl-theme-preference" is:inline></script>
 ```
+
+Without JavaScript the default theme's tokens fall back to `prefers-color-scheme`.
 
 ---
 

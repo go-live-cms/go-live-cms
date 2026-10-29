@@ -163,6 +163,41 @@ func TestGetActiveThemeAPI(t *testing.T) {
 			},
 		},
 		{
+			name: "SettingsAsObject",
+			buildStubs: func(store *mockdb.MockStore) {
+				row := activeRow
+				// What the driver returns for the jsonb_object_agg column.
+				row.Settings = []byte(`{"layout_variants": {"page": "fullwidth", "post": "wide"}}`)
+				store.EXPECT().
+					GetActiveThemeWithSettings(gomock.Any()).
+					Times(1).
+					Return(row, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				var resp struct {
+					Settings struct {
+						LayoutVariants map[string]string `json:"layout_variants"`
+					} `json:"settings"`
+				}
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+				require.Equal(t, map[string]string{"page": "fullwidth", "post": "wide"}, resp.Settings.LayoutVariants)
+			},
+		},
+		{
+			name: "NoSettings",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().
+					GetActiveThemeWithSettings(gomock.Any()).
+					Times(1).
+					Return(activeRow, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				require.Contains(t, recorder.Body.String(), `"settings":{}`)
+			},
+		},
+		{
 			name: "NotFound",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().

@@ -155,6 +155,17 @@ are the most fragile part of the codebase. **Before editing anything under
   `<figcaption>`, and `<cite>` as the last child of `<blockquote>`. The image toolbar is
   `components/editor/ui/ImageToolbar.tsx` (shown on a selected image; the text bubble
   menu hides then, and in a caption shows only bold/italic/link).
+- **Default public theme (#345):** tokens live in `themes/default/theme.config.ts` and
+  become CSS custom properties in `base.astro` (`tokens.ts`); `styles/theme.css` is plain
+  CSS served as is and only reads `var(--…)` (`tokens.test.ts` checks 4.5:1 in both
+  palettes and that every `var()` is defined). Fonts are self-hosted under
+  `themes/default/fonts/`. The Light / Dark / System switch is `scripts/theme-init.js`,
+  a render-blocking `<script src>` (never inline, so it survives a `script-src 'self'`
+  CSP). `/` and `/{post_type}` render the theme's `layouts/home` and `layouts/archive`
+  through `lib/themeLayout.ts` (default theme as fallback), with data from
+  `lib/postList.ts`. Parts without a backend stay hidden (table in
+  `themes/default/README.md`). `/themes/active` returns `settings` as an object (it was
+  base64 before, so `layout_variants` never applied).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

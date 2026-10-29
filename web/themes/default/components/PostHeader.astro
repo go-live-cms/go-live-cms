@@ -1,0 +1,25 @@
+---
+/**
+ * A post's title, excerpt (the dek) and byline (#345). The category eyebrow above the
+ * title links to its archive, so it waits for #348.
+ */
+import type { Post } from '@gl-admin/lib/api/types'
+import { metaDescription } from '@/lib/seo'
+import PostByline from './PostByline.astro'
+
+interface Props {
+  post: Post
+  class?: string
+  centered?: boolean
+  showByline?: boolean
+}
+
+const { post, class: className = '', centered = false, showByline = true } = Astro.props
+const dek = metaDescription(post.description, 400)
+---
+
+<header class:list={['post-header', className, { 'is-centered': centered }]}>
+  <h1 class="title">{post.title}</h1>
+  {dek && <p class="dek">{dek}</p>}
+  {showByline && <PostByline post={post} variant="post" />}
+</header>
