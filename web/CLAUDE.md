@@ -113,6 +113,14 @@ are the most fragile part of the codebase. **Before editing anything under
   (archived posts are left out). List rows fetched with `with_meta=true` carry `authors`
   (user_posts). Hierarchical types render `pages/Pages.tsx`, which loads every page for
   the tree. Features without a backend yet stay hidden (comments at the top of each page).
+- **Editor chrome (#341):** `components/editor/ui/EditorTopBar.tsx` (breadcrumb, status,
+  save/connection state, presence, publish menu), `PostSidebar` (Post · History), History
+  preview in the canvas (`RevisionsPanel`'s `VersionPreview`; the bound editor stays mounted,
+  only hidden). Connection states and the unload warning are `utils/connectionState.ts`
+  (tested): no change for `RECONNECT_GRACE_MS`, then "reconnecting", then offline; the tab
+  warns on unload while the provider has unsynced changes or the connection is down. Editor
+  styles use the design tokens only (never `prefers-color-scheme`). Features in the design
+  without a backend stay hidden (comments at the top of each file; table on #341).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

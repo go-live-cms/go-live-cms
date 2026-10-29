@@ -4,7 +4,7 @@ export const textBlocks: Block[] = [
   {
     title: "Paragraph",
     description: "Standard text block",
-    icon: "📃",
+    icon: "Aa",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setParagraph().run()
     },
@@ -16,7 +16,8 @@ export const textBlocks: Block[] = [
   {
     title: "Quote",
     description: "Add a blockquote",
-    icon: "💬",
+    icon: "“",
+    hint: ">",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setBlockquote().run()
     },
@@ -28,7 +29,8 @@ export const textBlocks: Block[] = [
   {
     title: "Code Block",
     description: "Add a code block with syntax highlighting",
-    icon: "💻",
+    icon: "{}",
+    hint: "```",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setCodeBlock().run()
     },
@@ -40,7 +42,8 @@ export const textBlocks: Block[] = [
   {
     title: "Divider",
     description: "Add a horizontal divider",
-    icon: "➖",
+    icon: "—",
+    hint: "---",
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).setHorizontalRule().run()
     },

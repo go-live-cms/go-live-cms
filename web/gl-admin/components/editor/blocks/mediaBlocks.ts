@@ -149,7 +149,8 @@ export const createMediaBlocks = (): Block[] => [
   {
     title: "Image",
     description: "Add an image from media library",
-    icon: "🖼️",
+    icon: "Img",
+    group: "media",
     command: ({ editor, range }) => {
       createImagePlaceholder(editor, range)
     },

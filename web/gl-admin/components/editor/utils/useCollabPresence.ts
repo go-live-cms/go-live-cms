@@ -2,7 +2,9 @@ import { useEffect, useState } from "react"
 import type { HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { acquirePostCollab, releasePostCollab } from "@gl-admin/lib/collaboration/postCollab"
 
-export type CollabStatus = "connecting" | "connected" | "disconnected"
+// "ended": the server refused or revoked the session; it never reconnects (the editor
+// says "session ended"), so it isn't offline either.
+export type CollabStatus = "connecting" | "connected" | "disconnected" | "ended"
 export type CollabUser = { clientId: number; id?: number; name?: string; color?: string }
 
 // The same connection the editor uses (shared, ref-counted), re-acquired when it goes
@@ -12,20 +14,33 @@ export function useCollabPresence(postId?: number, enabled = true) {
   const [generation, setGeneration] = useState(0)
   const [status, setStatus] = useState<CollabStatus>("disconnected")
   const [users, setUsers] = useState<CollabUser[]>([])
+  // Local edits the server hasn't acknowledged yet (the provider's own count): this tab
+  // holds the only copy of them (#341, the unload warning).
+  const [unsynced, setUnsynced] = useState(false)
 
   useEffect(() => {
     if (!postId || !enabled) {
       setCollab(null)
       setStatus("disconnected")
       setUsers([])
+      setUnsynced(false)
       return
     }
     const instance = acquirePostCollab(postId)
     setCollab(instance)
     const awareness = instance.provider.awareness
+    const onUnsynced = () => setUnsynced(instance.provider.hasUnsyncedChanges)
     let raf = 0
     const onStatus = (s = instance.getStatus()) =>
-      setStatus(s === "connected" ? "connected" : s === "connecting" ? "connecting" : "disconnected")
+      setStatus(
+        s === "connected"
+          ? "connected"
+          : s === "connecting"
+            ? "connecting"
+            : s === "denied" || s === "revoked"
+              ? "ended"
+              : "disconnected"
+      )
     const onUsers = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
@@ -40,18 +55,21 @@ export function useCollabPresence(postId?: number, enabled = true) {
     }
     onStatus()
     onUsers()
+    onUnsynced()
     const offStatus = instance.onStatus(onStatus)
     const offStale = instance.onStale(() => setGeneration((g) => g + 1))
     awareness?.on("change", onUsers)
+    instance.provider.on("unsyncedChanges", onUnsynced)
     return () => {
       cancelAnimationFrame(raf)
       offStatus()
       offStale()
       awareness?.off("change", onUsers)
+      instance.provider.off("unsyncedChanges", onUnsynced)
       releasePostCollab(instance)
     }
   }, [postId, enabled, generation])
 
   const clientId = collab?.provider.awareness?.clientID
-  return { status, users: clientId != null ? users.filter((u) => u.clientId !== clientId) : users }
+  return { status, unsynced, users: clientId != null ? users.filter((u) => u.clientId !== clientId) : users }
 }

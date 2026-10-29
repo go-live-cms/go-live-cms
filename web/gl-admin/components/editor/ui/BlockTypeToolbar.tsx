@@ -9,7 +9,7 @@ import CommandSelect, { type CommandSelectOption } from "./CommandSelect"
  * Shows Paragraph and H1-H6
  */
 const blockTypeOptions: CommandSelectOption[] = [
-  { value: "paragraph", label: "Paragraph", label_icon: "¶" },
+  { value: "paragraph", label: "Text", label_icon: "Aa" },
   { value: "heading-1", label: "Heading 1", label_icon: "H1" },
   { value: "heading-2", label: "Heading 2", label_icon: "H2" },
   { value: "heading-3", label: "Heading 3", label_icon: "H3" },
@@ -74,14 +74,16 @@ const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
 
   if (!editor) return null
 
-  const alignButtonClasses =
-    "hover:bg-gray-700 w-7 h-7 flex items-center justify-center rounded-md cursor-pointer transition-colors"
+  const isAligned = (align: "left" | "center" | "right") =>
+    align === "left"
+      ? editor.isActive({ textAlign: "left" }) || (!editor.isActive({ textAlign: "center" }) && !editor.isActive({ textAlign: "right" }))
+      : editor.isActive({ textAlign: align })
 
   return (
     <TipTapBubbleMenu
       editor={editor}
       pluginKey="blockTypeToolbar"
-      className="block-type-toolbar"
+      className="editor-toolbar block-type-toolbar"
       shouldShow={({ editor, state }) => {
         // Don't show if there's a text selection (let BubbleMenu handle that)
         const { from, to } = state.selection
@@ -94,41 +96,44 @@ const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
         return isInParagraph || isInHeading
       }}
     >
-      <CommandSelect
-        options={blockTypeOptions}
-        value={blockType}
-        label=""
-        onChange={(option: CommandSelectOption) => {
-          if (!editor) return
-          const val = option.value as TurnIntoValue
-          setBlockType(val)
-          applyTurnInto(editor, val, blockTypeOptions)
-        }}
-      />
-
-      {/* Text alignment buttons */}
-      <div className="ml-2 flex items-center gap-0.5 border-l border-gray-600 pl-2">
+      <div role="toolbar" aria-label="Block" className="editor-toolbar__group">
+        <CommandSelect
+          options={blockTypeOptions}
+          value={blockType}
+          label="Block type"
+          onChange={(option: CommandSelectOption) => {
+            if (!editor) return
+            const val = option.value as TurnIntoValue
+            setBlockType(val)
+            applyTurnInto(editor, val, blockTypeOptions)
+          }}
+        />
+        <span aria-hidden="true" className="editor-toolbar__divider" />
+        {/* Text alignment */}
         <button
           type="button"
+          className="editor-toolbar__button"
+          aria-label="Align left"
+          aria-pressed={isAligned("left")}
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
-          className={`${alignButtonClasses} ${editor.isActive({ textAlign: "left" }) || (!editor.isActive({ textAlign: "center" }) && !editor.isActive({ textAlign: "right" })) ? "bg-gray-600" : "bg-transparent"}`}
-          title="Align left"
         >
           <AlignLeftIcon />
         </button>
         <button
           type="button"
+          className="editor-toolbar__button"
+          aria-label="Align center"
+          aria-pressed={isAligned("center")}
           onClick={() => editor.chain().focus().setTextAlign("center").run()}
-          className={`${alignButtonClasses} ${editor.isActive({ textAlign: "center" }) ? "bg-gray-600" : "bg-transparent"}`}
-          title="Align center"
         >
           <AlignCenterIcon />
         </button>
         <button
           type="button"
+          className="editor-toolbar__button"
+          aria-label="Align right"
+          aria-pressed={isAligned("right")}
           onClick={() => editor.chain().focus().setTextAlign("right").run()}
-          className={`${alignButtonClasses} ${editor.isActive({ textAlign: "right" }) ? "bg-gray-600" : "bg-transparent"}`}
-          title="Align right"
         >
           <AlignRightIcon />
         </button>

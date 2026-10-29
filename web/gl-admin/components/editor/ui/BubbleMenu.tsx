@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, type CSSProperties, type ReactNode } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import { getTurnIntoCommandOptions } from "../blocks"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
@@ -13,11 +13,23 @@ function isViewMounted(editor: any): boolean {
   }
 }
 
-const BubbleMenu = ({ editor, className, openLinkModal, ...props }: any) => {
+const CodeIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
+  </svg>
+)
+const LinkIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+    <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+  </svg>
+)
+
+// The selection toolbar ("Editor menus & states"): turn into, marks, link. Comment (#192)
+// isn't built yet, so it isn't shown.
+const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) => {
   const [turnIntoOptions, setTurnIntoOptions] = useState<CommandSelectOption[]>([])
   const [turnInto, setTurnInto] = useState<TurnIntoValue>("paragraph")
-  const bubbleMenuItemClasses =
-    "hover:bg-gray-700/80 w-7 h-7 flex items-center justify-center rounded-sm py-1 px-2 cursor-pointer"
 
   useEffect(() => {
     if (!editor) return
@@ -43,10 +55,23 @@ const BubbleMenu = ({ editor, className, openLinkModal, ...props }: any) => {
 
   if (!editor) return null
 
+  const mark = (name: string, label: string, run: () => void, content: ReactNode, style?: CSSProperties) => (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={editor.isActive(name)}
+      className="editor-toolbar__button"
+      style={style}
+      onClick={run}
+    >
+      {content}
+    </button>
+  )
+
   return (
     <TipTapBubbleMenu
       editor={editor}
-      className={`mb-2 flex gap-2 rounded-lg border border-gray-700 bg-gray-800/80 px-2 py-1 text-sm shadow backdrop-blur-xs select-none ${className}`}
+      className={`editor-toolbar ${className}`}
       shouldShow={({ editor: e }) => {
         // Prevent positioning when view is not fully mounted (avoids domFromPos null error)
         if (!isViewMounted(e)) return false
@@ -56,59 +81,33 @@ const BubbleMenu = ({ editor, className, openLinkModal, ...props }: any) => {
       }}
       {...props}
     >
-      <CommandSelect
-        options={turnIntoOptions}
-        value={turnInto}
-        label="Turn into"
-        onChange={(option: CommandSelectOption) => {
-          if (!editor) return
-          const val = option.value as TurnIntoValue
-          setTurnInto(val)
-          applyTurnInto(editor, val, turnIntoOptions)
-        }}
-      />
-      <button
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        className={`${bubbleMenuItemClasses} ${editor.isActive("bold") ? "font-semibold text-blue-500" : "text-gray-200"}`}
-        type="button"
-      >
-        <strong>B</strong>
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={`${bubbleMenuItemClasses} ${editor.isActive("italic") ? "font-semibold text-blue-500" : "text-gray-200"}`}
-        type="button"
-      >
-        <em>I</em>
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
-        className={`${bubbleMenuItemClasses} ${editor.isActive("underline") ? "font-semibold text-blue-500" : "text-gray-200"}`}
-        type="button"
-      >
-        <u>U</u>
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-        className={`${bubbleMenuItemClasses} ${editor.isActive("strike") ? "font-semibold text-blue-500" : "text-gray-200"}`}
-        type="button"
-      >
-        <s>S</s>
-      </button>
-      <button
-        onClick={() => editor.chain().focus().toggleCode().run()}
-        className={`${bubbleMenuItemClasses} ${editor.isActive("code") ? "font-semibold text-blue-500" : "text-gray-200"}`}
-        type="button"
-      >
-        <span className="font-mono text-xs">{"</>"}</span>
-      </button>
-      <button
-        onClick={openLinkModal}
-        className={`${bubbleMenuItemClasses} ${editor.isActive("link") ? "font-semibold text-blue-500" : "text-gray-200"}`}
-        type="button"
-      >
-        🔗
-      </button>
+      <div role="toolbar" aria-label="Format text" className="editor-toolbar__group">
+        <CommandSelect
+          options={turnIntoOptions}
+          value={turnInto}
+          label="Turn into"
+          onChange={(option: CommandSelectOption) => {
+            if (!editor) return
+            const val = option.value as TurnIntoValue
+            setTurnInto(val)
+            applyTurnInto(editor, val, turnIntoOptions)
+          }}
+        />
+        <span aria-hidden="true" className="editor-toolbar__divider" />
+        {mark("bold", "Bold", () => editor.chain().focus().toggleBold().run(), "B", { fontWeight: 700 })}
+        {mark("italic", "Italic", () => editor.chain().focus().toggleItalic().run(), "i", {
+          fontFamily: "Georgia, serif",
+          fontStyle: "italic",
+        })}
+        {mark("underline", "Underline", () => editor.chain().focus().toggleUnderline().run(), "U", {
+          textDecoration: "underline",
+        })}
+        {mark("strike", "Strikethrough", () => editor.chain().focus().toggleStrike().run(), "S", {
+          textDecoration: "line-through",
+        })}
+        {mark("code", "Inline code", () => editor.chain().focus().toggleCode().run(), <CodeIcon />)}
+        {mark("link", "Link", openLinkModal, <LinkIcon />)}
+      </div>
     </TipTapBubbleMenu>
   )
 }

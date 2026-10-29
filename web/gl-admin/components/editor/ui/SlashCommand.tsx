@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react"
+import React, { useState, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from "react"
 import { Extension } from "@tiptap/core"
 import { ReactRenderer } from "@tiptap/react"
 import { PluginKey } from "prosemirror-state"
@@ -10,7 +10,12 @@ export interface SlashCommandItem {
   icon: string
   command: ({ editor, range }: any) => void
   aliases?: string[]
+  hint?: string
+  group?: "media"
 }
+
+const GROUPS = ["basic", "media"] as const
+const GROUP_LABELS = { basic: "Basic blocks", media: "Media" } as const
 
 export const SlashCommandList = forwardRef<
   any,
@@ -22,9 +27,15 @@ export const SlashCommandList = forwardRef<
 >((props, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const commandListRef = useRef<HTMLDivElement>(null)
+  // In the order the menu shows them (by section), so the arrow keys follow the screen
+  // even when a theme registers a basic block after the media ones.
+  const items = useMemo(
+    () => GROUPS.flatMap((group) => props.items.filter((item) => (item.group ?? "basic") === group)),
+    [props.items]
+  )
 
   const selectItem = (index: number) => {
-    const item = props.items[index]
+    const item = items[index]
     if (item) {
       props.command(item)
     }
@@ -32,14 +43,14 @@ export const SlashCommandList = forwardRef<
 
   const upHandler = () => {
     setSelectedIndex((prev) => {
-      const newIndex = prev > 0 ? prev - 1 : props.items.length - 1
+      const newIndex = prev > 0 ? prev - 1 : items.length - 1
       return newIndex
     })
   }
 
   const downHandler = () => {
     setSelectedIndex((prev) => {
-      const newIndex = prev < props.items.length - 1 ? prev + 1 : 0
+      const newIndex = prev < items.length - 1 ? prev + 1 : 0
       return newIndex
     })
   }
@@ -53,16 +64,8 @@ export const SlashCommandList = forwardRef<
   }, [props.items])
 
   useEffect(() => {
-    const element = commandListRef.current
-    if (element && selectedIndex >= 0 && selectedIndex < element.children.length) {
-      const selectedElement = element.children[selectedIndex] as HTMLElement
-      if (selectedElement) {
-        selectedElement.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-        })
-      }
-    }
+    const selectedElement = commandListRef.current?.querySelector<HTMLElement>(`[data-index="${selectedIndex}"]`)
+    selectedElement?.scrollIntoView?.({ block: "nearest" })
   }, [selectedIndex])
 
   useImperativeHandle(ref, () => ({
@@ -94,34 +97,53 @@ export const SlashCommandList = forwardRef<
     },
   }))
 
-  if (props.items.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="slash-command-list">
-        <div className="slash-command-item">
-          <div className="content">
-            <div className="title">No results found</div>
-          </div>
-        </div>
+        <div className="slash-command-empty">No blocks match</div>
       </div>
     )
   }
 
+  // Sections in the design's order; items keep one flat index for the keyboard.
+  const sections = GROUPS.map((group) => ({
+    group,
+    items: items.map((item, index) => ({ item, index })).filter(({ item }) => (item.group ?? "basic") === group),
+  })).filter((s) => s.items.length > 0)
+
   return (
-    <div className="slash-command-list" ref={commandListRef}>
-      {props.items.map((item, index) => (
-        <button
-          className={`slash-command-item ${index === selectedIndex ? "selected" : ""}`}
-          key={`${item.title}-${index}`}
-          onClick={() => selectItem(index)}
-          type="button"
-        >
-          <div className="icon">{item.icon}</div>
-          <div className="content">
-            <div className="title">{item.title}</div>
-            <div className="description">{item.description}</div>
+    <div className="slash-command-list" ref={commandListRef} role="listbox" aria-label="Insert block">
+      {sections.map((section, i) => (
+        <div key={section.group} role="group" aria-label={GROUP_LABELS[section.group]}>
+          {i > 0 && <div className="slash-command-separator" aria-hidden="true" />}
+          <div className="slash-command-group" aria-hidden="true">
+            {GROUP_LABELS[section.group]}
           </div>
-        </button>
+          {section.items.map(({ item, index }) => (
+            <button
+              className={`slash-command-item ${index === selectedIndex ? "selected" : ""}`}
+              key={`${item.title}-${index}`}
+              data-index={index}
+              role="option"
+              aria-selected={index === selectedIndex}
+              title={item.description}
+              onClick={() => selectItem(index)}
+              type="button"
+            >
+              <span className="icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span className="title">{item.title}</span>
+              {item.hint && <span className="hint">{item.hint}</span>}
+            </button>
+          ))}
+        </div>
       ))}
+      <div className="slash-command-footer" aria-hidden="true">
+        <span>↑↓ to move</span>
+        <span>↵ to insert</span>
+        <span>esc to close</span>
+      </div>
     </div>
   )
 })

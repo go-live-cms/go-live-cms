@@ -34,12 +34,14 @@ export function createCaretElement(label: string, color: string, caretWidth = 2)
   const labelEl = document.createElement("span")
   labelEl.className = "collab-caret-label"
   labelEl.textContent = label
+  // The design's name label (#341): 11px semibold white on the person's colour (every
+  // presence colour passes 4.5:1 with white), square bottom-left corner on the caret.
   labelEl.style.cssText = `
     position:absolute; left:-${caretWidth / 2}px; top:0; transform:translateY(-100%);
-    background:${color}; color:white; font-size:12px; line-height:1;
-    font-weight:500; font-style:normal; letter-spacing:normal; text-transform:none;
-    padding:2px 6px; border-radius:4px 4px 4px 0; white-space:nowrap;
-    box-shadow:0 1px 2px rgba(0,0,0,.15); pointer-events:none; user-select:none;
+    background:${color}; color:#ffffff; font-family:var(--font-sans); font-size:11px; line-height:16px;
+    font-weight:600; font-style:normal; letter-spacing:normal; text-transform:none; text-decoration:none;
+    padding:0 6px; border-radius:4px 4px 4px 0; white-space:nowrap;
+    pointer-events:none; user-select:none;
   `
   caret.appendChild(labelEl)
   return caret
@@ -103,7 +105,8 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               if (to > from) {
                 decos.push(
                   Decoration.inline(from, to, {
-                    style: `background: ${color}22; border-bottom: 1px solid ${color}55;`,
+                    // A 13% tint of their colour (#341); the colours are hex (postCollab.ts).
+                    style: `background: ${color}21;`,
                   })
                 )
               }
