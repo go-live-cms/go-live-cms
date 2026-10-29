@@ -1,0 +1,50 @@
+// Sticky unsaved-changes bar (#338): background-subtle with a top rule, a warning
+// dot before the message, Discard and Save on the right.
+
+.gl-unsaved-bar {
+  align-items: center;
+  animation: gl-unsaved-in var(--duration-moderate) var(--ease-out);
+  background: var(--background-subtle);
+  border-top: 1px solid var(--border-color);
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) 40px;
+  position: sticky;
+  z-index: var(--z-sticky);
+
+  @media (width <= 640px) {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  &__message {
+    align-items: center;
+    display: flex;
+    flex: 1;
+    gap: var(--space-2);
+    min-width: 0;
+
+    &.is-error {
+      color: var(--danger-text);
+    }
+  }
+
+  &__dot {
+    background: var(--warning-text);
+    border-radius: var(--radius-full);
+    flex: none;
+    height: 8px;
+    width: 8px;
+  }
+
+  &__message.is-error &__dot {
+    background: var(--danger-text);
+  }
+}
+
+@keyframes gl-unsaved-in {
+  from {
+    transform: translateY(100%);
+  }
+}

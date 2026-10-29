@@ -1,0 +1,99 @@
+// Toasts (#338): inverted (toast-background with the page colour as text), so they
+// read in either theme; bottom left, above everything but tooltips.
+
+.gl-toaster {
+  bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  left: var(--space-6);
+  max-width: calc(100vw - 2 * var(--space-6));
+  pointer-events: none;
+  position: fixed;
+  z-index: var(--z-toast);
+
+  &__region {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  @media (width <= 640px) {
+    bottom: var(--space-4);
+    left: var(--space-4);
+    max-width: calc(100vw - 2 * var(--space-4));
+  }
+}
+
+.gl-toast {
+  align-items: center;
+  animation: gl-toast-in var(--duration-moderate) var(--ease-out);
+  background: var(--toast-background);
+  border-radius: 8px;
+  box-shadow: var(--menu-shadow);
+  display: flex;
+  font-size: var(--type-body);
+  gap: var(--space-3);
+  line-height: var(--type-body-lh);
+  max-width: 480px;
+  padding: 10px 10px 10px 14px;
+  pointer-events: auto;
+
+  &,
+  * {
+    color: var(--background);
+  }
+
+  &__icon {
+    display: inline-flex;
+    flex: none;
+  }
+
+  &__message {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__action {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: 600;
+    padding: 0;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &__close {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: grid;
+    flex: none;
+    height: 24px;
+    opacity: 0.8;
+    padding: 0;
+    place-items: center;
+    width: 24px;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+
+  // Inverted surface: the ring uses the page colour so it shows on the dark toast.
+  :focus-visible {
+    outline-color: var(--background);
+  }
+}
+
+@keyframes gl-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

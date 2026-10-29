@@ -390,31 +390,3 @@
     width: 100%;
   }
 }
-
-.toast-container {
-  position: fixed;
-  right: 20px;
-  top: 20px;
-  z-index: 9999;
-}
-
-.toast {
-  border-left: 4px solid;
-  border-radius: 4px;
-  box-shadow: var(--toast-box-shadow);
-  margin-bottom: 10px;
-  max-width: 300px;
-  padding: 12px 16px;
-
-  &--success {
-    border-left-color: #00a32a;
-  }
-
-  &--error {
-    border-left-color: #d63638;
-  }
-
-  &--info {
-    border-left-color: #0073aa;
-  }
-}

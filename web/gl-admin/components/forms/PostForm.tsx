@@ -13,7 +13,6 @@ import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { useCollabPresence } from "@gl-admin/components/editor/utils/useCollabPresence"
 import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
-import "@gl-admin/assets/styles/components/Toast.scss"
 
 interface PostFormData {
   title: string

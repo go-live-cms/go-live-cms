@@ -1,18 +1,60 @@
-@use "@gl-admin/assets/styles/variables";
-
+// Loading placeholder (#338): background-hover with a 1.4s pulse. With reduced motion
+// _tokens.scss sets --skeleton-pulse to paused, so skeletons hold still. (A variable,
+// not a nested @media, so callers can keep declaring after the include.) The Skeleton
+// component (components/ui/Skeleton.tsx) uses it too.
 @mixin skeleton-bg {
-  animation: skeleton-loading 1.2s infinite linear alternate;
-  background: var(--skeleton-background);
-  background-repeat: no-repeat;
-  background-size: 200% 100%;
+  animation: gl-skeleton-pulse 1.4s var(--ease-in-out) infinite;
+  animation-play-state: var(--skeleton-pulse, running);
+  background: var(--background-hover);
 }
 
-@keyframes skeleton-loading {
-  0% {
-    background-position: 0% 0;
+@keyframes gl-skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+// Hidden from sight, kept for screen readers.
+@mixin visually-hidden {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+// The shared look of anything that floats over the page: menus, popovers, listboxes.
+@mixin floating-surface {
+  background: var(--surface-raised);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--menu-shadow);
+  z-index: var(--z-dropdown);
+}
+
+// A row inside a menu or listbox: 32px, 6px radius, highlighted when active.
+@mixin menu-row {
+  align-items: center;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  font-size: var(--type-body);
+  gap: var(--space-2);
+  line-height: var(--type-body-lh);
+  min-height: 32px;
+  outline: none;
+  padding: 0 var(--space-2);
+  transition: background var(--duration-fast) var(--ease-out);
+  user-select: none;
+
+  &:hover,
+  &[data-active="true"] {
+    background: var(--background-hover);
   }
 
-  100% {
-    background-position: 100% 0;
+  &[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
 }

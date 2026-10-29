@@ -1,46 +1,21 @@
-import Icon from "./Icon";
-import { capitalize } from "@gl-admin/utils/formatting";
-import { useGoLive } from "@gl-admin/contexts/GoLiveContext";
-import "@gl-admin/assets/styles/components/ui/post-status.scss";
+import { capitalize } from "@gl-admin/utils/formatting"
+import Pill, { type PillTone } from "@gl-admin/components/ui/Pill"
+import Skeleton from "@gl-admin/components/ui/Skeleton"
 
-export default function PostStatus({ status, iconPath }: { status: string | null, iconPath: string | null }) {
+const TONES: Record<string, PillTone> = {
+  published: "success",
+  draft: "warning",
+  scheduled: "info",
+  private: "neutral",
+  archived: "outline",
+}
 
-    const { isDark } = useGoLive();
+// A post's status as a pill (#338). `iconPath` is no longer drawn (the pill has its
+// dot); it stays in the signature because the tables pass null while loading.
+export default function PostStatus({ status, iconPath }: { status: string | null; iconPath: string | null }) {
+  if (!status || !iconPath) {
+    return <Skeleton shape="pill" />
+  }
 
-    const getStatusColor = () => {
-        if (isDark) {
-            switch (status) {
-                case "published":
-                    return "#71FF71";
-                case "draft":
-                    return "#FFDF60";
-                case "private":
-                    return "#888888";
-                default:
-                    return "#FFFFFF";
-            }
-        } else {
-            switch (status) {
-                case "published":
-                    return "#0F5E0F";
-                case "draft":
-                    return "#333536";
-                case "private":
-                    return "#434343";
-                default:
-                    return "black";
-            }
-        }
-    };
-
-    if (!status || !iconPath) {
-        return <span className="gl-post-status skeleton"></span>;
-    }
-
-    return (
-        <span className={`gl-post-status ${status}`} style={{ color: getStatusColor() }}>
-            {iconPath && <Icon name={iconPath} alt={status || ""} color={getStatusColor()} width="1.125rem" height="1.125rem" className="gl-post-status-icon" />}
-            {capitalize(status)}
-        </span>
-    )
+  return <Pill tone={TONES[status] ?? "neutral"}>{capitalize(status)}</Pill>
 }

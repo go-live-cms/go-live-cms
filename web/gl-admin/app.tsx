@@ -5,6 +5,7 @@ import { ThemeProvider } from "./contexts/ThemeContext"
 import AuthGuard from "@gl-admin/components/AuthGuard"
 import ErrorBoundary from "@gl-admin/components/ErrorBoundary"
 import Sidebar from "@gl-admin/components/sidebar/Sidebar"
+import { Toaster } from "@gl-admin/components/ui/Toast"
 import "@gl-admin/assets/styles/global.scss"
 import NewContent from "./pages/NewContent"
 import NewPost from "./pages/NewPost"
@@ -36,6 +37,9 @@ const Users = lazy(() => import("@gl-admin/pages/Users"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 const Themes = lazy(() => import("@gl-admin/pages/Themes"))
 const Profile = lazy(() => import("@gl-admin/pages/Profile"))
+// Dev-only component gallery (#338): every UI component in light and dark. Vite drops
+// the import from production builds, where import.meta.env.DEV is false.
+const UiGallery = import.meta.env.DEV ? lazy(() => import("@gl-admin/pages/dev/UiGallery")) : null
 
 // Minimal navigation shown if the sidebar itself fails to render.
 function SidebarFallback() {
@@ -82,11 +86,13 @@ function AppLayout() {
                 <Route path="/users/edit/:id" element={<EditUser />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/settings" element={<Settings />} />
+                {UiGallery && <Route path="/dev/ui" element={<UiGallery />} />}
               </Routes>
             </Suspense>
           </ErrorBoundary>
         </div>
       </section>
+      <Toaster />
     </main>
   )
 }

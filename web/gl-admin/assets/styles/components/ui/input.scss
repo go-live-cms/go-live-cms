@@ -1,89 +1,158 @@
-@use "@gl-admin/assets/styles/variables";
+@use "@gl-admin/assets/styles/mixins";
 
-.gl-input {
-  --height: 3.4rem;
-  --radius: 0.25rem;
-  --pad-x: 0.875rem;
-  --pad-y: 0.625rem;
+// Form fields (#338): label above, 36px control, helper or error text below.
+// Shared by Input, Textarea, Select and Combobox, and by the account pages' hand-written
+// `.gl-input` markup (input first, then label: `order` puts the label on top).
 
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  display: inline-flex;
+// The control box: control-border edge; on focus a focus-ring edge and a 2px halo.
+@mixin control-box {
+  background: var(--background);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  color: var(--text-primary);
   font-family: inherit;
-  height: var(--height);
-  position: relative;
-  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
   width: 100%;
 
-  &.is-focused {
-    border-color: var(--input-focused-border-color);
-    box-shadow: var(--input-focused-box-shadow);
+  &::placeholder {
+    color: var(--text-placeholder);
+  }
+}
+
+@mixin control-focus {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 2px var(--accent-subtle-hover);
+  outline: none;
+}
+
+@mixin control-invalid {
+  border-color: var(--danger-text);
+}
+
+.gl-field,
+.gl-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  position: relative;
+  width: 100%;
+
+  &__label,
+  .gl-field__label {
+    color: var(--text-primary);
+    font-size: var(--type-label);
+    font-weight: 500;
+    line-height: var(--type-label-lh);
+    order: -1;
   }
 
-  &__field {
-    background: transparent;
-    border: 0;
-    color: var(--input-color);
-    flex: 1 1 auto;
-    font-family: inherit;
-    font-size: 0.875rem;
-    font-weight: 600;
-    height: 100%;
-    line-height: 1.2;
-    outline: 0;
-    padding: var(--pad-y) var(--pad-x);
-    padding-top: calc(var(--pad-y) + 0.625rem);
-    width: 100%;
+  &__optional {
+    color: var(--text-secondary);
+    font-weight: 400;
+  }
+}
 
-    &::-ms-clear { display: none; }
+.gl-field__hint,
+.gl-field__error {
+  font-size: var(--type-footnote);
+  line-height: var(--type-footnote-lh);
+}
 
-    &[type="number"] {
-      appearance: textfield;
+.gl-field__hint {
+  color: var(--text-secondary);
+}
 
-      &::-webkit-outer-spin-button,
-      &::-webkit-inner-spin-button {
-        appearance: none;
-        margin: 0;
-      }
+.gl-field__error {
+  align-items: center;
+  color: var(--danger-text);
+  display: flex;
+  gap: 6px;
+
+  svg {
+    flex: none;
+  }
+}
+
+.gl-input__field,
+.gl-textarea__field {
+  @include control-box;
+
+  &:focus,
+  &:focus-visible {
+    @include control-focus;
+  }
+
+  &:disabled,
+  &[readonly] {
+    background: var(--background-subtle);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &[aria-invalid="true"] {
+    @include control-invalid;
+  }
+}
+
+.gl-input__field {
+  height: 36px;
+  padding: 0 10px;
+
+  &::-ms-clear {
+    display: none;
+  }
+
+  &[type="number"] {
+    appearance: textfield;
+
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      appearance: none;
+      margin: 0;
     }
   }
+}
 
-  &__label {
-    color: var(--input-label-color);
+.gl-input.is-invalid .gl-input__field {
+  @include control-invalid;
+}
 
-    /* Before typing: acts like placeholder, slightly larger */
-    font-size: 1rem;
-    left: var(--pad-x);
-    pointer-events: none;
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    transition:
-      transform 140ms ease,
-      top 140ms ease,
-      font-size 140ms ease,
-      color 140ms ease,
-      opacity 140ms ease;
-    white-space: nowrap;
+.gl-textarea__field {
+  min-height: 60px;
+  padding: var(--space-2) 10px;
+  resize: vertical;
+}
+
+// Counter shown on the label row (e.g. "120 / 160").
+.gl-field__label-row {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+  order: -1;
+}
+
+.gl-field__count {
+  color: var(--text-secondary);
+  font-size: var(--type-footnote);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--type-footnote-lh);
+
+  &.is-over {
+    color: var(--danger-text);
+    font-weight: 500;
   }
+}
 
-  &.is-invalid {
-    border-color: var(--input-invalid-border-color);
-    box-shadow: var(--input-invalid-box-shadow);
-    .gl-input__label { color: var(--input-invalid-color)!important; }
-  }
-
-  &.is-focused .gl-input__label,
-  &.is-filled .gl-input__label,
-  &:not(:has(input:placeholder-shown)) .gl-input__label {
-    color: var(--input-active-color);
-    font-size: 0.8rem;
-    top: 0.25rem;
-    transform: none;
-  }
-
-  &:has(input:disabled) {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
+.gl-visually-hidden {
+  @include mixins.visually-hidden;
 }

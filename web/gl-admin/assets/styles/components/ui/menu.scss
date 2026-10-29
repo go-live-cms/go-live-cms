@@ -1,0 +1,99 @@
+@use "@gl-admin/assets/styles/mixins";
+
+// Menus and popovers (#338): surface-raised, 10px radius, menu-shadow, z-dropdown.
+
+.gl-menu {
+  @include mixins.floating-surface;
+
+  animation: gl-float-in var(--duration-base) var(--ease-out);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 16px);
+  min-width: 200px;
+  padding: 6px;
+
+  &__item {
+    @include mixins.menu-row;
+
+    background: transparent;
+    border: 0;
+    font-family: inherit;
+    text-align: left;
+    width: 100%;
+
+    // The roving highlight: the focused item, by keyboard or by pointer.
+    &:focus,
+    &:focus-visible {
+      background: var(--background-hover);
+      outline: none;
+    }
+
+    &--described {
+      min-height: 44px;
+      padding-bottom: var(--space-1);
+      padding-top: var(--space-1);
+    }
+
+    &--danger,
+    &--danger * {
+      color: var(--danger-text);
+    }
+  }
+
+  &__icon {
+    color: var(--text-secondary);
+    display: inline-flex;
+    flex: none;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__label {
+    color: inherit;
+  }
+
+  &__description {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__separator {
+    background: var(--border-color);
+    flex: none;
+    height: 1px;
+    margin: 6px -6px;
+  }
+}
+
+.gl-popover {
+  @include mixins.floating-surface;
+
+  animation: gl-float-in var(--duration-base) var(--ease-out);
+  box-sizing: border-box;
+  max-width: min(360px, calc(100vw - 16px));
+  padding: var(--space-4);
+
+  &__title {
+    font-size: var(--type-body);
+    font-weight: 600;
+    line-height: var(--type-body-lh);
+    margin: 0 0 var(--space-1);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+@keyframes gl-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

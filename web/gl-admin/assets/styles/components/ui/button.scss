@@ -1,50 +1,163 @@
-@use "@gl-admin/assets/styles/variables";
+// Buttons (#338). Variants: primary (the one main action), secondary, ghost, danger.
+// Sizes 28 / 32 / 36px. Focus is the global 2px ring (global.scss).
 
-.button {
+%gl-button-base {
   align-items: center;
-  background: var(--button-background-default);
-  border: none;
-  border-radius: var(--button-border-radius);
-  box-shadow: var(--button-box-shadow);
-  color: var(--button-color-default);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
+  flex: none;
   font-family: inherit;
-  font-size: var(--text-size-body);
-  font-weight: 600;
-  gap: 0.625rem;
+  font-size: var(--type-body);
+  font-weight: 500;
+  gap: 6px;
+  height: 32px;
   justify-content: center;
-  padding: 0.5rem 1rem;
+  line-height: var(--type-body-lh);
+  padding: 0 var(--space-3);
+  position: relative;
   text-decoration: none;
-  transition: all var(--transition-duration) ease;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
   white-space: nowrap;
+
+  // global.scss colours every element; let the label and icon follow the button.
+  * {
+    color: inherit;
+  }
+
+  &:disabled,
+  &[aria-disabled="true"],
+  &.is-inactive {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }
 
-.active {
-  filter: brightness(1.05);
-  opacity: 1;
+%gl-button-primary {
+  background: var(--accent-solid);
+  color: var(--accent-on);
+
+  &:not(:disabled):hover {
+    background: var(--accent-solid-hover);
+  }
 }
 
-.inactive {
-  opacity: 0.6;
-  pointer-events: none;
+.gl-button {
+  @extend %gl-button-base;
+
+  &__icon {
+    display: inline-flex;
+    flex: none;
+
+    svg,
+    img {
+      height: 16px;
+      width: 16px;
+    }
+  }
+
+  &__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &--sm {
+    font-size: var(--type-label);
+    height: 28px;
+    padding: 0 10px;
+  }
+
+  &--lg {
+    height: 36px;
+    padding: 0 var(--space-4);
+  }
+
+  &--primary {
+    @extend %gl-button-primary;
+  }
+
+  &--secondary {
+    background: var(--background);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+
+    &:not(:disabled):hover {
+      background: var(--background-hover);
+    }
+  }
+
+  &--ghost {
+    background: transparent;
+    color: var(--text-secondary);
+
+    &:not(:disabled):hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+  }
+
+  &--danger {
+    background: var(--danger-solid);
+    color: var(--accent-on);
+
+    &:not(:disabled):hover {
+      filter: brightness(0.92);
+    }
+  }
+
+  &--icon-only {
+    padding: 0;
+    width: 32px;
+
+    &.gl-button--sm {
+      width: 28px;
+    }
+
+    &.gl-button--lg {
+      width: 36px;
+    }
+  }
+
+  &.is-loading {
+    cursor: progress;
+    opacity: 1;
+
+    .gl-button__label {
+      opacity: 0.6;
+    }
+  }
+
+  &__spinner {
+    animation: gl-button-spin 0.8s linear infinite;
+    border: 2px solid currentcolor;
+    border-radius: var(--radius-full);
+    border-right-color: transparent;
+    height: 14px;
+    width: 14px;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation-duration: 2.4s;
+    }
+  }
 }
 
-/* Variations */
-
-.primary {
-  background: var(--button-background-primary);
+@keyframes gl-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.secondary {
-  background: var(--button-background-secondary);
-}
+// The account pages (src/pages/login etc.) write the markup by hand with the
+// pre-redesign class names; keep those rendering as a large primary button.
+.button.primary {
+  @extend %gl-button-base;
+  @extend %gl-button-primary;
 
-.danger {
-  background: var(--button-background-danger);
-}
-
-.flat {
-  background: var(--button-background-flat);
-  color: var(--button-color-flat);
+  height: 36px;
+  padding: 0 var(--space-4);
 }

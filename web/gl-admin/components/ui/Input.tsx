@@ -1,11 +1,38 @@
-import { forwardRef, useMemo, useState, useCallback, useEffect, type InputHTMLAttributes } from "react"
+import { forwardRef, useMemo, useState, useCallback, useEffect, type InputHTMLAttributes, type ReactNode } from "react"
 import { getInputMask, getValidationPattern, type InputMaskType } from "@gl-admin/utils/inputMasks"
 import "@gl-admin/assets/styles/components/ui/input.scss"
 
-export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "title" | "type" | "placeholder"> & {
+export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "title" | "type"> & {
+  // The visible label, above the field.
   title: string
   type?: InputMaskType
   containerClassName?: string
+  // Helper text under the field.
+  hint?: ReactNode
+  // An error message: marks the field invalid and replaces the hint. Name the fix
+  // ("“maya@golive” isn't a complete email address.").
+  error?: ReactNode
+  // Adds "(optional)" after the label.
+  optional?: boolean
+  // Hides the label visually (keeps it for screen readers), e.g. a search box.
+  hideLabel?: boolean
+}
+
+export function FieldError({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <span id={id} className="gl-field__error">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 8v4M12 16h.01" />
+      </svg>
+      {children}
+    </span>
+  )
+}
+
+// The ids aria-describedby should point at for a field's hint and error.
+export function describedBy(id: string, hint: unknown, error: unknown, extra?: string) {
+  return [error ? `${id}-error` : hint ? `${id}-hint` : "", extra ?? ""].filter(Boolean).join(" ") || undefined
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
@@ -18,11 +45,17 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       defaultValue,
       className,
       containerClassName,
+      hint,
+      error,
+      optional,
+      hideLabel,
+      placeholder,
       onFocus,
       onBlur,
       onKeyDown,
       onChange,
       id,
+      "aria-describedby": ariaDescribedBy,
       ...rest
     },
     ref
@@ -113,6 +146,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     )
 
     const inputId = id ?? `input-${name || type}`
+    const invalid = Boolean(error) || !isValid()
 
     return (
       <div
@@ -120,23 +154,27 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           "gl-input",
           focused ? "is-focused" : "",
           isFilled ? "is-filled" : "",
-          isValid() ? "" : "is-invalid",
+          invalid ? "is-invalid" : "",
           containerClassName || "",
           className || "",
         ]
           .filter(Boolean)
           .join(" ")}
       >
-        {/* Render nothing until hydrated */}
-        {!hydrated || !IMaskInput ? null : (
+        {/* The masked input loads lazily; hold its place until it does. */}
+        {!hydrated || !IMaskInput ? (
+          <span className="gl-input__field" aria-hidden="true" />
+        ) : (
           <IMaskInput
             id={inputId}
             ref={ref}
             type={type === "password" ? "password" : "text"}
             className="gl-input__field"
-            placeholder=" "
+            placeholder={placeholder}
             value={value as any}
             defaultValue={defaultValue}
+            aria-invalid={invalid || undefined}
+            aria-describedby={describedBy(inputId, hint, error, ariaDescribedBy)}
             onFocus={handleFocus}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
@@ -154,9 +192,19 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {...rest}
           />
         )}
-        <label className="gl-input__label" htmlFor={inputId}>
+        <label className={`gl-input__label${hideLabel ? " gl-visually-hidden" : ""}`} htmlFor={inputId}>
           {title}
+          {optional && <span className="gl-input__optional"> (optional)</span>}
         </label>
+        {error ? (
+          <FieldError id={`${inputId}-error`}>{error}</FieldError>
+        ) : (
+          hint && (
+            <span id={`${inputId}-hint`} className="gl-field__hint">
+              {hint}
+            </span>
+          )
+        )}
       </div>
     )
   }

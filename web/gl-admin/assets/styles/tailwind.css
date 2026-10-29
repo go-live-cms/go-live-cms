@@ -1,42 +1,49 @@
 @import "tailwindcss";
 
 /* Design tokens (#337) as Tailwind utilities, so utilities and SCSS share one source:
-   the values live in _tokens.scss (light and dark), and these only point at them, e.g.
-   bg-background-subtle, text-text-secondary, border-control-border, ring-focus-ring.
+   the values live in _tokens.scss (light and dark), and these only point at them.
+   Named for the utility they make, without repeating its prefix (#338):
+     surfaces  bg-surface, bg-subtle, bg-hover, bg-active, bg-raised
+     lines     border-divider, border-strong, border-control, ring-focus / outline-focus
+     text      text-primary, text-secondary, text-placeholder, text-selected
+     accent    bg-accent, bg-accent-hover, text-on-accent, bg-accent-subtle, border-accent-border
+     status    text-success, bg-success-subtle, text-success-label (warning alike),
+               text-danger, bg-danger-subtle, bg-danger-solid, text-info, bg-info-subtle
+   Components are SCSS (components/ui/*.scss); prefer them over rebuilding one here.
    --font-sans, --font-mono and --radius-sm..xl need no mapping: Tailwind reads the
    variables of the same name, and the unlayered values in _tokens.scss win over its
    layered defaults (so rounded-lg is 10px). */
 @theme inline {
-  --color-background: var(--background);
-  --color-background-subtle: var(--background-subtle);
-  --color-background-hover: var(--background-hover);
-  --color-background-active: var(--background-active);
-  --color-surface-raised: var(--surface-raised);
-  --color-border-color: var(--border-color);
-  --color-border-strong: var(--border-strong);
-  --color-control-border: var(--control-border);
-  --color-focus-ring: var(--focus-ring);
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-placeholder: var(--text-placeholder);
-  --color-text-selected: var(--text-selected);
-  --color-accent-solid: var(--accent-solid);
-  --color-accent-solid-hover: var(--accent-solid-hover);
-  --color-accent-on: var(--accent-on);
+  --color-surface: var(--background);
+  --color-subtle: var(--background-subtle);
+  --color-hover: var(--background-hover);
+  --color-active: var(--background-active);
+  --color-raised: var(--surface-raised);
+  --color-divider: var(--border-color);
+  --color-strong: var(--border-strong);
+  --color-control: var(--control-border);
+  --color-focus: var(--focus-ring);
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-placeholder: var(--text-placeholder);
+  --color-selected: var(--text-selected);
+  --color-accent: var(--accent-solid);
+  --color-accent-hover: var(--accent-solid-hover);
+  --color-on-accent: var(--accent-on);
   --color-accent-subtle: var(--accent-subtle);
   --color-accent-subtle-hover: var(--accent-subtle-hover);
   --color-accent-border: var(--accent-border);
-  --color-success-text: var(--success-text);
-  --color-success-bg: var(--success-bg);
+  --color-success: var(--success-text);
+  --color-success-subtle: var(--success-bg);
   --color-success-label: var(--success-label);
-  --color-warning-text: var(--warning-text);
-  --color-warning-bg: var(--warning-bg);
+  --color-warning: var(--warning-text);
+  --color-warning-subtle: var(--warning-bg);
   --color-warning-label: var(--warning-label);
-  --color-danger-text: var(--danger-text);
-  --color-danger-bg: var(--danger-bg);
+  --color-danger: var(--danger-text);
+  --color-danger-subtle: var(--danger-bg);
   --color-danger-solid: var(--danger-solid);
-  --color-info-text: var(--info-text);
-  --color-info-bg: var(--info-bg);
+  --color-info: var(--info-text);
+  --color-info-subtle: var(--info-bg);
 
   --shadow-card: var(--card-shadow);
   --shadow-menu: var(--menu-shadow);

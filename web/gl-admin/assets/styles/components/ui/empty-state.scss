@@ -1,57 +1,69 @@
-@use "@gl-admin/assets/styles/variables";
+// Empty and failed states (#338): a dashed box with a 48px accent-subtle icon tile,
+// a subtitle title, one line of text-secondary and the primary action.
 
 .gl-empty-state {
   align-items: center;
-  border: 1px dashed var(--border-color);
-  border-radius: 0.75rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-xl);
   display: flex;
   flex-direction: column;
-  margin: 1rem 0;
-  padding: 4rem 2rem;
+  gap: var(--space-4);
+  padding: 96px var(--space-6);
   text-align: center;
 
+  &--compact {
+    padding: var(--space-8) var(--space-6);
+  }
+
   &__icon {
-    align-items: center;
-    background: var(--background-hover);
-    border: 1px solid var(--border-color);
-    border-radius: 50%;
+    background: var(--accent-subtle);
+    border-radius: var(--radius-xl);
+    color: var(--text-selected);
+    display: grid;
+    height: 48px;
+    place-items: center;
+    width: 48px;
+
+    // <Icon> sets its own colour inline; follow the tile instead.
+    .gl-icon {
+      color: inherit !important;
+      display: inline-flex;
+    }
+  }
+
+  &__text {
     display: flex;
-    height: 4rem;
-    justify-content: center;
-    margin-bottom: 1.25rem;
-    width: 4rem;
+    flex-direction: column;
+    gap: var(--space-1);
+    max-width: 420px;
   }
 
   &__title {
-    color: var(--text-primary);
-    font-size: 1.25rem;
+    font-size: var(--type-subtitle);
     font-weight: 600;
-    line-height: 130%;
-    margin: 0 0 0.5rem;
+    line-height: var(--type-subtitle-lh);
+    margin: 0;
   }
 
   &__description {
-    color: var(--text-quaternary);
-    font-size: var(--text-size-body);
-    line-height: 150%;
+    color: var(--text-secondary);
     margin: 0;
-    max-width: 32rem;
   }
 
   &__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    gap: var(--space-2);
     justify-content: center;
-    margin-top: 1.75rem;
   }
 
   &--error {
-    border-color: var(--input-invalid-border-color);
+    border-color: var(--danger-text);
     border-style: solid;
 
     .gl-empty-state__icon {
-      border-color: var(--input-invalid-border-color);
+      background: var(--danger-bg);
+      color: var(--danger-text);
     }
   }
 }

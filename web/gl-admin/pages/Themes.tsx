@@ -9,7 +9,7 @@ import {
   type ActiveThemeWithSettings,
 } from "@gl-admin/lib/api/themes"
 import { authManager } from "@gl-admin/lib/auth"
-import { toast } from "sonner"
+import { toast } from "@gl-admin/components/ui/Toast"
 import Button from "@gl-admin/components/ui/Button"
 import Select from "@gl-admin/components/ui/Select"
 import Modal from "@gl-admin/components/ui/Modal"

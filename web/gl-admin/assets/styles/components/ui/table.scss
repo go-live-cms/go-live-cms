@@ -1,134 +1,106 @@
-@use "@gl-admin/assets/styles/variables";
 @use "@gl-admin/assets/styles/mixins";
 
-/* Remove default styles for table related tags */
+// Tables (#338): a bordered box, background-subtle header in text-secondary 12px,
+// 52px rows with divider rules, background-subtle on hover, accent-subtle selected.
 
-table,
-thead,
-tbody,
-tfoot,
-tr,
-th,
-td,
-caption {
-  all: unset;
-  box-sizing: border-box;
-  display: revert;
-}
-
-table {
-  border-collapse: collapse;
-  border-spacing: 0;
-  width: 100%;
-}
-
-th,
-td {
-  background: none;
-  border: none;
-  color: inherit;
-  font: inherit;
-  margin: 0;
-  padding: 0;
-  vertical-align: middle;
-}
-
-caption {
-  color: inherit;
-  font: inherit;
-  padding: 0;
-  text-align: left;
-}
-
-/* Actual g-table styles */
-
-// Wide tables scroll inside this box instead of widening the page
+// Wide tables scroll inside this box instead of widening the page.
 .gl-table-scroll {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   max-width: 100%;
   overflow-x: auto;
+
+  // With a max height the box scrolls both ways and the header sticks inside it.
+  &--bounded {
+    overflow-y: auto;
+  }
 }
 
 .gl-table {
   background: var(--background);
-  border-collapse: collapse;
+  border-collapse: separate;
   border-spacing: 0;
+  color: var(--text-primary);
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
   width: 100%;
-
-  .skeleton {
-    @include mixins.skeleton-bg;
-
-    border-radius: .25rem;
-    height: 2rem;
-    width: 100%;
-
-    &:hover {
-      @include mixins.skeleton-bg;
-    }
-  }
-
-  thead,
-  tbody {
-    align-items: center;
-    align-self: stretch;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-
-  thead {
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  thead > tr,
-  tbody > tr {
-    align-items: center;
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-  }
 
   th,
   td {
-    color: var(--text-secondary);
-    flex: 1 1 0;
-    min-width: 0;
-    overflow: hidden;
-    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: inherit;
+    font: inherit;
+    margin: 0;
+    padding: 0 var(--space-3);
     text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    vertical-align: middle;
   }
 
   th {
+    white-space: nowrap;
+    background: var(--background-subtle);
     color: var(--text-secondary);
-    font-family: Inter, system-ui, sans-serif;
-    font-size: 0.875rem;
+    font-size: var(--type-footnote);
     font-weight: 500;
-    line-height: 130%;
+    height: 36px;
+    position: sticky;
+    top: 0;
+    z-index: var(--z-sticky);
   }
 
-  tbody > tr + tr {
-    border-top: 1px solid var(--border-color);
+  td {
+    height: 52px;
+    padding-bottom: 6px;
+    padding-top: 6px;
   }
 
-  tbody > tr:hover {
-    background: var(--background-hover);
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  tbody tr {
+    transition: background var(--duration-fast) var(--ease-out);
+
+    &:hover {
+      background: var(--background-subtle);
+    }
+
+    &.is-selected {
+      background: var(--accent-subtle);
+    }
+
+    &.is-clickable {
+      cursor: pointer;
+    }
+  }
+
+  &__select {
+    padding: 0 0 0 14px;
+    width: 40px;
+  }
+
+  &__cell--numeric {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  // Loading placeholders that column renderers draw with render(null, null).
+  .skeleton {
+    @include mixins.skeleton-bg;
+
+    border-radius: var(--radius-sm);
+    display: block;
+    height: 12px;
+    width: 100%;
   }
 
   &__date {
-    color: var(--text-quaternary);
+    color: var(--text-secondary);
     display: flex;
     flex-direction: column;
-    font-size: 0.875rem;
-    font-style: normal;
-    font-weight: 500;
-    line-height: 130%;
+    font-variant-numeric: tabular-nums;
 
     &.skeleton {
-      @include mixins.skeleton-bg;
-
-      border-radius: .25rem;
-      height: 2.4rem;
       width: 25%;
     }
   }
@@ -136,37 +108,30 @@ caption {
   &__heading {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 2px;
+    min-width: 0;
 
     &-title {
-      color: var(--text-secondary);
-      font-size: 1rem;
-      font-style: normal;
+      color: var(--text-primary);
       font-weight: 500;
-      line-height: 130%;
+      overflow: hidden;
+      text-overflow: ellipsis;
 
       &.skeleton {
-        @include mixins.skeleton-bg;
-
-        border-radius: .25rem;
-        height: 1.4rem;
         width: 60%;
       }
     }
 
     &-description {
-      color: var(--text-quaternary);
-      font-size: 0.875rem;
-      font-style: normal;
-      font-weight: 500;
-      line-height: 130%;
+      color: var(--text-secondary);
+      font-size: var(--type-footnote);
+      line-height: var(--type-footnote-lh);
+      overflow: hidden;
+      text-overflow: ellipsis;
 
       &.skeleton {
-        @include mixins.skeleton-bg;
-
-        border-radius: .25rem;
-        height: 1rem;
-        width: 70%;
+        height: 8px;
+        width: 40%;
       }
     }
   }
