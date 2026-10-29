@@ -82,7 +82,7 @@ func toActiveThemeWithSettingsResponse(theme db.GetActiveThemeWithSettingsRow) A
 		Author:      theme.Author.String,
 		Config:      theme.Config,
 		Active:      theme.Active,
-		Settings:    theme.Settings,
+		Settings:    themeSettingsObject(theme.Settings),
 		CreatedAt:   theme.CreatedAt.Format(time.RFC3339),
 		ChangedAt:   theme.ChangedAt.Format(time.RFC3339),
 	}
@@ -97,4 +97,24 @@ func toThemeSettingResponse(setting db.ThemeSetting) ThemeSettingResponse {
 		CreatedAt:    setting.CreatedAt.Format(time.RFC3339),
 		ChangedAt:    setting.ChangedAt.Format(time.RFC3339),
 	}
+}
+
+// themeSettingsObject returns the active theme's settings as a JSON object. The query
+// aggregates them with jsonb_object_agg, which the driver hands back as []byte: passed
+// through as is, that encoded as a base64 string, so readers of settings.layout_variants
+// (the public post route, the admin Themes screen) never saw the saved layouts (#345).
+func themeSettingsObject(settings interface{}) map[string]interface{} {
+	object := map[string]interface{}{}
+	switch v := settings.(type) {
+	case []byte:
+		decodeJSONBestEffort(v, &object)
+	case string:
+		decodeJSONBestEffort([]byte(v), &object)
+	case map[string]interface{}:
+		object = v
+	}
+	if object == nil { // a stored JSON null
+		object = map[string]interface{}{}
+	}
+	return object
 }
