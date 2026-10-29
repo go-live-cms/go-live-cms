@@ -196,7 +196,8 @@ type Querier interface {
 	// Up to @limit_count published posts of @post_type ranked by the terms they share
 	// with @post_id: shared categories first, then shared terms of every other taxonomy
 	// (tags), then newest first (id breaks ties). @taxonomy limits which of the current
-	// post's terms count ('' = all). With @with_fallback the latest posts fill the rest
+	// post's terms count ('' = all), and @term_id to one of them (0 = all; the sidebar's
+	// "In <category>" names one category). With @with_fallback the latest posts fill the rest
 	// when fewer share a term; without it only posts sharing one are returned. The
 	// current post never appears.
 	//
