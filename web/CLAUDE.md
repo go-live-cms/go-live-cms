@@ -128,6 +128,15 @@ are the most fragile part of the codebase. **Before editing anything under
   the featured image (order 0) and the image blocks the collab store syncs (> 0), merged
   per post. Write access is `canWriteMedia` (`lib/roles.ts`). Hidden until #325: the
   "No alt text" tag/filter and "Decorative image".
+- **Account pages (#344):** `/login`, `/forgot-password`, `/reset-password` and
+  `/accept-invite` are Astro pages (no React) on `src/layouts/AccountPage.astro`, styled by
+  `pages/login.scss` with the #338 class names (`gl-input`, `gl-button`, `gl-notice`,
+  `gl-avatar`). Each page's `<script>` only calls a mount function in
+  `lib/accountPages.ts` or `lib/loginPage.ts` (admin CSP: no inline scripts); the
+  shared pieces are `components/account/`. The password minimum is `PASSWORD_MIN` in
+  `lib/passwordRules.ts` (import-free, so pages render the hint server-side);
+  `passwordRules.test.ts` fails if the API's `min=` differs. The invite preview returns
+  `invited_by` `{id, name}` or null.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

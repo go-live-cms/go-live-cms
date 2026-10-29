@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react"
 import "@gl-admin/assets/styles/components/ui/avatar.scss"
+import { presenceColor } from "@gl-admin/lib/presence"
 
 export type AvatarUser = {
   // Picks the colour, the same way collaborators' carets do (postCollab.ts): id % 8.
@@ -11,9 +12,7 @@ export type AvatarUser = {
 
 type AvatarSize = 20 | 24 | 28 | 32 | 40
 
-export function presenceColor(id: number): string {
-  return `var(--presence-${(Math.abs(Math.trunc(id)) % 8) + 1})`
-}
+export { presenceColor }
 
 function initial(name: string): string {
   return (name.trim()[0] ?? "?").toUpperCase()

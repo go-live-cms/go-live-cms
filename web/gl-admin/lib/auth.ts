@@ -149,8 +149,12 @@ export class AuthManager {
   }
 
   // On failure, status is the API's HTTP status when it answered (absent when
-  // the request never got there, e.g. the API is unreachable).
-  async login(username: string, password: string): Promise<{ success: boolean; error?: string; status?: number }> {
+  // the request never got there, e.g. the API is unreachable), and a 429's
+  // Retry-After when it sent one.
+  async login(
+    username: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string; status?: number; retryAfterSeconds?: number | null }> {
     try {
       const response = await login({ username, password })
 
@@ -165,6 +169,7 @@ export class AuthManager {
         success: false,
         error: error instanceof Error ? error.message : "Login failed",
         status: error instanceof ApiError ? error.status : undefined,
+        retryAfterSeconds: error instanceof ApiError ? error.retryAfterSeconds : undefined,
       }
     }
   }
