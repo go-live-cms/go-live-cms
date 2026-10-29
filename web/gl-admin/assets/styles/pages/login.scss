@@ -1,6 +1,8 @@
 @use "@gl-admin/assets/styles/variables";
 @use "@gl-admin/assets/styles/components/ui/input";
 @use "@gl-admin/assets/styles/components/ui/button";
+@use "@gl-admin/assets/styles/tokens";
+@include tokens.emit;
 
 // The login page lives outside the admin SPA, so nothing sets data-theme on <html>.
 // Follow the OS colour scheme with the admin's dark tokens unless a theme is set.

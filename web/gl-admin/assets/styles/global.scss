@@ -1,6 +1,8 @@
 @use "./variables";
 @use "./fonts";
 @use "./admin";
+@use "./tokens";
+@include tokens.emit;
 
 :root {
   font-size: 16px;
@@ -11,7 +13,7 @@
 * {
   box-sizing: border-box;
   color: var(--text-primary);
-  transition: 0.2s;
+  transition: var(--duration-moderate); // 0 with reduced motion (_tokens.scss)
 }
 
 body {

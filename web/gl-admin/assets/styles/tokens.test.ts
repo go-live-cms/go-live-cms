@@ -76,6 +76,19 @@ describe.each(["light", "dark"])("%s theme tokens", (theme) => {
   })
 })
 
+describe("variables.scss", () => {
+  // Its :root and dark-tokens blocks are emitted alongside the tokens, so a name it
+  // re-declares would override the value tested above.
+  it("doesn't re-declare a design token", () => {
+    const legacy = readFileSync(path.resolve("gl-admin/assets/styles/variables.scss"), "utf8")
+    const declaredIn = (scss: string) => new Set([...scss.matchAll(/--([a-z0-9-]+)\s*:/gi)].map((m) => m[1]))
+    const declared = declaredIn(legacy)
+    const tokens = [...declaredIn(source)]
+    expect(tokens.length).toBeGreaterThan(100)
+    expect(tokens.filter((name) => declared.has(name))).toEqual([])
+  })
+})
+
 describe("presence colours", () => {
   const presence = Object.entries(mixin("static"))
     .filter(([name]) => name.startsWith("presence-"))
