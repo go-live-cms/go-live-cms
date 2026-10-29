@@ -101,6 +101,16 @@
     }
   }
 
+  // A ghost that starts something destructive (Revoke, Delete), in danger-text. The
+  // confirmation it opens uses the solid danger variant.
+  &--ghost.gl-button--danger-text {
+    color: var(--danger-text);
+
+    &:not(:disabled):hover {
+      color: var(--danger-text);
+    }
+  }
+
   &--danger {
     background: var(--danger-solid);
     color: var(--accent-on);

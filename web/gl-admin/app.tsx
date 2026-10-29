@@ -40,6 +40,7 @@ const Users = lazy(() => import("@gl-admin/pages/Users"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 const Themes = lazy(() => import("@gl-admin/pages/Themes"))
 const Profile = lazy(() => import("@gl-admin/pages/Profile"))
+const PostTypes = lazy(() => import("@gl-admin/pages/PostTypes"))
 // Dev-only component gallery (#338): every UI component in light and dark. Vite drops
 // the import from production builds, where import.meta.env.DEV is false.
 const UiGallery = import.meta.env.DEV ? lazy(() => import("@gl-admin/pages/dev/UiGallery")) : null
@@ -99,6 +100,7 @@ function AppLayout() {
                 <Route path="/users/edit/:id" element={<AdminOnly area="Users"><EditUser /></AdminOnly>} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/settings" element={<AdminOnly area="Settings"><Settings /></AdminOnly>} />
+                <Route path="/post-types" element={<AdminOnly area="Post types"><PostTypes /></AdminOnly>} />
                 {UiGallery && <Route path="/dev/ui" element={<UiGallery />} />}
               </Routes>
             </Suspense>

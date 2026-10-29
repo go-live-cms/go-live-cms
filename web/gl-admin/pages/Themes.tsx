@@ -11,15 +11,32 @@ import {
 import { authManager } from "@gl-admin/lib/auth"
 import { toast } from "@gl-admin/components/ui/Toast"
 import Button from "@gl-admin/components/ui/Button"
+import Pill from "@gl-admin/components/ui/Pill"
 import Select from "@gl-admin/components/ui/Select"
 import Modal from "@gl-admin/components/ui/Modal"
+import Skeleton from "@gl-admin/components/ui/Skeleton"
+import EmptyState from "@gl-admin/components/ui/EmptyState"
+import { ExternalIcon } from "@gl-admin/components/ui/icons"
+import { errorMessage } from "@gl-admin/lib/api/errors"
+import { plural } from "@gl-admin/utils/formatting"
+import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/themes.scss"
+
+// Themes (restyled in #343, the Themes board): the active theme with its layout
+// customizer, and the other installed themes to activate.
+//
+// Hidden until #332: uploading a theme and theme updates ("Update to x.y"), with the
+// per-theme menu that would hold them. A theme's own settings beyond the post and page
+// layouts don't exist yet, so Customize only picks those.
+
+const variantLabel = (variant: string) => variant.charAt(0).toUpperCase() + variant.slice(1)
 
 const ThemesPage: React.FC = () => {
   const { baseTitle } = useGoLive()
   const [themes, setThemes] = useState<Theme[]>([])
   const [activeTheme, setActiveTheme] = useState<ActiveThemeWithSettings | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<unknown>(null)
   const [activating, setActivating] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [customizerOpen, setCustomizerOpen] = useState(false)
@@ -33,9 +50,11 @@ const ThemesPage: React.FC = () => {
     fetchData()
   }, [baseTitle])
 
-  const fetchData = async () => {
+  // refresh: reloading after an activation or a save. A failure then is a toast, not the
+  // error page in place of themes that are still on screen.
+  const fetchData = async (refresh = false) => {
     try {
-      setLoading(true)
+      setLoadError(null)
       const token = authManager.getState().accessToken || undefined
       const [themesData, activeThemeData] = await Promise.all([getThemes(token), getActiveTheme(token)])
 
@@ -49,25 +68,36 @@ const ThemesPage: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to fetch themes:", error)
-      toast.error("Failed to load themes")
+      if (refresh) toast.error(`Couldn't reload the themes. ${errorMessage(error)}`)
+      else setLoadError(error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleActivateTheme = async (themeId: number) => {
+  const handleActivateTheme = async (theme: Theme) => {
     try {
-      setActivating(themeId)
+      setActivating(theme.id)
       const token = authManager.getState().accessToken || undefined
-      await activateTheme(themeId, token)
-      toast.success("Theme activated successfully!")
-      await fetchData()
+      await activateTheme(theme.id, token)
+      toast.success(`${theme.name} is now your theme`)
+      await fetchData(true)
     } catch (error) {
       console.error("Failed to activate theme:", error)
-      toast.error("Failed to activate theme")
+      toast.error(`Couldn't activate ${theme.name}. ${errorMessage(error)}`)
     } finally {
       setActivating(null)
     }
+  }
+
+  const resetLayouts = () => {
+    setPostLayout(activeTheme?.settings?.layout_variants?.post || "default")
+    setPageLayout(activeTheme?.settings?.layout_variants?.page || "default")
+  }
+
+  const closeCustomizer = () => {
+    resetLayouts()
+    setCustomizerOpen(false)
   }
 
   const handleSaveLayoutSettings = async (e: React.FormEvent) => {
@@ -86,11 +116,12 @@ const ThemesPage: React.FC = () => {
         token
       )
 
-      toast.success("Layout settings saved successfully!")
-      await fetchData()
+      toast.success("Layouts saved")
+      setCustomizerOpen(false)
+      await fetchData(true)
     } catch (error) {
       console.error("Failed to save layout settings:", error)
-      toast.error("Failed to save layout settings")
+      toast.error(`Couldn't save the layouts. ${errorMessage(error)}`)
     } finally {
       setSaving(false)
     }
@@ -101,204 +132,177 @@ const ThemesPage: React.FC = () => {
     (postLayout !== (activeTheme.settings?.layout_variants?.post || "default") ||
       pageLayout !== (activeTheme.settings?.layout_variants?.page || "default"))
 
-  const getThemePreview = (theme: Theme) => {
-    const title = theme.name || "Theme"
-    const subtitle = theme.author ? `by ${theme.author}` : ""
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
-        <defs>
-          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="#0f172a" />
-            <stop offset="50%" stop-color="#1e293b" />
-            <stop offset="100%" stop-color="#2563eb" />
-          </linearGradient>
-        </defs>
-        <rect width="800" height="450" fill="url(#bg)" />
-        <rect x="40" y="40" width="720" height="370" rx="24" fill="#ffffff" fill-opacity="0.08" />
-        <rect x="80" y="90" width="320" height="16" rx="8" fill="#ffffff" fill-opacity="0.45" />
-        <rect x="80" y="120" width="220" height="12" rx="6" fill="#ffffff" fill-opacity="0.3" />
-        <rect x="80" y="170" width="640" height="180" rx="18" fill="#0b1220" fill-opacity="0.45" />
-        <text x="80" y="260" fill="#ffffff" font-size="40" font-family="Segoe UI, sans-serif" font-weight="600">${title}</text>
-        <text x="80" y="300" fill="#cbd5f5" font-size="18" font-family="Segoe UI, sans-serif">${subtitle}</text>
-      </svg>
-    `
-
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-  }
-
-  const getThemeThumbnail = (theme: Theme) => `/themes/${theme.slug}/thumbnail.jpg`
-
-  const handleThemeImageError = (event: React.SyntheticEvent<HTMLImageElement>, theme: Theme) => {
-    const img = event.currentTarget
-    // If thumbnail.jpg fails, use generated preview
-    img.src = getThemePreview(theme)
-  }
+  const header = (
+    <header className="gl-workspace__header">
+      <div className="gl-workspace__heading">
+        <h1>Themes</h1>
+        <span className="gl-workspace__subtitle">How your site looks to readers. Switching themes doesn't change your content.</span>
+      </div>
+    </header>
+  )
 
   if (loading) {
     return (
-      <div className="admin-header">
-        <h1>🎨 Themes</h1>
-        <p>Loading themes...</p>
+      <div className="gl-workspace gl-themes" aria-busy="true">
+        {header}
+        <Skeleton height={280} />
       </div>
     )
   }
 
-  return (
-    <div className="themes-page">
-      <div className="admin-header">
-        <h1>🎨 Themes</h1>
-        <p>Manage your site's appearance</p>
+  if (loadError) {
+    return (
+      <div className="gl-workspace gl-themes">
+        {header}
+        <EmptyState
+          variant="error"
+          icon="close"
+          title="Couldn't load themes"
+          description={errorMessage(loadError)}
+          action={
+            <Button variant="primary" onClick={() => fetchData()}>
+              Try again
+            </Button>
+          }
+        />
       </div>
+    )
+  }
 
-      {/* Active Theme Section */}
-      <section className="themes-active">
-        <div className="themes-active__header">
-          <h2>Active Theme</h2>
-          {activeTheme && <Button onClick={() => setCustomizerOpen(true)}>Customize</Button>}
-        </div>
-        {activeTheme && (
-          <div className="themes-active__card">
-            <div className="theme-preview theme-preview--large">
-              <img
-                src={getThemeThumbnail(activeTheme)}
-                alt={`${activeTheme.name} preview`}
-                onError={(event) => handleThemeImageError(event, activeTheme)}
-              />
-              <span className="theme-badge">Active</span>
+  const others = themes.filter((t) => t.id !== activeTheme?.id)
+
+  return (
+    <div className="gl-workspace gl-themes">
+      {header}
+
+      {activeTheme && (
+        <section className="gl-theme-active" aria-labelledby="gl-theme-active-name">
+          <ThemePreview theme={activeTheme} className="gl-theme-active__preview" />
+          <div className="gl-theme-active__body">
+            <div className="gl-theme-active__title">
+              <h2 id="gl-theme-active-name">{activeTheme.name}</h2>
+              <Pill tone="success">Active</Pill>
             </div>
-            <div className="themes-active__content">
-              <h3>{activeTheme.name}</h3>
-              <p className="themes-active__meta">
-                Version {activeTheme.version} by {activeTheme.author}
-              </p>
-              <p className="themes-active__description">{activeTheme.description}</p>
-              <div className="themes-active__actions">
-                <Button onClick={() => setCustomizerOpen(true)}>Open Customizer</Button>
-                <Button
-                  variation="secondary"
-                  onClick={() => {
-                    setPostLayout(activeTheme.settings?.layout_variants?.post || "default")
-                    setPageLayout(activeTheme.settings?.layout_variants?.page || "default")
-                  }}
-                >
-                  Reset Layouts
-                </Button>
-              </div>
+            {activeTheme.description && <p className="gl-workspace__muted">{activeTheme.description}</p>}
+            <dl className="gl-theme-facts">
+              <dt>Version</dt>
+              <dd>{activeTheme.version}</dd>
+              {activeTheme.author && (
+                <>
+                  <dt>Made by</dt>
+                  <dd>{activeTheme.author}</dd>
+                </>
+              )}
+              <dt>Layouts</dt>
+              <dd>
+                {plural(activeTheme.config.layouts.post.variants.length, "post layout", "post layouts")},{" "}
+                {plural(activeTheme.config.layouts.page.variants.length, "page layout", "page layouts")}
+              </dd>
+            </dl>
+            <div className="gl-theme-active__actions">
+              <Button variant="primary" size="lg" onClick={() => setCustomizerOpen(true)}>
+                Customize
+              </Button>
+              <a className="gl-button gl-button--secondary gl-button--lg" href="/" target="_blank" rel="noreferrer">
+                <span className="gl-button__label">View site</span>
+                <span className="gl-button__icon" aria-hidden="true">
+                  <ExternalIcon size={14} />
+                </span>
+                <span className="gl-workspace__sr"> (opens in a new tab)</span>
+              </a>
             </div>
+          </div>
+        </section>
+      )}
+
+      <section className="gl-workspace__section" aria-labelledby="gl-themes-installed">
+        <h2 className="gl-workspace__section-title" id="gl-themes-installed">
+          Installed
+        </h2>
+        {others.length === 0 ? (
+          <EmptyState compact icon="content" title="No other themes installed" description="Themes in web/themes show up here." />
+        ) : (
+          <div className="gl-theme-grid">
+            {others.map((theme) => (
+              <article key={theme.id} className="gl-theme-card" aria-labelledby={`gl-theme-${theme.id}`}>
+                <ThemePreview theme={theme} className="gl-theme-card__preview" />
+                <div className="gl-theme-card__body">
+                  <div className="gl-theme-card__title">
+                    <h3 id={`gl-theme-${theme.id}`}>{theme.name}</h3>
+                    <span className="gl-workspace__muted">{theme.version}</span>
+                  </div>
+                  {theme.description && <p className="gl-workspace__muted">{theme.description}</p>}
+                  {theme.author && <p className="gl-theme-card__author">By {theme.author}</p>}
+                  <Button
+                    variant="secondary"
+                    className="gl-theme-card__activate"
+                    loading={activating === theme.id}
+                    disabled={activating !== null && activating !== theme.id}
+                    aria-label={`Activate ${theme.name}`}
+                    onClick={() => handleActivateTheme(theme)}
+                  >
+                    Activate
+                  </Button>
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </section>
 
-      {/* Available Themes Section */}
-      <section className="themes-selector">
-        <div className="themes-selector__header">
-          <h2>Available Themes ({themes.length})</h2>
-          <p>Browse and activate themes just like WordPress.</p>
-        </div>
-        <div className="theme-grid">
-          {themes.map((theme) => (
-            <div key={theme.id} className={`theme-card${theme.active ? "theme-card--active" : ""}`}>
-              <div className="theme-card__preview">
-                <img
-                  src={getThemeThumbnail(theme)}
-                  alt={`${theme.name} preview`}
-                  onError={(event) => handleThemeImageError(event, theme)}
-                />
-                {theme.active && <span className="theme-badge">Active</span>}
-              </div>
-              <div className="theme-card__body">
-                <h3 className="theme-card__title">{theme.name}</h3>
-                <p className="theme-card__meta">
-                  Version {theme.version} by {theme.author}
-                </p>
-                <p className="theme-card__description">{theme.description}</p>
-                <p className="theme-card__layouts">
-                  Layouts: {theme.config.layouts.post.variants.length} post variants,{" "}
-                  {theme.config.layouts.page.variants.length} page variants
-                </p>
-              </div>
-              <div className="theme-card__actions">
-                {theme.active ? (
-                  <Button onClick={() => setCustomizerOpen(true)}>Customize</Button>
-                ) : (
-                  <Button onClick={() => handleActivateTheme(theme.id)} disabled={activating === theme.id}>
-                    {activating === theme.id ? "Activating..." : "Activate"}
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
       {activeTheme && (
-        <Modal isOpen={customizerOpen} onClose={() => setCustomizerOpen(false)} title="Theme Customizer" size="large">
-          <div className="themes-customizer">
-            <div className="themes-customizer__summary">
-              <div className="theme-preview theme-preview--small">
-                <img
-                  src={getThemeThumbnail(activeTheme)}
-                  alt={`${activeTheme.name} preview`}
-                  onError={(event) => handleThemeImageError(event, activeTheme)}
-                />
-              </div>
-              <div>
-                <h3>{activeTheme.name}</h3>
-                <p className="themes-customizer__meta">
-                  Version {activeTheme.version} by {activeTheme.author}
-                </p>
-              </div>
+        <Modal
+          isOpen={customizerOpen}
+          onClose={closeCustomizer}
+          title={`Customize ${activeTheme.name}`}
+          description="The layout new posts and pages use unless they pick their own."
+          size="medium"
+          footer={
+            <div className="gl-themes__footer">
+              <Button variant="secondary" onClick={closeCustomizer} disabled={saving}>
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" form="gl-theme-layouts" loading={saving} disabled={!hasChanges}>
+                Save layouts
+              </Button>
             </div>
-
-            <form onSubmit={handleSaveLayoutSettings} className="admin-form themes-customizer__form">
-              <h4>Layout Settings</h4>
-              <div className="form-group">
-                <Select
-                  label="Default Post Layout"
-                  value={postLayout}
-                  onChange={setPostLayout}
-                  options={activeTheme.config.layouts.post.variants.map((variant) => ({
-                    value: variant,
-                    label: variant.charAt(0).toUpperCase() + variant.slice(1),
-                  }))}
-                />
-              </div>
-
-              <div className="form-group">
-                <Select
-                  label="Default Page Layout"
-                  value={pageLayout}
-                  onChange={setPageLayout}
-                  options={activeTheme.config.layouts.page.variants.map((variant) => ({
-                    value: variant,
-                    label: variant.charAt(0).toUpperCase() + variant.slice(1),
-                  }))}
-                />
-              </div>
-
-              <div className="themes-customizer__actions">
-                <Button type="submit" disabled={!hasChanges || saving}>
-                  {saving ? "Saving..." : "Save Layout Settings"}
-                </Button>
-                {hasChanges && (
-                  <Button
-                    type="button"
-                    variation="secondary"
-                    onClick={() => {
-                      setPostLayout(activeTheme.settings?.layout_variants?.post || "default")
-                      setPageLayout(activeTheme.settings?.layout_variants?.page || "default")
-                    }}
-                  >
-                    Reset
-                  </Button>
-                )}
-                <Button type="button" variation="secondary" onClick={() => setCustomizerOpen(false)}>
-                  Close
-                </Button>
-              </div>
-            </form>
-          </div>
+          }
+        >
+          <form id="gl-theme-layouts" className="gl-workspace__form" onSubmit={handleSaveLayoutSettings}>
+            <Select
+              label="Post layout"
+              value={postLayout}
+              onChange={setPostLayout}
+              options={activeTheme.config.layouts.post.variants.map((variant) => ({ value: variant, label: variantLabel(variant) }))}
+            />
+            <Select
+              label="Page layout"
+              value={pageLayout}
+              onChange={setPageLayout}
+              options={activeTheme.config.layouts.page.variants.map((variant) => ({ value: variant, label: variantLabel(variant) }))}
+            />
+          </form>
         </Modal>
+      )}
+    </div>
+  )
+}
+
+// The theme's thumbnail.jpg, or a drawn stand-in when it has none.
+function ThemePreview({ theme, className }: { theme: Theme; className: string }) {
+  // Each preview is keyed by its theme, so this never carries over to another one.
+  const [failed, setFailed] = useState(false)
+  return (
+    <div className={`gl-theme-preview ${className}`}>
+      {failed ? (
+        <div className="gl-theme-preview__stand-in" role="img" aria-label={`${theme.name}: no preview image`}>
+          <span className="gl-theme-preview__line is-title" />
+          <span className="gl-theme-preview__line" />
+          <span className="gl-theme-preview__line is-short" />
+          <span className="gl-theme-preview__block" />
+        </div>
+      ) : (
+        <img src={`/themes/${theme.slug}/thumbnail.jpg`} alt={`Preview of the ${theme.name} theme`} onError={() => setFailed(true)} />
       )}
     </div>
   )

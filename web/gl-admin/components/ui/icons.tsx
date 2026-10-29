@@ -148,6 +148,20 @@ export const DocumentIcon = (p: IconProps) => (
   </Svg>
 )
 
+export const MailIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="m3 7 9 6 9-6" />
+  </Svg>
+)
+
+// A link that opens in a new tab.
+export const ExternalIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 17 17 7M8 7h9v9" />
+  </Svg>
+)
+
 export const DownloadIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M12 3v12M7 10l5 5 5-5" />

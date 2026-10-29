@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react"
 import Modal from "@gl-admin/components/ui/Modal"
 import Input from "@gl-admin/components/ui/Input"
-import Select from "@gl-admin/components/ui/Select"
+import RadioGroup from "@gl-admin/components/ui/RadioGroup"
 import Button from "@gl-admin/components/ui/Button"
+import Notice from "@gl-admin/components/ui/Notice"
 import { createInvitation, type InvitationResult, type InvitationRole } from "@gl-admin/lib/api/invitations"
 import { describeInvitationError, validateInvitation } from "@gl-admin/lib/invitations"
-import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
+import { roleChoices } from "@gl-admin/lib/roles"
 import "@gl-admin/assets/styles/components/users/invitations.scss"
 
 interface InviteUserModalProps {
@@ -14,8 +15,12 @@ interface InviteUserModalProps {
     onInvited: (result: InvitationResult) => void
 }
 
-// Invites someone by email with a role (#148). They get a link to choose
-// their own username and password; the admin never sees or sets either.
+const FORM_ID = "gl-invite-form"
+
+// Invites someone by email with a role (#148, restyled in #343). They get a link to
+// choose their own username and password; the admin never sees or sets either.
+// One address per invitation (the API takes one), and no personal message (the
+// invitation email has none).
 const InviteUserModal: React.FC<InviteUserModalProps> = ({ isOpen, onClose, onInvited }) => {
     const [email, setEmail] = useState("")
     const [role, setRole] = useState<string>("contributor")
@@ -49,34 +54,36 @@ const InviteUserModal: React.FC<InviteUserModalProps> = ({ isOpen, onClose, onIn
         }
     }
 
+    const footer = (
+        <div className="gl-invite-form__footer">
+            <span className="gl-invite-form__note">They'll get an email with a link to join. It expires and works once.</span>
+            <Button variant="secondary" size="lg" onClick={onClose} disabled={saving}>
+                Cancel
+            </Button>
+            <Button variant="primary" size="lg" type="submit" form={FORM_ID} loading={saving}>
+                Send invite
+            </Button>
+        </div>
+    )
+
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Invite user" size="small">
-            <form className="gl-invite-form" onSubmit={submit} noValidate>
-                <p className="gl-invite-form__hint">
-                    They'll get an email with a link to choose their username and password. The link expires and works once.
-                </p>
+        <Modal isOpen={isOpen} onClose={onClose} title="Invite people" size="medium" footer={footer} closeOnBackdrop={false}>
+            <form id={FORM_ID} className="gl-invite-form" onSubmit={submit} noValidate>
                 <Input
-                    title="Email"
+                    title="Email address"
                     type="email"
                     name="email"
                     value={email}
                     autoComplete="off"
+                    hint="They choose their own username and password."
                     onChange={(e: any) => setEmail(e.currentTarget?.value ?? e.target?.value ?? "")}
                 />
-                <Select label="Role" options={USER_ROLE_OPTIONS} value={role} onChange={setRole} bordered />
+                <RadioGroup legend="Role" variant="card" options={roleChoices()} value={role} onChange={setRole} />
                 {error && (
-                    <p className="gl-invite-form__error" role="alert">
+                    <Notice tone="danger" live="alert">
                         {error}
-                    </p>
+                    </Notice>
                 )}
-                <div className="gl-invite-form__actions">
-                    <Button variation="flat" onClick={onClose} disabled={saving}>
-                        Cancel
-                    </Button>
-                    <Button variation="primary" type="submit" disabled={saving} aria-busy={saving}>
-                        {saving ? "Sending…" : "Send invitation"}
-                    </Button>
-                </div>
             </form>
         </Modal>
     )

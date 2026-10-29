@@ -1,21 +1,26 @@
 import { useEffect, useState } from "react"
 import Input from "@gl-admin/components/ui/Input"
 import Button from "@gl-admin/components/ui/Button"
-import UserRole from "@gl-admin/components/ui/UserRole"
+import Notice from "@gl-admin/components/ui/Notice"
+import Skeleton from "@gl-admin/components/ui/Skeleton"
+import { CheckIcon } from "@gl-admin/components/ui/icons"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { getMe, updateUser } from "@gl-admin/lib/api/users"
 import type { User } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
+import { roleLabel } from "@gl-admin/lib/roles"
 import {
   adoptPasswordChangeSession,
   buildProfileUpdate,
   describePasswordChangeError,
   describeProfileError,
+  newPasswordChecklist,
   validatePasswordChange,
   validateProfile,
   type PasswordFields,
   type ProfileFields,
 } from "@gl-admin/lib/profile"
+import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/profile.scss"
 
 const EMPTY_PASSWORDS: PasswordFields = { current_password: "", password: "", confirm_password: "" }
@@ -26,10 +31,14 @@ function toFields(user: User): ProfileFields {
 
 const inputValue = (e: any): string => e.currentTarget?.value ?? e.target?.value ?? ""
 
-// "My profile" (#168): any signed-in user, contributors included, edits their
-// own name, email and username and changes their password. This doesn't use
-// UserForm: that always sends `role` (403 for non-admins) and saves the
-// password together with the profile.
+// "My profile" (#168, restyled in #343): any signed-in user, contributors included,
+// edits their own name and username and changes their password. This doesn't use
+// UserForm: that always sends `role` (403 for non-admins) and saves the password
+// together with the profile.
+//
+// Hidden until #334: the avatar upload, changing the email address (it shows as
+// text) and "Sign out of other devices" (a password change already signs out every
+// other session). The password checklist shows the API's minimum until #329.
 export default function Profile() {
   const { toasts, showSuccess, showError, removeToast } = useToast()
   const [user, setUser] = useState<User | null>(null)
@@ -130,13 +139,23 @@ export default function Profile() {
     }
   }
 
+  const header = (
+    <header className="gl-workspace__header">
+      <div className="gl-workspace__heading">
+        <h1>My profile</h1>
+      </div>
+    </header>
+  )
+
   if (loading) {
     return (
-      <div className="user-form-page">
-        <div className="page-header">
-          <h1>My profile</h1>
+      <div className="gl-workspace gl-workspace--narrow gl-profile" aria-busy="true">
+        {header}
+        <div className="gl-workspace__fields" aria-hidden="true">
+          <Skeleton height={60} />
+          <Skeleton height={60} />
+          <Skeleton height={60} />
         </div>
-        <div>Loading profile...</div>
         <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
       </div>
     )
@@ -144,40 +163,38 @@ export default function Profile() {
 
   if (!user) {
     return (
-      <div className="user-form-page">
-        <div className="page-header">
-          <h1>My profile</h1>
-        </div>
-        <div className="message error">Your profile could not be loaded.</div>
+      <div className="gl-workspace gl-workspace--narrow gl-profile">
+        {header}
+        <Notice tone="danger" live="none">
+          Your profile could not be loaded. Reload the page to try again.
+        </Notice>
         <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
       </div>
     )
   }
 
-  return (
-    <div className="user-form profile-page">
-      <form onSubmit={handleSaveProfile} noValidate>
-        <div className="admin-topbar">
-          <h1 className="font-semibold">My profile</h1>
-          <div className="ml-auto flex items-center gap-2">
-            <UserRole role={user.role} />
-            <Button
-              type="submit"
-              disabled={savingProfile}
-              aria-disabled={savingProfile}
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100"
-            >
-              {savingProfile ? "Saving…" : "Save profile"}
-            </Button>
-          </div>
-        </div>
+  const rules = newPasswordChecklist(passwords.password, passwords.current_password)
+  // Only once the confirmation is as long as the password, so typing it isn't an error.
+  const mismatch =
+    passwords.confirm_password !== "" &&
+    passwords.confirm_password.length >= passwords.password.length &&
+    passwords.confirm_password !== passwords.password
 
-        <div className="user-form__fields grid grid-cols-1 gap-4 md:grid-cols-2">
+  return (
+    <div className="gl-workspace gl-workspace--narrow gl-profile">
+      {header}
+
+      <form className="gl-workspace__section" onSubmit={handleSaveProfile} noValidate aria-labelledby="gl-profile-details">
+        <h2 className="gl-workspace__section-title" id="gl-profile-details">
+          Your details
+        </h2>
+        <div className="gl-workspace__fields">
           <Input
-            title="Full name"
+            title="Name"
             type="text"
             name="full_name"
             autoComplete="name"
+            hint="Shown in bylines and next to your cursor."
             value={fields.full_name}
             onChange={(e: any) => setFields((prev) => ({ ...prev, full_name: inputValue(e) }))}
           />
@@ -186,72 +203,91 @@ export default function Profile() {
             type="text"
             name="username"
             autoComplete="username"
+            hint="If you change it, sign in with the new one next time."
             value={fields.username}
             onChange={(e: any) => setFields((prev) => ({ ...prev, username: inputValue(e) }))}
           />
-          <Input
-            title="Email"
-            type="email"
-            name="email"
-            autoComplete="email"
-            value={fields.email}
-            onChange={(e: any) => setFields((prev) => ({ ...prev, email: inputValue(e) }))}
-          />
+          <div className="gl-profile__fact">
+            <span className="gl-profile__fact-label">Email</span>
+            <span className="gl-profile__fact-value">{user.email}</span>
+          </div>
+          <div className="gl-profile__fact">
+            <span className="gl-profile__fact-label">Role</span>
+            <span className="gl-profile__fact-value">{roleLabel(user.role)}</span>
+            <span className="gl-workspace-field__hint">Roles are set by an admin in Users.</span>
+          </div>
         </div>
-        <p className="mt-2 text-sm opacity-70">
-          Your role can only be changed by an administrator. If you change your username, sign in with the new one next
-          time.
-        </p>
+        <div>
+          <Button type="submit" variant="primary" size="lg" loading={savingProfile}>
+            Save details
+          </Button>
+        </div>
       </form>
 
-      <form onSubmit={handleChangePassword} noValidate className="user-form__password-section mt-6 border-t pt-6">
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium">Change password</h3>
-          <p className="text-sm opacity-70">Changing your password signs you out on every other device and browser.</p>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Input
-              title="Current password"
-              type="password"
-              name="current_password"
-              autoComplete="current-password"
-              value={passwords.current_password}
-              onChange={(e: any) => setPasswords((prev) => ({ ...prev, current_password: inputValue(e) }))}
-            />
+      <hr className="gl-workspace__rule" />
+
+      <form className="gl-workspace__section" onSubmit={handleChangePassword} noValidate aria-labelledby="gl-profile-password">
+        <div>
+          <h2 className="gl-workspace__section-title" id="gl-profile-password">
+            Password
+          </h2>
+          <p className="gl-workspace__section-intro">Changing your password signs you out on every other device and browser.</p>
+        </div>
+        <div className="gl-profile__password">
+          <Input
+            title="Current password"
+            type="password"
+            name="current_password"
+            autoComplete="current-password"
+            value={passwords.current_password}
+            onChange={(e: any) => setPasswords((prev) => ({ ...prev, current_password: inputValue(e) }))}
+          />
+          <div className="gl-profile__new-password">
             <Input
               title="New password"
               type="password"
               name="password"
               autoComplete="new-password"
+              aria-describedby="gl-password-rules"
               value={passwords.password}
               onChange={(e: any) => setPasswords((prev) => ({ ...prev, password: inputValue(e) }))}
             />
-            <Input
-              title="Confirm new password"
-              type="password"
-              name="confirm_password"
-              autoComplete="new-password"
-              value={passwords.confirm_password}
-              onChange={(e: any) => setPasswords((prev) => ({ ...prev, confirm_password: inputValue(e) }))}
-            />
+            <ul className="gl-password-rules" id="gl-password-rules">
+              {rules.map((rule, i) => (
+                <li key={i} className={rule.met ? "is-met" : undefined}>
+                  <span className="gl-password-rules__mark" aria-hidden="true">
+                    {rule.met ? <CheckIcon size={12} /> : null}
+                  </span>
+                  {rule.label}
+                  <span className="gl-workspace__sr">{rule.met ? " (done)" : " (not yet)"}</span>
+                </li>
+              ))}
+            </ul>
           </div>
+          <Input
+            title="Confirm new password"
+            type="password"
+            name="confirm_password"
+            autoComplete="new-password"
+            error={mismatch ? "The two passwords don't match." : undefined}
+            value={passwords.confirm_password}
+            onChange={(e: any) => setPasswords((prev) => ({ ...prev, confirm_password: inputValue(e) }))}
+          />
           {passwordError && (
-            <div className="message error" role="alert">
+            <Notice tone="danger" live="alert">
               {passwordError}
-            </div>
+            </Notice>
           )}
           {passwordNotice && (
-            <div className="message success" role="status">
+            <Notice tone="info" live="status">
               {passwordNotice}
-            </div>
+            </Notice>
           )}
-          <Button
-            type="submit"
-            disabled={changingPassword}
-            aria-disabled={changingPassword}
-            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100"
-          >
-            {changingPassword ? "Changing…" : "Change password"}
-          </Button>
+          <div>
+            <Button type="submit" variant="primary" size="lg" loading={changingPassword}>
+              Change password
+            </Button>
+          </div>
         </div>
       </form>
 

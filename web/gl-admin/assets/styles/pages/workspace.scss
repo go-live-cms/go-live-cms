@@ -1,0 +1,369 @@
+@use "@gl-admin/assets/styles/mixins";
+
+// The Workspace screens (#343): Users, Taxonomies, Settings, Themes, Profile and Post
+// types share a page header, sections, the list-plus-panel layout and form grids.
+
+.gl-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin: 0 auto;
+  max-width: 1120px;
+  width: 100%;
+
+  &--narrow {
+    max-width: 720px;
+  }
+
+  &--medium {
+    max-width: 1000px;
+  }
+
+  &__header {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  &__heading {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    h1 {
+      font-size: var(--type-title);
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: var(--type-title-lh);
+      margin: 0;
+    }
+  }
+
+  &__eyebrow,
+  &__subtitle {
+    color: var(--text-secondary);
+  }
+
+  &__eyebrow {
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  &__section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  &__section-head {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+
+    h2 {
+      flex: 1;
+    }
+  }
+
+  &__section-title {
+    font-size: var(--type-subtitle);
+    font-weight: 600;
+    line-height: var(--type-subtitle-lh);
+    margin: 0;
+  }
+
+  &__section-intro {
+    color: var(--text-secondary);
+    font-size: var(--type-body);
+    line-height: var(--type-body-lh);
+    margin: 0;
+  }
+
+  &__rule {
+    background: var(--border-color);
+    border: 0;
+    height: 1px;
+    margin: 0;
+  }
+
+  // A list with a form beside it (taxonomies, post types). The panel drops below the
+  // list once there's no room for both.
+  &__split {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  &__main {
+    display: flex;
+    flex: 999 1 480px;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+
+  &__panel {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-xl);
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 1 320px;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: 100%;
+    padding: var(--space-5);
+
+    h2 {
+      font-size: var(--type-subtitle);
+      font-weight: 600;
+      line-height: var(--type-subtitle-lh);
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  &__panel-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-top: var(--space-1);
+  }
+
+  &__spacer {
+    flex: 1;
+  }
+
+  // Two columns of fields that fold into one.
+  &__fields {
+    display: grid;
+    gap: var(--space-4) var(--space-5);
+    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+
+    > .is-wide {
+      grid-column: 1 / -1;
+    }
+  }
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  &__muted {
+    color: var(--text-secondary);
+  }
+
+  &__mono {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--type-footnote);
+    overflow-wrap: anywhere;
+  }
+
+  &__badge {
+    align-items: center;
+    background: var(--background-active);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    display: inline-flex;
+    flex: none;
+    font-size: var(--type-caption);
+    font-weight: 600;
+    height: 20px;
+    padding: 0 6px;
+  }
+
+  &__sr {
+    @include mixins.visually-hidden;
+  }
+
+  // The tables scroll sideways inside their box below this.
+  .gl-table {
+    min-width: 520px;
+  }
+
+  // A row whose term or type is open in the panel.
+  .gl-table tr.is-current {
+    background: var(--accent-subtle);
+  }
+}
+
+// A plain label + control pair for native controls (number, select) that have no
+// field component.
+.gl-workspace-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &__label {
+    font-size: var(--type-label);
+    font-weight: 500;
+  }
+
+  &__row {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  &__hint {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+}
+
+// Settings: the page fills the scrolling area (section.admin-main, whose wrapper has no
+// height to take a percentage of) so the unsaved-changes bar sits at its bottom even
+// when the form is short.
+.gl-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-height: calc(100vh - 4rem);
+
+  > .gl-workspace {
+    flex: 1;
+  }
+
+  // The two URL choices side by side, as on the board; stacked when narrow.
+  &__url {
+    display: grid;
+    gap: var(--space-2);
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    margin-bottom: 6px;
+
+    legend {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .gl-unsaved-bar {
+    border-radius: var(--radius-lg);
+  }
+
+  // Below the 56px mobile top bar, with the shell's 1.5rem padding.
+  @media (width <= 768px) {
+    min-height: calc(100dvh - 56px - 3rem);
+  }
+}
+
+// Post types: the label cell with its Built-in badge, and the form's groups.
+.gl-post-type-label {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  min-width: 10rem;
+
+  &__text {
+    font-weight: 500;
+  }
+}
+
+.gl-post-types {
+  &__group {
+    border: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+
+    legend {
+      margin-bottom: var(--space-2);
+      padding: 0;
+    }
+  }
+
+  &__fields {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  &__position .gl-input__field {
+    max-width: 160px;
+  }
+}
+
+// A member in the Users table: avatar, name (a link to their page) and email.
+.gl-member {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 14rem;
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__name {
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__email {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    overflow-wrap: anywhere;
+  }
+}
+
+// A name cell that opens the row in the panel: text, not a boxed button.
+.gl-row-link {
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  padding: 0;
+  text-align: left;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    cursor: default;
+    text-decoration: none;
+  }
+}
+
+@media (width <= 768px) {
+  .gl-workspace {
+    gap: var(--space-5);
+
+    &__panel {
+      padding: var(--space-4);
+    }
+  }
+}

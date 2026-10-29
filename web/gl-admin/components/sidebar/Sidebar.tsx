@@ -7,7 +7,7 @@ import Avatar from "@gl-admin/components/ui/Avatar"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
 import { ChevronRightIcon, MenuIcon, MoreIcon, PlusIcon } from "@gl-admin/components/ui/icons"
 import GLIcon from "@gl-admin/assets/gl-logo.svg?raw"
-import { getPostTypes } from "@gl-admin/lib/api/postTypes"
+import { POST_TYPES_CHANGED, getPostTypes } from "@gl-admin/lib/api/postTypes"
 import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
 import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
@@ -176,9 +176,14 @@ export default function Sidebar() {
   const canManageTerms = isContentModerator(role)
 
   useEffect(() => {
-    getPostTypes()
-      .then(({ data }) => data.length > 0 && setPostTypes(data))
-      .catch((err) => console.warn("Failed to fetch post types for the sidebar:", err))
+    const load = () =>
+      getPostTypes()
+        .then(({ data }) => data.length > 0 && setPostTypes(data))
+        .catch((err) => console.warn("Failed to fetch post types for the sidebar:", err))
+    load()
+    // The Post types screen saved one: its label or menu position may have changed.
+    window.addEventListener(POST_TYPES_CHANGED, load)
+    return () => window.removeEventListener(POST_TYPES_CHANGED, load)
   }, [])
 
   useEffect(() => {

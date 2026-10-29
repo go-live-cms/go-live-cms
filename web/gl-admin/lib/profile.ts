@@ -3,7 +3,7 @@
 // source of truth: these only catch mistakes before a round trip.
 import { ApiError } from "./api"
 import type { AuthManager } from "./auth"
-import { PASSWORD_MIN } from "./passwordRules"
+import { PASSWORD_MIN, passwordRule } from "./passwordRules"
 
 export { PASSWORD_MIN }
 export const USERNAME_MIN = 3
@@ -42,6 +42,20 @@ export function validateNewPassword(password: string, confirm: string, label = "
     return `${label}s do not match.`
   }
   return null
+}
+
+export type PasswordRule = { label: string; met: boolean }
+
+// The checklist under Profile's new-password field (#343): the shared minimum rule
+// (lib/passwordRules.ts, the sign-in pages' too; the API's real minimum until #329),
+// plus "different from the current one" when the form asks for the current password.
+export function newPasswordChecklist(password: string, current?: string): PasswordRule[] {
+  const min = passwordRule(password)
+  const rules: PasswordRule[] = [{ label: min.text, met: min.met }]
+  if (current !== undefined) {
+    rules.push({ label: "Different from your current password", met: password !== "" && password !== current })
+  }
+  return rules
 }
 
 export function validateProfile(fields: ProfileFields): string | null {

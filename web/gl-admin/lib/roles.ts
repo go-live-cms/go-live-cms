@@ -6,6 +6,19 @@ export const USER_ROLE_OPTIONS = [
     { value: "admin", label: "Administrator" },
 ]
 
+// What each role may do, in the invite dialog (#343). They restate the rules below
+// and in api/auth_posts.go (#135); change them together.
+export const ROLE_DESCRIPTIONS: Record<string, string> = {
+    contributor: "Edits their own posts at any status; an editor publishes them. Other posts are view-only.",
+    editor: "Writes, edits and publishes any post or page.",
+    admin: "Everything editors can do, plus users, themes and settings.",
+}
+
+// USER_ROLE_OPTIONS with a description each, for a RadioGroup.
+export function roleChoices() {
+    return USER_ROLE_OPTIONS.map((r) => ({ ...r, description: ROLE_DESCRIPTIONS[r.value] }))
+}
+
 // "Administrator" for "admin"; an unknown role is shown as stored.
 export function roleLabel(role?: string | null): string | undefined {
     return USER_ROLE_OPTIONS.find((r) => r.value === role?.toLowerCase())?.label ?? role ?? undefined

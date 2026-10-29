@@ -38,6 +38,8 @@ export interface TableProps<T> {
   // Scroll the table inside a box this tall, with the header stuck to its top. (The
   // box scrolls sideways for wide tables, so the header can't stick to the page.)
   maxHeight?: string | number
+  // Extra classes for a row, e.g. "is-current" for the one open in a side panel.
+  rowClassName?: (row: T) => string | undefined
 }
 
 function widthStyle(width?: string | number): CSSProperties | undefined {
@@ -56,6 +58,7 @@ export default function Table<T extends Record<string, any>>({
   rowKey = (row, index) => row.id ?? index,
   rowLabel = (_row, index) => `row ${index + 1}`,
   maxHeight,
+  rowClassName,
   ...aria
 }: TableProps<T>) {
   const keys = data.map(rowKey)
@@ -106,7 +109,7 @@ export default function Table<T extends Record<string, any>>({
           <tr
             key={key}
             aria-selected={selectable ? isSelected : undefined}
-            className={[isSelected ? "is-selected" : "", onRowDoubleClick ? "is-clickable" : ""].filter(Boolean).join(" ") || undefined}
+            className={[isSelected ? "is-selected" : "", onRowDoubleClick ? "is-clickable" : "", rowClassName?.(row) ?? ""].filter(Boolean).join(" ") || undefined}
             onDoubleClick={() => onRowDoubleClick?.(row)}
           >
             {selectable && (

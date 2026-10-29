@@ -121,6 +121,16 @@ are the most fragile part of the codebase. **Before editing anything under
   warns on unload while the provider has unsynced changes or the connection is down. Editor
   styles use the design tokens only (never `prefers-color-scheme`). Features in the design
   without a backend stay hidden (comments at the top of each file; table on #341).
+- **Workspace screens (#343):** Users, Taxonomies, Settings, Themes, Profile and the new
+  Post types page (`/post-types`, admin only) share `assets/styles/pages/workspace.scss`
+  (header, list + side panel, field grids). Their rules live in `lib/settingsForm.ts`
+  (dirty fields and the unsaved-changes bar's message), `lib/postTypes.ts` (PUT resets
+  missing booleans and clears an empty description, so the form sends every field; Posts
+  and Pages are built in and read-only), `lib/roles.ts` (`ROLE_DESCRIPTIONS` for the
+  invite dialog) and `lib/profile.ts` (`newPasswordChecklist`: #344's `passwordRule`, the
+  API's real minimum, plus "different from the current one"). `Input` masks
+  refuse characters such as `! & : ?`; pass `unmasked` for free text the API validates.
+  Saving a post type fires `POST_TYPES_CHANGED` so the sidebar reloads its menu.
 - **Media library and detail (#342):** `/media` (grid, side panel for `?file=id`, at
   ≤768px a Drawer) and `/media/:id` (focal point with crop previews, Replace, fields,
   "Used in"). The rules (kinds, tags, filters, "Used in" rows, object-position) live in
