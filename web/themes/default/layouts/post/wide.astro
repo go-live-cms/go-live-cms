@@ -27,11 +27,13 @@ interface Props {
   terms?: TaxonomyTerm[]
   featuredImage?: string | null
   siteTitle?: string
+  // The site's id/slug URL setting, which the post route already fetched (#351).
+  urlStructure?: string
 }
 
-const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
+const { post, title, description, seo, terms, featuredImage, siteTitle, urlStructure } = Astro.props
 const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
-const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url))
+const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { urlStructure })
 ---
 
 <BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>

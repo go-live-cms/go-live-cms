@@ -1,10 +1,9 @@
 import React, { useContext } from "react"
 import type { BlockComponentProps } from "../types"
-import { HeadingIdsContext } from "../utils/headingAnchors"
+import { HeadingIdsContext, headingLevel } from "../utils/headingAnchors"
 
 const HeadingBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent }) => {
   const attrs = block.attrs as Record<string, unknown>
-  const level = (attrs?.level as number) || 1
   const content = getBlockContent(block)
   const pm = attrs?.pm as { attrs?: { textAlign?: string } } | undefined
   const textAlign = pm?.attrs?.textAlign as "left" | "center" | "right" | undefined
@@ -14,7 +13,7 @@ const HeadingBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent })
   const style: React.CSSProperties = textAlign ? { textAlign } : {}
 
   // Levels outside 1-6 render as an h1, as before.
-  const Tag = (Number.isInteger(level) && level >= 1 && level <= 6 ? `h${level}` : "h1") as "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+  const Tag = `h${headingLevel(block)}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
   return (
     <Tag key={block.id} id={id} style={style}>
       {content}

@@ -115,6 +115,12 @@ describe("headingAnchors", () => {
     ])
   })
 
+  it("reads the level as the renderer does (string levels too; out of range is 1)", () => {
+    const d = doc(h("a", "Two"), h("b", "Nine", 9))
+    ;(d.blocks.a as { attrs: Record<string, unknown> }).attrs.level = "3"
+    expect(headingAnchors(d).map((a) => a.level)).toEqual([3, 1])
+  })
+
   it("is empty for no doc", () => {
     expect(headingAnchors(undefined)).toEqual([])
     expect(headingAnchors(null)).toEqual([])

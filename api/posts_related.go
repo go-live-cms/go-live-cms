@@ -3,11 +3,11 @@
 // Routes (public group, for SSR):
 //   - GET /public/posts/:id/adjacent: {previous, next}, the published posts of the
 //     same type just before and after this one by publish date (null at either end)
-//   - GET /public/posts/:id/related?limit=3&taxonomy=: up to limit published posts
-//     of the same type sharing the most terms (categories first, then tags), newest
-//     first. Without taxonomy the latest posts fill in when fewer share a term; with
-//     one (e.g. taxonomy=category, the sidebar's "In <category>") only that
-//     taxonomy's terms count and nothing fills in.
+//   - GET /public/posts/:id/related?limit=3&taxonomy=&term_id=: up to limit published
+//     posts of the same type sharing the most terms (categories first, then tags),
+//     newest first. Without a filter the latest posts fill in when fewer share a
+//     term. taxonomy (e.g. category) counts only that taxonomy's terms and term_id
+//     only that one term (the sidebar's "In <category>"); then nothing fills in.
 //
 // Both 404 unless the post exists and is published, like /public/posts/:id/blocks.
 // The rows carry meta and authors like a with_meta list row, so the theme renders
@@ -17,7 +17,6 @@ package api
 import (
 	"database/sql"
 	"net/http"
-	"regexp"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -29,8 +28,8 @@ const (
 	relatedPostsMaxLimit     = 12
 )
 
-// A taxonomy type name as the API creates them (lowercase identifier).
-var relatedTaxonomyPattern = regexp.MustCompile(`^[a-z0-9_-]{1,64}$`)
+// The longest taxonomy type name the API accepts (taxonomy bindings, max=100).
+const relatedTaxonomyMaxLen = 100
 
 // RelatedPostResponse is a with_meta list row plus how many terms it shares.
 type RelatedPostResponse struct {
@@ -104,10 +103,20 @@ func (server *Server) getRelatedPosts(c *gin.Context) {
 		}
 		limit = min(n, relatedPostsMaxLimit)
 	}
+	// Taxonomy type names are free text (up to 100 characters), not identifiers.
 	taxonomy := c.Query("taxonomy")
-	if taxonomy != "" && !relatedTaxonomyPattern.MatchString(taxonomy) {
+	if len(taxonomy) > relatedTaxonomyMaxLen {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid taxonomy parameter"})
 		return
+	}
+	var termID int64
+	if s := c.Query("term_id"); s != "" {
+		n, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || n <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid term_id parameter"})
+			return
+		}
+		termID = n
 	}
 
 	post, ok := server.publishedPostForRelated(c)
@@ -119,7 +128,8 @@ func (server *Server) getRelatedPosts(c *gin.Context) {
 		PostID:       post.ID,
 		LimitCount:   int32(limit),
 		Taxonomy:     taxonomy,
-		WithFallback: taxonomy == "",
+		TermID:       termID,
+		WithFallback: taxonomy == "" && termID == 0,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get related posts"})

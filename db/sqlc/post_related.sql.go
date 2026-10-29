@@ -135,6 +135,7 @@ WITH current_terms AS (
     JOIN taxonomy_types ty ON ty.id = tt.taxonomy_type_id
     WHERE ptr.post_id = $2::bigint
         AND ($4::text = '' OR ty.name = $4::text)
+        AND ($5::bigint = 0 OR ptr.taxonomy_term_id = $5::bigint)
 ),
 shared AS (
     SELECT
@@ -149,7 +150,7 @@ shared AS (
 latest AS (
     SELECT lp.id
     FROM posts lp
-    WHERE $5::boolean
+    WHERE $6::boolean
         AND lp.post_status = 'published'
         AND lp.post_type = $1::text
         AND lp.id <> $2::bigint
@@ -190,6 +191,7 @@ type ListRelatedPostsParams struct {
 	PostID       int64  `json:"post_id"`
 	LimitCount   int32  `json:"limit_count"`
 	Taxonomy     string `json:"taxonomy"`
+	TermID       int64  `json:"term_id"`
 	WithFallback bool   `json:"with_fallback"`
 }
 
@@ -216,7 +218,8 @@ type ListRelatedPostsRow struct {
 // Up to @limit_count published posts of @post_type ranked by the terms they share
 // with @post_id: shared categories first, then shared terms of every other taxonomy
 // (tags), then newest first (id breaks ties). @taxonomy limits which of the current
-// post's terms count (” = all). With @with_fallback the latest posts fill the rest
+// post's terms count (” = all), and @term_id to one of them (0 = all; the sidebar's
+// "In <category>" names one category). With @with_fallback the latest posts fill the rest
 // when fewer share a term; without it only posts sharing one are returned. The
 // current post never appears.
 //
@@ -231,6 +234,7 @@ func (q *Queries) ListRelatedPosts(ctx context.Context, arg ListRelatedPostsPara
 		arg.PostID,
 		arg.LimitCount,
 		arg.Taxonomy,
+		arg.TermID,
 		arg.WithFallback,
 	)
 	if err != nil {

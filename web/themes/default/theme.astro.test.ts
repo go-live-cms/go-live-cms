@@ -187,11 +187,11 @@ describe("post layouts", () => {
   it("sidebar: On this page and the category's posts (#351)", async () => {
     const withHeadings = { ...post, published_blocks: docWithHeadings([2, "What changes"], [3, "For writers"], [2, "How it works"], [2, "What’s next"]) }
     const category = { id: 2, name: "Product updates", slug: "product-updates", taxonomy_type_name: "category" }
-    getRelatedPosts.mockImplementation(async (_id: number, params: { taxonomy?: string }) =>
-      params.taxonomy === "category" ? [listRow(41, "Analytics for every post")] : [listRow(7, "Roles explained")],
+    getRelatedPosts.mockImplementation(async (_id: number, params: { termId?: number }) =>
+      params.termId === 2 ? [listRow(41, "Analytics for every post")] : [listRow(7, "Roles explained")],
     )
     const html = await render(PostSidebar, { post: withHeadings, title: "t", description: "d", terms: [category, ...terms], siteTitle: "Field Notes" })
-    expect(getRelatedPosts).toHaveBeenCalledWith(42, { limit: 3, taxonomy: "category" })
+    expect(getRelatedPosts).toHaveBeenCalledWith(42, { limit: 3, termId: 2 })
     const aside = html.slice(html.indexOf('<aside class="post-aside"'), html.indexOf("</aside>"))
     expect(aside).toMatch(/<h2 id="toc-title" class="section-title">On this page<\/h2>/)
     expect(aside).toMatch(

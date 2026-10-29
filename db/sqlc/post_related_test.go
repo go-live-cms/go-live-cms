@@ -178,12 +178,15 @@ func TestListRelatedPosts(t *testing.T) {
 	unrelated := createRelatedTestPost(t, user, postType, "published", at(8))
 	tagPost(t, unrelated, otherCat)
 
-	related := func(p Post, limit int32, taxonomy string, fallback bool) []ListRelatedPostsRow {
+	relatedIn := func(p Post, limit int32, taxonomy string, termID int64, fallback bool) []ListRelatedPostsRow {
 		rows, err := testQueries.ListRelatedPosts(ctx, ListRelatedPostsParams{
-			PostType: postType, PostID: p.ID, LimitCount: limit, Taxonomy: taxonomy, WithFallback: fallback,
+			PostType: postType, PostID: p.ID, LimitCount: limit, Taxonomy: taxonomy, TermID: termID, WithFallback: fallback,
 		})
 		require.NoError(t, err)
 		return rows
+	}
+	related := func(p Post, limit int32, taxonomy string, fallback bool) []ListRelatedPostsRow {
+		return relatedIn(p, limit, taxonomy, 0, fallback)
 	}
 
 	t.Run("ranks categories, then tags, then newest", func(t *testing.T) {
@@ -213,6 +216,17 @@ func TestListRelatedPosts(t *testing.T) {
 		for _, r := range rows {
 			require.Zero(t, r.SharedTags)
 		}
+	})
+
+	t.Run("term_id counts only that term", func(t *testing.T) {
+		// current has one category; a second one shared only by twoTags must not
+		// put twoTags in the first category's list.
+		tagPost(t, current, otherCat)
+		t.Cleanup(func() {
+			require.NoError(t, testQueries.RemovePostFromTaxonomyTerm(ctx, RemovePostFromTaxonomyTermParams{PostID: current.ID, TaxonomyTermID: otherCat.ID}))
+		})
+		require.Equal(t, []int64{catAndTag.ID, catOnly.ID}, relatedIDs(relatedIn(current, 10, "", cat.ID, false)))
+		require.Equal(t, []int64{unrelated.ID, twoTags.ID}, relatedIDs(relatedIn(current, 10, "", otherCat.ID, false)))
 	})
 
 	t.Run("falls back to the latest posts when nothing shares a term", func(t *testing.T) {

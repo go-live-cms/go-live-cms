@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -133,6 +134,8 @@ func TestGetRelatedPostsAPI(t *testing.T) {
 		{"limit", "?limit=5", db.ListRelatedPostsParams{LimitCount: 5, WithFallback: true}},
 		{"limit is capped", "?limit=500", db.ListRelatedPostsParams{LimitCount: relatedPostsMaxLimit, WithFallback: true}},
 		{"taxonomy turns the fallback off", "?taxonomy=category", db.ListRelatedPostsParams{LimitCount: 3, Taxonomy: "category"}},
+		{"taxonomy names are free text", "?taxonomy=Book%20Genre", db.ListRelatedPostsParams{LimitCount: 3, Taxonomy: "Book Genre"}},
+		{"term_id turns the fallback off", "?term_id=9", db.ListRelatedPostsParams{LimitCount: 3, TermID: 9}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -166,7 +169,7 @@ func TestGetRelatedPostsAPI(t *testing.T) {
 		require.JSONEq(t, `{"posts":[]}`, rec.Body.String())
 	})
 
-	for _, bad := range []string{"?limit=0", "?limit=x", "?taxonomy=Bad%20Name"} {
+	for _, bad := range []string{"?limit=0", "?limit=x", "?term_id=0", "?term_id=x", "?taxonomy=" + strings.Repeat("x", 101)} {
 		t.Run("bad query "+bad, func(t *testing.T) {
 			store := mockdb.NewMockStore(gomock.NewController(t))
 			rec := serveRelated(t, store, fmt.Sprintf("/public/posts/%d/related%s", post.ID, bad))

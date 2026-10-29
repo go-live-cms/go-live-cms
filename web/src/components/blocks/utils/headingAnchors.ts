@@ -71,6 +71,13 @@ export function headingText(block: Block): string {
   return text.replace(/\s+/g, " ").trim()
 }
 
+// The level a heading renders at: attrs.level as a whole number 1-6, else 1. HeadingBlock
+// and the table of contents both read it here, so the outline matches the markup.
+export function headingLevel(block: Block): number {
+  const level = Number((block.attrs as Record<string, unknown> | undefined)?.level)
+  return Number.isInteger(level) && level >= 1 && level <= 6 ? level : 1
+}
+
 /**
  * Every heading of the doc in reading order with its id. Duplicates get "-2", "-3", …
  * in the order they appear (a later heading never renames an earlier one); `reserved`
@@ -89,8 +96,7 @@ export function headingAnchors(doc: BlockDocV1 | null | undefined, reserved: Ite
     let id = base
     for (let n = 2; used.has(id); n++) id = `${base}-${n}`
     used.add(id)
-    const level = Number((block.attrs as Record<string, unknown> | undefined)?.level) || 1
-    anchors.push({ blockId, id, level, text })
+    anchors.push({ blockId, id, level: headingLevel(block), text })
   }
   return anchors
 }

@@ -50,6 +50,12 @@ describe("HeadingBlock ids", () => {
     expect(html).toBe('<div class="block-content"><h5 id="centered" style="text-align:center">Centered</h5></div>')
   })
 
+  it("renders a string level at that level, as the table of contents counts it", () => {
+    const d = doc({ id: "a", text: "Three" })
+    ;(d.blocks.a as { attrs: Record<string, unknown> }).attrs.level = "3"
+    expect(render(d)).toContain('<h3 id="three"')
+  })
+
   it("renders an out-of-range level as an h1", () => {
     expect(render(doc({ id: "a", text: "Odd", level: 9 }))).toContain('<h1 id="odd"')
   })

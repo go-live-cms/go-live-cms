@@ -49,7 +49,9 @@ export async function loadPostEnd(
   post: Pick<Post, "id" | "post_type">,
   terms: TaxonomyTerm[] | undefined,
   siteUrl: string,
-  options: { inCategory?: boolean } = {},
+  // inCategory: also load the primary category's other posts. urlStructure: the
+  // site's id/slug setting when the caller has it (the post route does), else fetched.
+  options: { inCategory?: boolean; urlStructure?: unknown } = {},
   source: PostEndSource = apiSource,
 ): Promise<PostEndData> {
   const warn = (part: string) => (error: unknown) => {
@@ -58,11 +60,12 @@ export async function loadPostEnd(
   }
   const category = options.inCategory ? primaryCategory(terms) : undefined
   const [structure, adjacent, related, sameCategory] = await Promise.all([
-    source.getUrlStructure().catch(() => undefined),
+    options.urlStructure !== undefined ? options.urlStructure : source.getUrlStructure().catch(() => undefined),
     source.getAdjacentPosts(post.id).catch(warn("older/newer posts")),
     source.getRelatedPosts(post.id, { limit: RELATED_POSTS_LIMIT }).catch(warn("related posts")),
+    // Only the named category counts, so the list matches its "In <name>" heading.
     category
-      ? source.getRelatedPosts(post.id, { limit: RELATED_POSTS_LIMIT, taxonomy: "category" }).catch(warn("category posts"))
+      ? source.getRelatedPosts(post.id, { limit: RELATED_POSTS_LIMIT, termId: category.id }).catch(warn("category posts"))
       : Promise.resolve(null),
   ])
   const urls = normalizeUrlStructure(structure)

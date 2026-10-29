@@ -120,8 +120,11 @@ export interface AdjacentPosts {
   next: Post | null
 }
 
+// The post renders without these parts rather than wait on a slow API.
+const PUBLIC_EXTRAS_TIMEOUT_MS = 3000
+
 async function publicApiCall(endpoint: string) {
-  const response = await fetch(`${SERVER_MEDIA_URL}/public${endpoint}`)
+  const response = await fetch(`${SERVER_MEDIA_URL}/public${endpoint}`, { signal: AbortSignal.timeout(PUBLIC_EXTRAS_TIMEOUT_MS) })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   return response.json()
 }
@@ -131,12 +134,14 @@ export async function getAdjacentPosts(postId: string | number): Promise<Adjacen
   return { previous: data?.previous ?? null, next: data?.next ?? null }
 }
 
-// taxonomy limits the shared terms to one taxonomy (e.g. "category") and then returns
-// only posts sharing one; without it the latest posts fill in.
-export async function getRelatedPosts(postId: string | number, params: { limit?: number; taxonomy?: string } = {}): Promise<Post[]> {
+// taxonomy (e.g. "category") or termId limits the shared terms to that taxonomy or that
+// one term, and then only posts sharing one come back; without either the latest posts
+// fill in.
+export async function getRelatedPosts(postId: string | number, params: { limit?: number; taxonomy?: string; termId?: number } = {}): Promise<Post[]> {
   const query = new URLSearchParams()
   if (params.limit) query.set("limit", String(params.limit))
   if (params.taxonomy) query.set("taxonomy", params.taxonomy)
+  if (params.termId) query.set("term_id", String(params.termId))
   const qs = query.toString()
   const data = await publicApiCall(`/posts/${postId}/related${qs ? `?${qs}` : ""}`)
   return Array.isArray(data?.posts) ? data.posts : []

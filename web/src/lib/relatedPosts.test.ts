@@ -9,7 +9,7 @@ const term = (id: number, type: string, name = `T${id}`) => ({ id, name, slug: `
 function source(overrides: Partial<PostEndSource> = {}): PostEndSource {
   return {
     getAdjacentPosts: vi.fn(async () => ({ previous: row(1), next: row(3) })),
-    getRelatedPosts: vi.fn(async (_id, params) => (params?.taxonomy ? [row(7)] : [row(5), row(6)])),
+    getRelatedPosts: vi.fn(async (_id, params) => (params?.termId ? [row(7)] : [row(5), row(6)])),
     getUrlStructure: async () => "slug",
     toListedPost: vi.fn(async (post: Post, postType: string, structure: string) => ({ post, href: `/${post.post_type || postType}/${structure === "slug" ? post.slug : post.id}`, image: null }) as ListedPost),
     ...overrides,
@@ -42,7 +42,7 @@ describe("loadPostEnd", () => {
     const cat = term(9, "category", "Product updates")
     const src = source()
     const end = await loadPostEnd(post, [term(1, "tag"), cat], "https://example.com", { inCategory: true }, src)
-    expect(src.getRelatedPosts).toHaveBeenCalledWith(2, { limit: RELATED_POSTS_LIMIT, taxonomy: "category" })
+    expect(src.getRelatedPosts).toHaveBeenCalledWith(2, { limit: RELATED_POSTS_LIMIT, termId: 9 })
     expect(end.inCategory?.term).toBe(cat)
     expect(end.inCategory?.posts.map((r) => r.post.id)).toEqual([7])
 
@@ -52,8 +52,15 @@ describe("loadPostEnd", () => {
   })
 
   it("leaves out a category with no other posts", async () => {
-    const src = source({ getRelatedPosts: vi.fn(async (_id, params) => (params?.taxonomy ? [] : [row(5)])) })
+    const src = source({ getRelatedPosts: vi.fn(async (_id, params) => (params?.termId ? [] : [row(5)])) })
     expect((await loadPostEnd(post, [term(9, "category")], "", { inCategory: true }, src)).inCategory).toBeNull()
+  })
+
+  it("uses the caller's URL structure without fetching settings", async () => {
+    const getUrlStructure = vi.fn(async () => "slug")
+    const end = await loadPostEnd(post, [], "", { urlStructure: "id" }, source({ getUrlStructure }))
+    expect(getUrlStructure).not.toHaveBeenCalled()
+    expect(end.previous?.href).toBe("/post/1")
   })
 
   it("keeps null ends", async () => {
