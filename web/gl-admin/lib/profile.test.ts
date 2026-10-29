@@ -7,7 +7,7 @@ import {
   buildProfileUpdate,
   describePasswordChangeError,
   describeProfileError,
-  passwordRules,
+  newPasswordChecklist,
   validatePasswordChange,
   validateProfile,
 } from "./profile"
@@ -244,21 +244,21 @@ describe("after a password change", () => {
   })
 })
 
-describe("passwordRules (the checklist under a new password)", () => {
+describe("newPasswordChecklist (Profile's new-password checklist)", () => {
   it("shows the API's real minimum, 6, until #329 raises it", () => {
-    expect(passwordRules("abcde")[0]).toEqual({ label: "At least 6 characters", met: false })
-    expect(passwordRules("abcdef")[0].met).toBe(true)
-    expect(passwordRules("abcdef").map((r) => r.label).join()).not.toContain("12")
+    expect(newPasswordChecklist("abcde")[0]).toEqual({ label: "At least 6 characters (5 so far)", met: false })
+    expect(newPasswordChecklist("abcdef")[0].met).toBe(true)
+    expect(newPasswordChecklist("abcdef").map((r) => r.label).join()).not.toContain("12")
   })
 
   it("counts characters as the API does (runes, not UTF-16 units)", () => {
-    expect(passwordRules("😀😀😀😀😀")[0].met).toBe(false)
+    expect(newPasswordChecklist("😀😀😀😀😀")[0].met).toBe(false)
   })
 
   it("adds the different-from-current rule only when there is a current password field", () => {
-    expect(passwordRules("abcdef")).toHaveLength(1)
-    expect(passwordRules("abcdef", "abcdef")[1]).toEqual({ label: "Different from your current password", met: false })
-    expect(passwordRules("abcdefg", "abcdef")[1].met).toBe(true)
-    expect(passwordRules("", "")[1].met).toBe(false)
+    expect(newPasswordChecklist("abcdef")).toHaveLength(1)
+    expect(newPasswordChecklist("abcdef", "abcdef")[1]).toEqual({ label: "Different from your current password", met: false })
+    expect(newPasswordChecklist("abcdefg", "abcdef")[1].met).toBe(true)
+    expect(newPasswordChecklist("", "")[1].met).toBe(false)
   })
 })

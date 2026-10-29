@@ -161,13 +161,3 @@
     transform: rotate(360deg);
   }
 }
-
-// The account pages (src/pages/login etc.) write the markup by hand with the
-// pre-redesign class names; keep those rendering as a large primary button.
-.button.primary {
-  @extend %gl-button-base;
-  @extend %gl-button-primary;
-
-  height: 36px;
-  padding: 0 var(--space-4);
-}

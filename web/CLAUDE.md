@@ -127,10 +127,19 @@ are the most fragile part of the codebase. **Before editing anything under
   (dirty fields and the unsaved-changes bar's message), `lib/postTypes.ts` (PUT resets
   missing booleans and clears an empty description, so the form sends every field; Posts
   and Pages are built in and read-only), `lib/roles.ts` (`ROLE_DESCRIPTIONS` for the
-  invite dialog) and `lib/profile.ts` (`passwordRules`, the new-password checklist, shared
-  with the sign-in pages: it states the API's real minimum, `PASSWORD_MIN`). `Input` masks
+  invite dialog) and `lib/profile.ts` (`newPasswordChecklist`: #344's `passwordRule`, the
+  API's real minimum, plus "different from the current one"). `Input` masks
   refuse characters such as `! & : ?`; pass `unmasked` for free text the API validates.
   Saving a post type fires `POST_TYPES_CHANGED` so the sidebar reloads its menu.
+- **Account pages (#344):** `/login`, `/forgot-password`, `/reset-password` and
+  `/accept-invite` are Astro pages (no React) on `src/layouts/AccountPage.astro`, styled by
+  `pages/login.scss` with the #338 class names (`gl-input`, `gl-button`, `gl-notice`,
+  `gl-avatar`). Each page's `<script>` only calls a mount function in
+  `lib/accountPages.ts` or `lib/loginPage.ts` (admin CSP: no inline scripts); the
+  shared pieces are `components/account/`. The password minimum is `PASSWORD_MIN` in
+  `lib/passwordRules.ts` (import-free, so pages render the hint server-side);
+  `passwordRules.test.ts` fails if the API's `min=` differs. The invite preview returns
+  `invited_by` `{id, name}` or null.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

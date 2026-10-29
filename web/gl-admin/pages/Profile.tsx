@@ -14,7 +14,7 @@ import {
   buildProfileUpdate,
   describePasswordChangeError,
   describeProfileError,
-  passwordRules,
+  newPasswordChecklist,
   validatePasswordChange,
   validateProfile,
   type PasswordFields,
@@ -173,7 +173,7 @@ export default function Profile() {
     )
   }
 
-  const rules = passwordRules(passwords.password, passwords.current_password)
+  const rules = newPasswordChecklist(passwords.password, passwords.current_password)
   // Only once the confirmation is as long as the password, so typing it isn't an error.
   const mismatch =
     passwords.confirm_password !== "" &&
@@ -253,8 +253,8 @@ export default function Profile() {
               onChange={(e: any) => setPasswords((prev) => ({ ...prev, password: inputValue(e) }))}
             />
             <ul className="gl-password-rules" id="gl-password-rules">
-              {rules.map((rule) => (
-                <li key={rule.label} className={rule.met ? "is-met" : undefined}>
+              {rules.map((rule, i) => (
+                <li key={i} className={rule.met ? "is-met" : undefined}>
                   <span className="gl-password-rules__mark" aria-hidden="true">
                     {rule.met ? <CheckIcon size={12} /> : null}
                   </span>

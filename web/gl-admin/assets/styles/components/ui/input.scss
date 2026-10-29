@@ -2,7 +2,7 @@
 
 // Form fields (#338): label above, 36px control, helper or error text below.
 // Shared by Input, Textarea, Select and Combobox, and by the account pages' hand-written
-// `.gl-input` markup (input first, then label: `order` puts the label on top).
+// `.gl-input` markup (#344). `order` keeps a label on top wherever it is in the markup.
 
 // The control box: control-border edge; on focus a focus-ring edge and a 2px halo.
 @mixin control-box {

@@ -3,12 +3,13 @@
 // source of truth: these only catch mistakes before a round trip.
 import { ApiError } from "./api"
 import type { AuthManager } from "./auth"
+import { PASSWORD_MIN, passwordRule } from "./passwordRules"
 
+export { PASSWORD_MIN }
 export const USERNAME_MIN = 3
 export const USERNAME_MAX = 50
 export const FULL_NAME_MIN = 2
 export const FULL_NAME_MAX = 100
-export const PASSWORD_MIN = 6
 
 export type ProfileFields = {
   username: string
@@ -45,11 +46,12 @@ export function validateNewPassword(password: string, confirm: string, label = "
 
 export type PasswordRule = { label: string; met: boolean }
 
-// The checklist under a new-password field (#343; the sign-in pages, #344, share it).
-// Only rules the API enforces: its minimum is PASSWORD_MIN until #329 raises it to
-// 12, and "different from the current one" only when the form asks for that.
-export function passwordRules(password: string, current?: string): PasswordRule[] {
-  const rules: PasswordRule[] = [{ label: `At least ${PASSWORD_MIN} characters`, met: runeLength(password) >= PASSWORD_MIN }]
+// The checklist under Profile's new-password field (#343): the shared minimum rule
+// (lib/passwordRules.ts, the sign-in pages' too; the API's real minimum until #329),
+// plus "different from the current one" when the form asks for the current password.
+export function newPasswordChecklist(password: string, current?: string): PasswordRule[] {
+  const min = passwordRule(password)
+  const rules: PasswordRule[] = [{ label: min.text, met: min.met }]
   if (current !== undefined) {
     rules.push({ label: "Different from your current password", met: password !== "" && password !== current })
   }
@@ -101,7 +103,12 @@ export function validatePasswordChange(fields: PasswordFields): string | null {
 
 // The "try again" half of a 429 message, from Retry-After.
 export function retryHint(err: ApiError): string {
-  const seconds = err.retryAfterSeconds
+  return retryAfterHint(err.retryAfterSeconds)
+}
+
+// The same from the Retry-After seconds alone (authManager.login returns them
+// without the ApiError).
+export function retryAfterHint(seconds: number | null | undefined): string {
   if (seconds == null) return "Please wait a minute and try again."
   if (seconds === 0) return "Please try again."
   return seconds === 1 ? "Try again in 1 second." : `Try again in ${seconds} seconds.`
