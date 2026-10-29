@@ -9,5 +9,7 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 	{
 		// Published block content for SSR
 		posts.GET("/:id/blocks", server.getPublicPostBlocks)
+		// Numbered pages of a type's published posts (#349, pagination.go)
+		posts.GET("/type/:type", server.getPublicPostsByType)
 	}
 }
