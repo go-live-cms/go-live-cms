@@ -3,6 +3,7 @@ import type { BlockDocV1, Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
+import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
 
 interface BlockRendererProps {
   doc: BlockDocV1
@@ -10,6 +11,9 @@ interface BlockRendererProps {
   // them (e.g. "(max-width: 760px) 100vw, 720px" for a text column, "100vw"
   // for full width). Defaults to BLOCK_IMAGE_SIZES.
   imageSizes?: string
+  // The headings' ids (#351). A layout that also builds a table of contents passes the
+  // list it built, so both use the same ids; otherwise they're computed from the doc.
+  headings?: HeadingAnchor[]
 }
 
 /**
@@ -18,7 +22,9 @@ interface BlockRendererProps {
  * Uses the block registry to delegate rendering to individual block components.
  * WordPress-style architecture for easy extensibility.
  */
-export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES }: BlockRendererProps) {
+export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings }: BlockRendererProps) {
+  const headingIds = new Map((headings ?? headingAnchors(doc)).map((h) => [h.blockId, h.id]))
+
   /**
    * Render a single block by ID using the registry
    */
@@ -59,7 +65,9 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES }: B
 
   return (
     <ImageSizesContext.Provider value={imageSizes}>
-      <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+      <HeadingIdsContext.Provider value={headingIds}>
+        <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+      </HeadingIdsContext.Provider>
     </ImageSizesContext.Provider>
   )
 }

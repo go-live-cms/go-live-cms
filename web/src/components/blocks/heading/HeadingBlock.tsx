@@ -1,5 +1,6 @@
-import React from "react"
+import React, { useContext } from "react"
 import type { BlockComponentProps } from "../types"
+import { HeadingIdsContext } from "../utils/headingAnchors"
 
 const HeadingBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent }) => {
   const attrs = block.attrs as Record<string, unknown>
@@ -7,54 +8,18 @@ const HeadingBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent })
   const content = getBlockContent(block)
   const pm = attrs?.pm as { attrs?: { textAlign?: string } } | undefined
   const textAlign = pm?.attrs?.textAlign as "left" | "center" | "right" | undefined
+  // The anchor id (#351): a slug of the text, unique within the post (headingAnchors.ts).
+  const id = useContext(HeadingIdsContext).get(block.id)
 
   const style: React.CSSProperties = textAlign ? { textAlign } : {}
 
-  // Dynamically render heading based on level
-  switch (level) {
-    case 1:
-      return (
-        <h1 key={block.id} style={style}>
-          {content}
-        </h1>
-      )
-    case 2:
-      return (
-        <h2 key={block.id} style={style}>
-          {content}
-        </h2>
-      )
-    case 3:
-      return (
-        <h3 key={block.id} style={style}>
-          {content}
-        </h3>
-      )
-    case 4:
-      return (
-        <h4 key={block.id} style={style}>
-          {content}
-        </h4>
-      )
-    case 5:
-      return (
-        <h5 key={block.id} style={style}>
-          {content}
-        </h5>
-      )
-    case 6:
-      return (
-        <h6 key={block.id} style={style}>
-          {content}
-        </h6>
-      )
-    default:
-      return (
-        <h1 key={block.id} style={style}>
-          {content}
-        </h1>
-      )
-  }
+  // Levels outside 1-6 render as an h1, as before.
+  const Tag = (Number.isInteger(level) && level >= 1 && level <= 6 ? `h${level}` : "h1") as "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+  return (
+    <Tag key={block.id} id={id} style={style}>
+      {content}
+    </Tag>
+  )
 }
 
 export default HeadingBlock
