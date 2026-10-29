@@ -42,7 +42,14 @@ func TestSaveMenuTxMovesLocation(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, old.Location.Valid)
 
+	// A rename that keeps the location, even when the caller's copy is stale.
+	renamed, err := testStore.SaveMenuTx(ctx, SaveMenuTxParams{ID: second.ID, Name: "Main 2", KeepLocation: true})
+	require.NoError(t, err)
+	require.Equal(t, location, renamed.Location.String)
+
 	_, err = testStore.SaveMenuTx(ctx, SaveMenuTxParams{ID: -1, Name: "Gone"})
+	require.ErrorIs(t, err, sql.ErrNoRows)
+	_, err = testStore.SaveMenuTx(ctx, SaveMenuTxParams{ID: -1, Name: "Gone", KeepLocation: true})
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }
 

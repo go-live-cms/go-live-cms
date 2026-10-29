@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -21,8 +20,11 @@ func menuIDParam(c *gin.Context) (int64, bool) {
 }
 
 // resolvedMenuItems loads a menu's items and resolves them against their
-// targets and the site's URL structure.
-func (server *Server) resolvedMenuItems(ctx context.Context, menuID int64) ([]resolvedMenuItem, error) {
+// targets and the site's URL structure. If the settings can't be read, posts
+// get id URLs (/{type}/{id}), which the public site always serves, rather
+// than the whole menu failing.
+func (server *Server) resolvedMenuItems(c *gin.Context, menuID int64) ([]resolvedMenuItem, error) {
+	ctx := c.Request.Context()
 	rows, err := server.store.ListMenuItemsWithTargets(ctx, menuID)
 	if err != nil {
 		return nil, err
@@ -34,7 +36,7 @@ func (server *Server) resolvedMenuItems(ctx context.Context, menuID int64) ([]re
 		case err == nil:
 			structure = settings.PostUrlStructure
 		case !errors.Is(err, sql.ErrNoRows):
-			return nil, err
+			server.requestLog(c).Warn("menu: settings lookup failed, using id URLs", "menu_id", menuID, "error", err)
 		}
 	}
 	items := make([]resolvedMenuItem, len(rows))
@@ -46,7 +48,7 @@ func (server *Server) resolvedMenuItems(ctx context.Context, menuID int64) ([]re
 
 // respondMenu answers 200 with the menu and its whole item tree.
 func (server *Server) respondMenu(c *gin.Context, menu db.Menu) {
-	items, err := server.resolvedMenuItems(c.Request.Context(), menu.ID)
+	items, err := server.resolvedMenuItems(c, menu.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load menu items"})
 		return
@@ -124,7 +126,7 @@ func (server *Server) getPublicMenu(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load menu"})
 		return
 	}
-	items, err := server.resolvedMenuItems(c.Request.Context(), menu.ID)
+	items, err := server.resolvedMenuItems(c, menu.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load menu items"})
 		return

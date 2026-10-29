@@ -62,9 +62,9 @@ export async function createMenu(data: { name: string; location?: string }): Pro
   return (await apiCall("/menus", { method: "POST", body: data })).menu
 }
 
-// Renames a menu and sets its location; assigning a location takes it from the menu
-// that had it.
-export async function updateMenu(id: number, data: { name: string; location: string }): Promise<Menu> {
+// Renames a menu and sets its location ("" = none); assigning a location takes it from
+// the menu that had it. Without `location` the menu keeps the one it has.
+export async function updateMenu(id: number, data: { name: string; location?: string }): Promise<Menu> {
   return (await apiCall(`/menus/${id}`, { method: "PUT", body: data })).menu
 }
 

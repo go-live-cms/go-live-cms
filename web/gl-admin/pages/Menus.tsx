@@ -24,6 +24,7 @@ import {
   describePlace,
   draftFromApi,
   draftToRequest,
+  findItem,
   isDirty,
   isValidMenuUrl,
   itemName,
@@ -148,8 +149,8 @@ const MenusPage: React.FC = () => {
     setSaving(true)
     setSaveError(null)
     try {
-      const current = menus.find((m) => m.id === selectedId)
-      if (trimmed !== saved.name) await updateMenu(selectedId, { name: trimmed, location: current?.location ?? "" })
+      // No location: another editor may have moved it since this list loaded.
+      if (trimmed !== saved.name) await updateMenu(selectedId, { name: trimmed })
       const menu = await saveMenuItems(selectedId, draftToRequest(items))
       const draft = draftFromApi(menu.items)
       setSaved({ name: menu.name, items: draft })
@@ -185,22 +186,31 @@ const MenusPage: React.FC = () => {
     if (selectedId === null) return
     try {
       await deleteMenu(selectedId)
-      setConfirmDelete(false)
-      setSaved(null)
-      setSelectedId(null)
-      dispatch({ type: "reset", items: [] })
-      const list = await loadList()
-      if (list.length) await openMenu(list[0].id)
-      toast.success("Menu deleted")
     } catch (error) {
       toast.error(`Couldn't delete the menu. ${errorMessage(error)}`)
+      return
+    }
+    setConfirmDelete(false)
+    setSaved(null)
+    setSelectedId(null)
+    dispatch({ type: "reset", items: [] })
+    toast.success("Menu deleted")
+    try {
+      const list = await loadList()
+      if (list.length) await openMenu(list[0].id)
+    } catch (error) {
+      toast.error(`Couldn't reload the menus. ${errorMessage(error)}`)
     }
   }
 
+  // Runs the reducer once and hands its result over, so the announcement describes
+  // exactly the tree that's shown.
   const act = (action: Parameters<typeof menuTreeReducer>[1], key: string) => {
     const next = menuTreeReducer(items, action)
-    dispatch(action)
-    if (next !== items) setAnnouncement(describePlace(next, key))
+    if (next === items) return
+    const removed = action.type === "remove" ? findItem(items, key)?.item : undefined
+    dispatch({ type: "reset", items: next })
+    setAnnouncement(removed ? `Removed ${itemName(removed)}` : describePlace(next, key))
   }
 
   const add = (added: MenuDraftItem[]) => {
@@ -644,7 +654,9 @@ function PickList<T>({
   rowName,
   rowNote,
   onAdd,
+  footer,
 }: {
+  footer?: React.ReactNode
   label: string
   rows: T[]
   loading: boolean
@@ -682,6 +694,7 @@ function PickList<T>({
           ))}
         </ul>
       )}
+      {footer}
     </div>
   )
 }
@@ -702,18 +715,42 @@ function useLoader<T>(load: () => Promise<T>, deps: React.DependencyList) {
   return state
 }
 
+const POSTS_PAGE_SIZE = 100
+
 function PostPicker({ postType, onAdd }: { postType: "page" | "post"; onAdd: (items: MenuDraftItem[]) => boolean }) {
-  // The most recent 100; the filter narrows them.
-  const { data, loading, error } = useLoader(
-    () => getPosts({ type: postType, status: "draft,published", limit: 100 }).then((r) => r.data),
-    [postType]
-  )
+  // Newest first, a page at a time (the API has no title search); the filter narrows
+  // what's loaded, and "Show more" reaches older ones.
+  const first = useLoader(() => getPosts({ type: postType, status: "draft,published", limit: POSTS_PAGE_SIZE }), [postType])
+  const [more, setMore] = useState<Post[]>([])
+  const [loadingMore, setLoadingMore] = useState(false)
+  const rows = [...(first.data?.data ?? []), ...more]
+  const total = first.data?.meta.total ?? 0
+
+  const showMore = async () => {
+    setLoadingMore(true)
+    try {
+      const page = await getPosts({ type: postType, status: "draft,published", limit: POSTS_PAGE_SIZE, offset: rows.length })
+      setMore((prev) => [...prev, ...page.data])
+    } catch (error) {
+      toast.error(`Couldn't load more. ${errorMessage(error)}`)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
   return (
     <PickList<Post>
       label={postType === "page" ? "pages" : "posts"}
-      rows={data ?? []}
-      loading={loading}
-      error={error}
+      rows={rows}
+      loading={first.loading}
+      error={first.error}
+      footer={
+        rows.length < total && (
+          <Button variant="ghost" size="sm" loading={loadingMore} onClick={showMore}>
+            {`Show more (${total - rows.length} older)`}
+          </Button>
+        )
+      }
       rowKey={(p) => String(p.id)}
       rowName={(p) => p.title || "(untitled)"}
       rowNote={(p) => (p.post_status === "published" ? undefined : "draft")}

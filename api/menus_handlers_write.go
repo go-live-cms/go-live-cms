@@ -22,10 +22,19 @@ func (server *Server) saveMenu(c *gin.Context, id int64) {
 		return
 	}
 
+	location := ""
+	if req.Location != nil {
+		location = *req.Location
+		if location != "" && !identifierRe.MatchString(location) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "location must be a theme location name", "fields": gin.H{"location": "must be a theme location name"}})
+			return
+		}
+	}
 	menu, err := server.store.SaveMenuTx(c.Request.Context(), db.SaveMenuTxParams{
-		ID:       id,
-		Name:     name,
-		Location: sql.NullString{String: req.Location, Valid: req.Location != ""},
+		ID:           id,
+		Name:         name,
+		Location:     sql.NullString{String: location, Valid: location != ""},
+		KeepLocation: id != 0 && req.Location == nil,
 	})
 	if err != nil {
 		switch {

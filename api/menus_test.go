@@ -187,6 +187,21 @@ func TestMenuCRUD(t *testing.T) {
 		require.Equal(t, "footer", decodeMenu(t, rec).Location)
 	})
 
+	t.Run("rename without a location keeps it", func(t *testing.T) {
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		store.EXPECT().SaveMenuTx(gomock.Any(), db.SaveMenuTxParams{ID: 7, Name: "Renamed", KeepLocation: true}).Return(testMenu("primary"), nil)
+		store.EXPECT().ListMenuItemsWithTargets(gomock.Any(), int64(7)).Return([]db.ListMenuItemsWithTargetsRow{}, nil)
+		rec := serveMenuRequest(t, store, menuRequest{method: http.MethodPut, path: "/api/v1/menus/7", body: jsonBody{"name": "Renamed"}, user: &menuEditor})
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		// An explicit "" unassigns it.
+		store = mockdb.NewMockStore(gomock.NewController(t))
+		store.EXPECT().SaveMenuTx(gomock.Any(), db.SaveMenuTxParams{ID: 7, Name: "Main"}).Return(testMenu(""), nil)
+		store.EXPECT().ListMenuItemsWithTargets(gomock.Any(), int64(7)).Return([]db.ListMenuItemsWithTargetsRow{}, nil)
+		rec = serveMenuRequest(t, store, menuRequest{method: http.MethodPut, path: "/api/v1/menus/7", body: jsonBody{"name": "Main", "location": ""}, user: &menuEditor})
+		require.Equal(t, http.StatusOK, rec.Code)
+	})
+
 	t.Run("update missing", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		store.EXPECT().SaveMenuTx(gomock.Any(), gomock.Any()).Return(db.Menu{}, sql.ErrNoRows)
@@ -393,6 +408,14 @@ func TestPublicMenu(t *testing.T) {
 		store.EXPECT().GetMenuByLocation(gomock.Any(), gomock.Any()).Return(testMenu("primary"), nil)
 		store.EXPECT().ListMenuItemsWithTargets(gomock.Any(), int64(7)).Return([]db.ListMenuItemsWithTargetsRow{postItemRow(1, "a", "published")}, nil)
 		store.EXPECT().GetSettings(gomock.Any()).Return(db.Setting{}, errors.New("db down"))
+		// The menu still renders, with id URLs.
+		rec, menu := getPublicMenu(t, store, "primary")
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, "/page/42", menu.Items[0].URL)
+
+		store = mockdb.NewMockStore(gomock.NewController(t))
+		store.EXPECT().GetMenuByLocation(gomock.Any(), gomock.Any()).Return(testMenu("primary"), nil)
+		store.EXPECT().ListMenuItemsWithTargets(gomock.Any(), int64(7)).Return(nil, errors.New("db down"))
 		rec, _ = getPublicMenu(t, store, "primary")
 		require.Equal(t, http.StatusInternalServerError, rec.Code)
 
@@ -401,7 +424,7 @@ func TestPublicMenu(t *testing.T) {
 		store.EXPECT().GetMenuByLocation(gomock.Any(), gomock.Any()).Return(testMenu("primary"), nil)
 		store.EXPECT().ListMenuItemsWithTargets(gomock.Any(), int64(7)).Return([]db.ListMenuItemsWithTargetsRow{postItemRow(1, "a", "published")}, nil)
 		store.EXPECT().GetSettings(gomock.Any()).Return(db.Setting{}, sql.ErrNoRows)
-		_, menu := getPublicMenu(t, store, "primary")
+		_, menu = getPublicMenu(t, store, "primary")
 		require.Equal(t, "/page/42", menu.Items[0].URL)
 	})
 }

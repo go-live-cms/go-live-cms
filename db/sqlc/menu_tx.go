@@ -15,6 +15,8 @@ type SaveMenuTxParams struct {
 	ID       int64
 	Name     string
 	Location sql.NullString
+	// Update only: rename and leave the location as it is (Location ignored).
+	KeepLocation bool
 }
 
 // SaveMenuTx creates or updates a menu. Assigning a location moves it: the
@@ -25,7 +27,13 @@ func (store *SQLStore) SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Me
 	var menu Menu
 
 	err := store.execTx(ctx, func(q *Queries) error {
-		if arg.Location.Valid {
+		if arg.KeepLocation && arg.ID != 0 {
+			current, err := q.GetMenuForUpdate(ctx, arg.ID)
+			if err != nil {
+				return err
+			}
+			arg.Location = current.Location
+		} else if arg.Location.Valid {
 			if err := q.ClearMenuLocation(ctx, ClearMenuLocationParams{Location: arg.Location, ID: arg.ID}); err != nil {
 				return err
 			}

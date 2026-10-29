@@ -3,11 +3,12 @@ package api
 // Request bodies for the menus endpoints (#347).
 
 // SaveMenuRequest is the body of POST /menus and PUT /menus/:id. location is
-// a theme location name ("primary", "footer"); empty or absent = none.
-// Assigning a location moves it from the menu that had it.
+// a theme location name ("primary", "footer") or "" for none. Absent: none on
+// create, unchanged on update (so a rename can't reassign a location from a
+// stale copy). Assigning a location moves it from the menu that had it.
 type SaveMenuRequest struct {
-	Name     string `json:"name" binding:"required,max=100"`
-	Location string `json:"location" binding:"omitempty,max=64,identifier"`
+	Name     string  `json:"name" binding:"required,max=100"`
+	Location *string `json:"location" binding:"omitempty,max=64"`
 }
 
 // MenuItemRequest is one item of PUT /menus/:id/items. Which fields apply
