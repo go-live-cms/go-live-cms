@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { getPostCounts, getPosts } from "@gl-admin/lib/api/posts"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
@@ -21,6 +21,7 @@ import { errorMessage } from "@gl-admin/lib/api/errors"
 import { canCreateContent, isContentModerator, type PermissionUser } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
+import { useListParams } from "@gl-admin/lib/hooks/useListParams"
 import {
   SORT_OPTIONS,
   findSort,
@@ -62,6 +63,10 @@ export default function Content({ title }: ContentProps) {
   // /content/<something that isn't a post type>
   if (typeName && postTypesLoaded && postTypes.length > 0 && !postType) return <NotFound />
 
+  // Only posts and pages are known to be flat or a tree before /post-types answers;
+  // wait for it for any other type rather than load the wrong list first.
+  if (typeName && typeName !== "post" && typeName !== "page" && !postTypesLoaded) return null
+
   if (typeName && (postType?.hierarchical ?? typeName === "page")) {
     return <Pages typeName={typeName} postType={postType} />
   }
@@ -84,7 +89,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
   const moderator = isContentModerator(role)
   const canCreate = canCreateContent(role)
   const settings = useSiteSettings()
-  const [params, setParams] = useSearchParams()
+  const [params, setParam] = useListParams()
   const tabs = listTabs(role)
   const tab = findTab(tabs, params.get("view"))
   const sort = findSort(params.get("sort"))
@@ -104,6 +109,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
 
   useEffect(() => {
     let live = true
+    setCountsFailed(false)
     getPostCounts({ type: typeName })
       .then((r) => live && setCounts(r.counts))
       .catch(() => live && setCountsFailed(true))
@@ -120,13 +126,6 @@ function PostsList({ typeName, postType, title }: ListProps) {
   const changed = () => {
     setRefresh((n) => n + 1)
     retryList.current()
-  }
-
-  const setParam = (key: string, value: string, fallback: string) => {
-    const next = new URLSearchParams(params)
-    if (value === fallback) next.delete(key)
-    else next.set(key, value)
-    setParams(next, { replace: true })
   }
 
   const query = useMemo(

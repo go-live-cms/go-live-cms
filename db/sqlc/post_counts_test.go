@@ -69,6 +69,7 @@ func TestListPostsStatusList(t *testing.T) {
 		{"", []string{"archived", "draft", "published"}},
 		{"draft", []string{"draft"}},
 		{"draft,published", []string{"draft", "published"}},
+		{"draft, published", []string{"draft", "published"}},
 		{"published,archived", []string{"archived", "published"}},
 		{"bogus", nil},
 	} {

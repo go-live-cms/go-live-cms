@@ -46,7 +46,7 @@ const countFilteredPosts = `-- name: CountFilteredPosts :one
 SELECT COUNT(*) AS total FROM posts
 WHERE 
     ($1::text = '' OR post_type = $1)
-    AND ($2::text = '' OR post_status = ANY(string_to_array($2::text, ',')))
+    AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3 = 0 OR user_id = $3)
 `
 
@@ -122,7 +122,7 @@ func (q *Queries) CountPostsByType(ctx context.Context, postType string) (int64,
 const countPostsByTypeFiltered = `-- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts
 WHERE post_type = $1
-    AND ($2::text = '' OR post_status = ANY(string_to_array($2::text, ',')))
+    AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
 `
 
 type CountPostsByTypeFilteredParams struct {
@@ -434,7 +434,7 @@ const listPosts = `-- name: ListPosts :many
 SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug FROM posts
 WHERE 
     ($1::text = '' OR post_type = $1)
-    AND ($2::text = '' OR post_status = ANY(string_to_array($2::text, ',')))
+    AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3 = 0 OR user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
@@ -564,7 +564,7 @@ LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     ($1::text = '' OR p.post_type = $1)
-    AND ($2::text = '' OR p.post_status = ANY(string_to_array($2::text, ',')))
+    AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
@@ -690,7 +690,7 @@ SELECT
 FROM posts p
 WHERE 
     ($1::text = '' OR p.post_type = $1)
-    AND ($2::text = '' OR p.post_status = ANY(string_to_array($2::text, ',')))
+    AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,

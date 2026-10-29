@@ -1,3 +1,5 @@
+@use "@gl-admin/assets/styles/mixins";
+
 // Home (#9, #340): greeting, quick actions, recent posts, drafts and counts.
 
 .gl-home {
@@ -274,4 +276,8 @@
     gap: var(--space-7);
     padding-top: 0;
   }
+}
+
+.gl-home__sr {
+  @include mixins.visually-hidden;
 }

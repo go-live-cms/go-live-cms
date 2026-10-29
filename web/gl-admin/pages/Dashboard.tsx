@@ -28,7 +28,8 @@ export function greeting(date: Date = new Date()): string {
 type HomeData = {
   recent: Post[]
   drafts: Post[]
-  counts: { published: number; drafts: number; pages: number; media: number }
+  // null: that count failed to load.
+  counts: { published: number | null; drafts: number | null; pages: number | null; media: number | null }
 }
 
 export default function Dashboard() {
@@ -49,12 +50,14 @@ export default function Dashboard() {
   useEffect(() => {
     let live = true
     const list = { with_meta: true, meta_level: "basic", sort: "changed_at", order: "desc" } as const
+    // A count that fails shows a dash; only the post lists failing is an error.
+    const optional = <T,>(p: Promise<T>) => p.catch(() => null)
     Promise.all([
       getPosts({ ...list, ...mine, status: ACTIVE_STATUSES, limit: 3 }),
       getPosts({ ...list, ...mine, type: "post", status: "draft", limit: 5 }),
-      getPostCounts({ type: "post", ...mine }),
-      getPostCounts({ type: "page", ...mine }),
-      getMedia({ limit: 1 }),
+      optional(getPostCounts({ type: "post", ...mine })),
+      optional(getPostCounts({ type: "page", ...mine })),
+      optional(getMedia({ limit: 1 })),
     ])
       .then(([recent, drafts, posts, pages, media]) => {
         if (!live) return
@@ -62,10 +65,10 @@ export default function Dashboard() {
           recent: recent.data,
           drafts: drafts.data,
           counts: {
-            published: posts.counts.published ?? 0,
-            drafts: posts.counts.draft ?? 0,
-            pages: (pages.counts.published ?? 0) + (pages.counts.draft ?? 0),
-            media: media.meta.total ?? 0,
+            published: posts ? (posts.counts.published ?? 0) : null,
+            drafts: posts ? (posts.counts.draft ?? 0) : null,
+            pages: pages ? (pages.counts.published ?? 0) + (pages.counts.draft ?? 0) : null,
+            media: media ? (media.meta.total ?? 0) : null,
           },
         })
       })
@@ -207,13 +210,25 @@ function RecentCard({ post }: { post: Post | null }) {
   )
 }
 
-function Count({ label, value, to }: { label: string; value: number | undefined; to: string }) {
+// value: undefined while loading, null when it couldn't be loaded.
+function Count({ label, value, to }: { label: string; value: number | null | undefined; to: string }) {
   return (
     <div className="gl-home__count">
       <dt>
         <Link to={to}>{label}</Link>
       </dt>
-      <dd>{value === undefined ? <Skeleton width={32} height={24} /> : value}</dd>
+      <dd>
+        {value === undefined ? (
+          <Skeleton width={32} height={24} />
+        ) : value === null ? (
+          <>
+            <span aria-hidden="true">–</span>
+            <span className="gl-home__sr">Unavailable</span>
+          </>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   )
 }

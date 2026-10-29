@@ -18,7 +18,7 @@ export type ListTab = {
 }
 
 // Hidden until their issues land: Scheduled (#147) after Drafts, Trash (#327) last.
-const MODERATOR_TABS: ListTab[] = [
+export const MODERATOR_TABS: ListTab[] = [
   { id: "all", label: "All", status: ACTIVE_STATUSES },
   { id: "published", label: "Published", status: "published" },
   { id: "draft", label: "Drafts", status: "draft" },

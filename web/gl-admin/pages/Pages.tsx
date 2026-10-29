@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Link, useNavigate, useSearchParams } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { getPosts } from "@gl-admin/lib/api/posts"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
@@ -15,7 +15,8 @@ import { errorMessage } from "@gl-admin/lib/api/errors"
 import { canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
-import { ACTIVE_STATUSES, findTab, lastEdited, tabCount, type ListTab } from "@gl-admin/lib/contentList"
+import { useListParams } from "@gl-admin/lib/hooks/useListParams"
+import { MODERATOR_TABS, findTab, lastEdited, tabCount } from "@gl-admin/lib/contentList"
 import { buildPageTree, type PageRow } from "@gl-admin/lib/pageTree"
 import { postPath } from "@/lib/seo"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
@@ -28,21 +29,26 @@ import "@gl-admin/assets/styles/pages/content-list.scss"
 // Hidden until their issues land: search, the Front page badge and the Template column
 // (#336, templates #322), and "Changes not published" (#326).
 
-const TABS: ListTab[] = [
-  { id: "all", label: "All", status: ACTIVE_STATUSES },
-  { id: "published", label: "Published", status: "published" },
-  { id: "draft", label: "Drafts", status: "draft" },
-  { id: "archived", label: "Archived", status: "archived" },
-]
+// The moderators' status tabs: pages have no "My posts" view.
+const TABS = MODERATOR_TABS
 
 const PAGE_SIZE = 100
 // 50 requests (5,000 pages) at most; a site that big needs search, not a tree.
 const MAX_REQUESTS = 50
 
-async function loadAllPages(type: string): Promise<Post[]> {
+// `withAuthors` adds the byline (per-row subqueries); only contributors' "You're credited"
+// note needs it.
+async function loadAllPages(type: string, withAuthors: boolean): Promise<Post[]> {
   const all: Post[] = []
   for (let i = 0; i < MAX_REQUESTS; i++) {
-    const { data, meta } = await getPosts({ type, limit: PAGE_SIZE, offset: all.length, with_meta: true, meta_level: "basic", sort: "id", order: "asc" })
+    const { data, meta } = await getPosts({
+      type,
+      limit: PAGE_SIZE,
+      offset: all.length,
+      sort: "id",
+      order: "asc",
+      ...(withAuthors ? { with_meta: true, meta_level: "basic" } : {}),
+    })
     all.push(...data)
     if (data.length < PAGE_SIZE || all.length >= (meta.total ?? 0)) break
   }
@@ -58,7 +64,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
   const moderator = isContentModerator(user?.role)
   const canCreate = canCreateContent(user?.role)
   const structure = useSiteSettings()?.post_url_structure ?? "id"
-  const [params, setParams] = useSearchParams()
+  const [params, setParam] = useListParams()
   const tab = findTab(TABS, params.get("view"))
   const layout = params.get("layout") === "list" ? "list" : "tree"
   const plural = postType?.label || "Pages"
@@ -75,13 +81,13 @@ export default function Pages({ typeName, postType }: PagesProps) {
   useEffect(() => {
     let live = true
     setError(null)
-    loadAllPages(typeName)
+    loadAllPages(typeName, !moderator)
       .then((all) => live && setPages(all))
       .catch((e) => live && setError(e))
     return () => {
       live = false
     }
-  }, [typeName, attempt])
+  }, [typeName, moderator, attempt])
 
   const reload = () => setAttempt((n) => n + 1)
 
@@ -103,13 +109,6 @@ export default function Pages({ typeName, postType }: PagesProps) {
       .sort((a, b) => Date.parse(lastEdited(b)) - Date.parse(lastEdited(a)) || b.id - a.id)
       .map((page) => ({ page, depth: 0, orphan: false }))
   }, [pages, tab.status, layout])
-
-  const setParam = (key: string, value: string, fallback: string) => {
-    const next = new URLSearchParams(params)
-    if (value === fallback) next.delete(key)
-    else next.set(key, value)
-    setParams(next, { replace: true })
-  }
 
   const open = (post: Post) => navigate(`/content/edit/${post.id}`)
 

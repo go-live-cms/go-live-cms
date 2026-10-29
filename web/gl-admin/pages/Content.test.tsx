@@ -169,6 +169,30 @@ describe("Posts list", () => {
   })
 })
 
+describe("Posts list paging", () => {
+  it("moves back to the last page when the current one empties", async () => {
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 20 }, total: 20 })
+    const page = Array.from({ length: 10 }, (_, i) => post(i + 1))
+    api.getPosts.mockImplementation(({ offset }: { offset: number }) =>
+      offset === 0 ? Promise.resolve({ data: page, meta: { total: 20 } }) : Promise.resolve({ data: [], meta: { total: 10 } })
+    )
+    await render("/content/post")
+
+    const second = Array.from(container.querySelectorAll(".gl-pagination__navigation button")).find((b) => b.textContent === "2")
+    await act(async () => {
+      second!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+    const offsets = api.getPosts.mock.calls.map(([q]) => q.offset)
+    expect(offsets).toEqual([0, 10, 0])
+    expect(text()).toContain("Post 1")
+    expect(text()).not.toContain("Nothing in All")
+  })
+})
+
 describe("Pages list", () => {
   it("shows pages as a tree", async () => {
     api.getPosts.mockImplementation(() =>

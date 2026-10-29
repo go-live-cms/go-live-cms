@@ -65,7 +65,7 @@ GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.usern
 SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
-    AND (@post_status::text = '' OR post_status = ANY(string_to_array(@post_status::text, ',')))
+    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id = 0 OR user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
@@ -146,7 +146,7 @@ SELECT
 FROM posts p
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(@post_status::text, ',')))
+    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
@@ -171,7 +171,7 @@ OFFSET @offset_count;
 SELECT COUNT(*) AS total FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
-    AND (@post_status::text = '' OR post_status = ANY(string_to_array(@post_status::text, ',')))
+    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id = 0 OR user_id = @user_id);
 
 -- name: CountPostsByStatus :many
@@ -187,7 +187,7 @@ ORDER BY post_status;
 -- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts
 WHERE post_type = @post_type
-    AND (@post_status::text = '' OR post_status = ANY(string_to_array(@post_status::text, ',')));
+    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')));
 
 
 -- name: ListPostsWithAllMeta :many
@@ -225,7 +225,7 @@ LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(@post_status::text, ',')))
+    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id = 0 OR p.user_id = @user_id)  -- Add user filter
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
