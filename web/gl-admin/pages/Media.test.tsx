@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   user: { id: 7, username: "elena", full_name: "Elena V.", role: "editor" } as Record<string, unknown>,
   getMedia: vi.fn(),
   getMediaPosts: vi.fn(),
+  getMediaById: vi.fn(),
 }))
 
 vi.mock("@gl-admin/lib/auth", () => ({
@@ -23,6 +24,7 @@ vi.mock("@gl-admin/lib/api/media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@gl-admin/lib/api/media")>()),
   getMedia: api.getMedia,
   getMediaPosts: api.getMediaPosts,
+  getMediaById: api.getMediaById,
   createMedia: vi.fn(),
   updateMedia: vi.fn(),
   deleteMedia: vi.fn(),
@@ -82,6 +84,7 @@ beforeEach(() => {
   api.user = { id: 7, username: "elena", full_name: "Elena V.", role: "editor" }
   api.getMedia.mockReset()
   api.getMediaPosts.mockReset()
+  api.getMediaById.mockReset()
 })
 
 afterEach(() => {
@@ -166,5 +169,52 @@ describe("Media library", () => {
     expect(panel.querySelector("textarea")).toBeNull()
     expect(panel.textContent).toContain("No post or page uses this file yet.")
     expect(panel.querySelector("a[href='/media/1']")?.textContent).toBe("Details")
+  })
+})
+
+describe("Media library URL state", () => {
+  it("opens ?file= for a file that isn't on the first page by fetching it", async () => {
+    api.getMedia.mockImplementation(() => page([file(1)], 40))
+    api.getMediaById.mockImplementation(() => Promise.resolve({ media: file(99, { name: "deep.jpg" }) }))
+    api.getMediaPosts.mockImplementation(() => Promise.resolve([]))
+    await render("/media?file=99")
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    expect(api.getMediaById).toHaveBeenCalledWith(99)
+    expect(container.querySelector("aside[aria-label='File details'] h2")?.textContent).toBe("deep.jpg")
+  })
+
+  it("keeps a filter picked while the search is still debouncing", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    try {
+      api.getMedia.mockImplementation(() => page([file(1)]))
+      await act(async () => {
+        root.render(
+          <MemoryRouter initialEntries={["/media"]}>
+            <Routes>
+              <Route path="/media" element={<Media />} />
+            </Routes>
+          </MemoryRouter>
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      const search = container.querySelector<HTMLInputElement>("input[type=search]")!
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+        setter.call(search, "cat")
+        search.dispatchEvent(new Event("input", { bubbles: true }))
+      })
+      const video = container.querySelector<HTMLInputElement>("input[name=media-type][value=video]")!
+      await act(async () => video.click())
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500)
+      })
+      expect(api.getMedia).toHaveBeenLastCalledWith(expect.objectContaining({ search: "cat", type: "video" }))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

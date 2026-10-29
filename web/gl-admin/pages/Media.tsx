@@ -9,7 +9,7 @@ import EmptyState from "@gl-admin/components/ui/EmptyState"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
 import { SearchIcon, UploadIcon } from "@gl-admin/components/ui/icons"
 import { toast } from "@gl-admin/components/ui/Toast"
-import { getMedia, createMedia } from "@gl-admin/lib/api/media"
+import { getMedia, getMediaById, createMedia } from "@gl-admin/lib/api/media"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { MEDIA_SORTS, TYPE_FILTERS, countLine, findMediaSort } from "@gl-admin/lib/mediaLibrary"
 import { canCreateContent, canWriteMedia } from "@gl-admin/lib/roles"
@@ -64,16 +64,35 @@ export default function Media() {
     document.title = `${baseTitle} Media`
   }, [baseTitle])
 
+  // Updates from the URL as it is when the timer fires, so a filter picked during the
+  // pause isn't overwritten. (react-router's functional setSearchParams hands back the
+  // params of the render that created it, so the latest ones come from a ref.)
+  const latestParams = useRef(params)
+  latestParams.current = params
   useEffect(() => {
     if (searchText.trim() === search) return
-    const id = setTimeout(() => setParam("q", searchText.trim(), ""), 400)
+    const id = setTimeout(() => {
+      const next = new URLSearchParams(latestParams.current)
+      if (searchText.trim()) next.set("q", searchText.trim())
+      else next.delete("q")
+      setSearchParams(next, { replace: true })
+    }, 400)
     return () => clearTimeout(id)
   }, [searchText])
 
+  // Back / Forward (or a link) changed ?q: the box follows.
+  useEffect(() => {
+    setSearchText((text) => (text.trim() === search ? text : search))
+  }, [search])
+
   const query = { search: search || undefined, type: type || undefined, sort }
+
+  // Bumped by every fresh load, so a Load more answered after a filter change is dropped.
+  const generation = useRef(0)
 
   useEffect(() => {
     let live = true
+    generation.current++
     setLoading(true)
     getMedia({ limit: PAGE_SIZE, offset: 0, with_counts: true, ...query })
       .then((response) => {
@@ -91,8 +110,10 @@ export default function Media() {
 
   const loadMore = async () => {
     setLoadingMore(true)
+    const started = generation.current
     try {
       const response = await getMedia({ limit: PAGE_SIZE, offset: items.length, with_counts: true, ...query })
+      if (started !== generation.current) return
       setItems((prev) => [...prev, ...response.data.filter((m) => !prev.some((p) => p.id === m.id))])
       setTotal(response.meta?.total ?? total)
     } catch (e) {
@@ -153,10 +174,27 @@ export default function Media() {
     upload(Array.from(e.dataTransfer.files))
   }
 
-  const open = openId !== null ? (items.find((m) => m.id === openId) ?? null) : null
+  // ?file= for a file that isn't loaded (past the first page, or filtered out) is fetched
+  // on its own; one that no longer exists drops the parameter.
+  const [fetchedOpen, setFetchedOpen] = useState<MediaItem | null>(null)
+  const loadedOpen = openId !== null ? (items.find((m) => m.id === openId) ?? null) : null
+  useEffect(() => {
+    if (openId === null || loadedOpen || loading || fetchedOpen?.id === openId) return
+    let live = true
+    getMediaById(openId)
+      .then(({ media }) => live && setFetchedOpen(media))
+      .catch(() => live && setParam("file", "", ""))
+    return () => {
+      live = false
+    }
+  }, [openId, !!loadedOpen, loading])
+  const open = loadedOpen ?? (fetchedOpen?.id === openId ? fetchedOpen : null)
   const setOpen = (media: MediaItem | null) => setParam("file", media ? String(media.id) : "", "")
 
-  const replaceItem = (media: MediaItem) => setItems((prev) => prev.map((m) => (m.id === media.id ? media : m)))
+  const replaceItem = (media: MediaItem) => {
+    setItems((prev) => prev.map((m) => (m.id === media.id ? media : m)))
+    setFetchedOpen((prev) => (prev?.id === media.id ? media : prev))
+  }
 
   const removeItems = (ids: number[]) => {
     setItems((prev) => prev.filter((m) => !ids.includes(m.id)))

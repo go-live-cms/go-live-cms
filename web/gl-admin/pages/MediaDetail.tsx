@@ -5,7 +5,7 @@ import FocalPointPicker, { FocalCropPreviews, formatFocalPoint } from "@gl-admin
 import { KindIcon } from "@gl-admin/components/media/MediaCard"
 import UsedIn, { useUsedIn } from "@gl-admin/components/media/UsedIn"
 import { DeleteMediaDialog, downloadMedia } from "@gl-admin/components/media/mediaActions"
-import { ErrorPage } from "@gl-admin/components/errors/ErrorPages"
+import { ErrorPage, NotFoundPage } from "@gl-admin/components/errors/ErrorPages"
 import Button from "@gl-admin/components/ui/Button"
 import Input from "@gl-admin/components/ui/Input"
 import Textarea from "@gl-admin/components/ui/Textarea"
@@ -45,7 +45,7 @@ const fieldsOf = (media: Media): Fields => ({
 
 export default function MediaDetail() {
   const { id } = useParams<{ id: string }>()
-  const mediaId = Number(id)
+  const mediaId = /^\d+$/.test(id ?? "") ? Number(id) : null
   const navigate = useNavigate()
   const { baseTitle } = useGoLive()
   const user = useAuthUser()
@@ -61,9 +61,10 @@ export default function MediaDetail() {
   const [replaceError, setReplaceError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const replaceInput = useRef<HTMLInputElement>(null)
-  const usedIn = useUsedIn(Number.isFinite(mediaId) ? mediaId : null)
+  const usedIn = useUsedIn(mediaId)
 
   useEffect(() => {
+    if (mediaId === null) return
     let live = true
     setLoadError(null)
     getMediaById(mediaId)
@@ -83,6 +84,7 @@ export default function MediaDetail() {
     document.title = `${baseTitle} ${media?.name ?? "Media"}`
   }, [baseTitle, media?.name])
 
+  if (mediaId === null) return <NotFoundPage />
   if (loadError) return <ErrorPage error={loadError} onRetry={() => setReload((n) => n + 1)} />
   if (!media) return <DetailSkeleton />
 
@@ -96,6 +98,11 @@ export default function MediaDetail() {
   const stored = fieldsOf(media)
   const dirty =
     focalChanged || fields.name !== stored.name || fields.alt !== stored.alt || fields.description !== stored.description
+  // The API reads an empty field as "keep it", so clearing one would save as a silent
+  // revert; say so instead and hold Save.
+  const clearedError = (key: keyof Fields) =>
+    stored[key] && !fields[key].trim() ? "This can't be empty. Type a new value, or discard the change." : undefined
+  const anyCleared = (["name", "alt", "description"] as const).some((key) => clearedError(key))
 
   const save = async () => {
     setSaving(true)
@@ -184,7 +191,8 @@ export default function MediaDetail() {
                 src={getMediaVariantPreviewURL(media, "large")}
                 alt={fields.alt || media.alt}
                 value={focalPoint}
-                onChange={canWrite && !busy ? setFocalPoint : undefined}
+                // Stays editable (and focusable) while busy; changes then wait.
+                onChange={canWrite ? (point) => !busy && setFocalPoint(point) : undefined}
               />
               {canWrite && focalPoint && (
                 <div>
@@ -248,10 +256,10 @@ export default function MediaDetail() {
               aria-label="File details"
               onSubmit={(e) => {
                 e.preventDefault()
-                if (dirty) save()
+                if (dirty && !anyCleared) save()
               }}
             >
-              <Input id="media-name" title="Name" value={fields.name} onChange={set("name")} disabled={busy} />
+              <Input id="media-name" title="Name" value={fields.name} onChange={set("name")} disabled={busy} error={clearedError("name")} />
               {(kind === "image" || kind === "vector") && (
                 <Textarea
                   id="media-alt"
@@ -260,12 +268,13 @@ export default function MediaDetail() {
                   value={fields.alt}
                   onChange={set("alt")}
                   disabled={busy}
+                  error={clearedError("alt")}
                   hint="Describe what the image shows, for people who can't see it."
                 />
               )}
-              <Textarea id="media-description" label="Description" rows={3} value={fields.description} onChange={set("description")} disabled={busy} />
+              <Textarea id="media-description" label="Description" rows={3} value={fields.description} onChange={set("description")} disabled={busy} error={clearedError("description")} />
               <div className="gl-media-detail__save">
-                <Button type="submit" variant="primary" size="lg" loading={saving} disabled={!dirty || isReplacing}>
+                <Button type="submit" variant="primary" size="lg" loading={saving} disabled={!dirty || anyCleared || isReplacing}>
                   Save
                 </Button>
                 {dirty && (
