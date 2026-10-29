@@ -1,3 +1,9 @@
+@use "./tokens";
+
+// Legacy admin tokens. The design tokens (#337) live in _tokens.scss; the names they
+// share with this file (background, borders, text, tooltip, toast, sidebar) were
+// removed here so each theme has one value. The rest go as #338–#344 restyle the
+// components that use them.
 :root {
     // General styles
     --transition-duration: 0.2s;
@@ -5,20 +11,13 @@
     --icon-border-radius: .3rem;
 
     // ------------- Light mode -------------
-    --background: white;
-    --border-color: #D2D2D2;
     --box-shadow: 0 0 16px 0 #00000027;
     --logo-glow: drop-shadow(0 0 4px #0091ff5e);
     --top-white-space: 1.31rem;
-    --background-hover: #f4f4f3;
-    --selected-border-color: #0078d4;
 
     // Text colors
-    --text-primary: #202222;
-    --text-secondary: #333536;
     --text-quaternary: #838383;
     --text-quinary: #999999;
-    --text-selected: #0050FE;
 
     // Text sizes
     --text-size-body: 1rem;
@@ -54,12 +53,9 @@
     --select-option-selected-background: #e6f0ff;
 
     // Tooltip
-    --tooltip-background: #222222;
-    --tooltip-color: #ffffff;
     --tooltip-box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
 
     // Sidebar
-    --sidebar-background: #b4b3af05;
     --sidebar-background-hover: var(--background-hover);
     --sidebar-popup-background: white;
     --sidebar-popup-box-shadow: 0 2px 8px #0000001a;
@@ -92,7 +88,6 @@
     --filter-select-option-selected-background: var(--select-option-selected-background);
 
     // Toast
-    --toast-background: #333536;
     --toast-box-shadow: 0 2px 8px #0000001f;
 
     // Post status
@@ -112,18 +107,13 @@
 // A mixin so pages outside the admin SPA (e.g. /login, which has no data-theme
 // toggle) can apply the same tokens under prefers-color-scheme.
 @mixin dark-tokens {
-    --background: #13181C;
-    --border-color: #343C3F;
+    @include tokens.dark;
+
     --box-shadow: 0 0 8px 0 #1d2227;
-    --background-hover: #15191d;
-    --selected-border-color: #0078d4;
 
     // Text colors
-    --text-primary: #f2f3f3;
-    --text-secondary: #dee2e4;
     --text-quaternary: #949393;
     --text-quinary: #757575;
-    --text-selected: #008cfe;
 
     // Button
     --button-color-default: #141414;
@@ -132,11 +122,7 @@
     // Select
     --select-option-selected-background: #171d27;
 
-    // Tooltip
-    --tooltip-background: #232b31;
-
     // Sidebar
-    --sidebar-background: #0E1214;
     --sidebar-popup-background: #13181C;
 
     // User profile
@@ -177,15 +163,15 @@
 
 // Dark mode scrollbar
 :root[data-theme="dark"] ::-webkit-scrollbar {
-    background: #141a1d;
+    background: var(--background);
     width: 8px;
 }
 
 :root[data-theme="dark"] ::-webkit-scrollbar-thumb {
-    background: #232b31;
+    background: var(--border-strong);
     border-radius: 6px;
 }
 
 :root[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-    background: #0078d4;
+    background: var(--control-border);
 }

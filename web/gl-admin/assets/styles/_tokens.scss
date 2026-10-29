@@ -1,0 +1,228 @@
+// GoLive design tokens (#337): the Foundations of the admin redesign.
+// Source of truth: the redesign canvas's theme.css and the GoLive Design System's
+// tokens.json (v2), https://claude.ai/artifact/2RibAE1r4SvXEcrDfWjBsu.
+// Radix Slate for neutrals, Indigo for interaction, Green / Amber / Red for status.
+// Keep values as hex literals: tokens.test.ts parses this file to check the WCAG AA
+// contrast of the text pairs in both themes.
+
+// ------------- Light theme -------------
+@mixin light {
+    color-scheme: light;
+
+    // Surfaces
+    --background: #ffffff;                 // white
+    --background-subtle: #f9f9fb;          // slate-2: sidebar, panels, code blocks
+    --background-hover: #f0f0f3;           // slate-3: row & item hover, skeleton
+    --background-active: #e8e8ec;          // slate-4: current nav, pressed
+    --sidebar-background: #f9f9fb;         // slate-2
+    --surface-raised: #ffffff;             // menus, popovers, dialogs, cards
+
+    // Lines
+    --border-color: #e0e1e6;               // slate-5: decorative dividers only
+    --border-strong: #d9d9e0;              // slate-6: card & secondary-button edges
+    --control-border: #8b8d98;             // slate-9: input/select/switch edges
+    --selected-border-color: #3e63dd;      // indigo-9
+    --focus-ring: #3e63dd;                 // indigo-9: 2px ring
+
+    // Text
+    --text-primary: #1c2024;               // slate-12
+    --text-secondary: #60646c;             // slate-11
+    --text-placeholder: #8b8d98;           // slate-9: placeholders only
+    --text-selected: #3a5bc7;              // indigo-11: links, active item
+
+    // Accent
+    --accent-solid: #3e63dd;               // indigo-9: primary button, switch on
+    --accent-solid-hover: #3358d4;         // indigo-10
+    --accent-on: #ffffff;                  // text on accent-solid and danger-solid
+    --accent-subtle: #edf2fe;              // indigo-3: selected row, tags
+    --accent-subtle-hover: #e1e9ff;        // indigo-4
+    --accent-border: #abbdf9;              // indigo-7
+    --text-selection: #d2deff;             // indigo-5
+
+    // Status. *-text is for text on --background; *-label is for text on the *-bg
+    // fills, where step 11 is only 4.2:1.
+    --success-text: #218358;               // green-11
+    --success-bg: #e6f6eb;                 // green-3
+    --success-label: #193b2d;              // green-12
+    --warning-text: #ab6400;               // amber-11
+    --warning-bg: #fff7c2;                 // amber-3
+    --warning-label: #4f3422;              // amber-12
+    --danger-text: #ce2c31;                // red-11
+    --danger-bg: #feebec;                  // red-3
+    --danger-solid: #ce2c31;
+    --info-text: #3a5bc7;                  // = text-selected
+    --info-bg: #edf2fe;                    // = accent-subtle
+
+    // Editor content
+    --code-inline-color: #ce2c31;
+    --code-inline-background: #f0f0f3;
+    --code-block-background: #f9f9fb;
+    --callout-background: #f9f9fb;
+
+    // Overlays
+    --tooltip-background: #1c2024;
+    --tooltip-color: #ffffff;
+    --toast-background: #1c2024;
+    --scrim: rgb(0 0 0 / 40%);
+
+    // Shadows
+    --card-shadow: 0 1px 2px #00002f0f;
+    --menu-shadow: 0 0 0 1px #00002f14, 0 12px 32px -8px #00002f29, 0 2px 6px #00002f0f;
+    --panel-shadow: 0 0 0 1px #00002f14, 0 24px 48px -12px #00002f33;
+}
+
+// ------------- Dark theme -------------
+@mixin dark {
+    color-scheme: dark;
+
+    // Surfaces
+    --background: #111113;                 // slate-1
+    --background-subtle: #18191b;          // slate-2
+    --background-hover: #212225;           // slate-3
+    --background-active: #272a2d;          // slate-4
+    --sidebar-background: #18191b;
+    --surface-raised: #18191b;
+
+    // Lines
+    --border-color: #2e3135;               // slate-5
+    --border-strong: #363a3f;              // slate-6
+    --control-border: #696e77;             // slate-9
+    --selected-border-color: #5472e4;      // indigo-10
+    --focus-ring: #5472e4;
+
+    // Text
+    --text-primary: #edeef0;               // slate-12
+    --text-secondary: #b0b4ba;             // slate-11
+    --text-placeholder: #696e77;
+    --text-selected: #9eb1ff;              // indigo-11
+
+    // Accent
+    --accent-solid: #3e63dd;
+    --accent-solid-hover: #5472e4;
+    --accent-on: #ffffff;
+    --accent-subtle: #182449;              // indigo-3
+    --accent-subtle-hover: #1d2e62;        // indigo-4
+    --accent-border: #3a4f97;              // indigo-7
+    --text-selection: #253974;             // indigo-5
+
+    // Status
+    --success-text: #3dd68c;
+    --success-bg: #132d21;
+    --success-label: #3dd68c;
+    --warning-text: #ffca16;
+    --warning-bg: #302008;
+    --warning-label: #ffca16;
+    --danger-text: #ff9592;
+    --danger-bg: #3b1219;
+    --danger-solid: #ce2c31;
+    --info-text: #9eb1ff;
+    --info-bg: #182449;
+
+    // Editor content
+    --code-inline-color: #ff9592;
+    --code-inline-background: #212225;
+    --code-block-background: #18191b;
+    --callout-background: #18191b;
+
+    // Overlays
+    --tooltip-background: #edeef0;
+    --tooltip-color: #111113;
+    --toast-background: #edeef0;
+    --scrim: rgb(0 0 0 / 60%);
+
+    // Shadows
+    --card-shadow: none;
+    --menu-shadow: 0 0 0 1px #ffffff14, 0 12px 32px -8px #00000099;
+    --panel-shadow: 0 0 0 1px #ffffff14, 0 24px 48px -12px #000000b3;
+}
+
+// ------------- Theme-independent -------------
+@mixin static {
+    // Collaborators: Radix step 11, the same in both themes. White label text passes
+    // 4.5:1 on every one. postCollab.ts sends these hex values over awareness, so keep
+    // the two lists in sync.
+    --presence-1: #d13415;  // tomato
+    --presence-2: #2a7e3b;  // grass
+    --presence-3: #107d98;  // cyan
+    --presence-4: #6550b9;  // violet
+    --presence-5: #c2298a;  // pink
+    --presence-6: #cc4e00;  // orange
+    --presence-7: #0d74ce;  // blue
+    --presence-8: #008573;  // teal
+
+    // Fonts
+    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, menlo, consolas, monospace;
+
+    // UI type scale: size / line height. Editor content keeps its own em-based scale.
+    --type-caption: 11px;    --type-caption-lh: 16px;     // badges, presence labels, kbd
+    --type-footnote: 12px;   --type-footnote-lh: 16px;    // meta, helper text
+    --type-label: 13px;      --type-label-lh: 20px;       // field labels, segmented controls
+    --type-body: 14px;       --type-body-lh: 20px;        // default UI text
+    --type-subtitle: 16px;   --type-subtitle-lh: 24px;    // card and section titles
+    --type-title-sm: 20px;   --type-title-sm-lh: 28px;    // dialog titles, auth headings
+    --type-title: 24px;      --type-title-lh: 32px;       // page titles
+    --type-title-lg: 28px;   --type-title-lg-lh: 36px;    // Home greeting
+    --type-display: 40px;    --type-display-lh: 48px;     // post title in the editor
+
+    // Spacing
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-7: 32px;
+    --space-8: 48px;
+
+    // Radii
+    --radius-sm: 4px;     // inputs, checkboxes, tags
+    --radius-md: 6px;     // buttons, nav items
+    --radius-lg: 10px;    // menus, popovers
+    --radius-xl: 12px;    // panels, dialogs, cards
+    --radius-full: 999px; // pills, avatars, switches
+
+    // z-index layers: only these values. A scrim shares its drawer's or dialog's layer.
+    --z-base: 0;
+    --z-raised: 1;        // block handles, carets, name labels
+    --z-sticky: 10;       // top bar, sticky table header, save bar
+    --z-dropdown: 100;    // menus, slash menu, selects, popovers
+    --z-drawer: 200;      // off-canvas sidebar + its scrim
+    --z-modal: 300;       // dialogs + their scrim
+    --z-toast: 400;
+    --z-tooltip: 500;
+
+    // Motion
+    --duration-instant: 0ms;     // state swaps
+    --duration-fast: 100ms;      // hover, press, checkbox
+    --duration-base: 150ms;      // menus and popovers in
+    --duration-moderate: 200ms;  // panels, drawer, chevrons
+    --duration-slow: 300ms;      // dialogs, page-level transitions
+    --ease-out: cubic-bezier(0.2, 0, 0, 1);    // entering
+    --ease-in: cubic-bezier(0.4, 0, 1, 1);     // leaving
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// The :root blocks. Only entry stylesheets include this (global.scss for the admin,
+// pages/login.scss for the account pages): variables.scss is @used by every component
+// stylesheet, so emitting here at module level would copy the tokens into each one.
+// Dark comes from variables.scss's dark-tokens mixin.
+@mixin emit {
+    :root {
+        @include static;
+    }
+
+    :root,
+    [data-theme="light"] {
+        @include light;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        :root {
+            --duration-fast: 0ms;
+            --duration-base: 0ms;
+            --duration-moderate: 0ms;
+            --duration-slow: 0ms;
+        }
+    }
+}
