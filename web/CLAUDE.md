@@ -71,7 +71,7 @@ are the most fragile part of the codebase. **Before editing anything under
   (`thumb`/`medium`/`large`, each `{path,width,height,…}`; absent when the image is
   smaller) and `focal_point` (`{x,y}` 0..1 or null). Admin grids/pickers use
   `getMediaVariantPreviewURL(media, size)` (falls back to larger, then the original);
-  the edit modal sets the focal point with `FocalPointPicker`. Image blocks keep
+  the media detail page sets the focal point with `FocalPointPicker`. Image blocks keep
   storing the original `src`; the public `ImageBlock` reads the API-attached
   `doc.media[mediaId]` (`blocks/utils/responsiveImage.ts`) for `srcset`/`sizes`/
   `width`/`height`/`object-position`, all URLs through `safeImageSrc`.
@@ -131,6 +131,13 @@ are the most fragile part of the codebase. **Before editing anything under
   API's real minimum, plus "different from the current one"). `Input` masks
   refuse characters such as `! & : ?`; pass `unmasked` for free text the API validates.
   Saving a post type fires `POST_TYPES_CHANGED` so the sidebar reloads its menu.
+- **Media library and detail (#342):** `/media` (grid, side panel for `?file=id`, at
+  ≤768px a Drawer) and `/media/:id` (focal point with crop previews, Replace, fields,
+  "Used in"). The rules (kinds, tags, filters, "Used in" rows, object-position) live in
+  `lib/mediaLibrary.ts` (tested). "Used in" is `GET /media/:id/posts`, i.e. `post_media`:
+  the featured image (order 0) and the image blocks the collab store syncs (> 0), merged
+  per post. Write access is `canWriteMedia` (`lib/roles.ts`). Hidden until #325: the
+  "No alt text" tag/filter and "Decorative image".
 - **Account pages (#344):** `/login`, `/forgot-password`, `/reset-password` and
   `/accept-invite` are Astro pages (no React) on `src/layouts/AccountPage.astro`, styled by
   `pages/login.scss` with the #338 class names (`gl-input`, `gl-button`, `gl-notice`,

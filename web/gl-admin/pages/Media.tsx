@@ -1,604 +1,408 @@
-import React, { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type DragEvent } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import MediaGrid from "@gl-admin/components/media/MediaGrid"
-import { getMedia, createMedia } from "@gl-admin/lib/api/media"
-import { getUsers } from "@gl-admin/lib/api/users"
-import { getMediaURL } from "@gl-admin/lib/api"
-import type { Media, User, MediaSortOption } from "@gl-admin/lib/types"
-import GLAdminButton from "@gl-admin/components/ui/Button"
-import Icon from "@gl-admin/components/ui/Icon"
-import MediaEditModal from "@gl-admin/components/media/MediaEditModal"
-import { errorMessage } from "@gl-admin/lib/api/errors"
+import MediaGrid, { type UploadingFile } from "@gl-admin/components/media/MediaGrid"
+import MediaPanel from "@gl-admin/components/media/MediaPanel"
+import { DeleteMediaDialog } from "@gl-admin/components/media/mediaActions"
+import Button from "@gl-admin/components/ui/Button"
+import EmptyState from "@gl-admin/components/ui/EmptyState"
+import FilterSelect from "@gl-admin/components/ui/FilterSelect"
+import { SearchIcon, UploadIcon } from "@gl-admin/components/ui/icons"
 import { toast } from "@gl-admin/components/ui/Toast"
-import { canCreateContent } from "@gl-admin/lib/roles"
-import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
-
-//import { initializeMediaCardHandlers } from "@gl-admin/scripts/media-card-handlers"
+import { getMedia, getMediaById, createMedia } from "@gl-admin/lib/api/media"
+import { errorMessage } from "@gl-admin/lib/api/errors"
+import { MEDIA_SORTS, TYPE_FILTERS, countLine, findMediaSort } from "@gl-admin/lib/mediaLibrary"
+import { canCreateContent, canWriteMedia } from "@gl-admin/lib/roles"
+import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
+import { useListParams } from "@gl-admin/lib/hooks/useListParams"
+import { useMediaQuery } from "@gl-admin/lib/hooks/useMediaQuery"
+import { MOBILE_QUERY } from "@gl-admin/components/sidebar/Sidebar"
+import type { Media as MediaItem } from "@gl-admin/lib/types"
+import "@gl-admin/assets/styles/pages/content-list.scss"
 import "@gl-admin/assets/styles/pages/media.scss"
 
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 B"
-  const k = 1024
-  const sizes = ["B", "KB", "MB", "GB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
-}
+// The media library (#342): the grid with variant previews, search, the type filter and
+// sort (all in the URL), bulk select and delete, uploads by button or drop, and a side
+// panel for the open file (?file=id) with "Edit details" for the detail page.
+//
+// Hidden until #325 lands: the "Missing alt text" filter and the tiles' "No alt text"
+// tag. The board's "1.2 GB" total has no API (the count line shows files only).
 
-const Media: React.FC = () => {
+const PAGE_SIZE = 24
+const ACCEPT = "image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
+
+export default function Media() {
   const { baseTitle } = useGoLive()
+  const user = useAuthUser()
   // Every content role may upload (requireContentAuthor in the API, #135); editing or
   // deleting someone else's media is still moderators only (canWriteMedia).
-  const canUpload = canCreateContent(useCurrentRole())
-  const [mediaItems, setMediaItems] = useState<Media[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [total, setTotal] = useState<number>(0)
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState<
-    { name: string; size: number; progress: number; status: string; error?: boolean }[]
-  >([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [bulkSelectMode, setBulkSelectMode] = useState(false)
-  const [selectedMedia, setSelectedMedia] = useState<Media[]>([])
-  const [loading, setLoading] = useState(false)
-  const [currentPage, setCurrentPage] = useState(0)
-  const [hasMore, setHasMore] = useState(true)
+  const canUpload = canCreateContent(user?.role)
+  const asDrawer = useMediaQuery(MOBILE_QUERY)
+  const [params, setParam] = useListParams()
+  const [, setSearchParams] = useSearchParams()
+  const type = TYPE_FILTERS.some((t) => t.id === params.get("type")) ? params.get("type")! : ""
+  const sort = findMediaSort(params.get("sort"))
+  const search = params.get("q") ?? ""
+  const openId = Number(params.get("file")) || null
+
+  const [items, setItems] = useState<MediaItem[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [itemsPerPage] = useState(12)
-
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedType, setSelectedType] = useState("")
-  const [selectedUser, setSelectedUser] = useState("")
-  const [sortBy, setSortBy] = useState<MediaSortOption>("date_desc")
-  const [users, setUsers] = useState<User[]>([])
-  const [loadingUsers, setLoadingUsers] = useState(false)
-  const [selectedMediaForEdit, setSelectedMediaForEdit] = useState<Media | null>(null)
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-
-  useEffect(() => {
-
-    document.title = `${baseTitle} Media`;
-
-    refreshMediaData()
-    loadUsersWithMedia()
-    //initializeMediaCardHandlers()
-  }, [])
-
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value)
-  }
-
-  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedType(e.target.value)
-  }
-
-  const handleUserChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedUser(e.target.value)
-  }
-
-  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSortBy(e.target.value as MediaSortOption)
-  }
-
-  const handleFilterSearch = () => {
-    refreshMediaData(true)
-  }
-
-  // Used by the "no matches" empty state. Bumping clearCount makes the filter
-  // effect below refetch once, after the cleared values are in state (calling
-  // refreshMediaData here would query with the old filters).
-  const [clearCount, setClearCount] = useState(0)
-  const handleClearFilters = () => {
-    setSearchQuery("")
-    setSelectedType("")
-    setSelectedUser("")
-    setSortBy("date_desc")
-    setClearCount((n) => n + 1)
-  }
+  const [error, setError] = useState<string | null>(null)
+  const [reload, setReload] = useState(0)
+  const [uploads, setUploads] = useState<UploadingFile[]>([])
+  const [dragOver, setDragOver] = useState(false)
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<MediaItem[]>([])
+  const [toDelete, setToDelete] = useState<MediaItem[]>([])
+  // The search box's text; the URL (and the request) follow it after a pause.
+  const [searchText, setSearchText] = useState(search)
+  const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      refreshMediaData(true)
-    }, 500)
-    return () => clearTimeout(timeoutId)
-  }, [selectedType, selectedUser, sortBy, clearCount])
+    document.title = `${baseTitle} Media`
+  }, [baseTitle])
+
+  // Updates from the URL as it is when the timer fires, so a filter picked during the
+  // pause isn't overwritten. (react-router's functional setSearchParams hands back the
+  // params of the render that created it, so the latest ones come from a ref.)
+  const latestParams = useRef(params)
+  latestParams.current = params
+  useEffect(() => {
+    if (searchText.trim() === search) return
+    const id = setTimeout(() => {
+      const next = new URLSearchParams(latestParams.current)
+      if (searchText.trim()) next.set("q", searchText.trim())
+      else next.delete("q")
+      setSearchParams(next, { replace: true })
+    }, 400)
+    return () => clearTimeout(id)
+  }, [searchText])
+
+  // Back / Forward (or a link) changed ?q: the box follows.
+  useEffect(() => {
+    setSearchText((text) => (text.trim() === search ? text : search))
+  }, [search])
+
+  const query = { search: search || undefined, type: type || undefined, sort }
+
+  // Bumped by every fresh load, so a Load more answered after a filter change is dropped.
+  const generation = useRef(0)
 
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchQuery !== "") {
-        refreshMediaData(true)
-      }
-    }, 800)
-    return () => clearTimeout(timeoutId)
-  }, [searchQuery])
-
-  const handleBulkSelectToggle = () => {
-    setBulkSelectMode(!bulkSelectMode)
-    setSelectedMedia([])
-  }
-
-  const handleMediaSelect = (media: Media) => {
-    if (selectedMedia.some((selected) => selected.id === media.id)) {
-      setSelectedMedia(selectedMedia.filter((selected) => selected.id !== media.id))
-    } else {
-      setSelectedMedia([...selectedMedia, media])
-    }
-  }
-
-  const loadUsersWithMedia = async () => {
-    try {
-      setLoadingUsers(true)
-      const response = await getUsers()
-      // TODO: This could be optimized with a backend endpoint that only returns users with media
-      setUsers(response.data)
-    } catch (e) {
-      console.error("Error loading users:", e)
-    } finally {
-      setLoadingUsers(false)
-    }
-  }
-
-  const handleFileUpload = async (files: File[]) => {
-    setUploading(true)
-    setUploadProgress([])
-    const progressArr: typeof uploadProgress = []
-
-    for (const file of files) {
-      progressArr.push({ name: file.name, size: file.size, progress: 0, status: "Uploading..." })
-    }
-    setUploadProgress([...progressArr])
-
-    const uploadPromises = files.map((file, idx) => uploadSingleFile(file, idx))
-    const results = await Promise.allSettled(uploadPromises)
-
-    const successCount = results.filter((r) => r.status === "fulfilled" && r.value === true).length
-    const failCount = results.length - successCount
-    const firstFailure = results.find(
-      (r): r is PromiseFulfilledResult<string> => r.status === "fulfilled" && typeof r.value === "string"
-    )?.value
-
-    setTimeout(async () => {
-      if (successCount > 0) {
-        showToast(
-          `Successfully uploaded ${successCount} file${successCount !== 1 ? "s" : ""}${failCount > 0 ? `, ${failCount} failed` : ""
-          }`,
-          "success"
-        )
-        await refreshMediaData(true)
-      } else {
-        showToast(firstFailure ? `Upload failed: ${firstFailure}` : "All uploads failed", "error")
-      }
-      setUploading(false)
-    }, 1000)
-  }
-
-  const refreshMediaData = async (reset: boolean = true) => {
-    try {
-      if (reset) {
-        setLoading(true)
-        setCurrentPage(0)
-      }
-
-      const offset = reset ? 0 : (currentPage + 1) * itemsPerPage
-      const response = await getMedia({
-        limit: itemsPerPage,
-        offset: offset,
-        search: searchQuery || undefined,
-        type: selectedType || undefined,
-        user_id: selectedUser ? parseInt(selectedUser) : undefined,
-        sort: sortBy,
+    let live = true
+    generation.current++
+    setLoading(true)
+    getMedia({ limit: PAGE_SIZE, offset: 0, with_counts: true, ...query })
+      .then((response) => {
+        if (!live) return
+        setItems(response.data)
+        setTotal(response.meta?.total ?? response.data.length)
+        setError(null)
       })
-
-      if (reset) {
-        setMediaItems(response.data)
-        setCurrentPage(0)
-      } else {
-        setMediaItems((prev) => [...prev, ...response.data])
-        setCurrentPage((prev) => prev + 1)
-      }
-
-      const totalItems = response.meta?.total ?? 0
-      const currentOffset = offset + response.data.length
-
-      setTotal(totalItems)
-      setHasMore(response.data.length === itemsPerPage && currentOffset < totalItems)
-
-      setError(null)
-    } catch (e) {
-      setError(errorMessage(e, "Failed to fetch media"))
-      console.error("Error fetching media:", e)
-    } finally {
-      setLoading(false)
+      .catch((e) => live && setError(errorMessage(e, "Failed to fetch media")))
+      .finally(() => live && setLoading(false))
+    return () => {
+      live = false
     }
-  }
+  }, [search, type, sort, reload])
 
-  const loadMoreMedia = async () => {
-    if (loadingMore || !hasMore) return
-
+  const loadMore = async () => {
+    setLoadingMore(true)
+    const started = generation.current
     try {
-      setLoadingMore(true)
-      const offset = (currentPage + 1) * itemsPerPage
-      const response = await getMedia({
-        limit: itemsPerPage,
-        offset: offset,
-        search: searchQuery || undefined,
-        type: selectedType || undefined,
-        user_id: selectedUser ? parseInt(selectedUser) : undefined,
-        sort: sortBy,
-      })
-
-      setMediaItems((prev) => [...prev, ...response.data])
-      setCurrentPage((prev) => prev + 1)
-
-      const totalItems = response.meta?.total ?? 0
-      const currentOffset = offset + response.data.length
-
-      setHasMore(response.data.length === itemsPerPage && currentOffset < totalItems)
+      const response = await getMedia({ limit: PAGE_SIZE, offset: items.length, with_counts: true, ...query })
+      if (started !== generation.current) return
+      setItems((prev) => [...prev, ...response.data.filter((m) => !prev.some((p) => p.id === m.id))])
+      setTotal(response.meta?.total ?? total)
     } catch (e) {
       // Keep what's already loaded on screen; the button stays for a retry.
-      showToast(errorMessage(e, "Failed to load more media"), "error")
-      console.error("Error loading more media:", e)
+      toast.error(errorMessage(e, "Failed to load more media"))
     } finally {
       setLoadingMore(false)
     }
   }
 
-  // Resolves true on success, or with a readable failure message.
-  const uploadSingleFile = async (file: File, idx: number): Promise<true | string> => {
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("name", file.name)
-      formData.append("description", `Uploaded file: ${file.name}`)
-      formData.append("alt", file.name.split(".")[0])
-
-      await createMedia(formData)
-
-      let progress = 0
-      const interval = setInterval(() => {
-        progress += Math.random() * 20
-        if (progress > 90) progress = 90
-        setUploadProgress((prev) => {
-          const copy = [...prev]
-          copy[idx] = { ...copy[idx], progress, status: `${Math.round(progress)}%` }
-          return copy
-        })
-      }, 100)
-
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      clearInterval(interval)
-
-      setUploadProgress((prev) => {
-        const copy = [...prev]
-        copy[idx] = { ...copy[idx], progress: 100, status: "Complete" }
-        return copy
+  // Same fields as before the redesign: the file name as the name, its stem as the alt
+  // text (editable afterwards), and a description naming the file.
+  const upload = async (files: File[]) => {
+    if (files.length === 0) return
+    const batch = files.map((file, i) => ({ key: `${Date.now()}-${i}-${file.name}`, name: file.name, error: null }))
+    setUploads((prev) => [...batch, ...prev.filter((u) => u.error === null)])
+    const results = await Promise.allSettled(
+      files.map((file) => {
+        const form = new FormData()
+        form.append("file", file)
+        form.append("name", file.name)
+        form.append("description", `Uploaded file: ${file.name}`)
+        form.append("alt", file.name.split(".")[0])
+        return createMedia(form)
       })
-
-      return true
-    } catch (error) {
-      console.error("Upload error:", error)
-      setUploadProgress((prev) => {
-        const copy = [...prev]
-        copy[idx] = { ...copy[idx], status: "Failed", error: true }
-        return copy
+    )
+    const failed = new Map<string, string>()
+    results.forEach((r, i) => {
+      if (r.status === "rejected") failed.set(batch[i].key, errorMessage(r.reason, "Upload failed"))
+    })
+    const done = results.length - failed.size
+    // Uploaded tiles give way to the real ones; failed ones stay with the reason.
+    setUploads((prev) =>
+      prev.flatMap((u) => {
+        if (!batch.some((b) => b.key === u.key)) return [u]
+        return failed.has(u.key) ? [{ ...u, error: failed.get(u.key)! }] : []
       })
-      return errorMessage(error, "Upload failed")
+    )
+    if (done > 0) {
+      toast.success(`Uploaded ${done} file${done === 1 ? "" : "s"}${failed.size > 0 ? `, ${failed.size} failed` : ""}`)
+      setReload((n) => n + 1)
+    } else {
+      toast.error(failed.size === 1 ? `Upload failed: ${[...failed.values()][0]}` : "All uploads failed")
     }
   }
 
-  const showToast = (message: string, type: "success" | "error" | "info" = "info") => toast[type](message)
+  const chooseFiles = () => fileInput.current?.click()
 
-  const [showUploadArea, setShowUploadArea] = useState(false)
-  const [uploadAreaActive, setUploadAreaActive] = useState(false)
-
-  const handleNewMediaClick = () => {
-    setShowUploadArea(true)
-    setTimeout(() => setUploadAreaActive(true), 10)
-  }
-
-  const handleCancelUploadClick = () => {
-    setUploadAreaActive(false)
-    setTimeout(() => {
-      setShowUploadArea(false)
-      setUploading(false)
-      setUploadProgress([])
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }, 400)
-  }
-
-  const handleUploadBtnClick = () => fileInputRef.current?.click()
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files)
-      if (files.length > 0) handleFileUpload(files)
-    }
-  }
-
-  const uploadAreaRef = useRef<HTMLDivElement>(null)
-  const [dragOver, setDragOver] = useState(false)
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+  const onDragOver = (e: DragEvent) => {
+    if (!canUpload || !e.dataTransfer.types.includes("Files")) return
     e.preventDefault()
     setDragOver(true)
   }
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+  const onDrop = (e: DragEvent) => {
+    if (!canUpload) return
     e.preventDefault()
     setDragOver(false)
-  }
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    setDragOver(false)
-    const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0) handleFileUpload(files)
+    upload(Array.from(e.dataTransfer.files))
   }
 
-  const handleMediaCardClick = (media: Media) => {
-    setSelectedMediaForEdit(media)
-    setIsEditModalOpen(true)
+  // ?file= for a file that isn't loaded (past the first page, or filtered out) is fetched
+  // on its own; one that no longer exists drops the parameter.
+  const [fetchedOpen, setFetchedOpen] = useState<MediaItem | null>(null)
+  const loadedOpen = openId !== null ? (items.find((m) => m.id === openId) ?? null) : null
+  useEffect(() => {
+    if (openId === null || loadedOpen || loading || fetchedOpen?.id === openId) return
+    let live = true
+    getMediaById(openId)
+      .then(({ media }) => live && setFetchedOpen(media))
+      .catch(() => live && setParam("file", "", ""))
+    return () => {
+      live = false
+    }
+  }, [openId, !!loadedOpen, loading])
+  const open = loadedOpen ?? (fetchedOpen?.id === openId ? fetchedOpen : null)
+  const setOpen = (media: MediaItem | null) => setParam("file", media ? String(media.id) : "", "")
+
+  const replaceItem = (media: MediaItem) => {
+    setItems((prev) => prev.map((m) => (m.id === media.id ? media : m)))
+    setFetchedOpen((prev) => (prev?.id === media.id ? media : prev))
   }
 
-  const handleCloseEditModal = () => {
-    setIsEditModalOpen(false)
-    setSelectedMediaForEdit(null)
-  }
-  const handleMediaUpdated = (updatedMedia: Media) => {
-    setMediaItems((prev) => prev.map((item) => (item.id === updatedMedia.id ? updatedMedia : item)))
+  const removeItems = (ids: number[]) => {
+    setItems((prev) => prev.filter((m) => !ids.includes(m.id)))
+    setTotal((n) => Math.max(0, n - ids.length))
+    setSelected((prev) => prev.filter((m) => !ids.includes(m.id)))
+    if (openId !== null && ids.includes(openId)) setOpen(null)
   }
 
-  const handleMediaDeleted = (mediaId: number) => {
-    setMediaItems((prev) => prev.filter((item) => item.id !== mediaId))
-    setTotal((prev) => prev - 1)
+  const toggleSelect = (media: MediaItem) =>
+    setSelected((prev) => (prev.some((m) => m.id === media.id) ? prev.filter((m) => m.id !== media.id) : [...prev, media]))
+
+  const stopSelecting = () => {
+    setSelecting(false)
+    setSelected([])
   }
+
+  const hasFilters = !!(search || type)
+  const libraryEmpty = !loading && !error && items.length === 0 && !hasFilters && uploads.length === 0
+
+  const empty = hasFilters ? (
+    <EmptyState
+      icon="search"
+      title="No media matches these filters"
+      description="Try another type or search, or clear the filters."
+      action={
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setSearchText("")
+            const next = new URLSearchParams(params)
+            next.delete("q")
+            next.delete("type")
+            setSearchParams(next, { replace: true })
+          }}
+        >
+          Clear filters
+        </Button>
+      }
+    />
+  ) : (
+    <div className={`gl-media-dropzone${dragOver ? " is-over" : ""}`}>
+      <span className="gl-media-dropzone__icon" aria-hidden="true">
+        <UploadIcon size={24} />
+      </span>
+      <div className="gl-media-dropzone__text">
+        <h2>{canUpload ? "Drop files here to upload" : "No media yet"}</h2>
+        <p>
+          {canUpload
+            ? "Images, video, audio and documents (PDF, DOC, TXT), up to 50 MB each. Anything you upload can be used in any post or page."
+            : "Nothing has been uploaded yet. Your role can't upload media; ask an administrator."}
+        </p>
+      </div>
+      {canUpload && (
+        <Button variant="primary" size="lg" onClick={chooseFiles}>
+          Choose files
+        </Button>
+      )}
+    </div>
+  )
+
+  const writable = (media: MediaItem) => canWriteMedia(user, media)
 
   return (
-    <>
-      <div className="gl-admin-media-library">
-        <div className="gl-admin-media-header">
-          <div className="gl-admin-media-header-left">
-            <h1 className="gl-admin-media-header__title">Media Library</h1>
+    <div className={`gl-media-page${open && !asDrawer ? " has-panel" : ""}`}>
+      <div
+        className={`gl-media${dragOver && !libraryEmpty ? " is-drag-over" : ""}`}
+        onDragOver={onDragOver}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false)
+        }}
+        onDrop={onDrop}
+      >
+        <header className="gl-media__header">
+          <h1>Media</h1>
+          {!loading && !error && <span className="gl-media__count">{countLine(total)}</span>}
+          <div className="gl-media__spacer" />
+          {canUpload && (
+            <Button variant="primary" icon={<UploadIcon />} onClick={chooseFiles}>
+              Upload
+            </Button>
+          )}
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            accept={ACCEPT}
+            hidden
+            aria-label="Files to upload"
+            onChange={(e) => {
+              upload(Array.from(e.currentTarget.files ?? []))
+              e.currentTarget.value = ""
+            }}
+          />
+        </header>
 
-            {bulkSelectMode && selectedMedia.length > 0 && (
-              <p className="gl-admin-media-header__count">{selectedMedia.length} selected</p>
-            )}
-            {/* <p className="gl-admin-media-header__count">{total} {total === 1 ? 'item' : 'items'}</p> */}
-          </div>
-          <div className="gl-admin-media-header-right">
-            {/* TODO: add this later, its working
-             <div className="gl-admin-media-header__search">
-              <input
-                type="text"
-                placeholder="Search media..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="gl-admin-media-header__search-input"
-              />
-              <button onClick={handleFilterSearch} className="gl-admin-media-header__search-btn" disabled={loading}>
-                <Icon name="search" color="white" width="16" height="16" />
-              </button>
-            </div> */}
-            <div className="gl-admin-media-header__filters">
-              <div className="gl-admin-media-header__filter-wrapper">
-                <select
-                  className="gl-admin-media-header__filter"
-                  id="media-filter-author"
-                  value={selectedUser}
-                  onChange={handleUserChange}
-                  disabled={loadingUsers}
-                >
-                  <option value="">All Users</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.full_name || user.username}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="gl-admin-media-header__filter-wrapper">
-                <select
-                  className="gl-admin-media-header__filter"
-                  id="media-filter-type"
-                  value={selectedType}
-                  onChange={handleTypeChange}
-                >
-                  <option value="">All Types</option>
-                  <option value="image">Images</option>
-                  <option value="video">Videos</option>
-                  <option value="audio">Audio</option>
-                  <option value="document">Documents</option>
-                </select>
-              </div>
-              <div className="gl-admin-media-header__sort-wrapper">
-                <label htmlFor="media-sort" className="gl-admin-media-header__sort-label">
-                  Sort by:
-                </label>
-                <select
-                  className="gl-admin-media-header__sort"
-                  id="media-sort"
-                  value={sortBy}
-                  onChange={handleSortChange}
-                >
-                  <option value="date_desc"> Newest First</option>
-                  <option value="date_asc"> Oldest First</option>
-                  <option value="name_asc"> Name A-Z</option>
-                  <option value="name_desc"> Name Z-A</option>
-                  <option value="size_asc"> Smallest First</option>
-                  <option value="size_desc"> Largest First</option>
-                  <option value="type_asc"> Type A-Z</option>
-                  <option value="type_desc"> Type Z-A</option>
-                  {/* TODO: add least used and most used */}
-                </select>
-              </div>
-            </div>
-            <div className="gl-admin-media-header__button-wrapper">
-              <GLAdminButton
-                className="gl-admin-media__bulk-select"
-                variation={bulkSelectMode ? "primary" : "flat"}
-                onClick={handleBulkSelectToggle}
+        {!libraryEmpty &&
+          (selecting ? (
+            <div className="gl-media__toolbar gl-media__bulk" role="toolbar" aria-label="Selection">
+              <span className="gl-media__bulk-count" aria-live="polite">
+                {selected.length} selected
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setSelected(items)} disabled={selected.length === items.length}>
+                Select all {items.length}
+              </Button>
+              <div className="gl-media__spacer" />
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={selected.length === 0 || !selected.every(writable)}
+                title={selected.every(writable) ? undefined : "You can only delete files you uploaded"}
+                onClick={() => setToDelete(selected)}
               >
-                <Icon name="bulkSelectIcon" color={bulkSelectMode ? "white" : "#333536"} width="14" height="14" />
-                {bulkSelectMode ? "Exit Select" : "Bulk Select"}
-              </GLAdminButton>
-              {canUpload && (
-                <GLAdminButton className="gl-admin-media__new-media-btn" onClick={handleNewMediaClick}>
-                  <Icon name="add" color="white" width="14" height="14" /> New Media
-                </GLAdminButton>
+                Delete
+              </Button>
+              <Button variant="secondary" size="sm" onClick={stopSelecting}>
+                Done
+              </Button>
+            </div>
+          ) : (
+            <div className="gl-media__toolbar">
+              <label className="gl-media__search">
+                <SearchIcon />
+                <span className="gl-media-sr">Search media</span>
+                <input
+                  type="search"
+                  placeholder="Search by name or alt text"
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.currentTarget.value)}
+                />
+              </label>
+              <fieldset className="gl-segmented">
+                <legend className="gl-media-sr">File type</legend>
+                {TYPE_FILTERS.map((t) => (
+                  <label key={t.id || "all"} className={`gl-segmented__option${type === t.id ? " is-checked" : ""}`}>
+                    <input
+                      type="radio"
+                      name="media-type"
+                      value={t.id}
+                      checked={type === t.id}
+                      onChange={() => setParam("type", t.id, "")}
+                    />
+                    {t.label}
+                  </label>
+                ))}
+              </fieldset>
+              <div className="gl-media__spacer" />
+              <FilterSelect
+                prefix="Sort"
+                options={MEDIA_SORTS}
+                value={sort}
+                onChange={(value) => setParam("sort", value, "date_desc")}
+              />
+              {items.length > 0 && (
+                <Button variant="secondary" onClick={() => setSelecting(true)}>
+                  Select
+                </Button>
               )}
             </div>
-          </div>
-        </div>
-
-        {showUploadArea && (
-          <div
-            className={`gl-admin-media__upload-area${uploadAreaActive ? " gl-admin-media__upload-area--active" : ""}${dragOver ? " gl-admin-media__upload-area--dragover" : ""
-              }`}
-            ref={uploadAreaRef}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <div className="gl-admin-media__upload-area-header">
-              <h3>Drop files to upload</h3>
-              <div>
-                <span>or</span>
-                <div className="gl-admin-media__upload-area-button-wrapper">
-                  <GLAdminButton className="gl-admin-media__upload-btn" onClick={handleUploadBtnClick}>
-                    <Icon name="uploadIcon" color="white" width="14" height="14" /> Upload Files
-                  </GLAdminButton>
-                  <GLAdminButton
-                    className="gl-admin-media__cancel-upload-btn"
-                    variation="flat"
-                    onClick={handleCancelUploadClick}
-                  >
-                    Cancel
-                  </GLAdminButton>
-                </div>
-              </div>
-              <small>
-                Maximum size: 50MB. Supported: Images, Videos, Audio, Documents
-                {/* TODO:import number from env size limit */}
-              </small>
-            </div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              multiple
-              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
-              style={{ display: "none" }}
-              onChange={handleFileInputChange}
-            />
-          </div>
-        )}
-
-        {uploading && (
-          <div className="gl-admin-media__upload-progress">
-            {uploadProgress.map((item, idx) => (
-              <div className="gl-admin-media__progress-item" key={idx}>
-                <div className="gl-admin-media__progress-info">
-                  <span className="gl-admin-media__file-name">{item.name}</span>
-                  <span className="gl-admin-media__file-size">{formatFileSize(item.size)}</span>
-                </div>
-                <div className="gl-admin-media__progress-bar">
-                  <div
-                    className={`gl-admin-media__progress-fill${item.error
-                      ? " gl-admin-media__progress-fill--error"
-                      : item.progress === 100
-                        ? " gl-admin-media__progress-fill--success"
-                        : ""
-                      }`}
-                    style={{ width: `${item.progress}%` }}
-                  ></div>
-                </div>
-                <span
-                  className={`gl-admin-media__progress-status${item.error
-                    ? " gl-admin-media__progress-status--error"
-                    : item.progress === 100
-                      ? " gl-admin-media__progress-status--success"
-                      : ""
-                    }`}
-                >
-                  {item.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+          ))}
 
         <MediaGrid
-          mediaItems={mediaItems}
+          mediaItems={items}
           loading={loading}
           error={error}
-          onRetry={() => refreshMediaData(true)}
-          selectable={bulkSelectMode}
-          selectedMedia={selectedMedia}
-          onMediaSelect={handleMediaSelect}
-          onMediaClick={handleMediaCardClick}
-          emptyState={
-            searchQuery || selectedType || selectedUser
-              ? {
-                  icon: "search",
-                  title: "No media matches these filters",
-                  description: "Try another type or user, or clear the filters.",
-                  action: (
-                    <GLAdminButton variation="flat" onClick={handleClearFilters}>
-                      Clear filters
-                    </GLAdminButton>
-                  ),
-                }
-              : {
-                  icon: "media",
-                  title: "No media yet",
-                  description: canUpload
-                    ? "Images, videos, audio and documents you upload will show up here."
-                    : "Nothing has been uploaded yet. Your role can't upload media; ask an administrator.",
-                  action: canUpload && !showUploadArea && (
-                    <GLAdminButton variation="primary" onClick={handleNewMediaClick}>
-                      <Icon name="uploadIcon" color="white" width="14" height="14" /> Upload media
-                    </GLAdminButton>
-                  ),
-                }
-          }
+          onRetry={() => setReload((n) => n + 1)}
+          uploads={uploads}
+          empty={empty}
+          selectable={selecting}
+          selectedMedia={selected}
+          onMediaSelect={toggleSelect}
+          activeId={openId}
+          onMediaClick={(media) => setOpen(media.id === openId ? null : media)}
         />
 
-        {!loading && !error && mediaItems.length > 0 && (
-          <div className="gl-admin-media__load-more-section">
-            <div className="gl-admin-media__pagination-info">
-              Showing {mediaItems.length} of {total} items
-            </div>
-
-            {hasMore && (
-              <GLAdminButton
-                className="gl-admin-media__load-more-btn"
-                variation="primary"
-                onClick={loadMoreMedia}
-                disabled={loadingMore}
-              >
-                {loadingMore ? <>Loading more...</> : <>Load More</>}
-              </GLAdminButton>
-            )}
-
-            {!hasMore && mediaItems.length < total && (
-              <p className="gl-admin-media__end-message">You've reached the end of the media library</p>
+        {!loading && !error && items.length > 0 && (
+          <div className="gl-media__more">
+            <span className="gl-media__more-info">
+              Showing {items.length} of {total}
+            </span>
+            {items.length < total && (
+              <Button variant="secondary" loading={loadingMore} onClick={loadMore}>
+                Load more
+              </Button>
             )}
           </div>
         )}
-
-        <MediaEditModal
-          isOpen={isEditModalOpen}
-          onClose={handleCloseEditModal}
-          media={selectedMediaForEdit}
-          onMediaUpdated={(updated) => {
-            setMediaItems((prevItems) => prevItems.map((item) => (item.id === updated.id ? updated : item)))
-            setSelectedMediaForEdit(updated)
-          }}
-          onMediaDeleted={(id) => {
-            setMediaItems((prev) => prev.filter((m) => m.id !== id))
-            setSelectedMediaForEdit(null)
-            setIsEditModalOpen(false)
-          }}
-        />
       </div>
-    </>
+
+      {open && (
+        <MediaPanel
+          key={open.id}
+          media={open}
+          canWrite={writable(open)}
+          asDrawer={asDrawer}
+          onClose={() => setOpen(null)}
+          onUpdated={replaceItem}
+          onDelete={(media) => setToDelete([media])}
+        />
+      )}
+
+      <DeleteMediaDialog
+        media={toDelete}
+        onClose={() => setToDelete([])}
+        onDeleted={(ids) => {
+          removeItems(ids)
+          if (selecting && ids.length === selected.length) stopSelecting()
+        }}
+      />
+    </div>
   )
 }
-
-export default Media

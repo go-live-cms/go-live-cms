@@ -13,6 +13,7 @@ import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
+import { useMediaQuery } from "@gl-admin/lib/hooks/useMediaQuery"
 import { canCreateContent, isContentModerator, roleLabel } from "@gl-admin/lib/roles"
 import { activeKey, buildNavigation, parentOf, type NavItem, type NavSection } from "./nav"
 import NavIcon from "./NavIcon"
@@ -163,20 +164,6 @@ export function SidebarNav({ sections, current }: SidebarNavProps) {
       </div>
     </div>
   )
-}
-
-function useMediaQuery(query: string): boolean {
-  const get = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(query).matches
-  const [matches, setMatches] = useState(get)
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return
-    const list = window.matchMedia(query)
-    const onChange = () => setMatches(list.matches)
-    onChange()
-    list.addEventListener("change", onChange)
-    return () => list.removeEventListener("change", onChange)
-  }, [query])
-  return matches
 }
 
 export default function Sidebar() {

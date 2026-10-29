@@ -4,6 +4,7 @@ import {
   canCreateContent,
   canEditPost,
   canEditPostDetails,
+  canWriteMedia,
   isContentModerator,
   isSiteAdmin,
   postEditorAccess,
@@ -83,6 +84,23 @@ describe("canEditPostDetails (live fields)", () => {
   ])("%s → draft %s, published %s", (_name, user, onDraft, onPublished) => {
     expect(canEditPostDetails(user, draft)).toBe(onDraft)
     expect(canEditPostDetails(user, published)).toBe(onPublished)
+  })
+})
+
+describe("canWriteMedia", () => {
+  const file = { user_id: owner.id }
+  it.each([
+    ["admin", admin, true],
+    ["editor", editor, true],
+    ["owner contributor", owner, true],
+    ["other contributor", other, false],
+  ])("%s → %s", (_name, user, allowed) => {
+    expect(canWriteMedia(user, file)).toBe(allowed)
+  })
+
+  it("denies a signed-out user and an unknown role that owns the file", () => {
+    expect(canWriteMedia(null, file)).toBe(false)
+    expect(canWriteMedia({ id: owner.id, role: "subscriber" }, file)).toBe(false)
   })
 })
 
