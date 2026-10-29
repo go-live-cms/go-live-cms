@@ -65,6 +65,12 @@ const PATHS: Record<NavIconName, ReactNode> = {
       <circle cx="15" cy="7" r="1" />
     </>
   ),
+  menus: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 9h10M7 13h6M9 17h6" />
+    </>
+  ),
   settings: (
     <>
       <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" />
