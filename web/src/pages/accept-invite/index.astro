@@ -1,82 +1,104 @@
 ---
 import AccountPage from "@/layouts/AccountPage.astro"
+import AccountError from "@/components/account/AccountError.astro"
+import NewPasswordField from "@/components/account/NewPasswordField.astro"
+import { SITE_TITLE } from "@/consts"
+import { PASSWORD_MIN } from "@gl-admin/lib/passwordRules"
+
+// The inviter, role, its description and the email are filled in from
+// POST /auth/invitations/preview (lib/accountPages.ts showInvitation). The
+// design has no username field, but the API needs one to create the account.
 ---
 
-<AccountPage title="Accept invitation" heading="Set up your account" subtitle="You've been invited to the GoLive admin">
-  <form class="gl-admin-login__form" id="acceptForm" novalidate>
-    <p class="gl-admin-login__text" id="inviteSummary" role="status"></p>
+<AccountPage title="Accept invitation" description={`Join ${SITE_TITLE}`}>
+  <form class="gl-admin-login__view" id="acceptForm" novalidate>
+    <header class="gl-admin-login__invite">
+      <span class="gl-avatar gl-admin-login__inviter" id="inviterAvatar" aria-hidden="true" hidden></span>
+      <div class="gl-admin-login__header">
+        <h1 class="gl-admin-login__title">Join {SITE_TITLE}</h1>
+        <p class="gl-admin-login__subtitle" id="inviteSummary" aria-live="polite">Checking your invitation…</p>
+      </div>
+    </header>
+    <p class="gl-admin-login__role" id="roleDescription" hidden></p>
+
+    <AccountError />
 
     <div class="gl-admin-login__fields">
+      <div class="gl-input" data-invite-email hidden>
+        <label class="gl-input__label" for="inviteEmail">Email</label>
+        <input class="gl-input__field" type="email" id="inviteEmail" readonly />
+      </div>
       <div class="gl-input">
+        <label class="gl-input__label" for="full_name">Your name</label>
+        <input
+          class="gl-input__field"
+          type="text"
+          id="full_name"
+          name="full_name"
+          required
+          minlength="2"
+          maxlength="100"
+          autocomplete="name"
+          aria-describedby="full_name-hint"
+        />
+        <p class="gl-field__hint" id="full_name-hint">Shown in bylines and next to your cursor.</p>
+      </div>
+      <div class="gl-input">
+        <label class="gl-input__label" for="username">Username</label>
         <input
           class="gl-input__field"
           type="text"
           id="username"
           name="username"
-          placeholder=" "
           required
           minlength="3"
           maxlength="50"
           autocomplete="username"
           autocapitalize="none"
           spellcheck="false"
+          aria-describedby="username-hint"
         />
-        <label class="gl-input__label" for="username">Username</label>
+        <p class="gl-field__hint" id="username-hint">You sign in with this.</p>
       </div>
+      <NewPasswordField id="password" label="Create a password" />
       <div class="gl-input">
-        <input
-          class="gl-input__field"
-          type="text"
-          id="full_name"
-          name="full_name"
-          placeholder=" "
-          required
-          minlength="2"
-          maxlength="100"
-          autocomplete="name"
-        />
-        <label class="gl-input__label" for="full_name">Full name</label>
-      </div>
-      <div class="gl-input">
-        <input
-          class="gl-input__field"
-          type="password"
-          id="password"
-          name="password"
-          placeholder=" "
-          required
-          minlength="6"
-          autocomplete="new-password"
-        />
-        <label class="gl-input__label" for="password">Password</label>
-      </div>
-      <div class="gl-input">
+        <label class="gl-input__label" for="confirm_password">Confirm password</label>
         <input
           class="gl-input__field"
           type="password"
           id="confirm_password"
           name="confirm_password"
-          placeholder=" "
           required
-          minlength="6"
+          minlength={PASSWORD_MIN}
           autocomplete="new-password"
         />
-        <label class="gl-input__label" for="confirm_password">Confirm password</label>
       </div>
     </div>
 
-    <button type="submit" class="button primary gl-admin-login__submit">
-      <span class="gl-admin-login__spinner" data-spinner aria-hidden="true" hidden></span>
-      <span data-label>Create account</span>
+    <button type="submit" class="gl-button gl-button--primary gl-admin-login__submit">
+      <span class="gl-button__spinner" data-spinner aria-hidden="true" hidden></span>
+      <span data-label>Join {SITE_TITLE}</span>
     </button>
   </form>
 
-  <div class="gl-admin-login__panel" id="linkInvalid" role="status" hidden>
-    <p class="gl-admin-login__text">
-      This invitation link is invalid, has expired, or was already used. Ask an administrator to send you a new one.
-    </p>
-    <p class="gl-admin-login__footer"><a class="gl-admin-login__link" href="/login">Sign in</a></p>
-  </div>
+  <section class="gl-admin-login__view" id="linkInvalid" role="status" hidden>
+    <span class="gl-admin-login__badge gl-admin-login__badge--warning" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+        ><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg
+      >
+    </span>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title">This invitation has expired</h1>
+      <p class="gl-admin-login__subtitle">
+        Invitation links work once and only for a limited time. Ask an administrator to send you a new one.
+      </p>
+    </header>
+    <a class="gl-button gl-button--secondary gl-admin-login__submit" href="/login">Go to sign in</a>
+  </section>
+
+  <p class="gl-admin-login__after" slot="after">
+    Not you? <a class="gl-admin-login__link" href="/login">Sign in with another account</a>
+  </p>
 </AccountPage>
 
 <script>

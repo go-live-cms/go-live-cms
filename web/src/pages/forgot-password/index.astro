@@ -1,39 +1,58 @@
 ---
 import AccountPage from "@/layouts/AccountPage.astro"
+import AccountError from "@/components/account/AccountError.astro"
 ---
 
-<AccountPage title="Forgot password" heading="Forgot your password?" subtitle="We'll email you a link to choose a new one">
-  <form class="gl-admin-login__form" id="forgotForm" novalidate>
-    <div class="gl-admin-login__fields">
-      <div class="gl-input">
-        <input
-          class="gl-input__field"
-          type="email"
-          id="email"
-          name="email"
-          placeholder=" "
-          required
-          autocomplete="email"
-          autocapitalize="none"
-          spellcheck="false"
-        />
-        <label class="gl-input__label" for="email">Email</label>
-      </div>
+<AccountPage title="Forgot password" description="Get a link to choose a new password">
+  <form class="gl-admin-login__view" id="forgotForm" novalidate>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title">Forgot your password?</h1>
+      <p class="gl-admin-login__subtitle">Enter the email you sign in with and we'll send you a link to set a new one.</p>
+    </header>
+
+    <AccountError />
+
+    <div class="gl-input">
+      <label class="gl-input__label" for="email">Email</label>
+      <input
+        class="gl-input__field"
+        type="email"
+        id="email"
+        name="email"
+        required
+        autocomplete="email"
+        autocapitalize="none"
+        spellcheck="false"
+      />
     </div>
 
-    <button type="submit" class="button primary gl-admin-login__submit">
-      <span class="gl-admin-login__spinner" data-spinner aria-hidden="true" hidden></span>
+    <button type="submit" class="gl-button gl-button--primary gl-admin-login__submit">
+      <span class="gl-button__spinner" data-spinner aria-hidden="true" hidden></span>
       <span data-label>Send reset link</span>
     </button>
-    <p class="gl-admin-login__footer"><a class="gl-admin-login__link" href="/login">Back to sign in</a></p>
   </form>
 
-  <div class="gl-admin-login__panel" id="resetSent" role="status" hidden>
-    <p class="gl-admin-login__text">
-      If an account uses that email, we've sent it a link to reset the password. Check your inbox; the link expires soon and works once.
+  <!-- The API answers the same for any address (it never says whether one has
+       an account), so this panel does too. -->
+  <section class="gl-admin-login__view" id="resetSent" role="status" hidden>
+    <span class="gl-admin-login__badge" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+        ><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg
+      >
+    </span>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title" tabindex="-1">Check your email</h1>
+      <p class="gl-admin-login__subtitle">
+        If <strong class="gl-admin-login__strong" id="sentTo">that address</strong> has an account, a reset link is on its way. It works
+        once and expires soon.
+      </p>
+    </header>
+    <p class="gl-admin-login__footnote">
+      Nothing after a few minutes? Check spam, or <button type="button" class="gl-admin-login__link gl-admin-login__link--button" id="tryAnotherEmail">try another email</button>.
     </p>
-    <p class="gl-admin-login__footer"><a class="gl-admin-login__link" href="/login">Back to sign in</a></p>
-  </div>
+  </section>
+
+  <a class="gl-admin-login__link gl-admin-login__link--small" href="/login" slot="after">Back to sign in</a>
 </AccountPage>
 
 <script>

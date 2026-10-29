@@ -30,13 +30,22 @@ func (server *Server) listInvitations(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"invitations": rsp})
 }
 
+// InvitationInviter is who sent an invitation, as the accept page shows it.
+type InvitationInviter struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 // previewInvite tells the accept page what a valid invitation is for, so it
-// can show the email and role (and spot a dead link) before the form.
+// can show the email, role and inviter (and spot a dead link) before the form.
+// Only the holder of the emailed token gets this far, and the inviter's name
+// is what the page shows them ("Ana Costa invited you", #344).
 //
 // Request body: {"token": "..."}
 //
 // Returns:
-//   - 200 OK: {"email", "role", "expires_at"}
+//   - 200 OK: {"email", "role", "expires_at", "invited_by"}; invited_by is
+//     {"id", "name"}, or null when the inviter was deleted or can't be loaded
 //   - 400 Bad Request: code "invalid_token" for a link that doesn't work
 func (server *Server) previewInvite(c *gin.Context) {
 	var req PreviewInvitationRequest
@@ -57,6 +66,22 @@ func (server *Server) previewInvite(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load invitation"})
 		return
 	}
+	// The inviter is decoration: a failed lookup leaves it out, never the preview.
+	var inviter *InvitationInviter
+	if inv.InvitedBy.Valid {
+		user, err := server.store.GetUser(c.Request.Context(), inv.InvitedBy.Int64)
+		switch {
+		case err == nil:
+			name := user.FullName
+			if name == "" {
+				name = user.Username
+			}
+			inviter = &InvitationInviter{ID: user.ID, Name: name}
+		case !errors.Is(err, sql.ErrNoRows):
+			// A deleted inviter is expected; anything else is worth knowing about.
+			server.requestLog(c).Warn("invitation preview: inviter lookup failed", "invitation_id", inv.ID, "error", err)
+		}
+	}
 	c.Header("Cache-Control", "no-store")
-	c.JSON(http.StatusOK, gin.H{"email": inv.Email, "role": inv.Role, "expires_at": inv.ExpiresAt})
+	c.JSON(http.StatusOK, gin.H{"email": inv.Email, "role": inv.Role, "expires_at": inv.ExpiresAt, "invited_by": inviter})
 }

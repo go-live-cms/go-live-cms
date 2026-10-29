@@ -121,6 +121,15 @@ are the most fragile part of the codebase. **Before editing anything under
   warns on unload while the provider has unsynced changes or the connection is down. Editor
   styles use the design tokens only (never `prefers-color-scheme`). Features in the design
   without a backend stay hidden (comments at the top of each file; table on #341).
+- **Account pages (#344):** `/login`, `/forgot-password`, `/reset-password` and
+  `/accept-invite` are Astro pages (no React) on `src/layouts/AccountPage.astro`, styled by
+  `pages/login.scss` with the #338 class names (`gl-input`, `gl-button`, `gl-notice`,
+  `gl-avatar`). Each page's `<script>` only calls a mount function in
+  `lib/accountPages.ts` or `lib/loginPage.ts` (admin CSP: no inline scripts); the
+  shared pieces are `components/account/`. The password minimum is `PASSWORD_MIN` in
+  `lib/passwordRules.ts` (import-free, so pages render the hint server-side);
+  `passwordRules.test.ts` fails if the API's `min=` differs. The invite preview returns
+  `invited_by` `{id, name}` or null.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 
