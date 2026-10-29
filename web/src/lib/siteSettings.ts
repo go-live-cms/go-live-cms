@@ -16,13 +16,18 @@ const SETTINGS_TIMEOUT_MS = 2000
 
 export async function getSiteSettings(): Promise<SiteSettings> {
   let settings: Record<string, unknown> | null = null
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
     settings = await Promise.race([
       getSettings(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), SETTINGS_TIMEOUT_MS)),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), SETTINGS_TIMEOUT_MS)
+      }),
     ])
   } catch (error) {
     console.warn("[theme] Could not fetch settings:", error)
+  } finally {
+    clearTimeout(timer)
   }
   const title = typeof settings?.site_title === "string" && settings.site_title.trim() ? settings.site_title : SITE_TITLE
   const perPage = Number(settings?.posts_per_page)

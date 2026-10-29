@@ -28,3 +28,23 @@ export async function loadThemeLayout(glob: LayoutGlob, candidates: string[]): P
   }
   return null
 }
+
+// Folders under layouts/ that hold page layouts rather than a post type's (home, archive,
+// error): a post type with one of these names must not pick them up.
+export const RESERVED_LAYOUT_KINDS = new Set(["home", "archive", "error"])
+
+// The post route's chain: the type's own variant, the theme's generic post layouts, then
+// the default theme's.
+export function postLayoutCandidates(prefix: string, themeSlug: string, postType: string, variant: string): string[] {
+  const own = !RESERVED_LAYOUT_KINDS.has(postType) && postType !== "post"
+  return [
+    ...new Set([
+      ...(own ? [`${prefix}/${themeSlug}/layouts/${postType}/${variant}.astro`] : []),
+      `${prefix}/${themeSlug}/layouts/post/${variant}.astro`,
+      `${prefix}/${themeSlug}/layouts/post/default.astro`,
+      ...(own ? [`${prefix}/default/layouts/${postType}/${variant}.astro`] : []),
+      `${prefix}/default/layouts/post/${variant}.astro`,
+      `${prefix}/default/layouts/post/default.astro`,
+    ]),
+  ]
+}

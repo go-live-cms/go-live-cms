@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { pageLinks, pageNumber } from "./postList"
-import { themeLayoutCandidates } from "./themeLayout"
+import type { Post } from "@gl-admin/lib/api/types"
+import { listedThumbnail, pageLinks, pageNumber } from "./postList"
+import { postLayoutCandidates, themeLayoutCandidates } from "./themeLayout"
 
 describe("pageNumber", () => {
   it("reads ?page=, 1 for anything else", () => {
@@ -40,5 +41,41 @@ describe("themeLayoutCandidates", () => {
       "../themes/default/layouts/post/wide.astro",
       "../themes/default/layouts/post/default.astro",
     ])
+  })
+})
+
+describe("postLayoutCandidates", () => {
+  it("tries the type's own folder first, then the theme's and the default theme's post layouts", () => {
+    expect(postLayoutCandidates("..", "magazine", "page", "fullwidth")).toEqual([
+      "../magazine/layouts/page/fullwidth.astro",
+      "../magazine/layouts/post/fullwidth.astro",
+      "../magazine/layouts/post/default.astro",
+      "../default/layouts/page/fullwidth.astro",
+      "../default/layouts/post/fullwidth.astro",
+      "../default/layouts/post/default.astro",
+    ])
+  })
+
+  it("never treats the home, archive or error page layouts as a post type's", () => {
+    for (const type of ["home", "archive", "error"]) {
+      const candidates = postLayoutCandidates("..", "default", type, "default")
+      expect(candidates.every((c) => c.includes("/layouts/post/"))).toBe(true)
+    }
+  })
+})
+
+describe("listedThumbnail", () => {
+  const row = (meta?: Record<string, unknown>) => ({ id: 1, ...(meta ? { meta } : {}) }) as unknown as Post
+
+  it("uses the URL a with_meta row carries, null when there is none", () => {
+    expect(listedThumbnail(row({ _thumbnail_url: "/uploads/media/a.jpg" }))).toBe("/uploads/media/a.jpg")
+    expect(listedThumbnail(row({ _thumbnail_url: "http://localhost:8080/uploads/a.jpg" }))).toBe("http://localhost:8080/uploads/a.jpg")
+    expect(listedThumbnail(row({}))).toBeNull()
+    expect(listedThumbnail(row())).toBeNull()
+  })
+
+  it("leaves an old filesystem path to the featured-image endpoint", () => {
+    expect(listedThumbnail(row({ _thumbnail_url: "./uploads/media/a.jpg" }))).toBeUndefined()
+    expect(listedThumbnail(row({ _thumbnail_url: "/app/uploads/media/a.jpg" }))).toBeUndefined()
   })
 })

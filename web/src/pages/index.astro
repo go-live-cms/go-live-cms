@@ -3,7 +3,6 @@
  * The front page (#345): the latest published posts, rendered by the active theme's
  * layouts/home layout (the default theme's when it has none).
  */
-import { SITE_DESCRIPTION } from "../consts"
 import { loadPostList, pageNumber } from "../lib/postList"
 import { loadThemeLayout, themeLayoutCandidates } from "../lib/themeLayout"
 import { resolveSiteUrl } from "../lib/seo"
@@ -26,4 +25,5 @@ if (!Layout) {
 const title = page > 1 ? `${list.siteTitle} · Page ${page}` : list.siteTitle
 ---
 
-<Layout title={title} description={SITE_DESCRIPTION} list={list} />
+{/* The site has no tagline setting yet (#330): describe it by its own title, not GoLive. */}
+<Layout title={title} description={`The latest posts from ${list.siteTitle}`} list={list} />

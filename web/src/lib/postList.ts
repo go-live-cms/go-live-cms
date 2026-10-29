@@ -42,6 +42,16 @@ export function pageLinks(basePath: string, page: number, perPage: number, total
   }
 }
 
+// The featured image URL a with_meta list row carries (post meta _thumbnail_url): the URL,
+// null for none, or undefined when the stored value is not a URL (a pre-#201 filesystem
+// path, which only the API can map to /uploads).
+export function listedThumbnail(post: Post): string | null | undefined {
+  const value = (post as Post & { meta?: Record<string, unknown> }).meta?._thumbnail_url
+  if (value === undefined || value === null || value === "") return null
+  if (typeof value !== "string") return undefined
+  return /^https?:\/\//i.test(value) || value.startsWith("/uploads/") ? value : undefined
+}
+
 export async function loadPostList(postType: string, page: number, basePath: string, siteUrl: string): Promise<PostListData> {
   const site = await getSiteSettings()
   const perPage = site.postsPerPage
@@ -57,7 +67,10 @@ export async function loadPostList(postType: string, page: number, basePath: str
   })
   const posts = await Promise.all(
     data.map(async (post): Promise<ListedPost> => {
-      const url = await getFeaturedImageUrl(post.id).catch(() => null)
+      // with_meta rows carry the featured image URL; only rows whose stored value is an
+      // old filesystem path (before #201) need the featured-image endpoint to map it.
+      const stored = listedThumbnail(post)
+      const url = stored !== undefined ? stored : await getFeaturedImageUrl(post.id).catch(() => null)
       return {
         post,
         href: postPath({ ...post, post_type: post.post_type || postType }, structure),
