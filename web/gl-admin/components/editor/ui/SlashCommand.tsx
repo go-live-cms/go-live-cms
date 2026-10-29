@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react"
+import React, { useState, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from "react"
 import { Extension } from "@tiptap/core"
 import { ReactRenderer } from "@tiptap/react"
 import { PluginKey } from "prosemirror-state"
@@ -14,6 +14,7 @@ export interface SlashCommandItem {
   group?: "media"
 }
 
+const GROUPS = ["basic", "media"] as const
 const GROUP_LABELS = { basic: "Basic blocks", media: "Media" } as const
 
 export const SlashCommandList = forwardRef<
@@ -26,9 +27,15 @@ export const SlashCommandList = forwardRef<
 >((props, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const commandListRef = useRef<HTMLDivElement>(null)
+  // In the order the menu shows them (by section), so the arrow keys follow the screen
+  // even when a theme registers a basic block after the media ones.
+  const items = useMemo(
+    () => GROUPS.flatMap((group) => props.items.filter((item) => (item.group ?? "basic") === group)),
+    [props.items]
+  )
 
   const selectItem = (index: number) => {
-    const item = props.items[index]
+    const item = items[index]
     if (item) {
       props.command(item)
     }
@@ -36,14 +43,14 @@ export const SlashCommandList = forwardRef<
 
   const upHandler = () => {
     setSelectedIndex((prev) => {
-      const newIndex = prev > 0 ? prev - 1 : props.items.length - 1
+      const newIndex = prev > 0 ? prev - 1 : items.length - 1
       return newIndex
     })
   }
 
   const downHandler = () => {
     setSelectedIndex((prev) => {
-      const newIndex = prev < props.items.length - 1 ? prev + 1 : 0
+      const newIndex = prev < items.length - 1 ? prev + 1 : 0
       return newIndex
     })
   }
@@ -90,7 +97,7 @@ export const SlashCommandList = forwardRef<
     },
   }))
 
-  if (props.items.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="slash-command-list">
         <div className="slash-command-empty">No blocks match</div>
@@ -99,12 +106,10 @@ export const SlashCommandList = forwardRef<
   }
 
   // Sections in the design's order; items keep one flat index for the keyboard.
-  const sections = (["basic", "media"] as const)
-    .map((group) => ({
-      group,
-      items: props.items.map((item, index) => ({ item, index })).filter(({ item }) => (item.group ?? "basic") === group),
-    }))
-    .filter((s) => s.items.length > 0)
+  const sections = GROUPS.map((group) => ({
+    group,
+    items: items.map((item, index) => ({ item, index })).filter(({ item }) => (item.group ?? "basic") === group),
+  })).filter((s) => s.items.length > 0)
 
   return (
     <div className="slash-command-list" ref={commandListRef} role="listbox" aria-label="Insert block">

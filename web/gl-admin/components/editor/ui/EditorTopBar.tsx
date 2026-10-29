@@ -4,7 +4,7 @@ import Button, { IconButton } from "@gl-admin/components/ui/Button"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
 import Modal from "@gl-admin/components/ui/Modal"
 import Pill from "@gl-admin/components/ui/Pill"
-import PostStatus from "@gl-admin/components/ui/PostStatus"
+import { PostStatusPill } from "@gl-admin/components/ui/PostStatus"
 import { AvatarStack, type AvatarUser } from "@gl-admin/components/ui/Avatar"
 import { CheckIcon, ChevronDownIcon, DangerIcon, LockIcon } from "@gl-admin/components/ui/icons"
 import type { CollabUser } from "@gl-admin/components/editor/utils/useCollabPresence"
@@ -29,6 +29,8 @@ type EditorTopBarProps = {
   mode: "create" | "edit"
   saveStatus: SaveStatus
   connection: ConnectionView
+  // The socket is up right now (no grace period): publishing needs the server.
+  live: boolean
   // Other people in the post (the presence avatars).
   collabUsers: CollabUser[]
   me?: AvatarUser
@@ -101,6 +103,8 @@ export function SaveState({
 }: Pick<EditorTopBarProps, "mode" | "saveStatus" | "connection" | "viewOnly">) {
   let content: ReactNode = null
   let tone = ""
+  // The session-ended dialog says what happened; nothing here is waiting to be sent.
+  if (connection === "ended") return null
   if (connection === "connecting") {
     content = (
       <>
@@ -164,6 +168,7 @@ export default function EditorTopBar({
   mode,
   saveStatus,
   connection,
+  live,
   collabUsers,
   me,
   viewOnly,
@@ -185,7 +190,7 @@ export default function EditorTopBar({
   const published = postStatus === "published"
   const archived = postStatus === "archived"
   // Publishing needs the server: off until connected (the API flushes the collab server).
-  const connected = mode === "create" || connection === "online"
+  const connected = mode === "create" || live
   const publishDisabled = viewOnly || isSaving || isPublishing || busy || !connected
 
   // One avatar per person (two tabs are one person), others first, then you.
@@ -225,7 +230,7 @@ export default function EditorTopBar({
           </Pill>
         ) : (
           <>
-            {mode === "edit" && <PostStatus status={postStatus || "draft"} iconPath="status" />}
+            {mode === "edit" && <PostStatusPill status={postStatus || "draft"} />}
             {viewOnly && mode === "edit" && (
               <Pill tone="neutral" icon={<LockIcon size={12} />} className="editor-top-bar__pill">
                 View only

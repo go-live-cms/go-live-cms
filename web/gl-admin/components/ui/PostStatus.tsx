@@ -17,5 +17,10 @@ export default function PostStatus({ status, iconPath }: { status: string | null
     return <Skeleton shape="pill" />
   }
 
+  return <PostStatusPill status={status} />
+}
+
+// The pill alone, for places that always have the status (the editor's top bar).
+export function PostStatusPill({ status }: { status: string }) {
   return <Pill tone={TONES[status] ?? "neutral"}>{capitalize(status)}</Pill>
 }

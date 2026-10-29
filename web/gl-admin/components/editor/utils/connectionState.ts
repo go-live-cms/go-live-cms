@@ -6,11 +6,14 @@ import type { CollabStatus } from "./useCollabPresence"
 //   - online:       connected, or dropped for less than RECONNECT_GRACE_MS (a blip shows
 //                   nothing: no banner for the first few seconds);
 //   - reconnecting: dropped for longer, the provider is retrying; edits wait in this tab;
-//   - offline:      the browser says it's offline, or the drop outlasted OFFLINE_AFTER_MS.
+//   - offline:      the browser says it's offline, or the drop outlasted OFFLINE_AFTER_MS;
+//   - ended:        the server refused or revoked the session (the editor's "session
+//                   ended" dialog says so); nothing will be sent, so no offline promise.
 // Nothing is stored on the device (rule 0 in lib/collaboration/CLAUDE.md): while not
-// connected, this tab holds the only copy of the edits made since.
+// connected, this tab holds the only copy of the edits made since. Publishing waits for
+// a live connection (`status === "connected"`), grace period or not.
 
-export type ConnectionView = "connecting" | "online" | "reconnecting" | "offline"
+export type ConnectionView = "connecting" | "online" | "reconnecting" | "offline" | "ended"
 
 export const RECONNECT_GRACE_MS = 3000
 export const OFFLINE_AFTER_MS = 15000
@@ -28,6 +31,7 @@ export function connectionView({
   browserOnline: boolean
 }): ConnectionView {
   if (status === "connected") return "online"
+  if (status === "ended") return "ended"
   if (!everConnected) return "connecting"
   if (!browserOnline || droppedForMs >= OFFLINE_AFTER_MS) return "offline"
   if (droppedForMs >= RECONNECT_GRACE_MS) return "reconnecting"

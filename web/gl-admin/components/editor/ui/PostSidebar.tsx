@@ -9,7 +9,7 @@ import Tabs from "@gl-admin/components/ui/Tabs"
 import Textarea from "@gl-admin/components/ui/Textarea"
 import { IconButton } from "@gl-admin/components/ui/Button"
 import { CloseIcon } from "@gl-admin/components/ui/icons"
-import PostStatus from "@gl-admin/components/ui/PostStatus"
+import { PostStatusPill } from "@gl-admin/components/ui/PostStatus"
 import "@gl-admin/assets/styles/components/editor/post-settings.scss"
 
 // The post settings panel (#341, "Post editor" on the redesign canvas): Post and History.
@@ -82,7 +82,7 @@ export default function PostSidebar({
       <div className="post-settings__field">
         <span className="post-settings__label">Status</span>
         <div className="post-settings__status">
-          <PostStatus status={status} iconPath="status" />
+          <PostStatusPill status={status} />
         </div>
         <small className="post-settings__hint">{STATUS_HINT[status] ?? ""}</small>
       </div>

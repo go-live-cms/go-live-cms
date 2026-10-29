@@ -2,7 +2,9 @@ import { useEffect, useState } from "react"
 import type { HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { acquirePostCollab, releasePostCollab } from "@gl-admin/lib/collaboration/postCollab"
 
-export type CollabStatus = "connecting" | "connected" | "disconnected"
+// "ended": the server refused or revoked the session; it never reconnects (the editor
+// says "session ended"), so it isn't offline either.
+export type CollabStatus = "connecting" | "connected" | "disconnected" | "ended"
 export type CollabUser = { clientId: number; id?: number; name?: string; color?: string }
 
 // The same connection the editor uses (shared, ref-counted), re-acquired when it goes
@@ -30,7 +32,15 @@ export function useCollabPresence(postId?: number, enabled = true) {
     const onUnsynced = () => setUnsynced(instance.provider.hasUnsyncedChanges)
     let raf = 0
     const onStatus = (s = instance.getStatus()) =>
-      setStatus(s === "connected" ? "connected" : s === "connecting" ? "connecting" : "disconnected")
+      setStatus(
+        s === "connected"
+          ? "connected"
+          : s === "connecting"
+            ? "connecting"
+            : s === "denied" || s === "revoked"
+              ? "ended"
+              : "disconnected"
+      )
     const onUsers = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {

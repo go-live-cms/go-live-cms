@@ -1,7 +1,10 @@
 // The post settings panel (#341): beside the canvas, 320px by default (resizable), one
-// divider on its left. At phone width it covers the canvas under the top bar.
+// divider on its left, scrolling with the page (not sticky: the top bar above it wraps
+// to more rows at narrower widths, so no fixed offset fits). At phone width it covers
+// the screen.
 
 .post-settings {
+  align-self: stretch;
   background: var(--background);
   border-left: 1px solid var(--border-color);
   box-sizing: border-box;
@@ -11,10 +14,7 @@
   flex-direction: column;
   font-size: var(--type-body);
   line-height: var(--type-body-lh);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  position: sticky;
-  top: 48px;
+  position: relative;
   width: var(--post-settings-width, 320px);
 
   &[hidden] {
@@ -44,9 +44,6 @@
     gap: var(--space-1);
     justify-content: space-between;
     padding: var(--space-2) var(--space-3);
-    position: sticky;
-    top: 0;
-    z-index: var(--z-raised);
   }
 
   // Segmented tabs (Post · History).
@@ -247,15 +244,19 @@
     }
   }
 
-
   @media (width <= 768px) {
     background: var(--background);
     inset: 0 0 0 auto;
-    max-height: none;
+    overflow-y: auto;
     position: fixed;
-    top: 0;
     width: 100%;
     z-index: var(--z-drawer);
+
+    &__header {
+      position: sticky;
+      top: 0;
+      z-index: var(--z-raised);
+    }
 
     &__resize-handle {
       display: none;

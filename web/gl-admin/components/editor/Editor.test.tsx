@@ -277,6 +277,15 @@ describe("Editor", () => {
 
     await act(async () => (notice.querySelector("button") as HTMLButtonElement).click())
     expect(authManager.logout).toHaveBeenCalledWith("session-expired")
+
+    // Closing the dialog (Escape) leaves a notice with the same way back in.
+    vi.mocked(authManager.logout).mockClear()
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })))
+    expect(container.querySelector("[role=alertdialog]")).toBeNull()
+    const inline = container.querySelector(".editor-notice[role=alert]")!
+    expect(inline.textContent).toContain("Your session ended")
+    await act(async () => (inline.querySelector("button") as HTMLButtonElement).click())
+    expect(authManager.logout).toHaveBeenCalledWith("session-expired")
   })
 
   it("remounts on a fresh doc after stale-epoch (block_doc was written around the server)", async () => {

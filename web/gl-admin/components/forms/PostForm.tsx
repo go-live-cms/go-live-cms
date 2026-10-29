@@ -567,6 +567,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         mode={mode}
         saveStatus={saveStatus}
         connection={connection}
+        live={collabStatus === "connected"}
         collabUsers={collabUsers}
         me={signedIn ? { id: signedIn.id, name: signedIn.full_name || signedIn.username } : undefined}
         viewOnly={contentReadOnly}
@@ -609,7 +610,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           onDismiss={() => setPublishFailure(null)}
           actions={
             <>
-              <Button variant="secondary" size="sm" onClick={handlePublish} loading={isSubmitting} disabled={connection !== "online"}>
+              <Button variant="secondary" size="sm" onClick={handlePublish} loading={isSubmitting} disabled={collabStatus !== "connected"}>
                 Try again
               </Button>
               {publishFailure.attempts > 1 && (

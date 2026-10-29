@@ -49,6 +49,11 @@ describe("connectionView", () => {
   it("is offline at once when the browser is", () => {
     expect(connectionView({ ...base, browserOnline: false })).toBe("offline")
   })
+
+  it("is ended, never offline, when the server refused or revoked the session", () => {
+    expect(connectionView({ ...base, status: "ended", droppedForMs: OFFLINE_AFTER_MS })).toBe("ended")
+    expect(connectionView({ ...base, status: "ended", everConnected: false })).toBe("ended")
+  })
 })
 
 describe("useConnectionView", () => {
