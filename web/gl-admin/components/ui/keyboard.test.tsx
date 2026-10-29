@@ -404,4 +404,24 @@ describe("Select", () => {
     expect(document.querySelector("[role='listbox']")).toBeNull()
     expect(onChange).not.toHaveBeenCalled()
   })
+
+  it("typeahead skips disabled options", async () => {
+    render(
+      <Select
+        label="Role"
+        value="editor"
+        onChange={() => {}}
+        options={[
+          { value: "editor", label: "Editor" },
+          { value: "author", label: "Author", disabled: true },
+          { value: "admin", label: "Admin" },
+        ]}
+      />
+    )
+    const combo = document.querySelector<HTMLButtonElement>("[role='combobox']")!
+    combo.focus()
+    await press("ArrowDown")
+    await press("a")
+    expect(document.getElementById(combo.getAttribute("aria-activedescendant")!)?.textContent).toBe("Admin")
+  })
 })

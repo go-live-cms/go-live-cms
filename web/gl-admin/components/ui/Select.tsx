@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useRef, useState, type CSSProperties, type FC, type KeyboardEvent, type ReactNode } from "react"
 import { nextRovingIndex, typeaheadIndex, useClickOutside, useFloating, useStableId } from "@gl-admin/components/ui/a11y"
-import { FieldError, describedBy } from "@gl-admin/components/ui/Input"
+import { FieldMessage, describedBy } from "@gl-admin/components/ui/Input"
 import { CheckIcon, ChevronDownIcon } from "@gl-admin/components/ui/icons"
 import "@gl-admin/assets/styles/components/ui/select.scss"
 
@@ -123,7 +123,8 @@ export function useSelectListbox(options: SelectOption[], value: string, onChang
         setActive(enabledFrom(next, dir))
         return
       }
-      const jump = typeaheadIndex(options.map((o) => o.label), e.key, active)
+      // Disabled options get an empty label, so typeahead skips them as the arrows do.
+      const jump = typeaheadIndex(options.map((o) => (o.disabled ? "" : o.label)), e.key, active)
       if (jump !== null) setActive(jump)
     }
   }
@@ -219,15 +220,7 @@ export const Select: FC<SelectProps> = ({
           style={style}
         />
       )}
-      {error ? (
-        <FieldError id={`${fieldId}-error`}>{error}</FieldError>
-      ) : (
-        hint && (
-          <span id={`${fieldId}-hint`} className="gl-field__hint">
-            {hint}
-          </span>
-        )
-      )}
+      <FieldMessage id={fieldId} hint={hint} error={error} />
     </div>
   )
 }

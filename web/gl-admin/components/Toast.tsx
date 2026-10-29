@@ -20,7 +20,8 @@ export function ToastContainer(_props: { toasts: ToastMessage[]; onRemoveToast: 
 // New code uses `toast` from components/ui/Toast.
 export const useToast = () => {
   const showToast = useCallback(
-    (type: ToastType, message: string, duration?: number) => toast[type](message, { duration }),
+    // The old API treated 0 as "the default" (`duration || 3000`), not "hide at once".
+    (type: ToastType, message: string, duration?: number) => toast[type](message, { duration: duration || undefined }),
     []
   )
 

@@ -30,6 +30,18 @@ export function FieldError({ id, children }: { id: string; children: ReactNode }
   )
 }
 
+// The line under a field: the error when there is one, otherwise the hint. Its ids are
+// the ones describedBy points at.
+export function FieldMessage({ id, hint, error }: { id: string; hint?: ReactNode; error?: ReactNode }) {
+  if (error) return <FieldError id={`${id}-error`}>{error}</FieldError>
+  if (!hint) return null
+  return (
+    <span id={`${id}-hint`} className="gl-field__hint">
+      {hint}
+    </span>
+  )
+}
+
 // The ids aria-describedby should point at for a field's hint and error.
 export function describedBy(id: string, hint: unknown, error: unknown, extra?: string) {
   return [error ? `${id}-error` : hint ? `${id}-hint` : "", extra ?? ""].filter(Boolean).join(" ") || undefined
@@ -196,15 +208,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           {title}
           {optional && <span className="gl-input__optional"> (optional)</span>}
         </label>
-        {error ? (
-          <FieldError id={`${inputId}-error`}>{error}</FieldError>
-        ) : (
-          hint && (
-            <span id={`${inputId}-hint`} className="gl-field__hint">
-              {hint}
-            </span>
-          )
-        )}
+        <FieldMessage id={inputId} hint={hint} error={error} />
       </div>
     )
   }

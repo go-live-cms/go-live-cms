@@ -69,6 +69,8 @@ export default function Modal({
   if (!isOpen) return null
 
   const titled = showHeader && title
+  // The description is drawn in the header, so only point at it when there is one.
+  const described = description && showHeader && (title || showCloseButton)
   return (
     <div
       className="gl-modal-overlay"
@@ -83,7 +85,7 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={titled ? `${id}-title` : undefined}
         aria-label={titled ? undefined : (aria["aria-label"] ?? title)}
-        aria-describedby={description ? `${id}-description` : undefined}
+        aria-describedby={described ? `${id}-description` : undefined}
         tabIndex={-1}
         className={`gl-modal gl-modal--${size}${!showHeader ? " gl-modal--no-header" : ""}`}
       >

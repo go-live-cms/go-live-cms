@@ -33,10 +33,11 @@ export default function Switch({
       type="button"
       role="switch"
       id={switchId}
-      className="gl-switch"
+      className={label ? "gl-switch" : `gl-switch ${className}`}
       aria-checked={checked}
       aria-labelledby={label ? `${switchId}-label` : undefined}
-      aria-describedby={description ? `${switchId}-description` : undefined}
+      // The description is drawn only beside a visible label.
+      aria-describedby={label && description ? `${switchId}-description` : undefined}
       aria-label={aria["aria-label"]}
       disabled={disabled}
       onClick={() => onChange(!checked)}

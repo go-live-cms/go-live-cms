@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import { nextRovingIndex, useClickOutside, useFloating, useStableId } from "@gl-admin/components/ui/a11y"
-import { FieldError, describedBy } from "@gl-admin/components/ui/Input"
+import { FieldMessage, describedBy } from "@gl-admin/components/ui/Input"
 import { Listbox, optionId, type SelectOption } from "@gl-admin/components/ui/Select"
 import { ChevronDownIcon } from "@gl-admin/components/ui/icons"
 import "@gl-admin/assets/styles/components/ui/select.scss"
@@ -63,6 +63,7 @@ export default function Combobox({
   useClickOutside([wrapRef, listRef], open, close)
 
   const pick = (opt: SelectOption) => {
+    if (opt.disabled) return
     onChange(opt.value)
     close()
     inputRef.current?.focus()
@@ -164,15 +165,7 @@ export default function Combobox({
           empty={emptyMessage}
         />
       )}
-      {error ? (
-        <FieldError id={`${fieldId}-error`}>{error}</FieldError>
-      ) : (
-        hint && (
-          <span id={`${fieldId}-hint`} className="gl-field__hint">
-            {hint}
-          </span>
-        )
-      )}
+      <FieldMessage id={fieldId} hint={hint} error={error} />
     </div>
   )
 }

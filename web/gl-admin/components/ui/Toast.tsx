@@ -65,25 +65,35 @@ const ICONS: Record<ToastType, ReactNode> = {
 
 export function ToastView({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) {
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const start = () => {
-    if (Number.isFinite(item.duration)) timer.current = setTimeout(onDismiss, item.duration)
+  // Hovering or focusing a toast pauses its timer, so it can be read and acted on. It
+  // restarts only once neither holds it.
+  const holds = useRef({ hover: false, focus: false })
+  const sync = () => {
+    clearTimeout(timer.current)
+    const { hover, focus } = holds.current
+    if (!hover && !focus && Number.isFinite(item.duration)) timer.current = setTimeout(onDismiss, item.duration)
   }
-  const stop = () => clearTimeout(timer.current)
+  const hold = (which: "hover" | "focus", on: boolean) => {
+    holds.current[which] = on
+    sync()
+  }
 
-  // Hovering or focusing a toast pauses its timer, so it can be read and acted on.
   useEffect(() => {
-    start()
-    return stop
+    sync()
+    return () => clearTimeout(timer.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id])
 
   return (
     <div
       className={`gl-toast gl-toast--${item.type}`}
-      onMouseEnter={stop}
-      onMouseLeave={start}
-      onFocus={stop}
-      onBlur={start}
+      onMouseEnter={() => hold("hover", true)}
+      onMouseLeave={() => hold("hover", false)}
+      onFocus={() => hold("focus", true)}
+      onBlur={(e) => {
+        // Moving between the toast's own buttons keeps it held.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hold("focus", false)
+      }}
     >
       <span className="gl-toast__icon">{ICONS[item.type]}</span>
       <span className="gl-toast__message">{item.message}</span>

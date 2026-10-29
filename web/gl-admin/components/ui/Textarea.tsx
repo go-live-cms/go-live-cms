@@ -1,5 +1,5 @@
-import { forwardRef, type ReactNode, type TextareaHTMLAttributes } from "react"
-import { FieldError, describedBy } from "@gl-admin/components/ui/Input"
+import { forwardRef, useState, type ReactNode, type TextareaHTMLAttributes } from "react"
+import { FieldMessage, describedBy } from "@gl-admin/components/ui/Input"
 import { useStableId } from "@gl-admin/components/ui/a11y"
 import "@gl-admin/assets/styles/components/ui/input.scss"
 
@@ -14,11 +14,13 @@ type TextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "title"> 
 }
 
 const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
-  { label, hint, error, optional, maxCount, containerClassName = "", id, rows = 3, value, defaultValue, className = "", ...rest },
+  { label, hint, error, optional, maxCount, containerClassName = "", id, rows = 3, value, defaultValue, className = "", onChange, ...rest },
   ref
 ) {
   const fieldId = useStableId("textarea", id)
-  const count = String(value ?? defaultValue ?? "").length
+  // Uncontrolled: count what's typed, since there's no value prop to read.
+  const [typed, setTyped] = useState(() => String(defaultValue ?? "").length)
+  const count = value !== undefined ? String(value).length : typed
   const over = maxCount !== undefined && count > maxCount
   const countId = `${fieldId}-count`
 
@@ -44,17 +46,13 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textare
         className={`gl-textarea__field ${className}`}
         aria-invalid={error || over ? true : undefined}
         aria-describedby={describedBy(fieldId, hint, error, maxCount !== undefined ? countId : undefined)}
+        onChange={(e) => {
+          if (value === undefined) setTyped(e.currentTarget.value.length)
+          onChange?.(e)
+        }}
         {...rest}
       />
-      {error ? (
-        <FieldError id={`${fieldId}-error`}>{error}</FieldError>
-      ) : (
-        hint && (
-          <span id={`${fieldId}-hint`} className="gl-field__hint">
-            {hint}
-          </span>
-        )
-      )}
+      <FieldMessage id={fieldId} hint={hint} error={error} />
     </div>
   )
 })

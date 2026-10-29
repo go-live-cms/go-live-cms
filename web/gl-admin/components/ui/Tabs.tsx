@@ -1,4 +1,4 @@
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+import { useRef, type KeyboardEvent, type ReactNode } from "react"
 import { nextRovingIndex, useStableId } from "@gl-admin/components/ui/a11y"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import "@gl-admin/assets/styles/components/ui/tabs.scss"
@@ -32,18 +32,16 @@ export default function Tabs({ label, tabs, value, onChange, activation = "autom
   const refs = useRef<(HTMLButtonElement | null)[]>([])
   const enabled = tabs.map((t, i) => (t.disabled ? -1 : i)).filter((i) => i >= 0)
   const selectedIndex = tabs.findIndex((t) => t.id === value)
-  const [focusIndex, setFocusIndex] = useState(selectedIndex)
   const tabStop = selectedIndex >= 0 && !tabs[selectedIndex].disabled ? selectedIndex : enabled[0]
   const selected = tabs[selectedIndex]
 
+  // Keys reach the list only from a focused tab, so the focused one is where to move from.
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const current = refs.current.findIndex((el) => el === document.activeElement)
-    const pos = enabled.indexOf(current >= 0 ? current : focusIndex)
-    const next = nextRovingIndex(e.key, pos, enabled.length, "horizontal")
+    const next = nextRovingIndex(e.key, enabled.indexOf(current), enabled.length, "horizontal")
     if (next === null) return
     e.preventDefault()
     const index = enabled[next]
-    setFocusIndex(index)
     refs.current[index]?.focus()
     if (activation === "automatic") onChange(tabs[index].id)
   }
@@ -68,7 +66,6 @@ export default function Tabs({ label, tabs, value, onChange, activation = "autom
               disabled={tab.disabled}
               className="gl-tabs__tab"
               onClick={() => onChange(tab.id)}
-              onFocus={() => setFocusIndex(i)}
             >
               {tab.label}
               {tab.count === null ? (

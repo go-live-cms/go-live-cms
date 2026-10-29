@@ -26,7 +26,7 @@ const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Checkbox(
     <input
       ref={inner}
       type="checkbox"
-      className="gl-checkbox"
+      className={label ? "gl-checkbox" : `gl-checkbox ${className}`}
       aria-checked={indeterminate ? "mixed" : undefined}
       onChange={(e) => onChange?.(e.currentTarget.checked, e)}
       {...rest}
