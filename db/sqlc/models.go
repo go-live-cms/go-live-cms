@@ -43,6 +43,27 @@ type Medium struct {
 	FocalY           sql.NullFloat64 `json:"focal_y"`
 }
 
+type Menu struct {
+	ID        int64          `json:"id"`
+	Name      string         `json:"name"`
+	Location  sql.NullString `json:"location"`
+	CreatedAt time.Time      `json:"created_at"`
+	ChangedAt time.Time      `json:"changed_at"`
+}
+
+type MenuItem struct {
+	ID        int64          `json:"id"`
+	MenuID    int64          `json:"menu_id"`
+	ParentID  sql.NullInt64  `json:"parent_id"`
+	SortOrder int32          `json:"sort_order"`
+	ItemType  string         `json:"item_type"`
+	Label     string         `json:"label"`
+	PostID    sql.NullInt64  `json:"post_id"`
+	TermID    sql.NullInt64  `json:"term_id"`
+	PostType  sql.NullString `json:"post_type"`
+	Url       string         `json:"url"`
+}
+
 type PasswordResetToken struct {
 	ID        int64        `json:"id"`
 	UserID    int64        `json:"user_id"`

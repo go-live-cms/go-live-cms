@@ -63,6 +63,9 @@ type Store interface {
 
 	StorePostCollabTx(ctx context.Context, arg StorePostCollabTxParams) (StorePostCollabTxResult, error)
 
+	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)
+	ReplaceMenuItemsTx(ctx context.Context, arg ReplaceMenuItemsTxParams) ([]MenuItem, error)
+
 	ExecTx(ctx context.Context, fn func(*Queries) error) error
 
 	// Ping checks that the database is reachable (the API's /readyz).

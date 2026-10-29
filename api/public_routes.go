@@ -10,4 +10,7 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 		// Published block content for SSR
 		posts.GET("/:id/blocks", server.getPublicPostBlocks)
 	}
+
+	// The menu assigned to a theme location (menus_routes.go)
+	rg.GET("/menus/:location", server.getPublicMenu)
 }

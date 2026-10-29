@@ -357,6 +357,24 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **Error tracking:** `ErrorReporter` (`SetErrorReporter`, no-op default) gets
   recovered panics (with stack) and 5xx responses, once each.
 
+## Navigation menus (#347)
+
+- `menus` (name, `location` unique when set) and `menu_items` (`000021`): `item_type`
+  post | term | archive | custom, one target column each (CHECK), `parent_id` one level
+  deep, `sort_order` = position in the whole menu in reading order. Target FKs cascade on
+  delete; `parent_id` is SET NULL, so a deleted parent's children move up in place.
+- **URLs are never stored for content items:** `ListMenuItemsWithTargets` joins the
+  targets and `resolveMenuItem` (`menus_utils.go`) builds the URL at read time (posts by
+  `menuPostPath`, the web's `postPath` rule; terms `/{taxonomy}/{slug}`, #348's route;
+  archives `/{post_type}`), so links follow slug changes. Hidden from readers: unpublished
+  posts, non-public or inactive types, non-public taxonomies, and any custom URL that
+  fails `validMenuURL` (http(s) with a host, or `/path`; never `javascript:`, `//host`).
+- Admin CRUD under `/menus` (`requireContentEditor`); `PUT /menus/:id/items` replaces the
+  whole tree (`ReplaceMenuItemsTx`, locks the menu row). Assigning a location moves it
+  (`SaveMenuTx` clears the old holder). Public: `GET /public/menus/:location`, visible
+  items only, 404 when nothing is assigned. Themes declare `menuLocations` in
+  `theme.config.ts`; the scanner stores them as `config.menu_locations`.
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,
