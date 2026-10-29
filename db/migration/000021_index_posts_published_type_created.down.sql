@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS idx_posts_published_type_created_id;
