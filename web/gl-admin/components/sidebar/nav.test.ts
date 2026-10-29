@@ -29,7 +29,7 @@ describe("buildNavigation", () => {
   it("gives admins every section, with the workspace pages", () => {
     const nav = build("admin")
     expect(nav.map((s) => s.key)).toEqual(["top", "content", "workspace"])
-    expect(nav.find((s) => s.key === "workspace")!.items.map((i) => i.label)).toEqual(["Users", "Themes", "Settings"])
+    expect(nav.find((s) => s.key === "workspace")!.items.map((i) => i.label)).toEqual(["Users", "Post types", "Themes", "Settings"])
   })
 
   it("hides Users, Settings, Themes and Post types from contributors", () => {

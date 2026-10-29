@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest"
 import {
+  ROLE_DESCRIPTIONS,
   canCreateContent,
   canEditPost,
   canEditPostDetails,
   isContentModerator,
   isSiteAdmin,
   postEditorAccess,
+  roleChoices,
 } from "./roles"
 
 describe("isSiteAdmin", () => {
@@ -115,5 +117,21 @@ describe("postEditorAccess", () => {
 
   it("no user (signed out / not loaded yet) gets nothing", () => {
     expect(postEditorAccess(undefined, "edit", draft)).toEqual({ content: false, details: false, publish: false })
+  })
+})
+
+describe("roleChoices (the invite dialog)", () => {
+  it("describes every role, lowest privilege first", () => {
+    const choices = roleChoices()
+    expect(choices.map((c) => c.value)).toEqual(["contributor", "editor", "admin"])
+    for (const c of choices) expect(c.description).toBe(ROLE_DESCRIPTIONS[c.value])
+    expect(choices.every((c) => c.description && c.description.length > 0)).toBe(true)
+  })
+
+  it("says what sets each role apart (#135)", () => {
+    expect(ROLE_DESCRIPTIONS.contributor).toMatch(/their own posts/)
+    expect(ROLE_DESCRIPTIONS.contributor).toMatch(/editor publishes/)
+    expect(ROLE_DESCRIPTIONS.editor).toMatch(/publishes any post/)
+    expect(ROLE_DESCRIPTIONS.admin).toMatch(/users, themes and settings/)
   })
 })

@@ -1,66 +1,140 @@
-@use "@gl-admin/assets/styles/variables";
+// Themes (restyled in #343, the Themes board): the active theme's card, the grid of
+// installed themes and their previews. Page layout comes from workspace.scss.
 
-.themes-page {
-  color: var(--text-primary);
+.gl-theme-active {
+  background: var(--background-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  padding: var(--space-5);
 
-  h2 {
-    color: var(--text-primary);
-    margin-bottom: 1.5rem;
+  &__preview {
+    flex: 1 1 360px;
+    max-width: 520px;
   }
-}
 
-.themes-active {
-  margin-bottom: 3rem;
+  &__body {
+    display: flex;
+    flex: 1 1 280px;
+    flex-direction: column;
+    gap: var(--space-3);
+    min-width: 0;
 
-  &__header {
+    p {
+      margin: 0;
+    }
+  }
+
+  &__title {
     align-items: center;
     display: flex;
-    justify-content: space-between;
-    margin-bottom: 1.5rem;
-  }
+    flex-wrap: wrap;
+    gap: var(--space-2);
 
-  &__card {
-    background: var(--background);
-    border: 2px solid var(--accent);
-    border-radius: var(--admin-border-radius);
-    box-shadow: var(--admin-card-shadow);
-    display: grid;
-    gap: 2rem;
-    grid-template-columns: minmax(260px, 360px) 1fr;
-    padding: 1.5rem;
-  }
-
-  &__content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  &__meta {
-    color: var(--text-quaternary);
-    font-size: 0.95rem;
-    margin: 0;
-  }
-
-  &__description {
-    color: var(--text-secondary);
-    margin: 0;
+    h2 {
+      font-size: var(--type-title-sm);
+      font-weight: 600;
+      line-height: var(--type-title-sm-lh);
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
   }
 
   &__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
+    gap: var(--space-2);
+    margin-top: auto;
+    padding-top: var(--space-2);
   }
 }
 
-.theme-preview {
-  background: var(--background-hover);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
+.gl-theme-facts {
+  display: grid;
+  font-size: var(--type-label);
+  gap: 6px var(--space-4);
+  grid-template-columns: auto 1fr;
+  margin: 0;
+
+  dt {
+    color: var(--text-secondary);
+  }
+
+  dd {
+    font-weight: 400;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.gl-theme-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+}
+
+.gl-theme-card {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  position: relative;
+
+  &__preview {
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 0;
+  }
+
+  &__body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: 14px;
+
+    p {
+      font-size: var(--type-label);
+      margin: 0;
+    }
+  }
+
+  &__title {
+    align-items: baseline;
+    display: flex;
+    gap: var(--space-2);
+
+    h3 {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 22px;
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+
+    span {
+      font-size: var(--type-footnote);
+    }
+  }
+
+  &__author {
+    color: var(--text-secondary);
+  }
+
+  &__activate {
+    margin-top: auto;
+  }
+}
+
+// 16:10, the thumbnail cropped to fill; a drawn page when there is none.
+.gl-theme-preview {
+  aspect-ratio: 16 / 10;
+  background: var(--background-hover);
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1px var(--border-color);
+  overflow: hidden;
 
   img {
     display: block;
@@ -69,160 +143,42 @@
     width: 100%;
   }
 
-  &--large {
-    aspect-ratio: 16 / 9;
-  }
-
-  &--small {
-    aspect-ratio: 16 / 9;
-    max-width: 200px;
-  }
-}
-
-.theme-badge {
-  background: var(--accent);
-  border-radius: 999px;
-  box-shadow: 0 2px 6px rgb(0 0 0 / 20%);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
-  left: 1rem;
-  padding: 0.35rem 0.75rem;
-  position: absolute;
-  top: 1rem;
-}
-
-.themes-selector {
-  margin-bottom: 2rem;
-
-  &__header {
+  &__stand-in {
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    gap: 6%;
+    height: 100%;
+    padding: 7% 10%;
+  }
 
-    p {
-      color: var(--text-quaternary);
-      margin: 0;
+  &__line {
+    background: var(--border-strong);
+    border-radius: 2px;
+    height: 6px;
+    width: 88%;
+
+    &.is-title {
+      background: var(--text-secondary);
+      height: 18px;
+      width: 60%;
     }
-  }
-}
 
-.theme-grid {
-  display: grid;
-  gap: 1.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-}
-
-.theme-card {
-  background: var(--background);
-  border: 1px solid var(--border-color);
-  border-radius: var(--admin-border-radius);
-  box-shadow: var(--admin-card-shadow);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-
-  &:hover {
-    box-shadow: var(--admin-card-shadow-hover);
-    transform: translateY(-2px);
-  }
-
-  &--active {
-    border: 2px solid var(--accent);
-  }
-
-  &__preview {
-    aspect-ratio: 16 / 9;
-    background: var(--background-hover);
-    position: relative;
-
-    img {
-      display: block;
-      height: 100%;
-      object-fit: cover;
-      width: 100%;
+    &.is-short {
+      width: 70%;
     }
   }
 
-  &__body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 1rem 1rem 0.5rem;
-  }
-
-  &__title {
-    color: var(--text-primary);
-    font-size: 1.05rem;
-    margin: 0;
-  }
-
-  &__meta {
-    color: var(--text-quaternary);
-    font-size: 0.85rem;
-    margin: 0;
-  }
-
-  &__description {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    margin: 0;
-  }
-
-  &__layouts {
-    color: var(--text-quaternary);
-    font-size: 0.8rem;
-    margin: 0;
-  }
-
-  &__actions {
-    display: flex;
-    justify-content: flex-end;
-    padding: 0.75rem 1rem 1.25rem;
+  &__block {
+    background: var(--background-active);
+    border-radius: var(--radius-sm);
+    flex: 1;
   }
 }
 
-.themes-customizer {
+.gl-themes__footer {
   display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-
-  &__summary {
-    align-items: center;
-    display: flex;
-    gap: 1.5rem;
-  }
-
-  &__meta {
-    color: var(--text-quaternary);
-    margin: 0.5rem 0 0;
-  }
-
-  &__form {
-    margin: 0;
-    max-width: none;
-  }
-
-  &__actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 1rem;
-  }
-}
-
-@media (width <= 900px) {
-  .themes-active__card {
-    grid-template-columns: 1fr;
-  }
-
-  .themes-active__header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 1rem;
-  }
+  gap: var(--space-2);
+  justify-content: flex-end;
+  width: 100%;
 }

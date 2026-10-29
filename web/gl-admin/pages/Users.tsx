@@ -1,36 +1,55 @@
 import React, { useCallback, useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import Listing from "@gl-admin/layouts/Listing"
 import Pagination from "@gl-admin/components/ui/Pagination"
-import Username from "@gl-admin/components/ui/Username"
-import DateTime from "@gl-admin/components/ui/DateTime"
 import UserRole from "@gl-admin/components/ui/UserRole"
+import Avatar from "@gl-admin/components/ui/Avatar"
+import Skeleton from "@gl-admin/components/ui/Skeleton"
 import Button from "@gl-admin/components/ui/Button"
-import Icon from "@gl-admin/components/ui/Icon"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
+import { PlusIcon } from "@gl-admin/components/ui/icons"
 import { getUsers } from "@gl-admin/lib/api/users"
 import type { User, ApiMeta } from "@gl-admin/lib/api/types"
 import { AuthManager } from "@gl-admin/lib/auth"
-import { USER_ROLE_OPTIONS, isSiteAdmin } from "@gl-admin/lib/roles"
+import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
+import { formatDate } from "@gl-admin/utils/formatting"
 import InviteUserModal from "@gl-admin/components/users/InviteUserModal"
 import PendingInvitations from "@gl-admin/components/users/PendingInvitations"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { invitationSentNotice } from "@gl-admin/lib/invitations"
 import type { InvitationResult } from "@gl-admin/lib/api/invitations"
+import "@gl-admin/assets/styles/pages/workspace.scss"
+
+// Users (#148, restyled in #343, the "Users · invite" board). The route is admin-only
+// (AdminOnly in app.tsx), like every user-management endpoint (requireSiteAdmin).
+//
+// Hidden until their issues land (#333): member search, the Posts owned and Last
+// active columns, changing a role from the list and removing a member (the row menu).
+// A member's details, role included, are edited on their own page as before.
+
+const SORT_OPTIONS = [
+    { label: "Default", value: "" },
+    { label: "Newest first", value: "date_desc" },
+    { label: "Oldest first", value: "date_asc" },
+    { label: "Username A–Z", value: "username_asc" },
+    { label: "Username Z–A", value: "username_desc" },
+    { label: "Role A–Z", value: "role_asc" },
+    { label: "Role Z–A", value: "role_desc" },
+]
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 const Users: React.FC = () => {
     const accessToken = AuthManager.getInstance().getAccessToken() || ""
     const navigate = useNavigate()
     const { baseTitle } = useGoLive()
-    // User management is admin-only (requireSiteAdmin in the API).
-    const isAdmin = isSiteAdmin(useCurrentRole())
     const [inviteOpen, setInviteOpen] = useState(false)
     const [invitationsKey, setInvitationsKey] = useState(0)
+    const [memberCount, setMemberCount] = useState<number | null>(null)
+    const [pendingCount, setPendingCount] = useState(0)
     const { toasts, showSuccess, showError, showWarning, removeToast } = useToast()
     const showSentNotice = (result: InvitationResult) => {
         const notice = invitationSentNotice(result)
@@ -45,48 +64,57 @@ const Users: React.FC = () => {
     const showInvitationError = useCallback((message: string) => showError(message), [])
     const initialFilters = { role: "", sort: "" }
     const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>(initialFilters)
+    const filtered = selectedFilters.role !== "" || selectedFilters.sort !== ""
+
     const columns: TableColumnWithRender<User>[] = [
         {
             key: "full_name",
-            name: "Full Name",
-            width: "25rem",
-            render: (_, row) => <Username value={row || null} />,
-        },
-        {
-            key: "email",
-            name: "Email",
-            width: "25rem",
+            name: "Name",
+            render: (_, row) =>
+                row ? (
+                    <span className="gl-member">
+                        <Avatar user={{ id: row.id, name: row.full_name || row.username }} size={28} decorative />
+                        <span className="gl-member__text">
+                            <Link className="gl-member__name" to={`/users/edit/${row.id}`}>
+                                {row.full_name || row.username}
+                            </Link>
+                            <span className="gl-member__email">{row.email}</span>
+                        </span>
+                    </span>
+                ) : (
+                    <span className="gl-member">
+                        <Skeleton shape="circle" width={28} height={28} />
+                        <Skeleton shape="text" width={160} />
+                    </span>
+                ),
         },
         {
             key: "role",
             name: "Role",
-            width: "15rem",
+            width: "10rem",
             render: (_, row) => <UserRole role={row?.role || null} />,
         },
         {
             key: "created_at",
-            name: "Created At",
-            width: "10.75rem",
-            render: (_, row) => <DateTime value={row?.created_at || null} />,
-        }
+            name: "Joined",
+            width: "9rem",
+            render: (_, row) =>
+                row ? <span className="gl-workspace__muted">{formatDate(row.created_at)}</span> : <Skeleton shape="text" width={80} />,
+        },
     ]
 
     const clearFilters = () => {
         setSelectedFilters(initialFilters)
     }
 
-    const handleRowDoubleClick = (user: User) => {
-        navigate(`/users/edit/${user.id}`)
-    }
-
     const fetchData = useCallback(
         async (args: ApiMeta & Record<string, string>, token?: string) => {
             const { limit, offset, ...query } = args
             const response = await getUsers({ limit, offset, ...query }, token || "")
-            return {
-                data: response.data,
-                total: response.meta.total ?? 0
-            }
+            const total = response.meta.total ?? 0
+            // The unfiltered total is the member count in the subtitle.
+            if (!query.role) setMemberCount(total)
+            return { data: response.data, total }
         },
         []
     )
@@ -95,111 +123,118 @@ const Users: React.FC = () => {
         document.title = `${baseTitle} Users`
     }, [])
 
-    const actions = (
-        <>
-            {JSON.stringify(selectedFilters) !== JSON.stringify(initialFilters) ? (
-                <div className="gl-clear-filters" onClick={clearFilters}>
-                    Clear filters
-                </div>
-            ) : null}
-            <FilterSelect
-                value={selectedFilters.role}
-                options={[
-                    { label: "All Roles", value: "" },
-                    ...USER_ROLE_OPTIONS,
-                ]}
-                prefix="Role:"
-                onChange={(value) => setSelectedFilters((prev) => ({ ...prev, role: value }))}
-            />
-            <FilterSelect
-                value={selectedFilters.sort}
-                options={[
-                    { label: "Default", value: "" },
-                    { label: "Newest First", value: "date_desc" },
-                    { label: "Oldest First", value: "date_asc" },
-                    { label: "Username A-Z", value: "username_asc" },
-                    { label: "Username Z-A", value: "username_desc" },
-                    { label: "Role A-Z", value: "role_asc" },
-                    { label: "Role Z-A", value: "role_desc" },
-                ]}
-                prefix="Sort:"
-                onChange={(value) => setSelectedFilters((prev) => ({ ...prev, sort: value }))}
-            />
-            {isAdmin && (
-                <>
-                    <Button onClick={() => setInviteOpen(true)} variation="primary">
-                        Invite user
-                    </Button>
-                    <Button onClick={() => navigate("/users/new")} className="gl-admin-media__new-media-btn">
-                        <Icon name="add" color="#000000" width="14" height="14" /> New User
-                    </Button>
-                </>
-            )}
-        </>
-    )
+    const subtitle = [
+        memberCount !== null ? plural(memberCount, "member", "members") : null,
+        pendingCount > 0 ? plural(pendingCount, "pending invitation", "pending invitations") : null,
+    ]
+        .filter(Boolean)
+        .join(" · ")
 
     return (
-        <Listing title="Users" actions={actions}>
-            {isAdmin && (
-                <>
-                    <PendingInvitations
-                        refreshKey={invitationsKey}
-                        onResent={showSentNotice}
-                        onRevoked={(invitation) => showSuccess(`Invitation to ${invitation.email} revoked.`)}
-                        onError={showInvitationError}
-                    />
-                    <InviteUserModal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={handleInvited} />
-                </>
-            )}
+        <div className="gl-workspace gl-users">
+            <header className="gl-workspace__header">
+                <div className="gl-workspace__heading">
+                    <h1>Users</h1>
+                    {subtitle && <span className="gl-workspace__subtitle">{subtitle}</span>}
+                </div>
+                <div className="gl-workspace__actions">
+                    <Button variant="secondary" onClick={() => navigate("/users/new")}>
+                        New user
+                    </Button>
+                    <Button variant="primary" icon={<PlusIcon />} onClick={() => setInviteOpen(true)}>
+                        Invite people
+                    </Button>
+                </div>
+            </header>
+
+            <PendingInvitations
+                refreshKey={invitationsKey}
+                onResent={showSentNotice}
+                onRevoked={(invitation) => showSuccess(`Invitation to ${invitation.email} revoked.`)}
+                onError={showInvitationError}
+                onCount={setPendingCount}
+            />
+            <InviteUserModal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={handleInvited} />
             <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
-            <Pagination fetchData={fetchData} token={accessToken} query={selectedFilters || {}}>
-                {({ data, loading, error, retry }) => {
-                    if (error) {
-                        return (
-                            <EmptyState
-                                variant="error"
-                                icon="close"
-                                title="Couldn't load users"
-                                description={errorMessage(error)}
-                                action={
-                                    <Button variation="primary" onClick={retry}>
-                                        Try again
-                                    </Button>
-                                }
-                            />
-                        )
-                    }
-                    if (!loading && data.length === 0) {
-                        return selectedFilters.role ? (
-                            <EmptyState
-                                icon="search"
-                                title="No users match these filters"
-                                description="Try another role, or clear the filters."
-                                action={
-                                    <Button variation="flat" onClick={clearFilters}>
-                                        Clear filters
-                                    </Button>
-                                }
-                            />
-                        ) : (
-                            <EmptyState
-                                icon="user"
-                                title="No users yet"
-                                description="Invite your team: they'll get an email to set up their account."
-                                action={
-                                    isAdmin && (
-                                        <Button variation="primary" onClick={() => setInviteOpen(true)}>
-                                            <Icon name="add" color="white" width="14" height="14" /> Invite user
+
+            <section className="gl-workspace__section" aria-labelledby="gl-members-title">
+                <div className="gl-workspace__section-head">
+                    <h2 className="gl-workspace__section-title" id="gl-members-title">
+                        Members
+                    </h2>
+                    {filtered && (
+                        <Button variant="ghost" size="sm" onClick={clearFilters}>
+                            Clear filters
+                        </Button>
+                    )}
+                    <FilterSelect
+                        value={selectedFilters.role}
+                        options={[{ label: "All roles", value: "" }, ...USER_ROLE_OPTIONS]}
+                        prefix="Role:"
+                        onChange={(value) => setSelectedFilters((prev) => ({ ...prev, role: value }))}
+                    />
+                    <FilterSelect
+                        value={selectedFilters.sort}
+                        options={SORT_OPTIONS}
+                        prefix="Sort:"
+                        onChange={(value) => setSelectedFilters((prev) => ({ ...prev, sort: value }))}
+                    />
+                </div>
+                <Pagination fetchData={fetchData} token={accessToken} query={selectedFilters || {}}>
+                    {({ data, loading, error, retry }) => {
+                        if (error) {
+                            return (
+                                <EmptyState
+                                    variant="error"
+                                    icon="close"
+                                    title="Couldn't load users"
+                                    description={errorMessage(error)}
+                                    action={
+                                        <Button variant="primary" onClick={retry}>
+                                            Try again
                                         </Button>
-                                    )
-                                }
+                                    }
+                                />
+                            )
+                        }
+                        if (!loading && data.length === 0) {
+                            return selectedFilters.role ? (
+                                <EmptyState
+                                    icon="search"
+                                    title="No users match these filters"
+                                    description="Try another role, or clear the filters."
+                                    action={
+                                        <Button variant="secondary" onClick={clearFilters}>
+                                            Clear filters
+                                        </Button>
+                                    }
+                                />
+                            ) : (
+                                <EmptyState
+                                    icon="user"
+                                    title="No users yet"
+                                    description="Invite your team: they'll get an email to set up their account."
+                                    action={
+                                        <Button variant="primary" icon={<PlusIcon />} onClick={() => setInviteOpen(true)}>
+                                            Invite people
+                                        </Button>
+                                    }
+                                />
+                            )
+                        }
+                        return (
+                            <Table
+                                columns={columns}
+                                data={data}
+                                loading={loading}
+                                aria-label="Members"
+                                onRowDoubleClick={(user) => navigate(`/users/edit/${user.id}`)}
                             />
                         )
-                    }
-                    return <Table columns={columns} data={data} loading={loading} onRowDoubleClick={handleRowDoubleClick} />
-                }}
-            </Pagination>
-        </Listing>
+                    }}
+                </Pagination>
+            </section>
+        </div>
     )
 }
 

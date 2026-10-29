@@ -28,9 +28,6 @@ type Access = (role: string | null | undefined) => boolean
 type GatedItem = Omit<NavItem, "children"> & { access?: Access; children?: GatedItem[] }
 type GatedSection = Omit<NavSection, "items"> & { access?: Access; items: GatedItem[] }
 
-// The Post types screen lands with #343; until it's routed there's nothing to link to.
-export const POST_TYPES_PAGE = false
-
 const ICONS: Record<string, NavIcon> = { post: "post", page: "page" }
 
 // Before /post-types answers, so the menu doesn't jump in.
@@ -120,7 +117,7 @@ export function buildNavigation({ role, postTypes = DEFAULT_POST_TYPES, taxonomy
       access: isSiteAdmin,
       items: [
         { key: "users", label: "Users", to: "/users", icon: "users" },
-        ...(POST_TYPES_PAGE ? [{ key: "post-types", label: "Post types", to: "/post-types", icon: "types" as const }] : []),
+        { key: "post-types", label: "Post types", to: "/post-types", icon: "types" },
         { key: "themes", label: "Themes", to: "/themes", icon: "themes" },
         { key: "settings", label: "Settings", to: "/settings", icon: "settings" },
       ],

@@ -16,6 +16,9 @@ export type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "title" | "
   optional?: boolean
   // Hides the label visually (keeps it for screen readers), e.g. a search box.
   hideLabel?: boolean
+  // A plain input: no mask and no pattern check, for free text the API validates (a
+  // site title, a label). The masks refuse characters such as ! & : and ?.
+  unmasked?: boolean
 }
 
 export function FieldError({ id, children }: { id: string; children: ReactNode }) {
@@ -61,6 +64,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       error,
       optional,
       hideLabel,
+      unmasked = false,
       placeholder,
       onFocus,
       onBlur,
@@ -107,9 +111,9 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
     )
 
     const isValid = useCallback(() => {
-      if (value === undefined || value === "") return true
+      if (unmasked || value === undefined || value === "") return true
       return getValidationPattern(type).test(value as string)
-    }, [type, value])
+    }, [type, value, unmasked])
 
     function sanitizeInput(value: string) {
       return value.replace(/<[^>]*>?/gm, "")
@@ -173,8 +177,25 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           .filter(Boolean)
           .join(" ")}
       >
-        {/* The masked input loads lazily; hold its place until it does. */}
-        {!hydrated || !IMaskInput ? (
+        {unmasked ? (
+          <input
+            id={inputId}
+            ref={ref}
+            type={type === "password" ? "password" : "text"}
+            className="gl-input__field"
+            name={name}
+            placeholder={placeholder}
+            value={value}
+            defaultValue={defaultValue}
+            aria-invalid={invalid || undefined}
+            aria-describedby={describedBy(inputId, hint, error, ariaDescribedBy)}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            onChange={handleChange}
+            {...rest}
+          />
+        ) : /* The masked input loads lazily; hold its place until it does. */ !hydrated || !IMaskInput ? (
           <span className="gl-input__field" aria-hidden="true" />
         ) : (
           <IMaskInput

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import Modal from "@gl-admin/components/ui/Modal"
 import Button from "@gl-admin/components/ui/Button"
+import Notice from "@gl-admin/components/ui/Notice"
 import type { TaxonomyTerm } from "@gl-admin/lib/api/types"
 import { deleteTaxonomyTerm } from "@gl-admin/lib/api/taxonomies"
 import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
@@ -50,18 +51,18 @@ export default function DeleteTermModal({ term, childCount, onClose, onDeleted, 
 
   const footer = (
     <div className="gl-term-form__footer">
-      <Button variation="flat" onClick={onClose} disabled={deleting}>
+      <Button variant="secondary" onClick={onClose} disabled={deleting}>
         Cancel
       </Button>
-      <Button variation="danger" onClick={handleDelete} disabled={deleting}>
-        {deleting ? "Deleting…" : inUse ? "Delete and unassign" : "Delete term"}
+      <Button variant="danger" onClick={handleDelete} loading={deleting}>
+        {inUse ? "Delete and unassign" : "Delete term"}
       </Button>
     </div>
   )
 
   return (
-    <Modal isOpen onClose={onClose} title={`Delete “${term.name}”?`} size="small" footer={footer}>
-      <div className="gl-term-form">
+    <Modal isOpen onClose={onClose} title={`Delete “${term.name}”?`} size="small" footer={footer} role="alertdialog">
+      <div className="gl-workspace__form">
         <ul className="gl-term-form__warning">
           {deleteConsequences(term, childCount).map((line) => (
             <li key={line}>{line}</li>
@@ -69,9 +70,9 @@ export default function DeleteTermModal({ term, childCount, onClose, onDeleted, 
           <li>This can't be undone.</li>
         </ul>
         {error && (
-          <p className="gl-term-form__error" role="alert">
+          <Notice tone="danger" live="alert">
             {error}
-          </p>
+          </Notice>
         )}
       </div>
     </Modal>

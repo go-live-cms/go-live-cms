@@ -43,6 +43,19 @@ export function validateNewPassword(password: string, confirm: string, label = "
   return null
 }
 
+export type PasswordRule = { label: string; met: boolean }
+
+// The checklist under a new-password field (#343; the sign-in pages, #344, share it).
+// Only rules the API enforces: its minimum is PASSWORD_MIN until #329 raises it to
+// 12, and "different from the current one" only when the form asks for that.
+export function passwordRules(password: string, current?: string): PasswordRule[] {
+  const rules: PasswordRule[] = [{ label: `At least ${PASSWORD_MIN} characters`, met: runeLength(password) >= PASSWORD_MIN }]
+  if (current !== undefined) {
+    rules.push({ label: "Different from your current password", met: password !== "" && password !== current })
+  }
+  return rules
+}
+
 export function validateProfile(fields: ProfileFields): string | null {
   const username = fields.username.trim()
   const fullName = fields.full_name.trim()

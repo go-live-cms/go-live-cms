@@ -19,6 +19,7 @@ vi.mock("@gl-admin/lib/auth", () => ({
   },
 }))
 vi.mock("@gl-admin/lib/api/postTypes", () => ({
+  POST_TYPES_CHANGED: "gl:post-types-changed",
   getPostTypes: () =>
     Promise.resolve({
       data: [

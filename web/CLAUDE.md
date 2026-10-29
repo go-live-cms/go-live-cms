@@ -121,6 +121,16 @@ are the most fragile part of the codebase. **Before editing anything under
   warns on unload while the provider has unsynced changes or the connection is down. Editor
   styles use the design tokens only (never `prefers-color-scheme`). Features in the design
   without a backend stay hidden (comments at the top of each file; table on #341).
+- **Workspace screens (#343):** Users, Taxonomies, Settings, Themes, Profile and the new
+  Post types page (`/post-types`, admin only) share `assets/styles/pages/workspace.scss`
+  (header, list + side panel, field grids). Their rules live in `lib/settingsForm.ts`
+  (dirty fields and the unsaved-changes bar's message), `lib/postTypes.ts` (PUT resets
+  missing booleans and clears an empty description, so the form sends every field; Posts
+  and Pages are built in and read-only), `lib/roles.ts` (`ROLE_DESCRIPTIONS` for the
+  invite dialog) and `lib/profile.ts` (`passwordRules`, the new-password checklist, shared
+  with the sign-in pages: it states the API's real minimum, `PASSWORD_MIN`). `Input` masks
+  refuse characters such as `! & : ?`; pass `unmasked` for free text the API validates.
+  Saving a post type fires `POST_TYPES_CHANGED` so the sidebar reloads its menu.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

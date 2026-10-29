@@ -1,91 +1,87 @@
-@use "@gl-admin/assets/styles/variables";
+// Taxonomies (#167, restyled in #343). Layout comes from workspace.scss; these are the
+// type switcher, the tree indent, the quick add and the delete dialog's list.
 
-// Taxonomies screen (#167). Layout only: colors and controls come from the
-// existing listing, table, modal, input and button styles.
-.gl-taxonomies {
-  &__intro {
+// The type switcher: a segmented control of links.
+.gl-segmented {
+  background: var(--background-hover);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+
+  &__item {
+    align-items: center;
+    border-radius: var(--radius-md);
     color: var(--text-secondary);
-    margin: -2rem 0 1.5rem 1rem;
-  }
-
-  &__notice {
-    background: var(--background-hover);
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    color: var(--text-secondary);
-    margin: 0 0 1rem;
-    padding: 0.5rem 0.75rem;
-  }
-
-  &__term-name {
-    color: var(--text-primary);
-    font-weight: 500;
-  }
-
-  &__term-depth {
-    color: var(--text-secondary);
-    margin-right: 0.25rem;
-  }
-
-  &__muted {
-    color: var(--text-secondary);
-  }
-
-  &__row-actions {
     display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
+    font-size: var(--type-label);
+    font-weight: 500;
+    height: 28px;
+    padding: 0 var(--space-3);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+
+    &[aria-current="page"] {
+      background: var(--background);
+      box-shadow: var(--card-shadow), 0 0 0 1px var(--border-color);
+      color: var(--text-primary);
+    }
+  }
+}
+
+// A term's name, indented 16px per level, with a branch mark under its parent.
+.gl-term-name {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  min-width: 10rem;
+  padding-left: calc(var(--depth, 0) * 16px);
+
+  &__branch {
+    color: var(--text-placeholder);
+    flex: none;
+  }
+
+  &__text {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+}
+
+.gl-taxonomies__new {
+  align-self: flex-start;
+}
+
+.gl-quick-add {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+
+  &__field {
+    flex: 1 1 220px;
+    max-width: 320px;
   }
 }
 
 .gl-term-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-
-  &__field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
-
-  &__label {
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-  }
-
-  &__hint {
-    color: var(--text-secondary);
-    font-size: 0.8125rem;
-  }
-
-  &__error {
-    color: #d93025;
-    font-size: 0.8125rem;
-  }
-
-  textarea {
-    background: transparent;
-    border: 1px solid var(--border-color);
-    border-radius: 0.5rem;
-    color: var(--text-primary);
-    font: inherit;
-    padding: 0.75rem;
-    resize: vertical;
-  }
-
   &__warning {
     margin: 0;
     padding-left: 1.25rem;
 
     li + li {
-      margin-top: 0.35rem;
+      margin-top: var(--space-1);
     }
   }
-}
 
-.gl-term-form__footer {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
+  &__footer {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    width: 100%;
+  }
 }
