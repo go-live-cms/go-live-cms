@@ -71,7 +71,6 @@ The design shows these; the theme leaves them out rather than faking them:
 |------|-------|
 | Image captions, wide / full images, quote citations (styles are ready) | #346 |
 | Category and tag archives, category eyebrows, linked tags | #348 |
-| Numbered pagination (Newer / Older for now) | #349 |
 | The "All <category> →" link under the sidebar's category list | #348 |
 | Author photos (initials until then; author pages and cards are #350) | #334 |
 | Search | #145 |

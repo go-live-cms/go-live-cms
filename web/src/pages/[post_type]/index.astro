@@ -1,10 +1,12 @@
 ---
 /**
  * A public post type's list, e.g. /post (#345), rendered by the active theme's
- * layouts/archive layout (the default theme's when it has none).
+ * layouts/archive layout (the default theme's when it has none). Page N (#349) is
+ * /post/page/N/ (page/[n].astro), rewritten here with Astro.locals.listPageNumber set.
  */
 import { getPostTypes } from '../../lib/api'
-import { loadPostList, pageNumber } from '../../lib/postList'
+import { loadPostList } from '../../lib/postList'
+import { pageTitleSuffix, resolveListRequest } from '../../lib/pagination'
 import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
 import { resolveSiteUrl } from '../../lib/seo'
 
@@ -13,6 +15,7 @@ export const prerender = false
 const archiveLayouts = import.meta.glob('../../../themes/*/layouts/archive/*.astro')
 
 const { post_type: postType } = Astro.params as { post_type: string }
+const basePath = `/${postType}`
 
 // Every unknown single-segment URL (/foo) lands on this route, so it must 404
 // unless the segment is a public post type. If the type list can't be
@@ -30,9 +33,15 @@ try {
 }
 const heading = label || (postType === 'page' ? 'Pages' : `${postType.charAt(0).toUpperCase()}${postType.slice(1)}s`)
 
-const page = pageNumber(Astro.url.searchParams.get('page'))
-const list = await loadPostList(postType, page, `/${postType}`, resolveSiteUrl(Astro.url))
-if (page > 1 && list.posts.length === 0) {
+let page = Astro.locals.listPageNumber ?? 1
+if (Astro.locals.listPageNumber === undefined) {
+  const request = resolveListRequest(Astro.url, basePath)
+  if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+  if (request.kind === 'notFound') return new Response(null, { status: 404 })
+  page = request.page
+}
+const list = await loadPostList(postType, page, basePath, resolveSiteUrl(Astro.url))
+if (!list) {
   return new Response(null, { status: 404 })
 }
 
@@ -41,7 +50,7 @@ const Layout = await loadThemeLayout(archiveLayouts, themeLayoutCandidates('../.
 if (!Layout) {
   throw new Error('No archive layout in this build')
 }
-const title = `${heading}${page > 1 ? ` · Page ${page}` : ''} | ${list.siteTitle}`
+const title = `${heading}${pageTitleSuffix(page)} | ${list.siteTitle}`
 ---
 
 <Layout

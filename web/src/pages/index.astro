@@ -1,9 +1,12 @@
 ---
 /**
  * The front page (#345): the latest published posts, rendered by the active theme's
- * layouts/home layout (the default theme's when it has none).
+ * layouts/home layout (the default theme's when it has none). Page N (#349) is
+ * /page/N/, which src/pages/[post_type]/[id].astro rewrites here with
+ * Astro.locals.listPageNumber set (a published page with id N wins that URL).
  */
-import { loadPostList, pageNumber } from "../lib/postList"
+import { loadPostList } from "../lib/postList"
+import { pageTitleSuffix, resolveListRequest } from "../lib/pagination"
 import { loadThemeLayout, themeLayoutCandidates } from "../lib/themeLayout"
 import { resolveSiteUrl } from "../lib/seo"
 
@@ -11,9 +14,15 @@ export const prerender = false
 
 const homeLayouts = import.meta.glob("../../themes/*/layouts/home/*.astro")
 
-const page = pageNumber(Astro.url.searchParams.get("page"))
+let page = Astro.locals.listPageNumber ?? 1
+if (Astro.locals.listPageNumber === undefined) {
+  const request = resolveListRequest(Astro.url, "/")
+  if (request.kind === "redirect") return Astro.redirect(request.location, 301)
+  if (request.kind === "notFound") return new Response(null, { status: 404 })
+  page = request.page
+}
 const list = await loadPostList("post", page, "/", resolveSiteUrl(Astro.url))
-if (page > 1 && list.posts.length === 0) {
+if (!list) {
   return new Response(null, { status: 404 })
 }
 
@@ -22,7 +31,7 @@ const Layout = await loadThemeLayout(homeLayouts, themeLayoutCandidates("../../t
 if (!Layout) {
   throw new Error("No front page layout in this build")
 }
-const title = page > 1 ? `${list.siteTitle} · Page ${page}` : list.siteTitle
+const title = `${list.siteTitle}${pageTitleSuffix(page)}`
 ---
 
 {/* The site has no tagline setting yet (#330): describe it by its own title, not GoLive. */}

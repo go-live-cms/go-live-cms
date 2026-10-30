@@ -40,11 +40,17 @@ describe("loadAuthorPage", () => {
     expect(data?.author).toEqual(author)
     expect(data?.postCount).toBe(5)
     expect(data?.list.posts.map((p) => p.href)).toEqual(["/post/post-3", "/post/post-4"])
-    expect(data?.list.links).toEqual({ newer: "/author/ana", older: "/author/ana?page=3" })
+    expect(data?.list).toMatchObject({ page: 2, totalPages: 3, basePath: "/author/ana" })
+    expect(data?.list.links).toEqual({ newer: "/author/ana", older: "/author/ana/page/3/" })
     expect(data?.list.siteTitle).toBe("Field Notes")
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect((fetchMock.mock.calls[0] as unknown[])[0]).toBe(`${SERVER_MEDIA_URL}/public/authors/ana/posts?limit=2&offset=2`)
     expect(((fetchMock.mock.calls[0] as unknown[])[1] as RequestInit).signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it("is null for a page past the end, so the route 404s", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(200, { author, posts: [], meta: { total: 5 } })))
+    await expect(loadAuthorPage("ana", 4, "https://example.org")).resolves.toBeNull()
   })
 
   it("is null when the API has no page for the username (unknown or uncredited alike)", async () => {

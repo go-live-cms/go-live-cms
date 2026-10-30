@@ -47,13 +47,13 @@ SELECT COUNT(*) AS total FROM posts
 WHERE 
     ($1::text = '' OR post_type = $1)
     AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
-    AND ($3 = 0 OR user_id = $3)
+    AND ($3::bigint = 0 OR user_id = $3)
 `
 
 type CountFilteredPostsParams struct {
-	PostType   string      `json:"post_type"`
-	PostStatus string      `json:"post_status"`
-	UserID     interface{} `json:"user_id"`
+	PostType   string `json:"post_type"`
+	PostStatus string `json:"post_status"`
+	UserID     int64  `json:"user_id"`
 }
 
 func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error) {
@@ -435,7 +435,7 @@ SELECT id, title, description, user_id, username, url, post_type, post_status, p
 WHERE 
     ($1::text = '' OR post_type = $1)
     AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
-    AND ($3 = 0 OR user_id = $3)  -- Add user filter
+    AND ($3::bigint = 0 OR user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
     CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN created_at END DESC,
@@ -453,13 +453,13 @@ OFFSET $6
 `
 
 type ListPostsParams struct {
-	PostType      string      `json:"post_type"`
-	PostStatus    string      `json:"post_status"`
-	UserID        interface{} `json:"user_id"`
-	SortColumn    string      `json:"sort_column"`
-	SortDirection string      `json:"sort_direction"`
-	OffsetCount   int32       `json:"offset_count"`
-	LimitCount    int32       `json:"limit_count"`
+	PostType      string `json:"post_type"`
+	PostStatus    string `json:"post_status"`
+	UserID        int64  `json:"user_id"`
+	SortColumn    string `json:"sort_column"`
+	SortDirection string `json:"sort_direction"`
+	OffsetCount   int32  `json:"offset_count"`
+	LimitCount    int32  `json:"limit_count"`
 }
 
 type ListPostsRow struct {
@@ -565,7 +565,7 @@ LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
-    AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
+    AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
     CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
@@ -583,13 +583,13 @@ OFFSET $6
 `
 
 type ListPostsWithAllMetaParams struct {
-	PostType      string      `json:"post_type"`
-	PostStatus    string      `json:"post_status"`
-	UserID        interface{} `json:"user_id"`
-	SortColumn    string      `json:"sort_column"`
-	SortDirection string      `json:"sort_direction"`
-	OffsetCount   int32       `json:"offset_count"`
-	LimitCount    int32       `json:"limit_count"`
+	PostType      string `json:"post_type"`
+	PostStatus    string `json:"post_status"`
+	UserID        int64  `json:"user_id"`
+	SortColumn    string `json:"sort_column"`
+	SortDirection string `json:"sort_direction"`
+	OffsetCount   int32  `json:"offset_count"`
+	LimitCount    int32  `json:"limit_count"`
 }
 
 type ListPostsWithAllMetaRow struct {
@@ -691,7 +691,7 @@ FROM posts p
 WHERE 
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
-    AND ($3 = 0 OR p.user_id = $3)  -- Add user filter
+    AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
 ORDER BY
     CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
     CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
@@ -709,13 +709,13 @@ OFFSET $6
 `
 
 type ListPostsWithMetaParams struct {
-	PostType      string      `json:"post_type"`
-	PostStatus    string      `json:"post_status"`
-	UserID        interface{} `json:"user_id"`
-	SortColumn    string      `json:"sort_column"`
-	SortDirection string      `json:"sort_direction"`
-	OffsetCount   int32       `json:"offset_count"`
-	LimitCount    int32       `json:"limit_count"`
+	PostType      string `json:"post_type"`
+	PostStatus    string `json:"post_status"`
+	UserID        int64  `json:"user_id"`
+	SortColumn    string `json:"sort_column"`
+	SortDirection string `json:"sort_direction"`
+	OffsetCount   int32  `json:"offset_count"`
+	LimitCount    int32  `json:"limit_count"`
 }
 
 type ListPostsWithMetaRow struct {

@@ -6,7 +6,8 @@
  */
 import type { AuthorProfile, Post } from "@gl-admin/lib/api/types"
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
-import { pageLinks, toListedPosts, type PostListData } from "./postList"
+import { pageLinks } from "./pagination"
+import { toListedPosts, type PostListData } from "./postList"
 import { authorPath, normalizeUrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
 
@@ -62,19 +63,24 @@ export async function getPublicAuthors(): Promise<{ username: string; last_modif
 }
 
 // The author page's data, or null when the username has no page (unknown, or not
-// credited on anything published: the API answers both the same). The posts route
-// carries the author and the total, so this is one API call after the settings.
+// credited on anything published: the API answers both the same) or the page is past
+// the end (#349): the route 404s both. The posts route carries the author and the
+// total, so this is one API call after the settings. Pages are numbered like the
+// other lists: /author/{username}/page/N/.
 export async function loadAuthorPage(username: string, page: number, siteUrl: string): Promise<AuthorPageData | null> {
   const site = await getSiteSettings()
   const perPage = site.postsPerPage
   const result = await getAuthorPosts(username, perPage, (page - 1) * perPage)
   if (!result) return null
+  const total = result.meta?.total ?? result.posts?.length ?? 0
+  const totalPages = Math.ceil(total / perPage)
+  if (page > 1 && page > totalPages) return null
   const structure = normalizeUrlStructure(site.urlStructure)
   const posts = await toListedPosts(result.posts ?? [], "post", structure, siteUrl)
-  const total = result.meta?.total ?? posts.length
+  const basePath = authorPath(result.author.username)
   return {
     author: result.author,
     postCount: total,
-    list: { posts, total, page, links: pageLinks(authorPath(username), page, perPage, total), siteTitle: site.title },
+    list: { posts, total, page, totalPages, basePath, links: pageLinks(basePath, page, totalPages), siteTitle: site.title },
   }
 }

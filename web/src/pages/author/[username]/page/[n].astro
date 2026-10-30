@@ -1,0 +1,20 @@
+---
+/**
+ * Page N of an author's posts, /author/{username}/page/N/ (#349). Rendered by
+ * ../../[username].astro, with the page number in Astro.locals; /page/1/ and
+ * ?page= redirect, anything else not a page number 404s.
+ */
+import { authorPath } from '../../../../lib/authorPage'
+import { resolveListRequest } from '../../../../lib/pagination'
+
+export const prerender = false
+
+const { username = '', n } = Astro.params as { username?: string; n: string }
+const basePath = authorPath(username)
+
+const request = resolveListRequest(Astro.url, basePath, n)
+if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+if (request.kind === 'notFound') return new Response(null, { status: 404 })
+Astro.locals.listPageNumber = request.page
+return Astro.rewrite(basePath)
+---

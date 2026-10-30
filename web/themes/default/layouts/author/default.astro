@@ -2,11 +2,11 @@
 /**
  * An author's page, /author/{username} (#350): the "Author page" board. Name, avatar
  * initial, bio, website, post count, and the published posts they're credited on,
- * paged like the other lists (Newer / Older; numbered pages are #349).
+ * in numbered pages like the other lists (#349).
  */
 import BaseLayout from '../base.astro'
 import PostListItem from '../../components/PostListItem.astro'
-import Pagination from '../../components/Pagination.astro'
+import Pagination from '@/components/Pagination.astro'
 import { avatarColor, initial } from '../../lib/avatar'
 import { displayName, postCountLabel, safeWebsite, websiteLabel } from '../../lib/authors'
 import type { AuthorPageData } from '@/lib/authorPage'
@@ -40,8 +40,8 @@ const website = safeWebsite(author.website)
     <ul class="post-list">
       {list.posts.map((item) => <PostListItem item={item} headingLevel={2} />)}
     </ul>
-    {list.links.newer || list.links.older ? (
-      <Pagination links={list.links} />
+    {list.totalPages > 1 ? (
+      <Pagination page={list.page} totalPages={list.totalPages} basePath={list.basePath} />
     ) : (
       <p class="meta list-end">That’s every post by {name}. <a href="/">Back to all posts</a></p>
     )}
