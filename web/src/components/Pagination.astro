@@ -1,0 +1,38 @@
+---
+/**
+ * The numbered pager under a public list (#349): "← Newer · 1 2 3 … 5 · Page 1 of 5 ·
+ * Older →". Shared by every list (front page, post types; terms #348, authors #350,
+ * search #145); the theme styles the class names (.pagination, .page-link, .page-num,
+ * .page-status). Nothing renders for a single page. URLs and the window come from
+ * src/lib/pagination.ts.
+ */
+import { pageLinks, pagePath, pageWindow } from '@/lib/pagination'
+
+interface Props {
+  page: number
+  totalPages: number
+  // Page 1's URL, e.g. "/" or "/post".
+  basePath: string
+}
+
+const { page, totalPages, basePath } = Astro.props
+const links = pageLinks(basePath, page, totalPages)
+const slots = pageWindow(page, totalPages)
+---
+
+{totalPages > 1 && (
+  <nav class="pagination" aria-label="Pages">
+    {links.newer ? <a href={links.newer} class="page-link" rel="prev">← Newer</a> : <span class="page-link" aria-disabled="true">← Newer</span>}
+    {slots.map((slot) =>
+      slot === 'gap' ? (
+        <span class="page-link page-num" aria-hidden="true">…</span>
+      ) : slot === page ? (
+        <a href={pagePath(basePath, slot)} class="page-link page-num" aria-current="page">{slot}</a>
+      ) : (
+        <a href={pagePath(basePath, slot)} class="page-link page-num">{slot}</a>
+      ),
+    )}
+    <span class="page-status">Page {page} of {totalPages}</span>
+    {links.older ? <a href={links.older} class="page-link" rel="next">Older →</a> : <span class="page-link" aria-disabled="true">Older →</span>}
+  </nav>
+)}

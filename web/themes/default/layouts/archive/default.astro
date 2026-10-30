@@ -5,8 +5,8 @@
  */
 import BaseLayout from '../base.astro'
 import PostListItem from '../../components/PostListItem.astro'
-import Pagination from '../../components/Pagination.astro'
-import type { PostListData } from '@/lib/postList'
+import Pagination from '@/components/Pagination.astro'
+import { listSeo, type PostListData } from '@/lib/postList'
 
 interface Props {
   title: string
@@ -20,7 +20,7 @@ const { title, description, heading, postType, list } = Astro.props
 const count = list.total === 1 ? '1 item' : `${list.total} items`
 ---
 
-<BaseLayout title={title} description={description} siteTitle={list.siteTitle}>
+<BaseLayout title={title} description={description} seo={listSeo(list)} siteTitle={list.siteTitle}>
   <div class="container">
     <header class="archive-header">
       <h1 class="title">{heading}</h1>
@@ -33,6 +33,6 @@ const count = list.total === 1 ? '1 item' : `${list.total} items`
         {list.posts.map((item) => <PostListItem item={item} headingLevel={2} />)}
       </ul>
     )}
-    <Pagination links={list.links} />
+    <Pagination page={list.page} totalPages={list.totalPages} basePath={list.basePath} />
   </div>
 </BaseLayout>

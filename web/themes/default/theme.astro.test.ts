@@ -243,16 +243,37 @@ describe("page layouts", () => {
 describe("front page", () => {
   const item = (id: number, image: string | null = null) => ({ post: { ...post, id, title: `Post ${id}` }, href: `/post/p${id}`, image })
 
-  it("features the latest post and lists the rest, with Older paging only", async () => {
-    const list = { posts: [item(1, "https://example.org/uploads/1.jpg"), item(2), item(3)], total: 12, page: 1, links: { older: "/?page=2" }, siteTitle: "Field Notes" }
+  it("features the latest post and lists the rest, with the numbered pager", async () => {
+    const list = { posts: [item(1, "https://example.org/uploads/1.jpg"), item(2), item(3)], total: 12, page: 1, totalPages: 5, basePath: "/", links: { older: "/page/2/" }, siteTitle: "Field Notes" }
     const html = await render(Home, { title: "Field Notes", description: "d", list })
     expect(html).toContain('<h1 class="title">Field Notes</h1>')
     expect(html).toMatch(/class="feature has-media"[\s\S]*Post 1/)
     expect(html).toContain('<h2 id="more-posts" class="section-title list-heading">More posts</h2>')
     expect(html).toContain('<a href="/post/p3">Post 3</a>')
-    expect(html).toContain('<a href="/?page=2" class="page-link" rel="next">Older →</a>')
     expect(html).toContain('<span class="page-link" aria-disabled="true">← Newer</span>')
-    expect(html).not.toMatch(/page-num|Page 1 of/)
+    expect(html).toContain('<a href="/" class="page-link page-num" aria-current="page">1</a>')
+    expect(html).toContain('<a href="/page/3/" class="page-link page-num">3</a>')
+    expect(html).toContain('<span class="page-link page-num" aria-hidden="true">…</span>')
+    expect(html).toContain('<a href="/page/5/" class="page-link page-num">5</a>')
+    expect(html).not.toContain('href="/page/4/"')
+    expect(html).toContain('<span class="page-status">Page 1 of 5</span>')
+    expect(html).toContain('<a href="/page/2/" class="page-link" rel="next">Older →</a>')
+    const head = html.slice(0, html.indexOf("</head>"))
+    expect(head).toContain('<link rel="canonical" href="http://web:4321/">')
+    expect(head).toContain('<link rel="next" href="http://web:4321/page/2/">')
+    expect(head).not.toContain('rel="prev"')
+  })
+
+  it("links back to newer pages and has no pager for a single page", async () => {
+    const page3 = { posts: [item(9)], total: 21, page: 3, totalPages: 3, basePath: "/", links: { newer: "/page/2/" }, siteTitle: "Field Notes" }
+    const html = await render(Home, { title: "Field Notes · Page 3", description: "d", list: page3 })
+    expect(html).toContain('<a href="/page/2/" class="page-link" rel="prev">← Newer</a>')
+    expect(html).toContain('<span class="page-link" aria-disabled="true">Older →</span>')
+    expect(html).toContain('<link rel="canonical" href="http://web:4321/page/3/">')
+    expect(html).toContain('<link rel="prev" href="http://web:4321/page/2/">')
+
+    const single = { posts: [item(1)], total: 1, page: 1, totalPages: 1, basePath: "/", links: {}, siteTitle: "Field Notes" }
+    expect(await render(Home, { title: "Field Notes", description: "d", list: single })).not.toContain('class="pagination"')
   })
 })
 
@@ -261,7 +282,7 @@ describe("author page", () => {
   const author = authors[0]
 
   it("shows the name, initial, bio, website (rel=me) and post count, then the posts", async () => {
-    const list = { posts: [item(1), item(2)], total: 2, page: 1, links: {}, siteTitle: "Field Notes" }
+    const list = { posts: [item(1), item(2)], total: 2, page: 1, totalPages: 1, basePath: "/author/ana", links: {}, siteTitle: "Field Notes" }
     const html = await render(AuthorLayout, { author, postCount: 2, list, title: "Ana Costa | Field Notes", description: "d" })
     expect(html).toContain('<span class="eyebrow">Author</span>')
     expect(html).toContain('<h1 class="title">Ana Costa</h1>')
@@ -274,12 +295,13 @@ describe("author page", () => {
     expect(html).not.toContain('class="pagination"')
   })
 
-  it("pages with Newer / Older and leaves out an unsafe or empty website", async () => {
-    const list = { posts: [item(11)], total: 25, page: 2, links: { newer: "/author/admin", older: "/author/admin?page=3" }, siteTitle: "Field Notes" }
+  it("pages with the numbered pager and leaves out an unsafe or empty website", async () => {
+    const list = { posts: [item(11)], total: 25, page: 2, totalPages: 3, basePath: "/author/admin", links: { newer: "/author/admin", older: "/author/admin/page/3/" }, siteTitle: "Field Notes" }
     const html = await render(AuthorLayout, { author: { ...author, bio: "", website: "javascript:alert(1)" }, postCount: 25, list, title: "t", description: "d" })
     expect(html).toContain("Page 2 · 25 posts")
-    expect(html).toContain('<a href="/author/admin?page=3" class="page-link" rel="next">Older →</a>')
+    expect(html).toContain('<a href="/author/admin/page/3/" class="page-link" rel="next">Older →</a>')
     expect(html).toContain('<a href="/author/admin" class="page-link" rel="prev">← Newer</a>')
+    expect(html).toContain('<a href="/author/admin/page/2/" class="page-link page-num" aria-current="page">2</a>')
     expect(html).not.toContain("javascript:")
     expect(html).not.toContain("author-bio")
     expect(html).not.toContain("every post by")

@@ -9,6 +9,9 @@ export type UrlStructure = "id" | "slug"
 // What a page hands SeoHead.astro (and theme base layouts) beyond title/description.
 export interface SeoMeta {
   canonical?: string
+  // Paged lists (#349): the previous and next page, as <link rel="prev"/"next">.
+  prev?: string
+  next?: string
   image?: string | null
   type?: "website" | "article"
   noindex?: boolean

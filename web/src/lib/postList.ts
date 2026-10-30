@@ -1,12 +1,15 @@
 /**
- * Data for the public post lists (#345): the front page and /{post_type}. Paging is
- * Newer / Older over posts_per_page; numbered pagination is #349. Tested in
- * postList.test.ts.
+ * Data for the public post lists (#345): the front page and /{post_type}, in numbered
+ * pages of posts_per_page (#349; URLs and the pager window in pagination.ts). Tested
+ * in postList.test.ts.
  */
 import type { Post } from "@gl-admin/lib/api/types"
-import { getFeaturedImageUrl, getPostsByType } from "./api"
-import { normalizeUrlStructure, postPath, publicImageUrl } from "./seo"
+import { getFeaturedImageUrl, getPublicPostsPage, type PublicPostPage } from "./api"
+import { pageLinks, pagePath, type PageLinks } from "./pagination"
+import { normalizeUrlStructure, postPath, publicImageUrl, type SeoMeta } from "./seo"
 import { getSiteSettings } from "./siteSettings"
+
+export type { PageLinks } from "./pagination"
 
 export interface ListedPost {
   post: Post
@@ -15,31 +18,15 @@ export interface ListedPost {
   image: string | null
 }
 
-export interface PageLinks {
-  newer?: string
-  older?: string
-}
-
 export interface PostListData {
   posts: ListedPost[]
   total: number
   page: number
+  totalPages: number
+  // Page 1's URL; page N is pagePath(basePath, N).
+  basePath: string
   links: PageLinks
   siteTitle: string
-}
-
-// The ?page= query value as a page number (1 for anything missing or invalid).
-export function pageNumber(value: string | null | undefined): number {
-  const n = Number(value)
-  return Number.isInteger(n) && n > 1 ? n : 1
-}
-
-export function pageLinks(basePath: string, page: number, perPage: number, total: number): PageLinks {
-  const href = (n: number) => (n <= 1 ? basePath : `${basePath}?page=${n}`)
-  return {
-    newer: page > 1 ? href(Math.min(page - 1, Math.max(1, Math.ceil(total / perPage)))) : undefined,
-    older: page * perPage < total ? href(page + 1) : undefined,
-  }
 }
 
 // The featured image URL a with_meta list row carries (post meta _thumbnail_url): the URL,
@@ -52,22 +39,32 @@ export function listedThumbnail(post: Post): string | null | undefined {
   return /^https?:\/\//i.test(value) || value.startsWith("/uploads/") ? value : undefined
 }
 
-export async function loadPostList(postType: string, page: number, basePath: string, siteUrl: string): Promise<PostListData> {
-  const site = await getSiteSettings()
-  const perPage = site.postsPerPage
+// The list page's canonical URL and its rel="prev"/"next" neighbours, for SeoHead.
+export function listSeo(list: Pick<PostListData, "page" | "basePath" | "links">): SeoMeta {
+  return { canonical: pagePath(list.basePath, list.page), prev: list.links.newer, next: list.links.older }
+}
+
+const NO_POSTS: PublicPostPage = { posts: [], pagination: { page: 1, per_page: 0, total: 0, total_pages: 0 } }
+
+// Page `page` of a post type's published posts, or null when there is no such page
+// (past the end, or a type the API doesn't list publicly): the route answers 404.
+// Page 1 always exists; it may be empty (the front page with "post" switched off).
+export async function loadPostList(postType: string, page: number, basePath: string, siteUrl: string): Promise<PostListData | null> {
+  const [site, found] = await Promise.all([getSiteSettings(), getPublicPostsPage(postType, page)])
+  const result = found ?? (page === 1 ? NO_POSTS : null)
+  if (!result) return null
   const structure = normalizeUrlStructure(site.urlStructure)
-  // with_meta: list rows then carry the byline (authors) and the published doc.
-  const { data, meta } = await getPostsByType(postType, {
-    status: "published",
-    sort: "date_desc",
-    limit: perPage,
-    offset: (page - 1) * perPage,
-    with_meta: true,
-    meta_level: "basic",
-  })
-  const posts = await toListedPosts(data, postType, structure, siteUrl)
-  const total = meta.total ?? posts.length
-  return { posts, total, page, links: pageLinks(basePath, page, perPage, total), siteTitle: site.title }
+  const posts = await toListedPosts(result.posts, postType, structure, siteUrl)
+  const { total, total_pages: totalPages } = result.pagination
+  return {
+    posts,
+    total,
+    page,
+    totalPages,
+    basePath,
+    links: pageLinks(basePath, page, totalPages),
+    siteTitle: site.title,
+  }
 }
 
 // with_meta list rows as list items; the author page's list (#350) uses it too.

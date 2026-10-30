@@ -166,6 +166,17 @@ are the most fragile part of the codebase. **Before editing anything under
   `lib/postList.ts`. Parts without a backend stay hidden (table in
   `themes/default/README.md`). `/themes/active` returns `settings` as an object (it was
   base64 before, so `layout_variants` never applied).
+- **Numbered pagination (#349):** lists page through `GET /public/posts/type/:type?page=N`
+  (published only, `posts_per_page` from settings, `{posts, pagination: {page, per_page,
+  total, total_pages}}`, 404 past the end; Go helpers in `api/pagination.go`). URLs,
+  the `1 2 3 … 5` window and `?page=` handling are `src/lib/pagination.ts`
+  (`resolveListRequest`); the pager is `src/components/Pagination.astro`; `listSeo` gives
+  the canonical and `rel="prev"/"next"` for `SeoHead`. Page 1 has no suffix, page N is
+  `<base>/page/N/`. `[post_type]/page/[n].astro` and, for `/page/N/`, `[id].astro` set
+  `Astro.locals.listPageNumber` and `Astro.rewrite` to the list's first-page route. A
+  published `page` with id N keeps `/page/N` (it wins over the front page's page N).
+  The author page (#350) pages the same way (`/author/{username}/page/N/`); term (#348)
+  and search (#145) lists reuse these too.
 - **Navigation menus (#347):** Appearance › Menus (`pages/Menus.tsx`, `/menus`, editors
   and admins) edits a local tree and saves it whole; every change (drag and drop, and the
   row's Move menu, its keyboard alternative) goes through `lib/menuTree.ts`'s
