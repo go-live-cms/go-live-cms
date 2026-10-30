@@ -183,6 +183,27 @@ Expect a few seconds of downtime while containers are recreated. Open editors sh
 "Reconnecting" and resync by themselves: on SIGTERM the collab server stores every open doc
 (Yjs state + `block_doc`), and edits typed while it's down are sent when the tab reconnects.
 
+## Change the domain
+
+The site's address is deploy config, not a setting: Settings › General shows it
+read-only (the API's `PUBLIC_BASE_URL`, with an HTTPS indicator), and its "Change domain"
+link points here (#330).
+
+1. Point the new name's DNS (A/AAAA) at the VM and wait until it resolves. Caddy gets
+   the certificate on the first request, so it must reach the VM on ports 80 and 443.
+2. In the `production` environment, set `SITE_ADDRESS` to the new name. If you set
+   `PUBLIC_BASE_URL` or `SITE_URL` yourself, change them too (unset, both follow
+   `SITE_ADDRESS`). Update `MAIL_FROM` if its domain changes and the provider requires it.
+3. Run the **cd** workflow (or push to `main`). It rewrites `/opt/golive/.env` and
+   recreates the stack.
+4. Check Settings › General shows the new address with "HTTPS on", and that
+   `https://<new name>/robots.txt` names the new sitemap URL.
+
+Afterwards everyone signs in again: the refresh cookie belongs to the old host. Invitation
+and reset links sent before the change point at the old address; send new ones, or keep
+the old name pointed at the VM and redirect it to the new one (a second site block in
+`deploy/caddy/Caddyfile`). Search engines follow the canonical URLs, which now use the new origin.
+
 ## Rollback
 
 Find the previous sha in `/opt/golive/.deploy-history` (or the Actions history), then run

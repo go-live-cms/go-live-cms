@@ -22,7 +22,7 @@ if (!route) {
   return new Response(null, { status: 404 })
 }
 const page = Astro.locals.listPageNumber ?? 1
-const data = await loadTermPage(route.taxonomy, route.slug, page, resolveSiteUrl(Astro.url))
+const data = await loadTermPage(route.taxonomy, route.slug, page, resolveSiteUrl(Astro.url), Astro.locals)
 if (!data) {
   return new Response(null, { status: 404 })
 }

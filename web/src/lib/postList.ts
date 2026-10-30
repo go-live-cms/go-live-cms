@@ -27,6 +27,8 @@ export interface PostListData {
   basePath: string
   links: PageLinks
   siteTitle: string
+  // "" = none (#330).
+  siteTagline?: string
 }
 
 // The featured image URL a with_meta list row carries (post meta _thumbnail_url): the URL,
@@ -49,8 +51,14 @@ const NO_POSTS: PublicPostPage = { posts: [], pagination: { page: 1, per_page: 0
 // Page `page` of a post type's published posts, or null when there is no such page
 // (past the end, or a type the API doesn't list publicly): the route answers 404.
 // Page 1 always exists; it may be empty (the front page with "post" switched off).
-export async function loadPostList(postType: string, page: number, basePath: string, siteUrl: string): Promise<PostListData | null> {
-  const [site, found] = await Promise.all([getSiteSettings(), getPublicPostsPage(postType, page)])
+export async function loadPostList(
+  postType: string,
+  page: number,
+  basePath: string,
+  siteUrl: string,
+  locals?: App.Locals,
+): Promise<PostListData | null> {
+  const [site, found] = await Promise.all([getSiteSettings(locals), getPublicPostsPage(postType, page)])
   const result = found ?? (page === 1 ? NO_POSTS : null)
   if (!result) return null
   const structure = normalizeUrlStructure(site.urlStructure)
@@ -64,6 +72,7 @@ export async function loadPostList(postType: string, page: number, basePath: str
     basePath,
     links: pageLinks(basePath, page, totalPages),
     siteTitle: site.title,
+    siteTagline: site.tagline,
   }
 }
 

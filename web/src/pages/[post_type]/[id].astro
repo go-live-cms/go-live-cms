@@ -5,8 +5,8 @@ import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
 import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
 import { metaDescription, normalizeUrlStructure, postLastmod, postPath, publicImageUrl, resolveSiteUrl, toW3cDate, type SeoMeta } from '../../lib/seo'
 import { getPostAuthors } from '../../lib/authorPage'
+import { getSiteSettings } from '../../lib/siteSettings'
 import { getCachedTaxonomyTypes, isTermRoute, linkTerms, termPath, TERM_ARCHIVE_ROUTE } from '../../lib/termPage'
-import { SITE_TITLE } from '../../consts'
 import type { AuthorProfile, Post, TaxonomyTerm, TaxonomyType } from '@gl-admin/lib/api/types'
 
 // WordPress-style: Auto-discover all theme layouts using glob imports
@@ -275,16 +275,15 @@ if (!LayoutComponent) {
 
 // SEO (#137): the canonical URL follows the site's id/slug setting, so the
 // same post reached by id and by slug points crawlers at one URL.
-const [settings, featuredImage] = await Promise.all([
-  getSettings().catch((error) => {
-    console.warn('Could not fetch settings for SEO tags:', error)
-    return null
-  }),
+// The same per-request lookup the layout, SeoHead and bylines use (#330); it never
+// rejects (defaults when the API is down).
+const [site, featuredImage] = await Promise.all([
+  getSiteSettings(Astro.locals),
   fullPost.featured_image
     ? Promise.resolve(fullPost.featured_image)
     : getFeaturedImageUrl(fullPost.id).catch(() => null),
 ])
-const urlStructure = normalizeUrlStructure(settings?.post_url_structure)
+const urlStructure = normalizeUrlStructure(site.urlStructure)
 
 const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)
 const title = `${fullPost.title} | ${displayType}`
@@ -293,7 +292,7 @@ const seo: SeoMeta = {
   canonical: postPath({ ...fullPost, post_type: postType }, urlStructure),
   image: featuredImage,
   type: 'article',
-  siteName: settings?.site_title || SITE_TITLE,
+  siteName: site.title,
   publishedTime: toW3cDate(fullPost.created_at),
   modifiedTime: postLastmod(fullPost),
 }
@@ -307,6 +306,6 @@ const seo: SeoMeta = {
   terms={terms}
   authors={authors}
   featuredImage={publicImageUrl(resolveSiteUrl(Astro.url), featuredImage) ?? null}
-  siteTitle={settings?.site_title || SITE_TITLE}
+  siteTitle={site.title}
   urlStructure={urlStructure}
 />

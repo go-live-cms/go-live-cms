@@ -94,6 +94,9 @@ describe("query and URLs", () => {
     expect(resultLabels({ post_type: "page", created_at: "2026-01-01T00:00:00Z", changed_at: "2026-09-30T00:00:00Z" })).toEqual({ typeLabel: "Page", dateLabel: "Updated Sep 30, 2026" })
     // A page never edited keeps the 0001 sentinel: its creation date then.
     expect(resultLabels({ post_type: "page", created_at: "2026-01-02T00:00:00Z", changed_at: "0001-01-01T00:00:00Z" }).dateLabel).toBe("Updated Jan 2, 2026")
+    // In the site's language, zone and date format (#330): 02:00Z is still the 14th in São Paulo.
+    const sp = { language: "pt-BR", timeZone: "America/Sao_Paulo", dateFormat: "day_month_year" } as const
+    expect(resultLabels({ post_type: "post", created_at: "2026-10-15T02:00:00Z", changed_at: "" }, sp).dateLabel).toBe("14 de out. de 2026")
     expect(resultCountLabel(1)).toBe("1 result")
     expect(resultCountLabel(4)).toBe("4 results")
   })

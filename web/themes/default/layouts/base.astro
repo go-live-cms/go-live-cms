@@ -25,11 +25,12 @@ interface Props {
 
 const { title, description, seo = {}, menus = true } = Astro.props
 // The menus assigned to the theme's locations (#347), fetched alongside the settings.
-const [siteTitle, primaryMenu, footerMenu] = await Promise.all([
-  Astro.props.siteTitle ?? getSiteSettings().then((settings) => settings.title),
+const [site, primaryMenu, footerMenu] = await Promise.all([
+  getSiteSettings(Astro.locals),
   menus ? getMenu('primary') : null,
   menus ? getMenu('footer') : null,
 ])
+const siteTitle = Astro.props.siteTitle ?? site.title
 const path = Astro.url.pathname
 
 // WordPress-style: Get theme assets registered in theme.config.ts
@@ -40,7 +41,7 @@ const tokens = themeCssVariables(themeConfig)
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={site.language}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -72,7 +73,7 @@ const tokens = themeCssVariables(themeConfig)
       <main id="content" class="site-main" tabindex="-1">
         <slot />
       </main>
-      <SiteFooter siteTitle={siteTitle} menu={footerMenu?.items ?? []} />
+      <SiteFooter siteTitle={siteTitle} tagline={site.tagline} menu={footerMenu?.items ?? []} />
     </div>
     <slot name="footer-scripts" />
 

@@ -7,6 +7,10 @@ vi.mock("@/lib/menus", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/menus")>()),
   getMenu: async () => null,
 }))
+// The site settings (#330): no API call; a test may set a tagline.
+const getSiteSettings = vi.fn()
+vi.mock("@/lib/siteSettings", () => ({ getSiteSettings: (...args: unknown[]) => getSiteSettings(...args) }))
+const SITE = { title: "My Site", tagline: "", postsPerPage: 10, urlStructure: "slug", language: "en-US", timeZone: "UTC", dateFormat: "month_day_year" }
 import SeoHead from "./SeoHead.astro"
 import DefaultPostLayout from "../../themes/default/layouts/post/default.astro"
 import DefaultErrorLayout from "../../themes/default/layouts/error/default.astro"
@@ -44,6 +48,7 @@ let previousSiteUrl: string | undefined
 
 beforeEach(() => {
   previousSiteUrl = process.env.SITE_URL
+  getSiteSettings.mockReset().mockResolvedValue(SITE)
   process.env.SITE_URL = "https://example.org"
 })
 
@@ -92,6 +97,25 @@ describe("SeoHead", () => {
     })
     expect(html).toContain('<meta name="robots" content="noindex, nofollow">')
     expect(html).not.toContain('rel="canonical"')
+    // Sign-in and error pages don't wait on the API for the settings.
+    expect(getSiteSettings).not.toHaveBeenCalled()
+  })
+
+  it("takes the site name from the settings and falls back to the tagline for the description (#330)", async () => {
+    getSiteSettings.mockResolvedValue({ ...SITE, title: "Field Notes", tagline: "Notes from the team" })
+    const container = await AstroContainer.create()
+    const html = await container.renderToString(SeoHead, {
+      props: { title: "Field Notes" },
+      request: new Request("http://web:4321/"),
+    })
+    expect(html).toContain('<meta property="og:site_name" content="Field Notes">')
+    expect(html).toContain('<meta name="description" content="Notes from the team">')
+    expect(html).toContain('<meta name="twitter:description" content="Notes from the team">')
+
+    // Neither: no description tags at all.
+    getSiteSettings.mockResolvedValue(SITE)
+    const bare = await container.renderToString(SeoHead, { props: { title: "x" }, request: new Request("http://web:4321/") })
+    expect(bare).not.toContain('name="description"')
   })
 })
 

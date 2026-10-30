@@ -27,7 +27,7 @@ const type = parseSearchType(Astro.url.searchParams.get('type'))
 if (!type) {
   return new Response(null, { status: 404 })
 }
-const data = await loadSearchPage(query, type, page)
+const data = await loadSearchPage(query, type, page, Astro.locals)
 if (!data) {
   return new Response(null, { status: 404 })
 }

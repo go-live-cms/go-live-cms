@@ -15,6 +15,7 @@ import { pagePath, type Pagination } from "./pagination"
 import { getPublic } from "./publicApi"
 import { normalizeUrlStructure, postPath, termPath, type UrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
+import { DEFAULT_DATE_SETTINGS, formatSiteDate, type DateSettings } from "./siteDates"
 
 export const SEARCH_PATH = "/search"
 
@@ -144,29 +145,31 @@ export function highlightText(html: string): string {
   return html.replace(MARK_TOKEN, "")
 }
 
-const dateFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
-
-function formatDate(value: string | undefined): string {
+// In the site's language, time zone and date format (#330).
+function formatDate(value: string | undefined, settings: DateSettings): string {
   if (!value) return ""
   const date = new Date(value)
   if (Number.isNaN(date.getTime()) || date.getUTCFullYear() < 1900) return ""
-  return dateFormat.format(date)
+  return formatSiteDate(date, settings, "short")
 }
 
 // The line above a result's title: its type, and the date (a page's last update).
-export function resultLabels(hit: Pick<SearchHit, "post_type" | "created_at" | "changed_at">): { typeLabel: string; dateLabel: string } {
+export function resultLabels(
+  hit: Pick<SearchHit, "post_type" | "created_at" | "changed_at">,
+  settings: DateSettings = DEFAULT_DATE_SETTINGS,
+): { typeLabel: string; dateLabel: string } {
   if (hit.post_type === "page") {
-    const updated = formatDate(hit.changed_at) || formatDate(hit.created_at)
+    const updated = formatDate(hit.changed_at, settings) || formatDate(hit.created_at, settings)
     return { typeLabel: "Page", dateLabel: updated ? `Updated ${updated}` : "" }
   }
-  return { typeLabel: "Post", dateLabel: formatDate(hit.created_at) }
+  return { typeLabel: "Post", dateLabel: formatDate(hit.created_at, settings) }
 }
 
-export function toSearchResult(hit: SearchHit, structure: UrlStructure): SearchResult {
+export function toSearchResult(hit: SearchHit, structure: UrlStructure, settings: DateSettings = DEFAULT_DATE_SETTINGS): SearchResult {
   return {
     hit,
     href: postPath({ id: hit.id, slug: hit.slug, post_type: hit.post_type }, structure),
-    ...resultLabels(hit),
+    ...resultLabels(hit, settings),
     titleHtml: safeHighlight(hit.title_html),
     excerptHtml: safeHighlight(hit.excerpt_html),
   }
@@ -243,9 +246,15 @@ const NO_COUNTS: SearchCounts = { all: 0, post: 0, page: 0 }
  * An empty query is the page with just the form; one with no matches gets the
  * empty state's topics and recent posts.
  */
-export async function loadSearchPage(query: string, type: SearchType, page: number): Promise<SearchPageData | null> {
+export async function loadSearchPage(
+  query: string,
+  type: SearchType,
+  page: number,
+  // The request's locals share one settings lookup with the layout (#330).
+  locals?: App.Locals,
+): Promise<SearchPageData | null> {
   const [site, found] = await Promise.all([
-    getSiteSettings(),
+    getSiteSettings(locals),
     query ? getPublicSearch(query, type, page) : Promise.resolve(null),
   ])
   if (!found && (query || page > 1)) return null
@@ -253,7 +262,7 @@ export async function loadSearchPage(query: string, type: SearchType, page: numb
   const structure = normalizeUrlStructure(site.urlStructure)
   const counts = found?.counts ?? NO_COUNTS
   const total = found?.pagination.total ?? 0
-  const results = (found?.results ?? []).map((hit) => toSearchResult(hit, structure))
+  const results = (found?.results ?? []).map((hit) => toSearchResult(hit, structure, site))
   const [topics, recent] = query && total === 0 ? await Promise.all([getTopics(), getRecentPosts(structure)]) : [[], []]
 
   return {

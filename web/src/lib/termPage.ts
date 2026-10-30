@@ -131,8 +131,15 @@ export async function getPublicTerms(): Promise<{ taxonomy: string; slug: string
 
 // The term page's data, or null when there is no such page: the route 404s. The API
 // pages the list (posts_per_page at a time) and counts it, children's posts included.
-export async function loadTermPage(taxonomy: string, slug: string, page: number, siteUrl: string): Promise<TermPageData | null> {
-  const [site, result] = await Promise.all([getSiteSettings(), getTermPosts(taxonomy, slug, page)])
+export async function loadTermPage(
+  taxonomy: string,
+  slug: string,
+  page: number,
+  siteUrl: string,
+  // The request's locals share one settings lookup with the layout (#330).
+  locals?: App.Locals,
+): Promise<TermPageData | null> {
+  const [site, result] = await Promise.all([getSiteSettings(locals), getTermPosts(taxonomy, slug, page)])
   if (!result) return null
   const structure = normalizeUrlStructure(site.urlStructure)
   const posts = await toListedPosts(result.posts ?? [], "post", structure, siteUrl)

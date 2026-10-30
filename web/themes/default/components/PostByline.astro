@@ -8,6 +8,8 @@ import type { AuthorProfile, Post } from '@gl-admin/lib/api/types'
 import { avatarColor, initial } from '../lib/avatar'
 import { bylinePeople, nameSeparator } from '../lib/authors'
 import { readingMinutes } from '../lib/posts'
+import { getSiteSettings } from '@/lib/siteSettings'
+import { formatSiteDate } from '@/lib/siteDates'
 
 interface Props {
   post: Post
@@ -23,8 +25,8 @@ const date = new Date(post.created_at)
 const valid = !Number.isNaN(date.getTime())
 const minutes = readingMinutes(post.published_blocks)
 const size = variant === 'post' ? 36 : 28
-const longDate = { year: 'numeric', month: 'long', day: 'numeric' } as const
-const shortDate = { year: 'numeric', month: 'short', day: 'numeric' } as const
+// The site's language, time zone and date format (#330), fetched once per request.
+const site = await getSiteSettings(Astro.locals)
 ---
 
 <div class={`byline meta byline--${variant}`}>
@@ -41,7 +43,7 @@ const shortDate = { year: 'numeric', month: 'short', day: 'numeric' } as const
         ))}</span>
       )}
       <span>
-        {valid && <time datetime={date.toISOString()}>{date.toLocaleDateString('en-US', longDate)}</time>}
+        {valid && <time datetime={date.toISOString()}>{formatSiteDate(date, site, 'long')}</time>}
         {minutes && <> · {minutes} min read</>}
       </span>
     </span>
@@ -50,7 +52,7 @@ const shortDate = { year: 'numeric', month: 'short', day: 'numeric' } as const
       {people.map((p, i) => (
         <>{nameSeparator(i, people.length)}{p.href ? <a href={p.href}>{p.name}</a> : p.name}</>
       ))}
-      {valid && <>{people.length > 0 && ' · '}<time datetime={date.toISOString()}>{date.toLocaleDateString('en-US', shortDate)}</time></>}
+      {valid && <>{people.length > 0 && ' · '}<time datetime={date.toISOString()}>{formatSiteDate(date, site, 'short')}</time></>}
       {minutes && <> · {minutes} min read</>}
     </span>
   )}

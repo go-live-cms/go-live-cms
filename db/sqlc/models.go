@@ -172,12 +172,18 @@ type Session struct {
 }
 
 type Setting struct {
-	ID               int32          `json:"id"`
-	PostUrlStructure string         `json:"post_url_structure"`
-	SiteTitle        sql.NullString `json:"site_title"`
-	PostsPerPage     sql.NullInt32  `json:"posts_per_page"`
-	CreatedAt        time.Time      `json:"created_at"`
-	ChangedAt        time.Time      `json:"changed_at"`
+	ID                      int32          `json:"id"`
+	PostUrlStructure        string         `json:"post_url_structure"`
+	SiteTitle               sql.NullString `json:"site_title"`
+	PostsPerPage            sql.NullInt32  `json:"posts_per_page"`
+	CreatedAt               time.Time      `json:"created_at"`
+	ChangedAt               time.Time      `json:"changed_at"`
+	SiteTagline             string         `json:"site_tagline"`
+	SiteLanguage            string         `json:"site_language"`
+	SiteTimezone            string         `json:"site_timezone"`
+	DateFormat              string         `json:"date_format"`
+	EditorMarkdownShortcuts bool           `json:"editor_markdown_shortcuts"`
+	EditorAllowedEmbeds     []string       `json:"editor_allowed_embeds"`
 }
 
 type TaxonomyTerm struct {

@@ -21,7 +21,7 @@ if (Astro.locals.listPageNumber === undefined) {
   if (request.kind === "notFound") return new Response(null, { status: 404 })
   page = request.page
 }
-const list = await loadPostList("post", page, "/", resolveSiteUrl(Astro.url))
+const list = await loadPostList("post", page, "/", resolveSiteUrl(Astro.url), Astro.locals)
 if (!list) {
   return new Response(null, { status: 404 })
 }
@@ -34,5 +34,5 @@ if (!Layout) {
 const title = `${list.siteTitle}${pageTitleSuffix(page)}`
 ---
 
-{/* The site has no tagline setting yet (#330): describe it by its own title, not GoLive. */}
-<Layout title={title} description={`The latest posts from ${list.siteTitle}`} list={list} />
+{/* The tagline describes the site (#330); without one, its own title does, not GoLive. */}
+<Layout title={title} description={list.siteTagline || `The latest posts from ${list.siteTitle}`} list={list} />

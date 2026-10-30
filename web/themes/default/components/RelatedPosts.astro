@@ -7,17 +7,17 @@
  */
 import type { ListedPost } from '@/lib/postList'
 import { authorNames, joinNames } from '../lib/posts'
+import { getSiteSettings } from '@/lib/siteSettings'
+import { formatSiteDate } from '@/lib/siteDates'
 
 interface Props {
   posts: ListedPost[]
 }
 
 const { posts } = Astro.props
-const shortDate = { year: 'numeric', month: 'short', day: 'numeric' } as const
+const site = await getSiteSettings(Astro.locals)
 const meta = (item: ListedPost) => {
-  const date = new Date(item.post.created_at)
-  const parts = [joinNames(authorNames(item.post))]
-  if (!Number.isNaN(date.getTime())) parts.push(date.toLocaleDateString('en-US', shortDate))
+  const parts = [joinNames(authorNames(item.post)), formatSiteDate(item.post.created_at, site, 'short')]
   return parts.filter(Boolean).join(' · ')
 }
 ---

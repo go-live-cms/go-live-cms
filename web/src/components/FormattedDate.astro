@@ -1,17 +1,16 @@
 ---
+// A date in the site's language, time zone and format (#330).
+import { getSiteSettings } from '@/lib/siteSettings';
+import { formatSiteDate } from '@/lib/siteDates';
+
 interface Props {
 	date: Date;
 }
 
 const { date } = Astro.props;
+const site = await getSiteSettings(Astro.locals);
 ---
 
 <time datetime={date.toISOString()}>
-	{
-		date.toLocaleDateString('en-us', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric',
-		})
-	}
+	{formatSiteDate(date, site, 'short')}
 </time>

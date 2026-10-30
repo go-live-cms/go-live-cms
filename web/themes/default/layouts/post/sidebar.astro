@@ -17,6 +17,8 @@ import { readingMinutes, THEME_ELEMENT_IDS } from '../../lib/posts'
 import { headingAnchors, tableOfContents } from '@/components/blocks/utils/headingAnchors'
 import { loadPostEnd } from '@/lib/relatedPosts'
 import { resolveSiteUrl } from '@/lib/seo'
+import { getSiteSettings } from '@/lib/siteSettings'
+import { formatSiteDate, siteDay } from '@/lib/siteDates'
 import type { AuthorProfile, Post } from '@gl-admin/lib/api/types'
 import type { LinkedTerm } from '@/lib/termPage'
 import type { SeoMeta } from '@/lib/seo'
@@ -39,7 +41,10 @@ interface Props {
 const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle, urlStructure } = Astro.props
 const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
 const toc = tableOfContents(headings)
-const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { inCategory: true, urlStructure })
+const [end, site] = await Promise.all([
+  loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { inCategory: true, urlStructure }),
+  getSiteSettings(Astro.locals),
+])
 
 const dateOf = (value: string) => {
   const d = new Date(value)
@@ -48,9 +53,9 @@ const dateOf = (value: string) => {
 }
 const published = dateOf(post.created_at)
 const changed = dateOf(post.changed_at)
-const updated = changed && published && changed.toDateString() !== published.toDateString() ? changed : null
+const updated = changed && published && siteDay(changed, site) !== siteDay(published, site) ? changed : null
 const minutes = readingMinutes(post.published_blocks)
-const format = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+const format = (d: Date) => formatSiteDate(d, site, 'long')
 const showFacts = toc.length === 0 && !end.inCategory
 ---
 

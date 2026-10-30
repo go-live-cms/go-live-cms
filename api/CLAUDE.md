@@ -410,8 +410,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   body is read from the `post_versions` row publish points at (else `published_block_doc`),
   never `block_doc`: collab stores don't fire them. `golive_block_doc_text(jsonb)` extracts
   the text in reading order (`text`, `code`, caption runs, `cite`, children).
-- The text search config is `golive_search_config()` (SQL, `simple`); the site language
-  (#330) redefines it and reindexes with `golive_refresh_post_search(ARRAY(SELECT id FROM posts))`.
+- The text search config is `golive_search_config()`: the site language's (#330, below).
 - Queries (`db/query/post_search.sql`) use `websearch_to_tsquery`: any input is valid. Rank:
   `ts_rank` (weights), then newest. `GET /public/search?q=&type=all|post|page&page=`
   (published posts and pages of public, active types; counts per type; pagination.go) and
@@ -419,6 +418,25 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **Highlights:** `ts_headline` puts U+E000/U+E001 around matches (removed from the source
   first); `highlightHTML` escapes everything and turns only those into `<mark>`. Never
   return ts_headline output any other way.
+
+## Site settings (#330)
+
+- `settings` (singleton) gained `site_tagline` (≤160, one line, trimmed), `site_language`
+  (BCP-47 from `siteLanguages`), `site_timezone` (IANA, `time.LoadLocation`; `time/tzdata` is
+  embedded so the image needs no zoneinfo; `Local`/`""` refused), `date_format`
+  (`month_day_year`|`day_month_year`|`iso`), `editor_markdown_shortcuts` and
+  `editor_allowed_embeds` (`embedProviders`, ≤20, deduped; absent keeps, `[]` clears) (`000025`).
+  Lists and validator tags (`site_language`, `time_zone`, `embed_provider`, `single_line`) live
+  in `settings_utils.go`; the web copies are checked against it by its tests.
+- GET `/settings` also returns `site_address` (`PUBLIC_BASE_URL`, read-only, `""` if unusable):
+  the domain is deploy config (`docs/operations/deploy.md`, "Change the domain").
+- **Search follows the language:** `golive_search_config_for(language)` (000025; each
+  language of `siteLanguages` → `english`/`portuguese`/…, else `simple`, checked against the Go
+  list by `TestSearchConfigMigrationMatchesLanguages`) backs `golive_search_config()`, and the
+  `settings_search_language` trigger reindexes every post when a language change changes the
+  configuration (en-US → en-GB doesn't), in the settings update's transaction.
+- The sanitizer has no embed path yet: iframe/embed nodes are always dropped
+  (`disallowedNodeTypes`). The embed block (#352) is what reads the allowlist.
 
 ## Gotchas
 

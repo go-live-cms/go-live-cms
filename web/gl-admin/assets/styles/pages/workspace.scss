@@ -256,6 +256,145 @@
     border-radius: var(--radius-lg);
   }
 
+  // The sections nav beside the form (#330); above it, as a row, when narrow.
+  &__layout {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6) var(--space-8);
+  }
+
+  &__nav {
+    display: flex;
+    flex: 1 1 160px;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 200px;
+    position: sticky;
+    top: var(--space-4);
+
+    a {
+      align-items: center;
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      display: flex;
+      min-height: 32px;
+      padding: 0 10px;
+      text-decoration: none;
+
+      &:hover {
+        background: var(--background-hover);
+        color: var(--text-primary);
+      }
+
+      &[aria-current="true"] {
+        background: var(--background-active);
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+
+      &:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 1px;
+      }
+    }
+
+    @media (width <= 768px) {
+      flex-basis: 100%;
+      flex-direction: row;
+      max-width: none;
+      position: static;
+    }
+  }
+
+  &__content {
+    display: flex;
+    flex: 999 1 480px;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-width: 0;
+
+    > section {
+      scroll-margin-top: var(--space-4);
+    }
+  }
+
+  &__label {
+    font-size: var(--type-footnote);
+    font-weight: 500;
+  }
+
+  &__address-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__address {
+    align-items: center;
+    background: var(--background-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-height: 36px;
+    padding: 2px 4px 2px 10px;
+  }
+
+  &__address-url {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: var(--type-footnote);
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__https {
+    align-items: center;
+    display: inline-flex;
+    font-size: var(--type-caption, 12px);
+    font-weight: 500;
+    gap: 4px;
+
+    &.is-on {
+      color: var(--success-text);
+    }
+
+    &.is-off {
+      color: var(--warning-text);
+    }
+  }
+
+  // The date presets in a row, each labelled with today's date in that format.
+  & &__date-format {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+
+    legend {
+      margin-bottom: 6px;
+      width: 100%;
+    }
+  }
+
+  // The editor settings, one row each, in a bordered box (the board's Editor section).
+  &__card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+
+    > * {
+      padding: 14px var(--space-4);
+    }
+
+    > * + * {
+      border-top: 1px solid var(--border-color);
+    }
+  }
+
   // Below the 56px mobile top bar, with the shell's 1.5rem padding.
   @media (width <= 768px) {
     min-height: calc(100dvh - 56px - 3rem);

@@ -40,7 +40,7 @@ if (Astro.locals.listPageNumber === undefined) {
   if (request.kind === 'notFound') return new Response(null, { status: 404 })
   page = request.page
 }
-const list = await loadPostList(postType, page, basePath, resolveSiteUrl(Astro.url))
+const list = await loadPostList(postType, page, basePath, resolveSiteUrl(Astro.url), Astro.locals)
 if (!list) {
   return new Response(null, { status: 404 })
 }

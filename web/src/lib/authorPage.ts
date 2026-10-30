@@ -52,8 +52,14 @@ export async function getPublicAuthors(): Promise<{ username: string; last_modif
 // the end (#349): the route 404s both. The posts route carries the author and the
 // total, so this is one API call after the settings. Pages are numbered like the
 // other lists: /author/{username}/page/N/.
-export async function loadAuthorPage(username: string, page: number, siteUrl: string): Promise<AuthorPageData | null> {
-  const site = await getSiteSettings()
+export async function loadAuthorPage(
+  username: string,
+  page: number,
+  siteUrl: string,
+  // The request's locals share one settings lookup with the layout (#330).
+  locals?: App.Locals,
+): Promise<AuthorPageData | null> {
+  const site = await getSiteSettings(locals)
   const perPage = site.postsPerPage
   const result = await getAuthorPosts(username, perPage, (page - 1) * perPage)
   if (!result) return null
