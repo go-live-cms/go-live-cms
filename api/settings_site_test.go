@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -190,10 +193,6 @@ func TestSiteSettingsHelpers(t *testing.T) {
 	require.True(t, isTimeZone("Asia/Kathmandu"))
 	require.False(t, isTimeZone("../../etc/passwd"))
 
-	require.Equal(t, "portuguese", searchConfigForLanguage("pt-BR"))
-	require.Equal(t, "english", searchConfigForLanguage("en-GB"))
-	require.Equal(t, "simple", searchConfigForLanguage("xx-YY"))
-	require.Equal(t, "simple", searchConfigForLanguage(""))
 	for _, l := range siteLanguages {
 		require.True(t, isSiteLanguage(l.Tag))
 		require.NotEmpty(t, l.SearchConfig)
@@ -211,4 +210,23 @@ func TestSiteAddressUnusableConfig(t *testing.T) {
 	require.Equal(t, "", server.siteAddress())
 	server.config.PublicBaseURL = "https://cms.example.com/"
 	require.Equal(t, "https://cms.example.com", server.siteAddress())
+}
+
+// Search (#145) maps the site language to a text search configuration in SQL
+// (golive_search_config_for, migration 000025): it must cover exactly siteLanguages,
+// with the same configuration for each.
+func TestSearchConfigMigrationMatchesLanguages(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "db", "migration", "000025_site_settings.up.sql"))
+	require.NoError(t, err)
+	matches := regexp.MustCompile(`WHEN '([^']+)' THEN '([^']+)'`).FindAllStringSubmatch(string(data), -1)
+	got := map[string]string{}
+	for _, m := range matches {
+		got[m[1]] = m[2]
+	}
+	want := map[string]string{}
+	for _, l := range siteLanguages {
+		want[l.Tag] = l.SearchConfig
+	}
+	require.Equal(t, want, got)
+	require.Contains(t, string(data), "ELSE 'simple'")
 }

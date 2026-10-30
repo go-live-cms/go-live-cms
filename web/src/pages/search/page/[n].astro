@@ -1,0 +1,19 @@
+---
+/**
+ * Page N of a search, /search/page/N/?q= (#145, #349). Rendered by ../index.astro,
+ * with the page number in Astro.locals; /page/1/ and ?page= redirect (the query
+ * kept), anything else not a page number 404s.
+ */
+import { SEARCH_PATH } from '../../../lib/search'
+import { resolveListRequest } from '../../../lib/pagination'
+
+export const prerender = false
+
+const { n } = Astro.params as { n: string }
+
+const request = resolveListRequest(Astro.url, SEARCH_PATH, n)
+if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+if (request.kind === 'notFound') return new Response(null, { status: 404 })
+Astro.locals.listPageNumber = request.page
+return Astro.rewrite(`${SEARCH_PATH}${Astro.url.search}`)
+---

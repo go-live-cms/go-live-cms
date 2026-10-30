@@ -40,6 +40,7 @@ const Home = (await import("./layouts/home/default.astro")).default
 const ErrorLayout = (await import("./layouts/error/default.astro")).default
 const AuthorLayout = (await import("./layouts/author/default.astro")).default
 const TermLayout = (await import("./layouts/term/default.astro")).default
+const SearchLayout = (await import("./layouts/search/default.astro")).default
 
 const post = {
   id: 42,
@@ -116,12 +117,16 @@ const render = async (component: any, props: Record<string, unknown>) =>
   (await container.renderToString(component, { props, request })).replace(/\s+data-astro-source-(?:file|loc)="[^"]*"/g, "")
 
 describe("SiteHeader", () => {
-  it("shows the site title as text, the theme switch, no GoLive mark or search", async () => {
+  it("shows the site title as text, the theme switch, search and no GoLive mark", async () => {
     const html = await render(SiteHeader, { siteTitle: "Field Notes" })
     expect(html).toMatch(/<a href="\/" class="site-title"[^>]*>Field Notes<\/a>/)
     expect(html).not.toContain("<svg width=\"16\" height=\"16\" viewBox=\"0 0 66 67\"")
-    expect(html).not.toContain('role="search"')
     expect(html).toContain('href="#content"')
+    // The header's search link (#145) and the phone menu's field, a GET form to /search.
+    expect(html).toContain('<a href="/search" class="icon-btn" aria-label="Search">')
+    expect(html).toMatch(/<form role="search" class="search-form search-form--compact" action="\/search" method="get">/)
+    expect(html).toMatch(/<label for="menu-q" class="sr-only">Search the blog<\/label>/)
+    expect(html).toMatch(/<input id="menu-q" type="search" name="q"/)
   })
 
   it("without a primary menu: the site title only, no nav", async () => {
@@ -519,12 +524,13 @@ describe("term page (#348)", () => {
 })
 
 describe("error layout", () => {
-  it("404: lists recent posts at their slug URLs, no search form until #145", async () => {
+  it("404: a search form and recent posts at their slug URLs", async () => {
     getPostsByType.mockResolvedValue({ data: [{ ...post, title: "Recent one" }], meta: {} })
     const html = await render(ErrorLayout, { status: 404, title: "Page not found", message: "Gone." })
     expect(html).toContain("This page isn’t here")
     expect(html).toContain('<a href="/post/hello-world">Recent one</a>')
-    expect(html).not.toContain('role="search"')
+    expect(html).toMatch(/<form role="search" class="search-form" action="\/search" method="get">/)
+    expect(html).toMatch(/<input id="q404" type="search" name="q"/)
     expect(html).toContain('<meta name="robots" content="noindex, nofollow">')
   })
 
@@ -534,5 +540,107 @@ describe("error layout", () => {
     expect(html).toContain("Try again")
     expect(getPostsByType).not.toHaveBeenCalled()
     expect(getMenu).not.toHaveBeenCalled()
+  })
+})
+
+describe("search layout (#145)", () => {
+  const chips = (current: "all" | "post" | "page", q = "alt text") =>
+    (["all", "post", "page"] as const).map((type, i) => ({
+      type,
+      label: ["All", "Posts", "Pages"][i],
+      count: [4, 3, 1][i],
+      href: type === "all" ? `/search?q=${encodeURIComponent(q)}` : `/search?q=${encodeURIComponent(q)}&type=${type}`,
+      current: type === current,
+    }))
+  const result = (id: number, extra: Record<string, unknown> = {}) => ({
+    hit: { id, title: "Writing alt text", slug: "writing-alt-text", post_type: "post", created_at: "", changed_at: "", title_html: "", excerpt_html: "" },
+    href: "/post/writing-alt-text",
+    typeLabel: "Post",
+    dateLabel: "Oct 15, 2026",
+    titleHtml: "Writing <mark>alt</mark> <mark>text</mark> that helps",
+    excerptHtml: "…good <mark>alt</mark> &amp; more…",
+    ...extra,
+  })
+  const data = (extra: Record<string, unknown> = {}) => ({
+    query: "alt text",
+    type: "all",
+    results: [result(1), result(2, { typeLabel: "Page", dateLabel: "Updated Sep 30, 2026", href: "/accessibility" })],
+    counts: { all: 4, post: 3, page: 1 },
+    chips: chips("all"),
+    total: 4,
+    page: 1,
+    totalPages: 1,
+    basePath: "/search",
+    pageQuery: "?q=alt+text",
+    siteTitle: "Field Notes",
+    topics: [],
+    recent: [],
+    title: "Search: alt text | Field Notes",
+    description: "Search Field Notes",
+    seo: { noindex: true },
+    ...extra,
+  })
+
+  it("renders the results: count, type chips, marked title and excerpt, the URL path", async () => {
+    const html = await render(SearchLayout, data())
+    expect(html).toMatch(/<input id="search-q" type="search" name="q" class="input" value="alt text"/)
+    expect(html).toContain("<strong>4 results</strong> for “alt text”")
+    expect(html).toMatch(/<a href="\/search\?q=alt%20text" class="chip" aria-current="page">\s*All <span class="chip-count">4<\/span>\s*<\/a>/)
+    expect(html).toMatch(/<a href="\/search\?q=alt%20text&#38;type=post" class="chip">\s*Posts <span class="chip-count">3<\/span>\s*<\/a>/)
+    expect(html).toContain('<a href="/post/writing-alt-text">Writing <mark>alt</mark> <mark>text</mark> that helps</a>')
+    expect(html).toContain('<p class="search-result-excerpt">…good <mark>alt</mark> &amp; more…</p>')
+    expect(html).toContain('<span class="search-result-path">/accessibility</span>')
+    expect(html).toContain("Updated Sep 30, 2026")
+    expect(html).toContain('<meta name="robots" content="noindex, nofollow">')
+    expect(html).not.toContain("No results for")
+    expect(html).not.toContain('class="pagination"')
+  })
+
+  it("pages with the query kept on every link", async () => {
+    const html = await render(SearchLayout, data({ page: 2, totalPages: 3, pageQuery: "?q=alt+text&type=post" }))
+    expect(html).toContain('<a href="/search?q=alt+text&#38;type=post" class="page-link" rel="prev">← Previous</a>')
+    expect(html).toContain('<a href="/search/page/3/?q=alt+text&#38;type=post" class="page-link" rel="next">Next →</a>')
+    expect(html).toContain("· Page 2")
+  })
+
+  it("the empty state: no results for the query, tips, topics and recent posts", async () => {
+    const html = await render(SearchLayout, data({
+      query: "quantum editing",
+      results: [],
+      counts: { all: 0, post: 0, page: 0 },
+      chips: chips("all", "quantum editing"),
+      total: 0,
+      topics: [{ label: "Guides", href: "/category/guides" }],
+      recent: [{ label: "Recent one", href: "/post/recent-one" }],
+    }))
+    expect(html).toContain("No results for “quantum editing”")
+    expect(html).toContain("Check the spelling, or try fewer words.")
+    expect(html).toContain('<a href="/category/guides" class="chip">Guides</a>')
+    expect(html).toContain('<a href="/post/recent-one">Recent one</a>')
+    expect(html).not.toContain("search-results")
+    expect(html).not.toContain('aria-label="Filter results"')
+  })
+
+  it("an empty query shows the form alone", async () => {
+    const html = await render(SearchLayout, data({ query: "", results: [], total: 0 }))
+    expect(html).toContain('class="search-form"')
+    expect(html).not.toContain("No results for")
+    expect(html).not.toContain("search-results")
+  })
+
+  it("never reflects the query as markup", async () => {
+    const query = '"><script>alert(1)</script><img src=x onerror=alert(2)>'
+    const html = await render(SearchLayout, data({ query, title: `Search: ${query} | Field Notes`, results: [], total: 0, topics: [], recent: [] }))
+    // In the field's value the quote is escaped, so the attribute can't be closed
+    // (< and > are inert inside a quoted attribute).
+    const value = 'value="&#34;><script>alert(1)</script><img src=x onerror=alert(2)>"'
+    expect(html).toContain(value)
+    // Everywhere else (attribute values aside, where the quote is escaped too) it is text.
+    const outsideValue = html.replace(/="[^"]*"/g, "")
+    expect(outsideValue).not.toContain("<script>alert(1)")
+    expect(outsideValue).not.toContain("<img src=x")
+    expect(html).toContain("No results for “&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(2)&gt;”")
+    // The <title> too.
+    expect(html).not.toMatch(/<title>[^<]*<script/)
   })
 })

@@ -208,6 +208,13 @@ are the most fragile part of the codebase. **Before editing anything under
   `loadTermPage`. The post route attaches `href` + `taxonomy_label` to each term of a public
   taxonomy (`linkTerms`), which the default theme's eyebrow, chips and sidebar
   "All <category> →" use. The sitemap lists term pages before authors.
+- **Search (#145):** `/search?q=&type=` (`src/pages/search/`, the theme's `layouts/search`,
+  data from `src/lib/search.ts`) over the API's `/public/search`; page N is
+  `/search/page/N/?q=` (the pager's `query` prop keeps the query). The highlights are the
+  only `set:html`, re-checked by `safeHighlight` (only `<mark>` survives); the query is only
+  rendered as text. `noindex` (meta + `NOINDEX_PREFIXES`), never in the sitemap. The header
+  link, phone menu field and 404 form are the theme's `SearchForm` (plain GET). The admin
+  posts list's box (`?q=`) calls `GET /posts/search` with the tab's filters, best match first.
 - **Site settings (#330):** `src/lib/siteSettings.ts` `getSiteSettings(Astro.locals)` fetches
   `/settings` once per request (pass `Astro.locals`; every caller shares it): title, tagline,
   language, time zone, date format. `<html lang>` is the language; the tagline is the home dek,

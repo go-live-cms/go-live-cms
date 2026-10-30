@@ -76,6 +76,18 @@ the admin assigns a menu to each under Appearance › Menus (#347):
 resolves every URL from its target when the menu is read, so links follow slug changes,
 and leaves out items whose content is unpublished, deleted or not public.
 
+## Search
+
+`layouts/search/default.astro` renders `/search?q=` (#145): the form, the result count,
+All / Posts / Pages chips, and each hit's type, date, highlighted title and excerpt and URL
+path; with no match, "No results for …", tips, topic chips (the most used categories, linked to
+their archives) and recent posts. Results come from the API's `/public/search` (Postgres full-text search,
+published posts and pages only) through `src/lib/search.ts`, in numbered pages like the
+other lists (`/search/page/2/?q=`). The highlights are the API's escaped HTML with only
+`<mark>` added; the query itself is only ever rendered as text. The header's search link,
+the phone menu's field and the 404's form (`components/SearchForm.astro`, a plain GET
+form) all go there. Search pages are `noindex` and never in the sitemap.
+
 ## Light, dark, system
 
 Readers pick Light, Dark or System from the header (and the phone menu); the choice is
@@ -92,7 +104,6 @@ The design shows these; the theme leaves them out rather than faking them:
 | Image captions, wide / full images, quote citations (styles are ready) | #346 |
 | Category eyebrows on list rows and "More to read" cards (list rows don't carry their terms yet) | follow-up to #348 |
 | Author photos (initials until then; author pages and cards are #350) | #334 |
-| Search | #145 |
 | Site logo (no setting for it yet) | — |
 
 GoLive's own mark appears only in the footer's "Published with GoLive" credit.

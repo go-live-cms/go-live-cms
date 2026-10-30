@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import { getPostCounts, getPosts } from "@gl-admin/lib/api/posts"
+import { getPostCounts, getPosts, searchPosts } from "@gl-admin/lib/api/posts"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import Pagination from "@gl-admin/components/ui/Pagination"
@@ -12,7 +12,7 @@ import Button from "@gl-admin/components/ui/Button"
 import Notice from "@gl-admin/components/ui/Notice"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
-import { DocumentIcon, PlusIcon } from "@gl-admin/components/ui/icons"
+import { DocumentIcon, PlusIcon, SearchIcon } from "@gl-admin/components/ui/icons"
 import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
 import { AccessCell, ListHeader, RowActionsCell, SortMenu } from "@gl-admin/components/content/ListParts"
 import Pages from "@gl-admin/pages/Pages"
@@ -36,11 +36,12 @@ import { postPath } from "@/lib/seo"
 import type { ApiMeta, Post, PostType as PostTypeInfo } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/pages/content-list.scss"
 
-// The posts list (#340): status tabs with counts, sort, status pills, byline avatars and
-// last edited; contributors get a "Your access" column. Hierarchical types (Pages) get
-// the tree in Pages.tsx instead.
+// The posts list (#340): status tabs with counts, search (#145, the full-text index; ?q=
+// in the URL, best match first, the tab and owner filters still apply), sort, status
+// pills, byline avatars and last edited; contributors get a "Your access" column.
+// Hierarchical types (Pages) get the tree in Pages.tsx instead.
 //
-// Hidden until their issues land: search and the Author / Category / Tag filters, bulk
+// Hidden until their issues land: the Author / Category / Tag filters, bulk
 // selection and actions, Import (#150), Trash (#327), Scheduled (#147), "Changes not
 // published" (#326) and the Category column.
 
@@ -93,6 +94,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
   const tabs = listTabs(role)
   const tab = findTab(tabs, params.get("view"))
   const sort = findSort(params.get("sort"))
+  const search = params.get("q")?.trim() ?? ""
   const { plural, singular } = typeLabels(typeName, postType, title)
   const newType = typeName || "post"
 
@@ -123,6 +125,27 @@ function PostsList({ typeName, postType, title }: ListProps) {
     }
   }, [typeName, moderator, user?.id, refresh])
 
+  // The search box's text; the URL (and the request) follow it after a pause. The URL is
+  // read when the timer fires, so a tab picked during the pause isn't overwritten.
+  const [searchText, setSearchText] = useState(search)
+  const [, setSearchParams] = useSearchParams()
+  const latestParams = useRef(params)
+  latestParams.current = params
+  useEffect(() => {
+    if (searchText.trim() === search) return
+    const id = setTimeout(() => {
+      const next = new URLSearchParams(latestParams.current)
+      if (searchText.trim()) next.set("q", searchText.trim())
+      else next.delete("q")
+      setSearchParams(next, { replace: true })
+    }, 400)
+    return () => clearTimeout(id)
+  }, [searchText])
+  // Back / Forward (or a link) changed ?q: the box follows.
+  useEffect(() => {
+    setSearchText((text) => (text.trim() === search ? text : search))
+  }, [search])
+
   const changed = () => {
     setRefresh((n) => n + 1)
     retryList.current()
@@ -135,13 +158,17 @@ function PostsList({ typeName, postType, title }: ListProps) {
       user_id: tab.mine && user?.id ? String(user.id) : "",
       sort: sort.sort,
       order: sort.order,
+      q: search,
     }),
-    [typeName, tab.status, tab.mine, user?.id, sort.sort, sort.order]
+    [typeName, tab.status, tab.mine, user?.id, sort.sort, sort.order, search]
   )
 
-  const fetchData = useCallback(async ({ limit, offset, ...q }: ApiMeta & typeof query) => {
-    const filtered = Object.fromEntries(Object.entries(q).filter(([, v]) => v !== ""))
-    const response = await getPosts({ limit, offset, with_meta: true, meta_level: "basic", ...filtered })
+  const fetchData = useCallback(async ({ limit, offset, q, sort, order, ...filters }: ApiMeta & typeof query) => {
+    const filtered = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""))
+    // A search is ranked by the API, so it takes no sort.
+    const response = q
+      ? await searchPosts({ limit, offset, q, ...filtered })
+      : await getPosts({ limit, offset, with_meta: true, meta_level: "basic", sort, order, ...filtered })
     return { data: response.data, total: response.meta.total || 0 }
   }, [])
 
@@ -249,7 +276,22 @@ function PostsList({ typeName, postType, title }: ListProps) {
       />
 
       <div className="gl-content-list__toolbar">
-        <SortMenu value={sort.id} onChange={(id) => setParam("sort", id, SORT_OPTIONS[0].id)} />
+        <label className="gl-content-list__search">
+          <SearchIcon />
+          <span className="gl-content-list__sr">Search {plural.toLowerCase()}</span>
+          <input
+            type="search"
+            placeholder={`Search ${plural.toLowerCase()}`}
+            value={searchText}
+            maxLength={200}
+            onChange={(e) => setSearchText(e.currentTarget.value)}
+          />
+        </label>
+        {search ? (
+          <span className="gl-content-list__sorted">Best match first</span>
+        ) : (
+          <SortMenu value={sort.id} onChange={(id) => setParam("sort", id, SORT_OPTIONS[0].id)} />
+        )}
       </div>
 
       <Pagination fetchData={fetchData} query={query} limitOptions={[10, 25, 50]}>
@@ -271,7 +313,19 @@ function PostsList({ typeName, postType, title }: ListProps) {
             )
           }
           if (!loading && data.length === 0) {
-            return (
+            return search ? (
+              <EmptyState
+                compact
+                icon={<SearchIcon size={24} />}
+                title={`No ${plural.toLowerCase()} match “${search}”`}
+                description="Search looks at titles, descriptions, tags and published text. Try other words."
+                action={
+                  <Button variant="secondary" onClick={() => setSearchText("")}>
+                    Clear search
+                  </Button>
+                }
+              />
+            ) : (
               <EmptyState
                 compact
                 icon={<DocumentIcon size={24} />}

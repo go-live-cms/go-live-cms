@@ -13,11 +13,13 @@ import (
 // copies of these lists (web/src/lib/siteDates.ts, web/gl-admin/lib/settingsForm.ts);
 // their tests fail if the copies drift from these.
 
-// SiteTaglineMax is the tagline's limit in characters (also a CHECK in 000024).
+// SiteTaglineMax is the tagline's limit in characters (also a CHECK in 000025).
 const SiteTaglineMax = 160
 
 // siteLanguage is one supported site locale: a BCP-47 tag for <html lang> and the
-// date names, and the Postgres text search configuration that fits it (#145).
+// date names, and the Postgres text search configuration search (#145) uses for it:
+// golive_search_config_for in migration 000025, checked against this list by
+// TestSearchConfigMigrationMatchesLanguages.
 type siteLanguage struct {
 	Tag          string
 	SearchConfig string
@@ -51,17 +53,6 @@ func siteLanguageTags() []string {
 
 func isSiteLanguage(tag string) bool {
 	return slices.ContainsFunc(siteLanguages, func(l siteLanguage) bool { return l.Tag == tag })
-}
-
-// searchConfigForLanguage maps a site language to its Postgres text search
-// configuration, `simple` for anything unknown.
-func searchConfigForLanguage(tag string) string {
-	for _, l := range siteLanguages {
-		if l.Tag == tag {
-			return l.SearchConfig
-		}
-	}
-	return "simple"
 }
 
 // isTimeZone accepts IANA zone names only: "Local" and "" are what LoadLocation

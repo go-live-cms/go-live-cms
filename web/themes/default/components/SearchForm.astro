@@ -1,0 +1,42 @@
+---
+/**
+ * The search form (#145): a GET to /search, so it works without JavaScript. Used by
+ * the search page, the phone menu and the 404. `compact` is the phone menu's: an
+ * icon button that stays beside the field.
+ */
+import { MAX_QUERY_LENGTH, SEARCH_PATH } from '@/lib/search'
+
+interface Props {
+  id: string
+  label: string
+  value?: string
+  placeholder?: string
+  compact?: boolean
+  autofocus?: boolean
+}
+
+const { id, label, value = '', placeholder = 'Search the blog', compact = false, autofocus = false } = Astro.props
+---
+
+<form role="search" class:list={['search-form', { 'search-form--compact': compact }]} action={SEARCH_PATH} method="get">
+  <label for={id} class="sr-only">{label}</label>
+  <input
+    id={id}
+    type="search"
+    name="q"
+    class="input"
+    value={value}
+    placeholder={placeholder}
+    maxlength={MAX_QUERY_LENGTH}
+    autocomplete="off"
+    enterkeyhint="search"
+    autofocus={autofocus}
+  />
+  {compact ? (
+    <button type="submit" class="btn btn-primary" aria-label="Search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+    </button>
+  ) : (
+    <button type="submit" class="btn btn-primary">Search</button>
+  )}
+</form>

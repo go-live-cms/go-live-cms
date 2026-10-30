@@ -57,3 +57,47 @@ func TestUpdateSiteSettings(t *testing.T) {
 	_, err = testQueries.UpdateSettings(ctx, UpdateSettingsParams{DateFormat: sql.NullString{String: "yyyy", Valid: true}})
 	require.Error(t, err)
 }
+
+// Search follows the site language (#330, #145): golive_search_config() is the stored
+// language's configuration, and changing to a language with another configuration
+// reindexes every post, so stemming applies to documents built before the change.
+func TestSearchFollowsSiteLanguage(t *testing.T) {
+	ctx := context.Background()
+	before, err := testQueries.GetSettings(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := testQueries.UpdateSettings(ctx, UpdateSettingsParams{SiteLanguage: sql.NullString{String: before.SiteLanguage, Valid: true}})
+		require.NoError(t, err)
+	})
+	setLanguage := func(tag string) {
+		_, err := testQueries.UpdateSettings(ctx, UpdateSettingsParams{SiteLanguage: sql.NullString{String: tag, Valid: true}})
+		require.NoError(t, err)
+	}
+	config := func() string {
+		var name string
+		require.NoError(t, testQueries.db.QueryRowContext(ctx, `SELECT golive_search_config()::text`).Scan(&name))
+		return name
+	}
+
+	setLanguage("en-US")
+	require.Equal(t, "english", config())
+
+	owner := createRandomUser(t)
+	word := searchWord(t)
+	post := createSearchPost(t, owner, searchPostSpec{title: "Ela estava correndo " + word})
+	publishSearchPost(t, post, searchDoc("nada"))
+	// English doesn't stem "correndo" to the stem of "correr".
+	require.Empty(t, publicSearchIDs(t, word+" correr", ""))
+
+	setLanguage("pt-BR")
+	require.Equal(t, "portuguese", config())
+	// The post was indexed in English; the language change rebuilt it in Portuguese.
+	require.Equal(t, []int64{post.ID}, publicSearchIDs(t, word+" correr", ""))
+
+	var unknown, sameEnglish string
+	require.NoError(t, testQueries.db.QueryRowContext(ctx,
+		`SELECT golive_search_config_for('xx-YY')::text, (golive_search_config_for('en-US') = golive_search_config_for('en-GB'))::text`,
+	).Scan(&unknown, &sameEnglish))
+	require.Equal(t, "simple", unknown)
+	require.Equal(t, "true", sameEnglish) // en-US -> en-GB doesn't reindex
+}

@@ -24,6 +24,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		// Public reads (put static routes before the greedy :id route)
 		posts.GET("", server.getPosts)
 		posts.GET("/counts", server.getPostCounts)
+		// The admin list's search box (#145): signed-in content roles only
+		posts.GET("/search", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.searchPosts)
 		posts.GET("/type/:type", server.getPostsByType)
 		posts.GET("/user/:id", server.getPostsByUser)
 		posts.GET("/slug/:slug", server.getPostBySlug)

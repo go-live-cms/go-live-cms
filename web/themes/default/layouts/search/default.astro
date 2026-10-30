@@ -1,0 +1,95 @@
+---
+/**
+ * Search, /search?q= (#145): the "Search results" and "Search · no results" boards.
+ * The form, then either the results (count, All / Posts / Pages chips, each hit's
+ * type and date, highlighted title and excerpt, URL path) or "No results for …" with
+ * tips, topic chips and recent posts. An empty query shows the form alone.
+ *
+ * The query is only ever rendered as text. The highlights are the one set:html: the
+ * API escapes them and adds only <mark>, and src/lib/search.ts's safeHighlight
+ * re-checks that (toSearchResult).
+ */
+import BaseLayout from '../base.astro'
+import SearchForm from '../../components/SearchForm.astro'
+import Pagination from '@/components/Pagination.astro'
+import { resultCountLabel, type SearchPageData } from '@/lib/search'
+import type { SeoMeta } from '@/lib/seo'
+
+interface Props extends SearchPageData {
+  title: string
+  description: string
+  seo?: SeoMeta
+}
+
+const { title, description, seo, query, results, chips, total, page, totalPages, basePath, pageQuery, siteTitle, topics, recent } = Astro.props
+const hasResults = results.length > 0
+const isEmpty = query !== '' && total === 0
+---
+
+<BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
+  <div class="container">
+    <div class="measure search-page">
+      <h1 class="title search-title">Search</h1>
+      <SearchForm id="search-q" value={query} label="Search posts and pages" autofocus={query === ''} />
+
+      {hasResults && (
+        <>
+          <div class="search-summary">
+            <p role="status" class="meta">
+              <strong>{resultCountLabel(total)}</strong> for “{query}”{page > 1 && ` · Page ${page}`}
+            </p>
+            <nav aria-label="Filter results" class="search-chips">
+              {chips.map((chip) => (
+                <a href={chip.href} class="chip" aria-current={chip.current ? 'page' : undefined}>
+                  {chip.label} <span class="chip-count">{chip.count}</span>
+                </a>
+              ))}
+            </nav>
+          </div>
+          <ol class="search-results">
+            {results.map((result) => (
+              <li class="search-result">
+                <span class="meta search-result-meta">
+                  <span class="eyebrow">{result.typeLabel}</span>
+                  {result.dateLabel && <> · {result.dateLabel}</>}
+                </span>
+                <h2 class="post-item-title search-result-title"><a href={result.href} set:html={result.titleHtml} /></h2>
+                {result.excerptHtml && <p class="search-result-excerpt" set:html={result.excerptHtml} />}
+                <span class="search-result-path">{result.href}</span>
+              </li>
+            ))}
+          </ol>
+          <Pagination page={page} totalPages={totalPages} basePath={basePath} query={pageQuery} previousLabel="Previous" nextLabel="Next" />
+        </>
+      )}
+
+      {isEmpty && (
+        <>
+          <div role="status" class="search-empty">
+            <h2 class="search-empty-title">No results for “{query}”</h2>
+            <ul class="meta search-tips">
+              <li>Check the spelling, or try fewer words.</li>
+              <li>Search looks at the titles, text and tags of posts and pages.</li>
+            </ul>
+          </div>
+          {topics.length > 0 && (
+            <section aria-labelledby="search-topics" class="search-section">
+              <h2 id="search-topics" class="section-title">Browse by topic instead</h2>
+              <div class="tag-row">
+                {topics.map((topic) => <a href={topic.href} class="chip">{topic.label}</a>)}
+              </div>
+            </section>
+          )}
+          {recent.length > 0 && (
+            <section aria-labelledby="search-recent" class="search-section">
+              <h2 id="search-recent" class="section-title">Recent posts</h2>
+              <ul class="link-list">
+                {recent.map((post) => <li><a href={post.href}>{post.label}</a></li>)}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  </div>
+</BaseLayout>

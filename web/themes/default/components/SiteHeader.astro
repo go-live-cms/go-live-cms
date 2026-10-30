@@ -1,18 +1,19 @@
 ---
 /**
- * Site header (#345): the site's title as text, the main nav, the theme switch and,
- * at phone width, a menu with the same nav and the same three theme choices.
+ * Site header (#345): the site's title as text, the main nav, a link to search (#145),
+ * the theme switch and, at phone width, a menu with the same nav, a search field and
+ * the same three theme choices.
  *
  * The nav is the menu assigned to the theme's "primary" location (#347). Without one
  * the header shows the site title only. A top-level link with children gets a
  * disclosure button that opens them (scripts/theme-init.js; hover and focus open it
  * without JavaScript); the phone menu lists the children under their parent.
  *
- * Hidden until their issues land: search (#145) and a site logo (#330, it would
- * replace the title text). GoLive's own mark never appears here, only in the footer
+ * Hidden until its issue lands: a site logo (#330, it would replace the title text). GoLive's own mark never appears here, only in the footer
  * credit.
  */
 import ThemeSwitch from './ThemeSwitch.astro'
+import SearchForm from './SearchForm.astro'
 import type { MenuLink } from '@/lib/menus'
 
 interface Props {
@@ -63,6 +64,9 @@ const holdsCurrent = (link: MenuLink) => link.current || link.children.some((chi
       </nav>
     )}
     <div class="header-actions">
+      <a href="/search" class="icon-btn" aria-label="Search">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      </a>
       <div class="theme-menu hide-mobile">
         <button
           type="button"
@@ -117,6 +121,7 @@ const holdsCurrent = (link: MenuLink) => link.current || link.children.some((chi
     ))}
   </nav>
   <div class="mobile-menu-section">
+    <SearchForm id="menu-q" label="Search the blog" compact />
     <fieldset class="appearance">
       <legend class="section-title">Appearance</legend>
       <ThemeSwitch variant="segmented" />

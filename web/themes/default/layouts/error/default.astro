@@ -5,12 +5,13 @@
  * this theme is active. Themes can provide their own layouts/error/{status}.astro
  * or layouts/error/default.astro; themes without one get src/layouts/ErrorLayout.astro.
  *
- * #345: the 404 lists the latest posts; its search form waits for #145. The 500 makes no
+ * #345: the 404 has a search form (#145) and lists the latest posts. The 500 makes no
  * API call of its own (the API being down is a common cause), only base's settings
  * lookup, which gives up after a moment; it skips the menus (#347) so that wait isn't
  * doubled.
  */
 import BaseLayout from '../base.astro'
+import SearchForm from '../../components/SearchForm.astro'
 import { getPostsByType } from '@/lib/api'
 import { normalizeUrlStructure, postPath } from '@/lib/seo'
 import { getSiteSettings } from '@/lib/siteSettings'
@@ -46,7 +47,8 @@ const structure = normalizeUrlStructure(site.urlStructure)
       {is404 ? (
         <>
           <h1 class="title">This page isn’t here</h1>
-          <p class="dek">The link may be old, or the post may have moved. Start again from the front page.</p>
+          <p class="dek">The link may be old, or the post may have moved. Search for it, or start again from the front page.</p>
+          <SearchForm id="q404" label="Search posts and pages" />
           <div class="button-row">
             <a href="/" class="btn btn-secondary">Go to the front page</a>
           </div>
