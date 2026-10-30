@@ -124,65 +124,18 @@ let fullPost: Post | undefined = post ?? pagePost
 // Determine if ID is numeric (ID-based) or not (slug-based)
 const isNumeric = /^\d+$/.test(id)
 
+// The page is server-rendered, so there are no props: this fetch is the normal path.
 if (!fullPost) {
   try {
-    let postResponse
-    if (isNumeric) {
-      postResponse = await getPostById(id)
-    } else {
-      postResponse = await getPostBySlug(id)
-    }
-    
-    if (postResponse && postResponse.post) {
-      fullPost = postResponse.post
-    } else {
-      console.error(`Post not found via direct fetch for ${postType} ID/slug:`, id)
-      return new Response(null, {
-        status: 404,
-        statusText: 'Post Not Found'
-      })
-    }
+    const postResponse = isNumeric ? await getPostById(id) : await getPostBySlug(id)
+    fullPost = postResponse?.post
   } catch (error) {
-    console.error(`Error fetching ${postType} directly for ID/slug:`, id, 'Error:', error)
-    return new Response(null, {
-      status: 404,
-      statusText: 'Post Not Found'
-    })
+    // An unknown id or slug (crawlers, old links) is an ordinary 404, not an error.
+    if ((error as { status?: number })?.status !== 404) {
+      console.error(`Error fetching ${postType} ${id}:`, error)
+    }
   }
-}
-
-if (post) {
-  try {
-    console.log(`Fetching fresh ${postType} data for ID/slug:`, id)
-    let postResponse
-    if (isNumeric) {
-      postResponse = await getPostById(id)
-    } else {
-      postResponse = await getPostBySlug(id)
-    }
-    
-    if (postResponse && postResponse.post) {
-      fullPost = postResponse.post
-      console.log(`Successfully fetched fresh ${postType} data:`, fullPost?.title)
-    }
-  } catch (error) {
-    console.warn(`Could not fetch fresh ${postType} data for ID/slug:`, id, 'Error:', error.message)
-    fullPost = post
-  }
-}
-
-if (!fullPost) {
-  try {
-    console.log(`Final attempt to fetch ${postType} for ID/slug:`, id)
-    let postResponse
-    if (isNumeric) {
-      postResponse = await getPostById(id)
-    } else {
-      postResponse = await getPostBySlug(id)
-    }
-    fullPost = postResponse.post
-  } catch (error) {
-    console.error(`Final fetch attempt failed for ${postType} ID/slug:`, id)
+  if (!fullPost) {
     return new Response(null, {
       status: 404,
       statusText: 'Post Not Found'

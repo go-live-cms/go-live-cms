@@ -19,9 +19,19 @@ describe("apiCall", () => {
     expect(log).not.toHaveBeenCalled()
   })
 
-  it("throws the API's error message", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"error":"nope"}', { status: 403 })))
+  it("throws the API's error message with the status", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"request_id":"r-1","error":"post not found"}', { status: 404 })))
 
-    await expect(apiCall("/users")).rejects.toThrow("nope")
+    const error = await apiCall("/posts/9").catch((e) => e)
+    expect(error.message).toBe("post not found")
+    expect(error.status).toBe(404)
+  })
+
+  it("keeps a non-JSON error body", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Bad Gateway", { status: 502 })))
+
+    const error = await apiCall("/settings").catch((e) => e)
+    expect(error.message).toBe("HTTP 502: Bad Gateway")
+    expect(error.status).toBe(502)
   })
 })
