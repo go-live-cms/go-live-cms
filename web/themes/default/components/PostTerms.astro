@@ -1,30 +1,36 @@
 ---
 /**
  * The post's categories, tags, ... grouped by taxonomy type (#167), as chips (#345).
- * They aren't links until category and tag archives exist (#348).
+ * A term of a public taxonomy links to its archive (#348): the post route passes its
+ * `href` (lib/termPage.ts linkTerms) along with its taxonomy's label.
  * Renders nothing when the post has no terms.
  */
-import type { TaxonomyTerm } from '@gl-admin/lib/api/types'
 import { getTaxonomyTypes } from '@/lib/api'
+import type { LinkedTerm } from '@/lib/termPage'
 
 interface Props {
-  terms?: TaxonomyTerm[]
+  terms?: LinkedTerm[]
 }
 
 const { terms = [] } = Astro.props
 
 // Keeps the API's order (by type, then name)
-const groups = new Map<string, TaxonomyTerm[]>()
+const groups = new Map<string, LinkedTerm[]>()
 for (const term of terms) {
   const type = term.taxonomy_type_name || 'terms'
   groups.set(type, [...(groups.get(type) ?? []), term])
 }
 
-// Headings use each type's configured label; its name if the lookup fails
+// Headings use each type's configured label: the one the route attached, else a
+// lookup here (terms passed without labels), else the type's name.
 const labels = new Map<string, string>()
-if (groups.size > 0) {
+for (const term of terms) {
+  if (term.taxonomy_type_name && term.taxonomy_label) labels.set(term.taxonomy_type_name, term.taxonomy_label)
+}
+// Only named types can have a label: terms without one ('terms') never trigger it.
+if (terms.some((term) => term.taxonomy_type_name && !labels.has(term.taxonomy_type_name))) {
   try {
-    for (const type of await getTaxonomyTypes()) labels.set(type.name, type.label)
+    for (const type of await getTaxonomyTypes()) if (!labels.has(type.name)) labels.set(type.name, type.label)
   } catch (error) {
     console.warn('[PostTerms] Could not fetch taxonomy types:', error)
   }
@@ -38,7 +44,11 @@ const label = (type: string) => labels.get(type) ?? type
       <div class={`tag-row post-terms__group post-terms__group--${type}`}>
         <dt class="section-title">{label(type)}</dt>
         {list.map((term) => (
-          <dd class="chip post-terms__term" data-slug={term.slug}>{term.name}</dd>
+          term.href ? (
+            <dd class="post-terms__term" data-slug={term.slug}><a class="chip" href={term.href}>{term.name}</a></dd>
+          ) : (
+            <dd class="chip post-terms__term" data-slug={term.slug}>{term.name}</dd>
+          )
         ))}
       </div>
     ))}

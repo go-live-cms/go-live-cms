@@ -30,8 +30,8 @@ export async function loadThemeLayout(glob: LayoutGlob, candidates: string[]): P
 }
 
 // Folders under layouts/ that hold page layouts rather than a post type's (home, archive,
-// error, author): a post type with one of these names must not pick them up.
-export const RESERVED_LAYOUT_KINDS = new Set(["home", "archive", "error", "author"])
+// error, author, term): a post type with one of these names must not pick them up.
+export const RESERVED_LAYOUT_KINDS = new Set(["home", "archive", "error", "author", "term"])
 
 // The post route's chain: the type's own variant, the theme's generic post layouts, then
 // the default theme's.

@@ -5,8 +5,9 @@ import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
 import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
 import { metaDescription, normalizeUrlStructure, postLastmod, postPath, publicImageUrl, resolveSiteUrl, toW3cDate, type SeoMeta } from '../../lib/seo'
 import { getPostAuthors } from '../../lib/authorPage'
+import { getCachedTaxonomyTypes, isTermRoute, linkTerms, termPath, TERM_ARCHIVE_ROUTE } from '../../lib/termPage'
 import { SITE_TITLE } from '../../consts'
-import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post, TaxonomyTerm, TaxonomyType } from '@gl-admin/lib/api/types'
 
 // WordPress-style: Auto-discover all theme layouts using glob imports
 // This allows dropping in new themes without modifying code
@@ -103,6 +104,17 @@ if (postType === 'page' && parsePageSegment(id) !== null) {
     Astro.locals.listPageNumber = request.page
     return Astro.rewrite('/')
   }
+}
+// Term archives (#348): /{taxonomy}/{slug} when no public post type has the name and a
+// public taxonomy does (lib/termPage.ts). Rendered by src/pages/term.archive.astro, with
+// the term in Astro.locals; page N is [id]/page/[n].astro.
+if (await isTermRoute(postType, publicTypes)) {
+  const request = resolveListRequest(Astro.url, termPath(postType, id))
+  if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+  if (request.kind === 'notFound') return new Response(null, { status: 404 })
+  Astro.locals.termArchive = { taxonomy: postType, slug: id }
+  Astro.locals.listPageNumber = request.page
+  return Astro.rewrite(TERM_ARCHIVE_ROUTE)
 }
 if (!typeIsPublic) {
   return new Response(null, { status: 404 })
@@ -218,11 +230,16 @@ if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
 }
 
 // Categories/tags (#167). Layouts that don't take `terms` ignore them; a failed
-// lookup just renders the post without them. The byline and "Written by" cards (#350) come with them: credited authors with their
+// lookup just renders the post without them. Terms of public taxonomies carry their
+// archive's `href` (#348); without the taxonomy list they render unlinked. The byline and "Written by" cards (#350) come with them: credited authors with their
 // bios. A failed lookup renders the post with its owner in the byline and no cards.
-const [terms, authors] = await Promise.all([
+const [postTerms, taxonomyTypes, authors] = await Promise.all([
   getPostTaxonomyTerms(fullPost.id).catch((error): TaxonomyTerm[] => {
     console.warn(`Could not fetch terms for ${postType} ${fullPost.id}:`, error)
+    return []
+  }),
+  getCachedTaxonomyTypes().catch((error): TaxonomyType[] => {
+    console.warn('Could not fetch taxonomy types:', error)
     return []
   }),
   getPostAuthors(fullPost.id).catch((error): AuthorProfile[] => {
@@ -230,6 +247,7 @@ const [terms, authors] = await Promise.all([
     return []
   }),
 ])
+const terms = linkTerms(postTerms, taxonomyTypes)
 
 // Get layout variant for this post
 const layoutVariant = await getPostLayoutVariant(fullPost, postType)

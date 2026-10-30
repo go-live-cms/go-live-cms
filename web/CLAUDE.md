@@ -199,6 +199,15 @@ are the most fragile part of the codebase. **Before editing anything under
   the "Written by" cards; credited names link to their pages, an owner shown as a fallback
   doesn't. Avatar colours are keyed by username. The sitemap lists author pages last. Bio
   and website are edited on Profile (`lib/profile.ts` mirrors the API's checks).
+- **Term archives (#348):** `/{taxonomy}/{slug}` (`/category/guides`, page N
+  `/category/guides/page/N/`). The URL is `[post_type]/[id].astro`: a public post type keeps
+  it; otherwise, if a public taxonomy has the name (`isTermRoute`, `src/lib/termPage.ts`), it
+  sets `Astro.locals.termArchive` and rewrites to `src/pages/term.archive.astro` (404 when
+  reached directly; a dot can't be in a post type name). `[post_type]/[id]/page/[n].astro`
+  does the same for page N. The page renders the theme's `layouts/term` from
+  `loadTermPage`. The post route attaches `href` + `taxonomy_label` to each term of a public
+  taxonomy (`linkTerms`), which the default theme's eyebrow, chips and sidebar
+  "All <category> →" use. The sitemap lists term pages before authors.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

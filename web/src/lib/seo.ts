@@ -220,11 +220,18 @@ export interface SitemapSource {
   // Every author with a page (#350) and their newest post's time. Optional: a source
   // without it lists no author pages.
   getAuthors?(): Promise<{ username: string; last_modified?: string }[]>
+  // Every term archive with a post (#348) and that post's newest change. Optional too.
+  getTerms?(): Promise<{ taxonomy: string; slug: string; last_modified?: string }[]>
 }
 
 // An author's page (#350).
 export function authorPath(username: string): string {
   return `/author/${encodeURIComponent(username)}`
+}
+
+// A term's archive (#348), /{taxonomy}/{slug}: the URL the API's menus build too.
+export function termPath(taxonomy: string, slug: string): string {
+  return `/${encodeURIComponent(taxonomy)}/${encodeURIComponent(slug)}`
 }
 
 const PAGE_SIZE = 100 // the API caps limit at 100
@@ -236,13 +243,16 @@ export const MAX_SITEMAP_URLS = 50_000
 // and every published post at its canonical URL with lastmod from changed_at.
 // Only public types are listed, so admin routes never appear, and only
 // published posts (drafts, including unpublished posts, and archived posts are
-// skipped even if the API returned them). Author pages (#350) come last.
+// skipped even if the API returned them). Term archives (#348), then author pages
+// (#350), come last.
 export async function collectSitemapEntries(siteUrl: string, source: SitemapSource): Promise<SitemapEntry[]> {
-  // Independent of the posts walk, so it runs alongside it.
+  // Independent of the posts walk, so they run alongside it.
   const authorsPromise = source.getAuthors?.() ?? Promise.resolve([])
-  // If the posts walk fails first, its error is the one reported; don't leave this
-  // rejection unhandled meanwhile (awaiting it below still rethrows).
+  const termsPromise = source.getTerms?.() ?? Promise.resolve([])
+  // If the posts walk fails first, its error is the one reported; don't leave these
+  // rejections unhandled meanwhile (awaiting them below still rethrows).
   authorsPromise.catch(() => {})
+  termsPromise.catch(() => {})
   const [types, structure] = await Promise.all([source.getPublicPostTypeNames(), source.getUrlStructure()])
   // Types are fetched in parallel (each still pages sequentially), then joined
   // in the API's type order.
@@ -266,8 +276,10 @@ export async function collectSitemapEntries(siteUrl: string, source: SitemapSour
     }),
   )
 
+  const terms = await termsPromise
+  const termEntries = terms.map((t) => ({ loc: absoluteUrl(siteUrl, termPath(t.taxonomy, t.slug)), lastmod: toW3cDate(t.last_modified) }))
   const authors = await authorsPromise
   const authorEntries = authors.map((a) => ({ loc: absoluteUrl(siteUrl, authorPath(a.username)), lastmod: toW3cDate(a.last_modified) }))
 
-  return [{ loc: absoluteUrl(siteUrl, "/") }, ...perType.flat(), ...authorEntries].slice(0, MAX_SITEMAP_URLS)
+  return [{ loc: absoluteUrl(siteUrl, "/") }, ...perType.flat(), ...termEntries, ...authorEntries].slice(0, MAX_SITEMAP_URLS)
 }
