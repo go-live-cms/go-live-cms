@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   user: { id: 7, username: "elena", full_name: "Elena V.", role: "editor" } as Record<string, unknown>,
   getPosts: vi.fn(),
   getPostCounts: vi.fn(),
+  searchPosts: vi.fn(),
 }))
 
 vi.mock("@gl-admin/lib/auth", () => ({
@@ -22,6 +23,7 @@ vi.mock("@gl-admin/lib/auth", () => ({
 vi.mock("@gl-admin/lib/api/posts", () => ({
   getPosts: api.getPosts,
   getPostCounts: api.getPostCounts,
+  searchPosts: api.searchPosts,
   updatePost: vi.fn(),
   deletePost: vi.fn(),
 }))
@@ -93,6 +95,7 @@ beforeEach(() => {
   api.user.role = "editor"
   api.getPosts.mockReset()
   api.getPostCounts.mockReset()
+  api.searchPosts.mockReset()
 })
 
 afterEach(() => {
@@ -166,6 +169,65 @@ describe("Posts list", () => {
     const buttons = Array.from(container.querySelectorAll("td button")).map((b) => b.textContent)
     expect(buttons).toContain("Edit")
     expect(buttons).toContain("Open")
+  })
+})
+
+describe("Posts list search (#145)", () => {
+  const settle = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+
+  it("searches the index with the tab's filters after a pause, best match first", async () => {
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 2, published: 3 }, total: 5 })
+    api.searchPosts.mockImplementation(() => list([post(9, { title: "Alt text guide" })]))
+    await render("/content/post?view=draft")
+
+    vi.useFakeTimers()
+    try {
+      const input = container.querySelector<HTMLInputElement>(".gl-content-list__search input")!
+      expect(input.placeholder).toBe("Search posts")
+      await act(async () => {
+        const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!
+        setValue.call(input, "alt text")
+        input.dispatchEvent(new Event("input", { bubbles: true }))
+      })
+      expect(api.searchPosts).not.toHaveBeenCalled()
+      await act(async () => {
+        vi.advanceTimersByTime(400)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+    await settle()
+
+    expect(api.searchPosts).toHaveBeenCalledWith(expect.objectContaining({ q: "alt text", type: "post", status: "draft", offset: 0 }))
+    expect(api.searchPosts.mock.calls[0][0]).not.toHaveProperty("sort")
+    expect(text()).toContain("Alt text guide")
+    expect(text()).toContain("Best match first")
+    expect(container.querySelector(".gl-content-list__search input")).not.toBeNull()
+  })
+
+  it("loads a search from the URL and says when nothing matches", async () => {
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 2 }, total: 2 })
+    api.searchPosts.mockImplementation(() => list([]))
+    await render("/content/post?q=quantum")
+
+    expect(api.getPosts).not.toHaveBeenCalled()
+    expect(api.searchPosts).toHaveBeenCalledWith(expect.objectContaining({ q: "quantum", status: "draft,published" }))
+    expect(container.querySelector<HTMLInputElement>(".gl-content-list__search input")!.value).toBe("quantum")
+    expect(text()).toContain("No posts match “quantum”")
+    expect(text()).toContain("Clear search")
+  })
+
+  it("passes the contributor's own-posts filter on", async () => {
+    api.user.role = "contributor"
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 2 }, total: 2 })
+    api.searchPosts.mockImplementation(() => list([post(1)]))
+    await render("/content/post?view=mine&q=notes")
+
+    expect(api.searchPosts).toHaveBeenCalledWith(expect.objectContaining({ q: "notes", user_id: "7" }))
   })
 })
 

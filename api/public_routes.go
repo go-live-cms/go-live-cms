@@ -32,4 +32,7 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 
 	// The menu assigned to a theme location (menus_routes.go)
 	rg.GET("/menus/:location", server.getPublicMenu)
+
+	// Full-text search of published posts and pages (#145, search_handlers_read.go)
+	rg.GET("/search", server.getPublicSearch)
 }

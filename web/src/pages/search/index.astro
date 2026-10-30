@@ -1,0 +1,50 @@
+---
+/**
+ * Search, /search?q= (#145), rendered by the active theme's layouts/search layout
+ * (the default theme's when it has none). Page N (#349) is /search/page/N/?q=
+ * (page/[n].astro), rewritten here with Astro.locals.listPageNumber set. Data from
+ * src/lib/search.ts. Never indexed: noindex here and X-Robots-Tag from the
+ * middleware (seo.ts), and the sitemap doesn't list it.
+ */
+import { loadSearchPage, normalizeQuery, parseSearchType, SEARCH_PATH } from '../../lib/search'
+import { pageTitleSuffix, resolveListRequest } from '../../lib/pagination'
+import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
+
+export const prerender = false
+
+const searchLayouts = import.meta.glob('../../../themes/*/layouts/search/*.astro')
+
+let page = Astro.locals.listPageNumber ?? 1
+if (Astro.locals.listPageNumber === undefined) {
+  const request = resolveListRequest(Astro.url, SEARCH_PATH)
+  if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+  if (request.kind === 'notFound') return new Response(null, { status: 404 })
+  page = request.page
+}
+
+const query = normalizeQuery(Astro.url.searchParams.get('q'))
+const type = parseSearchType(Astro.url.searchParams.get('type'))
+if (!type) {
+  return new Response(null, { status: 404 })
+}
+const data = await loadSearchPage(query, type, page)
+if (!data) {
+  return new Response(null, { status: 404 })
+}
+
+const themeSlug = Astro.locals.activeTheme || 'default'
+const Layout = await loadThemeLayout(searchLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'search'))
+if (!Layout) {
+  throw new Error('No search layout in this build')
+}
+// The query goes into <title> as text; Astro escapes it.
+const heading = query ? `Search: ${query}` : 'Search'
+const title = `${heading}${pageTitleSuffix(page)} | ${data.siteTitle}`
+---
+
+<Layout
+  {...data}
+  title={title}
+  description={`Search ${data.siteTitle}`}
+  seo={{ noindex: true, type: 'website', siteName: data.siteTitle }}
+/>

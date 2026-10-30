@@ -13,26 +13,32 @@ interface Props {
   totalPages: number
   // Page 1's URL, e.g. "/" or "/post".
   basePath: string
+  // A query string every link keeps, e.g. "?q=alt" on search (#145).
+  query?: string
+  // The arrows' words: lists run newest first, search best match first.
+  previousLabel?: string
+  nextLabel?: string
 }
 
-const { page, totalPages, basePath } = Astro.props
+const { page, totalPages, basePath, query = '', previousLabel = 'Newer', nextLabel = 'Older' } = Astro.props
 const links = pageLinks(basePath, page, totalPages)
 const slots = pageWindow(page, totalPages)
+const withQuery = (href: string) => `${href}${query}`
 ---
 
 {totalPages > 1 && (
   <nav class="pagination" aria-label="Pages">
-    {links.newer ? <a href={links.newer} class="page-link" rel="prev">← Newer</a> : <span class="page-link" aria-disabled="true">← Newer</span>}
+    {links.newer ? <a href={withQuery(links.newer)} class="page-link" rel="prev">← {previousLabel}</a> : <span class="page-link" aria-disabled="true">← {previousLabel}</span>}
     {slots.map((slot) =>
       slot === 'gap' ? (
         <span class="page-link page-num" aria-hidden="true">…</span>
       ) : slot === page ? (
-        <a href={pagePath(basePath, slot)} class="page-link page-num" aria-current="page">{slot}</a>
+        <a href={withQuery(pagePath(basePath, slot))} class="page-link page-num" aria-current="page">{slot}</a>
       ) : (
-        <a href={pagePath(basePath, slot)} class="page-link page-num">{slot}</a>
+        <a href={withQuery(pagePath(basePath, slot))} class="page-link page-num">{slot}</a>
       ),
     )}
     <span class="page-status">Page {page} of {totalPages}</span>
-    {links.older ? <a href={links.older} class="page-link" rel="next">Older →</a> : <span class="page-link" aria-disabled="true">Older →</span>}
+    {links.older ? <a href={withQuery(links.older)} class="page-link" rel="next">{nextLabel} →</a> : <span class="page-link" aria-disabled="true">{nextLabel} →</span>}
   </nav>
 )}
