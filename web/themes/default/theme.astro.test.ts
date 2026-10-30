@@ -5,8 +5,11 @@ import { getContainerRenderer as reactRenderer } from "@astrojs/react"
 import { loadRenderers } from "astro:container"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
+// The site settings (#330); a test may change them for one render.
+const SITE = { title: "Field Notes", tagline: "", postsPerPage: 10, urlStructure: "slug", language: "en-US", timeZone: "UTC", dateFormat: "month_day_year" }
+const getSiteSettings = vi.fn()
 vi.mock("@/lib/siteSettings", () => ({
-  getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 10, urlStructure: "slug" }),
+  getSiteSettings: (...args: unknown[]) => getSiteSettings(...args),
 }))
 const getPostsByType = vi.fn()
 const getAdjacentPosts = vi.fn()
@@ -77,6 +80,7 @@ beforeEach(async () => {
   getAdjacentPosts.mockReset().mockResolvedValue({ previous: null, next: null })
   getRelatedPosts.mockReset().mockResolvedValue([])
   getMenu.mockReset()
+  getSiteSettings.mockReset().mockResolvedValue(SITE)
   getMenu.mockResolvedValue(null)
 })
 
@@ -190,7 +194,31 @@ describe("base layout", () => {
     expect(head).toContain("--color-primary:#1b7760;")
     expect(head).toContain('<link rel="alternate" type="application/rss+xml"')
     // No server-side data-theme: the script sets it, and without JS the CSS follows the system.
-    expect(html).toMatch(/<html lang="en">/)
+    expect(html).toMatch(/<html lang="en-US">/)
+  })
+
+  it("sets <html lang> from the site language (#330)", async () => {
+    getSiteSettings.mockResolvedValue({ ...SITE, language: "pt-BR" })
+    const html = await render(PostDefault, { post, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(html).toMatch(/<html lang="pt-BR">/)
+  })
+
+  it("shows the tagline in the footer and as the description of a page without one (#330)", async () => {
+    getSiteSettings.mockResolvedValue({ ...SITE, tagline: "Notes from the team building GoLive" })
+    const html = await render(PostDefault, { post, title: "t", description: "", siteTitle: "Field Notes" })
+    expect(html).toContain('<p class="site-tagline">Notes from the team building GoLive</p>')
+    const head = html.slice(0, html.indexOf("</head>"))
+    expect(head).toContain('<meta name="description" content="Notes from the team building GoLive">')
+    expect(head).toContain('<meta property="og:description" content="Notes from the team building GoLive">')
+    expect(head).toContain('<meta property="og:site_name" content="Field Notes">')
+    // A page with its own description keeps it.
+    const own = await render(PostDefault, { post, title: "t", description: "Its own", siteTitle: "Field Notes" })
+    expect(own).toContain('<meta name="description" content="Its own">')
+  })
+
+  it("has no tagline line without a tagline", async () => {
+    const html = await render(PostDefault, { post, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(html).not.toContain("site-tagline")
   })
 
   it("renders the menus assigned to primary and footer, marking the current page", async () => {
@@ -328,6 +356,25 @@ describe("page layouts", () => {
   })
 })
 
+describe("dates (#330)", () => {
+  it("bylines and the sidebar facts use the site language, time zone and date format", async () => {
+    getSiteSettings.mockResolvedValue({ ...SITE, language: "pt-BR", timeZone: "America/Sao_Paulo", dateFormat: "day_month_year" })
+    // 2026-10-01T10:00Z is 07:00 in São Paulo: still 1 October.
+    const html = await render(PostSidebar, { post: { ...post, published_blocks: docWithHeadings() }, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(html).toContain("1 de outubro de 2026")
+    expect(html).toContain("12 de outubro de 2026")
+    expect(html).not.toContain("October")
+  })
+
+  it("the ISO preset is the same in any language, and the day is the site zone's", async () => {
+    getSiteSettings.mockResolvedValue({ ...SITE, language: "de-DE", timeZone: "Pacific/Auckland", dateFormat: "iso" })
+    // 10:00Z on Oct 1 is 23:00 the same day in Auckland (UTC+13); 12:30Z on Oct 12 is 01:30 on Oct 13.
+    const html = await render(PostSidebar, { post: { ...post, published_blocks: docWithHeadings() }, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(html).toContain("2026-10-01")
+    expect(html).toContain("2026-10-13")
+  })
+})
+
 describe("front page", () => {
   const item = (id: number, image: string | null = null) => ({ post: { ...post, id, title: `Post ${id}` }, href: `/post/p${id}`, image })
 
@@ -335,6 +382,7 @@ describe("front page", () => {
     const list = { posts: [item(1, "https://example.org/uploads/1.jpg"), item(2), item(3)], total: 12, page: 1, totalPages: 5, basePath: "/", links: { older: "/page/2/" }, siteTitle: "Field Notes" }
     const html = await render(Home, { title: "Field Notes", description: "d", list })
     expect(html).toContain('<h1 class="title">Field Notes</h1>')
+    expect(html).not.toContain('<p class="dek">')
     expect(html).toMatch(/class="feature has-media"[\s\S]*Post 1/)
     expect(html).toContain('<h2 id="more-posts" class="section-title list-heading">More posts</h2>')
     expect(html).toContain('<a href="/post/p3">Post 3</a>')
@@ -350,6 +398,15 @@ describe("front page", () => {
     expect(head).toContain('<link rel="canonical" href="http://web:4321/">')
     expect(head).toContain('<link rel="next" href="http://web:4321/page/2/">')
     expect(head).not.toContain('rel="prev"')
+  })
+
+  it("puts the tagline under the title on the first page only (#330)", async () => {
+    const list = { posts: [item(1)], total: 1, page: 1, totalPages: 1, basePath: "/", links: {}, siteTitle: "Field Notes", siteTagline: "Notes from the team" }
+    expect(await render(Home, { title: "Field Notes", description: "d", list })).toMatch(/<h1 class="title">Field Notes<\/h1>\s*<p class="dek">Notes from the team<\/p>/)
+    const page2 = { ...list, page: 2, totalPages: 2, links: { newer: "/" } }
+    const html = await render(Home, { title: "Field Notes", description: "d", list: page2 })
+    expect(html).toContain('<p class="dek">Page 2</p>')
+    expect(html).not.toContain("Notes from the team</p>")
   })
 
   it("links back to newer pages and has no pager for a single page", async () => {

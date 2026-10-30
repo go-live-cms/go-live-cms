@@ -34,6 +34,17 @@ first category. Headings get ids from their text (`src/components/blocks/utils/h
 `THEME_ELEMENT_IDS` in `lib/posts.ts` lists the ids the theme's own markup uses, which a
 heading never takes. Add any new element id there.
 
+## Site settings (#330)
+
+`base.astro` reads the site settings once per request (`getSiteSettings(Astro.locals)`,
+`src/lib/siteSettings.ts`; every other caller with the same `Astro.locals` shares the
+lookup). `<html lang>` is the site's language; the tagline is the front page's dek, sits
+under the title in the footer and is the meta description of any page without its own
+(`SeoHead`). Every date goes through `formatSiteDate(date, site, "long" | "short")`
+(`src/lib/siteDates.ts`): the site's language for the month names, its time zone for the
+day, and its date format preset for the order. Don't call `toLocaleDateString` in a
+theme.
+
 ## Fonts
 
 Literata (variable, opsz + wght), Inter 400–700 and JetBrains Mono 400/500, latin
@@ -74,7 +85,7 @@ The design shows these; the theme leaves them out rather than faking them:
 | The "All <category> →" link under the sidebar's category list | #348 |
 | Author photos (initials until then; author pages and cards are #350) | #334 |
 | Search | #145 |
-| Tagline and site logo | #330 |
+| Site logo (no setting for it yet) | — |
 
 GoLive's own mark appears only in the footer's "Published with GoLive" credit.
 

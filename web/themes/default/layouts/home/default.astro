@@ -1,8 +1,8 @@
 ---
 /**
  * Front page (#345): the latest post as a feature, then the rest of the page of posts.
- * The design's headline and dek are the site's tagline (#330); until it exists the
- * heading is the site title. Pages after the first are a plain list.
+ * The heading is the site title, with the site's tagline (#330) as its dek when it has
+ * one. Pages after the first are a plain list.
  */
 import BaseLayout from '../base.astro'
 import PostByline from '../../components/PostByline.astro'
@@ -26,7 +26,7 @@ const featureExcerpt = feature ? metaDescription(feature.post.description, 260) 
   <div class="container">
     <header class="home-header">
       <h1 class="title">{list.siteTitle}</h1>
-      {list.page > 1 && <p class="dek">Page {list.page}</p>}
+      {list.page > 1 ? <p class="dek">Page {list.page}</p> : list.siteTagline && <p class="dek">{list.siteTagline}</p>}
     </header>
 
     {list.posts.length === 0 && (

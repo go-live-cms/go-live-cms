@@ -9,16 +9,17 @@
  * links to it), and the other top-level links are in the "Site" column with the RSS
  * feed. Without a footer menu, the "Site" column has the RSS feed only.
  *
- * Hidden until its issue lands: the tagline under the title (#330).
+ * The site's tagline (#330), when it has one, sits under the title.
  */
 import { footerColumns, type MenuLink } from '@/lib/menus'
 
 interface Props {
   siteTitle: string
+  tagline?: string
   menu?: MenuLink[]
 }
 
-const { siteTitle, menu = [] } = Astro.props
+const { siteTitle, tagline, menu = [] } = Astro.props
 const year = new Date().getFullYear()
 const columns = footerColumns(menu)
 if (!columns.some((column) => column.heading === null)) columns.push({ heading: null, links: [] })
@@ -29,6 +30,7 @@ if (!columns.some((column) => column.heading === null)) columns.push({ heading: 
     <div class="footer-grid">
       <div class="footer-col">
         <a href="/" class="site-title">{siteTitle}</a>
+        {tagline && <p class="site-tagline">{tagline}</p>}
       </div>
       {columns.map((column, i) =>
         column.heading ? (

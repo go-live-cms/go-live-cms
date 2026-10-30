@@ -10,28 +10,32 @@
  *
  * canonical defaults to the current path on the configured site URL (SITE_URL,
  * see src/lib/seo.ts), without the query string.
+ *
+ * The site settings (#330) fill in what the page doesn't say: og:site_name is the site
+ * title, and a page without a description is described by the site's tagline.
  */
-import { SITE_TITLE } from '@/consts'
 import { absoluteUrl, publicImageUrl, resolveSiteUrl, type SeoMeta } from '@/lib/seo'
+import { getSiteSettings } from '@/lib/siteSettings'
 
 interface Props extends SeoMeta {
   title: string
   description?: string
 }
 
+const site = await getSiteSettings(Astro.locals)
 const {
   title,
-  description,
   canonical,
   prev,
   next,
   image,
   type = 'website',
   noindex = false,
-  siteName = SITE_TITLE,
+  siteName = site.title,
   publishedTime,
   modifiedTime,
 } = Astro.props
+const description = Astro.props.description || site.tagline || undefined
 
 const siteUrl = resolveSiteUrl(Astro.url)
 const canonicalUrl = canonical ? absoluteUrl(siteUrl, canonical) : absoluteUrl(siteUrl, Astro.url.pathname)

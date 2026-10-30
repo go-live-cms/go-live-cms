@@ -9,7 +9,7 @@ import Header from '@/layouts/Header.astro'
 import Footer from '@/layouts/Footer.astro'
 import ErrorContent from '@/components/ErrorContent.astro'
 import SeoHead from '@/components/SeoHead.astro'
-import { SITE_TITLE } from '@/consts'
+import { getSiteSettings } from '@/lib/siteSettings'
 import '@/assets/styles/global.css'
 
 interface Props {
@@ -20,17 +20,18 @@ interface Props {
 }
 
 const { title, message } = Astro.props
+const site = await getSiteSettings(Astro.locals)
 const themeAssets = Astro.locals.themeAssets || {}
 const legacyCssPath = Astro.locals.themeCssPath
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={site.language}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <SeoHead title={`${title} | ${SITE_TITLE}`} description={message} noindex />
+    <SeoHead title={`${title} | ${site.title}`} description={message} noindex />
 
     {themeAssets.styles?.map((style: any) => (
       <link rel="stylesheet" href={style.src} media={style.media || 'all'} />
