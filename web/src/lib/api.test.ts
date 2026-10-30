@@ -8,7 +8,10 @@ afterEach(() => {
 
 describe("apiCall", () => {
   it("returns the JSON body and logs nothing", async () => {
-    const fetchMock = vi.fn(async () => new Response('{"ok":true}', { headers: { "Content-Type": "application/json" } }))
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response('{"ok":true}', { headers: { "Content-Type": "application/json" } }),
+    )
     vi.stubGlobal("fetch", fetchMock)
     const log = vi.spyOn(console, "log")
 
