@@ -388,6 +388,18 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   public, active type. Anyone else gets the same 404 body as an unknown username (tested),
   so the routes can't enumerate accounts.
 
+## Public term archives (#348)
+
+- `GET /public/taxonomies/:taxonomy/terms/:slug/posts?page=N` (`terms_public_handlers_read.go`)
+  answers `{term, posts, pagination}` like `/public/posts/type/:type` (#349 helpers). Who has
+  a page is decided in `db/query/terms_public.sql` alone: a term of a **public** taxonomy
+  type. Unknown taxonomy, non-public taxonomy and unknown slug are the same 404 body.
+- The list is published posts of public, active types tagged with the term **or any term
+  below it** (recursive CTE over `parent_id`, `UNION` so a cycle still ends). Count and page
+  use the same CTE, so `total` agrees with the rows. Page 1 of an empty term is a 200.
+- `GET /public/terms?limit=&offset=` lists term pages with at least one post (theirs or a
+  descendant's) and lastmod, for the sitemap.
+
 ## Site settings (#330)
 
 - `settings` (singleton) gained `site_tagline` (≤160, one line, trimmed), `site_language`

@@ -8,11 +8,13 @@ import { getAdjacentPosts, getRelatedPosts } from "./api"
 import { toListedPost, type ListedPost } from "./postList"
 import { normalizeUrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
+import type { LinkedTerm } from "./termPage"
 
 export const RELATED_POSTS_LIMIT = 3
 
 export interface CategoryPosts {
-  term: TaxonomyTerm
+  // With its archive's href when the post route linked it (#348).
+  term: LinkedTerm
   posts: ListedPost[]
 }
 
@@ -27,7 +29,7 @@ export interface PostEndData {
 
 // The category the sidebar names: the post's first (the API sorts terms by type, then
 // name), or undefined.
-export function primaryCategory(terms: TaxonomyTerm[] | undefined): TaxonomyTerm | undefined {
+export function primaryCategory<T extends TaxonomyTerm>(terms: T[] | undefined): T | undefined {
   return terms?.find((t) => t.taxonomy_type_name === "category")
 }
 
@@ -47,7 +49,7 @@ const apiSource: PostEndSource = {
 
 export async function loadPostEnd(
   post: Pick<Post, "id" | "post_type">,
-  terms: TaxonomyTerm[] | undefined,
+  terms: LinkedTerm[] | undefined,
   siteUrl: string,
   // inCategory: also load the primary category's other posts. urlStructure: the
   // site's id/slug setting when the caller has it (the post route does), else fetched.

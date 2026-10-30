@@ -245,6 +245,27 @@ describe("collectSitemapEntries", () => {
     ])
   })
 
+  it("lists term archives after the posts and before the authors (#348)", async () => {
+    const entries = await collectSitemapEntries("https://example.org", {
+      ...source({ post: [post({ id: 1 })] }),
+      getTerms: async () => [
+        { taxonomy: "category", slug: "guides", last_modified: "2026-10-21T08:00:00Z" },
+        { taxonomy: "tag", slug: "c++", last_modified: "0001-01-01T00:00:00Z" },
+      ],
+      getAuthors: async () => [{ username: "ana", last_modified: "2026-10-20T09:00:00Z" }],
+    })
+    expect(entries.map((e) => e.loc)).toEqual([
+      "https://example.org/",
+      "https://example.org/post",
+      "https://example.org/post/1",
+      "https://example.org/category/guides",
+      "https://example.org/tag/c%2B%2B",
+      "https://example.org/author/ana",
+    ])
+    expect(entries[3].lastmod).toBe("2026-10-21T08:00:00.000Z")
+    expect(entries[4].lastmod).toBeUndefined()
+  })
+
   it("falls back to created_at when changed_at is Go's zero time", async () => {
     const entries = await collectSitemapEntries(
       "https://example.org",

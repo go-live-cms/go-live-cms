@@ -247,6 +247,18 @@ body {
   font-weight: 500;
   line-height: 1;
 }
+/* Term links (#348): a post's category eyebrow and its category and tag chips. */
+.site a.eyebrow:hover {
+  text-decoration: underline;
+}
+.site a.chip {
+  color: var(--color-text);
+  text-decoration: none;
+}
+.site a.chip:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
 .btn {
   display: inline-flex;
   align-items: center;
@@ -722,6 +734,9 @@ body {
 .home-header {
   padding-bottom: 0;
 }
+.term-header {
+  max-width: 760px;
+}
 .home-header .title,
 .archive-header .title {
   font-size: var(--size-3xl);
@@ -1119,6 +1134,10 @@ body {
 .post-header .title {
   font-size: var(--size-4xl);
 }
+/* The category eyebrow (#348): as wide as its text, so only the name is the link. */
+.post-header > .eyebrow {
+  width: fit-content;
+}
 .post-header.is-centered {
   align-items: center;
   text-align: center;
@@ -1179,6 +1198,9 @@ body {
 }
 .tag-row dt {
   margin-right: 4px;
+}
+.post-terms dd {
+  margin: 0;
 }
 
 /* Heading anchors (#351): a jump to #id lands below the sticky header. */
@@ -1431,6 +1453,10 @@ body {
 .site .aside-links a:hover {
   text-decoration: underline;
   text-decoration-color: var(--color-primary);
+}
+/* "All <category> →" under them (#348). */
+.site a.aside-all {
+  font-weight: 500;
 }
 @media (max-width: 1000px) {
   .post-grid {

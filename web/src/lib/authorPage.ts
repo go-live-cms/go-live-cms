@@ -5,8 +5,8 @@
  * published post. Tested in authorPage.test.ts.
  */
 import type { AuthorProfile, Post } from "@gl-admin/lib/api/types"
-import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
 import { pageLinks } from "./pagination"
+import { getPublic } from "./publicApi"
 import { toListedPosts, type PostListData } from "./postList"
 import { authorPath, normalizeUrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
@@ -19,21 +19,6 @@ export interface AuthorPageData {
   list: PostListData
 }
 
-
-// Like siteSettings: an unreachable API fails the call after a moment instead of
-// hanging the page (the post route then renders without the cards).
-const PUBLIC_API_TIMEOUT_MS = 5000
-
-// GET {API}/public{path}: the JSON body, or null for a 404. Anything else throws.
-async function getPublic<T>(path: string): Promise<T | null> {
-  const response = await fetch(`${SERVER_MEDIA_URL}/public${path}`, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(PUBLIC_API_TIMEOUT_MS),
-  })
-  if (response.status === 404) return null
-  if (!response.ok) throw new Error(`GET /public${path}: HTTP ${response.status}`)
-  return (await response.json()) as T
-}
 
 // One page of an author's posts, with the author: null when they have no page.
 export async function getAuthorPosts(
@@ -67,8 +52,14 @@ export async function getPublicAuthors(): Promise<{ username: string; last_modif
 // the end (#349): the route 404s both. The posts route carries the author and the
 // total, so this is one API call after the settings. Pages are numbered like the
 // other lists: /author/{username}/page/N/.
-export async function loadAuthorPage(username: string, page: number, siteUrl: string): Promise<AuthorPageData | null> {
-  const site = await getSiteSettings()
+export async function loadAuthorPage(
+  username: string,
+  page: number,
+  siteUrl: string,
+  // The request's locals share one settings lookup with the layout (#330).
+  locals?: App.Locals,
+): Promise<AuthorPageData | null> {
+  const site = await getSiteSettings(locals)
   const perPage = site.postsPerPage
   const result = await getAuthorPosts(username, perPage, (page - 1) * perPage)
   if (!result) return null

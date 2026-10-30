@@ -7,12 +7,13 @@ import PostTerms from './PostTerms.astro'
 import AuthorCards from './AuthorCards.astro'
 import PostNav from './PostNav.astro'
 import { archiveLink } from '../lib/posts'
-import type { AuthorProfile, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile } from '@gl-admin/lib/api/types'
+import type { LinkedTerm } from '@/lib/termPage'
 import type { PostEndData } from '@/lib/relatedPosts'
 
 interface Props {
   postType: string
-  terms?: TaxonomyTerm[]
+  terms?: LinkedTerm[]
   authors?: AuthorProfile[]
   end: PostEndData
   class?: string

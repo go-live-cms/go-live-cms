@@ -3,7 +3,7 @@
  * Post Layout with Sidebar (#345): the reading column with a sidebar beside it. The
  * sidebar holds "On this page" (the post's H2s and H3s, from three headings up) and
  * the category's other posts (#351); a post with neither shows its dates and reading
- * time there instead. The "All <category>" link waits for category archives (#348).
+ * time there instead, and "All <category> →" links to the category's archive (#348).
  */
 import BaseLayout from '../base.astro'
 import BlockRenderer from '@/components/BlockRenderer'
@@ -19,7 +19,8 @@ import { loadPostEnd } from '@/lib/relatedPosts'
 import { resolveSiteUrl } from '@/lib/seo'
 import { getSiteSettings } from '@/lib/siteSettings'
 import { formatSiteDate, siteDay } from '@/lib/siteDates'
-import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post } from '@gl-admin/lib/api/types'
+import type { LinkedTerm } from '@/lib/termPage'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -27,7 +28,8 @@ interface Props {
   title: string
   description: string
   seo?: SeoMeta
-  terms?: TaxonomyTerm[]
+  // Categories and tags, with their archives' URLs (#348).
+  terms?: LinkedTerm[]
   // "Written by" (#350): the credited authors, in byline order.
   authors?: AuthorProfile[]
   featuredImage?: string | null
@@ -61,7 +63,7 @@ const showFacts = toc.length === 0 && !end.inCategory
   <div class="container">
     <div class="post-grid">
       <article class="post post--sidebar">
-        <PostHeader post={post} authors={authors} />
+        <PostHeader post={post} authors={authors} terms={terms} />
         <FeaturedImage src={featuredImage} variant="column" />
         <div class="prose">
           {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} headings={headings} />}
@@ -80,6 +82,7 @@ const showFacts = toc.length === 0 && !end.inCategory
                   <li><a href={item.href}>{item.post.title}</a></li>
                 ))}
               </ul>
+              {end.inCategory.term.href && <a class="aside-all" href={end.inCategory.term.href}>All {end.inCategory.term.name} →</a>}
             </section>
           )}
           {showFacts && (

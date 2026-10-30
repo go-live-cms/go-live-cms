@@ -1,0 +1,48 @@
+---
+/**
+ * A term's archive, /{taxonomy}/{slug} (#348): the "Category archive" and "Tag archive"
+ * boards. The taxonomy as the eyebrow, the term's name, its description when set and
+ * the post count, then its published posts (a category's include its children's), in
+ * numbered pages like the other lists (#349).
+ */
+import BaseLayout from '../base.astro'
+import PostListItem from '../../components/PostListItem.astro'
+import Pagination from '@/components/Pagination.astro'
+import { postCountLabel } from '../../lib/authors'
+import { termKindLabel, termPhrase, type TermPageData } from '@/lib/termPage'
+import type { SeoMeta } from '@/lib/seo'
+
+interface Props extends TermPageData {
+  title: string
+  description: string
+  seo?: SeoMeta
+}
+
+const { title, description, seo, term, postCount, list } = Astro.props
+const phrase = termPhrase(term)
+// "14 posts" for a category, "4 posts tagged Collaboration" for a tag, as designed.
+const count = term.hierarchical ? postCountLabel(postCount) : `${postCountLabel(postCount)} ${phrase}`
+---
+
+<BaseLayout title={title} description={description} seo={seo} siteTitle={list.siteTitle}>
+  <div class="container">
+    <header class="archive-header term-header">
+      <span class="eyebrow">{termKindLabel(term)}</span>
+      <h1 class="title">{term.name}</h1>
+      {term.description && <p class="dek">{term.description}</p>}
+      <p class="meta">{list.page > 1 ? `Page ${list.page} · ${count}` : count}</p>
+    </header>
+    {list.posts.length === 0 ? (
+      <p class="empty-state dek">Nothing has been published here yet.</p>
+    ) : (
+      <ul class="post-list">
+        {list.posts.map((item) => <PostListItem item={item} headingLevel={2} />)}
+      </ul>
+    )}
+    {list.totalPages > 1 ? (
+      <Pagination page={list.page} totalPages={list.totalPages} basePath={list.basePath} />
+    ) : (
+      list.posts.length > 0 && <p class="meta list-end">That’s every post {phrase}. <a href="/">Back to all posts</a></p>
+    )}
+  </div>
+</BaseLayout>

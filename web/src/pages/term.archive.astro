@@ -1,0 +1,45 @@
+---
+/**
+ * A term's archive (#348), /{taxonomy}/{slug} (e.g. /category/guides), rendered by the
+ * active theme's layouts/term layout (the default theme's when it has none). Not a
+ * public URL: [post_type]/[id].astro and [post_type]/[id]/page/[n].astro hand over here
+ * with Astro.rewrite, the term in Astro.locals.termArchive and the page number in
+ * Astro.locals.listPageNumber (#349). Reached any other way it is a 404, as is an
+ * unknown term, one of a non-public taxonomy, or a page past the end.
+ */
+import { listSeo } from '../lib/postList'
+import { pageTitleSuffix } from '../lib/pagination'
+import { loadTermPage, termPhrase } from '../lib/termPage'
+import { loadThemeLayout, themeLayoutCandidates } from '../lib/themeLayout'
+import { metaDescription, resolveSiteUrl } from '../lib/seo'
+
+export const prerender = false
+
+const termLayouts = import.meta.glob('../../themes/*/layouts/term/*.astro')
+
+const route = Astro.locals.termArchive
+if (!route) {
+  return new Response(null, { status: 404 })
+}
+const page = Astro.locals.listPageNumber ?? 1
+const data = await loadTermPage(route.taxonomy, route.slug, page, resolveSiteUrl(Astro.url), Astro.locals)
+if (!data) {
+  return new Response(null, { status: 404 })
+}
+
+const themeSlug = Astro.locals.activeTheme || 'default'
+const Layout = await loadThemeLayout(termLayouts, themeLayoutCandidates('../../themes', themeSlug, 'term'))
+if (!Layout) {
+  throw new Error('No term layout in this build')
+}
+const { term, list } = data
+const title = `${term.name}${pageTitleSuffix(page)} | ${list.siteTitle}`
+const description = metaDescription(term.description) || `Posts ${termPhrase(term)} on ${list.siteTitle}`
+---
+
+<Layout
+  {...data}
+  title={title}
+  description={description}
+  seo={{ ...listSeo(list), type: 'website', siteName: list.siteTitle }}
+/>
