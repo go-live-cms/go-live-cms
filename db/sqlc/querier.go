@@ -37,6 +37,8 @@ type Querier interface {
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
 	CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error)
+	// The archive's total, with the same filters as ListPublishedPostsByTerm.
+	CountPublishedPostsByTerm(ctx context.Context, termID int64) (int64, error)
 	// Counting functions
 	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
 	CountTotalMedia(ctx context.Context) (int64, error)
@@ -145,6 +147,14 @@ type Querier interface {
 	// The author's public fields and how many of those posts credit them. A user
 	// with none gets post_count 0, which the API answers like an unknown username.
 	GetPublicAuthor(ctx context.Context, username string) (GetPublicAuthorRow, error)
+	// Public term archives (#348): /{taxonomy}/{slug}, e.g. /category/guides. A term
+	// has a page when its taxonomy type is public; its list is the published posts of
+	// public, active post types tagged with the term or, for a hierarchical taxonomy,
+	// any term below it (a parent category's page includes its children's posts). The
+	// subtree is a recursive CTE over parent_id; UNION (not UNION ALL) drops repeats,
+	// so even a parent cycle ends.
+	// The term of a public taxonomy by type name and slug, with the type's label.
+	GetPublicTerm(ctx context.Context, arg GetPublicTermParams) (GetPublicTermRow, error)
 	GetPublishedPostBlocks(ctx context.Context, id int64) (GetPublishedPostBlocksRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
@@ -220,9 +230,16 @@ type Querier interface {
 	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
 	// Every author with a page, for the sitemap; lastmod is their newest post's.
 	ListPublicAuthors(ctx context.Context, arg ListPublicAuthorsParams) ([]ListPublicAuthorsRow, error)
+	// Every term page with at least one post (its own or a descendant's), for the
+	// sitemap; lastmod is the newest of those posts. closure pairs each term with
+	// itself and every term below it.
+	ListPublicTerms(ctx context.Context, arg ListPublicTermsParams) ([]ListPublicTermsRow, error)
 	// The author page's list, newest first. Same columns as ListPostsWithMeta so
 	// rows share its presenter.
 	ListPublishedPostsByAuthor(ctx context.Context, arg ListPublishedPostsByAuthorParams) ([]ListPublishedPostsByAuthorRow, error)
+	// One page of the archive, newest first. Same columns as ListPostsWithMeta so rows
+	// share its presenter. A post in both a parent and its child is listed once.
+	ListPublishedPostsByTerm(ctx context.Context, arg ListPublishedPostsByTermParams) ([]ListPublishedPostsByTermRow, error)
 	// Up to @limit_count published posts of @post_type ranked by the terms they share
 	// with @post_id: shared categories first, then shared terms of every other taxonomy
 	// (tags), then newest first (id breaks ties). @taxonomy limits which of the current
