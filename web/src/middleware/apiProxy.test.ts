@@ -44,6 +44,20 @@ describe("proxyToApi", () => {
     expect(await new Response(init?.body as BodyInit).text()).toBe('{"title":"x"}')
   })
 
+  it("drops Expect, which Node's fetch refuses to send", async () => {
+    const fetchImpl = upstream({ status: 200 })
+    const req = new Request("https://cms.example.com/api/v1/media", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Expect: "100-continue" },
+      body: "{}",
+    })
+
+    const res = await proxyToApi(req, "198.51.100.7", "http://api:8080", fetchImpl)
+
+    expect(res.status).toBe(200)
+    expect((fetchImpl.mock.calls[0][1]?.headers as Headers).has("expect")).toBe(false)
+  })
+
   it("sends no body for GET and keeps every Set-Cookie", async () => {
     const headers = new Headers({ "Content-Encoding": "gzip", "Content-Length": "999" })
     headers.append("Set-Cookie", "__Host-refresh_token=r; Path=/; Secure; HttpOnly")
