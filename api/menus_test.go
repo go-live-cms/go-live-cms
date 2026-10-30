@@ -241,21 +241,21 @@ func TestSaveMenuItems(t *testing.T) {
 	})
 
 	invalid := map[string]jsonBody{
-		"javascript url":      {"type": "custom", "label": "x", "url": "javascript:alert(1)"},
-		"JavaScript url":      {"type": "custom", "label": "x", "url": "JavaScript:alert(1)"},
-		"data url":            {"type": "custom", "label": "x", "url": "data:text/html,hi"},
-		"protocol relative":   {"type": "custom", "label": "x", "url": "//evil.example"},
-		"backslash relative":  {"type": "custom", "label": "x", "url": "/\\evil.example"},
-		"relative no slash":   {"type": "custom", "label": "x", "url": "about"},
-		"whitespace":          {"type": "custom", "label": "x", "url": "/a b"},
+		"javascript url":       {"type": "custom", "label": "x", "url": "javascript:alert(1)"},
+		"JavaScript url":       {"type": "custom", "label": "x", "url": "JavaScript:alert(1)"},
+		"data url":             {"type": "custom", "label": "x", "url": "data:text/html,hi"},
+		"protocol relative":    {"type": "custom", "label": "x", "url": "//evil.example"},
+		"backslash relative":   {"type": "custom", "label": "x", "url": "/\\evil.example"},
+		"relative no slash":    {"type": "custom", "label": "x", "url": "about"},
+		"whitespace":           {"type": "custom", "label": "x", "url": "/a b"},
 		"custom without label": {"type": "custom", "url": "/a"},
-		"custom without url":  {"type": "custom", "label": "x"},
-		"post without target": {"type": "post"},
-		"post with url":       {"type": "post", "target_id": 1, "url": "/x"},
+		"custom without url":   {"type": "custom", "label": "x"},
+		"post without target":  {"type": "post"},
+		"post with url":        {"type": "post", "target_id": 1, "url": "/x"},
 		"archive without type": {"type": "archive"},
-		"archive bad type":    {"type": "archive", "post_type": "../etc"},
-		"unknown type":        {"type": "file", "url": "/x"},
-		"too deep":            {"type": "custom", "label": "a", "url": "/a", "children": []jsonBody{{"type": "custom", "label": "b", "url": "/b", "children": []jsonBody{{"type": "custom", "label": "c", "url": "/c"}}}}},
+		"archive bad type":     {"type": "archive", "post_type": "../etc"},
+		"unknown type":         {"type": "file", "url": "/x"},
+		"too deep":             {"type": "custom", "label": "a", "url": "/a", "children": []jsonBody{{"type": "custom", "label": "b", "url": "/b", "children": []jsonBody{{"type": "custom", "label": "c", "url": "/c"}}}}},
 	}
 	for name, item := range invalid {
 		t.Run("rejects "+name, func(t *testing.T) {
