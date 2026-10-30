@@ -199,6 +199,21 @@ are the most fragile part of the codebase. **Before editing anything under
   the "Written by" cards; credited names link to their pages, an owner shown as a fallback
   doesn't. Avatar colours are keyed by username. The sitemap lists author pages last. Bio
   and website are edited on Profile (`lib/profile.ts` mirrors the API's checks).
+- **Site settings (#330):** `src/lib/siteSettings.ts` `getSiteSettings(Astro.locals)` fetches
+  `/settings` once per request (pass `Astro.locals`; every caller shares it): title, tagline,
+  language, time zone, date format. `<html lang>` is the language; the tagline is the home dek,
+  the footer line and `SeoHead`'s fallback description (`og:site_name` = the site title).
+  **Every public date goes through `formatSiteDate(date, site, "long" | "short")`**
+  (`src/lib/siteDates.ts`): the preset sets the day/month/year order, the language the names,
+  the time zone the day; never `toLocaleDateString` in a theme. The language list and presets
+  mirror `api/settings_utils.go` (`siteDates.test.ts`/`settingsForm.test.ts` read the Go and
+  fail on drift). Settings › General/Editor (`pages/Settings.tsx`, `lib/settingsForm.ts`) show
+  the site address read-only (`site_address` = `PUBLIC_BASE_URL`; "Change domain" links the
+  runbook). **Markdown shortcuts** = TipTap `enableInputRules`/`enablePasteRules` only
+  (`lib/editorSettings.ts`: off keeps `typography` and `link`), read when the editor is created
+  (`LiveGate` waits for the setting before mounting; connecting doesn't); never a `useEditor`
+  dependency, so a change never recreates a bound editor. "Allowed embeds" stays hidden until
+  #352 (the API stores and checks `editor_allowed_embeds`).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

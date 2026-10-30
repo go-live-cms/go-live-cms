@@ -16,6 +16,7 @@ import {
   type UnbuildableTypes,
 } from "@gl-admin/lib/collaboration/schemaGuard"
 import { useTheme } from "@gl-admin/contexts/ThemeContext"
+import { markdownRuleOptions, useEditorSettings } from "@gl-admin/lib/editorSettings"
 import { applyLink, openLinkModal } from "./utils/linkManager"
 import LinkModal from "./ui/LinkModal"
 import BubbleMenu from "./ui/BubbleMenu"
@@ -51,6 +52,9 @@ import "@gl-admin/assets/styles/components/editor/editor.scss"
 //     the theme, and the schema gate (rule 10) checks the synced fragment against the
 //     schema the editor will have. Unbuildable types → no binding at all (y-tiptap would
 //     delete them for everyone), a static view from REST instead.
+//   - Markdown shortcuts (#330, a workspace setting) only switch TipTap's input and paste
+//     rules (editor options; lib/editorSettings.ts). The editor mounts once they're known;
+//     connecting doesn't wait for them.
 
 export type EditorProps = {
   value: string
@@ -89,6 +93,8 @@ type InnerProps = EditorProps & {
   unbuildable?: UnbuildableTypes
   /** Focus the end of the doc on mount (not on a remount for an access change: the user is elsewhere). */
   autoFocus?: boolean
+  /** The workspace's Markdown shortcuts setting, read when the editor is created. */
+  markdownShortcuts?: boolean
 }
 
 const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
@@ -109,6 +115,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     collab,
     unbuildable,
     autoFocus = true,
+    markdownShortcuts = true,
   },
   ref
 ) {
@@ -168,6 +175,9 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       // ships in editor.scss instead (_tiptap-base.scss, #305).
       injectCSS: false,
       extensions,
+      // Read at creation only (not a dependency): a changed setting never recreates a
+      // bound editor; it applies to the next one.
+      ...markdownRuleOptions(markdownShortcuts),
       // Bound to the collab doc: content comes from the server, never from here.
       content: !collab ? value || "<p></p>" : undefined,
       autofocus: false,
@@ -453,6 +463,8 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
   const [access, setAccess] = useState<CollabAccess | null>(null)
   const onAccessChange = useRef(props.onAccessChange)
   onAccessChange.current = props.onAccessChange
+  // Loaded alongside the connection; only mounting the editor waits for it.
+  const editorSettings = useEditorSettings()
 
   useEffect(() => {
     if (!live || !postId) return
@@ -492,7 +504,9 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
     }
   }, [live, postId, generation])
 
-  if (!live) return <EditorInner ref={ref} {...props} collab={null} />
+  if (!editorSettings) return <Placeholder text={live ? "Connecting…" : "Loading…"} />
+  const { markdownShortcuts } = editorSettings
+  if (!live) return <EditorInner ref={ref} {...props} collab={null} markdownShortcuts={markdownShortcuts} />
   if (!gate || gate.collab.postId !== postId || gate.collab.stale) return <Placeholder text="Connecting…" />
   if (!gate.unbuildable) {
     const viewOnly = readOnly || (access?.readOnly ?? gate.collab.readOnly)
@@ -510,6 +524,7 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
           collab={gate.collab}
           readOnly={viewOnly}
           autoFocus={!access?.reason}
+          markdownShortcuts={markdownShortcuts}
         />
       </>
     )
@@ -522,7 +537,7 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
         is off until that theme is available. Those blocks are hidden below but kept in the post.
       </Notice>
       {access?.revoked && <AccessNotice access={access} />}
-      <EditorInner ref={ref} {...props} readOnly collab={null} unbuildable={gate.unbuildable} />
+      <EditorInner ref={ref} {...props} readOnly collab={null} unbuildable={gate.unbuildable} markdownShortcuts={markdownShortcuts} />
     </>
   )
 })

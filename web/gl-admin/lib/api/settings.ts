@@ -1,10 +1,24 @@
 import { apiCall } from "../api-core"
 
+import type { DateFormat, SiteLanguage } from "@/lib/siteDates"
+
 export interface Settings {
   id: number
   post_url_structure: "id" | "slug"
   site_title: string
   posts_per_page: number
+  // #330: General
+  site_tagline: string
+  site_language: SiteLanguage
+  // An IANA zone name, e.g. "America/Sao_Paulo".
+  site_timezone: string
+  date_format: DateFormat
+  // #330: Editor (workspace-wide)
+  editor_markdown_shortcuts: boolean
+  // Embed provider ids (EMBED_PROVIDERS in settingsForm.ts); used by #352's embed block.
+  editor_allowed_embeds: string[]
+  // PUBLIC_BASE_URL, read-only ("" when not configured): the domain is deploy config.
+  site_address: string
   created_at: string
   changed_at: string
 }
@@ -13,6 +27,12 @@ export interface UpdateSettingsRequest {
   post_url_structure?: "id" | "slug"
   site_title?: string
   posts_per_page?: number
+  site_tagline?: string
+  site_language?: SiteLanguage
+  site_timezone?: string
+  date_format?: DateFormat
+  editor_markdown_shortcuts?: boolean
+  editor_allowed_embeds?: string[]
 }
 
 export interface ExtensionSetting {
