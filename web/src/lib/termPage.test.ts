@@ -79,6 +79,20 @@ describe("route resolution", () => {
     await expect(isTermRoute("tag", ["post"])).resolves.toBe(true)
   })
 
+  it("keeps the taxonomy list for a minute and retries after a failure", async () => {
+    const { getCachedTaxonomyTypes } = await import("./termPage")
+    // Past anything an earlier test cached at the real clock.
+    const t0 = Date.now() + 3_600_000
+    getTaxonomyTypes.mockRejectedValueOnce(new Error("down")).mockResolvedValue(types)
+    await expect(getCachedTaxonomyTypes(t0)).rejects.toThrow("down")
+    // The failure isn't kept.
+    await expect(getCachedTaxonomyTypes(t0 + 1)).resolves.toEqual(types)
+    await getCachedTaxonomyTypes(t0 + 59_000)
+    expect(getTaxonomyTypes).toHaveBeenCalledTimes(2)
+    await getCachedTaxonomyTypes(t0 + 61_001)
+    expect(getTaxonomyTypes).toHaveBeenCalledTimes(3)
+  })
+
   it("pages a term like the other lists: /category/guides/page/2/", () => {
     const base = termPath("category", "guides")
     expect(resolveListRequest(new URL("https://x/category/guides/page/2/"), base, "2")).toEqual({ kind: "page", page: 2 })

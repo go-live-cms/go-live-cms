@@ -27,7 +27,8 @@ const labels = new Map<string, string>()
 for (const term of terms) {
   if (term.taxonomy_type_name && term.taxonomy_label) labels.set(term.taxonomy_type_name, term.taxonomy_label)
 }
-if ([...groups.keys()].some((type) => !labels.has(type))) {
+// Only named types can have a label: terms without one ('terms') never trigger it.
+if (terms.some((term) => term.taxonomy_type_name && !labels.has(term.taxonomy_type_name))) {
   try {
     for (const type of await getTaxonomyTypes()) if (!labels.has(type.name)) labels.set(type.name, type.label)
   } catch (error) {

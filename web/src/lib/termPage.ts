@@ -10,10 +10,10 @@
  * (termRouteFor). Page N is /{taxonomy}/{slug}/page/N/ (#349).
  */
 import type { Post, TaxonomyTerm, TaxonomyType } from "@gl-admin/lib/api/types"
-import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
 import { getTaxonomyTypes } from "./api"
 import { pageLinks, type Pagination } from "./pagination"
 import { toListedPosts, type PostListData } from "./postList"
+import { getPublic } from "./publicApi"
 import { normalizeUrlStructure, termPath } from "./seo"
 import { getSiteSettings } from "./siteSettings"
 
@@ -45,17 +45,24 @@ export type LinkedTerm = TaxonomyTerm & { href?: string; taxonomy_label?: string
 // a public route handed over in Astro.locals.termArchive.
 export const TERM_ARCHIVE_ROUTE = "/term.archive"
 
-const PUBLIC_API_TIMEOUT_MS = 5000
+// The taxonomy list changes rarely, but every unknown /{x}/{y} URL and every post
+// page asks for it: keep it for a minute, one request shared by concurrent callers,
+// so 404 probes and post renders don't each cost an API call (#190 rate limit). A
+// taxonomy made public or private takes up to a minute to show.
+const TAXONOMY_TYPES_TTL_MS = 60_000
+let taxonomyTypesCache: { types: Promise<TaxonomyType[]>; expires: number } | null = null
 
-// GET {API}/public{path}: the JSON body, or null for a 404. Anything else throws.
-async function getPublic<T>(path: string): Promise<T | null> {
-  const response = await fetch(`${SERVER_MEDIA_URL}/public${path}`, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(PUBLIC_API_TIMEOUT_MS),
-  })
-  if (response.status === 404) return null
-  if (!response.ok) throw new Error(`GET /public${path}: HTTP ${response.status}`)
-  return (await response.json()) as T
+export function getCachedTaxonomyTypes(now = Date.now()): Promise<TaxonomyType[]> {
+  if (!taxonomyTypesCache || taxonomyTypesCache.expires <= now) {
+    const types = getTaxonomyTypes()
+    const entry = { types, expires: now + TAXONOMY_TYPES_TTL_MS }
+    taxonomyTypesCache = entry
+    // Don't keep a failure: the next caller retries.
+    types.catch(() => {
+      if (taxonomyTypesCache === entry) taxonomyTypesCache = null
+    })
+  }
+  return taxonomyTypesCache.types
 }
 
 // Names of the taxonomies with public archives.
@@ -64,7 +71,7 @@ export function publicTaxonomyNames(types: Pick<TaxonomyType, "name" | "public">
 }
 
 export async function getPublicTaxonomyNames(): Promise<Set<string>> {
-  return publicTaxonomyNames(await getTaxonomyTypes())
+  return publicTaxonomyNames(await getCachedTaxonomyTypes())
 }
 
 // Whether /{segment}/{slug} is a term archive: only when no public post type has the
