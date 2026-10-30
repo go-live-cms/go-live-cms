@@ -36,6 +36,7 @@ const PageFull = (await import("./layouts/page/fullwidth.astro")).default
 const Home = (await import("./layouts/home/default.astro")).default
 const ErrorLayout = (await import("./layouts/error/default.astro")).default
 const AuthorLayout = (await import("./layouts/author/default.astro")).default
+const TermLayout = (await import("./layouts/term/default.astro")).default
 
 const post = {
   id: 42,
@@ -393,6 +394,70 @@ describe("author page", () => {
     expect(html).not.toContain("javascript:")
     expect(html).not.toContain("author-bio")
     expect(html).not.toContain("every post by")
+  })
+})
+
+describe("post term links (#348)", () => {
+  // As the post route passes them: lib/termPage.ts linkTerms gave public ones an href.
+  const category = { id: 2, name: "Product updates", slug: "product-updates", taxonomy_type_name: "category", taxonomy_label: "Categories", href: "/category/product-updates" }
+  const linked = [category, { id: 1, name: "Editor", slug: "editor", taxonomy_type_name: "tag", taxonomy_label: "Tags", href: "/tag/editor" }]
+
+  it("links the category eyebrow and the term chips to their archives", async () => {
+    for (const Layout of [PostDefault, PostSidebar, PostWide]) {
+      const html = await render(Layout, { post, title: "t", description: "d", terms: linked, siteTitle: "Field Notes" })
+      expect(html).toMatch(/<header class="post-header[^"]*">\s*<a class="eyebrow" href="\/category\/product-updates">Product updates<\/a>\s*<h1/)
+      expect(html).toContain('<dd class="post-terms__term" data-slug="editor"><a class="chip" href="/tag/editor">Editor</a></dd>')
+      expect(html).toContain('<dt class="section-title">Categories</dt>')
+    }
+  })
+
+  it("leaves a term without an archive (a non-public taxonomy) as plain text", async () => {
+    const html = await render(PostDefault, { post, title: "t", description: "d", terms: [{ ...category, href: undefined }], siteTitle: "Field Notes" })
+    expect(html).toContain('<span class="eyebrow">Product updates</span>')
+    expect(html).toContain('<dd class="chip post-terms__term" data-slug="product-updates">Product updates</dd>')
+    expect(html).not.toContain('href="/category/')
+  })
+
+  it("sidebar: All <category> links to its archive", async () => {
+    getRelatedPosts.mockImplementation(async (_id: number, params: { termId?: number }) => (params.termId === 2 ? [listRow(41, "Analytics for every post")] : []))
+    const html = await render(PostSidebar, { post, title: "t", description: "d", terms: linked, siteTitle: "Field Notes" })
+    const aside = html.slice(html.indexOf('<aside class="post-aside"'), html.indexOf("</aside>"))
+    expect(aside).toContain('<a class="aside-all" href="/category/product-updates">All Product updates →</a>')
+  })
+})
+
+describe("term page (#348)", () => {
+  const item = (id: number) => ({ post: { ...post, id, title: `Post ${id}` }, href: `/post/p${id}`, image: null })
+  const category = { id: 2, name: "Product updates", slug: "product-updates", description: "What’s new in GoLive, when it ships.", taxonomy: "category", taxonomy_label: "Categories", hierarchical: true }
+  const tag = { id: 3, name: "Collaboration", slug: "collaboration", description: "", taxonomy: "tag", taxonomy_label: "Tags", hierarchical: false }
+
+  it("category: eyebrow, name, description and count, then the posts with the pager", async () => {
+    const list = { posts: [item(1), item(2)], total: 14, page: 1, totalPages: 2, basePath: "/category/product-updates", links: { older: "/category/product-updates/page/2/" }, siteTitle: "Field Notes" }
+    const html = await render(TermLayout, { term: category, postCount: 14, list, title: "Product updates | Field Notes", description: "d" })
+    expect(html).toMatch(/<header class="archive-header term-header">\s*<span class="eyebrow">Category<\/span>\s*<h1 class="title">Product updates<\/h1>\s*<p class="dek">What’s new in GoLive, when it ships\.<\/p>\s*<p class="meta">14 posts<\/p>/)
+    expect(html).toContain('<h2 class="post-item-title"><a href="/post/p2">Post 2</a></h2>')
+    expect(html).toContain('<a href="/category/product-updates/page/2/" class="page-link" rel="next">Older →</a>')
+    expect(html).not.toContain("That’s every post")
+  })
+
+  it("tag: no description, the tagged count line, and the list end on one page", async () => {
+    const list = { posts: [item(1)], total: 4, page: 1, totalPages: 1, basePath: "/tag/collaboration", links: {}, siteTitle: "Field Notes" }
+    const html = await render(TermLayout, { term: tag, postCount: 4, list, title: "t", description: "d" })
+    expect(html).toContain('<span class="eyebrow">Tag</span>')
+    expect(html).not.toContain('class="dek"')
+    expect(html).toContain("4 posts tagged Collaboration")
+    expect(html).toContain('That’s every post tagged Collaboration. <a href="/">Back to all posts</a>')
+    expect(html).not.toContain('class="pagination"')
+  })
+
+  it("page N says so; an empty term says nothing has been published", async () => {
+    const paged = { posts: [item(11)], total: 14, page: 2, totalPages: 2, basePath: "/category/product-updates", links: { newer: "/category/product-updates" }, siteTitle: "Field Notes" }
+    expect(await render(TermLayout, { term: category, postCount: 14, list: paged, title: "t", description: "d" })).toContain("Page 2 · 14 posts")
+    const empty = { posts: [], total: 0, page: 1, totalPages: 0, basePath: "/tag/collaboration", links: {}, siteTitle: "Field Notes" }
+    const html = await render(TermLayout, { term: tag, postCount: 0, list: empty, title: "t", description: "d" })
+    expect(html).toContain("0 posts tagged Collaboration")
+    expect(html).toContain("Nothing has been published here yet.")
+    expect(html).not.toContain("That’s every post")
   })
 })
 

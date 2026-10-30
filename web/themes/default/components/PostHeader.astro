@@ -1,26 +1,32 @@
 ---
 /**
- * A post's title, excerpt (the dek) and byline (#345). The category eyebrow above the
- * title links to its archive, so it waits for #348.
+ * A post's title, excerpt (the dek) and byline (#345). The post's first category is
+ * the eyebrow above the title, linked to its archive (#348) when the route gave it one.
  */
 import type { AuthorProfile, Post } from '@gl-admin/lib/api/types'
 import { metaDescription } from '@/lib/seo'
+import { primaryCategory } from '@/lib/relatedPosts'
+import type { LinkedTerm } from '@/lib/termPage'
 import PostByline from './PostByline.astro'
 
 interface Props {
   post: Post
   // The credited authors (#350), for the byline's names and links.
   authors?: AuthorProfile[]
+  // The post's terms (#348), for the category eyebrow.
+  terms?: LinkedTerm[]
   class?: string
   centered?: boolean
   showByline?: boolean
 }
 
-const { post, authors, class: className = '', centered = false, showByline = true } = Astro.props
+const { post, authors, terms, class: className = '', centered = false, showByline = true } = Astro.props
 const dek = metaDescription(post.description, 400)
+const category = primaryCategory(terms)
 ---
 
 <header class:list={['post-header', className, { 'is-centered': centered }]}>
+  {category && (category.href ? <a class="eyebrow" href={category.href}>{category.name}</a> : <span class="eyebrow">{category.name}</span>)}
   <h1 class="title">{post.title}</h1>
   {dek && <p class="dek">{dek}</p>}
   {showByline && <PostByline post={post} authors={authors} variant="post" />}

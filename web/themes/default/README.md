@@ -19,6 +19,8 @@ themes/default/
     ├── base.astro         # <head>, header, footer
     ├── home/default.astro       # Front page (/)
     ├── archive/default.astro    # A post type's list (/post)
+    ├── author/default.astro     # An author's page (/author/ana)
+    ├── term/default.astro       # A category or tag archive (/category/guides)
     ├── post/{default,sidebar,wide}.astro
     ├── page/{default,fullwidth}.astro
     └── error/default.astro      # 404 and 500
@@ -33,6 +35,13 @@ H3s, only from three headings up, hidden below 1000px) and the other posts in th
 first category. Headings get ids from their text (`src/components/blocks/utils/headingAnchors.ts`);
 `THEME_ELEMENT_IDS` in `lib/posts.ts` lists the ids the theme's own markup uses, which a
 heading never takes. Add any new element id there.
+
+A post's first category is the eyebrow above its title, and its categories and tags
+link to their archives (#348): the post route gives each term of a public taxonomy an
+`href` (`src/lib/termPage.ts`, `linkTerms`); a term without one renders as plain text.
+The sidebar's category list ends with "All <category> →". The term layout shows the
+taxonomy as the eyebrow, the term's name, its description and its post count; a
+category's list includes its subcategories' posts.
 
 ## Fonts
 
@@ -70,8 +79,7 @@ The design shows these; the theme leaves them out rather than faking them:
 | Part | Issue |
 |------|-------|
 | Image captions, wide / full images, quote citations (styles are ready) | #346 |
-| Category and tag archives, category eyebrows, linked tags | #348 |
-| The "All <category> →" link under the sidebar's category list | #348 |
+| Category eyebrows on list rows and "More to read" cards (list rows don't carry their terms yet) | follow-up to #348 |
 | Author photos (initials until then; author pages and cards are #350) | #334 |
 | Search | #145 |
 | Tagline and site logo | #330 |

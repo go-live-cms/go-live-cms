@@ -1,0 +1,32 @@
+---
+/**
+ * Page N of a term archive, /{taxonomy}/{slug}/page/N/ (#348, #349). Rendered by
+ * src/pages/term.archive.astro, with the term and page number in Astro.locals;
+ * /page/1/ and ?page= redirect. Anything that isn't a term route, or a page number,
+ * 404s (posts have no pages).
+ */
+import { getPublicPostTypeNames } from '../../../../lib/api'
+import { resolveListRequest } from '../../../../lib/pagination'
+import { isTermRoute, termPath, TERM_ARCHIVE_ROUTE } from '../../../../lib/termPage'
+
+export const prerender = false
+
+const { post_type: taxonomy, id: slug, n } = Astro.params as { post_type: string; id: string; n: string }
+
+let publicTypes: string[] | null = null
+try {
+  publicTypes = await getPublicPostTypeNames()
+} catch (error) {
+  console.warn('Could not fetch post types:', error)
+}
+if (!(await isTermRoute(taxonomy, publicTypes))) {
+  return new Response(null, { status: 404 })
+}
+
+const request = resolveListRequest(Astro.url, termPath(taxonomy, slug), n)
+if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+if (request.kind === 'notFound') return new Response(null, { status: 404 })
+Astro.locals.termArchive = { taxonomy, slug }
+Astro.locals.listPageNumber = request.page
+return Astro.rewrite(TERM_ARCHIVE_ROUTE)
+---
