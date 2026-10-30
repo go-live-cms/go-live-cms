@@ -388,6 +388,22 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   public, active type. Anyone else gets the same 404 body as an unknown username (tested),
   so the routes can't enumerate accounts.
 
+## Site settings (#330)
+
+- `settings` (singleton) gained `site_tagline` (≤160, one line, trimmed), `site_language`
+  (BCP-47 from `siteLanguages`), `site_timezone` (IANA, `time.LoadLocation`; `time/tzdata` is
+  embedded so the image needs no zoneinfo; `Local`/`""` refused), `date_format`
+  (`month_day_year`|`day_month_year`|`iso`), `editor_markdown_shortcuts` and
+  `editor_allowed_embeds` (`embedProviders`, ≤20, deduped; absent keeps, `[]` clears) (`000024`).
+  Lists and validator tags (`site_language`, `time_zone`, `embed_provider`, `single_line`) live
+  in `settings_utils.go`; the web copies are checked against it by its tests.
+- GET `/settings` also returns `site_address` (`PUBLIC_BASE_URL`, read-only, `""` if unusable):
+  the domain is deploy config (`docs/operations/deploy.md`, "Change the domain").
+- `searchConfigForLanguage` maps the site language to a Postgres text search config
+  (`english`, `portuguese`, …, else `simple`) for search (#145).
+- The sanitizer has no embed path yet: iframe/embed nodes are always dropped
+  (`disallowedNodeTypes`). The embed block (#352) is what reads the allowlist.
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,

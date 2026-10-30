@@ -85,6 +85,19 @@ func init() {
 		}
 		return len(fl.Field().String()) <= limit
 	})
+	// Site settings (#330, settings_utils.go).
+	mustRegister(v, "site_language", func(fl validator.FieldLevel) bool {
+		return isSiteLanguage(fl.Field().String())
+	})
+	mustRegister(v, "time_zone", func(fl validator.FieldLevel) bool {
+		return isTimeZone(fl.Field().String())
+	})
+	mustRegister(v, "embed_provider", func(fl validator.FieldLevel) bool {
+		return isEmbedProvider(fl.Field().String())
+	})
+	mustRegister(v, "single_line", func(fl validator.FieldLevel) bool {
+		return isSingleLine(fl.Field().String())
+	})
 }
 
 func mustRegister(v *validator.Validate, tag string, fn validator.Func) {
@@ -256,6 +269,14 @@ func fieldErrorMessage(fe validator.FieldError) string {
 		return "must contain only letters, digits, '.', '_', '-' or ':'"
 	case "uuid", "uuid4":
 		return "must be a UUID"
+	case "site_language":
+		return "must be one of: " + strings.Join(siteLanguageTags(), ", ")
+	case "time_zone":
+		return "must be an IANA time zone name, such as America/Sao_Paulo or UTC"
+	case "embed_provider":
+		return "must be one of: " + strings.Join(embedProviders, ", ")
+	case "single_line":
+		return "must be a single line of text"
 	default:
 		return "is invalid"
 	}

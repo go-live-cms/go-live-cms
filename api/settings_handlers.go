@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -21,16 +22,17 @@ func (server *Server) getSettings(c *gin.Context) {
 		return
 	}
 
-	response := SettingsResponse{
-		ID:               settings.ID,
-		PostURLStructure: settings.PostUrlStructure,
-		SiteTitle:        settings.SiteTitle.String,
-		PostsPerPage:     settings.PostsPerPage.Int32,
-		CreatedAt:        settings.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		ChangedAt:        settings.ChangedAt.Format("2006-01-02T15:04:05Z07:00"),
-	}
+	c.JSON(http.StatusOK, toSettingsResponse(settings, server.siteAddress()))
+}
 
-	c.JSON(http.StatusOK, response)
+// siteAddress is the public origin the Settings page shows read-only (#330), or "" if
+// PUBLIC_BASE_URL isn't usable (NewServer refuses that outside debug/test mode).
+func (server *Server) siteAddress() string {
+	address, err := server.config.PublicSiteURL()
+	if err != nil {
+		return ""
+	}
+	return address
 }
 
 // updateSettings handles PUT /settings - update settings
@@ -45,6 +47,19 @@ func (server *Server) updateSettings(c *gin.Context) {
 		PostUrlStructure: stringToNullString(req.PostURLStructure),
 		SiteTitle:        stringToNullString(req.SiteTitle),
 		PostsPerPage:     int32ToNullInt32(req.PostsPerPage),
+		SiteLanguage:     stringToNullString(req.SiteLanguage),
+		SiteTimezone:     stringToNullString(req.SiteTimezone),
+		DateFormat:       stringToNullString(req.DateFormat),
+
+		EditorMarkdownShortcuts: boolToNullBool(req.EditorMarkdownShortcuts),
+	}
+	if req.SiteTagline != nil {
+		tagline := strings.TrimSpace(*req.SiteTagline)
+		params.SiteTagline = sql.NullString{String: tagline, Valid: true}
+	}
+	if req.EditorAllowedEmbeds != nil {
+		// Non-nil even when empty: [] clears the list, absent keeps it.
+		params.EditorAllowedEmbeds = normalizeEmbeds(append([]string{}, *req.EditorAllowedEmbeds...))
 	}
 
 	settings, err := server.store.UpdateSettings(c, params)
@@ -53,16 +68,7 @@ func (server *Server) updateSettings(c *gin.Context) {
 		return
 	}
 
-	response := SettingsResponse{
-		ID:               settings.ID,
-		PostURLStructure: settings.PostUrlStructure,
-		SiteTitle:        settings.SiteTitle.String,
-		PostsPerPage:     settings.PostsPerPage.Int32,
-		CreatedAt:        settings.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		ChangedAt:        settings.ChangedAt.Format("2006-01-02T15:04:05Z07:00"),
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, toSettingsResponse(settings, server.siteAddress()))
 }
 
 // getExtensionSetting handles GET /extension-settings/:key

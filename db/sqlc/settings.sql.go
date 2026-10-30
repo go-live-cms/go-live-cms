@@ -9,6 +9,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+
+	"github.com/lib/pq"
 )
 
 const deleteExtensionSetting = `-- name: DeleteExtensionSetting :exec
@@ -54,7 +56,7 @@ func (q *Queries) GetExtensionSetting(ctx context.Context, key string) (Extensio
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at FROM settings WHERE id = 1
+SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds FROM settings WHERE id = 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
@@ -67,6 +69,12 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.PostsPerPage,
 		&i.CreatedAt,
 		&i.ChangedAt,
+		&i.SiteTagline,
+		&i.SiteLanguage,
+		&i.SiteTimezone,
+		&i.DateFormat,
+		&i.EditorMarkdownShortcuts,
+		pq.Array(&i.EditorAllowedEmbeds),
 	)
 	return i, err
 }
@@ -153,19 +161,42 @@ SET
   post_url_structure = COALESCE($1, post_url_structure),
   site_title = COALESCE($2, site_title),
   posts_per_page = COALESCE($3, posts_per_page),
+  site_tagline = COALESCE($4, site_tagline),
+  site_language = COALESCE($5, site_language),
+  site_timezone = COALESCE($6, site_timezone),
+  date_format = COALESCE($7, date_format),
+  editor_markdown_shortcuts = COALESCE($8, editor_markdown_shortcuts),
+  -- A nil slice is NULL (keep); an empty one clears the list.
+  editor_allowed_embeds = COALESCE($9::text[], editor_allowed_embeds),
   changed_at = now()
 WHERE id = 1
-RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at
+RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds
 `
 
 type UpdateSettingsParams struct {
-	PostUrlStructure sql.NullString `json:"post_url_structure"`
-	SiteTitle        sql.NullString `json:"site_title"`
-	PostsPerPage     sql.NullInt32  `json:"posts_per_page"`
+	PostUrlStructure        sql.NullString `json:"post_url_structure"`
+	SiteTitle               sql.NullString `json:"site_title"`
+	PostsPerPage            sql.NullInt32  `json:"posts_per_page"`
+	SiteTagline             sql.NullString `json:"site_tagline"`
+	SiteLanguage            sql.NullString `json:"site_language"`
+	SiteTimezone            sql.NullString `json:"site_timezone"`
+	DateFormat              sql.NullString `json:"date_format"`
+	EditorMarkdownShortcuts sql.NullBool   `json:"editor_markdown_shortcuts"`
+	EditorAllowedEmbeds     []string       `json:"editor_allowed_embeds"`
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error) {
-	row := q.db.QueryRowContext(ctx, updateSettings, arg.PostUrlStructure, arg.SiteTitle, arg.PostsPerPage)
+	row := q.db.QueryRowContext(ctx, updateSettings,
+		arg.PostUrlStructure,
+		arg.SiteTitle,
+		arg.PostsPerPage,
+		arg.SiteTagline,
+		arg.SiteLanguage,
+		arg.SiteTimezone,
+		arg.DateFormat,
+		arg.EditorMarkdownShortcuts,
+		pq.Array(arg.EditorAllowedEmbeds),
+	)
 	var i Setting
 	err := row.Scan(
 		&i.ID,
@@ -174,6 +205,12 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.PostsPerPage,
 		&i.CreatedAt,
 		&i.ChangedAt,
+		&i.SiteTagline,
+		&i.SiteLanguage,
+		&i.SiteTimezone,
+		&i.DateFormat,
+		&i.EditorMarkdownShortcuts,
+		pq.Array(&i.EditorAllowedEmbeds),
 	)
 	return i, err
 }

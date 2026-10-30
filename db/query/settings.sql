@@ -7,6 +7,13 @@ SET
   post_url_structure = COALESCE(sqlc.narg('post_url_structure'), post_url_structure),
   site_title = COALESCE(sqlc.narg('site_title'), site_title),
   posts_per_page = COALESCE(sqlc.narg('posts_per_page'), posts_per_page),
+  site_tagline = COALESCE(sqlc.narg('site_tagline'), site_tagline),
+  site_language = COALESCE(sqlc.narg('site_language'), site_language),
+  site_timezone = COALESCE(sqlc.narg('site_timezone'), site_timezone),
+  date_format = COALESCE(sqlc.narg('date_format'), date_format),
+  editor_markdown_shortcuts = COALESCE(sqlc.narg('editor_markdown_shortcuts'), editor_markdown_shortcuts),
+  -- A nil slice is NULL (keep); an empty one clears the list.
+  editor_allowed_embeds = COALESCE(sqlc.narg('editor_allowed_embeds')::text[], editor_allowed_embeds),
   changed_at = now()
 WHERE id = 1
 RETURNING *;

@@ -26,6 +26,13 @@ func randomSetting() db.Setting {
 		PostsPerPage:     sql.NullInt32{Int32: 10, Valid: true},
 		CreatedAt:        time.Now(),
 		ChangedAt:        time.Now(),
+
+		SiteTagline:             "Notes from the team",
+		SiteLanguage:            "pt-BR",
+		SiteTimezone:            "America/Sao_Paulo",
+		DateFormat:              "day_month_year",
+		EditorMarkdownShortcuts: true,
+		EditorAllowedEmbeds:     []string{"youtube", "vimeo"},
 	}
 }
 
