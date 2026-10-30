@@ -16,6 +16,10 @@ const HOP_BY_HOP_REQUEST = [
   "upgrade",
   "host",
   "content-length",
+  // Node's fetch refuses any request carrying Expect, so forwarding it turned every such
+  // request into a 502. .NET clients send `Expect: 100-continue` on each POST, curl on
+  // bodies over 1 MB. The Node server has already answered the 100 Continue itself.
+  "expect",
 ]
 
 // fetch() has already decoded the body, so the upstream encoding/length no longer apply.

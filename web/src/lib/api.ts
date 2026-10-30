@@ -24,19 +24,19 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}) {
     config.body = JSON.stringify(body)
   }
 
-  const url = `${API_BASE}${endpoint}`
-  console.log("Fetching from:", url)
-
-  const response = await fetch(url, config)
+  const response = await fetch(`${API_BASE}${endpoint}`, config)
 
   if (!response.ok) {
     const error = await response.text()
+    let message = `HTTP ${response.status}: ${error}`
     try {
       const errorObj = JSON.parse(error)
-      throw new Error(errorObj.error || `HTTP ${response.status}`)
+      if (errorObj?.error) message = errorObj.error
     } catch {
-      throw new Error(`HTTP ${response.status}: ${error}`)
+      // Not JSON: keep the raw body.
     }
+    // status lets callers tell "not found" from a failure.
+    throw Object.assign(new Error(message), { status: response.status })
   }
 
   const contentType = response.headers.get("content-type")

@@ -74,8 +74,6 @@ export async function getStaticPaths() {
 const { 'post_type': postType, id } = Astro.params as { 'post_type': string; id: string }
 const { post } = Astro.props as { post?: Post }
 
-console.log(`Rendering ${postType} with ID/slug:`, id)
-
 // Inactive and non-public post types have no public pages. If the type list
 // can't be fetched, fall through to the post lookup.
 let publicTypes: string[] | null = null
@@ -126,69 +124,18 @@ let fullPost: Post | undefined = post ?? pagePost
 // Determine if ID is numeric (ID-based) or not (slug-based)
 const isNumeric = /^\d+$/.test(id)
 
-if (!fullPost) {
-  console.error(`Post not found in props for ${postType} ID/slug:`, id)
-  
-  try {
-    console.log(`Attempting to fetch ${postType} directly for ID/slug:`, id)
-    let postResponse
-    if (isNumeric) {
-      postResponse = await getPostById(id)
-    } else {
-      postResponse = await getPostBySlug(id)
-    }
-    
-    if (postResponse && postResponse.post) {
-      console.log('Found post via direct fetch:', postResponse.post.title)
-      fullPost = postResponse.post
-    } else {
-      console.error(`Post not found via direct fetch for ${postType} ID/slug:`, id)
-      return new Response(null, {
-        status: 404,
-        statusText: 'Post Not Found'
-      })
-    }
-  } catch (error) {
-    console.error(`Error fetching ${postType} directly for ID/slug:`, id, 'Error:', error)
-    return new Response(null, {
-      status: 404,
-      statusText: 'Post Not Found'
-    })
-  }
-}
-
-if (post) {
-  try {
-    console.log(`Fetching fresh ${postType} data for ID/slug:`, id)
-    let postResponse
-    if (isNumeric) {
-      postResponse = await getPostById(id)
-    } else {
-      postResponse = await getPostBySlug(id)
-    }
-    
-    if (postResponse && postResponse.post) {
-      fullPost = postResponse.post
-      console.log(`Successfully fetched fresh ${postType} data:`, fullPost?.title)
-    }
-  } catch (error) {
-    console.warn(`Could not fetch fresh ${postType} data for ID/slug:`, id, 'Error:', error.message)
-    fullPost = post
-  }
-}
-
+// The page is server-rendered, so there are no props: this fetch is the normal path.
 if (!fullPost) {
   try {
-    console.log(`Final attempt to fetch ${postType} for ID/slug:`, id)
-    let postResponse
-    if (isNumeric) {
-      postResponse = await getPostById(id)
-    } else {
-      postResponse = await getPostBySlug(id)
-    }
-    fullPost = postResponse.post
+    const postResponse = isNumeric ? await getPostById(id) : await getPostBySlug(id)
+    fullPost = postResponse?.post
   } catch (error) {
-    console.error(`Final fetch attempt failed for ${postType} ID/slug:`, id)
+    // An unknown id or slug (crawlers, old links) is an ordinary 404, not an error.
+    if ((error as { status?: number })?.status !== 404) {
+      console.error(`Error fetching ${postType} ${id}:`, error)
+    }
+  }
+  if (!fullPost) {
     return new Response(null, {
       status: 404,
       statusText: 'Post Not Found'
@@ -255,7 +202,6 @@ const layoutVariant = await getPostLayoutVariant(fullPost, postType)
 // Get active theme for dynamic layout loading
 const activeTheme = await getActiveTheme()
 const themeSlug = activeTheme.slug
-console.log(`🎨 Active theme: ${activeTheme.name} (${themeSlug}), layout variant: ${layoutVariant}`)
 
 // Layout fallback chain (lib/themeLayout.ts): the type's own layouts/{postType}/{variant}
 // (never home/archive/error, which hold page layouts), the theme's layouts/post ones, then
