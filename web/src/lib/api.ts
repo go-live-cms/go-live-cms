@@ -24,10 +24,7 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}) {
     config.body = JSON.stringify(body)
   }
 
-  const url = `${API_BASE}${endpoint}`
-  console.log("Fetching from:", url)
-
-  const response = await fetch(url, config)
+  const response = await fetch(`${API_BASE}${endpoint}`, config)
 
   if (!response.ok) {
     const error = await response.text()

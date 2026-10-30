@@ -49,6 +49,12 @@ describe.each([
   it("has no inline script", async () => {
     expect(inlineScripts(await render(page))).toEqual([])
   })
+
+  // The admin styles never use Atkinson: preloading it cost two requests and a
+  // console warning on every account page.
+  it("preloads no unused font", async () => {
+    expect(await render(page)).not.toMatch(/rel="preload"[^>]*atkinson/)
+  })
 })
 
 describe("password hints", () => {
