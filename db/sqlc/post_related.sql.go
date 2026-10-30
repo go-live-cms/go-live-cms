@@ -86,7 +86,7 @@ type ListAdjacentPostsRow struct {
 // The published posts of @post_type just before ('previous', older) and just after
 // ('next', newer) the current one by publish date (created_at), ties broken on id
 // so two posts published in the same instant still have one order. Zero, one or two
-// rows. Each branch is one step along idx_posts_published_type_created_id (000021).
+// rows. Each branch is one step along idx_posts_published_type_created_id (000022).
 func (q *Queries) ListAdjacentPosts(ctx context.Context, arg ListAdjacentPostsParams) ([]ListAdjacentPostsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAdjacentPosts, arg.PostType, arg.CreatedAt, arg.PostID)
 	if err != nil {

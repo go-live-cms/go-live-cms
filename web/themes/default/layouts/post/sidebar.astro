@@ -17,7 +17,7 @@ import { readingMinutes, THEME_ELEMENT_IDS } from '../../lib/posts'
 import { headingAnchors, tableOfContents } from '@/components/blocks/utils/headingAnchors'
 import { loadPostEnd } from '@/lib/relatedPosts'
 import { resolveSiteUrl } from '@/lib/seo'
-import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -26,13 +26,15 @@ interface Props {
   description: string
   seo?: SeoMeta
   terms?: TaxonomyTerm[]
+  // "Written by" (#350): the credited authors, in byline order.
+  authors?: AuthorProfile[]
   featuredImage?: string | null
   siteTitle?: string
   // The site's id/slug URL setting, which the post route already fetched (#351).
   urlStructure?: string
 }
 
-const { post, title, description, seo, terms, featuredImage, siteTitle, urlStructure } = Astro.props
+const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle, urlStructure } = Astro.props
 const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
 const toc = tableOfContents(headings)
 const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { inCategory: true, urlStructure })
@@ -54,12 +56,12 @@ const showFacts = toc.length === 0 && !end.inCategory
   <div class="container">
     <div class="post-grid">
       <article class="post post--sidebar">
-        <PostHeader post={post} />
+        <PostHeader post={post} authors={authors} />
         <FeaturedImage src={featuredImage} variant="column" />
         <div class="prose">
           {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} headings={headings} />}
         </div>
-        <PostEnd postType={post.post_type} terms={terms} end={end} />
+        <PostEnd postType={post.post_type} terms={terms} authors={authors} end={end} />
       </article>
 
       <aside class="post-aside" aria-label="About this post">

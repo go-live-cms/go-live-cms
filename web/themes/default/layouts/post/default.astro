@@ -1,8 +1,7 @@
 ---
 /**
  * Default Post Layout (#345): one reading column, the featured image at wide width,
- * then terms, older / newer posts and "More to read" (#351).
- * Hidden until its issue lands: author cards (#350).
+ * then terms, "Written by" (#350), older / newer posts and "More to read" (#351).
  */
 import BaseLayout from '../base.astro'
 import BlockRenderer from '@/components/BlockRenderer'
@@ -15,7 +14,7 @@ import { THEME_ELEMENT_IDS } from '../../lib/posts'
 import { headingAnchors } from '@/components/blocks/utils/headingAnchors'
 import { loadPostEnd } from '@/lib/relatedPosts'
 import { resolveSiteUrl } from '@/lib/seo'
-import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -24,13 +23,15 @@ interface Props {
   description: string
   seo?: SeoMeta
   terms?: TaxonomyTerm[]
+  // "Written by" (#350): the credited authors, in byline order.
+  authors?: AuthorProfile[]
   featuredImage?: string | null
   siteTitle?: string
   // The site's id/slug URL setting, which the post route already fetched (#351).
   urlStructure?: string
 }
 
-const { post, title, description, seo, terms, featuredImage, siteTitle, urlStructure } = Astro.props
+const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle, urlStructure } = Astro.props
 const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
 const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { urlStructure })
 ---
@@ -38,12 +39,12 @@ const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { urlStruc
 <BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
   <div class="container">
     <article class="post post--default">
-      <PostHeader post={post} class="measure" />
+      <PostHeader post={post} authors={authors} class="measure" />
       <FeaturedImage src={featuredImage} variant="wide" />
       <div class="prose measure">
         {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} headings={headings} />}
       </div>
-      <PostEnd postType={post.post_type} terms={terms} end={end} class="measure" />
+      <PostEnd postType={post.post_type} terms={terms} authors={authors} end={end} class="measure" />
     </article>
     <RelatedPosts posts={end.related} />
   </div>

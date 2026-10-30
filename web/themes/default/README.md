@@ -57,8 +57,8 @@ The design shows these; the theme leaves them out rather than faking them:
 | Navigation menus (the header has the title and Posts) | #347 |
 | Category and tag archives, category eyebrows, linked tags | #348 |
 | Numbered pagination (Newer / Older for now) | #349 |
-| Author pages and author cards | #350 |
 | The "All <category> →" link under the sidebar's category list | #348 |
+| Author photos (initials until then; author pages and cards are #350) | #334 |
 | Search | #145 |
 | Tagline and site logo | #330 |
 

@@ -62,6 +62,8 @@ type PrivateUserResponse struct {
 	Email     string    `json:"email"`
 	FullName  string    `json:"full_name"`
 	Role      string    `json:"role"`
+	Bio       string    `json:"bio"`
+	Website   string    `json:"website"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -102,6 +104,8 @@ func toPrivateUser(user db.User) PrivateUserResponse {
 		Email:     user.Email,
 		FullName:  user.FullName,
 		Role:      user.Role,
+		Bio:       user.Bio,
+		Website:   user.Website,
 		CreatedAt: user.CreatedAt,
 	}
 }

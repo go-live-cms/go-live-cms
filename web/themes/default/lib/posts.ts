@@ -47,7 +47,7 @@ export function readingMinutes(doc: BlockDocV1 | undefined | null): number | nul
 
 // Element ids the theme's own markup uses (base layout, header, footer, post end). A
 // heading's anchor never takes one of these (headingAnchors' reserved ids, #351).
-export const THEME_ELEMENT_IDS = ["content", "site-menu", "theme-menu", "footer-site", "more-posts", "recent-404", "toc-title", "in-category", "more-to-read"]
+export const THEME_ELEMENT_IDS = ["content", "site-menu", "theme-menu", "footer-site", "more-posts", "recent-404", "toc-title", "in-category", "written-by", "more-to-read"]
 
 // The "Back to" link of the newest post: the post type's list.
 export function archiveLink(postType: string): { href: string; label: string } {

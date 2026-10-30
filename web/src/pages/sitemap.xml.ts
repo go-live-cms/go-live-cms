@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro"
 import { getPostsByType, getPublicPostTypeNames, getSettings } from "../lib/api"
+import { getPublicAuthors } from "../lib/authorPage"
 import { buildSitemapXml, cacheControl, collectSitemapEntries, normalizeUrlStructure, resolveSiteUrl } from "../lib/seo"
 
 // Built from the API: post pages are server-rendered, so @astrojs/sitemap
@@ -28,6 +29,12 @@ function buildSitemap(siteUrl: string): Promise<string> {
     },
     getPublishedPosts: async (type, limit, offset) =>
       (await getPostsByType(type, { status: "published", sort: "id", order: "asc", limit, offset })).data,
+    // Author pages (#350). Without them the posts are still worth listing.
+    getAuthors: () =>
+      getPublicAuthors().catch((error) => {
+        console.warn("[sitemap] Could not fetch authors, leaving author pages out:", error)
+        return []
+      }),
   }).then(buildSitemapXml)
 }
 

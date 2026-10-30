@@ -10,11 +10,18 @@ export const USERNAME_MIN = 3
 export const USERNAME_MAX = 50
 export const FULL_NAME_MIN = 2
 export const FULL_NAME_MAX = 100
+// Author profile (#350): bioMaxChars and the website's max in api/users_utils.go
+// and api/users_bindings.go.
+export const BIO_MAX = 300
+export const WEBSITE_MAX = 2048
 
 export type ProfileFields = {
   username: string
   email: string
   full_name: string
+  // Shown on the public author page and the "Written by" cards (#350).
+  bio?: string
+  website?: string
 }
 
 export type PasswordFields = {
@@ -29,6 +36,45 @@ const runeLength = (s: string) => [...s].length
 // A loose shape check; the API's `email` tag is stricter and has the last word.
 export function isValidEmail(email: string): boolean {
   return /^\S+@\S+\.\S+$/.test(email)
+}
+
+// The bio as the API stores it: CRLF as LF, trimmed.
+export function normalizeBio(bio: string | undefined): string {
+  return (bio ?? "").replace(/\r\n/g, "\n").trim()
+}
+
+// An http(s) URL with a host, like the API's http_url tag. Empty means no website.
+export function isValidWebsite(website: string | undefined): boolean {
+  const value = (website ?? "").trim()
+  if (value === "") return true
+  if (runeLength(value) > WEBSITE_MAX) return false
+  try {
+    const url = new URL(value)
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname !== ""
+  } catch {
+    return false
+  }
+}
+
+// Plain text: line breaks and tabs, but no other control characters (as the API checks).
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u0008\u000b-\u001f\u007f]/
+
+export type AuthorFieldErrors = { bio?: string; website?: string }
+
+// The messages under the bio and website fields, or {} when both are fine.
+export function authorFieldErrors(fields: Pick<ProfileFields, "bio" | "website">): AuthorFieldErrors {
+  const errors: AuthorFieldErrors = {}
+  const bio = normalizeBio(fields.bio)
+  if (runeLength(bio) > BIO_MAX) {
+    errors.bio = `Keep your bio to ${BIO_MAX} characters or fewer.`
+  } else if (CONTROL_CHARS.test(bio)) {
+    errors.bio = "Your bio can only contain plain text."
+  }
+  if (!isValidWebsite(fields.website)) {
+    errors.website = "Enter a full web address that starts with http:// or https://."
+  }
+  return errors
 }
 
 // A new password and its confirmation, as typed (the API doesn't trim them
@@ -74,17 +120,21 @@ export function validateProfile(fields: ProfileFields): string | null {
   if (runeLength(fullName) < FULL_NAME_MIN || runeLength(fullName) > FULL_NAME_MAX) {
     return `Full name must be ${FULL_NAME_MIN}–${FULL_NAME_MAX} characters.`
   }
-  return null
+  const author = authorFieldErrors(fields)
+  return author.bio ?? author.website ?? null
 }
 
 // The PUT body for a profile save: only the fields that changed, trimmed.
 // Never includes role (a non-admin sending it gets 403) or any password field.
+// An emptied bio or website is sent as "", which clears it.
 export function buildProfileUpdate(original: ProfileFields, fields: ProfileFields): Partial<ProfileFields> {
   const update: Partial<ProfileFields> = {}
-  for (const key of ["username", "email", "full_name"] as const) {
-    const value = fields[key].trim()
+  for (const key of ["username", "email", "full_name", "website"] as const) {
+    const value = (fields[key] ?? "").trim()
     if (value !== (original[key] ?? "").trim()) update[key] = value
   }
+  const bio = normalizeBio(fields.bio)
+  if (bio !== normalizeBio(original.bio)) update.bio = bio
   return update
 }
 
