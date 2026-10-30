@@ -41,6 +41,57 @@
     justify-content: flex-end;
   }
 
+  // The search box (#145), at the toolbar's start; the sort stays at its end.
+  &__search {
+    align-items: center;
+    background: var(--background);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+    color: var(--text-secondary);
+    display: flex;
+    flex: 1 1 260px;
+    gap: var(--space-2);
+    height: 32px;
+    margin-right: auto;
+    max-width: 360px;
+    padding: 0 10px;
+
+    svg {
+      flex: none;
+    }
+
+    input {
+      background: transparent;
+      border: 0;
+      color: var(--text-primary);
+      flex: 1;
+      font: inherit;
+      min-width: 0;
+      outline: none;
+
+      &::placeholder {
+        color: var(--text-placeholder);
+      }
+    }
+
+    &:focus-within {
+      border-color: var(--focus-ring);
+      box-shadow: 0 0 0 1px var(--focus-ring);
+    }
+
+    @media (width <= 768px) {
+      flex-basis: 100%;
+      max-width: none;
+    }
+  }
+
+  &__sorted {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    padding: 0 var(--space-2);
+  }
+
   &__title {
     display: flex;
     flex-direction: column;

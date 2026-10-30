@@ -49,6 +49,18 @@ export async function getPosts(params: PostQueryParams = {}): Promise<ApiRespons
   }
 }
 
+// The posts list's search box (#145): the full-text index, with the list's type, status
+// and owner filters, best match first. Rows are shaped like getPosts' with_meta rows.
+export async function searchPosts(
+  params: PaginationParams & { q: string; type?: string; status?: string; user_id?: string | number }
+): Promise<ApiResponse<Post>> {
+  const response = await apiCall(buildUrl("/posts/search", params))
+  return {
+    data: response.posts || [],
+    meta: response.meta || { count: 0, limit: 10, offset: 0, total: 0 },
+  }
+}
+
 // How many posts have each status, with the list's type and owner filters (#340).
 export async function getPostCounts(
   params: { type?: string; user_id?: string | number } = {}
