@@ -59,7 +59,7 @@ func (server *Server) updateSettings(c *gin.Context) {
 	}
 	if req.EditorAllowedEmbeds != nil {
 		// Non-nil even when empty: [] clears the list, absent keeps it.
-		params.EditorAllowedEmbeds = normalizeEmbeds(append([]string{}, *req.EditorAllowedEmbeds...))
+		params.EditorAllowedEmbeds = normalizeEmbeds(*req.EditorAllowedEmbeds)
 	}
 
 	settings, err := server.store.UpdateSettings(c, params)

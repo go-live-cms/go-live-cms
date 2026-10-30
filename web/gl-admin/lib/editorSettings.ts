@@ -35,14 +35,18 @@ export function toEditorSettings(settings: Pick<Settings, "editor_markdown_short
 
 let current: EditorSettings | null = null
 let pending: Promise<EditorSettings> | null = null
+// Bumped by every setEditorSettings: a lookup that started before a save mustn't
+// overwrite the saved value when it answers.
+let version = 0
 const listeners = new Set<(settings: EditorSettings) => void>()
 
 // Never rejects: a failed lookup gives the defaults (shortcuts on, as before #330) and
 // is retried by the next editor that opens.
 export function loadEditorSettings(): Promise<EditorSettings> {
   if (current) return Promise.resolve(current)
+  const started = version
   pending ??= getSettings()
-    .then((settings) => setEditorSettings(settings))
+    .then((settings) => (version === started ? setEditorSettings(settings) : current ?? toEditorSettings(settings)))
     .catch((error) => {
       console.warn("[Editor] Could not load the editor settings, using the defaults:", error)
       pending = null
@@ -55,6 +59,7 @@ export function loadEditorSettings(): Promise<EditorSettings> {
 export function setEditorSettings(settings: Pick<Settings, "editor_markdown_shortcuts">): EditorSettings {
   current = toEditorSettings(settings)
   pending = null
+  version++
   listeners.forEach((listener) => listener(current!))
   return current
 }

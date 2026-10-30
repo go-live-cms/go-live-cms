@@ -69,12 +69,33 @@ const SettingsPage: React.FC = () => {
   const [loadError, setLoadError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [section, setSection] = useState("general")
+  // The section the nav marks current: the one in the URL's hash, then the one scrolled to.
+  const [section, setSection] = useState(() =>
+    SECTIONS.find((s) => window.location.hash === `#gl-settings-${s.id}`)?.id ?? "general"
+  )
 
   useEffect(() => {
     document.title = `${baseTitle} Settings`
     fetchSettings()
   }, [baseTitle])
+
+  const loaded = Boolean(draft && settings)
+  useEffect(() => {
+    if (!loaded || typeof IntersectionObserver === "undefined") return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        if (visible[0]) setSection(visible[0].target.id.replace("gl-settings-", ""))
+      },
+      // A section counts once its top reaches the upper part of the screen.
+      { rootMargin: "0px 0px -60% 0px" }
+    )
+    SECTIONS.forEach((s) => {
+      const el = document.getElementById(`gl-settings-${s.id}`)
+      if (el) observer.observe(el)
+    })
+    return () => observer.disconnect()
+  }, [loaded])
 
   const fetchSettings = async () => {
     setLoadError(null)

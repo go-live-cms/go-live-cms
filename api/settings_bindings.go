@@ -9,11 +9,11 @@ type UpdateSettingsRequest struct {
 	PostsPerPage     *int32  `json:"posts_per_page" binding:"omitempty,min=1,max=100"`
 	// #330. Absent keeps the stored value; "" clears the tagline.
 	SiteTagline             *string   `json:"site_tagline" binding:"omitempty,max=160,single_line"`
-	SiteLanguage            *string   `json:"site_language" binding:"omitempty,site_language"`
+	SiteLanguage            *string   `json:"site_language" binding:"omitempty,max=35,site_language"`
 	SiteTimezone            *string   `json:"site_timezone" binding:"omitempty,max=64,time_zone"`
 	DateFormat              *string   `json:"date_format" binding:"omitempty,oneof=month_day_year day_month_year iso"`
 	EditorMarkdownShortcuts *bool     `json:"editor_markdown_shortcuts"`
-	EditorAllowedEmbeds     *[]string `json:"editor_allowed_embeds" binding:"omitempty,max=20,dive,embed_provider"`
+	EditorAllowedEmbeds     *[]string `json:"editor_allowed_embeds" binding:"omitempty,max=20,dive,max=32,embed_provider"`
 }
 
 // SettingsResponse represents the settings response

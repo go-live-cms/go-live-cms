@@ -97,6 +97,8 @@ describe("SeoHead", () => {
     })
     expect(html).toContain('<meta name="robots" content="noindex, nofollow">')
     expect(html).not.toContain('rel="canonical"')
+    // Sign-in and error pages don't wait on the API for the settings.
+    expect(getSiteSettings).not.toHaveBeenCalled()
   })
 
   it("takes the site name from the settings and falls back to the tagline for the description (#330)", async () => {

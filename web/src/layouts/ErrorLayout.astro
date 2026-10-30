@@ -31,7 +31,7 @@ const legacyCssPath = Astro.locals.themeCssPath
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <SeoHead title={`${title} | ${site.title}`} description={message} noindex />
+    <SeoHead title={`${title} | ${site.title}`} description={message} siteName={site.title} noindex />
 
     {themeAssets.styles?.map((style: any) => (
       <link rel="stylesheet" href={style.src} media={style.media || 'all'} />

@@ -11,9 +11,12 @@
  * canonical defaults to the current path on the configured site URL (SITE_URL,
  * see src/lib/seo.ts), without the query string.
  *
- * The site settings (#330) fill in what the page doesn't say: og:site_name is the site
- * title, and a page without a description is described by the site's tagline.
+ * The site settings (#330) fill in what an indexed page doesn't say: og:site_name is the
+ * site title, and a page without a description is described by the site's tagline. A
+ * noindex page (sign-in, errors) doesn't look them up: it renders without waiting on the
+ * API, which may be the reason for the error.
  */
+import { SITE_TITLE } from '@/consts'
 import { absoluteUrl, publicImageUrl, resolveSiteUrl, type SeoMeta } from '@/lib/seo'
 import { getSiteSettings } from '@/lib/siteSettings'
 
@@ -22,7 +25,6 @@ interface Props extends SeoMeta {
   description?: string
 }
 
-const site = await getSiteSettings(Astro.locals)
 const {
   title,
   canonical,
@@ -31,11 +33,12 @@ const {
   image,
   type = 'website',
   noindex = false,
-  siteName = site.title,
   publishedTime,
   modifiedTime,
 } = Astro.props
-const description = Astro.props.description || site.tagline || undefined
+const site = noindex ? null : await getSiteSettings(Astro.locals)
+const siteName = Astro.props.siteName ?? site?.title ?? SITE_TITLE
+const description = Astro.props.description || site?.tagline || undefined
 
 const siteUrl = resolveSiteUrl(Astro.url)
 const canonicalUrl = canonical ? absoluteUrl(siteUrl, canonical) : absoluteUrl(siteUrl, Astro.url.pathname)

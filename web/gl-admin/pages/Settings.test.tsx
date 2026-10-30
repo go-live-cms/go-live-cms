@@ -181,6 +181,17 @@ describe("General and Editor (#330)", () => {
     ])
   })
 
+  it("marks the section in the URL's hash as current", async () => {
+    window.history.replaceState(null, "", "#gl-settings-editor")
+    try {
+      await render()
+      const current = container.querySelector("nav[aria-label='Settings sections'] a[aria-current='true']")
+      expect(current?.textContent).toBe("Editor")
+    } finally {
+      window.history.replaceState(null, "", window.location.pathname)
+    }
+  })
+
   it("shows the site address read-only with its HTTPS state and the runbook link", async () => {
     await render()
     expect(container.textContent).toContain("https://cms.example.com")

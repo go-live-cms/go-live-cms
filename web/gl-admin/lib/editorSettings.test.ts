@@ -120,6 +120,16 @@ describe("loading the setting", () => {
     expect(api.getSettings).not.toHaveBeenCalled()
   })
 
+  it("a lookup that answers after a save doesn't overwrite the saved value", async () => {
+    let answer!: (s: unknown) => void
+    api.getSettings.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+    const loading = loadEditorSettings()
+    setEditorSettings({ editor_markdown_shortcuts: false })
+    answer({ editor_markdown_shortcuts: true })
+    expect(await loading).toEqual({ markdownShortcuts: false })
+    expect(await loadEditorSettings()).toEqual({ markdownShortcuts: false })
+  })
+
   it("treats a missing field (an older API) as on", () => {
     expect(toEditorSettings({} as never)).toEqual({ markdownShortcuts: true })
     expect(toEditorSettings(null)).toEqual({ markdownShortcuts: true })
