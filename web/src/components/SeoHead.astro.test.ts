@@ -1,7 +1,12 @@
 // Renders SeoHead.astro and a theme post layout with Astro's Container API and
 // checks the <head> a crawler would see (#137).
 import { experimental_AstroContainer as AstroContainer } from "astro/container"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+// The theme's menus (#347) aren't what these tests check: no API call for them.
+vi.mock("@/lib/menus", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/menus")>()),
+  getMenu: async () => null,
+}))
 import SeoHead from "./SeoHead.astro"
 import DefaultPostLayout from "../../themes/default/layouts/post/default.astro"
 import DefaultErrorLayout from "../../themes/default/layouts/error/default.astro"

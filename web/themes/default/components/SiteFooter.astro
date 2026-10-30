@@ -4,17 +4,24 @@
  * mark appears on a site: the logo as is (web/gl-admin/assets/icons/logoIcon.svg), in
  * the text colour.
  *
- * Hidden until their issues land: the topic columns (category archives, #348), footer
- * menus such as Legal (#347) and the tagline under the title (#330).
+ * The link columns are the menu assigned to the theme's "footer" location (#347):
+ * each top-level link with children is a column headed by its label (the heading
+ * links to it), and the other top-level links are in the "Site" column with the RSS
+ * feed. Without a footer menu, the "Site" column has the RSS feed only.
+ *
+ * Hidden until its issue lands: the tagline under the title (#330).
  */
-import { NAV_ITEMS } from '../lib/nav'
+import { footerColumns, type MenuLink } from '@/lib/menus'
 
 interface Props {
   siteTitle: string
+  menu?: MenuLink[]
 }
 
-const { siteTitle } = Astro.props
+const { siteTitle, menu = [] } = Astro.props
 const year = new Date().getFullYear()
+const columns = footerColumns(menu)
+if (!columns.some((column) => column.heading === null)) columns.push({ heading: null, links: [] })
 ---
 
 <footer class="site-footer">
@@ -23,11 +30,20 @@ const year = new Date().getFullYear()
       <div class="footer-col">
         <a href="/" class="site-title">{siteTitle}</a>
       </div>
-      <nav class="footer-col" aria-labelledby="footer-site">
-        <h2 id="footer-site">Site</h2>
-        {NAV_ITEMS.map((item) => <a href={item.href}>{item.label}</a>)}
-        <a href="/rss.xml">RSS feed</a>
-      </nav>
+      {columns.map((column, i) =>
+        column.heading ? (
+          <nav class="footer-col" aria-labelledby={`footer-col-${i}`}>
+            <h2 id={`footer-col-${i}`}><a href={column.heading.url} class="footer-heading">{column.heading.label}</a></h2>
+            {column.links.map((link) => <a href={link.url}>{link.label}</a>)}
+          </nav>
+        ) : (
+          <nav class="footer-col" aria-labelledby="footer-site">
+            <h2 id="footer-site">Site</h2>
+            {column.links.map((link) => <a href={link.url}>{link.label}</a>)}
+            <a href="/rss.xml">RSS feed</a>
+          </nav>
+        )
+      )}
     </div>
     <div class="footer-bottom">
       <span>© {year} {siteTitle}</span>

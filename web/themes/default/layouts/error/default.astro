@@ -7,7 +7,8 @@
  *
  * #345: the 404 lists the latest posts; its search form waits for #145. The 500 makes no
  * API call of its own (the API being down is a common cause), only base's settings
- * lookup, which gives up after a moment.
+ * lookup, which gives up after a moment; it skips the menus (#347) so that wait isn't
+ * doubled.
  */
 import BaseLayout from '../base.astro'
 import { getPostsByType } from '@/lib/api'
@@ -38,7 +39,7 @@ if (is404) {
 const structure = normalizeUrlStructure(site.urlStructure)
 ---
 
-<BaseLayout title={`${title} | ${site.title}`} description={message} seo={{ noindex: true }} siteTitle={site.title}>
+<BaseLayout title={`${title} | ${site.title}`} description={message} seo={{ noindex: true }} siteTitle={site.title} menus={is404}>
   <div class="container">
     <div class="measure error-page">
       <span class="eyebrow eyebrow--mono">Error {status}</span>

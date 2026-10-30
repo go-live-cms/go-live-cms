@@ -27,6 +27,8 @@ type Querier interface {
 	// accepts can't both succeed: the loser re-checks accepted_at after the
 	// winner commits and matches no row.
 	ClaimUserInvitation(ctx context.Context, tokenHash []byte) (UserInvitation, error)
+	// Frees a location for another menu (assigning a location moves it).
+	ClearMenuLocation(ctx context.Context, arg ClearMenuLocationParams) error
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	CountPasswordResetTokensSince(ctx context.Context, arg CountPasswordResetTokensSinceParams) (int64, error)
 	// The admin list's status tabs (#340): one count per status, with the list's
@@ -43,6 +45,8 @@ type Querier interface {
 	CountTotalUsers(ctx context.Context) (int64, error)
 	// variants is NULL for media without generated variants, stored as {}.
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
+	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
+	CreateMenuItem(ctx context.Context, arg CreateMenuItemParams) (MenuItem, error)
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
@@ -69,6 +73,8 @@ type Querier interface {
 	DeleteMedia(ctx context.Context, id int64) error
 	DeleteMediaByUserID(ctx context.Context, userID int64) error
 	DeleteMediaPosts(ctx context.Context, mediaID int64) error
+	DeleteMenu(ctx context.Context, id int64) (int64, error)
+	DeleteMenuItems(ctx context.Context, menuID int64) error
 	DeletePost(ctx context.Context, id int64) error
 	DeletePostMedia(ctx context.Context, arg DeletePostMediaParams) error
 	DeletePostMediaByOrder(ctx context.Context, arg DeletePostMediaByOrderParams) error
@@ -100,6 +106,9 @@ type Querier interface {
 	// replace's UPDATE waits until the backfill's files and row are both in.
 	GetMediaForUpdate(ctx context.Context, id int64) (Medium, error)
 	GetMediaPostCount(ctx context.Context, mediaID int64) (int64, error)
+	GetMenu(ctx context.Context, id int64) (Menu, error)
+	GetMenuByLocation(ctx context.Context, location sql.NullString) (Menu, error)
+	GetMenuForUpdate(ctx context.Context, id int64) (Menu, error)
 	GetNextVersionNoForPost(ctx context.Context, postID int64) (int32, error)
 	GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error)
 	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
@@ -174,6 +183,11 @@ type Querier interface {
 	// Which of the given media_path values some media row uses (the dev seed
 	// restores only sample files a row still references).
 	ListMediaPathsIn(ctx context.Context, paths []string) ([]string, error)
+	// A menu's items with what their URL and visibility are resolved from: the
+	// post (and its type), the term (and its taxonomy) or the archive's post type.
+	// A target that no longer exists comes back as NULLs.
+	ListMenuItemsWithTargets(ctx context.Context, menuID int64) ([]ListMenuItemsWithTargetsRow, error)
+	ListMenus(ctx context.Context) ([]ListMenusRow, error)
 	// What the admin Users page shows. Invitations that expired over 30 days ago
 	// are dropped (nobody is waiting on them any more), and the list is capped.
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
@@ -254,6 +268,7 @@ type Querier interface {
 	// id keeps its first position (one row per media, or the upsert would touch
 	// the same row twice and fail).
 	SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error
+	TouchMenu(ctx context.Context, id int64) error
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
 	// Back to draft and drop the public snapshot (#136). The snapshot stays in
@@ -264,6 +279,7 @@ type Querier interface {
 	// file_size, mime_type, dimensions, original_filename) are set on upload and
 	// deliberately not writable here. NULL args keep the current value.
 	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
+	UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	// changed_at is the post's "last modified" (admin list and sort, sitemap
 	// lastmod). Only stores that carry a block_doc reach this query, and the

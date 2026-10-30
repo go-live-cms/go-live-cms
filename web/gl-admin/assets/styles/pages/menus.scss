@@ -1,0 +1,206 @@
+// Appearance › Menus (#347), on the Workspace patterns (workspace.scss): theme
+// locations, the item tree being edited, and the "Add items" panel.
+
+.gl-menus {
+  &__picker {
+    min-width: 200px;
+  }
+
+  &__add {
+    position: sticky;
+    top: var(--space-4);
+  }
+}
+
+.gl-menu-locations {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  &__hint {
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    margin: 0;
+  }
+}
+
+.gl-menu-location {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+
+  & + & {
+    border-top: 1px solid var(--border-color);
+  }
+
+  &__text {
+    display: flex;
+    flex: 1 1 240px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__label {
+    font-weight: 600;
+  }
+
+  &__select {
+    flex: 0 1 240px;
+    min-width: 180px;
+  }
+}
+
+.gl-menu-tree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  &--children {
+    border-left: 2px solid var(--border-color);
+    margin: var(--space-2) 0 0 var(--space-5);
+    padding-left: var(--space-3);
+  }
+}
+
+.gl-menu-item {
+  position: relative;
+
+  &__row {
+    align-items: center;
+    background: var(--background);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    display: flex;
+    gap: var(--space-3);
+    min-height: 52px;
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+
+    &[draggable="true"] {
+      cursor: grab;
+    }
+  }
+
+  &__grip {
+    color: var(--text-placeholder);
+    display: flex;
+    flex: none;
+  }
+
+  &__text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__name {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  &__meta {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  &__actions {
+    display: flex;
+    flex: none;
+    gap: 2px;
+  }
+
+  &__editor {
+    background: var(--background-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-top: var(--space-2);
+    padding: var(--space-4);
+  }
+
+  // Where a drop would land: a line above or below, or the row outlined (nest inside).
+  &.is-drop-before > .gl-menu-item__row,
+  &.is-drop-after > .gl-menu-item__row {
+    position: relative;
+
+    &::after {
+      background: var(--accent-solid);
+      border-radius: var(--radius-full);
+      content: "";
+      height: 3px;
+      left: 0;
+      position: absolute;
+      right: 0;
+    }
+  }
+
+  &.is-drop-before > .gl-menu-item__row::after {
+    top: -6px;
+  }
+
+  &.is-drop-after > .gl-menu-item__row::after {
+    bottom: -6px;
+  }
+
+  &.is-drop-inside > .gl-menu-item__row {
+    background: var(--accent-subtle);
+    border-color: var(--accent-border);
+  }
+
+  @media (width <= 768px) {
+    &__row {
+      flex-wrap: wrap;
+    }
+
+    &__grip {
+      display: none;
+    }
+  }
+}
+
+.gl-menu-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  &__row {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+    justify-content: space-between;
+    padding: var(--space-2) 0;
+
+    & + & {
+      border-top: 1px solid var(--border-color);
+    }
+  }
+
+  &__name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

@@ -86,6 +86,51 @@
     })
   }
 
+  // The header menu's children (#347): each disclosure button opens its list; Escape
+  // or a click elsewhere closes it, and opening one closes the others.
+  function setupNavSubmenus() {
+    var groups = document.querySelectorAll("[data-nav-group]")
+    if (!groups.length) return
+
+    function setOpen(group, open) {
+      var toggle = group.querySelector("[data-nav-sub-toggle]")
+      if (open) group.setAttribute("data-open", "")
+      else group.removeAttribute("data-open")
+      if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false")
+    }
+    function closeAll(except) {
+      for (var i = 0; i < groups.length; i++) if (groups[i] !== except) setOpen(groups[i], false)
+    }
+    for (var i = 0; i < groups.length; i++) {
+      var toggle = groups[i].querySelector("[data-nav-sub-toggle]")
+      if (!toggle) continue
+      toggle.addEventListener("click", function (event) {
+        var group = event.currentTarget.closest("[data-nav-group]")
+        var open = !group.hasAttribute("data-open")
+        closeAll(group)
+        setOpen(group, open)
+      })
+    }
+    document.addEventListener("click", function (event) {
+      if (!event.target.closest || !event.target.closest("[data-nav-group]")) closeAll(null)
+    })
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape") return
+      var open = document.querySelector("[data-nav-group][data-open]")
+      if (!open) return
+      setOpen(open, false)
+      var toggle = open.querySelector("[data-nav-sub-toggle]")
+      if (toggle) toggle.focus()
+    })
+    // Tabbing out of a group closes it.
+    for (var j = 0; j < groups.length; j++) {
+      groups[j].addEventListener("focusout", function (event) {
+        var group = event.currentTarget
+        if (!event.relatedTarget || !group.contains(event.relatedTarget)) setOpen(group, false)
+      })
+    }
+  }
+
   function setupPhoneMenu() {
     var dialog = document.querySelector("[data-site-menu]")
     if (!dialog || typeof dialog.showModal !== "function") return
@@ -125,6 +170,7 @@
       apply()
     })
     setupThemeMenu()
+    setupNavSubmenus()
     setupPhoneMenu()
   }
 

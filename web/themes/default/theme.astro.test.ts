@@ -14,6 +14,13 @@ vi.mock("@/lib/api", () => ({
   getPostsByType: (...args: unknown[]) => getPostsByType(...args),
 }))
 
+// The menus assigned to the theme's locations (#347); none unless a test sets them.
+const getMenu = vi.fn()
+vi.mock("@/lib/menus", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/menus")>()),
+  getMenu: (location: string) => getMenu(location),
+}))
+
 const SiteHeader = (await import("./components/SiteHeader.astro")).default
 const SiteFooter = (await import("./components/SiteFooter.astro")).default
 const PostDefault = (await import("./layouts/post/default.astro")).default
@@ -62,20 +69,50 @@ beforeEach(async () => {
   // React renders the post body (BlockRenderer).
   container = await AstroContainer.create({ renderers: await loadRenderers([reactRenderer()]) })
   getPostsByType.mockReset()
+  getMenu.mockReset()
+  getMenu.mockResolvedValue(null)
 })
+
+const link = (id: number, label: string, url: string, children: unknown[] = [], current = false) => ({ id, label, url, children, current })
 
 // Dev builds tag elements with data-astro-source-* (the dev toolbar); compare without them.
 const render = async (component: any, props: Record<string, unknown>) =>
   (await container.renderToString(component, { props, request })).replace(/\s+data-astro-source-(?:file|loc)="[^"]*"/g, "")
 
 describe("SiteHeader", () => {
-  it("shows the site title as text, today's nav and the theme switch, no GoLive mark or search", async () => {
-    const html = await render(SiteHeader, { siteTitle: "Field Notes", current: "posts" })
+  it("shows the site title as text, the theme switch, no GoLive mark or search", async () => {
+    const html = await render(SiteHeader, { siteTitle: "Field Notes" })
     expect(html).toMatch(/<a href="\/" class="site-title"[^>]*>Field Notes<\/a>/)
-    expect(html).toMatch(/<a href="\/post" aria-current="page">Posts<\/a>/)
     expect(html).not.toContain("<svg width=\"16\" height=\"16\" viewBox=\"0 0 66 67\"")
     expect(html).not.toContain('role="search"')
     expect(html).toContain('href="#content"')
+  })
+
+  it("without a primary menu: the site title only, no nav", async () => {
+    const html = await render(SiteHeader, { siteTitle: "Field Notes" })
+    expect(html).not.toContain('class="site-nav"')
+    // The phone menu keeps Home and the theme switch.
+    const phone = html.slice(html.indexOf("<dialog"))
+    expect([...phone.matchAll(/<nav[\s\S]*?<\/nav>/g)][0][0].match(/<a /g)).toHaveLength(1)
+  })
+
+  it("with a primary menu: its links in the nav and the phone menu, children under their parent", async () => {
+    const menu = [
+      link(1, "Guides", "/category/guides", [link(2, "Setup", "/page/setup", [], true)]),
+      link(3, "About", "/page/about"),
+      link(4, "GitHub", "https://github.com/go-live-cms"),
+    ]
+    const html = await render(SiteHeader, { siteTitle: "Field Notes", menu })
+    const nav = html.slice(html.indexOf('<nav class="site-nav"'), html.indexOf("</nav>"))
+    expect(nav).toMatch(/<div class="nav-group" data-nav-group data-current="true">\s*<a href="\/category\/guides">Guides<\/a>/)
+    expect(nav).toMatch(/aria-expanded="false" aria-controls="nav-sub-1" aria-label="Guides: more links"/)
+    expect(nav).toMatch(/<ul id="nav-sub-1" class="nav-submenu" role="list">\s*<li><a href="\/page\/setup" aria-current="page">Setup<\/a><\/li>/)
+    expect(nav).toContain('<a href="/page/about">About</a>')
+    expect(nav).toContain('<a href="https://github.com/go-live-cms">GitHub</a>')
+
+    const phone = html.slice(html.indexOf("<dialog"))
+    expect(phone).toMatch(/<a href="\/category\/guides">Guides<\/a>\s*<ul class="mobile-submenu" role="list">\s*<li><a href="\/page\/setup" aria-current="page">Setup<\/a>/)
+    expect(phone).toContain('<a href="/page/about">About</a>')
   })
 
   it("offers Light, Dark and System in the header menu and the phone menu alike", async () => {
@@ -96,6 +133,18 @@ describe("SiteFooter", () => {
     expect(html).toContain('href="/rss.xml"')
     expect(html).toContain(`© ${new Date().getFullYear()} Field Notes`)
     expect(html).not.toMatch(/Legal|Privacy|Topics/)
+    expect(html).toMatch(/<h2 id="footer-site">Site<\/h2>\s*<a href="\/rss.xml">RSS feed<\/a>/)
+  })
+
+  it("turns the footer menu into columns: parents with children head one, the rest go under Site", async () => {
+    const menu = [
+      link(1, "About", "/page/about"),
+      link(2, "Legal", "/page/legal", [link(3, "Privacy", "/page/privacy"), link(4, "Terms", "/page/terms")]),
+    ]
+    const html = await render(SiteFooter, { siteTitle: "Field Notes", menu })
+    expect(html).toMatch(/<h2 id="footer-site">Site<\/h2>\s*<a href="\/page\/about">About<\/a>\s*<a href="\/rss.xml">RSS feed<\/a>/)
+    expect(html).toMatch(/<h2 id="footer-col-1"><a href="\/page\/legal" class="footer-heading">Legal<\/a><\/h2>\s*<a href="\/page\/privacy">Privacy<\/a>\s*<a href="\/page\/terms">Terms<\/a>/)
+    expect(html.indexOf("footer-site")).toBeLessThan(html.indexOf("footer-col-1"))
   })
 })
 
@@ -112,6 +161,19 @@ describe("base layout", () => {
     // No server-side data-theme: the script sets it, and without JS the CSS follows the system.
     expect(html).toMatch(/<html lang="en">/)
   })
+
+  it("renders the menus assigned to primary and footer, marking the current page", async () => {
+    getMenu.mockImplementation(async (location: string) =>
+      location === "primary"
+        ? { name: "Main", location, items: [link(1, "Hello", "/post/hello-world"), link(2, "About", "/page/about")] }
+        : { name: "Footer", location, items: [link(3, "Privacy", "/page/privacy")] },
+    )
+    const html = await render(PostDefault, { post, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(getMenu.mock.calls.map((c) => c[0]).sort()).toEqual(["footer", "primary"])
+    // The request is /post/hello-world.
+    expect(html).toMatch(/<nav class="site-nav" aria-label="Main">\s*<a href="\/post\/hello-world" aria-current="page">Hello<\/a>\s*<a href="\/page\/about">About<\/a>/)
+    expect(html).toMatch(/<h2 id="footer-site">Site<\/h2>\s*<a href="\/page\/privacy">Privacy<\/a>/)
+  })
 })
 
 describe("post layouts", () => {
@@ -125,7 +187,6 @@ describe("post layouts", () => {
     expect(html).toContain('<dd class="chip post-terms__term" data-slug="editor">Editor</dd>')
     // No "Written by" without the route's authors.
     expect(html).not.toMatch(/More to read|Written by|Older post|On this page/)
-    expect(html).toMatch(/<a href="\/post" aria-current="page">Posts/)
   })
 
   it("ends with Written by cards that link to each author page (#350)", async () => {
@@ -257,10 +318,11 @@ describe("error layout", () => {
     expect(html).toContain('<meta name="robots" content="noindex, nofollow">')
   })
 
-  it("500: offers to try again and makes no posts call", async () => {
+  it("500: offers to try again and makes no posts or menus call", async () => {
     const html = await render(ErrorLayout, { status: 500, title: "Something went wrong", message: "Oops." })
     expect(html).toContain("Something went wrong on our side")
     expect(html).toContain("Try again")
     expect(getPostsByType).not.toHaveBeenCalled()
+    expect(getMenu).not.toHaveBeenCalled()
   })
 })

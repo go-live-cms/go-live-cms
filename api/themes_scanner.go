@@ -166,7 +166,55 @@ func parseThemeConfig(slug, configPath, themePath string) (DiscoveredTheme, erro
 	// Extract postTypes declarations
 	theme.PostTypes = parsePostTypes(configStr)
 
+	// Menu locations (#347): the admin's Menus screen offers these.
+	if locations := parseMenuLocations(configStr); len(locations) > 0 {
+		if theme.Config == nil {
+			theme.Config = map[string]interface{}{}
+		}
+		theme.Config["menu_locations"] = locations
+	}
+
 	return theme, nil
+}
+
+// DiscoveredMenuLocation is a place in a theme's templates that shows a menu.
+type DiscoveredMenuLocation struct {
+	Name        string `json:"name"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+// parseMenuLocations reads the menuLocations array of theme.config.ts:
+//
+//	menuLocations: [{ name: "primary", label: "Header", description: "..." }, ...]
+//
+// Names must be identifiers (the API's location rule); others are skipped, and
+// so are repeats of a name.
+func parseMenuLocations(configStr string) []DiscoveredMenuLocation {
+	locations := []DiscoveredMenuLocation{}
+	match := regexp.MustCompile(`menuLocations\s*:\s*\[((?s:[^\]]*))\]`).FindStringSubmatch(configStr)
+	if len(match) < 2 {
+		return locations
+	}
+	seen := map[string]bool{}
+	for _, obj := range regexp.MustCompile(`\{([^}]*)\}`).FindAllStringSubmatch(match[1], -1) {
+		field := func(key string) string {
+			if m := regexp.MustCompile(key + `:\s*["']([^"']*)["']`).FindStringSubmatch(obj[1]); len(m) > 1 {
+				return m[1]
+			}
+			return ""
+		}
+		loc := DiscoveredMenuLocation{Name: field(`\bname`), Label: field(`\blabel`), Description: field(`\bdescription`)}
+		if !identifierRe.MatchString(loc.Name) || len(loc.Name) > 64 || seen[loc.Name] {
+			continue
+		}
+		seen[loc.Name] = true
+		if loc.Label == "" {
+			loc.Label = loc.Name
+		}
+		locations = append(locations, loc)
+	}
+	return locations
 }
 
 // parsePostTypes extracts post type declarations from theme.config.ts content.

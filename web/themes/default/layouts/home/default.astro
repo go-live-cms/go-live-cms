@@ -22,7 +22,7 @@ const [feature, ...rest] = list.page === 1 ? list.posts : [undefined, ...list.po
 const featureExcerpt = feature ? metaDescription(feature.post.description, 260) : ''
 ---
 
-<BaseLayout title={title} description={description} seo={listSeo(list)} current="home" siteTitle={list.siteTitle}>
+<BaseLayout title={title} description={description} seo={listSeo(list)} siteTitle={list.siteTitle}>
   <div class="container">
     <header class="home-header">
       <h1 class="title">{list.siteTitle}</h1>

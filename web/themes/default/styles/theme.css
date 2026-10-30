@@ -388,6 +388,78 @@ body {
   text-underline-offset: 8px;
   text-decoration-color: var(--color-primary);
 }
+/* A menu link with children (#347): the link, a disclosure button, and the children
+   in a popover under it. theme-init.js toggles data-open; hover and keyboard focus
+   open it too, so it works without JavaScript. */
+.nav-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.site .nav-group > a {
+  padding-right: 4px;
+}
+.nav-group[data-current] > a {
+  color: var(--color-secondary);
+}
+.nav-sub-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.nav-sub-toggle:hover {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+}
+.nav-sub-toggle svg {
+  transition: transform 0.15s ease;
+}
+.nav-group[data-open] .nav-sub-toggle svg {
+  transform: rotate(180deg);
+}
+.nav-submenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: none;
+  min-width: 200px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+/* A bridge over the 6px gap, so moving the pointer down doesn't close it. */
+.nav-submenu::before {
+  content: "";
+  position: absolute;
+  inset: -8px 0 auto;
+  height: 8px;
+}
+.nav-group[data-open] .nav-submenu,
+:root:not([data-js]) .nav-group:hover .nav-submenu,
+:root:not([data-js]) .nav-group:focus-within .nav-submenu {
+  display: block;
+}
+.site .nav-submenu a {
+  width: 100%;
+  min-height: 40px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-sub-toggle svg {
+    transition: none;
+  }
+}
 .header-actions {
   display: flex;
   align-items: center;
@@ -532,6 +604,18 @@ body {
 .mobile-menu nav a[aria-current="page"] {
   color: var(--color-primary);
 }
+/* A menu link's children, indented under it. */
+.mobile-submenu {
+  margin: 0;
+  padding: 0 0 0 var(--space-5);
+  list-style: none;
+}
+.site .mobile-menu .mobile-submenu a,
+.mobile-menu .mobile-submenu a {
+  min-height: 48px;
+  font-size: var(--size-lg);
+  font-weight: 500;
+}
 .mobile-menu a.site-title {
   color: var(--color-secondary);
 }
@@ -583,6 +667,10 @@ body {
   min-height: 28px;
   color: var(--color-text-muted);
   text-decoration: none;
+}
+.site .footer-col h2 a.footer-heading {
+  min-height: 0;
+  color: inherit;
 }
 .site .footer-col a:not(.site-title):hover {
   color: var(--color-primary);
