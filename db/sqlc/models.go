@@ -107,6 +107,12 @@ type PostMetum struct {
 	CreatedAt time.Time      `json:"created_at"`
 }
 
+type PostSearch struct {
+	PostID   int64       `json:"post_id"`
+	BodyText string      `json:"body_text"`
+	Document interface{} `json:"document"`
+}
+
 type PostTaxonomyRelationship struct {
 	PostID         int64     `json:"post_id"`
 	TaxonomyTermID int64     `json:"taxonomy_term_id"`

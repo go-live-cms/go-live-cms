@@ -37,6 +37,11 @@ type Querier interface {
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
 	CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error)
+	// The public search's matches per type, for the All / Posts / Pages chips and
+	// the total. Same filters as SearchPublicPosts, without the type.
+	CountPublicSearchResults(ctx context.Context, query string) ([]CountPublicSearchResultsRow, error)
+	// SearchPostsWithMeta's total, with the same filters.
+	CountSearchPosts(ctx context.Context, arg CountSearchPostsParams) (int64, error)
 	// Counting functions
 	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
 	CountTotalMedia(ctx context.Context) (int64, error)
@@ -269,6 +274,28 @@ type Querier interface {
 	RevokeUserInvitation(ctx context.Context, id int64) (int64, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
+	// The admin posts list's search: the list's filters (type, status, owner) plus
+	// the search, ranked. Same columns as ListPostsWithMeta, so the handler shapes
+	// rows the same way. Drafts match on title, description and terms; their
+	// working copy is never indexed.
+	SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMetaParams) ([]SearchPostsWithMetaRow, error)
+	// Full-text search (#145) over post_search (000024_post_search). The query text
+	// goes through websearch_to_tsquery, which accepts any input: quotes, OR and -
+	// work, and everything else (& | ! ( <tags>) is just words or ignored, never a
+	// syntax error. A query with no words left matches nothing.
+	//
+	// Ranking: ts_rank's weights (A 1.0, B 0.4, C 0.2) put a title match above a
+	// description or term match, and those above a body match; equal ranks go
+	// newest first.
+	// One page of the public search: published posts and pages of public, active
+	// types that the public site serves (a published snapshot). The highlights are
+	// ts_headline output with U+E000 / U+E001 around each match, sentinels taken out
+	// of the source first, so the API can escape everything and add only <mark>
+	// (search_utils.go). Headlines are built for the page's rows only.
+	// excerpt_at_start / excerpt_at_end say whether the excerpt reaches the start
+	// and end of its text (compared without sentinels, edge punctuation or extra
+	// whitespace), so the page can show "…" where it was cut.
+	SearchPublicPosts(ctx context.Context, arg SearchPublicPostsParams) ([]SearchPublicPostsRow, error)
 	// Search and filtering
 	SearchTaxonomyTerms(ctx context.Context, arg SearchTaxonomyTermsParams) ([]SearchTaxonomyTermsRow, error)
 	// Used by the variant backfill. changed_at is left alone: nothing the user

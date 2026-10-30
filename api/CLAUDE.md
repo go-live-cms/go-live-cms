@@ -388,6 +388,26 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   public, active type. Anyone else gets the same 404 body as an unknown username (tested),
   so the routes can't enumerate accounts.
 
+## Full-text search (#145)
+
+- `post_search` (`000024`): one row per post, `document` (tsvector: title A, description B,
+  public taxonomies' term names B, published body C) and `body_text` (the published body as
+  plain text, for excerpts). **Triggers keep it current**, not handlers: posts insert, and
+  updates of title/description/`published_version_id`/`published_block_doc` (so publish and
+  unpublish), term links added/removed, a term renamed, a taxonomy's `public` flipped. The
+  body is read from the `post_versions` row publish points at (else `published_block_doc`),
+  never `block_doc`: collab stores don't fire them. `golive_block_doc_text(jsonb)` extracts
+  the text in reading order (`text`, `code`, caption runs, `cite`, children).
+- The text search config is `golive_search_config()` (SQL, `simple`); the site language
+  (#330) redefines it and reindexes with `golive_refresh_post_search(ARRAY(SELECT id FROM posts))`.
+- Queries (`db/query/post_search.sql`) use `websearch_to_tsquery`: any input is valid. Rank:
+  `ts_rank` (weights), then newest. `GET /public/search?q=&type=all|post|page&page=`
+  (published posts and pages of public, active types; counts per type; pagination.go) and
+  `GET /posts/search` (admin list: content roles, the list's type/status/user_id filters).
+- **Highlights:** `ts_headline` puts U+E000/U+E001 around matches (removed from the source
+  first); `highlightHTML` escapes everything and turns only those into `<mark>`. Never
+  return ts_headline output any other way.
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,
