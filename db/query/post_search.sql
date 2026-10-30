@@ -47,11 +47,11 @@ CROSS JOIN LATERAL (
            regexp_replace(regexp_replace(translate(e.excerpt, chr(57344) || chr(57345), ''), '\s+', ' ', 'g'), '^[^[:alnum:]]+|[^[:alnum:]]+$', '', 'g') AS plain,
            regexp_replace(regexp_replace(e.source, '\s+', ' ', 'g'), '^[^[:alnum:]]+|[^[:alnum:]]+$', '', 'g') AS source
     FROM (
-        -- A short text is shown whole (fragment mode would cut it to a few words
-        -- around the match); a longer one as up to two fragments.
+        -- A short text (about 40 words) is shown whole: fragment mode would cut it
+        -- to a few words around the match. A longer one as up to two fragments.
         SELECT s.source,
                ts_headline(golive_search_config(), s.source, q.tsq,
-                   CASE WHEN cardinality(regexp_split_to_array(btrim(s.source), '\s+')) <= 40
+                   CASE WHEN length(s.source) <= 280
                      THEN 'HighlightAll=true, StartSel=' || chr(57344) || ', StopSel=' || chr(57345)
                      ELSE 'MaxFragments=2, MaxWords=30, MinWords=12, FragmentDelimiter=" … ", StartSel=' || chr(57344) || ', StopSel=' || chr(57345)
                    END) AS excerpt

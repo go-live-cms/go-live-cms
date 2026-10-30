@@ -60,8 +60,8 @@ and leaves out items whose content is unpublished, deleted or not public.
 
 `layouts/search/default.astro` renders `/search?q=` (#145): the form, the result count,
 All / Posts / Pages chips, and each hit's type, date, highlighted title and excerpt and URL
-path; with no match, "No results for …", tips, topic chips (the most used categories) and
-recent posts. Results come from the API's `/public/search` (Postgres full-text search,
+path; with no match, "No results for …", tips, topic chips (the most used categories, each
+a search for its name until #348 gives them archives) and recent posts. Results come from the API's `/public/search` (Postgres full-text search,
 published posts and pages only) through `src/lib/search.ts`, in numbered pages like the
 other lists (`/search/page/2/?q=`). The highlights are the API's escaped HTML with only
 `<mark>` added; the query itself is only ever rendered as text. The header's search link,

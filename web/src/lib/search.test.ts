@@ -136,14 +136,14 @@ describe("loadSearchPage", () => {
   it("fills the empty state's topics and recent posts when nothing matched", async () => {
     const fetchMock = vi.fn(async (url: string) =>
       url.startsWith(`${SERVER_API_URL}/taxonomy/terms/popular`)
-        ? json(200, { taxonomy_terms: [{ name: "Guides", slug: "guides" }, { name: "", slug: "x" }] })
+        ? json(200, { taxonomy_terms: [{ name: "Guides", slug: "guides" }, { name: " ", slug: "x" }] })
         : json(200, { query: "zzz", type: "all", results: [], counts: { all: 0, post: 0, page: 0 }, pagination: { page: 1, per_page: 10, total: 0, total_pages: 0 } })
     )
     vi.stubGlobal("fetch", fetchMock)
     getPostsByType.mockResolvedValue({ data: [{ id: 5, title: "Recent", slug: "recent", post_type: "post" }] })
     const data = await loadSearchPage("zzz", "all", 1)
     expect(data?.results).toEqual([])
-    expect(data?.topics).toEqual([{ label: "Guides", href: "/category/guides" }])
+    expect(data?.topics).toEqual([{ label: "Guides", href: "/search?q=Guides" }])
     expect(data?.recent).toEqual([{ label: "Recent", href: "/post/recent" }])
   })
 

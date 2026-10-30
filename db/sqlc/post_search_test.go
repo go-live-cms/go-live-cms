@@ -348,3 +348,54 @@ func TestSearchPublicPostsExcerptEdges(t *testing.T) {
 	require.False(t, byID[long.ID].ExcerptAtStart)
 	require.False(t, byID[long.ID].ExcerptAtEnd)
 }
+
+// A title edit and a term link on one post in concurrent transactions: whichever
+// commits last, the index has both (golive_refresh_post_search locks the post).
+func TestPostSearchConcurrentEditsKeepBothChanges(t *testing.T) {
+	ctx := context.Background()
+	conn, ok := testQueries.db.(*sql.DB)
+	require.True(t, ok)
+	owner := createRandomUser(t)
+	titleWord, termWord := searchWord(t), searchWord(t)
+	taxonomy := createTestTaxonomyType(t, "race", "Race", false)
+	term := createTestTaxonomyTerm(t, taxonomy.ID)
+	_, err := conn.ExecContext(ctx, `UPDATE taxonomy_terms SET name = $2 WHERE id = $1`, term.ID, termWord)
+	require.NoError(t, err)
+	post := createSearchPost(t, owner, searchPostSpec{title: "Before"})
+
+	// Transaction A renames the post and holds its row lock.
+	txA, err := conn.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = txA.ExecContext(ctx, `UPDATE posts SET title = $2 WHERE id = $1`, post.ID, "After "+titleWord)
+	require.NoError(t, err)
+
+	// Transaction B links the term meanwhile; its rebuild waits for A's lock.
+	done := make(chan error, 1)
+	go func() {
+		txB, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			done <- err
+			return
+		}
+		if _, err := txB.ExecContext(ctx, `INSERT INTO post_taxonomy_relationships (post_id, taxonomy_term_id) VALUES ($1, $2)`, post.ID, term.ID); err != nil {
+			_ = txB.Rollback()
+			done <- err
+			return
+		}
+		done <- txB.Commit()
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("B finished while A held the post: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	require.NoError(t, txA.Commit())
+	require.NoError(t, <-done)
+
+	var matchesTitle, matchesTerm bool
+	require.NoError(t, conn.QueryRowContext(ctx,
+		`SELECT document @@ to_tsquery('simple', $2), document @@ to_tsquery('simple', $3) FROM post_search WHERE post_id = $1`,
+		post.ID, titleWord, termWord).Scan(&matchesTitle, &matchesTerm))
+	require.True(t, matchesTitle, "the title edit was lost")
+	require.True(t, matchesTerm, "the term link was lost")
+}

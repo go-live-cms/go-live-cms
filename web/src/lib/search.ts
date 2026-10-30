@@ -211,8 +211,9 @@ export async function getPublicSearch(query: string, type: SearchType, page: num
   return (await response.json()) as PublicSearchResponse
 }
 
-// The empty state's topic chips: the most used categories, at /{taxonomy}/{slug}
-// (#348's term archive route, as the menus build it). Fails soft.
+// The empty state's topic chips: the most used categories, each a search for its name
+// (term names are indexed, weight B). They can point at the term archive,
+// /{taxonomy}/{slug}, once #348's route exists; until then that URL is a 404. Fails soft.
 export async function getTopics(limit = 6): Promise<SearchLink[]> {
   try {
     const response = await fetch(`${SERVER_API_URL}/taxonomy/terms/popular?type=category&limit=${limit}`, {
@@ -222,8 +223,8 @@ export async function getTopics(limit = 6): Promise<SearchLink[]> {
     if (!response.ok) return []
     const body = (await response.json()) as { taxonomy_terms?: Array<{ name?: string; slug?: string }> }
     return (body.taxonomy_terms ?? [])
-      .filter((term) => term.name && term.slug)
-      .map((term) => ({ label: term.name as string, href: `/category/${encodeURIComponent(term.slug as string)}` }))
+      .filter((term) => term.name?.trim())
+      .map((term) => ({ label: term.name as string, href: searchUrl(normalizeQuery(term.name)) }))
   } catch (error) {
     console.warn("[search] Could not fetch topics:", error)
     return []

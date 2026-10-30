@@ -76,8 +76,18 @@ CREATE INDEX idx_post_search_document ON post_search USING gin (document);
 -- Rebuild the post_search rows of these posts from what is stored now. Term
 -- names come from public taxonomies only: a private one's terms aren't shown
 -- anywhere public, so they mustn't make a post findable either.
+--
+-- The posts are locked first (in id order, so two callers can't deadlock), and
+-- the rebuild is a separate statement with its own snapshot. Two transactions
+-- changing one post (say a title edit and a new term link) then rebuild one
+-- after the other, and the second sees what the first committed; without the
+-- lock each could read the other's change as not yet there and the last to
+-- commit would leave a row missing the other's change.
 CREATE FUNCTION golive_refresh_post_search(post_ids bigint[]) RETURNS void
-LANGUAGE sql VOLATILE AS $$
+LANGUAGE plpgsql VOLATILE AS $$
+BEGIN
+  PERFORM 1 FROM posts WHERE id = ANY(post_ids) ORDER BY id FOR UPDATE;
+
   INSERT INTO post_search (post_id, body_text, document)
   SELECT p.id, body.doc_text,
          setweight(to_tsvector(golive_search_config(), p.title), 'A')
@@ -99,7 +109,8 @@ LANGUAGE sql VOLATILE AS $$
   ) body
   WHERE p.id = ANY(post_ids)
   ON CONFLICT (post_id) DO UPDATE
-    SET body_text = EXCLUDED.body_text, document = EXCLUDED.document
+    SET body_text = EXCLUDED.body_text, document = EXCLUDED.document;
+END
 $$;
 
 CREATE FUNCTION golive_posts_search_trigger() RETURNS trigger
