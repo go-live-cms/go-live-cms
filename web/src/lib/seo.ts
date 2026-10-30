@@ -145,9 +145,10 @@ export function metaDescription(text: string | null | undefined, maxLength = 160
 const ACCOUNT_PATHS = ["/login", "/forgot-password", "/reset-password", "/accept-invite"]
 
 // Pages that must not be indexed even when a crawler ignores robots.txt: the
-// admin SPA, the account pages and the old demo pages. Error responses are
-// handled by status in shouldNoindex.
-const NOINDEX_PREFIXES = ["/gl-admin", ...ACCOUNT_PATHS, "/users", "/taxonomies", "/test-theme"]
+// admin SPA, the account pages, search results (#145; never in the sitemap
+// either) and the old demo pages. Error responses are handled by status in
+// shouldNoindex.
+const NOINDEX_PREFIXES = ["/gl-admin", ...ACCOUNT_PATHS, "/search", "/users", "/taxonomies", "/test-theme"]
 
 export function isNonPublicPath(pathname: string): boolean {
   return NOINDEX_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))

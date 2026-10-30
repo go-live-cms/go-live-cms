@@ -199,6 +199,13 @@ are the most fragile part of the codebase. **Before editing anything under
   the "Written by" cards; credited names link to their pages, an owner shown as a fallback
   doesn't. Avatar colours are keyed by username. The sitemap lists author pages last. Bio
   and website are edited on Profile (`lib/profile.ts` mirrors the API's checks).
+- **Search (#145):** `/search?q=&type=` (`src/pages/search/`, the theme's `layouts/search`,
+  data from `src/lib/search.ts`) over the API's `/public/search`; page N is
+  `/search/page/N/?q=` (the pager's `query` prop keeps the query). The highlights are the
+  only `set:html`, re-checked by `safeHighlight` (only `<mark>` survives); the query is only
+  rendered as text. `noindex` (meta + `NOINDEX_PREFIXES`), never in the sitemap. The header
+  link, phone menu field and 404 form are the theme's `SearchForm` (plain GET). The admin
+  posts list's box (`?q=`) calls `GET /posts/search` with the tab's filters, best match first.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 
