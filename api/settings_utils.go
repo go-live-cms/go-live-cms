@@ -35,9 +35,6 @@ var siteLanguages = []siteLanguage{
 	{"nl-NL", "dutch"},
 }
 
-// Date format presets: the order of day, month and year. The language gives the names.
-var dateFormatPresets = []string{"month_day_year", "day_month_year", "iso"}
-
 // Embed providers an embed block (#352) may load from. The sanitizer has no embed path
 // yet: it drops every iframe/embed node (disallowedNodeTypes).
 var embedProviders = []string{"youtube", "vimeo", "codepen", "spotify", "soundcloud", "loom", "figma", "x"}
