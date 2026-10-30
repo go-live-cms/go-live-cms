@@ -28,6 +28,9 @@ declare namespace App {
     // A list route's page number when /page/N/ is rewritten to its first page (#349).
     listPageNumber?: number
 
+    // The term a /{taxonomy}/{slug} route hands to src/pages/term.archive.astro (#348).
+    termArchive?: { taxonomy: string; slug: string }
+
     // User authentication
     user?: any
 

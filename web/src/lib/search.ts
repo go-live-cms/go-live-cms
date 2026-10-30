@@ -9,10 +9,11 @@
  * there with <mark> added; safeHighlight checks that again before set:html.
  */
 import type { Post } from "@gl-admin/lib/api/types"
-import { SERVER_API_URL, SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
+import { SERVER_API_URL } from "@gl-admin/lib/server-api-url"
 import { getPostsByType } from "./api"
 import { pagePath, type Pagination } from "./pagination"
-import { normalizeUrlStructure, postPath, type UrlStructure } from "./seo"
+import { getPublic } from "./publicApi"
+import { normalizeUrlStructure, postPath, termPath, type UrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
 
 export const SEARCH_PATH = "/search"
@@ -194,7 +195,7 @@ export interface PublicSearchResponse {
   pagination: Pagination
 }
 
-const PUBLIC_API_TIMEOUT_MS = 5000
+const TOPICS_TIMEOUT_MS = 5000
 
 // GET /public/search: the body, or null for a 404 (a page past the end). Anything
 // else throws.
@@ -202,29 +203,22 @@ export async function getPublicSearch(query: string, type: SearchType, page: num
   const params = new URLSearchParams({ q: query })
   if (type !== "all") params.set("type", type)
   if (page > 1) params.set("page", String(page))
-  const response = await fetch(`${SERVER_MEDIA_URL}/public/search?${params}`, {
-    headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(PUBLIC_API_TIMEOUT_MS),
-  })
-  if (response.status === 404) return null
-  if (!response.ok) throw new Error(`GET /public/search: HTTP ${response.status}`)
-  return (await response.json()) as PublicSearchResponse
+  return getPublic<PublicSearchResponse>(`/search?${params}`)
 }
 
-// The empty state's topic chips: the most used categories, each a search for its name
-// (term names are indexed, weight B). They can point at the term archive,
-// /{taxonomy}/{slug}, once #348's route exists; until then that URL is a 404. Fails soft.
+// The empty state's topic chips: the most used categories, linked to their term
+// archives (#348, /{taxonomy}/{slug}). Fails soft.
 export async function getTopics(limit = 6): Promise<SearchLink[]> {
   try {
     const response = await fetch(`${SERVER_API_URL}/taxonomy/terms/popular?type=category&limit=${limit}`, {
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(PUBLIC_API_TIMEOUT_MS),
+      signal: AbortSignal.timeout(TOPICS_TIMEOUT_MS),
     })
     if (!response.ok) return []
     const body = (await response.json()) as { taxonomy_terms?: Array<{ name?: string; slug?: string }> }
     return (body.taxonomy_terms ?? [])
-      .filter((term) => term.name?.trim())
-      .map((term) => ({ label: term.name as string, href: searchUrl(normalizeQuery(term.name)) }))
+      .filter((term) => term.name?.trim() && term.slug)
+      .map((term) => ({ label: term.name as string, href: termPath("category", term.slug as string) }))
   } catch (error) {
     console.warn("[search] Could not fetch topics:", error)
     return []

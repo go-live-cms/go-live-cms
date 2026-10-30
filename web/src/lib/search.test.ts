@@ -143,7 +143,7 @@ describe("loadSearchPage", () => {
     getPostsByType.mockResolvedValue({ data: [{ id: 5, title: "Recent", slug: "recent", post_type: "post" }] })
     const data = await loadSearchPage("zzz", "all", 1)
     expect(data?.results).toEqual([])
-    expect(data?.topics).toEqual([{ label: "Guides", href: "/search?q=Guides" }])
+    expect(data?.topics).toEqual([{ label: "Guides", href: "/category/guides" }])
     expect(data?.recent).toEqual([{ label: "Recent", href: "/post/recent" }])
   })
 

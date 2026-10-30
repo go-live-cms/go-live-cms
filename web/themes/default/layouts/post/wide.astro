@@ -16,7 +16,8 @@ import { THEME_ELEMENT_IDS } from '../../lib/posts'
 import { headingAnchors } from '@/components/blocks/utils/headingAnchors'
 import { loadPostEnd } from '@/lib/relatedPosts'
 import { resolveSiteUrl } from '@/lib/seo'
-import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post } from '@gl-admin/lib/api/types'
+import type { LinkedTerm } from '@/lib/termPage'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -24,7 +25,8 @@ interface Props {
   title: string
   description: string
   seo?: SeoMeta
-  terms?: TaxonomyTerm[]
+  // Categories and tags, with their archives' URLs (#348).
+  terms?: LinkedTerm[]
   // "Written by" (#350): the credited authors, in byline order.
   authors?: AuthorProfile[]
   featuredImage?: string | null
@@ -41,7 +43,7 @@ const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { urlStruc
 <BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
   <article class="post post--wide">
     <div class="container">
-      <PostHeader post={post} authors={authors} class="wide" centered />
+      <PostHeader post={post} authors={authors} terms={terms} class="wide" centered />
     </div>
     <FeaturedImage src={featuredImage} variant="full" />
     <div class="container">
