@@ -78,6 +78,15 @@ export interface ThemeAssets {
   scripts?: ThemeAsset[]
 }
 
+// A place in the theme's templates that shows a navigation menu (#347). The admin
+// assigns a menu to each (Appearance › Menus); the API reads these from this file.
+export interface MenuLocation {
+  // An identifier: lowercase letters, digits, - and _.
+  name: string
+  label: string
+  description?: string
+}
+
 export interface ThemeConfig {
   name: string
   description: string
@@ -113,6 +122,8 @@ export interface ThemeConfig {
     post: Record<string, LayoutVariant>
     page: Record<string, LayoutVariant>
   }
+
+  menuLocations?: MenuLocation[]
 
   darkMode: {
     strategy: "class" | "media"
@@ -270,6 +281,14 @@ export const themeConfig: ThemeConfig = {
       },
     },
   },
+
+  // Header: the top-level links (children open under them; at phone width all of it is
+  // in the phone menu). Footer: each top-level link with children is a column headed by
+  // its label; the rest go in the "Site" column.
+  menuLocations: [
+    { name: "primary", label: "Header", description: "The main navigation, beside the site title" },
+    { name: "footer", label: "Footer", description: "Link columns at the bottom of every page" },
+  ],
 
   // The header's Light / Dark / System switch stores the choice under storageKey
   // (scripts/theme-init.js); "system" follows prefers-color-scheme.

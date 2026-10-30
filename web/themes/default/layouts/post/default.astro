@@ -36,7 +36,7 @@ const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
 const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { urlStructure })
 ---
 
-<BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
+<BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
   <div class="container">
     <article class="post post--default">
       <PostHeader post={post} authors={authors} class="measure" />

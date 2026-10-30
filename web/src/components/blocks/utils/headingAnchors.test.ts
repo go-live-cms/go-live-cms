@@ -106,6 +106,11 @@ describe("headingAnchors", () => {
     expect(headingAnchors(d, ["content", "more-to-read"]).map((a) => a.id)).toEqual(["content-2", "more-to-read-2"])
   })
 
+  it("avoids reserved patterns", () => {
+    const d = doc(h("a", "Nav sub 3"), h("b", "Nav sub"), h("c", "Nav sub"), h("d", "Footer col 1"))
+    expect(headingAnchors(d, [/^nav-sub-\d+$/, /^footer-col-\d+$/]).map((a) => a.id)).toEqual(["nav-sub-3-2", "nav-sub", "nav-sub-h2", "footer-col-1-2"])
+  })
+
   it("follows blocks_order once per id and ignores missing blocks", () => {
     const d = doc(h("a", "One"), h("b", "Two"))
     d.blocks_order = ["b", "a", "b", "ghost"]

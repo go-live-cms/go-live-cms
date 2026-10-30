@@ -5,7 +5,7 @@ import { ThemeProvider } from "./contexts/ThemeContext"
 import AuthGuard from "@gl-admin/components/AuthGuard"
 import ErrorBoundary from "@gl-admin/components/ErrorBoundary"
 import RequireRole from "@gl-admin/components/RequireRole"
-import { isSiteAdmin } from "@gl-admin/lib/roles"
+import { isContentModerator, isSiteAdmin } from "@gl-admin/lib/roles"
 import Sidebar from "@gl-admin/components/sidebar/Sidebar"
 import { Toaster } from "@gl-admin/components/ui/Toast"
 import "@gl-admin/assets/styles/global.scss"
@@ -39,6 +39,7 @@ const Taxonomies = lazy(() => import("@gl-admin/pages/Taxonomies"))
 const Users = lazy(() => import("@gl-admin/pages/Users"))
 const Settings = lazy(() => import("@gl-admin/pages/Settings"))
 const Themes = lazy(() => import("@gl-admin/pages/Themes"))
+const Menus = lazy(() => import("@gl-admin/pages/Menus"))
 const Profile = lazy(() => import("@gl-admin/pages/Profile"))
 const PostTypes = lazy(() => import("@gl-admin/pages/PostTypes"))
 // Dev-only component gallery (#338): every UI component in light and dark. Vite drops
@@ -95,6 +96,7 @@ function AppLayout() {
                 <Route path="/taxonomies" element={<Taxonomies />} />
                 {/* Admin-only pages (requireSiteAdmin in the API): others get the 403. */}
                 <Route path="/themes" element={<AdminOnly area="Themes"><Themes /></AdminOnly>} />
+                <Route path="/menus" element={<RequireRole allow={isContentModerator} area="Menus"><Menus /></RequireRole>} />
                 <Route path="/users" element={<AdminOnly area="Users"><Users /></AdminOnly>} />
                 <Route path="/users/new" element={<AdminOnly area="Users"><NewUser /></AdminOnly>} />
                 <Route path="/users/edit/:id" element={<AdminOnly area="Users"><EditUser /></AdminOnly>} />

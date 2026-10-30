@@ -410,6 +410,9 @@ func (server *Server) setupRoutes() error {
 	// Theme module routes (see themes_routes.go for complete definitions)
 	server.registerThemeRoutes(v1)
 
+	// Navigation menus (see menus_routes.go)
+	server.registerMenuRoutes(v1)
+
 	// Collaboration (WebSocket) ticket routes (see collab_routes.go)
 	server.registerCollabRoutes(v1)
 

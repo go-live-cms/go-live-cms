@@ -10,21 +10,27 @@ import SiteHeader from '../components/SiteHeader.astro'
 import SiteFooter from '../components/SiteFooter.astro'
 import SeoHead from '@/components/SeoHead.astro'
 import type { SeoMeta } from '@/lib/seo'
-import type { NavKey } from '../lib/nav'
+import { getMenu, withCurrent } from '@/lib/menus'
 
 interface Props {
   title: string
   description: string
   // Canonical/OG/robots tags (#137), passed by the post route through the layouts.
   seo?: SeoMeta
-  // The nav entry for this page (aria-current), if any.
-  current?: NavKey
   // Settings the caller already fetched; base fetches them otherwise.
   siteTitle?: string
+  // false skips the menu lookups (the 500 page: the API is likely down).
+  menus?: boolean
 }
 
-const { title, description, seo = {}, current } = Astro.props
-const siteTitle = Astro.props.siteTitle ?? (await getSiteSettings()).title
+const { title, description, seo = {}, menus = true } = Astro.props
+// The menus assigned to the theme's locations (#347), fetched alongside the settings.
+const [siteTitle, primaryMenu, footerMenu] = await Promise.all([
+  Astro.props.siteTitle ?? getSiteSettings().then((settings) => settings.title),
+  menus ? getMenu('primary') : null,
+  menus ? getMenu('footer') : null,
+])
+const path = Astro.url.pathname
 
 // WordPress-style: Get theme assets registered in theme.config.ts
 const themeAssets = Astro.locals.themeAssets || {}
@@ -62,11 +68,11 @@ const tokens = themeCssVariables(themeConfig)
   </head>
   <body>
     <div class="site">
-      <SiteHeader siteTitle={siteTitle} current={current} />
+      <SiteHeader siteTitle={siteTitle} menu={withCurrent(primaryMenu?.items ?? [], path)} isHome={path === '/'} />
       <main id="content" class="site-main" tabindex="-1">
         <slot />
       </main>
-      <SiteFooter siteTitle={siteTitle} />
+      <SiteFooter siteTitle={siteTitle} menu={footerMenu?.items ?? []} />
     </div>
     <slot name="footer-scripts" />
 

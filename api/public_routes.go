@@ -23,4 +23,7 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 		authors.GET("/:username", server.getPublicAuthor)
 		authors.GET("/:username/posts", server.listPublicAuthorPosts)
 	}
+
+	// The menu assigned to a theme location (menus_routes.go)
+	rg.GET("/menus/:location", server.getPublicMenu)
 }

@@ -81,11 +81,19 @@ export function headingLevel(block: Block): number {
 /**
  * Every heading of the doc in reading order with its id. Duplicates get "-2", "-3", …
  * in the order they appear (a later heading never renames an earlier one); `reserved`
- * holds ids the page already uses (e.g. the theme's `content`), which count as taken.
+ * holds ids the page already uses (e.g. the theme's `content`), which count as taken,
+ * and patterns for numbered ones (e.g. `/^nav-sub-\d+$/`).
  */
-export function headingAnchors(doc: BlockDocV1 | null | undefined, reserved: Iterable<string> = []): HeadingAnchor[] {
+export function headingAnchors(doc: BlockDocV1 | null | undefined, reserved: Iterable<string | RegExp> = []): HeadingAnchor[] {
   if (!doc?.blocks || !Array.isArray(doc.blocks_order)) return []
-  const used = new Set(reserved)
+  const used = new Set<string>()
+  const patterns: RegExp[] = []
+  for (const r of reserved) typeof r === "string" ? used.add(r) : patterns.push(r)
+  const reservedByPattern = (id: string) => patterns.some((p) => p.test(id))
+  const taken = (id: string) => used.has(id) || reservedByPattern(id)
+  // "nav-sub-2", "nav-sub-3", … all match /^nav-sub-\d+$/, so a numbered suffix that
+  // hits a pattern becomes "-h2" instead (or the loop below would never end).
+  const suffixed = (base: string, n: number) => (reservedByPattern(`${base}-${n}`) ? `${base}-h${n}` : `${base}-${n}`)
   const anchors: HeadingAnchor[] = []
   // The same order BlockRenderer renders: blocks_order, each id once.
   for (const blockId of new Set(doc.blocks_order)) {
@@ -94,7 +102,7 @@ export function headingAnchors(doc: BlockDocV1 | null | undefined, reserved: Ite
     const text = headingText(block)
     const base = slugifyHeading(text)
     let id = base
-    for (let n = 2; used.has(id); n++) id = `${base}-${n}`
+    for (let n = 2; taken(id); n++) id = suffixed(base, n)
     used.add(id)
     anchors.push({ blockId, id, level: headingLevel(block), text })
   }

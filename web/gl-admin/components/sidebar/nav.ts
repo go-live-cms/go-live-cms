@@ -5,7 +5,7 @@ import type { PostType, TaxonomyType } from "@gl-admin/lib/api/types"
 // what is a UI hint only (lib/roles.ts): the API enforces the real checks, and the
 // router guards the admin-only pages (RequireRole in app.tsx).
 
-export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "settings"
+export type NavIcon = "home" | "new" | "post" | "page" | "content" | "media" | "users" | "types" | "themes" | "menus" | "settings"
 
 export type NavItem = {
   key: string
@@ -110,15 +110,24 @@ export function buildNavigation({ role, postTypes = DEFAULT_POST_TYPES, taxonomy
       items: [...typeItems, { key: "media", label: "Media", to: "/media", icon: "media" }],
     },
     {
-      // Users and invitations, post types, themes and settings: writes are admin-only
-      // in the API (requireSiteAdmin), and so are the pages.
+      // How the site looks: themes are admin-only (requireSiteAdmin); menus are managed
+      // by editors and admins (requireContentEditor, #347).
+      key: "appearance",
+      label: "Appearance",
+      items: [
+        { key: "themes", label: "Themes", to: "/themes", icon: "themes", access: isSiteAdmin },
+        { key: "menus", label: "Menus", to: "/menus", icon: "menus", access: isContentModerator },
+      ],
+    },
+    {
+      // Users and invitations, post types and settings: writes are admin-only in the
+      // API (requireSiteAdmin), and so are the pages.
       key: "workspace",
       label: "Workspace",
       access: isSiteAdmin,
       items: [
         { key: "users", label: "Users", to: "/users", icon: "users" },
         { key: "post-types", label: "Post types", to: "/post-types", icon: "types" },
-        { key: "themes", label: "Themes", to: "/themes", icon: "themes" },
         { key: "settings", label: "Settings", to: "/settings", icon: "settings" },
       ],
     },

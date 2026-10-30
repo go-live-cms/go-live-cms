@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS "menu_items";
+DROP TABLE IF EXISTS "menus";
