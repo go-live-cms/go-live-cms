@@ -1,0 +1,48 @@
+---
+/**
+ * An author's page (#350), rendered by the active theme's layouts/author layout (the
+ * default theme's when it has none). Only authors credited on a published post have
+ * one; anyone else, like an unknown username, is the same 404. Page N (#349) is
+ * /author/{username}/page/N/ ([username]/page/[n].astro), rewritten here with
+ * Astro.locals.listPageNumber set.
+ */
+import { loadAuthorPage, authorPath } from '../../lib/authorPage'
+import { listSeo } from '../../lib/postList'
+import { pageTitleSuffix, resolveListRequest } from '../../lib/pagination'
+import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
+import { metaDescription, resolveSiteUrl } from '../../lib/seo'
+
+export const prerender = false
+
+const authorLayouts = import.meta.glob('../../../themes/*/layouts/author/*.astro')
+
+const { username = '' } = Astro.params as { username?: string }
+
+let page = Astro.locals.listPageNumber ?? 1
+if (Astro.locals.listPageNumber === undefined) {
+  const request = resolveListRequest(Astro.url, authorPath(username))
+  if (request.kind === 'redirect') return Astro.redirect(request.location, 301)
+  if (request.kind === 'notFound') return new Response(null, { status: 404 })
+  page = request.page
+}
+const data = await loadAuthorPage(username, page, resolveSiteUrl(Astro.url))
+if (!data) {
+  return new Response(null, { status: 404 })
+}
+
+const themeSlug = Astro.locals.activeTheme || 'default'
+const Layout = await loadThemeLayout(authorLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'author'))
+if (!Layout) {
+  throw new Error('No author layout in this build')
+}
+const name = data.author.full_name?.trim() || data.author.username
+const title = `${name}${pageTitleSuffix(page)} | ${data.list.siteTitle}`
+const description = metaDescription(data.author.bio) || `Posts by ${name} on ${data.list.siteTitle}`
+---
+
+<Layout
+  {...data}
+  title={title}
+  description={description}
+  seo={{ ...listSeo(data.list), type: 'website', siteName: data.list.siteTitle }}
+/>

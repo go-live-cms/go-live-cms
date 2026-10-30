@@ -11,5 +11,15 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 		posts.GET("/:id/blocks", server.getPublicPostBlocks)
 		// Numbered pages of a type's published posts (#349, pagination.go)
 		posts.GET("/type/:type", server.getPublicPostsByType)
+		// "Written by" cards (#350)
+		posts.GET("/:id/authors", server.listPublicPostAuthors)
+	}
+
+	// Author pages (#350, authors_handlers_read.go)
+	authors := rg.Group("/authors")
+	{
+		authors.GET("", server.listPublicAuthors)
+		authors.GET("/:username", server.getPublicAuthor)
+		authors.GET("/:username/posts", server.listPublicAuthorPosts)
 	}
 }

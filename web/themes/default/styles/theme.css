@@ -1086,6 +1086,88 @@ body {
   margin-right: 4px;
 }
 
+/* "Written by" (#350) */
+.author-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.author-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.author-card h3 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--size-base);
+  font-weight: 700;
+  line-height: var(--leading-snug);
+}
+.site .author-card h3 a {
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+.site .author-card h3 a:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-primary);
+}
+.author-card p {
+  margin: 4px 0 0;
+  font-size: var(--size-sm);
+  line-height: var(--leading-normal);
+  color: var(--color-text-muted);
+}
+/* A bio is plain text: keep the line breaks the author typed. */
+.author-bio {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Author page header (#350): the avatar beside the name, bio and links. */
+.author-header {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-6);
+  max-width: none;
+}
+.author-header__avatar {
+  width: 112px;
+  height: 112px;
+  font-size: 40px;
+}
+.author-header__text {
+  flex: 1 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.author-header .dek {
+  max-width: 640px;
+}
+.author-header .meta {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .author-header {
+    gap: var(--space-4);
+  }
+  .author-header__avatar {
+    width: 72px;
+    height: 72px;
+    font-size: 28px;
+  }
+}
+.list-end {
+  margin: 0;
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
 /* The wide post layout: images and code at the wide width beside the reading column. */
 .post--wide .prose > .block-content > :is(img, pre) {
   width: min(var(--wide-width), 100vw - 2 * var(--container-gutter));

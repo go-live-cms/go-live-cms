@@ -54,19 +54,7 @@ export async function loadPostList(postType: string, page: number, basePath: str
   const result = found ?? (page === 1 ? NO_POSTS : null)
   if (!result) return null
   const structure = normalizeUrlStructure(site.urlStructure)
-  const posts = await Promise.all(
-    result.posts.map(async (post): Promise<ListedPost> => {
-      // with_meta rows carry the featured image URL; only rows whose stored value is an
-      // old filesystem path (before #201) need the featured-image endpoint to map it.
-      const stored = listedThumbnail(post)
-      const url = stored !== undefined ? stored : await getFeaturedImageUrl(post.id).catch(() => null)
-      return {
-        post,
-        href: postPath({ ...post, post_type: post.post_type || postType }, structure),
-        image: publicImageUrl(siteUrl, url) ?? null,
-      }
-    }),
-  )
+  const posts = await toListedPosts(result.posts, postType, structure, siteUrl)
   const { total, total_pages: totalPages } = result.pagination
   return {
     posts,
@@ -77,4 +65,27 @@ export async function loadPostList(postType: string, page: number, basePath: str
     links: pageLinks(basePath, page, totalPages),
     siteTitle: site.title,
   }
+}
+
+// with_meta list rows as list items; the author page's list (#350) uses it too.
+// fallbackType names the type of rows that don't say.
+export function toListedPosts(
+  data: Post[],
+  fallbackType: string,
+  structure: ReturnType<typeof normalizeUrlStructure>,
+  siteUrl: string,
+): Promise<ListedPost[]> {
+  return Promise.all(
+    data.map(async (post): Promise<ListedPost> => {
+      // with_meta rows carry the featured image URL; only rows whose stored value is an
+      // old filesystem path (before #201) need the featured-image endpoint to map it.
+      const stored = listedThumbnail(post)
+      const url = stored !== undefined ? stored : await getFeaturedImageUrl(post.id).catch(() => null)
+      return {
+        post,
+        href: postPath({ ...post, post_type: post.post_type || fallbackType }, structure),
+        image: publicImageUrl(siteUrl, url) ?? null,
+      }
+    }),
+  )
 }
