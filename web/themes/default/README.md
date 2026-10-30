@@ -27,6 +27,13 @@ themes/default/
 The post layout is chosen per post type on the admin Themes screen (`layout_variants`,
 read by `getPostLayoutVariant`).
 
+Every post layout ends with the post's terms, older / newer links and "More to read"
+(#351, `src/lib/relatedPosts.ts`). The sidebar layout adds "On this page" (H2s with their
+H3s, only from three headings up, hidden below 1000px) and the other posts in the post's
+first category. Headings get ids from their text (`src/components/blocks/utils/headingAnchors.ts`);
+`THEME_ELEMENT_IDS` in `lib/posts.ts` lists the ids the theme's own markup uses, which a
+heading never takes. Add any new element id there.
+
 ## Fonts
 
 Literata (variable, opsz + wght), Inter 400–700 and JetBrains Mono 400/500, latin
@@ -64,8 +71,8 @@ The design shows these; the theme leaves them out rather than faking them:
 |------|-------|
 | Image captions, wide / full images, quote citations (styles are ready) | #346 |
 | Category and tag archives, category eyebrows, linked tags | #348 |
+| The "All <category> →" link under the sidebar's category list | #348 |
 | Author photos (initials until then; author pages and cards are #350) | #334 |
-| Related and older/newer posts, table of contents | #351 |
 | Search | #145 |
 | Tagline and site logo | #330 |
 

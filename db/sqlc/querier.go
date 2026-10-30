@@ -172,6 +172,12 @@ type Querier interface {
 	InsertPostVersion(ctx context.Context, arg InsertPostVersionParams) (InsertPostVersionRow, error)
 	InvalidatePasswordResetTokensForUser(ctx context.Context, userID int64) error
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
+	// Older/newer and related posts for the public post page (#351).
+	// The published posts of @post_type just before ('previous', older) and just after
+	// ('next', newer) the current one by publish date (created_at), ties broken on id
+	// so two posts published in the same instant still have one order. Zero, one or two
+	// rows. Each branch is one step along idx_posts_published_type_created_id (000023).
+	ListAdjacentPosts(ctx context.Context, arg ListAdjacentPostsParams) ([]ListAdjacentPostsRow, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	// Pages through image media by id for the variant backfill. With
@@ -217,6 +223,20 @@ type Querier interface {
 	// The author page's list, newest first. Same columns as ListPostsWithMeta so
 	// rows share its presenter.
 	ListPublishedPostsByAuthor(ctx context.Context, arg ListPublishedPostsByAuthorParams) ([]ListPublishedPostsByAuthorRow, error)
+	// Up to @limit_count published posts of @post_type ranked by the terms they share
+	// with @post_id: shared categories first, then shared terms of every other taxonomy
+	// (tags), then newest first (id breaks ties). @taxonomy limits which of the current
+	// post's terms count ('' = all), and @term_id to one of them (0 = all; the sidebar's
+	// "In <category>" names one category). With @with_fallback the latest posts fill the rest
+	// when fewer share a term; without it only posts sharing one are returned. The
+	// current post never appears.
+	//
+	// The candidates are the posts sharing a term (unique_post_taxonomy_term for the
+	// current post's terms, idx_post_taxonomy_term_id for the posts in them) plus the
+	// latest @limit_count published posts (idx_posts_published_type_created_id), so the
+	// ranking never scans the whole posts table. Those are enough: if fewer than
+	// @limit_count published posts share a term, the latest ones fill the gap.
+	ListRelatedPosts(ctx context.Context, arg ListRelatedPostsParams) ([]ListRelatedPostsRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
 	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)

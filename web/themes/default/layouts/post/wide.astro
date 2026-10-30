@@ -2,15 +2,20 @@
 /**
  * Wide Post Layout (#345): a centred title, the featured image full bleed, and images
  * and code blocks at the wide width beside a reading column of text. Images an author
- * marks full width (#346, `align`) run edge to edge.
+ * marks full width (#346, `align`) run edge to edge. It ends like the default layout:
+ * terms, "Written by" (#350), older / newer posts and "More to read" (#351).
  */
 import BaseLayout from '../base.astro'
 import BlockRenderer from '@/components/BlockRenderer'
 import PostHeader from '../../components/PostHeader.astro'
 import FeaturedImage from '../../components/FeaturedImage.astro'
-import PostTerms from '../../components/PostTerms.astro'
-import AuthorCards from '../../components/AuthorCards.astro'
+import PostEnd from '../../components/PostEnd.astro'
+import RelatedPosts from '../../components/RelatedPosts.astro'
 import { WIDE_IMAGE_SIZES } from '../../lib/imageSizes'
+import { THEME_ELEMENT_IDS } from '../../lib/posts'
+import { headingAnchors } from '@/components/blocks/utils/headingAnchors'
+import { loadPostEnd } from '@/lib/relatedPosts'
+import { resolveSiteUrl } from '@/lib/seo'
 import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
@@ -24,9 +29,13 @@ interface Props {
   authors?: AuthorProfile[]
   featuredImage?: string | null
   siteTitle?: string
+  // The site's id/slug URL setting, which the post route already fetched (#351).
+  urlStructure?: string
 }
 
-const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle } = Astro.props
+const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle, urlStructure } = Astro.props
+const headings = headingAnchors(post.published_blocks, THEME_ELEMENT_IDS)
+const end = await loadPostEnd(post, terms, resolveSiteUrl(Astro.url), { urlStructure })
 ---
 
 <BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
@@ -37,14 +46,12 @@ const { post, title, description, seo, terms, authors = [], featuredImage, siteT
     <FeaturedImage src={featuredImage} variant="full" />
     <div class="container">
       <div class="prose measure">
-        {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={WIDE_IMAGE_SIZES} />}
+        {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={WIDE_IMAGE_SIZES} headings={headings} />}
       </div>
-      {((terms && terms.length > 0) || authors.length > 0) && (
-        <footer class="post-end measure">
-          <PostTerms terms={terms} />
-          <AuthorCards authors={authors} />
-        </footer>
-      )}
+      <PostEnd postType={post.post_type} terms={terms} authors={authors} end={end} class="measure" />
     </div>
   </article>
+  <div class="container">
+    <RelatedPosts posts={end.related} />
+  </div>
 </BaseLayout>

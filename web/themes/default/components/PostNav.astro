@@ -1,0 +1,34 @@
+---
+/**
+ * Older / newer post links at the end of a post (#351). The newest post links back to
+ * the post type's list instead of a newer post; the oldest has no older link.
+ */
+import type { ListedPost } from '@/lib/postList'
+
+interface Props {
+  previous: ListedPost | null
+  next: ListedPost | null
+  // Where "All posts" goes when there is no newer post.
+  archiveHref: string
+  archiveLabel: string
+}
+
+const { previous, next, archiveHref, archiveLabel } = Astro.props
+---
+
+<nav class="post-nav" aria-label="More posts">
+  {previous && (
+    <a href={previous.href} class="post-nav-link" rel="prev">
+      <span>← Older post</span>{previous.post.title}
+    </a>
+  )}
+  {next ? (
+    <a href={next.href} class="post-nav-link is-next" rel="next">
+      <span>Newer post →</span>{next.post.title}
+    </a>
+  ) : (
+    <a href={archiveHref} class="post-nav-link is-next">
+      <span>Back to</span>{archiveLabel} →
+    </a>
+  )}
+</nav>

@@ -1,0 +1,41 @@
+---
+/**
+ * "More to read" (#351): up to three related posts as cards (image, title, byline).
+ * The category eyebrow above the title links to an archive, so it waits for #348.
+ * Renders nothing without posts.
+ */
+import type { ListedPost } from '@/lib/postList'
+import { authorNames, joinNames } from '../lib/posts'
+
+interface Props {
+  posts: ListedPost[]
+}
+
+const { posts } = Astro.props
+const shortDate = { year: 'numeric', month: 'short', day: 'numeric' } as const
+const meta = (item: ListedPost) => {
+  const date = new Date(item.post.created_at)
+  const parts = [joinNames(authorNames(item.post))]
+  if (!Number.isNaN(date.getTime())) parts.push(date.toLocaleDateString('en-US', shortDate))
+  return parts.filter(Boolean).join(' · ')
+}
+---
+
+{posts.length > 0 && (
+  <section class="related-posts" aria-labelledby="more-to-read">
+    <h2 id="more-to-read" class="section-title">More to read</h2>
+    <div class="card-grid">
+      {posts.map((item) => (
+        <article class="card">
+          {item.image && (
+            <a href={item.href} tabindex="-1" aria-hidden="true">
+              <img class="media" src={item.image} alt="" loading="lazy" decoding="async" />
+            </a>
+          )}
+          <h3 class="card-title"><a href={item.href}>{item.post.title}</a></h3>
+          <span class="meta">{meta(item)}</span>
+        </article>
+      ))}
+    </div>
+  </section>
+)}

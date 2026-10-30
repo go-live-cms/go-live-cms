@@ -2073,6 +2073,21 @@ func (mr *MockStoreMockRecorder) ListActivePostTypes(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActivePostTypes", reflect.TypeOf((*MockStore)(nil).ListActivePostTypes), arg0)
 }
 
+// ListAdjacentPosts mocks base method.
+func (m *MockStore) ListAdjacentPosts(arg0 context.Context, arg1 db.ListAdjacentPostsParams) ([]db.ListAdjacentPostsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAdjacentPosts", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListAdjacentPostsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAdjacentPosts indicates an expected call of ListAdjacentPosts.
+func (mr *MockStoreMockRecorder) ListAdjacentPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAdjacentPosts", reflect.TypeOf((*MockStore)(nil).ListAdjacentPosts), arg0, arg1)
+}
+
 // ListExtensionSettings mocks base method.
 func (m *MockStore) ListExtensionSettings(arg0 context.Context) ([]db.ExtensionSetting, error) {
 	m.ctrl.T.Helper()
@@ -2311,6 +2326,21 @@ func (m *MockStore) ListPublishedPostsByAuthor(arg0 context.Context, arg1 db.Lis
 func (mr *MockStoreMockRecorder) ListPublishedPostsByAuthor(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublishedPostsByAuthor", reflect.TypeOf((*MockStore)(nil).ListPublishedPostsByAuthor), arg0, arg1)
+}
+
+// ListRelatedPosts mocks base method.
+func (m *MockStore) ListRelatedPosts(arg0 context.Context, arg1 db.ListRelatedPostsParams) ([]db.ListRelatedPostsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListRelatedPosts", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListRelatedPostsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListRelatedPosts indicates an expected call of ListRelatedPosts.
+func (mr *MockStoreMockRecorder) ListRelatedPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRelatedPosts", reflect.TypeOf((*MockStore)(nil).ListRelatedPosts), arg0, arg1)
 }
 
 // ListSessionsByUser mocks base method.

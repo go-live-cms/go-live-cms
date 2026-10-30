@@ -44,3 +44,13 @@ export function readingMinutes(doc: BlockDocV1 | undefined | null): number | nul
   const words = wordCount(doc)
   return words > 0 ? Math.max(1, Math.round(words / 220)) : null
 }
+
+// Element ids the theme's own markup uses (base layout, header, footer, post end). A
+// heading's anchor never takes one of these (headingAnchors' reserved ids, #351). The
+// patterns are the menus' numbered ids (#347): footer columns and header submenus.
+export const THEME_ELEMENT_IDS: (string | RegExp)[] = ["content", "site-menu", "theme-menu", "footer-site", "more-posts", "recent-404", "toc-title", "in-category", "written-by", "more-to-read", /^footer-col-\d+$/, /^nav-sub-\d+$/]
+
+// The "Back to" link of the newest post: the post type's list.
+export function archiveLink(postType: string): { href: string; label: string } {
+  return { href: `/${encodeURIComponent(postType)}`, label: postType === "post" ? "All posts" : `All ${postType}` }
+}

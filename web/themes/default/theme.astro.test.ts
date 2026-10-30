@@ -9,9 +9,14 @@ vi.mock("@/lib/siteSettings", () => ({
   getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 10, urlStructure: "slug" }),
 }))
 const getPostsByType = vi.fn()
+const getAdjacentPosts = vi.fn()
+const getRelatedPosts = vi.fn()
 vi.mock("@/lib/api", () => ({
   getTaxonomyTypes: async () => [{ name: "tag", label: "Tags" }],
   getPostsByType: (...args: unknown[]) => getPostsByType(...args),
+  getAdjacentPosts: (...args: unknown[]) => getAdjacentPosts(...args),
+  getRelatedPosts: (...args: unknown[]) => getRelatedPosts(...args),
+  getFeaturedImageUrl: async () => null,
 }))
 
 // The menus assigned to the theme's locations (#347); none unless a test sets them.
@@ -69,11 +74,37 @@ beforeEach(async () => {
   // React renders the post body (BlockRenderer).
   container = await AstroContainer.create({ renderers: await loadRenderers([reactRenderer()]) })
   getPostsByType.mockReset()
+  getAdjacentPosts.mockReset().mockResolvedValue({ previous: null, next: null })
+  getRelatedPosts.mockReset().mockResolvedValue([])
   getMenu.mockReset()
   getMenu.mockResolvedValue(null)
 })
 
 const link = (id: number, label: string, url: string, children: unknown[] = [], current = false) => ({ id, label, url, children, current })
+
+// A related/adjacent row (#351) as the API sends it: a with_meta list row.
+const listRow = (id: number, title: string, extra: Record<string, unknown> = {}) => ({
+  ...post,
+  id,
+  title,
+  slug: `post-${id}`,
+  published_blocks: undefined,
+  meta: {},
+  authors: [{ id: 5, username: "priya", full_name: "Priya Nair" }],
+  ...extra,
+})
+
+// A published doc with these headings (level, text), each followed by a paragraph.
+const docWithHeadings = (...headings: [number, string][]) => {
+  const blocks: Record<string, unknown> = {}
+  const order: string[] = []
+  headings.forEach(([level, text], i) => {
+    blocks[`h${i}`] = { id: `h${i}`, type: "heading", version: 1, attrs: { level, pm: { type: "heading", attrs: { level }, content: [{ type: "text", text }] } } }
+    blocks[`p${i}`] = { id: `p${i}`, type: "paragraph", version: 1, attrs: { pm: { type: "paragraph", content: [{ type: "text", text: "Body" }] } } }
+    order.push(`h${i}`, `p${i}`)
+  })
+  return { version: 1, blocks_order: order, blocks }
+}
 
 // Dev builds tag elements with data-astro-source-* (the dev toolbar); compare without them.
 const render = async (component: any, props: Record<string, unknown>) =>
@@ -177,7 +208,7 @@ describe("base layout", () => {
 })
 
 describe("post layouts", () => {
-  it("default: title, dek, byline, terms; no related posts", async () => {
+  it("default: title, dek, byline, terms; no TOC", async () => {
     const html = await render(PostDefault, { post, title: "t", description: "d", terms, featuredImage: "https://example.org/uploads/a.jpg", siteTitle: "Field Notes" })
     expect(html).toContain('<h1 class="title">Hello World</h1>')
     expect(html).toContain('<p class="dek">An excerpt</p>')
@@ -186,7 +217,61 @@ describe("post layouts", () => {
     expect(html).toContain("<p>Body text</p>")
     expect(html).toContain('<dd class="chip post-terms__term" data-slug="editor">Editor</dd>')
     // No "Written by" without the route's authors.
-    expect(html).not.toMatch(/More to read|Written by|Older post|On this page/)
+    expect(html).not.toMatch(/Written by|On this page/)
+  })
+
+  it("default: older / newer posts and More to read (#351)", async () => {
+    getAdjacentPosts.mockResolvedValue({ previous: listRow(41, "Analytics for every post"), next: listRow(43, "Scheduled updates") })
+    getRelatedPosts.mockResolvedValue([listRow(7, "Roles explained", { meta: { _thumbnail_url: "/uploads/media/r.jpg" } }), listRow(8, "Blocks that survive")])
+    const html = await render(PostDefault, { post, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(getAdjacentPosts).toHaveBeenCalledWith(42)
+    expect(getRelatedPosts).toHaveBeenCalledWith(42, { limit: 3 })
+    // Links follow the site's URL structure (slug here).
+    expect(html).toMatch(/<a href="\/post\/post-41" class="post-nav-link" rel="prev">\s*<span>← Older post<\/span>Analytics for every post/)
+    expect(html).toMatch(/<a href="\/post\/post-43" class="post-nav-link is-next" rel="next">\s*<span>Newer post →<\/span>Scheduled updates/)
+    expect(html).toMatch(/<h2 id="more-to-read" class="section-title">More to read<\/h2>/)
+    expect(html).toMatch(/<h3 class="card-title"><a href="\/post\/post-7">Roles explained<\/a><\/h3>/)
+    expect(html).toMatch(/<img class="media" src="[^"]*\/uploads\/media\/r\.jpg"/)
+    expect(html).toContain("Priya Nair · Oct 1, 2026")
+    // A card without a featured image has no image link.
+    expect(html.match(/<img class="media"/g)).toHaveLength(1)
+  })
+
+  it("default: the newest post links back to the list; no related posts, no section", async () => {
+    getAdjacentPosts.mockResolvedValue({ previous: null, next: null })
+    const html = await render(PostDefault, { post, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(html).toMatch(/<a href="\/post" class="post-nav-link is-next">\s*<span>Back to<\/span>All posts →/)
+    expect(html).not.toMatch(/Older post|More to read/)
+  })
+
+  it("headings get ids that never take the theme's own (e.g. #content)", async () => {
+    const withHeadings = { ...post, published_blocks: docWithHeadings([2, "Content"], [2, "How it works"]) }
+    const html = await render(PostDefault, { post: withHeadings, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(html).toContain('<h2 id="content-2">Content</h2>')
+    expect(html).toContain('<h2 id="how-it-works">How it works</h2>')
+    expect(html.match(/id="content"/g)).toHaveLength(1)
+  })
+
+  it("sidebar: On this page and the category's posts (#351)", async () => {
+    const withHeadings = { ...post, published_blocks: docWithHeadings([2, "What changes"], [3, "For writers"], [2, "How it works"], [2, "What’s next"]) }
+    const category = { id: 2, name: "Product updates", slug: "product-updates", taxonomy_type_name: "category" }
+    getRelatedPosts.mockImplementation(async (_id: number, params: { termId?: number }) =>
+      params.termId === 2 ? [listRow(41, "Analytics for every post")] : [listRow(7, "Roles explained")],
+    )
+    const html = await render(PostSidebar, { post: withHeadings, title: "t", description: "d", terms: [category, ...terms], siteTitle: "Field Notes" })
+    expect(getRelatedPosts).toHaveBeenCalledWith(42, { limit: 3, termId: 2 })
+    const aside = html.slice(html.indexOf('<aside class="post-aside"'), html.indexOf("</aside>"))
+    expect(aside).toMatch(/<h2 id="toc-title" class="section-title">On this page<\/h2>/)
+    expect(aside).toMatch(
+      /<ol class="toc">\s*<li>\s*<a href="#what-changes">What changes<\/a>\s*<ol class="toc toc--nested">\s*<li><a href="#for-writers">For writers<\/a><\/li>\s*<\/ol>\s*<\/li>\s*<li>\s*<a href="#how-it-works">How it works<\/a>\s*<\/li>\s*<li>\s*<a href="#what-s-next">What’s next<\/a>/,
+    )
+    expect(html).toContain('<h3 id="for-writers">For writers</h3>')
+    expect(aside).toMatch(/<h2 id="in-category" class="section-title">In Product updates<\/h2>/)
+    expect(aside).toContain('<a href="/post/post-41">Analytics for every post</a>')
+    // The dates move out of the aside once it has these; terms are at the post's end.
+    expect(aside).not.toContain("Reading time")
+    expect(html).toMatch(/<footer class="post-end">[\s\S]*data-slug="editor"/)
+    expect(html).toContain("More to read")
   })
 
   it("ends with Written by cards that link to each author page (#350)", async () => {
@@ -200,6 +285,8 @@ describe("post layouts", () => {
       expect(html).toContain('<a href="/author/admin">Ana Costa</a> and <a href="/author/luan">luan</a>')
       // Cards show the bio only: the website is on the author page.
       expect(html).not.toContain("anacosta.example")
+      // The design's order: tags, Written by, then older / newer (#351).
+      expect(html.indexOf('id="written-by"')).toBeLessThan(html.indexOf('class="post-nav"'))
     }
   })
 
@@ -209,13 +296,14 @@ describe("post layouts", () => {
     expect(html).not.toContain("/author/")
   })
 
-  it("sidebar: the aside holds the dates and terms", async () => {
+  it("sidebar: under three headings and no category, the aside holds the dates", async () => {
     const html = await render(PostSidebar, { post, title: "t", description: "d", terms, siteTitle: "Field Notes" })
     expect(html).toContain('class="post-grid"')
     expect(html).toMatch(/<aside class="post-aside" aria-label="About this post">/)
     expect(html).toContain("October 1, 2026")
     expect(html).toContain("October 12, 2026") // updated
-    expect(html).not.toContain("On this page")
+    expect(html).not.toMatch(/On this page|In Editor/)
+    expect(getRelatedPosts).toHaveBeenCalledTimes(1)
   })
 
   it("wide: centred header and a full-bleed featured image", async () => {

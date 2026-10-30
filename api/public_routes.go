@@ -9,6 +9,9 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 	{
 		// Published block content for SSR
 		posts.GET("/:id/blocks", server.getPublicPostBlocks)
+		// Older/newer and related posts for the post page (#351, posts_related.go)
+		posts.GET("/:id/adjacent", server.getAdjacentPosts)
+		posts.GET("/:id/related", server.getRelatedPosts)
 		// Numbered pages of a type's published posts (#349, pagination.go)
 		posts.GET("/type/:type", server.getPublicPostsByType)
 		// "Written by" cards (#350)
