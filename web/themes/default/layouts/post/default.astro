@@ -29,7 +29,7 @@ interface Props {
 const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle } = Astro.props
 ---
 
-<BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
+<BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
   <div class="container">
     <article class="post post--default">
       <PostHeader post={post} authors={authors} class="measure" />

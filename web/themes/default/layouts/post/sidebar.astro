@@ -41,7 +41,7 @@ const minutes = readingMinutes(post.published_blocks)
 const format = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 ---
 
-<BaseLayout title={title} description={description} seo={seo} current={post.post_type === 'post' ? 'posts' : undefined} siteTitle={siteTitle}>
+<BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
   <div class="container">
     <div class="post-grid">
       <article class="post post--sidebar">

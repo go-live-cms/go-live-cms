@@ -166,6 +166,14 @@ are the most fragile part of the codebase. **Before editing anything under
   `lib/postList.ts`. Parts without a backend stay hidden (table in
   `themes/default/README.md`). `/themes/active` returns `settings` as an object (it was
   base64 before, so `layout_variants` never applied).
+- **Navigation menus (#347):** Appearance › Menus (`pages/Menus.tsx`, `/menus`, editors
+  and admins) edits a local tree and saves it whole; every change (drag and drop, and the
+  row's Move menu, its keyboard alternative) goes through `lib/menuTree.ts`'s
+  `menuTreeReducer` (tested). Locations come from the active theme's
+  `config.menu_locations`. The public theme gets menus from `src/lib/menus.ts` (`getMenu`,
+  2s timeout, `null` on 404/failure; `normalizeMenu` re-checks every href), fetched in
+  `base.astro` for `primary` and `footer` (the 500 page skips them). The default theme's
+  rules are in `themes/default/README.md` (Menus).
 - **Author pages (#350):** `/author/{username}` (`src/pages/author/[username].astro`, the
   theme's `layouts/author`, data from `src/lib/authorPage.ts`). The API's `/public/authors`
   routes return only `AuthorProfile` (name, username, avatar, bio, website) and 404 anyone

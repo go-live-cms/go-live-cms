@@ -28,13 +28,21 @@ const build = (role: string | undefined) => buildNavigation({ role, postTypes: P
 describe("buildNavigation", () => {
   it("gives admins every section, with the workspace pages", () => {
     const nav = build("admin")
-    expect(nav.map((s) => s.key)).toEqual(["top", "content", "workspace"])
-    expect(nav.find((s) => s.key === "workspace")!.items.map((i) => i.label)).toEqual(["Users", "Post types", "Themes", "Settings"])
+    expect(nav.map((s) => s.key)).toEqual(["top", "content", "appearance", "workspace"])
+    expect(nav.find((s) => s.key === "appearance")!.items.map((i) => i.label)).toEqual(["Themes", "Menus"])
+    expect(nav.find((s) => s.key === "workspace")!.items.map((i) => i.label)).toEqual(["Users", "Post types", "Settings"])
+  })
+
+  it("gives editors Menus under Appearance, without Themes (#347)", () => {
+    const appearance = build("editor").find((s) => s.key === "appearance")!
+    expect(appearance.items.map((i) => i.key)).toEqual(["menus"])
+    expect(keys(build("contributor"))).not.toContain("menus")
+    expect(build("contributor").map((s) => s.key)).not.toContain("appearance")
   })
 
   it("hides Users, Settings, Themes and Post types from contributors", () => {
     const visible = keys(build("contributor"))
-    for (const key of ["users", "settings", "themes", "post-types"]) expect(visible).not.toContain(key)
+    for (const key of ["users", "settings", "themes", "menus", "post-types"]) expect(visible).not.toContain(key)
     expect(build("contributor").map((s) => s.label)).not.toContain("Workspace")
     // What they can use stays.
     expect(visible).toEqual(expect.arrayContaining(["home", "new-post", "type-post", "type-page", "media"]))
