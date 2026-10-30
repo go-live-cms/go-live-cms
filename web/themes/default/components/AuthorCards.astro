@@ -1,0 +1,31 @@
+---
+/**
+ * "Written by" at the end of a post (#350): one card per credited author, in byline
+ * order, each linking to their author page. Nothing when the post has none.
+ */
+import type { AuthorProfile } from '@gl-admin/lib/api/types'
+import { authorPath } from '@/lib/seo'
+import { avatarColor, initial } from '../lib/avatar'
+import { displayName } from '../lib/authors'
+
+interface Props {
+  authors?: AuthorProfile[]
+}
+
+const { authors = [] } = Astro.props
+---
+
+{authors.length > 0 && (
+  <section class="author-cards" aria-labelledby="written-by">
+    <h2 id="written-by" class="section-title">Written by</h2>
+    {authors.map((author) => (
+      <div class="author-card">
+        <span class="avatar" aria-hidden="true" style={`width:56px;height:56px;font-size:20px;background:${avatarColor(author.username)}`}>{initial(displayName(author))}</span>
+        <div>
+          <h3><a href={authorPath(author.username)}>{displayName(author)}</a></h3>
+          {author.bio && <p class="author-bio">{author.bio}</p>}
+        </div>
+      </div>
+    ))}
+  </section>
+)}

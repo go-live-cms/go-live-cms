@@ -231,6 +231,20 @@ describe("collectSitemapEntries", () => {
     ])
   })
 
+  it("lists author pages last, with their newest post's time (#350)", async () => {
+    const entries = await collectSitemapEntries("https://example.org", {
+      ...source({ post: [post({ id: 1 })] }),
+      getAuthors: async () => [
+        { username: "ana", last_modified: "2026-10-20T09:00:00Z" },
+        { username: "luan dev", last_modified: "0001-01-01T00:00:00Z" },
+      ],
+    })
+    expect(entries.slice(-2)).toEqual([
+      { loc: "https://example.org/author/ana", lastmod: "2026-10-20T09:00:00.000Z" },
+      { loc: "https://example.org/author/luan%20dev", lastmod: undefined },
+    ])
+  })
+
   it("falls back to created_at when changed_at is Go's zero time", async () => {
     const entries = await collectSitemapEntries(
       "https://example.org",

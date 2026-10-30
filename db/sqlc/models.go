@@ -208,6 +208,8 @@ type User struct {
 	PasswordChangedAt time.Time `json:"password_changed_at"`
 	CreatedAt         time.Time `json:"created_at"`
 	Role              string    `json:"role"`
+	Bio               string    `json:"bio"`
+	Website           string    `json:"website"`
 }
 
 type UserInvitation struct {

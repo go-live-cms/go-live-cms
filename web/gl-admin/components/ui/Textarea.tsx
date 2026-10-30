@@ -13,14 +13,17 @@ type TextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "title"> 
   containerClassName?: string
 }
 
+const charCount = (s: string) => [...s].length
+
 const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
   { label, hint, error, optional, maxCount, containerClassName = "", id, rows = 3, value, defaultValue, className = "", onChange, ...rest },
   ref
 ) {
   const fieldId = useStableId("textarea", id)
-  // Uncontrolled: count what's typed, since there's no value prop to read.
-  const [typed, setTyped] = useState(() => String(defaultValue ?? "").length)
-  const count = value !== undefined ? String(value).length : typed
+  // Uncontrolled: count what's typed, since there's no value prop to read. Characters
+  // are code points, as the API's limits count them (an emoji is one, not two).
+  const [typed, setTyped] = useState(() => charCount(String(defaultValue ?? "")))
+  const count = value !== undefined ? charCount(String(value)) : typed
   const over = maxCount !== undefined && count > maxCount
   const countId = `${fieldId}-count`
 
@@ -47,7 +50,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textare
         aria-invalid={error || over ? true : undefined}
         aria-describedby={describedBy(fieldId, hint, error, maxCount !== undefined ? countId : undefined)}
         onChange={(e) => {
-          if (value === undefined) setTyped(e.currentTarget.value.length)
+          if (value === undefined) setTyped(charCount(e.currentTarget.value))
           onChange?.(e)
         }}
         {...rest}

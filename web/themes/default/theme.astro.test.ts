@@ -23,6 +23,7 @@ const PageDefault = (await import("./layouts/page/default.astro")).default
 const PageFull = (await import("./layouts/page/fullwidth.astro")).default
 const Home = (await import("./layouts/home/default.astro")).default
 const ErrorLayout = (await import("./layouts/error/default.astro")).default
+const AuthorLayout = (await import("./layouts/author/default.astro")).default
 
 const post = {
   id: 42,
@@ -48,6 +49,11 @@ const post = {
   },
 }
 const terms = [{ id: 1, name: "Editor", slug: "editor", taxonomy_type_name: "tag" }]
+// The "Written by" authors the post route fetches (#350): public fields only.
+const authors = [
+  { username: "admin", full_name: "Ana Costa", avatar: null, bio: "Edits this blog.\nAnd most docs.", website: "https://anacosta.example" },
+  { username: "luan", full_name: "", avatar: null, bio: "", website: "" },
+]
 
 const request = new Request("http://web:4321/post/hello-world")
 let container: AstroContainer
@@ -109,16 +115,37 @@ describe("base layout", () => {
 })
 
 describe("post layouts", () => {
-  it("default: title, dek, byline, terms; no author pages or related posts", async () => {
+  it("default: title, dek, byline, terms; no related posts", async () => {
     const html = await render(PostDefault, { post, title: "t", description: "d", terms, featuredImage: "https://example.org/uploads/a.jpg", siteTitle: "Field Notes" })
     expect(html).toContain('<h1 class="title">Hello World</h1>')
     expect(html).toContain('<p class="dek">An excerpt</p>')
-    expect(html).toContain("By Ana Costa and luan")
+    expect(html).toContain('By <a href="/author/admin">Ana Costa</a> and <a href="/author/luan">luan</a>')
     expect(html).toContain('class="post-featured post-featured--wide"')
     expect(html).toContain("<p>Body text</p>")
     expect(html).toContain('<dd class="chip post-terms__term" data-slug="editor">Editor</dd>')
+    // No "Written by" without the route's authors.
     expect(html).not.toMatch(/More to read|Written by|Older post|On this page/)
     expect(html).toMatch(/<a href="\/post" aria-current="page">Posts/)
+  })
+
+  it("ends with Written by cards that link to each author page (#350)", async () => {
+    for (const Layout of [PostDefault, PostSidebar, PostWide]) {
+      const html = await render(Layout, { post: { ...post, authors: undefined }, authors, title: "t", description: "d", siteTitle: "Field Notes" })
+      expect(html).toMatch(/<section class="author-cards" aria-labelledby="written-by">\s*<h2 id="written-by" class="section-title">Written by<\/h2>/)
+      expect(html).toContain('<h3><a href="/author/admin">Ana Costa</a></h3>')
+      expect(html).toContain('<p class="author-bio">Edits this blog.\nAnd most docs.</p>')
+      expect(html).toContain('<h3><a href="/author/luan">luan</a></h3>')
+      // The byline names the same credited authors, linked.
+      expect(html).toContain('<a href="/author/admin">Ana Costa</a> and <a href="/author/luan">luan</a>')
+      // Cards show the bio only: the website is on the author page.
+      expect(html).not.toContain("anacosta.example")
+    }
+  })
+
+  it("a post without a byline shows its owner, unlinked", async () => {
+    const html = await render(PostDefault, { post: { ...post, authors: [] }, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(html).toContain("<span>By admin</span>")
+    expect(html).not.toContain("/author/")
   })
 
   it("sidebar: the aside holds the dates and terms", async () => {
@@ -165,6 +192,36 @@ describe("front page", () => {
     expect(html).toContain('<a href="/?page=2" class="page-link" rel="next">Older →</a>')
     expect(html).toContain('<span class="page-link" aria-disabled="true">← Newer</span>')
     expect(html).not.toMatch(/page-num|Page 1 of/)
+  })
+})
+
+describe("author page", () => {
+  const item = (id: number) => ({ post: { ...post, id, title: `Post ${id}` }, href: `/post/p${id}`, image: null })
+  const author = authors[0]
+
+  it("shows the name, initial, bio, website (rel=me) and post count, then the posts", async () => {
+    const list = { posts: [item(1), item(2)], total: 2, page: 1, links: {}, siteTitle: "Field Notes" }
+    const html = await render(AuthorLayout, { author, postCount: 2, list, title: "Ana Costa | Field Notes", description: "d" })
+    expect(html).toContain('<span class="eyebrow">Author</span>')
+    expect(html).toContain('<h1 class="title">Ana Costa</h1>')
+    expect(html).toMatch(/<span class="avatar author-header__avatar" aria-hidden="true" style="background:#[0-9a-f]{6}">A<\/span>/)
+    expect(html).toContain('<p class="dek author-bio">Edits this blog.\nAnd most docs.</p>')
+    expect(html).toContain('<a href="https://anacosta.example/" rel="me noopener">anacosta.example</a>')
+    expect(html).toContain("2 posts")
+    expect(html).toContain('<a href="/post/p2">Post 2</a>')
+    expect(html).toContain("That’s every post by Ana Costa.")
+    expect(html).not.toContain('class="pagination"')
+  })
+
+  it("pages with Newer / Older and leaves out an unsafe or empty website", async () => {
+    const list = { posts: [item(11)], total: 25, page: 2, links: { newer: "/author/admin", older: "/author/admin?page=3" }, siteTitle: "Field Notes" }
+    const html = await render(AuthorLayout, { author: { ...author, bio: "", website: "javascript:alert(1)" }, postCount: 25, list, title: "t", description: "d" })
+    expect(html).toContain("Page 2 · 25 posts")
+    expect(html).toContain('<a href="/author/admin?page=3" class="page-link" rel="next">Older →</a>')
+    expect(html).toContain('<a href="/author/admin" class="page-link" rel="prev">← Newer</a>')
+    expect(html).not.toContain("javascript:")
+    expect(html).not.toContain("author-bio")
+    expect(html).not.toContain("every post by")
   })
 })
 

@@ -248,6 +248,24 @@ func createDummyUsers(store db.Store) []db.User {
 			continue
 		}
 
+		// An author profile (#350), so seeded author pages and cards have one.
+		withProfile, err := store.UpdateUser(context.TODO(), db.UpdateUserParams{
+			ID:                createdUser.ID,
+			Username:          createdUser.Username,
+			FullName:          createdUser.FullName,
+			Email:             createdUser.Email,
+			HashedPassword:    createdUser.HashedPassword,
+			PasswordChangedAt: createdUser.PasswordChangedAt,
+			Role:              createdUser.Role,
+			Bio:               sql.NullString{String: gofakeit.Sentence(18), Valid: true},
+			Website:           sql.NullString{String: fmt.Sprintf("https://%s.example", username), Valid: true},
+		})
+		if err != nil {
+			log.Printf("❌ Failed to set the profile of %s: %v", username, err)
+		} else {
+			createdUser = withProfile
+		}
+
 		users = append(users, createdUser)
 	}
 
@@ -699,6 +717,22 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 		if err != nil {
 			log.Printf("❌ Failed to create post '%s': %v", title, err)
 			continue
+		}
+
+		// The byline (#319, #350): the owner, and on every third post a co-author,
+		// so seeded posts have author pages and "Written by" cards.
+		authors := []db.User{users[userIndex]}
+		if i%3 == 0 && len(users) > 1 {
+			authors = append(authors, users[(userIndex+1)%len(users)])
+		}
+		for order, author := range authors {
+			if _, err := store.CreateUserPost(context.TODO(), db.CreateUserPostParams{
+				PostID: createdPost.ID,
+				UserID: author.ID,
+				Order:  int32(order),
+			}); err != nil {
+				log.Printf("❌ Failed to credit %s on post %s: %v", author.Username, title, err)
+			}
 		}
 
 		blogMeta := map[string]string{

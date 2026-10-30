@@ -357,6 +357,19 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **Error tracking:** `ErrorReporter` (`SetErrorReporter`, no-op default) gets
   recovered panics (with stack) and 5xx responses, once each.
 
+## Public author pages (#350)
+
+- `users.bio` (plain text, ≤300 characters) and `users.website` (http/https URL), `''` =
+  unset. `PUT /users/:id` takes them as optional pointers: absent keeps, `""` clears
+  (`normalizeBio`/`normalizeWebsite` in `users_utils.go`; `UpdateUser` uses `sqlc.narg`, so a
+  NULL keeps the stored value).
+- `/public/authors[/:username[/posts]]` and `/public/posts/:id/authors`
+  (`authors_handlers_read.go`) answer with `AuthorProfileResponse` only, never
+  `PublicUserResponse` (it has the role and id) or a `db.User`. Who has a page is decided
+  in `db/query/authors.sql` alone: credited in `user_posts` on a `published` post of a
+  public, active type. Anyone else gets the same 404 body as an unknown username (tested),
+  so the routes can't enumerate accounts.
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,

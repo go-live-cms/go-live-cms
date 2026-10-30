@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import Input from "@gl-admin/components/ui/Input"
+import Textarea from "@gl-admin/components/ui/Textarea"
 import Button from "@gl-admin/components/ui/Button"
 import Notice from "@gl-admin/components/ui/Notice"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
@@ -10,7 +11,9 @@ import type { User } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
 import { roleLabel } from "@gl-admin/lib/roles"
 import {
+  BIO_MAX,
   adoptPasswordChangeSession,
+  authorFieldErrors,
   buildProfileUpdate,
   describePasswordChangeError,
   describeProfileError,
@@ -26,13 +29,20 @@ import "@gl-admin/assets/styles/pages/profile.scss"
 const EMPTY_PASSWORDS: PasswordFields = { current_password: "", password: "", confirm_password: "" }
 
 function toFields(user: User): ProfileFields {
-  return { username: user.username || "", email: user.email || "", full_name: user.full_name || "" }
+  return {
+    username: user.username || "",
+    email: user.email || "",
+    full_name: user.full_name || "",
+    bio: user.bio || "",
+    website: user.website || "",
+  }
 }
 
 const inputValue = (e: any): string => e.currentTarget?.value ?? e.target?.value ?? ""
 
 // "My profile" (#168, restyled in #343): any signed-in user, contributors included,
-// edits their own name and username and changes their password. This doesn't use
+// edits their own name, username, bio and website (the public author page, #350) and
+// changes their password. This doesn't use
 // UserForm: that always sends `role` (403 for non-admins) and saves the password
 // together with the profile.
 //
@@ -43,7 +53,9 @@ export default function Profile() {
   const { toasts, showSuccess, showError, removeToast } = useToast()
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [fields, setFields] = useState<ProfileFields>({ username: "", email: "", full_name: "" })
+  const [fields, setFields] = useState<ProfileFields>({ username: "", email: "", full_name: "", bio: "", website: "" })
+  // Field errors show once a save was tried, then follow the typing.
+  const [showFieldErrors, setShowFieldErrors] = useState(false)
   const [passwords, setPasswords] = useState<PasswordFields>(EMPTY_PASSWORDS)
   const [savingProfile, setSavingProfile] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
@@ -77,6 +89,7 @@ export default function Profile() {
 
     const invalid = validateProfile(fields)
     if (invalid) {
+      setShowFieldErrors(true)
       showError(invalid)
       return
     }
@@ -173,6 +186,7 @@ export default function Profile() {
     )
   }
 
+  const authorErrors = showFieldErrors ? authorFieldErrors(fields) : {}
   const rules = newPasswordChecklist(passwords.password, passwords.current_password)
   // Only once the confirmation is as long as the password, so typing it isn't an error.
   const mismatch =
@@ -216,6 +230,36 @@ export default function Profile() {
             <span className="gl-profile__fact-value">{roleLabel(user.role)}</span>
             <span className="gl-workspace-field__hint">Roles are set by an admin in Users.</span>
           </div>
+          <Textarea
+            label="Bio"
+            name="bio"
+            optional
+            rows={3}
+            maxCount={BIO_MAX}
+            containerClassName="is-wide"
+            hint="Plain text. Shown on your author page and under the posts you wrote."
+            error={authorErrors.bio}
+            value={fields.bio}
+            onChange={(e) => {
+              // Read it now: React clears currentTarget before the updater runs.
+              const bio = e.currentTarget.value
+              setFields((prev) => ({ ...prev, bio }))
+            }}
+          />
+          <Input
+            title="Website"
+            type="text"
+            name="website"
+            autoComplete="url"
+            inputMode="url"
+            unmasked
+            placeholder="https://"
+            containerClassName="is-wide"
+            hint="Linked from your author page."
+            error={authorErrors.website}
+            value={fields.website}
+            onChange={(e: any) => setFields((prev) => ({ ...prev, website: inputValue(e) }))}
+          />
         </div>
         <div>
           <Button type="submit" variant="primary" size="lg" loading={savingProfile}>

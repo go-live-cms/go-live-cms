@@ -1566,6 +1566,21 @@ func (mr *MockStoreMockRecorder) GetPostsByUserWithMedia(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostsByUserWithMedia", reflect.TypeOf((*MockStore)(nil).GetPostsByUserWithMedia), arg0, arg1)
 }
 
+// GetPublicAuthor mocks base method.
+func (m *MockStore) GetPublicAuthor(arg0 context.Context, arg1 string) (db.GetPublicAuthorRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPublicAuthor", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPublicAuthorRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPublicAuthor indicates an expected call of GetPublicAuthor.
+func (mr *MockStoreMockRecorder) GetPublicAuthor(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicAuthor", reflect.TypeOf((*MockStore)(nil).GetPublicAuthor), arg0, arg1)
+}
+
 // GetPublishedPostBlocks mocks base method.
 func (m *MockStore) GetPublishedPostBlocks(arg0 context.Context, arg1 int64) (db.GetPublishedPostBlocksRow, error) {
 	m.ctrl.T.Helper()
@@ -2030,6 +2045,21 @@ func (mr *MockStoreMockRecorder) ListOpenUserInvitations(arg0 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOpenUserInvitations", reflect.TypeOf((*MockStore)(nil).ListOpenUserInvitations), arg0)
 }
 
+// ListPostAuthorProfiles mocks base method.
+func (m *MockStore) ListPostAuthorProfiles(arg0 context.Context, arg1 int64) ([]db.ListPostAuthorProfilesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostAuthorProfiles", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostAuthorProfilesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostAuthorProfiles indicates an expected call of ListPostAuthorProfiles.
+func (mr *MockStoreMockRecorder) ListPostAuthorProfiles(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostAuthorProfiles", reflect.TypeOf((*MockStore)(nil).ListPostAuthorProfiles), arg0, arg1)
+}
+
 // ListPostTypes mocks base method.
 func (m *MockStore) ListPostTypes(arg0 context.Context) ([]db.PostType, error) {
 	m.ctrl.T.Helper()
@@ -2103,6 +2133,36 @@ func (m *MockStore) ListPostsWithMeta(arg0 context.Context, arg1 db.ListPostsWit
 func (mr *MockStoreMockRecorder) ListPostsWithMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsWithMeta", reflect.TypeOf((*MockStore)(nil).ListPostsWithMeta), arg0, arg1)
+}
+
+// ListPublicAuthors mocks base method.
+func (m *MockStore) ListPublicAuthors(arg0 context.Context, arg1 db.ListPublicAuthorsParams) ([]db.ListPublicAuthorsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPublicAuthors", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPublicAuthorsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPublicAuthors indicates an expected call of ListPublicAuthors.
+func (mr *MockStoreMockRecorder) ListPublicAuthors(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublicAuthors", reflect.TypeOf((*MockStore)(nil).ListPublicAuthors), arg0, arg1)
+}
+
+// ListPublishedPostsByAuthor mocks base method.
+func (m *MockStore) ListPublishedPostsByAuthor(arg0 context.Context, arg1 db.ListPublishedPostsByAuthorParams) ([]db.ListPublishedPostsByAuthorRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPublishedPostsByAuthor", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPublishedPostsByAuthorRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPublishedPostsByAuthor indicates an expected call of ListPublishedPostsByAuthor.
+func (mr *MockStoreMockRecorder) ListPublishedPostsByAuthor(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublishedPostsByAuthor", reflect.TypeOf((*MockStore)(nil).ListPublishedPostsByAuthor), arg0, arg1)
 }
 
 // ListSessionsByUser mocks base method.

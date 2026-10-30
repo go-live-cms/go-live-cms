@@ -1,0 +1,38 @@
+---
+/**
+ * An author's page (#350), rendered by the active theme's layouts/author layout (the
+ * default theme's when it has none). Only authors credited on a published post have
+ * one; anyone else, like an unknown username, is the same 404.
+ */
+import { loadAuthorPage, authorPath } from '../../lib/authorPage'
+import { pageNumber } from '../../lib/postList'
+import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
+import { metaDescription, resolveSiteUrl } from '../../lib/seo'
+
+export const prerender = false
+
+const authorLayouts = import.meta.glob('../../../themes/*/layouts/author/*.astro')
+
+const { username = '' } = Astro.params as { username?: string }
+const page = pageNumber(Astro.url.searchParams.get('page'))
+const data = await loadAuthorPage(username, page, resolveSiteUrl(Astro.url))
+if (!data || (page > 1 && data.list.posts.length === 0)) {
+  return new Response(null, { status: 404 })
+}
+
+const themeSlug = Astro.locals.activeTheme || 'default'
+const Layout = await loadThemeLayout(authorLayouts, themeLayoutCandidates('../../../themes', themeSlug, 'author'))
+if (!Layout) {
+  throw new Error('No author layout in this build')
+}
+const name = data.author.full_name?.trim() || data.author.username
+const title = `${name}${page > 1 ? ` · Page ${page}` : ''} | ${data.list.siteTitle}`
+const description = metaDescription(data.author.bio) || `Posts by ${name} on ${data.list.siteTitle}`
+---
+
+<Layout
+  {...data}
+  title={title}
+  description={description}
+  seo={{ canonical: page > 1 ? `${authorPath(data.author.username)}?page=${page}` : authorPath(data.author.username), type: 'website', siteName: data.list.siteTitle }}
+/>
