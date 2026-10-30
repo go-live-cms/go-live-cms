@@ -227,6 +227,12 @@ func (server *Server) updateUser(c *gin.Context) {
 	if req.Role != "" {
 		updateParams.Role = req.Role
 	}
+	if updateParams.Bio, ok = normalizeBio(c, req.Bio); !ok {
+		return
+	}
+	if updateParams.Website, ok = normalizeWebsite(c, req.Website); !ok {
+		return
+	}
 	if passwordChanged {
 		// password_changed_at is stamped inside UpdateUserTx, under the user
 		// row lock, not here: hashing takes long enough for a concurrent

@@ -3,8 +3,12 @@ import { ApiError, apiCall } from "./api"
 import { authManager } from "./auth"
 import { updateUser } from "./api/users"
 import {
+  BIO_MAX,
   adoptPasswordChangeSession,
+  authorFieldErrors,
   buildProfileUpdate,
+  isValidWebsite,
+  normalizeBio,
   describePasswordChangeError,
   describeProfileError,
   newPasswordChecklist,
@@ -35,6 +39,44 @@ describe("validateProfile", () => {
   it("counts characters like Go's validator (runes, not UTF-16 units)", () => {
     // 50 emoji are 100 UTF-16 units but 50 runes: allowed by min=3,max=50.
     expect(validateProfile({ ...PROFILE, username: "😀".repeat(50) })).toBeNull()
+  })
+})
+
+// Bio and website (#350): the same rules as the API's normalizeBio/normalizeWebsite.
+describe("author profile fields", () => {
+  it("accepts a bio up to 300 characters, counted like the API (code points)", () => {
+    expect(authorFieldErrors({ bio: "a".repeat(BIO_MAX) })).toEqual({})
+    expect(authorFieldErrors({ bio: "😀".repeat(BIO_MAX) })).toEqual({})
+    expect(authorFieldErrors({ bio: `  ${"a".repeat(BIO_MAX)}  ` })).toEqual({})
+    expect(authorFieldErrors({ bio: "a".repeat(BIO_MAX + 1) }).bio).toMatch(/300 characters/)
+    expect(validateProfile({ ...PROFILE, bio: "a".repeat(BIO_MAX + 1) })).toMatch(/300 characters/)
+  })
+
+  it("keeps a bio plain text: line breaks and tabs, no other control characters", () => {
+    expect(authorFieldErrors({ bio: "Line one\nLine two\tend" })).toEqual({})
+    expect(authorFieldErrors({ bio: "bell\u0007" }).bio).toMatch(/plain text/)
+  })
+
+  it("takes only an http(s) URL with a host as the website, or nothing", () => {
+    for (const ok of ["", "  ", "https://anacosta.example", "http://a.example/about?x=1"]) {
+      expect(authorFieldErrors({ website: ok })).toEqual({})
+    }
+    for (const bad of ["anacosta.example", "javascript:alert(1)", "ftp://a.example", "https://", "mailto:a@b.c"]) {
+      expect(authorFieldErrors({ website: bad }).website).toMatch(/http:\/\/ or https:\/\//)
+    }
+    expect(validateProfile({ ...PROFILE, website: "nope" })).toMatch(/web address/)
+    expect(isValidWebsite(`https://a.example/${"a".repeat(2048)}`)).toBe(false)
+  })
+
+  it("sends a changed bio and website trimmed, and an emptied one as '' to clear it", () => {
+    const original = { ...PROFILE, bio: "Old", website: "https://old.example" }
+    expect(buildProfileUpdate(original, { ...original, bio: " New\r\nbio ", website: " https://new.example " })).toEqual({
+      bio: "New\nbio",
+      website: "https://new.example",
+    })
+    expect(buildProfileUpdate(original, { ...original, bio: "", website: "" })).toEqual({ bio: "", website: "" })
+    expect(buildProfileUpdate(original, { ...original, bio: " Old " })).toEqual({})
+    expect(normalizeBio(undefined)).toBe("")
   })
 })
 

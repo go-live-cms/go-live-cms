@@ -9,6 +9,16 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 	{
 		// Published block content for SSR
 		posts.GET("/:id/blocks", server.getPublicPostBlocks)
+		// "Written by" cards (#350)
+		posts.GET("/:id/authors", server.listPublicPostAuthors)
+	}
+
+	// Author pages (#350, authors_handlers_read.go)
+	authors := rg.Group("/authors")
+	{
+		authors.GET("", server.listPublicAuthors)
+		authors.GET("/:username", server.getPublicAuthor)
+		authors.GET("/:username/posts", server.listPublicAuthorPosts)
 	}
 
 	// The menu assigned to a theme location (menus_routes.go)

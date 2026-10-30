@@ -65,7 +65,20 @@ export async function loadPostList(postType: string, page: number, basePath: str
     with_meta: true,
     meta_level: "basic",
   })
-  const posts = await Promise.all(
+  const posts = await toListedPosts(data, postType, structure, siteUrl)
+  const total = meta.total ?? posts.length
+  return { posts, total, page, links: pageLinks(basePath, page, perPage, total), siteTitle: site.title }
+}
+
+// with_meta list rows as list items; the author page's list (#350) uses it too.
+// fallbackType names the type of rows that don't say.
+export function toListedPosts(
+  data: Post[],
+  fallbackType: string,
+  structure: ReturnType<typeof normalizeUrlStructure>,
+  siteUrl: string,
+): Promise<ListedPost[]> {
+  return Promise.all(
     data.map(async (post): Promise<ListedPost> => {
       // with_meta rows carry the featured image URL; only rows whose stored value is an
       // old filesystem path (before #201) need the featured-image endpoint to map it.
@@ -73,11 +86,9 @@ export async function loadPostList(postType: string, page: number, basePath: str
       const url = stored !== undefined ? stored : await getFeaturedImageUrl(post.id).catch(() => null)
       return {
         post,
-        href: postPath({ ...post, post_type: post.post_type || postType }, structure),
+        href: postPath({ ...post, post_type: post.post_type || fallbackType }, structure),
         image: publicImageUrl(siteUrl, url) ?? null,
       }
     }),
   )
-  const total = meta.total ?? posts.length
-  return { posts, total, page, links: pageLinks(basePath, page, perPage, total), siteTitle: site.title }
 }

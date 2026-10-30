@@ -359,7 +359,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 
 ## Navigation menus (#347)
 
-- `menus` (name, `location` unique when set) and `menu_items` (`000021`): `item_type`
+- `menus` (name, `location` unique when set) and `menu_items` (`000022`): `item_type`
   post | term | archive | custom, one target column each (CHECK), `parent_id` one level
   deep, `sort_order` = position in the whole menu in reading order. Target FKs cascade on
   delete; `parent_id` is SET NULL, so a deleted parent's children move up in place.
@@ -374,6 +374,19 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   (`SaveMenuTx` clears the old holder). Public: `GET /public/menus/:location`, visible
   items only, 404 when nothing is assigned. Themes declare `menuLocations` in
   `theme.config.ts`; the scanner stores them as `config.menu_locations`.
+
+## Public author pages (#350)
+
+- `users.bio` (plain text, ≤300 characters) and `users.website` (http/https URL), `''` =
+  unset. `PUT /users/:id` takes them as optional pointers: absent keeps, `""` clears
+  (`normalizeBio`/`normalizeWebsite` in `users_utils.go`; `UpdateUser` uses `sqlc.narg`, so a
+  NULL keeps the stored value).
+- `/public/authors[/:username[/posts]]` and `/public/posts/:id/authors`
+  (`authors_handlers_read.go`) answer with `AuthorProfileResponse` only, never
+  `PublicUserResponse` (it has the role and id) or a `db.User`. Who has a page is decided
+  in `db/query/authors.sql` alone: credited in `user_posts` on a `published` post of a
+  public, active type. Anyone else gets the same 404 body as an unknown username (tested),
+  so the routes can't enumerate accounts.
 
 ## Gotchas
 

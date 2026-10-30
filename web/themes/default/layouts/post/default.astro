@@ -1,16 +1,17 @@
 ---
 /**
  * Default Post Layout (#345): one reading column, the featured image at wide width.
- * Hidden until their issues land: author cards (#350), older/newer and related posts
- * (#351).
+ * Ends with the terms and the "Written by" cards (#350). Hidden until #351 lands:
+ * older/newer and related posts.
  */
 import BaseLayout from '../base.astro'
 import BlockRenderer from '@/components/BlockRenderer'
 import PostHeader from '../../components/PostHeader.astro'
 import FeaturedImage from '../../components/FeaturedImage.astro'
 import PostTerms from '../../components/PostTerms.astro'
+import AuthorCards from '../../components/AuthorCards.astro'
 import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
-import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -19,24 +20,27 @@ interface Props {
   description: string
   seo?: SeoMeta
   terms?: TaxonomyTerm[]
+  // "Written by" (#350): the credited authors, in byline order.
+  authors?: AuthorProfile[]
   featuredImage?: string | null
   siteTitle?: string
 }
 
-const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
+const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle } = Astro.props
 ---
 
 <BaseLayout title={title} description={description} seo={seo} siteTitle={siteTitle}>
   <div class="container">
     <article class="post post--default">
-      <PostHeader post={post} class="measure" />
+      <PostHeader post={post} authors={authors} class="measure" />
       <FeaturedImage src={featuredImage} variant="wide" />
       <div class="prose measure">
         {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} />}
       </div>
-      {terms && terms.length > 0 && (
+      {((terms && terms.length > 0) || authors.length > 0) && (
         <footer class="post-end measure">
           <PostTerms terms={terms} />
+          <AuthorCards authors={authors} />
         </footer>
       )}
     </article>

@@ -150,6 +150,19 @@ export interface User {
   role: string
   created_at: string
   password_changed_at?: string
+  // Author profile (#350); "" when not set.
+  bio?: string
+  website?: string
+}
+
+// An author as the public site sees them (GET /public/authors/:username, #350): no
+// email, role or id. avatar stays null until #334.
+export interface AuthorProfile {
+  username: string
+  full_name: string
+  avatar: string | null
+  bio: string
+  website: string
 }
 
 export interface TaxonomyType {

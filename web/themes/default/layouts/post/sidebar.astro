@@ -9,9 +9,10 @@ import BlockRenderer from '@/components/BlockRenderer'
 import PostHeader from '../../components/PostHeader.astro'
 import FeaturedImage from '../../components/FeaturedImage.astro'
 import PostTerms from '../../components/PostTerms.astro'
+import AuthorCards from '../../components/AuthorCards.astro'
 import { COLUMN_IMAGE_SIZES } from '../../lib/imageSizes'
 import { readingMinutes } from '../../lib/posts'
-import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
+import type { AuthorProfile, Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import type { SeoMeta } from '@/lib/seo'
 
 interface Props {
@@ -20,11 +21,13 @@ interface Props {
   description: string
   seo?: SeoMeta
   terms?: TaxonomyTerm[]
+  // "Written by" (#350): the credited authors, in byline order.
+  authors?: AuthorProfile[]
   featuredImage?: string | null
   siteTitle?: string
 }
 
-const { post, title, description, seo, terms, featuredImage, siteTitle } = Astro.props
+const { post, title, description, seo, terms, authors = [], featuredImage, siteTitle } = Astro.props
 
 const dateOf = (value: string) => {
   const d = new Date(value)
@@ -42,11 +45,16 @@ const format = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', mon
   <div class="container">
     <div class="post-grid">
       <article class="post post--sidebar">
-        <PostHeader post={post} />
+        <PostHeader post={post} authors={authors} />
         <FeaturedImage src={featuredImage} variant="column" />
         <div class="prose">
           {post.published_blocks && <BlockRenderer doc={post.published_blocks} imageSizes={COLUMN_IMAGE_SIZES} />}
         </div>
+        {authors.length > 0 && (
+          <footer class="post-end">
+            <AuthorCards authors={authors} />
+          </footer>
+        )}
       </article>
 
       <aside class="post-aside" aria-label="About this post">

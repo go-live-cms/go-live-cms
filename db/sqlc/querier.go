@@ -138,6 +138,13 @@ type Querier interface {
 	GetPostsByMultipleTaxonomyTerms(ctx context.Context, arg GetPostsByMultipleTaxonomyTermsParams) ([]Post, error)
 	GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxonomyTermParams) ([]Post, error)
 	GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error)
+	// Public author pages (#350). An author is a user credited (user_posts, the
+	// byline) on at least one published post of a public, active post type: the
+	// posts the public site serves. Nobody else has a page, so these queries are
+	// the only place that rule lives.
+	// The author's public fields and how many of those posts credit them. A user
+	// with none gets post_count 0, which the API answers like an unknown username.
+	GetPublicAuthor(ctx context.Context, username string) (GetPublicAuthorRow, error)
 	GetPublishedPostBlocks(ctx context.Context, id int64) (GetPublishedPostBlocksRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
@@ -184,6 +191,10 @@ type Querier interface {
 	// What the admin Users page shows. Invitations that expired over 30 days ago
 	// are dropped (nobody is waiting on them any more), and the list is capped.
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
+	// The "Written by" cards: every author credited on a post, in byline order.
+	// Empty unless the post is one the public site serves, so it never shows who
+	// wrote a draft, and every author it returns has a page.
+	ListPostAuthorProfiles(ctx context.Context, postID int64) ([]ListPostAuthorProfilesRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
@@ -201,6 +212,11 @@ type Querier interface {
 	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
 	// keep the 0001-01-01 sentinel and rank by creation time instead.
 	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
+	// Every author with a page, for the sitemap; lastmod is their newest post's.
+	ListPublicAuthors(ctx context.Context, arg ListPublicAuthorsParams) ([]ListPublicAuthorsRow, error)
+	// The author page's list, newest first. Same columns as ListPostsWithMeta so
+	// rows share its presenter.
+	ListPublishedPostsByAuthor(ctx context.Context, arg ListPublishedPostsByAuthorParams) ([]ListPublishedPostsByAuthorRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
 	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)

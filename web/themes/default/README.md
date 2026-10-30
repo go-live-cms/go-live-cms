@@ -65,7 +65,7 @@ The design shows these; the theme leaves them out rather than faking them:
 | Image captions, wide / full images, quote citations (styles are ready) | #346 |
 | Category and tag archives, category eyebrows, linked tags | #348 |
 | Numbered pagination (Newer / Older for now) | #349 |
-| Author pages and author cards | #350 |
+| Author photos (initials until then; author pages and cards are #350) | #334 |
 | Related and older/newer posts, table of contents | #351 |
 | Search | #145 |
 | Tagline and site logo | #330 |
