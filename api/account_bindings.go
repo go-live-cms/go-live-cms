@@ -1,7 +1,8 @@
 // account_bindings defines request bodies for invitations and password reset.
 //
 // Username, full name and password rules match CreateUserRequest (an accepted
-// invitation creates a user), so they can't drift apart. Bound with bindJSON
+// invitation creates a user), so they can't drift apart. new_password is the
+// shared minimum (MinPasswordLength, password_utils.go). Bound with bindJSON
 // (#139): unknown fields are rejected, and every string has a max.
 package api
 
@@ -20,7 +21,7 @@ type ForgotPasswordRequest struct {
 // ResetPasswordRequest redeems a password reset token.
 type ResetPasswordRequest struct {
 	Token    string `json:"token" binding:"required,max=64"`
-	Password string `json:"password" binding:"required,min=6,max_bytes=72"`
+	Password string `json:"password" binding:"required,new_password,max_bytes=72"`
 }
 
 // PreviewInvitationRequest looks up what a valid invitation token is for.
@@ -34,5 +35,5 @@ type AcceptInvitationRequest struct {
 	Token    string `json:"token" binding:"required,max=64"`
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	FullName string `json:"full_name" binding:"required,min=2,max=100"`
-	Password string `json:"password" binding:"required,min=6,max_bytes=72"`
+	Password string `json:"password" binding:"required,new_password,max_bytes=72"`
 }

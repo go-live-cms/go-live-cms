@@ -121,7 +121,8 @@ describe("authManager.setUser", () => {
 })
 
 describe("validatePasswordChange", () => {
-  const ok = { current_password: "password123", password: "newpass1", confirm_password: "newpass1" }
+  // The current one may be shorter than the new minimum: it was set before #329.
+  const ok = { current_password: "old-pass", password: "new-password", confirm_password: "new-password" }
 
   it("accepts a valid change", () => {
     expect(validatePasswordChange(ok)).toBeNull()
@@ -131,18 +132,28 @@ describe("validatePasswordChange", () => {
     expect(validatePasswordChange({ ...ok, current_password: "" })).toMatch(/current password/)
   })
 
-  it("matches the API's min=6 rule", () => {
-    expect(validatePasswordChange({ ...ok, password: "12345", confirm_password: "12345" })).toMatch(/at least 6/)
-    expect(validatePasswordChange({ ...ok, password: "123456", confirm_password: "123456" })).toBeNull()
+  it("matches the API's 12-character minimum", () => {
+    expect(validatePasswordChange({ ...ok, password: "new-passwor", confirm_password: "new-passwor" })).toMatch(/at least 12/)
+    expect(validatePasswordChange({ ...ok, password: "new-passwor1", confirm_password: "new-passwor1" })).toBeNull()
+  })
+
+  it("refuses the account's email, username or name", () => {
+    const details = ["marisol@example.com", "marisolduarte", "Marisol Duarte"]
+    const change = (password: string) => validatePasswordChange({ ...ok, password, confirm_password: password }, details)
+    expect(change("Marisol@Example.com")).toMatch(/can't be your email, username or name/)
+    expect(change("MARISOLDUARTE")).toMatch(/can't be your email, username or name/)
+    expect(change("marisol duarte")).toMatch(/can't be your email, username or name/)
+    expect(change("new-password")).toBeNull()
   })
 
   it("requires the confirmation to match, without trimming", () => {
-    expect(validatePasswordChange({ ...ok, confirm_password: "newpass2" })).toMatch(/do not match/)
-    expect(validatePasswordChange({ ...ok, confirm_password: "newpass1 " })).toMatch(/do not match/)
+    expect(validatePasswordChange({ ...ok, confirm_password: "new-password2" })).toMatch(/do not match/)
+    expect(validatePasswordChange({ ...ok, confirm_password: "new-password " })).toMatch(/do not match/)
   })
 
   it("rejects reusing the current password", () => {
-    expect(validatePasswordChange({ ...ok, password: "password123", confirm_password: "password123" })).toMatch(
+    const current = { ...ok, current_password: "password-1234" }
+    expect(validatePasswordChange({ ...current, password: "password-1234", confirm_password: "password-1234" })).toMatch(
       /different/
     )
   })
@@ -238,7 +249,7 @@ describe("after a password change", () => {
     })
     vi.stubGlobal("fetch", fetchMock)
 
-    const response = await updateUser(7, { password: "newpass1", current_password: "password123" } as any)
+    const response = await updateUser(7, { password: "new-password-1", current_password: "old-pass" } as any)
     expect(adoptPasswordChangeSession(authManager, response)).toBe("signed-in")
 
     const state = authManager.getState()
@@ -287,14 +298,15 @@ describe("after a password change", () => {
 })
 
 describe("newPasswordChecklist (Profile's new-password checklist)", () => {
-  it("shows the API's real minimum, 6, until #329 raises it", () => {
-    expect(newPasswordChecklist("abcde")[0]).toEqual({ label: "At least 6 characters (5 so far)", met: false })
-    expect(newPasswordChecklist("abcdef")[0].met).toBe(true)
-    expect(newPasswordChecklist("abcdef").map((r) => r.label).join()).not.toContain("12")
+  it("shows the API's minimum, 12 (#329)", () => {
+    expect(newPasswordChecklist("abcdefghijk")[0]).toEqual({ label: "At least 12 characters (11 so far)", met: false })
+    expect(newPasswordChecklist("abcdefghijkl")[0]).toEqual({ label: "At least 12 characters", met: true })
   })
 
   it("counts characters as the API does (runes, not UTF-16 units)", () => {
-    expect(newPasswordChecklist("😀😀😀😀😀")[0].met).toBe(false)
+    // Eleven emoji are 22 UTF-16 units.
+    expect(newPasswordChecklist("😀".repeat(11))[0].met).toBe(false)
+    expect(newPasswordChecklist("😀".repeat(12))[0].met).toBe(true)
   })
 
   it("adds the different-from-current rule only when there is a current password field", () => {
@@ -302,5 +314,15 @@ describe("newPasswordChecklist (Profile's new-password checklist)", () => {
     expect(newPasswordChecklist("abcdef", "abcdef")[1]).toEqual({ label: "Different from your current password", met: false })
     expect(newPasswordChecklist("abcdefg", "abcdef")[1].met).toBe(true)
     expect(newPasswordChecklist("", "")[1].met).toBe(false)
+  })
+
+  it("adds the design's \"Not your email or name\" when the account's details are given", () => {
+    const details = ["marisol@example.com", "marisolduarte", "Marisol Duarte"]
+    const labels = (password: string) => newPasswordChecklist(password, "old-pass", details).map((r) => r.label)
+    expect(labels("x")).toEqual(["At least 12 characters (1 so far)", "Not your email or name", "Different from your current password"])
+    expect(newPasswordChecklist("", "old-pass", details)[1].met).toBe(false)
+    expect(newPasswordChecklist("MARISOL@example.com", "old-pass", details)[1].met).toBe(false)
+    expect(newPasswordChecklist("marisol duarte", "old-pass", details)[1].met).toBe(false)
+    expect(newPasswordChecklist("a-new-password", "old-pass", details)[1].met).toBe(true)
   })
 })

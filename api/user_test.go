@@ -39,7 +39,7 @@ func TestCreateUserAPI(t *testing.T) {
 	user := randomUserNew()
 	adminUser := randomUserNew()
 	adminUser.Role = "admin"
-	password := "password123"
+	password := "password1234"
 
 	testCases := []struct {
 		name          string

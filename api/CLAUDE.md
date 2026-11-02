@@ -263,7 +263,15 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `respondBindError` for a multipart `ShouldBind` error. A field a known client sends
   but the API ignores must be declared (e.g. posts' `content`), or that client breaks.
 - Custom validator tags: `slug`, `identifier` (post type names; never a path),
-  `setting_key` (meta/setting keys), `max_bytes=N` (passwords: bcrypt reads 72 bytes).
+  `setting_key` (meta/setting keys), `max_bytes=N` (passwords: bcrypt reads 72 bytes),
+  `new_password` (at least `MinPasswordLength`, 12, #329).
+- **New passwords** (`password_utils.go`): every binding that sets one uses
+  `new_password,max_bytes=72`, never `min=N`, and the handler calls
+  `checkPasswordDetails` (not the email, username or full name, case-insensitive; the
+  update also checks the details the same request sets). Reset and accept read the
+  token's user/invitation first for that (the Tx re-checks the token). Login keeps
+  `min=6`, so passwords set before #329 still work. The web's `PASSWORD_MIN` is checked
+  against the constant by `passwordRules.test.ts`.
   URLs use `http_url` (http/https only). Give every string a `max`.
 - **Body limits** (`request_limits.go`): 1 MiB default on `/api/v1` and `/public`, 4 MiB
   for `POST /posts` (it may carry a `block_doc`), uploads exempt (they cap themselves). The internal listener

@@ -3,7 +3,7 @@
 // source of truth: these only catch mistakes before a round trip.
 import { ApiError } from "./api"
 import type { AuthManager } from "./auth"
-import { PASSWORD_MIN, passwordRule } from "./passwordRules"
+import { PASSWORD_DETAILS_RULE, PASSWORD_MIN, passwordMatchesDetails, passwordRule } from "./passwordRules"
 
 export { PASSWORD_MIN }
 export const USERNAME_MIN = 3
@@ -79,10 +79,19 @@ export function authorFieldErrors(fields: Pick<ProfileFields, "bio" | "website">
 
 // A new password and its confirmation, as typed (the API doesn't trim them
 // either). Shared with UserForm and the account pages so every form applies
-// the API's min=6. label names the field in the messages.
-export function validateNewPassword(password: string, confirm: string, label = "New password"): string | null {
+// the API's rules (lib/passwordRules.ts). label names the field in the
+// messages; details are the account's email, username and name, where known.
+export function validateNewPassword(
+  password: string,
+  confirm: string,
+  label = "New password",
+  details: readonly (string | null | undefined)[] = []
+): string | null {
   if (runeLength(password) < PASSWORD_MIN) {
     return `${label} must be at least ${PASSWORD_MIN} characters.`
+  }
+  if (passwordMatchesDetails(password, details)) {
+    return `${label} can't be your email, username or name.`
   }
   if (password !== confirm) {
     return `${label}s do not match.`
@@ -93,11 +102,19 @@ export function validateNewPassword(password: string, confirm: string, label = "
 export type PasswordRule = { label: string; met: boolean }
 
 // The checklist under Profile's new-password field (#343): the shared minimum rule
-// (lib/passwordRules.ts, the sign-in pages' too; the API's real minimum until #329),
-// plus "different from the current one" when the form asks for the current password.
-export function newPasswordChecklist(password: string, current?: string): PasswordRule[] {
+// (lib/passwordRules.ts, the sign-in pages' too), "Not your email or name" when the
+// account's details are given (#329), and "different from the current one" when the
+// form asks for the current password.
+export function newPasswordChecklist(
+  password: string,
+  current?: string,
+  details?: readonly (string | null | undefined)[]
+): PasswordRule[] {
   const min = passwordRule(password)
   const rules: PasswordRule[] = [{ label: min.text, met: min.met }]
+  if (details !== undefined) {
+    rules.push({ label: PASSWORD_DETAILS_RULE, met: password.trim() !== "" && !passwordMatchesDetails(password, details) })
+  }
   if (current !== undefined) {
     rules.push({ label: "Different from your current password", met: password !== "" && password !== current })
   }
@@ -138,12 +155,13 @@ export function buildProfileUpdate(original: ProfileFields, fields: ProfileField
   return update
 }
 
-// Passwords are sent as typed (the API doesn't trim them either).
-export function validatePasswordChange(fields: PasswordFields): string | null {
+// Passwords are sent as typed (the API doesn't trim them either). details are
+// the account's email, username and name.
+export function validatePasswordChange(fields: PasswordFields, details: readonly (string | null | undefined)[] = []): string | null {
   if (!fields.current_password) {
     return "Enter your current password."
   }
-  const invalid = validateNewPassword(fields.password, fields.confirm_password)
+  const invalid = validateNewPassword(fields.password, fields.confirm_password, "New password", details)
   if (invalid) return invalid
   if (fields.password === fields.current_password) {
     return "New password must be different from the current one."

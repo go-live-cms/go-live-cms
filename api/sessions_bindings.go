@@ -31,7 +31,8 @@ import (
 )
 
 // LoginUserRequest contains credentials for user authentication.
-// Username must be alphanumeric, password must be at least 6 characters.
+// Username must be alphanumeric, password must be at least 6 characters: the
+// old minimum, not MinPasswordLength, so passwords set before #329 still sign in.
 type LoginUserRequest struct {
 	Username string `json:"username" binding:"required,max=50,alphanum"`
 	Password string `json:"password" binding:"required,min=6,max_bytes=1024"`

@@ -85,6 +85,12 @@ func init() {
 		}
 		return len(fl.Field().String()) <= limit
 	})
+	// new_password: at least MinPasswordLength characters (password_utils.go).
+	// A tag can't name a Go constant, so every binding that sets a password
+	// uses this instead of min=N.
+	mustRegister(v, "new_password", func(fl validator.FieldLevel) bool {
+		return isLongEnoughPassword(fl.Field().String())
+	})
 	// Site settings (#330, settings_utils.go).
 	mustRegister(v, "site_language", func(fl validator.FieldLevel) bool {
 		return isSiteLanguage(fl.Field().String())
@@ -249,6 +255,8 @@ func fieldErrorMessage(fe validator.FieldError) string {
 		return "must be at most " + fe.Param()
 	case "max_bytes":
 		return "must be at most " + fe.Param() + " bytes"
+	case "new_password":
+		return newPasswordMessage()
 	case "gt":
 		return "must be greater than " + fe.Param()
 	case "oneof":

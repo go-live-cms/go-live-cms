@@ -28,6 +28,12 @@ import "@gl-admin/assets/styles/pages/profile.scss"
 
 const EMPTY_PASSWORDS: PasswordFields = { current_password: "", password: "", confirm_password: "" }
 
+// What a new password can't be (#329): the saved account's, since a password
+// change sends only the password.
+function accountDetails(user: User): string[] {
+  return [user.email, user.username, user.full_name]
+}
+
 function toFields(user: User): ProfileFields {
   return {
     username: user.username || "",
@@ -120,7 +126,7 @@ export default function Profile() {
     if (!user || changingPassword) return
     setPasswordNotice(null)
 
-    const invalid = validatePasswordChange(passwords)
+    const invalid = validatePasswordChange(passwords, accountDetails(user))
     if (invalid) {
       setPasswordError(invalid)
       return
@@ -187,7 +193,7 @@ export default function Profile() {
   }
 
   const authorErrors = showFieldErrors ? authorFieldErrors(fields) : {}
-  const rules = newPasswordChecklist(passwords.password, passwords.current_password)
+  const rules = newPasswordChecklist(passwords.password, passwords.current_password, accountDetails(user))
   // Only once the confirmation is as long as the password, so typing it isn't an error.
   const mismatch =
     passwords.confirm_password !== "" &&

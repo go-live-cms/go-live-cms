@@ -40,7 +40,7 @@ import (
 //   - username: Unique username (3-50 chars)
 //   - email: Valid email address
 //   - full_name: User's display name (2-100 chars)
-//   - password: Secure password (min 6 chars)
+//   - password: at least MinPasswordLength characters, not the email, username or name
 //   - role: User role (admin|editor|contributor)
 //
 // Authentication: Required (Bearer token + admin role)
@@ -59,6 +59,9 @@ func (server *Server) createUser(c *gin.Context) {
 	}
 	// Checked after trimming, as stored (normUsername below).
 	if !checkUsernameFormat(c, normUsername(req.Username)) {
+		return
+	}
+	if !checkPasswordDetails(c, req.Password, req.Email, req.Username, req.FullName) {
 		return
 	}
 
@@ -234,6 +237,12 @@ func (server *Server) updateUser(c *gin.Context) {
 		return
 	}
 	if passwordChanged {
+		// Neither the details the account has nor the ones this request sets.
+		if !checkPasswordDetails(c, req.Password,
+			existingUser.Email, existingUser.Username, existingUser.FullName,
+			updateParams.Email, updateParams.Username, updateParams.FullName) {
+			return
+		}
 		// password_changed_at is stamped inside UpdateUserTx, under the user
 		// row lock, not here: hashing takes long enough for a concurrent
 		// refresh to mint a token that would otherwise postdate it.

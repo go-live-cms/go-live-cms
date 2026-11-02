@@ -197,6 +197,22 @@ func (server *Server) acceptInvite(c *gin.Context) {
 		respondInvalidAccountToken(c)
 		return
 	}
+	// The invited email is only in the invitation. Reading it before the
+	// claim is safe: AcceptInvitationTx re-checks the token, and an
+	// invitation's email never changes.
+	invitation, err := server.store.GetValidUserInvitationByTokenHash(c.Request.Context(), hash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respondInvalidAccountToken(c)
+			return
+		}
+		server.requestLog(c).Error("loading invitation failed", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to accept invitation"})
+		return
+	}
+	if !checkPasswordDetails(c, req.Password, invitation.Email, username, fullName) {
+		return
+	}
 
 	hashedPassword, err := util.HashPassword(req.Password)
 	if err != nil {

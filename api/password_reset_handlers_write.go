@@ -132,6 +132,26 @@ func (server *Server) resetPassword(c *gin.Context) {
 		respondInvalidAccountToken(c)
 		return
 	}
+	// Whose password this is, to refuse one equal to their details. The
+	// token is read without claiming it: ResetPasswordTx re-checks it, so a
+	// refused password leaves the link usable.
+	resetToken, err := server.store.GetValidPasswordResetTokenByHash(c.Request.Context(), hash)
+	if err == nil {
+		var user db.User
+		user, err = server.store.GetUser(c.Request.Context(), resetToken.UserID)
+		if err == nil && !checkPasswordDetails(c, req.Password, user.Email, user.Username, user.FullName) {
+			return
+		}
+	}
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respondInvalidAccountToken(c)
+			return
+		}
+		server.requestLog(c).Error("loading password reset token failed", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password"})
+		return
+	}
 
 	hashedPassword, err := util.HashPassword(req.Password)
 	if err != nil {

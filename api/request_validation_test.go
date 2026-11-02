@@ -117,15 +117,15 @@ func TestRejectedWriteInput(t *testing.T) {
 			`{"labell":"v1"}`, "labell"},
 		// Users
 		{"user username not alphanumeric", "admin", http.MethodPost, "/api/v1/users",
-			`{"username":"john.doe","email":"j@example.com","full_name":"John","password":"secret1","role":"editor"}`, "username"},
+			`{"username":"john.doe","email":"j@example.com","full_name":"John","password":"secret1-long","role":"editor"}`, "username"},
 		{"user password over 72 bytes", "admin", http.MethodPost, "/api/v1/users",
 			`{"username":"johndoe","email":"j@example.com","full_name":"John","password":"` + strings.Repeat("é", 37) + `","role":"editor"}`, "password"},
 		{"user bad role", "admin", http.MethodPost, "/api/v1/users",
-			`{"username":"johndoe","email":"j@example.com","full_name":"John","password":"secret1","role":"owner"}`, "role"},
+			`{"username":"johndoe","email":"j@example.com","full_name":"John","password":"secret1-long","role":"owner"}`, "role"},
 		{"user bad email", "admin", http.MethodPost, "/api/v1/users",
-			`{"username":"johndoe","email":"nope","full_name":"John","password":"secret1","role":"editor"}`, "email"},
+			`{"username":"johndoe","email":"nope","full_name":"John","password":"secret1-long","role":"editor"}`, "email"},
 		{"user server-owned field", "admin", http.MethodPost, "/api/v1/users",
-			`{"username":"johndoe","email":"j@example.com","full_name":"John","password":"secret1","role":"editor","hashed_password":"x"}`, "hashed_password"},
+			`{"username":"johndoe","email":"j@example.com","full_name":"John","password":"secret1-long","role":"editor","hashed_password":"x"}`, "hashed_password"},
 		{"delete user bad body", "admin", http.MethodDelete, "/api/v1/users/7",
 			`{"transfer_to_id":"7"}`, "transfer_to_id"},
 		// Taxonomy
@@ -458,7 +458,7 @@ func TestCreateUserTrimsUsernameBeforeFormatCheck(t *testing.T) {
 
 	server := newTestServer(t, store)
 	recorder := sendAs(t, server, &admin, http.MethodPost, "/api/v1/users",
-		[]byte(`{"username":" johndoe ","email":"j@example.com","full_name":"John","password":"secret1","role":"editor"}`))
+		[]byte(`{"username":" johndoe ","email":"j@example.com","full_name":"John","password":"secret1-long","role":"editor"}`))
 	require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
 }
 

@@ -27,7 +27,8 @@ package api
 //     (what login accepts, checked by the handler)
 //   - Email: Valid email format (max 254), will be normalized to lowercase
 //   - FullName: 2-100 characters for display purposes
-//   - Password: 6 characters to 72 bytes (bcrypt reads only 72), hashed before storage
+//   - Password: MinPasswordLength characters to 72 bytes (bcrypt reads only 72),
+//     not the user's email, username or name; hashed before storage
 //   - Role: Must be one of: admin, editor, contributor
 //
 // Security note: This endpoint is admin-only, and role values are restricted
@@ -36,7 +37,7 @@ type CreateUserRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	Email    string `json:"email" binding:"required,max=254,email"`
 	FullName string `json:"full_name" binding:"required,min=2,max=100"`
-	Password string `json:"password" binding:"required,min=6,max_bytes=72"`
+	Password string `json:"password" binding:"required,new_password,max_bytes=72"`
 	Role     string `json:"role" binding:"required,oneof=admin editor contributor"`
 }
 
@@ -49,7 +50,8 @@ type CreateUserRequest struct {
 //   - Username: 3-50 characters if provided; a changed one must be ASCII letters/digits
 //   - Email: Valid email format if provided
 //   - FullName: 2-100 characters if provided
-//   - Password: 6 characters to 72 bytes if provided. The handler blocks every
+//   - Password: MinPasswordLength characters to 72 bytes if provided, not the
+//     user's email, username or name (old or new). The handler blocks every
 //     session the user holds in the same transaction as the change.
 //   - CurrentPassword: The caller's existing password. The handler requires it
 //     (and checks it) when a user changes their own password; it is ignored
@@ -63,7 +65,7 @@ type UpdateUserRequest struct {
 	Username        string `json:"username" binding:"omitempty,min=3,max=50"`
 	Email           string `json:"email" binding:"omitempty,max=254,email"`
 	FullName        string `json:"full_name" binding:"omitempty,min=2,max=100"`
-	Password        string `json:"password" binding:"omitempty,min=6,max_bytes=72"`
+	Password        string `json:"password" binding:"omitempty,new_password,max_bytes=72"`
 	CurrentPassword string `json:"current_password" binding:"max_bytes=72"`
 	Role            string `json:"role" binding:"omitempty,oneof=admin editor contributor"`
 	// Author profile (#350). Absent keeps the stored value; "" clears it. The bio

@@ -217,6 +217,15 @@ func (e eqResetPasswordTx) Matches(x any) bool {
 
 func (e eqResetPasswordTx) String() string { return "reset params for the token and password" }
 
+// expectResetTokenLookup stubs what resetPassword reads before redeeming a
+// token: the token's row, then its user (to compare the password with their
+// details).
+func expectResetTokenLookup(store *mockdb.MockStore, token string, user db.User) {
+	store.EXPECT().GetValidPasswordResetTokenByHash(gomock.Any(), hashAccountToken(token)).
+		Return(db.PasswordResetToken{ID: 1, UserID: user.ID}, nil)
+	store.EXPECT().GetUser(gomock.Any(), user.ID).Return(user, nil)
+}
+
 func TestResetPasswordAPI(t *testing.T) {
 	user := accountTestUser(RoleContributor)
 	token, _, err := newAccountToken()
@@ -225,6 +234,7 @@ func TestResetPasswordAPI(t *testing.T) {
 	t.Run("success: new password set, refresh cookie cleared", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
+		expectResetTokenLookup(store, token, user)
 		store.EXPECT().ResetPasswordTx(gomock.Any(), eqResetPasswordTx{token, "new-secret-1"}).Return(user, nil)
 		server, _ := newAccountTestServer(t, store)
 
@@ -240,6 +250,17 @@ func TestResetPasswordAPI(t *testing.T) {
 	t.Run("expired, used or unknown token", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
+		store.EXPECT().GetValidPasswordResetTokenByHash(gomock.Any(), gomock.Any()).Return(db.PasswordResetToken{}, sql.ErrNoRows)
+		server, _ := newAccountTestServer(t, store)
+
+		recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/password/reset", gin.H{"token": token, "password": "new-secret-1"}, nil)
+		requireErrorCode(t, recorder, http.StatusBadRequest, "invalid_token")
+	})
+
+	t.Run("token used up between the lookup and the claim", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		expectResetTokenLookup(store, token, user)
 		store.EXPECT().ResetPasswordTx(gomock.Any(), gomock.Any()).Return(db.User{}, db.ErrTokenInvalid)
 		server, _ := newAccountTestServer(t, store)
 
@@ -247,10 +268,31 @@ func TestResetPasswordAPI(t *testing.T) {
 		requireErrorCode(t, recorder, http.StatusBadRequest, "invalid_token")
 	})
 
+	t.Run("token's user is gone", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		store.EXPECT().GetValidPasswordResetTokenByHash(gomock.Any(), gomock.Any()).Return(db.PasswordResetToken{UserID: user.ID}, nil)
+		store.EXPECT().GetUser(gomock.Any(), user.ID).Return(db.User{}, sql.ErrNoRows)
+		server, _ := newAccountTestServer(t, store)
+
+		recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/password/reset", gin.H{"token": token, "password": "new-secret-1"}, nil)
+		requireErrorCode(t, recorder, http.StatusBadRequest, "invalid_token")
+	})
+
+	t.Run("token lookup fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		store.EXPECT().GetValidPasswordResetTokenByHash(gomock.Any(), gomock.Any()).Return(db.PasswordResetToken{}, errors.New("boom"))
+		server, _ := newAccountTestServer(t, store)
+
+		recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/password/reset", gin.H{"token": token, "password": "new-secret-1"}, nil)
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+	})
+
 	for name, body := range map[string]gin.H{
 		"malformed token":    {"token": "short", "password": "new-secret-1"},
 		"non-base64 token":   {"token": strings.Repeat("!", accountTokenLen), "password": "new-secret-1"},
-		"short password":     {"token": token, "password": "12345"},
+		"short password":     {"token": token, "password": "new-secret-"},
 		"too long password":  {"token": token, "password": strings.Repeat("a", 73)},
 		"missing everything": {},
 	} {
@@ -265,6 +307,7 @@ func TestResetPasswordAPI(t *testing.T) {
 	t.Run("store failure", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
+		expectResetTokenLookup(store, token, user)
 		store.EXPECT().ResetPasswordTx(gomock.Any(), gomock.Any()).Return(db.User{}, errors.New("boom"))
 		server, _ := newAccountTestServer(t, store)
 		recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/password/reset", gin.H{"token": token, "password": "new-secret-1"}, nil)
@@ -605,16 +648,24 @@ func (e eqAcceptInvitationTx) Matches(x any) bool {
 
 func (e eqAcceptInvitationTx) String() string { return "accept params" }
 
+// expectInvitationLookup stubs the read acceptInvite makes before redeeming a
+// token, for the invited email.
+func expectInvitationLookup(store *mockdb.MockStore, token, email string) {
+	store.EXPECT().GetValidUserInvitationByTokenHash(gomock.Any(), hashAccountToken(token)).
+		Return(db.UserInvitation{ID: 5, Email: email, Role: "editor"}, nil)
+}
+
 func TestAcceptInvitationAPI(t *testing.T) {
 	token, _, err := newAccountToken()
 	require.NoError(t, err)
-	valid := gin.H{"token": token, "username": " newbie ", "full_name": "New Person", "password": "secret-123"}
+	valid := gin.H{"token": token, "username": " newbie ", "full_name": "New Person", "password": "secret-12345"}
 
 	t.Run("creates the user with the invited role", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
+		expectInvitationLookup(store, token, "invited@example.com")
 		created := db.User{ID: 77, Username: "newbie", FullName: "New Person", Email: "invited@example.com", Role: "editor"}
-		store.EXPECT().AcceptInvitationTx(gomock.Any(), eqAcceptInvitationTx{token, "newbie", "New Person", "secret-123"}).
+		store.EXPECT().AcceptInvitationTx(gomock.Any(), eqAcceptInvitationTx{token, "newbie", "New Person", "secret-12345"}).
 			Return(db.AcceptInvitationTxResult{User: created, Invitation: db.UserInvitation{ID: 5}}, nil)
 		server, _ := newAccountTestServer(t, store)
 
@@ -632,11 +683,32 @@ func TestAcceptInvitationAPI(t *testing.T) {
 	t.Run("used, expired or revoked link", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
+		store.EXPECT().GetValidUserInvitationByTokenHash(gomock.Any(), gomock.Any()).Return(db.UserInvitation{}, sql.ErrNoRows)
+		server, _ := newAccountTestServer(t, store)
+
+		recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/invitations/accept", valid, nil)
+		requireErrorCode(t, recorder, http.StatusBadRequest, "invalid_token")
+	})
+
+	t.Run("link used up between the lookup and the claim", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		expectInvitationLookup(store, token, "invited@example.com")
 		store.EXPECT().AcceptInvitationTx(gomock.Any(), gomock.Any()).Return(db.AcceptInvitationTxResult{}, db.ErrTokenInvalid)
 		server, _ := newAccountTestServer(t, store)
 
 		recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/invitations/accept", valid, nil)
 		requireErrorCode(t, recorder, http.StatusBadRequest, "invalid_token")
+	})
+
+	t.Run("invitation lookup fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		store.EXPECT().GetValidUserInvitationByTokenHash(gomock.Any(), gomock.Any()).Return(db.UserInvitation{}, errors.New("boom"))
+		server, _ := newAccountTestServer(t, store)
+
+		recorder := doJSON(t, server, http.MethodPost, "/api/v1/auth/invitations/accept", valid, nil)
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
 	})
 
 	for name, tc := range map[string]struct {
@@ -649,6 +721,7 @@ func TestAcceptInvitationAPI(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			store := mockdb.NewMockStore(ctrl)
+			expectInvitationLookup(store, token, "invited@example.com")
 			store.EXPECT().AcceptInvitationTx(gomock.Any(), gomock.Any()).Return(db.AcceptInvitationTxResult{}, tc.err)
 			server, _ := newAccountTestServer(t, store)
 
@@ -659,15 +732,15 @@ func TestAcceptInvitationAPI(t *testing.T) {
 
 	// Same rules as admin user creation (CreateUserRequest).
 	for name, body := range map[string]gin.H{
-		"short password":    {"token": token, "username": "newbie", "full_name": "New Person", "password": "12345"},
+		"short password":    {"token": token, "username": "newbie", "full_name": "New Person", "password": "secret-1234"},
 		"long password":     {"token": token, "username": "newbie", "full_name": "New Person", "password": strings.Repeat("x", 73)},
-		"short username":    {"token": token, "username": "ab", "full_name": "New Person", "password": "secret-123"},
-		"blank username":    {"token": token, "username": "    ", "full_name": "New Person", "password": "secret-123"},
-		"missing full name": {"token": token, "username": "newbie", "password": "secret-123"},
-		"malformed token":   {"token": "nope", "username": "newbie", "full_name": "New Person", "password": "secret-123"},
+		"short username":    {"token": token, "username": "ab", "full_name": "New Person", "password": "secret-12345"},
+		"blank username":    {"token": token, "username": "    ", "full_name": "New Person", "password": "secret-12345"},
+		"missing full name": {"token": token, "username": "newbie", "password": "secret-12345"},
+		"malformed token":   {"token": "nope", "username": "newbie", "full_name": "New Person", "password": "secret-12345"},
 		// The invitation decides these; a request can't even send them (#139 bindJSON).
-		"role field":  {"token": token, "username": "newbie", "full_name": "New Person", "password": "secret-123", "role": "admin"},
-		"email field": {"token": token, "username": "newbie", "full_name": "New Person", "password": "secret-123", "email": "x@example.com"},
+		"role field":  {"token": token, "username": "newbie", "full_name": "New Person", "password": "secret-12345", "role": "admin"},
+		"email field": {"token": token, "username": "newbie", "full_name": "New Person", "password": "secret-12345", "email": "x@example.com"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -699,7 +772,7 @@ func TestAccountEndpointRateLimits(t *testing.T) {
 	require.Equal(t, http.StatusOK, doJSON(t, server, http.MethodPost, "/api/v1/auth/password/forgot", gin.H{"email": "a@example.com"}, from("203.0.113.2")).Code)
 
 	// The token endpoints share one per-client allowance.
-	bad := gin.H{"token": "x", "password": "secret-123", "username": "abc", "full_name": "Ab"}
+	bad := gin.H{"token": "x", "password": "secret-12345", "username": "abc", "full_name": "Ab"}
 	require.Equal(t, http.StatusBadRequest, doJSON(t, server, http.MethodPost, "/api/v1/auth/password/reset", bad, from("203.0.113.3")).Code)
 	require.Equal(t, http.StatusBadRequest, doJSON(t, server, http.MethodPost, "/api/v1/auth/invitations/accept", bad, from("203.0.113.3")).Code)
 	requireRateLimited(t, doJSON(t, server, http.MethodPost, "/api/v1/auth/invitations/preview", bad, from("203.0.113.3")))
