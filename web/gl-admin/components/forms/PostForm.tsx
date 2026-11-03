@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { createPost, getPostById, updatePost } from "@gl-admin/lib/api/posts"
+import { createPost, getPostById, updatePost, updatePostSEO } from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
-import type { Post } from "@gl-admin/lib/api/types"
+import type { Post, PostSEOSettings } from "@gl-admin/lib/api/types"
+import { firstParagraphFromHtml, sameSeo, seoFromPost, seoPayload, seoSaveable } from "@gl-admin/lib/postSeo"
+import { firstParagraphText, postPath } from "@/lib/seo"
 import { authManager } from "@gl-admin/lib/auth"
 import { blockAPIClient, type PostVersion } from "@gl-admin/lib/api/blockAPI"
 import { getSettings } from "@gl-admin/lib/api/settings"
@@ -145,9 +147,14 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [isRestoring, setIsRestoring] = useState(false)
 
   const [urlStructure, setUrlStructure] = useState<"id" | "slug">("id")
+  // For the SEO tab's previews (#357).
+  const [site, setSite] = useState({ title: "", address: "" })
   useEffect(() => {
     getSettings()
-      .then((settings) => setUrlStructure(settings.post_url_structure))
+      .then((settings) => {
+        setUrlStructure(settings.post_url_structure)
+        setSite({ title: settings.site_title || "", address: settings.site_address || window.location.origin })
+      })
       .catch((error) => console.error("Failed to fetch settings:", error))
   }, [])
 
@@ -155,6 +162,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   // reach the site only on Update. `settingsPending` says they differ from the live ones
   // (GET /posts/:id/settings), re-read after each settings save, publish and restore.
   const [settingsPending, setSettingsPending] = useState(false)
+  // The live title the site shows (published SEO title, else title), for the SEO tab.
+  const [liveTitle, setLiveTitle] = useState<string | null>(null)
   // Bumped when a restored version changed the featured image and terms, to reload them.
   const [settingsKey, setSettingsKey] = useState(0)
   const refreshSettingsState = async () => {
@@ -162,7 +171,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     try {
       const token = authManager.getAccessToken()
       if (token) blockAPIClient.setAuthToken(token)
-      setSettingsPending((await blockAPIClient.getSettingsState(initialData.id)).changed)
+      const state = await blockAPIClient.getSettingsState(initialData.id)
+      setSettingsPending(state.changed)
+      setLiveTitle(state.published ? state.published.seo_title?.trim() || state.published.title : null)
     } catch (error) {
       // Only the hint depends on it.
       console.error("Failed to read the settings state:", error)
@@ -182,11 +193,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     if (!titleSaveable || !initialData?.id) return
     const title = formData.title.trim()
     const excerpt = formData.excerpt.trim()
-    // The API's limits (3+ characters for a title, 10+ for an excerpt): keep the last
-    // saved value until the new one is long enough.
+    // The API's title limit (3+ characters): keep the last saved title until the new
+    // one is long enough. The excerpt is optional (#357): empty clears it.
     const changes: Partial<Post> = {}
     if (title !== savedTitleRef.current && title.length >= 3) changes.title = title
-    if (excerpt !== savedExcerptRef.current && excerpt.length >= 10) changes.description = excerpt
+    if (excerpt !== savedExcerptRef.current) changes.description = excerpt
     if (Object.keys(changes).length === 0) return
     await updatePost(initialData.id, changes)
     if (changes.title !== undefined) savedTitleRef.current = changes.title
@@ -204,6 +215,45 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.title, formData.excerpt, titleSaveable])
+
+  // SEO (#357): editors and admins only (contributors see the tab read-only). Saved on
+  // its own like the title, debounced, through PUT /posts/:id/seo; on a published post
+  // the site shows it after Update. A canonical URL the API would refuse waits.
+  const [seo, setSeo] = useState<PostSEOSettings>(() => seoFromPost(initialData))
+  const savedSeoRef = useRef<PostSEOSettings>(seoFromPost(initialData))
+  const [seoError, setSeoError] = useState<string | null>(null)
+  const seoSaveableNow = mode === "edit" && roleVerified && canPublish && !!initialData?.id
+  const saveSeo = async (): Promise<void> => {
+    if (!seoSaveableNow || !initialData?.id) return
+    if (sameSeo(seo, savedSeoRef.current) || !seoSaveable(seo)) return
+    const body = seoPayload(seo)
+    try {
+      await updatePostSEO(initialData.id, body)
+      savedSeoRef.current = body
+      setSeoError(null)
+      void refreshSettingsState()
+    } catch (error) {
+      setSeoError(errorMessage(error, "Couldn't save the SEO settings. Your changes are kept here; try again."))
+      throw error
+    }
+  }
+  useEffect(() => {
+    if (!seoSaveableNow) return
+    const timer = setTimeout(() => {
+      saveSeo().catch((error) => console.error("SEO save failed:", error))
+    }, 1500)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seo, seoSaveableNow])
+
+  // What the meta description falls back to without an excerpt: the first paragraph,
+  // from the editor's content (debounced), else the published body.
+  const [firstParagraph, setFirstParagraph] = useState(() => firstParagraphText(initialData?.published_blocks))
+  useEffect(() => {
+    if (!formData.content) return
+    const timer = setTimeout(() => setFirstParagraph(firstParagraphFromHtml(formData.content)), 500)
+    return () => clearTimeout(timer)
+  }, [formData.content])
 
   const handlePostUpdate = (updates: Partial<Post>) => {
     setFormData((prev) => ({
@@ -236,6 +286,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       const slug = initialData.slug || urlParts[urlParts.length - 1] || ""
       savedTitleRef.current = initialData.title
       savedExcerptRef.current = initialData.description
+      savedSeoRef.current = seoFromPost(initialData)
+      setSeo(seoFromPost(initialData))
 
       setFormData({
         title: initialData.title,
@@ -332,7 +384,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     // Use Block Spec v1 persistence for edit mode, fallback to traditional save for create mode
     if (mode === "edit" && editorRef.current && initialData?.id) {
       try {
-        await Promise.all([saveTitle(), editorRef.current.forceSave()])
+        await Promise.all([saveTitle(), saveSeo(), editorRef.current.forceSave()])
         showSuccess("Changes saved successfully")
       } catch (error) {
         showError("Failed to save changes")
@@ -349,7 +401,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     if (mode === "edit" && editorRef.current && initialData?.id) {
       const wasPublished = formData.post_status === "published"
       try {
-        await saveTitle()
+        // The settings go out with the content: save any pending edit first.
+        await Promise.all([saveTitle(), saveSeo()])
         const result = await editorRef.current.publish()
         if (result) {
           setPublishFailure(null)
@@ -427,6 +480,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           savedTitleRef.current = title
           savedExcerptRef.current = description
           setFormData((prev) => ({ ...prev, title, excerpt: description }))
+          if (settings.post.seo) {
+            savedSeoRef.current = seoFromPost(settings.post)
+            setSeo(seoFromPost(settings.post))
+          }
           setSettingsKey((k) => k + 1)
         } else {
           settingsNote = " This version was published before settings were saved with it, so only its content came back."
@@ -484,10 +541,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         throw new Error("User not authenticated")
       }
 
-      const description = formData.excerpt.trim() || formData.title
-      if (description.length < 10) {
-        throw new Error("Description must be at least 10 characters long")
-      }
+      // The excerpt is optional (#357): themes use the first paragraph without one.
+      const description = formData.excerpt.trim()
 
       const baseUrl = window.location.origin
       const postType = contentType || "post"
@@ -819,6 +874,21 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           onSettingsSaved={() => void refreshSettingsState()}
           settingsKey={settingsKey}
           settingsPending={settingsPending}
+          seo={
+            mode === "edit" && initialData?.id
+              ? {
+                  value: seo,
+                  onChange: setSeo,
+                  readOnly: !seoSaveableNow,
+                  firstParagraph,
+                  siteName: site.title,
+                  siteAddress: site.address || window.location.origin,
+                  path: postPath({ id: initialData.id, slug: formData.slug, post_type: postType }, urlStructure),
+                  liveTitle,
+                  error: seoError,
+                }
+              : undefined
+          }
           history={
             historyEnabled && initialData?.id
               ? {

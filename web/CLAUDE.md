@@ -136,6 +136,19 @@ are the most fragile part of the codebase. **Before editing anything under
   env); the other tests stay in the plain `unit` project. Without `SITE_URL`,
   robots/sitemap are sent `private, no-store` (the URL came from the Host header);
   the sitemap is cached in memory for 10 minutes.
+- **Post SEO (#357):** the post route builds the head from `getPublicPost`'s `seo` (the
+  *published* values, never the admin's): `<title>` = `pageTitle(SEO title or title, site
+  name)` ("X · Site"; the home page is `homeTitle`, site · tagline), description =
+  `postDescription` (SEO description → excerpt → first paragraph, cut before 160),
+  canonical = `postCanonical`, `og:image`/`twitter:image` from the API's resolved image (the
+  1200 x 630 `social` variant) with width/height/alt, `hideFromSearch` → `robots` noindex
+  (canonical and OG stay), and an Article JSON-LD (`articleJsonLd`, `jsonLdText`). The
+  sitemap skips `/public/posts` rows with `noindex`; RSS, archives and search keep them.
+  The excerpt is optional: lists use `postExcerpt` (the first paragraph without one).
+  Admin: the settings panel's SEO tab is `components/editor/ui/PostSeoPanel.tsx`, rules in
+  `lib/postSeo.ts` (tested); `PostForm` saves it debounced through `updatePostSEO` (and
+  before Update), editors and admins only. Media `variants.social` is that crop; srcsets
+  never include it.
 - **App shell (#339):** the sidebar's links come from `components/sidebar/nav.ts`
   (`buildNavigation`, role-filtered with `lib/roles.ts`; tested in `nav.test.ts`). At
   ≤768px it's the shared `Drawer` (`bare`), so focus trap, Escape and focus return are
