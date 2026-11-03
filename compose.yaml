@@ -63,22 +63,23 @@ services:
       API_PORT: ":8080"
       ACCESS_TOKEN_DURATION: "15m"
       REFRESH_TOKEN_DURATION: "24h"
-      # Required: shared with the collab server's access lookup and load/store (#223).
-      # Plain interpolation (not :?) so `down`/`ps` still work without it; the API
-      # itself refuses to start when it is empty.
-      ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
-      # Required signing/encryption keys (64-hex public, 128-hex private, 64-hex
-      # local). The image has no app.env, so they must come from the environment
-      # (e.g. a .env file next to this one, never committed).
+      # The secrets (the private and local keys, and the secrets shared with the
+      # collab server, #223) are files under /run/secrets, not environment variables:
+      # see `secrets:` at the end. The API reads <NAME>_FILE (#158); the plain
+      # variables still work for a stack that sets them directly.
+      ROLE_LOOKUP_SECRET_FILE: /run/secrets/role_lookup_secret
+      PASETO_V4_PRIVATE_KEY_HEX_FILE: /run/secrets/paseto_v4_private_key
+      PASETO_V4_LOCAL_KEY_HEX_FILE: /run/secrets/paseto_v4_local_key
+      # Not a secret. Required (64 hex); the image has no app.env.
       PASETO_V4_PUBLIC_KEY_HEX: "${PASETO_V4_PUBLIC_KEY_HEX}"
-      PASETO_V4_PRIVATE_KEY_HEX: "${PASETO_V4_PRIVATE_KEY_HEX}"
-      PASETO_V4_LOCAL_KEY_HEX: "${PASETO_V4_LOCAL_KEY_HEX}"
       # Optional, only during a key rotation (docs/operations/key-rotation.md). Empty
-      # KIDs keep the API's defaults.
+      # KIDs keep the API's defaults. The previous keys are kid=hex lists. The local
+      # ones stay a variable because a compose secret can't be optional: an unset one
+      # fails `up`, an empty one is silently not mounted.
       PASETO_ACCESS_KID: "${PASETO_ACCESS_KID:-}"
       PASETO_REFRESH_KID: "${PASETO_REFRESH_KID:-}"
-      PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX: "${PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX:-}"
-      PASETO_V4_PREVIOUS_LOCAL_KEY_HEX: "${PASETO_V4_PREVIOUS_LOCAL_KEY_HEX:-}"
+      PASETO_V4_PREVIOUS_PUBLIC_KEYS: "${PASETO_V4_PREVIOUS_PUBLIC_KEYS:-}"
+      PASETO_V4_PREVIOUS_LOCAL_KEYS: "${PASETO_V4_PREVIOUS_LOCAL_KEYS:-}"
       PASETO_PREVIOUS_KEYS_VALID_UNTIL: "${PASETO_PREVIOUS_KEYS_VALID_UNTIL:-}"
       # Server-to-server listener (/internal/*). Never add it to `ports:`.
       INTERNAL_SERVER_ADDRESS: "0.0.0.0:8081"
@@ -98,7 +99,7 @@ services:
       # collab:1236 and answers 503 if it can't. The secret is the collab service's
       # COLLAB_INTERNAL_SECRET. Required: the API refuses to start without both.
       COLLAB_INTERNAL_URL: "${COLLAB_INTERNAL_URL:-http://collab:1236}"
-      COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET}"
+      COLLAB_INTERNAL_SECRET_FILE: /run/secrets/collab_internal_secret
       # Browser requests reach the API as caddy -> web -> api. web appends its peer
       # (caddy) to X-Forwarded-For (web/src/middleware/apiProxy.ts), and caddy sets it
       # to the browser's IP. Trust exactly those two fixed addresses, so rate limits
@@ -109,6 +110,15 @@ services:
       # Uploaded media. Media rows store absolute paths under it, so keep it the
       # same across deploys and restores. Served at /uploads/media/*.
       UPLOAD_PATH: "/app/uploads/media"
+    secrets:
+      - paseto_v4_private_key
+      - paseto_v4_local_key
+      - role_lookup_secret
+      - collab_internal_secret
+    labels:
+      # Set by deploy.sh: changes when a secret's value does, so api and collab are
+      # recreated together (compose doesn't for a changed secret alone).
+      golive.secrets-rev: "${GOLIVE_SECRETS_REV:-}"
     volumes:
       - uploads:/app/uploads
     entrypoint: ["/app/wait-for.sh", "postgres:5432", "--", "/app/start.sh"]
@@ -176,10 +186,16 @@ services:
       PASETO_V4_PUBLIC_KEY_HEX: "${PASETO_V4_PUBLIC_KEY_HEX}"
       PASETO_ISSUER: golive.auth
       # Access lookups and load/store on the API's unpublished internal listener.
-      # Required: the server exits at startup without any of these.
+      # Required: the server exits at startup without any of these. The secrets are
+      # the API's, read from /run/secrets (<NAME>_FILE, like the API).
       INTERNAL_API_URL: http://api:8081
-      ROLE_LOOKUP_SECRET: "${ROLE_LOOKUP_SECRET}"
-      COLLAB_INTERNAL_SECRET: "${COLLAB_INTERNAL_SECRET}"
+      ROLE_LOOKUP_SECRET_FILE: /run/secrets/role_lookup_secret
+      COLLAB_INTERNAL_SECRET_FILE: /run/secrets/collab_internal_secret
+    secrets:
+      - role_lookup_secret
+      - collab_internal_secret
+    labels:
+      golive.secrets-rev: "${GOLIVE_SECRETS_REV:-}"
     depends_on:
       api:
         condition: service_healthy
@@ -223,6 +239,25 @@ networks:
           # Dynamic addresses come from the upper half only, so no other container can
           # take the fixed .10 (web) / .11 (caddy) that the API trusts.
           ip_range: 172.28.0.128/25
+
+# Secrets (#158), mounted read-only at /run/secrets/<name> in the services that list
+# them, so they aren't in the containers' environment (`docker inspect`, /proc/*/environ,
+# crash dumps). Each is created from the variable of the same purpose in the .env, so
+# CD (scripts/deploy/write-env.sh) and cmd/gen-prod-env are unchanged; every one is
+# required. Compose doesn't recreate a container when only a secret's value changes:
+# deploy.sh sets GOLIVE_SECRETS_REV for that; by hand, `up -d --force-recreate api collab`.
+# To take them from a secrets manager instead of the .env, replace
+# `environment:` with `file:` pointing at the file its agent writes
+# (docs/operations/deploy.md, "Secrets"). scripts/deploy/check-env.sh reads these names.
+secrets:
+  paseto_v4_private_key:
+    environment: PASETO_V4_PRIVATE_KEY_HEX
+  paseto_v4_local_key:
+    environment: PASETO_V4_LOCAL_KEY_HEX
+  role_lookup_secret:
+    environment: ROLE_LOOKUP_SECRET
+  collab_internal_secret:
+    environment: COLLAB_INTERNAL_SECRET
 
 volumes:
   postgres_data:

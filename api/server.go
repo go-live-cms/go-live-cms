@@ -103,7 +103,15 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := tokenMaker.SetPreviousKeys(config.PasetoV4PreviousPublicKeyHex, config.PasetoV4PreviousLocalKeyHex, previousUntil); err != nil {
+	previousPublic, err := config.PasetoPreviousPublicKeys()
+	if err != nil {
+		return nil, err
+	}
+	previousLocal, err := config.PasetoPreviousLocalKeys()
+	if err != nil {
+		return nil, err
+	}
+	if err := tokenMaker.SetPreviousKeys(previousPublic, previousLocal, previousUntil); err != nil {
 		return nil, fmt.Errorf("invalid previous PASETO key: %w", err)
 	}
 	// A cutoff already in the past (e.g. a typo'd year) silently accepts no

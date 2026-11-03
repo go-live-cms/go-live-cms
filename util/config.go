@@ -6,7 +6,9 @@ package util
 
 import (
 	"fmt"
+	"io"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -29,8 +31,10 @@ import (
 //	PASETO_V4_LOCAL_KEY_HEX=64-char-hex-string
 //
 // Security note (production):
-//   - Prefer loading PASETO keys from a secrets manager or file path instead of
-//     embedding raw keys in environment variables.
+//   - Secrets (secretFileSettings) can be read from files instead: set <KEY>_FILE to
+//     a path, e.g. a compose secret under /run/secrets or a file a secrets
+//     manager's agent writes. compose.yaml does that for the PASETO keys and the
+//     shared secrets (docs/operations/deploy.md, "Secrets").
 //   - In development (GIN_MODE=debug), leave CookieDomain empty and CookieSecure=false.
 //     Outside debug mode the Secure flag is always set and CookieSecure is ignored.
 type Config struct {
@@ -111,12 +115,14 @@ type Config struct {
 	// Verifiers accept tokens by matching KID to select the correct verification key
 	PasetoRefreshKID string `mapstructure:"PASETO_REFRESH_KID"`
 
-	// Key rotation (#139, docs/operations/key-rotation.md). The retired public
-	// key (access tokens) and/or local key (refresh tokens) keep verifying
-	// tokens until PASETO_PREVIOUS_KEYS_VALID_UNTIL (RFC 3339), which is
-	// required when either is set. New tokens always use the current keys.
-	PasetoV4PreviousPublicKeyHex string `mapstructure:"PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX"`
-	PasetoV4PreviousLocalKeyHex  string `mapstructure:"PASETO_V4_PREVIOUS_LOCAL_KEY_HEX"`
+	// Key rotation (#139, #158, docs/operations/key-rotation.md). The retired
+	// public keys (access tokens) and/or local keys (refresh tokens), as
+	// comma-separated kid=hex entries (the KID their tokens carry), keep
+	// verifying tokens until PASETO_PREVIOUS_KEYS_VALID_UNTIL (RFC 3339), which
+	// is required when either is set. New tokens always use the current keys.
+	// Parsed by PasetoPreviousPublicKeys / PasetoPreviousLocalKeys.
+	PasetoV4PreviousPublicKeys   string `mapstructure:"PASETO_V4_PREVIOUS_PUBLIC_KEYS"`
+	PasetoV4PreviousLocalKeys    string `mapstructure:"PASETO_V4_PREVIOUS_LOCAL_KEYS"`
 	PasetoPreviousKeysValidUntil string `mapstructure:"PASETO_PREVIOUS_KEYS_VALID_UNTIL"`
 
 	// CookieDomain specifies the Domain attribute for the non-Secure refresh
@@ -335,9 +341,12 @@ func LoadConfig(path string) (config Config, err error) {
 		"PASETO_V4_PRIVATE_KEY_HEX",
 		"PASETO_V4_LOCAL_KEY_HEX",
 		"SMTP_PASS",
+		"PASETO_V4_PREVIOUS_PUBLIC_KEYS",
+		"PASETO_V4_PREVIOUS_LOCAL_KEYS",
+		"PASETO_PREVIOUS_KEYS_VALID_UNTIL",
+		// Read only to refuse them (renamedConfigKeys).
 		"PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX",
 		"PASETO_V4_PREVIOUS_LOCAL_KEY_HEX",
-		"PASETO_PREVIOUS_KEYS_VALID_UNTIL",
 	} {
 		if err = viper.BindEnv(key); err != nil {
 			return config, err
@@ -352,9 +361,27 @@ func LoadConfig(path string) (config Config, err error) {
 		// Config file not found is acceptable, continue with env vars and defaults
 	}
 
+	// A renamed setting would otherwise be dropped without a word, e.g. a
+	// rotation that looks configured but accepts no old token.
+	for old, replacement := range renamedConfigKeys {
+		if viper.GetString(old) != "" {
+			return config, fmt.Errorf("%s is no longer read: use %s (docs/operations/key-rotation.md)", old, replacement)
+		}
+	}
+
 	// Unmarshal configuration
 	if err = viper.Unmarshal(&config); err != nil {
 		return config, err
+	}
+
+	for _, secret := range secretFileSettings {
+		value, ok, err := readSecretFile(secret.key)
+		if err != nil {
+			return config, err
+		}
+		if ok {
+			*secret.field(&config) = value
+		}
 	}
 
 	// Exact values only, no case/space normalization: gin's own init() reads the
@@ -375,6 +402,12 @@ func LoadConfig(path string) (config Config, err error) {
 		return config, fmt.Errorf("INVITATION_TTL and PASSWORD_RESET_TTL must be positive durations")
 	}
 
+	if _, err = config.PasetoPreviousPublicKeys(); err != nil {
+		return config, err
+	}
+	if _, err = config.PasetoPreviousLocalKeys(); err != nil {
+		return config, err
+	}
 	if _, err = config.PasetoPreviousKeysUntil(); err != nil {
 		return config, err
 	}
@@ -540,11 +573,118 @@ func (c Config) AllowedOrigins() []string {
 	return splitList(c.CORSAllowedOrigins)
 }
 
+// renamedConfigKeys maps settings that are no longer read to their
+// replacements. LoadConfig refuses to start while an old one is set.
+var renamedConfigKeys = map[string]string{
+	// #158: one unnamed key became a kid=hex list.
+	"PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX": "PASETO_V4_PREVIOUS_PUBLIC_KEYS=<kid>=<hex>",
+	"PASETO_V4_PREVIOUS_LOCAL_KEY_HEX":  "PASETO_V4_PREVIOUS_LOCAL_KEYS=<kid>=<hex>",
+}
+
+// secretFileSettings are the settings that may also be read from a file: when
+// <KEY>_FILE names one, LoadConfig uses its contents (surrounding whitespace,
+// such as the trailing newline, trimmed) as KEY. Setting both KEY and
+// <KEY>_FILE is an error, so it's never unclear which one is in use. This is
+// the Docker/compose secrets convention (/run/secrets/<name>), and how a
+// secrets manager plugs in: its agent or CSI driver writes the file.
+var secretFileSettings = []struct {
+	key   string
+	field func(*Config) *string
+}{
+	{"DB_SOURCE", func(c *Config) *string { return &c.DBSource }},
+	{"PASETO_V4_PUBLIC_KEY_HEX", func(c *Config) *string { return &c.PasetoV4PublicKeyHex }},
+	{"PASETO_V4_PRIVATE_KEY_HEX", func(c *Config) *string { return &c.PasetoV4PrivateKeyHex }},
+	{"PASETO_V4_LOCAL_KEY_HEX", func(c *Config) *string { return &c.PasetoV4LocalKeyHex }},
+	{"PASETO_V4_PREVIOUS_PUBLIC_KEYS", func(c *Config) *string { return &c.PasetoV4PreviousPublicKeys }},
+	{"PASETO_V4_PREVIOUS_LOCAL_KEYS", func(c *Config) *string { return &c.PasetoV4PreviousLocalKeys }},
+	{"ROLE_LOOKUP_SECRET", func(c *Config) *string { return &c.RoleLookupSecret }},
+	{"COLLAB_INTERNAL_SECRET", func(c *Config) *string { return &c.CollabInternalSecret }},
+	{"SMTP_PASS", func(c *Config) *string { return &c.SMTPPass }},
+}
+
+// maxSecretFileBytes caps a <KEY>_FILE read: secrets are short, so anything
+// bigger is the wrong path (a directory's worth of data, a device).
+const maxSecretFileBytes = 64 << 10
+
+// readSecretFile reads <key>_FILE (see secretFileSettings): the value and
+// true, or false when <key>_FILE is unset. Errors name the variables and the
+// path, never the contents.
+func readSecretFile(key string) (string, bool, error) {
+	fileKey := key + "_FILE"
+	if err := viper.BindEnv(fileKey); err != nil {
+		return "", false, err
+	}
+	path := strings.TrimSpace(viper.GetString(fileKey))
+	if path == "" {
+		return "", false, nil
+	}
+	if v, ok := os.LookupEnv(key); (ok && v != "") || viper.InConfig(key) {
+		return "", false, fmt.Errorf("both %s and %s are set: use one", key, fileKey)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false, fmt.Errorf("%s: %w", fileKey, err)
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxSecretFileBytes+1))
+	if err != nil {
+		return "", false, fmt.Errorf("%s: reading %s: %w", fileKey, path, err)
+	}
+	if len(data) > maxSecretFileBytes {
+		return "", false, fmt.Errorf("%s: %s is larger than %d bytes", fileKey, path, maxSecretFileBytes)
+	}
+	value := strings.TrimSpace(string(data))
+	if value == "" {
+		return "", false, fmt.Errorf("%s: %s is empty", fileKey, path)
+	}
+	return value, true, nil
+}
+
+// PasetoPreviousPublicKeys parses PASETO_V4_PREVIOUS_PUBLIC_KEYS into KID →
+// hex public key (nil when unset). The keys themselves are checked by the
+// token maker.
+func (c Config) PasetoPreviousPublicKeys() (map[string]string, error) {
+	return parseKIDKeys("PASETO_V4_PREVIOUS_PUBLIC_KEYS", c.PasetoV4PreviousPublicKeys)
+}
+
+// PasetoPreviousLocalKeys parses PASETO_V4_PREVIOUS_LOCAL_KEYS like
+// PasetoPreviousPublicKeys.
+func (c Config) PasetoPreviousLocalKeys() (map[string]string, error) {
+	return parseKIDKeys("PASETO_V4_PREVIOUS_LOCAL_KEYS", c.PasetoV4PreviousLocalKeys)
+}
+
+// parseKIDKeys parses comma-separated kid=hex entries. Errors never include
+// the key material.
+func parseKIDKeys(name, value string) (map[string]string, error) {
+	entries := splitList(value)
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	keys := make(map[string]string, len(entries))
+	for i, entry := range entries {
+		kid, hex, ok := strings.Cut(entry, "=")
+		kid, hex = strings.TrimSpace(kid), strings.TrimSpace(hex)
+		if !ok || kid == "" || hex == "" {
+			return nil, fmt.Errorf("invalid %s: entry %d is not <kid>=<hex key>", name, i+1)
+		}
+		// Written the wrong way round (<hex>=<kid>): the key is where the KID
+		// goes, so never echo it.
+		if len(kid) >= 32 && strings.Trim(strings.ToLower(kid), "0123456789abcdef") == "" {
+			return nil, fmt.Errorf("invalid %s: entry %d has a hex key where the KID goes: write <kid>=<hex key>", name, i+1)
+		}
+		if _, dup := keys[kid]; dup {
+			return nil, fmt.Errorf("invalid %s: KID %q is listed twice", name, kid)
+		}
+		keys[kid] = hex
+	}
+	return keys, nil
+}
+
 // PasetoPreviousKeysUntil parses PASETO_PREVIOUS_KEYS_VALID_UNTIL: the end of
 // the key rotation grace window. It is zero when no previous key is set, and
 // an error when a previous key is set without a valid RFC 3339 time.
 func (c Config) PasetoPreviousKeysUntil() (time.Time, error) {
-	if c.PasetoV4PreviousPublicKeyHex == "" && c.PasetoV4PreviousLocalKeyHex == "" {
+	if len(splitList(c.PasetoV4PreviousPublicKeys)) == 0 && len(splitList(c.PasetoV4PreviousLocalKeys)) == 0 {
 		return time.Time{}, nil
 	}
 	until, err := time.Parse(time.RFC3339, strings.TrimSpace(c.PasetoPreviousKeysValidUntil))

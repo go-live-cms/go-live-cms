@@ -29,6 +29,16 @@ cd "$(dirname "$0")/../.."
 set -a; . ./.env; set +a
 : "${POSTGRES_PASSWORD:?deploy: POSTGRES_PASSWORD is not set in .env}"
 
+# Compose doesn't recreate a container when only the value of a secret it mounts changed
+# (the secret is copied in at create), so a rotated ROLE_LOOKUP_SECRET could reach the api
+# but not collab. compose.yaml puts this fingerprint of every secret's value in a label on
+# both, which changes their config and recreates them together (#158). It's a truncated
+# SHA-256 of random secrets: it identifies a change, not a value.
+secret_vars="$(awk '/^secrets:/ { on = 1; next } /^[^[:space:]#]/ { on = 0 }
+  on && $1 == "environment:" { print $2 }' compose.yaml)"
+GOLIVE_SECRETS_REV="$(for v in $secret_vars; do eval "printf '%s\n' \"\${$v:-}\""; done | sha256sum | cut -c1-16)"
+export GOLIVE_SECRETS_REV
+
 export GOLIVE_IMAGE_REGISTRY="${GOLIVE_IMAGE_REGISTRY:-ghcr.io/go-live-cms}"
 export GOLIVE_IMAGE_TAG="$TAG"
 PROJECT="${COMPOSE_PROJECT_NAME:-golive_cms}"

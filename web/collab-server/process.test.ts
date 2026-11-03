@@ -74,10 +74,14 @@ beforeAll(async () => {
   const served = await serveFakeApi(api, ROLE_SECRET)
   apiServer = served.server
 
+  // The shared secrets as files, the way compose.yaml passes them (#158, env.ts); the
+  // flush and lookup tests below then prove the bundle read them.
+  writeFileSync(path.join(dir, "role_lookup_secret"), `${ROLE_SECRET}\n`)
+  writeFileSync(path.join(dir, "collab_internal_secret"), `${FLUSH_SECRET}\n`)
   const listening = await startBundle({
     INTERNAL_API_URL: served.url,
-    ROLE_LOOKUP_SECRET: ROLE_SECRET,
-    COLLAB_INTERNAL_SECRET: FLUSH_SECRET,
+    ROLE_LOOKUP_SECRET_FILE: path.join(dir, "role_lookup_secret"),
+    COLLAB_INTERNAL_SECRET_FILE: path.join(dir, "collab_internal_secret"),
     PASETO_V4_PUBLIC_KEY_HEX: publicKeyHex,
     COLLAB_STORE_DEBOUNCE_MS: "60000",
   })

@@ -25,6 +25,7 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 | `server.ts` | `createCollabServer`: the hooks wired into a Hocuspocus `Server`, plus `flush`. |
 | `internal.ts` | Internal HTTP listener: `/healthz`, flush. |
 | `logsafe.ts` | `logEvent`, `requestIdFrom`, `docNameForLog`, `clientContextForLog`. |
+| `env.ts` | `readEnv`, `readSecretEnv` (`<NAME>_FILE`, #158) for `main.ts`. |
 | `probe.ts`, `build.mjs`, `singleYjsInstance.mjs`, `main.ts` | Single-instance probe, esbuild bundle and its yjs plugin, entry point. |
 | `importMetaGlob.mjs` | esbuild plugin: Vite's eager `import.meta.glob` (the installed theme blocks, #376). |
 
@@ -215,7 +216,10 @@ is pinned exact in the same file (rule 8). `paseto` `3.1.4`.
 `PORT` (1235), `HOST`, `INTERNAL_PORT` (1236), `INTERNAL_API_URL` + `ROLE_LOOKUP_SECRET`
 (required; the API's internal listener and its secret), `COLLAB_INTERNAL_SECRET`
 (required; what the API sends to flush), `PASETO_V4_PUBLIC_KEY_HEX` or
-`PASETO_V4_PUBLIC_PEM_FILE`, `PASETO_ISSUER` (`golive.auth`),
+`PASETO_V4_PUBLIC_PEM_FILE`, `PASETO_ISSUER` (`golive.auth`). `ROLE_LOOKUP_SECRET`,
+`COLLAB_INTERNAL_SECRET` and `PASETO_V4_PUBLIC_KEY_HEX` may instead come from the file
+`<NAME>_FILE` names (`env.ts`, #158; prod `compose.yaml` mounts the two secrets at
+`/run/secrets`; both set is a startup error). `process.test.ts` starts the bundle that way.
 `COLLAB_STORE_DEBOUNCE_MS` / `COLLAB_STORE_MAX_DEBOUNCE_MS`, `COLLAB_ACCESS_RECHECK_MS`
 (60000; 0 turns the re-check off) / `COLLAB_ACCESS_GRACE_MS` (120000). In dev compose, the one-shot
 `collab-key` service copies only the public key and issuer out of `app.env` (which also

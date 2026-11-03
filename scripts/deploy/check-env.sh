@@ -5,7 +5,9 @@
 # first production deploy would have shipped without the mail settings). Checks:
 #
 #   1. every ${VAR} in compose.yaml is in write-env.sh's lists or in NOT_FROM_ENV below,
-#      and every one without a default is in its required list;
+#      and every one without a default is in its required list, as is every variable a
+#      top-level secret is created from (`environment: VAR`, #158: no default possible,
+#      and `docker compose config` doesn't notice when it is unset; `up` fails);
 #   2. cd.yml maps every listed variable into the writer's step, credentials as secrets;
 #   3. `docker compose config` with a .env the writer made from dummy values (only the
 #      required ones set) reports no unset variable and keeps quoted values intact.
@@ -18,7 +20,8 @@ cd "$(dirname "$0")/../.."
 #   GOLIVE_IMAGE_REGISTRY, GOLIVE_IMAGE_TAG  exported by deploy.sh for each deploy
 #   COLLAB_INTERNAL_URL                      internal wiring (collab:1236); its default is
 #                                            the only right value in this stack
-NOT_FROM_ENV="GOLIVE_IMAGE_REGISTRY GOLIVE_IMAGE_TAG COLLAB_INTERNAL_URL"
+#   GOLIVE_SECRETS_REV                       computed by deploy.sh from the secrets' values
+NOT_FROM_ENV="GOLIVE_IMAGE_REGISTRY GOLIVE_IMAGE_TAG COLLAB_INTERNAL_URL GOLIVE_SECRETS_REV"
 
 WRITER=scripts/deploy/write-env.sh
 REQUIRED="$(sh "$WRITER" --list required)"
@@ -33,16 +36,29 @@ all_vars="$(printf '%s\n' "$compose_src" | grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*'
 # ${VAR} and ${VAR:?msg}/${VAR?msg} have no default.
 required_vars="$(printf '%s\n' "$compose_src" | grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*(\}|:?\?)' |
   sed -E 's/^\$\{([A-Za-z0-9_]*).*/\1/' | sort -u)"
+# Variables the top-level secrets: block creates secrets from (`environment: VAR` under
+# it, until the next top-level key).
+secret_vars="$(printf '%s\n' "$compose_src" | awk '
+  /^secrets:/ { on = 1; next }
+  /^[^[:space:]]/ { on = 0 }
+  on && $1 == "environment:" { print $2 }' | tr -d "\"'" | sort -u)"
+[ -n "$secret_vars" ] || err "compose.yaml: found no environment: sources under the top-level secrets: block"
+all_vars="$(printf '%s\n' $all_vars $secret_vars | sort -u)"
+required_vars="$(printf '%s\n' $required_vars $secret_vars | sort -u)"
 
 for v in $all_vars; do
   if in_list "$v" "$NOT_FROM_ENV"; then continue; fi
   if ! in_list "$v" "$REQUIRED $OPTIONAL"; then
-    err "compose.yaml reads \${$v}, but $WRITER doesn't write it: add it there and to cd.yml, or to NOT_FROM_ENV in $0 with the reason"
+    if in_list "$v" "$secret_vars"; then
+      err "compose.yaml creates a secret from $v (environment: $v), but $WRITER doesn't write it: add it to REQUIRED_VARS there and to cd.yml"
+    else
+      err "compose.yaml reads \${$v}, but $WRITER doesn't write it: add it there and to cd.yml, or to NOT_FROM_ENV in $0 with the reason"
+    fi
   fi
 done
 for v in $required_vars; do
   if ! in_list "$v" "$REQUIRED"; then
-    err "compose.yaml requires \${$v} (no default), but it isn't in REQUIRED_VARS in $WRITER"
+    err "compose.yaml requires $v (\${$v} with no default, or a secret's environment: source), but it isn't in REQUIRED_VARS in $WRITER"
   fi
 done
 
@@ -89,6 +105,10 @@ if ( for v in $all_vars; do unset "$v"; done
   fi
   # Whole lines, whatever the indentation. (`config` prints a literal $ as $$.)
   sed 's/^[[:space:]]*//' "$tmp/config.yaml" > "$tmp/config.lines"
+  # Each secret is still sourced from the variable (config prints the name, not the value).
+  for v in $secret_vars; do
+    grep -qxF "environment: $v" "$tmp/config.lines" || err "docker compose config: no secret is created from $v"
+  done
   for want in 'MAIL_FROM: GoLive CMS <no-reply@cms.example.com>' \
               'PUBLIC_BASE_URL: https://cms.example.com' \
               'SITE_URL: https://cms.example.com' \

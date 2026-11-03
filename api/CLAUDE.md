@@ -134,7 +134,13 @@ the collab server.
   current password.
 - **Refresh reuse vs revoked:** a blocked session's refresh token is only treated
   as *reuse* (409, blocks all sessions) if the session was rotated (`replaced_by`
-  set). A session blocked by logout or a password change just gets 401.
+  set). A session blocked by logout or a password change just gets 401. Reuse logs a
+  `refresh_token_reuse` warning with the reused session's id. Two refreshes racing
+  with one token: one rotates; the other waits on the session row lock and gets 401
+  (or, arriving after the commit, counts as reuse). Already-issued access tokens are
+  not revoked by any of these (they live `ACCESS_TOKEN_DURATION`); only a password
+  change cuts them short. `auth_flow_test.go` (#162) runs these flows against the
+  real database; `BlockAllSessionsForUser` uses the partial index `000029` (#160).
 
 ## Tests
 
@@ -311,9 +317,19 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **CSRF:** `cookieOriginGuard` (`origin_guard.go`) on login/refresh/logout refuses
   cross-origin browser requests (Sec-Fetch-Site, else Origin vs Host /
   trusted-proxy X-Forwarded-Host), on top of SameSite=Strict + `__Host-`.
-- **Key rotation:** `PASETO_V4_PREVIOUS_{PUBLIC,LOCAL}_KEY_HEX` +
+- **Key rotation (#158):** `PASETO_V4_PREVIOUS_{PUBLIC,LOCAL}_KEYS` (`<kid>=<hex>,…`) +
   `PASETO_PREVIOUS_KEYS_VALID_UNTIL` keep retired keys verifying until the cutoff
-  (`token/paseto_v4_rotation.go`, `docs/operations/key-rotation.md`).
+  (`token/paseto_v4_rotation.go`, `docs/operations/key-rotation.md`). Verification picks
+  the key **by the footer KID** (current KID → current key, listed KID → that key), never by
+  trying keys; signing only ever uses the current keys. A previous KID equal to the current
+  one is a startup error. The old single-key `*_KEY_HEX` names are refused by `LoadConfig`
+  (`renamedConfigKeys`).
+- **Secrets from files (#158):** every secret setting also reads `<NAME>_FILE`
+  (`secretFileSettings` in `util/config.go`: PASETO keys and lists, `ROLE_LOOKUP_SECRET`,
+  `COLLAB_INTERNAL_SECRET`, `SMTP_PASS`, `DB_SOURCE`), trimmed; both set → error, and
+  errors never include the contents. Add a new secret there. Prod `compose.yaml` passes the
+  private/local keys and both shared secrets as compose secrets (`/run/secrets`);
+  `check-env.sh` reads the top-level `secrets:` block.
 
 ## Rate limiting and client IP (#190, #156)
 

@@ -18,10 +18,15 @@
 //
 // # Security Features
 //
-// **Reuse Detection**: If a previously-used refresh token is submitted:
-//   - All sessions for the user are immediately blocked
-//   - Security alert is logged with user and session details
-//   - Client receives 401 with reuse detection error
+// **Reuse Detection**: If a previously-used (rotated) refresh token is submitted:
+//   - All sessions for the user are immediately blocked, the rotated
+//     session's successors included
+//   - A refresh_token_reuse warning is logged with the user and session ids
+//   - Client receives 409 with reuse detection error
+//
+// A token whose session was blocked without rotating (logout, password
+// change) just gets 401. Of two refreshes racing with one token, the one that
+// waits on the session lock finds it rotated and also gets 401.
 //
 // **Session Binding**: Each session tracks:
 //   - User agent and IP address for anomaly detection
@@ -283,10 +288,14 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 					return
 				}
 
-				// Block all sessions for this user
-				_ = server.store.BlockAllSessionsForUser(ctx.Request.Context(), s2.UserID)
+				// Block all sessions for this user: the rotated token's
+				// successors too, whoever holds them. The event names the
+				// session whose spent token came back, for the incident.
+				if err := server.store.BlockAllSessionsForUser(ctx.Request.Context(), s2.UserID); err != nil {
+					logSecurityEvent(ctx, LogSessionReuse, s2.ID.String(), s2.UserID, fmt.Sprintf("Failed to block sessions after reuse: %v", err))
+				}
 
-				logSecurityEvent(ctx, LogSessionReuse, "unknown", s2.UserID, "Token reuse detected - all sessions blocked")
+				logSecurityEvent(ctx, LogSessionReuse, s2.ID.String(), s2.UserID, "Token reuse detected - all sessions blocked")
 				ctx.JSON(http.StatusConflict, gin.H{"error": "refresh token reuse detected"})
 				return
 			}
