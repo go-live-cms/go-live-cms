@@ -122,6 +122,15 @@ the collab server.
   compose); responses map it to where `/uploads` serves it (`/uploads/media/x.jpg`)
   via `server.mediaResponse` / `publicMediaPath`. The admin uses it directly as the
   image URL, so never return a media row through bare `toMediaResponse`.
+- **Stored names are unguessable (#399).** `/uploads` is a public static route (published
+  pages embed it; no directory listing), so the file name is what keeps a draft-only image
+  private. Every new file goes through `saveUploadedFile`: `<cleaned name>-<32 hex><ext>`
+  (128 random bits, `O_EXCL`, a failed write leaves nothing), variants under that name.
+  `original_filename` and the default `name`/description use the readable
+  `cleanUploadFilename`, never the stored name. Replace keeps the path. Files from before
+  #399 (dev/seed only: no deployment had uploads) keep their names: renaming would mean
+  rewriting `src` inside `post_ydoc_state`, `block_doc`, versions and `_thumbnail_url`. Never
+  write an upload under a name a client chose or can predict.
 - **Password change revokes everything.** `UpdateUserTx{PasswordChanged: true}`
   locks the user row, stamps `password_changed_at` itself, and blocks every
   session. `authMiddleware` then rejects access tokens whose `iat` is before
