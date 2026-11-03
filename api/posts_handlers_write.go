@@ -141,7 +141,7 @@ func (server *Server) createPost(c *gin.Context) {
 
 	createParams := db.CreatePostsParams{
 		Title:       req.Title,
-		Description: req.Description,
+		Description: strings.TrimSpace(req.Description),
 		UserID:      primaryAuthor.ID,
 		Username:    primaryAuthor.Username,
 		Url:         req.Url,
@@ -325,8 +325,8 @@ func (server *Server) updatePost(c *gin.Context) {
 	if req.Title != "" {
 		updateParams.Title = req.Title
 	}
-	if req.Description != "" {
-		updateParams.Description = req.Description
+	if req.Description != nil {
+		updateParams.Description = strings.TrimSpace(*req.Description)
 	}
 	if req.Url != "" {
 		updateParams.Url = req.Url

@@ -1564,6 +1564,21 @@ func (mr *MockStoreMockRecorder) GetPostCollab(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostCollab", reflect.TypeOf((*MockStore)(nil).GetPostCollab), arg0, arg1)
 }
 
+// GetPostHasUnpublishedChanges mocks base method.
+func (m *MockStore) GetPostHasUnpublishedChanges(arg0 context.Context, arg1 int64) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostHasUnpublishedChanges", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostHasUnpublishedChanges indicates an expected call of GetPostHasUnpublishedChanges.
+func (mr *MockStoreMockRecorder) GetPostHasUnpublishedChanges(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostHasUnpublishedChanges", reflect.TypeOf((*MockStore)(nil).GetPostHasUnpublishedChanges), arg0, arg1)
+}
+
 // GetPostMedia mocks base method.
 func (m *MockStore) GetPostMedia(arg0 context.Context, arg1 int64) ([]db.GetPostMediaRow, error) {
 	m.ctrl.T.Helper()
@@ -2935,6 +2950,20 @@ func (mr *MockStoreMockRecorder) ResetPasswordTx(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPasswordTx", reflect.TypeOf((*MockStore)(nil).ResetPasswordTx), arg0, arg1)
 }
 
+// RestorePostSEO mocks base method.
+func (m *MockStore) RestorePostSEO(arg0 context.Context, arg1 db.RestorePostSEOParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestorePostSEO", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RestorePostSEO indicates an expected call of RestorePostSEO.
+func (mr *MockStoreMockRecorder) RestorePostSEO(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestorePostSEO", reflect.TypeOf((*MockStore)(nil).RestorePostSEO), arg0, arg1)
+}
+
 // RestorePostSettingsTx mocks base method.
 func (m *MockStore) RestorePostSettingsTx(arg0 context.Context, arg1 db.RestorePostSettingsTxParams) (db.Post, error) {
 	m.ctrl.T.Helper()
@@ -3403,6 +3432,21 @@ func (m *MockStore) UpdatePostMeta(arg0 context.Context, arg1 db.UpdatePostMetaP
 func (mr *MockStoreMockRecorder) UpdatePostMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostMeta", reflect.TypeOf((*MockStore)(nil).UpdatePostMeta), arg0, arg1)
+}
+
+// UpdatePostSEO mocks base method.
+func (m *MockStore) UpdatePostSEO(arg0 context.Context, arg1 db.UpdatePostSEOParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostSEO", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostSEO indicates an expected call of UpdatePostSEO.
+func (mr *MockStoreMockRecorder) UpdatePostSEO(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostSEO", reflect.TypeOf((*MockStore)(nil).UpdatePostSEO), arg0, arg1)
 }
 
 // UpdatePostSlug mocks base method.

@@ -1,3 +1,4 @@
+import type { PostSeo } from "./seo"
 import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse, TaxonomyTerm, TaxonomyType } from "../../gl-admin/lib/api/types"
 import { SERVER_API_URL, SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 import type { Pagination } from "./pagination"
@@ -259,6 +260,8 @@ export interface PublicPost {
   post: Post
   featured_image: { id: number | null; url: string } | null
   taxonomy_terms: TaxonomyTerm[]
+  // The published SEO settings (#357); absent from an older API.
+  seo?: PostSeo
 }
 
 export async function getPublicPost(idOrSlug: string | number): Promise<PublicPost | null> {
@@ -269,7 +272,7 @@ export async function getPublicPost(idOrSlug: string | number): Promise<PublicPo
   if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status} loading a post`), { status: response.status })
   const body = await response.json()
   if (!body?.post) return null
-  return { post: body.post, featured_image: body.featured_image ?? null, taxonomy_terms: body.taxonomy_terms ?? [] }
+  return { post: body.post, featured_image: body.featured_image ?? null, taxonomy_terms: body.taxonomy_terms ?? [], seo: body.seo ?? undefined }
 }
 
 // A public type's published posts with their published titles and excerpts (#358,

@@ -89,6 +89,7 @@ GROUP BY p.post_type;
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -113,6 +114,8 @@ WHERE
     AND (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)
+    AND (NOT @unpublished_changes::boolean
+         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), @query::text)) DESC, p.created_at DESC, p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
@@ -129,4 +132,6 @@ WHERE
              @@ websearch_to_tsquery(golive_search_config(), @query::text)))
     AND (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id::bigint = 0 OR p.user_id = @user_id);
+    AND (@user_id::bigint = 0 OR p.user_id = @user_id)
+    AND (NOT @unpublished_changes::boolean
+         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));

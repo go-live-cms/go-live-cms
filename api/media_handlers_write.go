@@ -56,6 +56,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mime/multipart"
@@ -121,7 +122,7 @@ func (server *Server) createMedia(c *gin.Context) {
 	}
 
 	// Strip the original's metadata and generate its variants (#255).
-	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, header.Size)
+	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, header.Size, nil)
 	variants := staged.commitForNewRow(server.requestLog(c))
 	removeStored := func() {
 		os.Remove(mediaPath)
@@ -303,7 +304,7 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 		}
 	}
 
-	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, fileHeader.Size)
+	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, fileHeader.Size, nil)
 
 	media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
 		Name:        strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename)),
@@ -447,7 +448,8 @@ func (server *Server) replaceMedia(c *gin.Context) {
 	// New variants are staged aside; the old ones stay until the row is
 	// updated, so a failed replace leaves the original and its variants.
 	var staged *stagedVariants
-	params.FileSize, staged = prepareStoredImage(server.requestLog(c), server.config.UploadPath, storedPath, mimeType, header.Size)
+	// The focal point stays with a replace, so the new social crop uses it.
+	params.FileSize, staged = prepareStoredImage(server.requestLog(c), server.config.UploadPath, storedPath, mimeType, header.Size, focalPointFrom(media.FocalX, media.FocalY))
 	params.Variants = staged.column()
 
 	updated, err := server.store.ReplaceMediaFile(c.Request.Context(), params)
@@ -571,10 +573,55 @@ func (server *Server) updateMedia(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})
 		return
 	}
+	// The social crop is cut around the focal point (#357).
+	if setFocal {
+		updatedMedia = server.restageMediaVariants(c, updatedMedia)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"media": server.mediaResponse(updatedMedia),
 	})
+}
+
+// restageMediaVariants regenerates an image's variants after its focal point
+// changed, so the social crop follows it. It writes through SetMediaVariantsTx,
+// like the backfill: the row is locked and must still be the one just updated,
+// so a concurrent replace or edit wins. Best effort: on failure the old crop
+// stays (logged) and the edit still succeeds. Returns the row to answer with.
+func (server *Server) restageMediaVariants(c *gin.Context, media db.Medium) db.Medium {
+	if !strings.HasPrefix(media.MimeType, "image/") || len(parseMediaVariants(media.Variants)) == 0 {
+		return media // no variants to update (too small, animated, not ours)
+	}
+	release := acquireImagePipeline()
+	staged, err := stageImageVariants(server.config.UploadPath, media.MediaPath, focalPointFrom(media.FocalX, media.FocalY))
+	release()
+	if staged == nil {
+		return media
+	}
+	if err != nil && !noVariantsReason(err) {
+		staged.discard()
+		server.requestLog(c).Warn("media: regenerating variants for the focal point failed", "media_id", media.ID, "error", err)
+		return media
+	}
+	raw := json.RawMessage(`{}`)
+	if column := staged.column(); column.Valid {
+		raw = column.RawMessage
+	}
+	updated, err := server.store.SetMediaVariantsTx(c.Request.Context(), db.SetMediaVariantsTxParams{
+		ID:          media.ID,
+		MediaPath:   media.MediaPath,
+		ChangedAt:   media.ChangedAt,
+		Variants:    raw,
+		CommitFiles: staged.commit,
+	})
+	if err != nil {
+		staged.discard()
+		if !errors.Is(err, db.ErrMediaChanged) && !errors.Is(err, sql.ErrNoRows) {
+			server.requestLog(c).Warn("media: saving variants for the focal point failed", "media_id", media.ID, "error", err)
+		}
+		return media
+	}
+	return updated
 }
 
 // deleteMedia handles DELETE /media/:id - deletion with filesystem cleanup.

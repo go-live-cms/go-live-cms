@@ -119,6 +119,81 @@ describe("SeoHead", () => {
   })
 })
 
+describe("SeoHead: a post's SEO (#357)", () => {
+  it("hides a post from search engines with robots noindex, and keeps the rest", async () => {
+    const container = await AstroContainer.create()
+    const html = await container.renderToString(SeoHead, {
+      props: { title: "Hello · My Site", description: "An excerpt", ...seo, hideFromSearch: true },
+      request: new Request("http://web:4321/post/hello-world"),
+    })
+    expect(html).toContain('<meta name="robots" content="noindex">')
+    expect(html).not.toContain("nofollow")
+    expect(html).toContain('<link rel="canonical" href="https://example.org/post/hello-world">')
+    expect(html).toContain('<meta property="og:url" content="https://example.org/post/hello-world">')
+    expect(getSiteSettings).toHaveBeenCalled()
+  })
+
+  it("takes an absolute canonical URL as it is", async () => {
+    const container = await AstroContainer.create()
+    const html = await container.renderToString(SeoHead, {
+      props: { title: "t", ...seo, canonical: "https://elsewhere.example/original" },
+      request: new Request("http://web:4321/post/hello-world"),
+    })
+    expect(html).toContain('<link rel="canonical" href="https://elsewhere.example/original">')
+    expect(html).toContain('<meta property="og:url" content="https://elsewhere.example/original">')
+  })
+
+  it("describes the social image: size, alt text and the large Twitter card", async () => {
+    const container = await AstroContainer.create()
+    const html = await container.renderToString(SeoHead, {
+      props: {
+        title: "t",
+        ...seo,
+        image: "/uploads/media/_variants/share.png/social.png",
+        imageWidth: 1200,
+        imageHeight: 630,
+        imageAlt: "Two documents",
+      },
+      request: new Request("http://web:4321/post/hello-world"),
+    })
+    expect(html).toContain('<meta property="og:image" content="https://example.org/uploads/media/_variants/share.png/social.png">')
+    expect(html).toContain('<meta property="og:image:width" content="1200">')
+    expect(html).toContain('<meta property="og:image:height" content="630">')
+    expect(html).toContain('<meta property="og:image:alt" content="Two documents">')
+    expect(html).toContain('<meta name="twitter:image:alt" content="Two documents">')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image">')
+  })
+
+  it("without an image: the summary card and no image tags", async () => {
+    const container = await AstroContainer.create()
+    const html = await container.renderToString(SeoHead, {
+      props: { title: "t", ...seo, image: null, imageWidth: 1200, imageHeight: 630, imageAlt: "x" },
+      request: new Request("http://web:4321/post/hello-world"),
+    })
+    expect(html).toContain('<meta name="twitter:card" content="summary">')
+    expect(html).not.toContain("og:image")
+    expect(html).not.toContain("twitter:image")
+  })
+
+  it("renders the JSON-LD as one data block", async () => {
+    const container = await AstroContainer.create()
+    const html = await container.renderToString(SeoHead, {
+      props: { title: "t", ...seo, jsonLd: { "@context": "https://schema.org", "@type": "Article", headline: "</script>x" } },
+      request: new Request("http://web:4321/post/hello-world"),
+    })
+    const scripts = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g) ?? []
+    expect(scripts).toHaveLength(1)
+    const json = (scripts[0] ?? "").replace(/^<script[^>]*>/, "").replace(/<\/script>$/, "")
+    expect(JSON.parse(json)).toEqual({ "@context": "https://schema.org", "@type": "Article", headline: "</script>x" })
+
+    const noindex = await container.renderToString(SeoHead, {
+      props: { title: "Error", noindex: true, jsonLd: { "@type": "Article" } },
+      request: new Request("http://web:4321/nope"),
+    })
+    expect(noindex).not.toContain("ld+json")
+  })
+})
+
 describe("theme layouts", () => {
   it("the default post layout puts the SEO tags in <head>", async () => {
     const container = await AstroContainer.create()

@@ -1069,7 +1069,7 @@ func TestListImageMediaAfterOnlyMissing(t *testing.T) {
 	})
 	require.NoError(t, err)
 	_, done := createTestMedia(t)
-	_, err = testQueries.SetMediaVariants(ctx, SetMediaVariantsParams{ID: done.ID, Variants: json.RawMessage(`{"thumb":{"path":"p"}}`)})
+	_, err = testQueries.SetMediaVariants(ctx, SetMediaVariantsParams{ID: done.ID, Variants: json.RawMessage(`{"thumb":{"path":"p"},"social":{"path":"s"}}`)})
 	require.NoError(t, err)
 
 	ids := func(onlyMissing bool) map[int64]bool {

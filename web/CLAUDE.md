@@ -121,8 +121,17 @@ are the most fragile part of the codebase. **Before editing anything under
   `getPublishedPosts(type, …)` (`/public/posts`); the other `/public` lists already answer with
   published settings. On a published post a settings edit reaches the site on Update; the
   slug changes at once. The editor shows "settings go live on Update" from
-  `GET /posts/:id/settings` (the full "Changes not published" status is #326), and restoring a
-  version restores its settings too (`blockAPI.restoreVersionSettings`).
+  `GET /posts/:id/settings`, and restoring a version restores its settings too
+  (`blockAPI.restoreVersionSettings`).
+- **Changes not published (#326):** a published post whose body or settings differ from the
+  live ones (the API's `has_unpublished_changes`; `api/CLAUDE.md`). `PostStatusPill` takes
+  `unpublishedChanges` (accent pill, `UNPUBLISHED_CHANGES_LABEL`); the posts list and Pages
+  tree show it, editors get a "Changes not published" tab (`status=published` +
+  `unpublished_changes=true`, count from `/posts/counts`' `unpublished_changes`), and editors'
+  Home counts them (linking to that tab, which contributors don't have). In the editor `PostForm` reads `blocks_changed`/`changed` from `GET /posts/:id/settings`
+  on open, after settings saves, publish and restore, and on `Editor`'s `onStored` (the collab
+  server's `stored` with `block_doc: "written"`, anyone's edits; debounced), so the top bar's
+  pill and "Saved · changes go live on Update" follow collaborators live.
 - **SEO (#137):** `src/lib/seo.ts` holds the pure helpers (tested in `seo.test.ts`).
   The site URL is `SITE_URL`, read from `process.env` at runtime (`resolveSiteUrl`;
   unset → request origin, wrong behind a proxy, so prod must set it). `/robots.txt`
@@ -136,6 +145,19 @@ are the most fragile part of the codebase. **Before editing anything under
   env); the other tests stay in the plain `unit` project. Without `SITE_URL`,
   robots/sitemap are sent `private, no-store` (the URL came from the Host header);
   the sitemap is cached in memory for 10 minutes.
+- **Post SEO (#357):** the post route builds the head from `getPublicPost`'s `seo` (the
+  *published* values, never the admin's): `<title>` = `pageTitle(SEO title or title, site
+  name)` ("X · Site"; the home page is `homeTitle`, site · tagline), description =
+  `postDescription` (SEO description → excerpt → first paragraph, cut before 160),
+  canonical = `postCanonical`, `og:image`/`twitter:image` from the API's resolved image (the
+  1200 x 630 `social` variant) with width/height/alt, `hideFromSearch` → `robots` noindex
+  (canonical and OG stay), and an Article JSON-LD (`articleJsonLd`, `jsonLdText`). The
+  sitemap skips `/public/posts` rows with `noindex`; RSS, archives and search keep them.
+  The excerpt is optional: lists use `postExcerpt` (the first paragraph without one).
+  Admin: the settings panel's SEO tab is `components/editor/ui/PostSeoPanel.tsx`, rules in
+  `lib/postSeo.ts` (tested); `PostForm` saves it debounced through `updatePostSEO` (and
+  before Update), editors and admins only. Media `variants.social` is that crop; srcsets
+  never include it.
 - **App shell (#339):** the sidebar's links come from `components/sidebar/nav.ts`
   (`buildNavigation`, role-filtered with `lib/roles.ts`; tested in `nav.test.ts`). At
   ≤768px it's the shared `Drawer` (`bare`), so focus trap, Escape and focus return are

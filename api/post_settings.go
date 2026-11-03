@@ -4,8 +4,8 @@
 // (post_versions.settings) and the published ones sit next to published_block_doc
 // (posts.published_settings). The database builds the snapshot
 // (golive_post_settings, migration 000027), so the shape lives in one place:
-// title, excerpt (description), featured image and term ids. The SEO fields
-// (#357) and byline authors (#319) join it later.
+// title, excerpt (description), featured image, term ids and the SEO fields
+// (#357, 000031; posts_seo.go). Byline authors (#319) join it later.
 //
 // The public site and its feeds show the published settings; the admin edits
 // the working ones (the post row, its featured image meta and term links). The
@@ -27,6 +27,13 @@ type PostSettings struct {
 	Description   string                     `json:"description"`
 	FeaturedImage *PostSettingsFeaturedImage `json:"featured_image"`
 	TermIDs       []int64                    `json:"term_ids"`
+
+	// SEO (#357). A snapshot from before 000031 was given the defaults.
+	SEOTitle       string `json:"seo_title"`
+	SEODescription string `json:"seo_description"`
+	SocialImageID  *int64 `json:"social_image_id"`
+	Noindex        bool   `json:"noindex"`
+	CanonicalURL   string `json:"canonical_url"`
 }
 
 // PostSettingsFeaturedImage is the featured image as the post's meta records it

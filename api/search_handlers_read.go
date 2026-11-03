@@ -125,7 +125,7 @@ func (server *Server) getPublicSearch(c *gin.Context) {
 }
 
 // searchPosts handles GET /posts/search?q=: the admin posts list's search box.
-// The list's filters (type, status, user_id) and paging (limit, offset) work as
+// The list's filters (type, status, user_id, unpublished_changes) and paging (limit, offset) work as
 // on GET /posts, and so do its permissions: any content role sees every post
 // the list shows, drafts included. Rows are ranked like the public search and
 // shaped like GET /posts?with_meta=true.
@@ -154,28 +154,35 @@ func (server *Server) searchPosts(c *gin.Context) {
 	}
 	postType := c.Query("type")
 	status := c.Query("status")
+	unpublishedChanges, err := parseUnpublishedChangesFilter(c.Query("unpublished_changes"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	posts := []PostWithMetaResponse{}
 	var total int64
 	if query != "" {
 		ctx := c.Request.Context()
 		total, err = server.store.CountSearchPosts(ctx, db.CountSearchPostsParams{
-			Query:      query,
-			PostType:   postType,
-			PostStatus: status,
-			UserID:     userID,
+			Query:              query,
+			PostType:           postType,
+			PostStatus:         status,
+			UserID:             userID,
+			UnpublishedChanges: unpublishedChanges,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search posts"})
 			return
 		}
 		rows, err := server.store.SearchPostsWithMeta(ctx, db.SearchPostsWithMetaParams{
-			Query:       query,
-			PostType:    postType,
-			PostStatus:  status,
-			UserID:      userID,
-			OffsetCount: int32(offset),
-			LimitCount:  int32(limit),
+			Query:              query,
+			PostType:           postType,
+			PostStatus:         status,
+			UserID:             userID,
+			UnpublishedChanges: unpublishedChanges,
+			OffsetCount:        int32(offset),
+			LimitCount:         int32(limit),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search posts"})

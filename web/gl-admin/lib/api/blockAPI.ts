@@ -1,5 +1,6 @@
 import type { BlockDocV1 } from "../blocks-spec"
 import { ApiError } from "./errors"
+import type { PostSEOSettings } from "./types"
 
 // A published snapshot from post_versions (#136)
 export interface PostVersionSummary {
@@ -27,6 +28,12 @@ export interface PostSettings {
   description: string
   featured_image: { id: number | null; url: string } | null
   term_ids: number[]
+  // SEO (#357); "" / null / false = the defaults (a snapshot from before has them).
+  seo_title?: string
+  seo_description?: string
+  social_image_id?: number | null
+  noindex?: boolean
+  canonical_url?: string
 }
 
 export interface PostVersion extends PostVersionSummary {
@@ -39,7 +46,12 @@ export interface PostVersion extends PostVersionSummary {
 export interface PostSettingsState {
   working: PostSettings
   published: PostSettings | null
+  // The settings differ from the published ones (#358).
   changed: boolean
+  // A published post's body differs from the published one (#326).
+  blocks_changed: boolean
+  // Published, with either of the two: "Changes not published" (#326).
+  has_unpublished_changes: boolean
 }
 
 // API client for Block Spec v1 operations
@@ -139,7 +151,10 @@ export class BlockAPIClient {
 
   // Put a version's settings back into the working copy (#358), after its blocks were
   // restored in the editor. `restored` is false for a version without saved settings.
-  async restoreVersionSettings(postId: number, versionNo: number): Promise<{ restored: boolean; post?: { title: string; description: string } }> {
+  async restoreVersionSettings(
+    postId: number,
+    versionNo: number
+  ): Promise<{ restored: boolean; post?: { title: string; description: string; seo?: PostSEOSettings } }> {
     const response = await this.request(`/posts/${postId}/versions/${versionNo}/restore-settings`, "restore the version's settings", {
       method: "POST",
     })

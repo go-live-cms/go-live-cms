@@ -78,6 +78,12 @@ export type EditorProps = {
    * the user's role then, so the rest of it (title, settings, publish) follows the body.
    */
   onAccessChange?: (access: CollabAccess) => void
+  /**
+   * The collab server stored a changed working copy, from anyone's edits (`stored` with
+   * `block_doc: "written"`). The form re-reads "Changes not published" then (#326).
+   * Read-only: it only listens to the messages CollabSaveStatus already gets.
+   */
+  onStored?: () => void
 }
 
 export interface EditorRef {
@@ -119,6 +125,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     onPublishStart,
     onPublishSuccess,
     onPublishError,
+    onStored,
     collab,
     unbuildable,
     autoFocus = true,
@@ -135,8 +142,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   const [url, setUrl] = useState("")
 
   // Kept current in refs: the save-status subscription lives as long as the connection.
-  const callbacks = useRef({ onSaveStart, onSaveSuccess, onSaveError })
-  callbacks.current = { onSaveStart, onSaveSuccess, onSaveError }
+  const callbacks = useRef({ onSaveStart, onSaveSuccess, onSaveError, onStored })
+  callbacks.current = { onSaveStart, onSaveSuccess, onSaveError, onStored }
 
   // Created by the effect that destroys it, not in useMemo: StrictMode runs effects
   // mount → cleanup → mount, and a memoized instance would be destroyed by the first cleanup
@@ -161,10 +168,14 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       }
     })
     const offDropped = status.watchDroppedBlocks((entries) => setDroppedCount(entries.length))
+    const offStored = collab.onStore((message) => {
+      if (message.type === "stored" && message.block_doc === "written") callbacks.current.onStored?.()
+    })
     return () => {
       clearTimeout(clearTimer)
       off()
       offDropped()
+      offStored()
       status.destroy()
       setSaveStatusTracker(null)
     }

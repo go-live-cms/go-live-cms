@@ -27,9 +27,11 @@ const post = (over: Record<string, unknown> = {}) => ({
 })
 
 describe("status tabs", () => {
-  it("gives moderators All, Published, Drafts and Archived", () => {
-    expect(listTabs("editor").map((t) => t.id)).toEqual(["all", "published", "draft", "archived"])
-    expect(listTabs("admin").map((t) => t.id)).toEqual(["all", "published", "draft", "archived"])
+  it("gives moderators All, Published, Changes not published, Drafts and Archived", () => {
+    expect(listTabs("editor").map((t) => t.id)).toEqual(["all", "published", "changes", "draft", "archived"])
+    expect(listTabs("admin").map((t) => t.id)).toEqual(["all", "published", "changes", "draft", "archived"])
+    // #326: published posts, filtered to those with changes not published.
+    expect(findTab(listTabs("editor"), "changes")).toMatchObject({ status: "published", unpublishedChanges: true })
   })
 
   it("gives contributors All, My posts and Published", () => {
@@ -62,6 +64,14 @@ describe("tabCount", () => {
   it("is 0 for a status nobody has", () => {
     expect(tabCount(findTab(tabs, "archived"), { draft: 2 })).toBe(0)
     expect(tabCount(findTab(tabs, "all"), {})).toBe(0)
+  })
+
+  it("counts Changes not published from the response's unpublished_changes", () => {
+    const changes = findTab(tabs, "changes")
+    expect(tabCount(changes, counts, null, 3)).toBe(3)
+    expect(tabCount(changes, counts, null, null)).toBeNull()
+    // Not double-counted: All and Published still count each published post once.
+    expect(tabCount(findTab(tabs, "published"), counts, null, 3)).toBe(31)
   })
 
   it("is null (a skeleton) while the counts load", () => {

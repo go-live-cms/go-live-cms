@@ -8,7 +8,7 @@
 import { loadPostList } from "../lib/postList"
 import { pageTitleSuffix, resolveListRequest } from "../lib/pagination"
 import { loadThemeLayout, themeLayoutCandidates } from "../lib/themeLayout"
-import { resolveSiteUrl } from "../lib/seo"
+import { homeTitle, resolveSiteUrl } from "../lib/seo"
 
 export const prerender = false
 
@@ -31,7 +31,8 @@ const Layout = await loadThemeLayout(homeLayouts, themeLayoutCandidates("../../t
 if (!Layout) {
   throw new Error("No front page layout in this build")
 }
-const title = `${list.siteTitle}${pageTitleSuffix(page)}`
+// The site name, with its tagline on the first page (#357, decision 2).
+const title = page === 1 ? homeTitle(list.siteTitle, list.siteTagline) : `${list.siteTitle}${pageTitleSuffix(page)}`
 ---
 
 {/* The tagline describes the site (#330); without one, its own title does, not GoLive. */}

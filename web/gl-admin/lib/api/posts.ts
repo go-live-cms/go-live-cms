@@ -1,5 +1,6 @@
 import type {
   Post,
+  PostSEOSettings,
   PostSortOption,
   PostStatusCounts,
   SortOrder,
@@ -15,6 +16,7 @@ import type { BlockDocV1 } from "../blocks-spec"
 export interface CreatePostRequest {
   title: string
   content: string
+  // The excerpt: optional (#357), up to 500 characters.
   description: string
   url: string
   // Omitted → the API derives it from the title. Either way a clash gets -2, -3, ...
@@ -36,6 +38,8 @@ export interface PostQueryParams extends PaginationParams {
   type?: string // post type name
   status?: string // one status, or a comma list ("draft,published")
   user_id?: string | number
+  // Only published posts with changes not published (#326).
+  unpublished_changes?: boolean
   with_meta?: boolean
   meta_level?: string // 'basic' | 'full' | 'all'
 }
@@ -52,7 +56,7 @@ export async function getPosts(params: PostQueryParams = {}): Promise<ApiRespons
 // The posts list's search box (#145): the full-text index, with the list's type, status
 // and owner filters, best match first. Rows are shaped like getPosts' with_meta rows.
 export async function searchPosts(
-  params: PaginationParams & { q: string; type?: string; status?: string; user_id?: string | number }
+  params: PaginationParams & { q: string; type?: string; status?: string; user_id?: string | number; unpublished_changes?: boolean }
 ): Promise<ApiResponse<Post>> {
   const response = await apiCall(buildUrl("/posts/search", params))
   return {
@@ -61,12 +65,13 @@ export async function searchPosts(
   }
 }
 
-// How many posts have each status, with the list's type and owner filters (#340).
+// How many posts have each status, with the list's type and owner filters (#340), and how many
+// have changes not published (#326).
 export async function getPostCounts(
   params: { type?: string; user_id?: string | number } = {}
 ): Promise<PostStatusCounts> {
   const response = await apiCall(buildUrl("/posts/counts", params))
-  return { counts: response.counts || {}, total: response.total || 0 }
+  return { counts: response.counts || {}, total: response.total || 0, unpublished_changes: response.unpublished_changes || 0 }
 }
 
 export async function getPostById(id: string | number): Promise<{ post: Post }> {
@@ -115,6 +120,20 @@ export async function createPost(data: CreatePostRequest): Promise<any> {
     throw await apiErrorFromResponse(response, { fallback: "Create post failed" })
   }
 
+  return response.json()
+}
+
+// PUT /posts/:id/seo (#357): replaces the post's SEO settings. Editors and admins;
+// on a published post they reach the site on Update.
+export async function updatePostSEO(id: string | number, seo: PostSEOSettings): Promise<{ post: Post }> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/seo`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(seo),
+  })
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Saving the SEO settings failed" })
+  }
   return response.json()
 }
 
