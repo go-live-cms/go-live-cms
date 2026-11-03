@@ -84,34 +84,45 @@ func (q *Queries) GetNextVersionNoForPost(ctx context.Context, postID int64) (in
 }
 
 const getPostSettingsState = `-- name: GetPostSettingsState :one
-SELECT w.settings::jsonb AS working,
+SELECT golive_post_settings(p.id)::jsonb AS working,
        p.published_settings,
-       (p.published_settings IS NOT NULL
-        AND jsonb_set(p.published_settings, '{term_ids}', coalesce((
-              SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
-              FROM post_published_terms ppt
-              WHERE ppt.post_id = p.id
-            ), '[]'::jsonb)) IS DISTINCT FROM w.settings)::boolean AS changed
+       s.changed::boolean AS changed,
+       b.changed::boolean AS blocks_changed,
+       (p.post_status = 'published' AND (b.changed OR s.changed))::boolean AS has_unpublished_changes
 FROM posts p
-CROSS JOIN LATERAL (SELECT golive_post_settings(p.id) AS settings) w
+CROSS JOIN LATERAL (SELECT golive_post_settings_changed(p.id, p.published_settings) AS changed) s
+CROSS JOIN LATERAL (
+    SELECT p.post_status = 'published' AND p.block_doc_hash IS DISTINCT FROM p.published_block_hash AS changed
+) b
 WHERE p.id = $1
 `
 
 type GetPostSettingsStateRow struct {
-	Working           json.RawMessage       `json:"working"`
-	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
-	Changed           bool                  `json:"changed"`
+	Working               json.RawMessage       `json:"working"`
+	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
+	Changed               bool                  `json:"changed"`
+	BlocksChanged         bool                  `json:"blocks_changed"`
+	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
 }
 
 // The editor's view of a post's settings (#358): the working ones, the published
 // ones (NULL when nothing is published) and whether they differ, i.e. whether a
-// settings change is waiting for Update. The published term ids are compared as
-// post_published_terms has them: a term deleted since the publish is gone from
-// both sides (it can't be shown or published), not a pending change.
+// settings change is waiting for Update (golive_post_settings_changed, 000030).
+// blocks_changed: the post is published and its working body differs from the
+// published one; has_unpublished_changes: the list's flag, either of the two on
+// a published post (#326).
+// (The flag as golive_post_has_unpublished_changes defines it, from the two halves so the
+// settings are compared once.)
 func (q *Queries) GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error) {
 	row := q.db.QueryRowContext(ctx, getPostSettingsState, id)
 	var i GetPostSettingsStateRow
-	err := row.Scan(&i.Working, &i.PublishedSettings, &i.Changed)
+	err := row.Scan(
+		&i.Working,
+		&i.PublishedSettings,
+		&i.Changed,
+		&i.BlocksChanged,
+		&i.HasUnpublishedChanges,
+	)
 	return i, err
 }
 
@@ -386,7 +397,7 @@ SET title = $2,
     description = $3,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash
 `
 
 type RestorePostTitleAndDescriptionParams struct {
@@ -419,6 +430,8 @@ func (q *Queries) RestorePostTitleAndDescription(ctx context.Context, arg Restor
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 	)
 	return i, err
 }
@@ -457,7 +470,7 @@ SET post_status = 'draft',
     published_block_doc = NULL,
     published_settings = NULL
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash
 `
 
 // Back to draft and drop the public snapshot (#136), settings included (#358).
@@ -484,6 +497,8 @@ func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 	)
 	return i, err
 }

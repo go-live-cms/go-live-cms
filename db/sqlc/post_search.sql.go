@@ -68,13 +68,16 @@ WHERE
     AND ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)
+    AND (NOT $5::boolean
+         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 `
 
 type CountSearchPostsParams struct {
-	Query      string `json:"query"`
-	PostType   string `json:"post_type"`
-	PostStatus string `json:"post_status"`
-	UserID     int64  `json:"user_id"`
+	Query              string `json:"query"`
+	PostType           string `json:"post_type"`
+	PostStatus         string `json:"post_status"`
+	UserID             int64  `json:"user_id"`
+	UnpublishedChanges bool   `json:"unpublished_changes"`
 }
 
 // SearchPostsWithMeta's total, with the same filters.
@@ -84,6 +87,7 @@ func (q *Queries) CountSearchPosts(ctx context.Context, arg CountSearchPostsPara
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.UnpublishedChanges,
 	)
 	var total int64
 	err := row.Scan(&total)
@@ -94,6 +98,7 @@ const searchPostsWithMeta = `-- name: SearchPostsWithMeta :many
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -118,38 +123,42 @@ WHERE
     AND ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)
+    AND (NOT $5::boolean
+         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), $1::text)) DESC, p.created_at DESC, p.id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type SearchPostsWithMetaParams struct {
-	Query       string `json:"query"`
-	PostType    string `json:"post_type"`
-	PostStatus  string `json:"post_status"`
-	UserID      int64  `json:"user_id"`
-	OffsetCount int32  `json:"offset_count"`
-	LimitCount  int32  `json:"limit_count"`
+	Query              string `json:"query"`
+	PostType           string `json:"post_type"`
+	PostStatus         string `json:"post_status"`
+	UserID             int64  `json:"user_id"`
+	UnpublishedChanges bool   `json:"unpublished_changes"`
+	OffsetCount        int32  `json:"offset_count"`
+	LimitCount         int32  `json:"limit_count"`
 }
 
 type SearchPostsWithMetaRow struct {
-	ID                int64                 `json:"id"`
-	Title             string                `json:"title"`
-	Description       string                `json:"description"`
-	UserID            int64                 `json:"user_id"`
-	Username          string                `json:"username"`
-	Url               string                `json:"url"`
-	PostType          string                `json:"post_type"`
-	PostStatus        string                `json:"post_status"`
-	PostParent        sql.NullInt64         `json:"post_parent"`
-	MenuOrder         int32                 `json:"menu_order"`
-	CreatedAt         time.Time             `json:"created_at"`
-	ChangedAt         time.Time             `json:"changed_at"`
-	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug              string                `json:"slug"`
-	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
-	Meta              interface{}           `json:"meta"`
-	Authors           json.RawMessage       `json:"authors"`
+	ID                    int64                 `json:"id"`
+	Title                 string                `json:"title"`
+	Description           string                `json:"description"`
+	UserID                int64                 `json:"user_id"`
+	Username              string                `json:"username"`
+	Url                   string                `json:"url"`
+	PostType              string                `json:"post_type"`
+	PostStatus            string                `json:"post_status"`
+	PostParent            sql.NullInt64         `json:"post_parent"`
+	MenuOrder             int32                 `json:"menu_order"`
+	CreatedAt             time.Time             `json:"created_at"`
+	ChangedAt             time.Time             `json:"changed_at"`
+	PublishedBlockDoc     pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                  string                `json:"slug"`
+	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
+	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
+	Meta                  interface{}           `json:"meta"`
+	Authors               json.RawMessage       `json:"authors"`
 }
 
 // The admin posts list's search: the list's filters (type, status, owner) plus
@@ -164,6 +173,7 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.UnpublishedChanges,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)
@@ -190,6 +200,7 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.HasUnpublishedChanges,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

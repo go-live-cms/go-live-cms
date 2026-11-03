@@ -49,7 +49,8 @@ type Querier interface {
 	CountMissingAltMedia(ctx context.Context) (CountMissingAltMediaRow, error)
 	CountPasswordResetTokensSince(ctx context.Context, arg CountPasswordResetTokensSinceParams) (int64, error)
 	// The admin list's status tabs (#340): one count per status, with the list's
-	// type and owner filters.
+	// type and owner filters. unpublished_changes: how many of them have changes
+	// not published (#326; only published posts can).
 	CountPostsByStatus(ctx context.Context, arg CountPostsByStatusParams) ([]CountPostsByStatusRow, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)
@@ -143,15 +144,21 @@ type Querier interface {
 	// these through the API's internal listener (GET/PUT /internal/posts/:id/collab);
 	// the writes run together in StorePostCollabTx.
 	GetPostCollab(ctx context.Context, id int64) (GetPostCollabRow, error)
+	// GET /posts/:id and /posts/slug/:slug (#326): ListPosts' has_unpublished_changes
+	// for one post.
+	GetPostHasUnpublishedChanges(ctx context.Context, id int64) (bool, error)
 	GetPostMedia(ctx context.Context, postID int64) ([]GetPostMediaRow, error)
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
 	GetPostMeta(ctx context.Context, postID int64) ([]PostMetum, error)
 	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
 	// The editor's view of a post's settings (#358): the working ones, the published
 	// ones (NULL when nothing is published) and whether they differ, i.e. whether a
-	// settings change is waiting for Update. The published term ids are compared as
-	// post_published_terms has them: a term deleted since the publish is gone from
-	// both sides (it can't be shown or published), not a pending change.
+	// settings change is waiting for Update (golive_post_settings_changed, 000030).
+	// blocks_changed: the post is published and its working body differs from the
+	// published one; has_unpublished_changes: the list's flag, either of the two on
+	// a published post (#326).
+	// (The flag as golive_post_has_unpublished_changes defines it, from the two halves so the
+	// settings are compared once.)
 	GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error)
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
