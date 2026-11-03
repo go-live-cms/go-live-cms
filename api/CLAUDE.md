@@ -423,7 +423,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   public taxonomies' term names B, published body C) and `body_text` (the published body as
   plain text, for excerpts). A published post is indexed by its **published** title,
   excerpt and terms (`published_settings`, #358; 000027), a draft by its working ones, so a
-  settings edit on a published post reaches search on Update (the admin search box too).
+  settings edit on a published post reaches the public search on Update. The admin search
+  (`SearchPostsWithMeta`) also matches a published post's working title and excerpt.
   **Triggers keep it current**, not handlers: posts insert, and updates of
   title/description/`published_version_id`/`published_block_doc`/`published_settings` (so
   publish and unpublish), term links added/removed (working and published), a term renamed,
