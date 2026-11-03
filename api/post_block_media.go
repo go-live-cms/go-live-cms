@@ -155,7 +155,7 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 				MediaPath:  publicMediaPath(server.config.UploadPath, row.MediaPath),
 				Width:      row.Width,
 				Height:     row.Height,
-				Variants:   publicVariants(server.config.UploadPath, variantsResponse(row.Variants)),
+				Variants:   publicVariants(server.config.UploadPath, resizedOnly(variantsResponse(row.Variants))),
 				FocalPoint: focalPointFrom(row.FocalX, row.FocalY),
 				Decorative: row.Decorative,
 			}

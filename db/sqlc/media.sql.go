@@ -865,7 +865,7 @@ func (q *Queries) GetPostMediaCount(ctx context.Context, postID int64) (int64, e
 
 const getPostWithMedia = `-- name: GetPostWithMedia :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url,
     COALESCE(
         json_agg(
             json_build_object(
@@ -908,6 +908,11 @@ type GetPostWithMediaRow struct {
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
 	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
+	SeoTitle           string                `json:"seo_title"`
+	SeoDescription     string                `json:"seo_description"`
+	SocialImageID      sql.NullInt64         `json:"social_image_id"`
+	Noindex            bool                  `json:"noindex"`
+	CanonicalUrl       string                `json:"canonical_url"`
 	Media              interface{}           `json:"media"`
 }
 
@@ -933,6 +938,11 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.Media,
 	)
 	return i, err
@@ -1023,7 +1033,7 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 
 const getPostsByUserWithMedia = `-- name: GetPostsByUserWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1075,6 +1085,11 @@ type GetPostsByUserWithMediaRow struct {
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
 	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
+	SeoTitle           string                `json:"seo_title"`
+	SeoDescription     string                `json:"seo_description"`
+	SocialImageID      sql.NullInt64         `json:"social_image_id"`
+	Noindex            bool                  `json:"noindex"`
+	CanonicalUrl       string                `json:"canonical_url"`
 	Media              interface{}           `json:"media"`
 }
 
@@ -1106,6 +1121,11 @@ func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUse
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.SeoTitle,
+			&i.SeoDescription,
+			&i.SocialImageID,
+			&i.Noindex,
+			&i.CanonicalUrl,
 			&i.Media,
 		); err != nil {
 			return nil, err
@@ -1139,7 +1159,7 @@ WHERE mime_type LIKE 'image/%' AND id > $1
   AND (
     NOT $2::boolean
     OR (
-      variants = '{}'::jsonb
+      variants -> 'social' IS NULL
       AND (width = 0 OR height = 0 OR GREATEST(width, height) > $3::int)
     )
   )
@@ -1157,7 +1177,8 @@ type ListImageMediaAfterParams struct {
 // Pages through image media by id for the variant backfill. With
 // only_missing, rows that already have variants are skipped, and so are
 // images whose known long edge is at most min_long_edge (they never get any;
-// {} is their final state, not "not processed yet").
+// {} is their final state, not "not processed yet"). Rows with variants but no
+// social crop (made before #357) count as missing.
 func (q *Queries) ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error) {
 	rows, err := q.db.QueryContext(ctx, listImageMediaAfter,
 		arg.AfterID,
@@ -1359,7 +1380,7 @@ func (q *Queries) ListMediaPathsIn(ctx context.Context, paths []string) ([]strin
 
 const listPostsWithMedia = `-- name: ListPostsWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1409,6 +1430,11 @@ type ListPostsWithMediaRow struct {
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
 	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
+	SeoTitle           string                `json:"seo_title"`
+	SeoDescription     string                `json:"seo_description"`
+	SocialImageID      sql.NullInt64         `json:"social_image_id"`
+	Noindex            bool                  `json:"noindex"`
+	CanonicalUrl       string                `json:"canonical_url"`
 	Media              interface{}           `json:"media"`
 }
 
@@ -1440,6 +1466,11 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.SeoTitle,
+			&i.SeoDescription,
+			&i.SocialImageID,
+			&i.Noindex,
+			&i.CanonicalUrl,
 			&i.Media,
 		); err != nil {
 			return nil, err

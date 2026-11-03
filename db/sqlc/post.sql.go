@@ -221,7 +221,7 @@ INSERT INTO posts (
     block_doc
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, seo_title, seo_description, social_image_id, noindex, canonical_url
 `
 
 type CreatePostsParams struct {
@@ -272,6 +272,11 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 	)
 	return i, err
 }
@@ -320,7 +325,7 @@ func (q *Queries) DeleteUserPost(ctx context.Context, postID int64) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, seo_title, seo_description, social_image_id, noindex, canonical_url FROM posts 
 WHERE id = $1 LIMIT 1
 `
 
@@ -346,12 +351,17 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 	)
 	return i, err
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, seo_title, seo_description, social_image_id, noindex, canonical_url FROM posts 
 WHERE slug = $1 LIMIT 1
 `
 
@@ -377,12 +387,17 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 	)
 	return i, err
 }
 
 const getPostChildren = `-- name: GetPostChildren :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, seo_title, seo_description, social_image_id, noindex, canonical_url FROM posts
 WHERE post_parent = $1
 ORDER BY menu_order ASC, title ASC
 `
@@ -415,6 +430,11 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.SeoTitle,
+			&i.SeoDescription,
+			&i.SocialImageID,
+			&i.Noindex,
+			&i.CanonicalUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -431,7 +451,7 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 
 const getPostWithMeta = `-- name: GetPostWithMeta :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -464,6 +484,11 @@ type GetPostWithMetaRow struct {
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
 	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
+	SeoTitle           string                `json:"seo_title"`
+	SeoDescription     string                `json:"seo_description"`
+	SocialImageID      sql.NullInt64         `json:"social_image_id"`
+	Noindex            bool                  `json:"noindex"`
+	CanonicalUrl       string                `json:"canonical_url"`
 	Meta               interface{}           `json:"meta"`
 }
 
@@ -489,6 +514,11 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.Meta,
 	)
 	return i, err
@@ -870,7 +900,7 @@ SET title = COALESCE($1, title),
     menu_order = COALESCE($9, menu_order),
     changed_at = now()
 WHERE id = $10
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, seo_title, seo_description, social_image_id, noindex, canonical_url
 `
 
 type UpdatePostParams struct {
@@ -919,6 +949,72 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
+	)
+	return i, err
+}
+
+const updatePostSEO = `-- name: UpdatePostSEO :one
+UPDATE posts
+SET seo_title = $1,
+    seo_description = $2,
+    social_image_id = $3,
+    noindex = $4,
+    canonical_url = $5,
+    changed_at = now()
+WHERE id = $6
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, seo_title, seo_description, social_image_id, noindex, canonical_url
+`
+
+type UpdatePostSEOParams struct {
+	SeoTitle       string        `json:"seo_title"`
+	SeoDescription string        `json:"seo_description"`
+	SocialImageID  sql.NullInt64 `json:"social_image_id"`
+	Noindex        bool          `json:"noindex"`
+	CanonicalUrl   string        `json:"canonical_url"`
+	ID             int64         `json:"id"`
+}
+
+// PUT /posts/:id/seo (#357): the post's working SEO settings, replaced as a whole.
+// On a published post they reach the site on Update (golive_post_settings, 000030).
+func (q *Queries) UpdatePostSEO(ctx context.Context, arg UpdatePostSEOParams) (Post, error) {
+	row := q.db.QueryRowContext(ctx, updatePostSEO,
+		arg.SeoTitle,
+		arg.SeoDescription,
+		arg.SocialImageID,
+		arg.Noindex,
+		arg.CanonicalUrl,
+		arg.ID,
+	)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
+		&i.Slug,
+		&i.PublishedSettings,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 	)
 	return i, err
 }
@@ -928,7 +1024,7 @@ UPDATE posts
 SET slug = $2,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, seo_title, seo_description, social_image_id, noindex, canonical_url
 `
 
 type UpdatePostSlugParams struct {
@@ -958,6 +1054,11 @@ func (q *Queries) UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) 
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 	)
 	return i, err
 }

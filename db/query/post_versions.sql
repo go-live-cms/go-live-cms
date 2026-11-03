@@ -76,15 +76,22 @@ WHERE v.post_id = $1
 -- ones (NULL when nothing is published) and whether they differ, i.e. whether a
 -- settings change is waiting for Update. The published term ids are compared as
 -- post_published_terms has them: a term deleted since the publish is gone from
--- both sides (it can't be shown or published), not a pending change.
+-- both sides (it can't be shown or published), not a pending change. So is a
+-- social image deleted since (#357): the working column went NULL with it.
 SELECT w.settings::jsonb AS working,
        p.published_settings,
        (p.published_settings IS NOT NULL
-        AND jsonb_set(p.published_settings, '{term_ids}', coalesce((
-              SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
-              FROM post_published_terms ppt
-              WHERE ppt.post_id = p.id
-            ), '[]'::jsonb)) IS DISTINCT FROM w.settings)::boolean AS changed
+        AND jsonb_set(
+              jsonb_set(p.published_settings, '{term_ids}', coalesce((
+                SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
+                FROM post_published_terms ppt
+                WHERE ppt.post_id = p.id
+              ), '[]'::jsonb)),
+              '{social_image_id}', coalesce((
+                SELECT to_jsonb(m.id) FROM media m
+                WHERE jsonb_typeof(p.published_settings->'social_image_id') = 'number'
+                  AND m.id = (p.published_settings->>'social_image_id')::bigint
+              ), 'null'::jsonb)) IS DISTINCT FROM w.settings)::boolean AS changed
 FROM posts p
 CROSS JOIN LATERAL (SELECT golive_post_settings(p.id) AS settings) w
 WHERE p.id = $1;
@@ -124,6 +131,17 @@ SET title = $2,
     changed_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: RestorePostSEO :exec
+-- Restoring a version's settings (#358, #357): the working SEO fields. A social
+-- image deleted since is left out (NULL), like a deleted featured image.
+UPDATE posts
+SET seo_title = sqlc.arg(seo_title),
+    seo_description = sqlc.arg(seo_description),
+    social_image_id = (SELECT m.id FROM media m WHERE m.id = sqlc.narg(social_image_id)::bigint),
+    noindex = sqlc.arg(noindex),
+    canonical_url = sqlc.arg(canonical_url)
+WHERE posts.id = sqlc.arg(post_id)::bigint;
 
 -- name: GetLatestPublishedVersion :one
 SELECT id, version_no, status, label, message, block_doc, created_at, created_by

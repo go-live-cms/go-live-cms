@@ -110,6 +110,8 @@ func TestGetPublicPost(t *testing.T) {
 		store := mockdb.NewMockStore(ctrl)
 		store.EXPECT().GetPost(gomock.Any(), int64(7)).Times(1).Return(editedPublishedPost(), nil)
 		store.EXPECT().GetPublishedPostTaxonomyTerms(gomock.Any(), int64(7)).Times(1).Return([]db.GetPublishedPostTaxonomyTermsRow{publishedTerm}, nil)
+		// The SEO image (#357): the published featured image's media row.
+		store.EXPECT().GetMediaByIDs(gomock.Any(), []int64{5}).Times(1).Return(nil, nil)
 		// The working featured image and terms are never read.
 		store.EXPECT().GetPostMetaByKey(gomock.Any(), gomock.Any()).Times(0)
 		store.EXPECT().GetPostTaxonomyTerms(gomock.Any(), gomock.Any()).Times(0)
@@ -132,6 +134,7 @@ func TestGetPublicPost(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
 		store.EXPECT().GetPostBySlug(gomock.Any(), "the-post").Times(1).Return(editedPublishedPost(), nil)
+		store.EXPECT().GetMediaByIDs(gomock.Any(), []int64{5}).Times(1).Return(nil, nil)
 		store.EXPECT().GetPublishedPostTaxonomyTerms(gomock.Any(), int64(7)).Times(1).Return(nil, nil)
 
 		recorder := serveSettingsGET(t, newTestServer(t, store), "/public/posts/slug/the-post")
@@ -192,6 +195,7 @@ func TestGetPublicPost(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
 		store.EXPECT().GetPost(gomock.Any(), int64(7)).Times(1).Return(editedPublishedPost(), nil)
+		store.EXPECT().GetMediaByIDs(gomock.Any(), []int64{5}).Times(1).Return(nil, nil)
 		store.EXPECT().GetPublishedPostTaxonomyTerms(gomock.Any(), int64(7)).Times(1).Return(nil, fmt.Errorf("db down"))
 		recorder := serveSettingsGET(t, newTestServer(t, store), "/public/posts/7")
 		require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -386,7 +390,10 @@ func TestGetPostSettingsState(t *testing.T) {
 		store.EXPECT().GetPostSettingsState(gomock.Any(), int64(7)).Times(1).Return(db.GetPostSettingsStateRow{Working: json.RawMessage(working)}, nil)
 		recorder := settingsRequest(t, newTestServer(t, store), http.MethodGet, "/api/v1/posts/7/settings", contributor)
 		require.Equal(t, http.StatusOK, recorder.Code)
-		require.JSONEq(t, `{"working": `+working+`, "published": null, "changed": false}`, recorder.Body.String())
+		// A snapshot without the SEO keys reads as their defaults (#357).
+		withSEO := `{"title": "Working title", "description": "Working excerpt", "featured_image": null, "term_ids": [3],
+			"seo_title": "", "seo_description": "", "social_image_id": null, "noindex": false, "canonical_url": ""}`
+		require.JSONEq(t, `{"working": `+withSEO+`, "published": null, "changed": false}`, recorder.Body.String())
 	})
 
 	for _, tc := range []struct {

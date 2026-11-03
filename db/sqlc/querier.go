@@ -151,7 +151,8 @@ type Querier interface {
 	// ones (NULL when nothing is published) and whether they differ, i.e. whether a
 	// settings change is waiting for Update. The published term ids are compared as
 	// post_published_terms has them: a term deleted since the publish is gone from
-	// both sides (it can't be shown or published), not a pending change.
+	// both sides (it can't be shown or published), not a pending change. So is a
+	// social image deleted since (#357): the working column went NULL with it.
 	GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error)
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
@@ -229,7 +230,8 @@ type Querier interface {
 	// Pages through image media by id for the variant backfill. With
 	// only_missing, rows that already have variants are skipped, and so are
 	// images whose known long edge is at most min_long_edge (they never get any;
-	// {} is their final state, not "not processed yet").
+	// {} is their final state, not "not processed yet"). Rows with variants but no
+	// social crop (made before #357) count as missing.
 	ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error)
 	// published_post_count is how many of the posts using it (post_media) are
 	// published. $7 keeps only images missing their alt text (#325): not
@@ -330,6 +332,9 @@ type Querier interface {
 	// name, description, alt and the focal point alone, so a concurrent metadata
 	// edit is never overwritten by a stale read.
 	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
+	// Restoring a version's settings (#358, #357): the working SEO fields. A social
+	// image deleted since is left out (NULL), like a deleted featured image.
+	RestorePostSEO(ctx context.Context, arg RestorePostSEOParams) error
 	// Restoring a version's settings (#358): the working title and excerpt. Only the
 	// working copy changes; the published settings stay until Update.
 	RestorePostTitleAndDescription(ctx context.Context, arg RestorePostTitleAndDescriptionParams) (Post, error)
@@ -412,6 +417,9 @@ type Querier interface {
 	// stores (the seed, unchanged or invalid docs) leave it alone (#307).
 	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
+	// PUT /posts/:id/seo (#357): the post's working SEO settings, replaced as a whole.
+	// On a published post they reach the site on Update (golive_post_settings, 000030).
+	UpdatePostSEO(ctx context.Context, arg UpdatePostSEOParams) (Post, error)
 	UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) (Post, error)
 	UpdatePostType(ctx context.Context, arg UpdatePostTypeParams) (PostType, error)
 	UpdatePostsUsername(ctx context.Context, arg UpdatePostsUsernameParams) error

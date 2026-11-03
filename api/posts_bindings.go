@@ -5,7 +5,8 @@
 //
 // Validation Rules
 //   - Title: 3-255 chars, required for create
-//   - Description: 10-500 chars, required for create
+//   - Description (the excerpt): optional, up to 500 chars (#357: themes use the
+//     first paragraph when it's empty); on update, absent keeps it and "" clears it
 //   - URL: absolute http(s) URL up to 2048 chars, required for create
 //   - PostType: a post type name, max 50, no slashes (existing types may
 //     predate the identifier pattern createPostType enforces)
@@ -26,7 +27,7 @@ import "encoding/json"
 // CreatePostRequest defines the JSON structure for POST /posts
 type CreatePostRequest struct {
 	Title       string  `json:"title" binding:"required,min=3,max=255"`
-	Description string  `json:"description" binding:"required,min=10,max=500"`
+	Description string  `json:"description" binding:"max=500"`
 	Url         string  `json:"url" binding:"required,max=2048,http_url"`
 	Slug        string  `json:"slug" binding:"omitempty,max=255"`
 	PostType    string  `json:"post_type" binding:"omitempty,max=50,excludesall=/\\"`
@@ -49,7 +50,7 @@ type CreatePostRequest struct {
 // UpdatePostRequest defines the JSON structure for PUT /posts/:id
 type UpdatePostRequest struct {
 	Title       string  `json:"title" binding:"omitempty,min=3,max=255"`
-	Description string  `json:"description" binding:"omitempty,min=10,max=500"`
+	Description *string `json:"description" binding:"omitempty,max=500"`
 	Url         string  `json:"url" binding:"omitempty,max=2048,http_url"`
 	Slug        string  `json:"slug" binding:"omitempty,max=255"`
 	PostType    string  `json:"post_type" binding:"omitempty,max=50,excludesall=/\\"`

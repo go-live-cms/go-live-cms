@@ -33,6 +33,9 @@ type PostResponse struct {
 	CreatedAt       time.Time              `json:"created_at"`
 	ChangedAt       time.Time              `json:"changed_at"`
 	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
+	// SEO is the working SEO settings (#357), the admin's; the public site gets
+	// the published ones (publicPostView.SEO), never these.
+	SEO *PostSEOResponse `json:"seo,omitempty"`
 }
 
 // PostWithMetaResponse includes post-specific meta data
@@ -120,6 +123,7 @@ func toPostResponse(post db.Post) PostResponse {
 		CreatedAt:       post.CreatedAt,
 		ChangedAt:       post.ChangedAt,
 		PublishedBlocks: publishedBlocks,
+		SEO:             toPostSEOResponse(post),
 	}
 }
 
