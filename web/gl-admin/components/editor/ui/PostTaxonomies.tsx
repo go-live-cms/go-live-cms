@@ -17,6 +17,8 @@ import Button from "@gl-admin/components/ui/Button"
 interface PostTaxonomiesProps {
   postId: number
   readOnly: boolean
+  // After a term was added or removed (the editor re-checks what waits for Update, #358)
+  onChange?: () => void
 }
 
 const SUGGESTION_LIMIT = 10
@@ -45,7 +47,7 @@ async function findOrCreateTerm(type: TaxonomyType, name: string): Promise<Taxon
 // (PUT/DELETE /posts/:id/taxonomy-terms/:term_id), independent of the editor's
 // block autosave, so editors changing different terms don't overwrite each
 // other. Read-only users see the assigned terms but can't change them.
-export default function PostTaxonomies({ postId, readOnly }: PostTaxonomiesProps) {
+export default function PostTaxonomies({ postId, readOnly, onChange }: PostTaxonomiesProps) {
   const [types, setTypes] = useState<TaxonomyType[]>([])
   // Every term of the hierarchical types (the tree needs them all). Flat types
   // can have thousands of terms, so they only get search suggestions.
@@ -92,6 +94,7 @@ export default function PostTaxonomies({ postId, readOnly }: PostTaxonomiesProps
     setSaveError(null)
     try {
       await (on ? addPostTaxonomyTerm(postId, term.id) : removePostTaxonomyTerm(postId, term.id))
+      onChange?.()
     } catch (error) {
       setAssigned((prev) => (on ? without(prev) : [...without(prev), term]))
       setSaveError(errorMessage(error))
@@ -136,6 +139,7 @@ export default function PostTaxonomies({ postId, readOnly }: PostTaxonomiesProps
     } catch (error) {
       setSaveError(errorMessage(error))
     } finally {
+      if (done > 0) onChange?.()
       setTagInputs((prev) => ({ ...prev, [type.name]: names.slice(done).join(", ") }))
       setSuggestions((prev) => ({ ...prev, [type.name]: [] }))
       setSaving(false)

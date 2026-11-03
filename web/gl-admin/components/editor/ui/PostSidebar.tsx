@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
 import FeaturedImage from "./FeaturedImage"
 import { useFeaturedImage } from "@gl-admin/lib/hooks/useFeaturedImage"
-import type { Post } from "@gl-admin/lib/api/types"
+import type { Media, Post } from "@gl-admin/lib/api/types"
 import type { PostVersion } from "@gl-admin/lib/api/blockAPI"
 import RevisionsPanel from "./RevisionsPanel"
 import PostTaxonomies from "./PostTaxonomies"
@@ -31,6 +31,12 @@ interface PostSidebarProps {
   readOnly?: boolean
   // "id" or "slug": how the site builds this post's address (Settings)
   urlStructure: "id" | "slug"
+  // Settings (#358): called after the featured image or terms changed; `settingsKey`
+  // changes when they were changed elsewhere (a restored version), to reload them;
+  // `settingsPending` says a published post's settings differ from the live ones.
+  onSettingsSaved?: () => void
+  settingsKey?: number
+  settingsPending?: boolean
   // History (#136): edit mode, for users who may restore
   history?: {
     refreshKey: number
@@ -58,6 +64,9 @@ export default function PostSidebar({
   onSlugChange,
   readOnly = false,
   urlStructure,
+  onSettingsSaved,
+  settingsKey = 0,
+  settingsPending = false,
   history,
 }: PostSidebarProps) {
   const [activeTab, setActiveTab] = useState<"post" | "history">("post")
@@ -65,8 +74,17 @@ export default function PostSidebar({
   const {
     featuredImage,
     error: featuredImageError,
-    setImage: setFeaturedImage,
+    setImage,
+    refetch: refetchFeaturedImage,
   } = useFeaturedImage(post.id)
+  const setFeaturedImage = async (media: Media | null) => {
+    await setImage(media)
+    onSettingsSaved?.()
+  }
+  // A restored version brought its own featured image (and terms, remounted below).
+  useEffect(() => {
+    if (settingsKey > 0) void refetchFeaturedImage()
+  }, [settingsKey, refetchFeaturedImage])
 
   // History may go away (a demotion): fall back to the Post tab.
   useEffect(() => {
@@ -85,6 +103,13 @@ export default function PostSidebar({
           <PostStatusPill status={status} />
         </div>
         <small className="post-settings__hint">{STATUS_HINT[status] ?? ""}</small>
+        {status === "published" && (
+          <small className="post-settings__hint" role="status">
+            {settingsPending
+              ? "Settings changed: the site shows the old title, excerpt, image and terms until you update."
+              : "The title, excerpt, image and terms below go live when you update. The URL changes at once."}
+          </small>
+        )}
       </div>
 
       <div className="post-settings__field">
@@ -117,7 +142,7 @@ export default function PostSidebar({
       <div className="post-settings__field">
         <span className="post-settings__label">Categories and tags</span>
         {mode === "edit" && post.id ? (
-          <PostTaxonomies postId={post.id} readOnly={readOnly} />
+          <PostTaxonomies key={settingsKey} postId={post.id} readOnly={readOnly} onChange={onSettingsSaved} />
         ) : (
           <small className="post-settings__hint">Save the post first, then add categories and tags here.</small>
         )}

@@ -145,7 +145,9 @@ kept so references in code stay valid.
    which the ySyncPlugin mirrors to every peer as an ordinary edit, adopts the version's
    dropped-block record into `meta.dropped`, and waits for the server's next `stored`.
    Writing `posts.block_doc` behind the live doc would be undone by the next store (rule
-   11).
+   11). A version's settings (title, excerpt, featured image, terms; #358) aren't in the
+   Yjs doc: after `restoreVersionLive`, `PostForm` calls the API's restore-settings route,
+   which writes them into the working copy (the live post waits for Update).
 
 10. **Never bind Collaboration to a doc the editor's schema can't build (#206/#274).**
    `@tiptap/y-tiptap` 3.0.0's `createNodeFromYElement` / `createTextNodesFromYText`

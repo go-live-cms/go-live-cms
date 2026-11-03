@@ -20,8 +20,26 @@ export interface PostVersionList {
   versions: PostVersionSummary[]
 }
 
+// What a version stores besides its blocks (#358): the settings the site shows. null for a
+// version published before they were saved.
+export interface PostSettings {
+  title: string
+  description: string
+  featured_image: { id: number | null; url: string } | null
+  term_ids: number[]
+}
+
 export interface PostVersion extends PostVersionSummary {
   doc: BlockDocV1
+  settings?: PostSettings | null
+}
+
+// GET /posts/:id/settings: the working settings, the published ones (null when nothing is
+// published) and whether a change waits for Update.
+export interface PostSettingsState {
+  working: PostSettings
+  published: PostSettings | null
+  changed: boolean
 }
 
 // API client for Block Spec v1 operations
@@ -110,6 +128,21 @@ export class BlockAPIClient {
   // Get one version, including its Block Spec v1 doc
   async getVersion(postId: number, versionNo: number): Promise<PostVersion> {
     const response = await this.request(`/posts/${postId}/versions/${versionNo}`, `get version ${versionNo}`)
+    return response.json()
+  }
+
+  // Whether a published post's settings changed since its last publish (#358)
+  async getSettingsState(postId: number): Promise<PostSettingsState> {
+    const response = await this.request(`/posts/${postId}/settings`, "get post settings")
+    return response.json()
+  }
+
+  // Put a version's settings back into the working copy (#358), after its blocks were
+  // restored in the editor. `restored` is false for a version without saved settings.
+  async restoreVersionSettings(postId: number, versionNo: number): Promise<{ restored: boolean; post?: { title: string; description: string } }> {
+    const response = await this.request(`/posts/${postId}/versions/${versionNo}/restore-settings`, "restore the version's settings", {
+      method: "POST",
+    })
     return response.json()
   }
 

@@ -50,6 +50,10 @@ type EditorTopBarProps = {
   liveUrl?: string | null
   // History preview (#136): replaces the actions while a version is shown.
   viewing?: { label: string; onBack: () => void; onRestore: () => void } | null
+  // A published post's title, excerpt, featured image or terms differ from the live ones
+  // (#358): they reach the site on Update. The full "Changes not published" status,
+  // blocks included, is #326.
+  settingsPending?: boolean
 }
 
 const SpinnerIcon = () => (
@@ -100,7 +104,8 @@ export function SaveState({
   saveStatus,
   connection,
   viewOnly,
-}: Pick<EditorTopBarProps, "mode" | "saveStatus" | "connection" | "viewOnly">) {
+  settingsPending,
+}: Pick<EditorTopBarProps, "mode" | "saveStatus" | "connection" | "viewOnly" | "settingsPending">) {
   let content: ReactNode = null
   let tone = ""
   // The session-ended dialog says what happened; nothing here is waiting to be sent.
@@ -149,7 +154,7 @@ export function SaveState({
     content = (
       <>
         <CheckIcon size={14} />
-        Saved
+        {settingsPending ? "Saved · settings go live on Update" : "Saved"}
       </>
     )
   }
@@ -184,6 +189,7 @@ export default function EditorTopBar({
   onRestoreToDrafts,
   liveUrl,
   viewing,
+  settingsPending = false,
 }: EditorTopBarProps) {
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -256,7 +262,13 @@ export default function EditorTopBar({
           </>
         ) : (
           <>
-            <SaveState mode={mode} saveStatus={saveStatus} connection={connection} viewOnly={viewOnly} />
+            <SaveState
+              mode={mode}
+              saveStatus={saveStatus}
+              connection={connection}
+              viewOnly={viewOnly}
+              settingsPending={published && settingsPending}
+            />
 
             {people.length > 0 && (
               <AvatarStack
@@ -334,7 +346,13 @@ export default function EditorTopBar({
                     <MenuItem
                       onSelect={onPublish}
                       disabled={publishDisabled}
-                      description={published ? "Replace the live post with this version" : "Put this version on the site"}
+                      description={
+                        published
+                          ? settingsPending
+                            ? "Replace the live post and its settings with this version"
+                            : "Replace the live post with this version"
+                          : "Put this version on the site"
+                      }
                     >
                       {published ? "Update now" : "Publish now"}
                     </MenuItem>
