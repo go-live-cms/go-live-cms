@@ -393,7 +393,24 @@ func TestGetPostSettingsState(t *testing.T) {
 		// A snapshot without the SEO keys reads as their defaults (#357).
 		withSEO := `{"title": "Working title", "description": "Working excerpt", "featured_image": null, "term_ids": [3],
 			"seo_title": "", "seo_description": "", "social_image_id": null, "noindex": false, "canonical_url": ""}`
-		require.JSONEq(t, `{"working": `+withSEO+`, "published": null, "changed": false}`, recorder.Body.String())
+		require.JSONEq(t, `{"working": `+withSEO+`, "published": null, "changed": false, "blocks_changed": false, "has_unpublished_changes": false}`, recorder.Body.String())
+	})
+
+	// The body half (#326): the editor's publish bar reads both.
+	t.Run("BlocksChanged", func(t *testing.T) {
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		stubRoleLookup(store, contributor)
+		store.EXPECT().GetPostSettingsState(gomock.Any(), int64(7)).Times(1).Return(db.GetPostSettingsStateRow{
+			Working: json.RawMessage(working), PublishedSettings: publishedSettings(publishedSettingsJSON),
+			BlocksChanged: true, HasUnpublishedChanges: true,
+		}, nil)
+		recorder := settingsRequest(t, newTestServer(t, store), http.MethodGet, "/api/v1/posts/7/settings", contributor)
+		require.Equal(t, http.StatusOK, recorder.Code)
+		var resp PostSettingsStateResponse
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+		require.False(t, resp.Changed)
+		require.True(t, resp.BlocksChanged)
+		require.True(t, resp.HasUnpublishedChanges)
 	})
 
 	for _, tc := range []struct {

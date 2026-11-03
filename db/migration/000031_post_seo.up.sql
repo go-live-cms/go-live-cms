@@ -59,6 +59,26 @@ LANGUAGE sql STABLE AS $$
   WHERE p.id = target_post_id
 $$;
 
+-- "Settings changed" (000030, #326) compares the snapshot with the working
+-- settings. A social image deleted since the publish set the working column to
+-- NULL while the snapshot still names it: like a deleted term, that's nothing to
+-- publish, so the published id counts as NULL once its media is gone.
+CREATE OR REPLACE FUNCTION golive_post_settings_changed(target_post_id bigint, published jsonb) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+  SELECT published IS NOT NULL
+     AND jsonb_set(
+           jsonb_set(published, '{term_ids}', coalesce((
+             SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
+             FROM post_published_terms ppt
+             WHERE ppt.post_id = target_post_id
+           ), '[]'::jsonb)),
+           '{social_image_id}', coalesce((
+             SELECT to_jsonb(m.id) FROM media m
+             WHERE jsonb_typeof(published->'social_image_id') = 'number'
+               AND m.id = (published->>'social_image_id')::bigint
+           ), 'null'::jsonb)) IS DISTINCT FROM golive_post_settings(target_post_id)
+$$;
+
 -- Snapshots taken before this get the defaults, which is what they published (no
 -- SEO fields existed), so a published post doesn't show a pending change and
 -- restoring an older version clears the SEO fields as it should.

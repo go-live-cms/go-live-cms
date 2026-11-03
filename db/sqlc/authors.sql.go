@@ -167,6 +167,8 @@ const listPublishedPostsByAuthor = `-- name: ListPublishedPostsByAuthor :many
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    -- ListPostsWithMeta's column (#326); the public site never shows it.
+    false::boolean AS has_unpublished_changes,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -198,23 +200,24 @@ type ListPublishedPostsByAuthorParams struct {
 }
 
 type ListPublishedPostsByAuthorRow struct {
-	ID                int64                 `json:"id"`
-	Title             string                `json:"title"`
-	Description       string                `json:"description"`
-	UserID            int64                 `json:"user_id"`
-	Username          string                `json:"username"`
-	Url               string                `json:"url"`
-	PostType          string                `json:"post_type"`
-	PostStatus        string                `json:"post_status"`
-	PostParent        sql.NullInt64         `json:"post_parent"`
-	MenuOrder         int32                 `json:"menu_order"`
-	CreatedAt         time.Time             `json:"created_at"`
-	ChangedAt         time.Time             `json:"changed_at"`
-	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug              string                `json:"slug"`
-	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
-	Meta              interface{}           `json:"meta"`
-	Authors           json.RawMessage       `json:"authors"`
+	ID                    int64                 `json:"id"`
+	Title                 string                `json:"title"`
+	Description           string                `json:"description"`
+	UserID                int64                 `json:"user_id"`
+	Username              string                `json:"username"`
+	Url                   string                `json:"url"`
+	PostType              string                `json:"post_type"`
+	PostStatus            string                `json:"post_status"`
+	PostParent            sql.NullInt64         `json:"post_parent"`
+	MenuOrder             int32                 `json:"menu_order"`
+	CreatedAt             time.Time             `json:"created_at"`
+	ChangedAt             time.Time             `json:"changed_at"`
+	PublishedBlockDoc     pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                  string                `json:"slug"`
+	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
+	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
+	Meta                  interface{}           `json:"meta"`
+	Authors               json.RawMessage       `json:"authors"`
 }
 
 // The author page's list, newest first. Same columns as ListPostsWithMeta so
@@ -244,6 +247,7 @@ func (q *Queries) ListPublishedPostsByAuthor(ctx context.Context, arg ListPublis
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.HasUnpublishedChanges,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

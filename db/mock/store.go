@@ -1590,6 +1590,21 @@ func (mr *MockStoreMockRecorder) GetPostCollab(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostCollab", reflect.TypeOf((*MockStore)(nil).GetPostCollab), arg0, arg1)
 }
 
+// GetPostHasUnpublishedChanges mocks base method.
+func (m *MockStore) GetPostHasUnpublishedChanges(arg0 context.Context, arg1 int64) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostHasUnpublishedChanges", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostHasUnpublishedChanges indicates an expected call of GetPostHasUnpublishedChanges.
+func (mr *MockStoreMockRecorder) GetPostHasUnpublishedChanges(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostHasUnpublishedChanges", reflect.TypeOf((*MockStore)(nil).GetPostHasUnpublishedChanges), arg0, arg1)
+}
+
 // GetPostMedia mocks base method.
 func (m *MockStore) GetPostMedia(arg0 context.Context, arg1 int64) ([]db.GetPostMediaRow, error) {
 	m.ctrl.T.Helper()

@@ -37,6 +37,16 @@ LANGUAGE sql STABLE AS $$
   WHERE p.id = target_post_id
 $$;
 
+CREATE OR REPLACE FUNCTION golive_post_settings_changed(target_post_id bigint, published jsonb) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+  SELECT published IS NOT NULL
+     AND jsonb_set(published, '{term_ids}', coalesce((
+           SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
+           FROM post_published_terms ppt
+           WHERE ppt.post_id = target_post_id
+         ), '[]'::jsonb)) IS DISTINCT FROM golive_post_settings(target_post_id)
+$$;
+
 DROP INDEX idx_posts_social_image_id;
 
 ALTER TABLE posts

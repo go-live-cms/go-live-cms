@@ -93,6 +93,8 @@ type Post struct {
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
 	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
+	BlockDocHash       sql.NullString        `json:"block_doc_hash"`
+	PublishedBlockHash sql.NullString        `json:"published_block_hash"`
 	SeoTitle           string                `json:"seo_title"`
 	SeoDescription     string                `json:"seo_description"`
 	SocialImageID      sql.NullInt64         `json:"social_image_id"`

@@ -46,7 +46,12 @@ export interface PostVersion extends PostVersionSummary {
 export interface PostSettingsState {
   working: PostSettings
   published: PostSettings | null
+  // The settings differ from the published ones (#358).
   changed: boolean
+  // A published post's body differs from the published one (#326).
+  blocks_changed: boolean
+  // Published, with either of the two: "Changes not published" (#326).
+  has_unpublished_changes: boolean
 }
 
 // API client for Block Spec v1 operations

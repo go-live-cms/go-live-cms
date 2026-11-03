@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SEO settings (#357, 000030): typed columns that golive_post_settings snapshots,
+// SEO settings (#357, 000031): typed columns that golive_post_settings snapshots,
 // so they follow the publish rule of the other settings (#358).
 
 type testSEOSettings struct {

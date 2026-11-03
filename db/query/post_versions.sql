@@ -74,26 +74,23 @@ WHERE v.post_id = $1
 -- name: GetPostSettingsState :one
 -- The editor's view of a post's settings (#358): the working ones, the published
 -- ones (NULL when nothing is published) and whether they differ, i.e. whether a
--- settings change is waiting for Update. The published term ids are compared as
--- post_published_terms has them: a term deleted since the publish is gone from
--- both sides (it can't be shown or published), not a pending change. So is a
--- social image deleted since (#357): the working column went NULL with it.
-SELECT w.settings::jsonb AS working,
+-- settings change is waiting for Update (golive_post_settings_changed, 000030; 000031
+-- ignores a social image deleted since, #357).
+-- blocks_changed: the post is published and its working body differs from the
+-- published one; has_unpublished_changes: the list's flag, either of the two on
+-- a published post (#326).
+-- (The flag as golive_post_has_unpublished_changes defines it, from the two halves so the
+-- settings are compared once.)
+SELECT golive_post_settings(p.id)::jsonb AS working,
        p.published_settings,
-       (p.published_settings IS NOT NULL
-        AND jsonb_set(
-              jsonb_set(p.published_settings, '{term_ids}', coalesce((
-                SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
-                FROM post_published_terms ppt
-                WHERE ppt.post_id = p.id
-              ), '[]'::jsonb)),
-              '{social_image_id}', coalesce((
-                SELECT to_jsonb(m.id) FROM media m
-                WHERE jsonb_typeof(p.published_settings->'social_image_id') = 'number'
-                  AND m.id = (p.published_settings->>'social_image_id')::bigint
-              ), 'null'::jsonb)) IS DISTINCT FROM w.settings)::boolean AS changed
+       s.changed::boolean AS changed,
+       b.changed::boolean AS blocks_changed,
+       (p.post_status = 'published' AND (b.changed OR s.changed))::boolean AS has_unpublished_changes
 FROM posts p
-CROSS JOIN LATERAL (SELECT golive_post_settings(p.id) AS settings) w
+CROSS JOIN LATERAL (SELECT golive_post_settings_changed(p.id, p.published_settings) AS changed) s
+CROSS JOIN LATERAL (
+    SELECT p.post_status = 'published' AND p.block_doc_hash IS DISTINCT FROM p.published_block_hash AS changed
+) b
 WHERE p.id = $1;
 
 -- name: RefreshPublishedSettings :exec

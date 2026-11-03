@@ -27,6 +27,8 @@ LIMIT 1;
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    -- ListPostsWithMeta's column (#326); the public site never shows it.
+    false::boolean AS has_unpublished_changes,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm

@@ -1,7 +1,7 @@
 // Package api — Post SEO settings (#357)
 //
 // A post's SEO title, meta description, social image, "Hide from search engines"
-// (noindex) and canonical URL are typed columns on posts (000030). They are post
+// (noindex) and canonical URL are typed columns on posts (000031). They are post
 // settings like the title and excerpt (#358): golive_post_settings snapshots them,
 // so on a published post an edit reaches the site on Update, versions record them
 // and restore-settings brings them back.
