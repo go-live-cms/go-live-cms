@@ -28,9 +28,10 @@ type StorePostCollabTxParams struct {
 	// document. nil stores the Yjs state only (the server's derived doc
 	// failed validation) and leaves block_doc and block_revision alone.
 	BlockDoc json.RawMessage
-	// MediaIDs are BlockDoc's image media ids in document order; the content
-	// links (post_media order > 0) are synced to them. Ignored without BlockDoc.
-	MediaIDs []int64
+	// ContentMedia are BlockDoc's image blocks in document order; the content
+	// links (post_media order > 0, and every link's blocks) are synced to them.
+	// Ignored without BlockDoc.
+	ContentMedia []ContentMediaUse
 	// BaseRevision, when set, must equal posts.block_revision or nothing is
 	// written (ErrCollabRevisionConflict). Required without BlockDoc
 	// (ErrCollabBaseRevisionRequired): the state is then recorded against the
@@ -83,10 +84,7 @@ func (store *SQLStore) StorePostCollabTx(ctx context.Context, arg StorePostColla
 				return err
 			}
 			if !strings.EqualFold(post.PostStatus, "published") {
-				if err := q.SyncPostContentMedia(ctx, SyncPostContentMediaParams{
-					PostID:   arg.PostID,
-					MediaIds: arg.MediaIDs,
-				}); err != nil {
+				if err := syncContentMedia(ctx, q, arg.PostID, arg.ContentMedia); err != nil {
 					return err
 				}
 			}

@@ -60,12 +60,10 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 	}
 
 	err = server.store.ExecTx(c.Request.Context(), func(q *db.Queries) error {
-		// Remove existing featured image association
-		err := q.DeletePostMediaByOrder(c.Request.Context(), db.DeletePostMediaByOrderParams{
-			PostID: postID,
-			Order:  0,
-		})
-		if err != nil && err != sql.ErrNoRows {
+		// Remove existing featured image association (kept as a content link
+		// when the image is also in the body, #176)
+		err := q.UnlinkPostFeaturedMedia(c.Request.Context(), postID)
+		if err != nil {
 			return fmt.Errorf("failed to remove existing featured image: %w", err)
 		}
 
@@ -221,12 +219,10 @@ func (server *Server) removeFeaturedImage(c *gin.Context) {
 	}
 
 	err = server.store.ExecTx(c.Request.Context(), func(q *db.Queries) error {
-		// Remove featured image association (order=0)
-		err := q.DeletePostMediaByOrder(c.Request.Context(), db.DeletePostMediaByOrderParams{
-			PostID: postID,
-			Order:  0,
-		})
-		if err != nil && err != sql.ErrNoRows {
+		// Remove featured image association (order=0). An image also in the
+		// body stays linked as a content image (#176).
+		err := q.UnlinkPostFeaturedMedia(c.Request.Context(), postID)
+		if err != nil {
 			return fmt.Errorf("failed to remove featured image association: %w", err)
 		}
 

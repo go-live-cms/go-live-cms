@@ -14,8 +14,10 @@ import {
   replaceHint,
   typeLabel,
   usedInHeading,
+  usageLabels,
   usedInRows,
   type MediaPostLink,
+  type MediaUsage,
 } from "./mediaLibrary"
 
 const link = (id: number, relationship: string, over: Partial<MediaPostLink["post"]> = {}): MediaPostLink => ({
@@ -35,13 +37,42 @@ describe("usedInRows (the “Used in” data)", () => {
   it("merges a post that uses it as featured image and in its body", () => {
     const rows = usedInRows([link(5, "featured"), link(5, "gallery"), link(5, "gallery")])
     expect(rows).toHaveLength(1)
-    expect(rows[0].how).toBe("Featured image and Image in the post")
+    expect(rows[0].how).toBe("Featured image and image in the post")
   })
 
   it("prefixes types other than post, and names untitled posts", () => {
     const [row] = usedInRows([link(3, "gallery", { post_type: "page", title: "" })])
     expect(row.how).toBe("Page · Image in the post")
     expect(row.title).toBe("Untitled")
+  })
+
+  it("names the usage types (#176): featured image, blocks and attached links", () => {
+    const featured: MediaUsage = { type: "featured" }
+    const block = (id: string, block_type = "image"): MediaUsage => ({ type: "block", block_id: id, block_type })
+    const rows = usedInRows([
+      { ...link(1, "featured"), usages: [featured] },
+      { ...link(2, "gallery"), usages: [block("a")] },
+      { ...link(3, "featured"), usages: [featured, block("b"), block("c")] },
+      { ...link(4, "gallery"), usages: [{ type: "attached" }] },
+      { ...link(5, "gallery", { post_type: "page" }), usages: [block("d"), block("e", "theme:example/hero_banner")] },
+    ])
+    expect(rows.map((r) => r.how)).toEqual([
+      "Featured image",
+      "Image block",
+      "Featured image and 2 image blocks",
+      "Attached",
+      "Page · Image block and hero banner block",
+    ])
+  })
+
+  it("labels each usage in order", () => {
+    expect(usageLabels({ relationship_type: "featured", usages: [{ type: "featured" }, { type: "block", block_id: "x" }] })).toEqual([
+      "featured image",
+      "image block",
+    ])
+    // An API older than #176 sends no usages.
+    expect(usageLabels({ relationship_type: "gallery" })).toEqual(["image in the post"])
+    expect(usageLabels({ relationship_type: "featured", usages: [] })).toEqual(["featured image"])
   })
 
   it("is empty for an unused file", () => {

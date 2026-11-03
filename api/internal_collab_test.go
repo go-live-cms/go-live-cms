@@ -238,7 +238,7 @@ func TestPutInternalPostCollab(t *testing.T) {
 						require.Equal(t, "6f1c5f4e-9a59-4d55-9a4d-2b8f0d9e1a01", arg.Epoch.String())
 						require.Equal(t, sql.NullInt64{Int64: 3, Valid: true}, arg.LastEditorID)
 						require.Equal(t, sql.NullInt64{Int64: 4, Valid: true}, arg.BaseRevision)
-						require.Equal(t, []int64{12}, arg.MediaIDs)
+						require.Equal(t, []db.ContentMediaUse{{MediaID: 12, BlockID: "img", BlockType: "image"}}, arg.ContentMedia)
 
 						// Structural check: duplicate ids deduplicated, and the
 						// sanitizing as every block_doc write.
@@ -262,7 +262,7 @@ func TestPutInternalPostCollab(t *testing.T) {
 				store.EXPECT().StorePostCollabTx(gomock.Any(), gomock.Any()).Times(1).
 					DoAndReturn(func(_ any, arg db.StorePostCollabTxParams) (db.StorePostCollabTxResult, error) {
 						require.Nil(t, arg.BlockDoc)
-						require.Nil(t, arg.MediaIDs)
+						require.Nil(t, arg.ContentMedia)
 						require.Equal(t, sql.NullInt64{Int64: 4, Valid: true}, arg.BaseRevision)
 						require.False(t, arg.LastEditorID.Valid)
 						return db.StorePostCollabTxResult{BlockRevision: 4}, nil

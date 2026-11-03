@@ -173,7 +173,7 @@ INSERT INTO post_media (
 )
 ON CONFLICT (post_id, media_id)
 DO UPDATE SET "order" = EXCLUDED."order"
-RETURNING post_id, media_id, "order"
+RETURNING post_id, media_id, "order", blocks
 `
 
 type CreatePostMediaParams struct {
@@ -185,7 +185,12 @@ type CreatePostMediaParams struct {
 func (q *Queries) CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error) {
 	row := q.db.QueryRowContext(ctx, createPostMedia, arg.PostID, arg.MediaID, arg.Order)
 	var i PostMedium
-	err := row.Scan(&i.PostID, &i.MediaID, &i.Order)
+	err := row.Scan(
+		&i.PostID,
+		&i.MediaID,
+		&i.Order,
+		&i.Blocks,
+	)
 	return i, err
 }
 
@@ -938,7 +943,10 @@ SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
     COALESCE(pm."order", 0) as media_order,
-    CASE 
+    -- The content blocks showing it (#176); [] for the featured image alone
+    -- or a link made some other way.
+    COALESCE(pm.blocks, '[]'::jsonb)::jsonb as blocks,
+    CASE
         WHEN pm.media_id IS NOT NULL AND pm."order" = 0 THEN 'featured'
         WHEN pm.media_id IS NOT NULL AND pm."order" > 0 THEN 'gallery'
         WHEN meta.meta_value IS NOT NULL THEN 'featured'
@@ -957,20 +965,21 @@ ORDER BY
 `
 
 type GetPostsByMediaRow struct {
-	ID               int64         `json:"id"`
-	Title            string        `json:"title"`
-	Description      string        `json:"description"`
-	UserID           int64         `json:"user_id"`
-	Username         string        `json:"username"`
-	Url              string        `json:"url"`
-	PostType         string        `json:"post_type"`
-	PostStatus       string        `json:"post_status"`
-	PostParent       sql.NullInt64 `json:"post_parent"`
-	MenuOrder        int32         `json:"menu_order"`
-	CreatedAt        time.Time     `json:"created_at"`
-	ChangedAt        time.Time     `json:"changed_at"`
-	MediaOrder       int32         `json:"media_order"`
-	RelationshipType string        `json:"relationship_type"`
+	ID               int64           `json:"id"`
+	Title            string          `json:"title"`
+	Description      string          `json:"description"`
+	UserID           int64           `json:"user_id"`
+	Username         string          `json:"username"`
+	Url              string          `json:"url"`
+	PostType         string          `json:"post_type"`
+	PostStatus       string          `json:"post_status"`
+	PostParent       sql.NullInt64   `json:"post_parent"`
+	MenuOrder        int32           `json:"menu_order"`
+	CreatedAt        time.Time       `json:"created_at"`
+	ChangedAt        time.Time       `json:"changed_at"`
+	MediaOrder       int32           `json:"media_order"`
+	Blocks           json.RawMessage `json:"blocks"`
+	RelationshipType string          `json:"relationship_type"`
 }
 
 func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPostsByMediaRow, error) {
@@ -996,6 +1005,7 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 			&i.CreatedAt,
 			&i.ChangedAt,
 			&i.MediaOrder,
+			&i.Blocks,
 			&i.RelationshipType,
 		); err != nil {
 			return nil, err
@@ -1678,6 +1688,35 @@ type TransferMediaToUserParams struct {
 
 func (q *Queries) TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error {
 	_, err := q.db.ExecContext(ctx, transferMediaToUser, arg.UserID, arg.UserID_2)
+	return err
+}
+
+const unlinkPostFeaturedMedia = `-- name: UnlinkPostFeaturedMedia :exec
+WITH featured AS (
+    SELECT pm.media_id, pm.blocks
+    FROM post_media pm
+    WHERE pm.post_id = $1 AND pm."order" = 0
+), removed AS (
+    DELETE FROM post_media pm
+    USING featured
+    WHERE pm.post_id = $1
+      AND pm.media_id = featured.media_id
+      AND featured.blocks = '[]'::jsonb
+)
+UPDATE post_media pm
+SET "order" = (SELECT COALESCE(MAX(o."order"), 0) + 1 FROM post_media o WHERE o.post_id = $1)
+FROM featured
+WHERE pm.post_id = $1
+  AND pm.media_id = featured.media_id
+  AND featured.blocks <> '[]'::jsonb
+`
+
+// Removes the post's featured image link (order 0). An image that is also in
+// the content (blocks, #176) keeps its row as a content link, placed after
+// the others until the next sync puts it at its document position; deleting
+// the row would drop that use until then.
+func (q *Queries) UnlinkPostFeaturedMedia(ctx context.Context, postID int64) error {
+	_, err := q.db.ExecContext(ctx, unlinkPostFeaturedMedia, postID)
 	return err
 }
 

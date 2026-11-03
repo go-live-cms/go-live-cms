@@ -3208,6 +3208,20 @@ func (mr *MockStoreMockRecorder) TransferPostsToAdmin(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferPostsToAdmin", reflect.TypeOf((*MockStore)(nil).TransferPostsToAdmin), arg0, arg1)
 }
 
+// UnlinkPostFeaturedMedia mocks base method.
+func (m *MockStore) UnlinkPostFeaturedMedia(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnlinkPostFeaturedMedia", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UnlinkPostFeaturedMedia indicates an expected call of UnlinkPostFeaturedMedia.
+func (mr *MockStoreMockRecorder) UnlinkPostFeaturedMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnlinkPostFeaturedMedia", reflect.TypeOf((*MockStore)(nil).UnlinkPostFeaturedMedia), arg0, arg1)
+}
+
 // UnpublishPost mocks base method.
 func (m *MockStore) UnpublishPost(arg0 context.Context, arg1 int64) (db.Post, error) {
 	m.ctrl.T.Helper()

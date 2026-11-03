@@ -55,6 +55,19 @@ func decodeDoc(t *testing.T, raw json.RawMessage) map[string]interface{} {
 // requireRegeneratedFrom checks that out is src with every block id replaced:
 // the same document once each new id is mapped back to its old one, the
 // mapping one-to-one, and no id of src anywhere in out. Returns the mapping.
+// requireContentMediaIDs checks the media ids of a copy's content media uses;
+// their block ids are regenerated, so only their presence is checked.
+func requireContentMediaIDs(t *testing.T, want []int64, uses []db.ContentMediaUse) {
+	t.Helper()
+	got := make([]int64, len(uses))
+	for i, use := range uses {
+		got[i] = use.MediaID
+		require.NotEmpty(t, use.BlockID)
+		require.Equal(t, "image", use.BlockType)
+	}
+	require.Equal(t, want, got)
+}
+
 func requireRegeneratedFrom(t *testing.T, src, out json.RawMessage) map[string]string {
 	t.Helper()
 	srcDoc, outDoc := decodeDoc(t, src), decodeDoc(t, out)
@@ -180,7 +193,7 @@ func TestRegenerateBlockIDs(t *testing.T) {
 
 		var parsed BlockDocV1
 		require.NoError(t, json.Unmarshal(out, &parsed))
-		require.Equal(t, []int64{42}, parsed.extractMediaIDsFromBlocks())
+		requireContentMediaIDs(t, []int64{42}, parsed.contentMediaUses())
 	})
 
 	t.Run("two copies share no id", func(t *testing.T) {
@@ -308,7 +321,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 				require.Equal(t, source.MenuOrder, got.MenuOrder)
 				require.Equal(t, "my-post-copy", got.Slug)
 				require.Equal(t, "https://site.test/post/my-post-copy", got.Url)
-				require.Equal(t, []int64{42}, got.ContentMediaIDs)
+				requireContentMediaIDs(t, []int64{42}, got.ContentMedia)
 				requireRegeneratedFrom(t, source.BlockDoc, got.BlockDoc)
 
 				var body struct {

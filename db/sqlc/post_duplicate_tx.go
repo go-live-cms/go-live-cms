@@ -10,9 +10,9 @@ type DuplicatePostTxParams struct {
 	// title, slug, url, status and the block_doc with regenerated block ids.
 	// UserID is also the copy's only byline (user_posts).
 	CreatePostsParams
-	// ContentMediaIDs are the copy's block_doc image media ids in document
-	// order; its content links (post_media order > 0) are synced to them.
-	ContentMediaIDs []int64
+	// ContentMedia are the copy's block_doc image blocks in document order;
+	// its content links (post_media order > 0) are synced to them.
+	ContentMedia []ContentMediaUse
 }
 
 // DuplicatePostTx creates a copy of a post in one transaction (#354): the new
@@ -41,7 +41,7 @@ func (store *SQLStore) DuplicatePostTx(ctx context.Context, arg DuplicatePostTxP
 		if err := q.CopyPostFeaturedImageMeta(ctx, CopyPostFeaturedImageMetaParams(copyArgs)); err != nil {
 			return err
 		}
-		return q.SyncPostContentMedia(ctx, SyncPostContentMediaParams{PostID: post.ID, MediaIds: arg.ContentMediaIDs})
+		return syncContentMedia(ctx, q, post.ID, arg.ContentMedia)
 	})
 	return post, err
 }

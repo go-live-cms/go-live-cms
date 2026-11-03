@@ -25,6 +25,15 @@ func collabDocWithImages(mediaIDs ...int64) json.RawMessage {
 	return doc
 }
 
+// imageUses are the content media uses of collabDocWithImages(mediaIDs...).
+func imageUses(mediaIDs ...int64) []ContentMediaUse {
+	uses := make([]ContentMediaUse, len(mediaIDs))
+	for i, id := range mediaIDs {
+		uses[i] = ContentMediaUse{MediaID: id, BlockID: fmt.Sprintf("img-%d", i), BlockType: "image"}
+	}
+	return uses
+}
+
 // contentMediaOrder returns the post's media links as media id -> order.
 func contentMediaOrder(t *testing.T, postID int64) map[int64]int32 {
 	t.Helper()
@@ -293,7 +302,7 @@ func TestStorePostCollabTxSyncsContentMedia(t *testing.T) {
 		Epoch:    uuid.New(),
 		BlockDoc: collabDocWithImages(added.ID, missingMediaID, kept.ID, featured.ID, added.ID),
 		// added.ID twice: one link, at its first position.
-		MediaIDs: []int64{added.ID, missingMediaID, kept.ID, featured.ID, added.ID},
+		ContentMedia: imageUses(added.ID, missingMediaID, kept.ID, featured.ID, added.ID),
 	})
 	require.NoError(t, err)
 
@@ -316,11 +325,11 @@ func TestStorePostCollabTxPublishedPostKeepsMedia(t *testing.T) {
 	publishPost(t, post.ID, post.UserID, "")
 
 	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
-		PostID:   post.ID,
-		State:    []byte{1},
-		Epoch:    uuid.New(),
-		BlockDoc: collabDocWithImages(other.ID),
-		MediaIDs: []int64{other.ID},
+		PostID:       post.ID,
+		State:        []byte{1},
+		Epoch:        uuid.New(),
+		BlockDoc:     collabDocWithImages(other.ID),
+		ContentMedia: imageUses(other.ID),
 	})
 	require.NoError(t, err)
 	require.Equal(t, map[int64]int32{linked.ID: 1}, contentMediaOrder(t, post.ID))

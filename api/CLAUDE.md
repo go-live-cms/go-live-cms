@@ -104,6 +104,14 @@ the collab server.
   count) and `CountMissingAltMedia` (`GET /media/missing-alt`, content roles:
   `{media_count, published_post_count}`, published = `post_status`, via `post_media`).
   `BlockMedia.decorative` makes the public renderer emit `alt=""`.
+- **Media usage (#176, `000028`):** `post_media` is one row per (post, media): `order` 0 =
+  featured image, > 0 = content link, and `blocks` (jsonb `[{"id","type"}]`) = the content
+  blocks showing it, in document order, for the order-0 row too. `SyncPostContentMedia`
+  takes parallel `media_ids`/`block_ids`/`block_types` (`db.ContentMediaUse`, built by
+  `BlockDocV1.contentMediaUses`; the Tx params' `ContentMedia`). Unsetting or replacing the
+  featured image goes through `UnlinkPostFeaturedMedia`, which keeps an image that is also in
+  the body as a content link. `GET /media/:id/posts` adds `usages` (`featured` | `block` |
+  `attached`, `mediaUsages`). One row per pair keeps #325's counts unchanged.
 - **`media_path` in responses is a URL path, not the stored value.** The DB holds
   the filesystem path (`<UPLOAD_PATH>/<file>`, e.g. `/app/uploads/media/x.jpg` in
   compose); responses map it to where `/uploads` serves it (`/uploads/media/x.jpg`)
@@ -173,8 +181,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   - `StorePostCollabTx` (`db/sqlc/post_collab_tx.go`) is one transaction: lock the post,
     `block_doc` + `block_revision+1` + `changed_at` (state-only stores touch none of
     them, #307), sync content media links (`SyncPostContentMedia`:
-    unknown media ids skipped, featured image untouched; **only while unpublished**, publish
-    syncs them otherwise), upsert `post_ydoc_state` (`000020`) at the new revision with
+    unknown media ids skipped, featured image's order untouched; **only while unpublished**,
+    publish syncs them otherwise), upsert `post_ydoc_state` (`000020`) at the new revision with
     `last_editor_id` (NULL if the user is gone).
 - **`GET /posts/:id/blocks`** (any signed-in user) and `/versions[/:no]` stay: the static
   read-only view and revisions use them. A stored `{}` comes back as a well-formed empty

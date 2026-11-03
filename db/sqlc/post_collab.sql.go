@@ -71,39 +71,67 @@ func (q *Queries) LockPostForCollabStore(ctx context.Context, id int64) (LockPos
 }
 
 const syncPostContentMedia = `-- name: SyncPostContentMedia :exec
-WITH wanted AS (
-    SELECT DISTINCT ON (m.id) m.id AS media_id, w.ord::int AS ord
-    FROM unnest($2::bigint[]) WITH ORDINALITY AS w(id, ord)
-    JOIN media m ON m.id = w.id
-    ORDER BY m.id, w.ord
+WITH uses AS (
+    SELECT u.media_id, b.block_id, t.block_type, u.ord
+    FROM unnest($2::bigint[]) WITH ORDINALITY AS u(media_id, ord)
+    JOIN unnest($3::text[]) WITH ORDINALITY AS b(block_id, ord) ON b.ord = u.ord
+    JOIN unnest($4::text[]) WITH ORDINALITY AS t(block_type, ord) ON t.ord = u.ord
+), per_media AS (
+    SELECT uses.media_id,
+           (ROW_NUMBER() OVER (ORDER BY MIN(uses.ord)))::int AS ord,
+           jsonb_agg(jsonb_build_object('id', uses.block_id, 'type', uses.block_type) ORDER BY uses.ord) AS blocks
+    FROM uses
+    GROUP BY uses.media_id
+), wanted AS (
+    -- Ranked before the media join, so a missing id keeps its slot.
+    SELECT per_media.media_id, per_media.ord, per_media.blocks
+    FROM per_media
+    JOIN media m ON m.id = per_media.media_id
 ), removed AS (
     DELETE FROM post_media pm
     WHERE pm.post_id = $1
       AND pm."order" > 0
       AND pm.media_id NOT IN (SELECT wanted.media_id FROM wanted)
+), cleared AS (
+    UPDATE post_media pm
+    SET blocks = '[]'::jsonb
+    WHERE pm.post_id = $1
+      AND pm."order" = 0
+      AND pm.blocks <> '[]'::jsonb
+      AND pm.media_id NOT IN (SELECT wanted.media_id FROM wanted)
 )
-INSERT INTO post_media (post_id, media_id, "order")
-SELECT $1, wanted.media_id, wanted.ord
+INSERT INTO post_media (post_id, media_id, "order", blocks)
+SELECT $1, wanted.media_id, wanted.ord, wanted.blocks
 FROM wanted
 ON CONFLICT (post_id, media_id) DO UPDATE
-SET "order" = EXCLUDED."order"
-WHERE post_media."order" > 0
+SET "order" = CASE WHEN post_media."order" = 0 THEN 0 ELSE EXCLUDED."order" END,
+    blocks = EXCLUDED.blocks
 `
 
 type SyncPostContentMediaParams struct {
-	PostID   int64   `json:"post_id"`
-	MediaIds []int64 `json:"media_ids"`
+	PostID     int64    `json:"post_id"`
+	MediaIds   []int64  `json:"media_ids"`
+	BlockIds   []string `json:"block_ids"`
+	BlockTypes []string `json:"block_types"`
 }
 
-// Makes the post's content image links (order > 0) match media_ids, in
-// document order (the collab store, publish and duplicate). Ids without a
-// media row are skipped (a stale mediaId must not fail the store), and the
-// featured image link (order 0) is never moved or removed, even when the
-// featured image is also in the content (#389). A repeated id keeps its first
-// position (one row per media, or the upsert would touch the same row twice
-// and fail).
+// Makes the post's content image links (order > 0) match the doc's media
+// blocks, in document order (the collab store, publish and duplicate). The
+// three arrays are parallel, one entry per block: media_ids[i] is shown by
+// block block_ids[i] of type block_types[i]. Ids without a media row are
+// skipped (a stale mediaId must not fail the store). One row per media: its
+// order is the media's first position among the doc's distinct media ids (1,
+// 2, ..., a skipped id keeping its slot) and its blocks every block showing it
+// (#176). The featured image link
+// (order 0) is never moved or removed, even when the featured image is also in
+// the content (#389); only its blocks follow the doc.
 func (q *Queries) SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error {
-	_, err := q.db.ExecContext(ctx, syncPostContentMedia, arg.PostID, pq.Array(arg.MediaIds))
+	_, err := q.db.ExecContext(ctx, syncPostContentMedia,
+		arg.PostID,
+		pq.Array(arg.MediaIds),
+		pq.Array(arg.BlockIds),
+		pq.Array(arg.BlockTypes),
+	)
 	return err
 }
 

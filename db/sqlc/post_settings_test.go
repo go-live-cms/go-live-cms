@@ -54,7 +54,7 @@ func createSettingsFixture(t *testing.T) settingsFixture {
 
 func setFeaturedImageMeta(t *testing.T, postID int64, media Medium) {
 	ctx := context.Background()
-	require.NoError(t, testQueries.DeletePostMediaByOrder(ctx, DeletePostMediaByOrderParams{PostID: postID, Order: 0}))
+	require.NoError(t, testQueries.UnlinkPostFeaturedMedia(ctx, postID))
 	_, err := testQueries.CreatePostMedia(ctx, CreatePostMediaParams{PostID: postID, MediaID: media.ID, Order: 0})
 	require.NoError(t, err)
 	_, err = testQueries.UpsertPostMeta(ctx, UpsertPostMetaParams{PostID: postID, MetaKey: "_thumbnail_id", MetaValue: sql.NullString{String: fmt.Sprint(media.ID), Valid: true}})
