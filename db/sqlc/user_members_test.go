@@ -345,3 +345,26 @@ func TestTouchUserLastActive(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, later.LastActiveAt.Time.After(first.LastActiveAt.Time.Add(-time.Minute)))
 }
+
+// A request never waits for a transaction holding the user's row (a role change
+// locks every admin): the stamp is skipped and a later request writes it.
+func TestTouchUserLastActiveSkipsLockedRow(t *testing.T) {
+	ctx := context.Background()
+	user := createTestUser(t)
+
+	tx, err := testStore.(*SQLStore).db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `SELECT id FROM users WHERE id = $1 FOR UPDATE`, user.ID)
+	require.NoError(t, err)
+
+	timeout, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	n, err := testQueries.TouchUserLastActive(timeout, TouchUserLastActiveParams{ID: user.ID, MinAgeSeconds: 300})
+	require.NoError(t, err, "must not wait for the lock")
+	require.EqualValues(t, 0, n)
+	require.NoError(t, tx.Rollback())
+
+	n, err = testQueries.TouchUserLastActive(ctx, TouchUserLastActiveParams{ID: user.ID, MinAgeSeconds: 300})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, n)
+}

@@ -404,6 +404,9 @@ type Querier interface {
 	TouchMenu(ctx context.Context, id int64) error
 	// Stamps last_active_at unless it is newer than min_age_seconds, so concurrent
 	// requests and the API's own check (authMiddleware) write at most once per interval.
+	// A row another transaction holds (a role change locks every admin, a password change
+	// its user) is skipped rather than waited for: the request carries on, and a later one
+	// stamps it.
 	TouchUserLastActive(ctx context.Context, arg TouchUserLastActiveParams) (int64, error)
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	// Removes the post's featured image link (order 0). An image that is also in

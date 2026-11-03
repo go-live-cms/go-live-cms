@@ -17,8 +17,17 @@ interface RemoveMemberModalProps {
     onRemoved: (member: User, recipient: User, postsReassigned: number) => void
 }
 
-// The API's page size cap: the picker lists up to this many members.
-const RECIPIENT_LIMIT = 100
+// The API's page size cap. The picker loads every member, a page at a time.
+const PAGE_SIZE = 100
+
+async function allMembers(): Promise<User[]> {
+    const members: User[] = []
+    for (;;) {
+        const page = await getUsers({ limit: PAGE_SIZE, offset: members.length, sort: "username_asc" })
+        members.push(...page.data)
+        if (page.data.length < PAGE_SIZE || members.length >= (page.meta.total ?? 0)) return members
+    }
+}
 
 // Matches the name, the email or the role, as the list's search does.
 const matchesRecipient = (option: SelectOption, query: string) => {
@@ -36,6 +45,10 @@ export default function RemoveMemberModal({ member, me, onClose, onRemoved }: Re
     const [error, setError] = useState<string | null>(null)
     const [saving, setSaving] = useState(false)
 
+    // Keyed by id, not the object: authManager hands out a new user object on every
+    // refresh, which must not reset a recipient already picked.
+    const meId = me?.id ?? null
+
     useEffect(() => {
         if (!member) return
         let live = true
@@ -43,14 +56,14 @@ export default function RemoveMemberModal({ member, me, onClose, onRemoved }: Re
         setLoadError(null)
         setError(null)
         setSaving(false)
-        setRecipient(me && me.id !== member.id ? String(me.id) : null)
-        getUsers({ limit: RECIPIENT_LIMIT, sort: "username_asc" })
-            .then((res) => live && setMembers(res.data))
+        setRecipient(meId !== null && meId !== member.id ? String(meId) : null)
+        allMembers()
+            .then((list) => live && setMembers(list))
             .catch((err) => live && setLoadError(errorMessage(err, "Couldn't load the members.")))
         return () => {
             live = false
         }
-    }, [member, me])
+    }, [member, meId])
 
     const options = useMemo(() => (member && members ? recipientOptions(members, member, me) : []), [members, member, me])
 

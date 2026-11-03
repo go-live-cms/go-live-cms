@@ -96,6 +96,8 @@ const Users: React.FC = () => {
 
     const removed = (member: User, recipient: User, moved: number) => {
         setRemoveTarget(null)
+        // A filtered reload doesn't update the count, so take the member off it here.
+        setMemberCount((n) => (n === null ? n : n - 1))
         showSuccess(removedNotice(member, recipient, moved), 6000)
         setReloadKey((k) => k + 1)
     }

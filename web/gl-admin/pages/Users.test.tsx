@@ -199,4 +199,29 @@ describe("remove member", () => {
         expect(api.deleteUser).toHaveBeenCalledWith(3, 2)
         expect(dialog()!.textContent).toContain("Choose another member to receive their posts.")
     })
+
+    it("offers every member, past the API's 100-per-page cap", async () => {
+        const many = Array.from({ length: 150 }, (_, i) => ({
+            id: 100 + i,
+            username: `m${String(i).padStart(3, "0")}`,
+            full_name: `Member ${String(i).padStart(3, "0")}`,
+            email: `m${i}@golive.dev`,
+            role: "contributor",
+            created_at: "",
+        }))
+        const everyone = [...MEMBERS, ...many]
+        api.getUsers.mockImplementation(async ({ limit = 8, offset = 0 }: { limit?: number; offset?: number }) => ({
+            data: everyone.slice(offset, offset + limit),
+            meta: { total: everyone.length },
+        }))
+        await click(byLabel("More for Ana Costa"))
+        await click(menuItem("Remove"))
+        const picker = dialog()!.querySelector<HTMLInputElement>("input[role='combobox']")!
+        await type(picker, "Member 149")
+        await act(async () => picker.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })))
+        await act(async () => picker.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })))
+        await settle()
+        expect(picker.value).toBe("Member 149")
+        expect(api.getUsers).toHaveBeenCalledWith(expect.objectContaining({ limit: 100, offset: 100 }))
+    })
 })

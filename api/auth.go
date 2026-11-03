@@ -137,8 +137,9 @@ func lastActiveStale(user db.User, interval time.Duration, now time.Time) bool {
 }
 
 // recordActivity stamps last_active_at (#333). TouchUserLastActive re-checks the
-// age in SQL, so concurrent requests still write once. It never fails the
-// request: "last active" is informational.
+// age in SQL, so concurrent requests still write once, and skips a row another
+// transaction has locked instead of waiting for it. It never fails the request:
+// "last active" is informational.
 func recordActivity(ctx *gin.Context, store db.Store, userID int64, interval time.Duration) {
 	if interval <= 0 {
 		return

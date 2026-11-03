@@ -80,11 +80,18 @@ WHERE (sqlc.arg(pattern)::text = ''
 -- name: TouchUserLastActive :execrows
 -- Stamps last_active_at unless it is newer than min_age_seconds, so concurrent
 -- requests and the API's own check (authMiddleware) write at most once per interval.
+-- A row another transaction holds (a role change locks every admin, a password change
+-- its user) is skipped rather than waited for: the request carries on, and a later one
+-- stamps it.
 UPDATE users
 SET last_active_at = now()
-WHERE id = sqlc.arg(id)
-    AND (last_active_at IS NULL
-        OR last_active_at < now() - make_interval(secs => sqlc.arg(min_age_seconds)::float8));
+WHERE id = (
+    SELECT u.id FROM users u
+    WHERE u.id = sqlc.arg(id)
+        AND (u.last_active_at IS NULL
+            OR u.last_active_at < now() - make_interval(secs => sqlc.arg(min_age_seconds)::float8))
+    FOR UPDATE SKIP LOCKED
+);
 
 -- name: SetUserRole :one
 UPDATE users

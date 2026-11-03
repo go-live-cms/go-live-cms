@@ -267,7 +267,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   row it already loaded is at least `LAST_ACTIVE_INTERVAL` old (default `5m`; **0 = off,
   so a zero `Config` (tests) never writes it**), and so do `startSession` (login, accept,
   self password change) and refresh rotation, after the commit. `TouchUserLastActive` re-checks
-  the age in SQL, so a burst of requests writes once. A failed write is logged
+  the age in SQL, so a burst of requests writes once, and skips a locked row (`FOR UPDATE SKIP
+  LOCKED`: a role change locks every admin) instead of making the request wait. A failed write is logged
   (`last_active_update_failed`) and never fails the request. Tests that want it set the
   interval (`newRateLimitedTestServer`).
 - **`GET /users`** (admin) is `ListMembers` + `CountMembers`: `?q=` (name, username or
