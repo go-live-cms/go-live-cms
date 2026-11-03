@@ -511,8 +511,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `block_doc` writer for an existing post is the collab server's
   `PUT /internal/posts/:id/collab`.
 - **Settings snapshots (#358, `000027`, `post_settings.go`):** publish (`PublishPostTx`: lock,
-  next version_no, `InsertPublishedVersionFromPost`, `SetPublishedVersionOnPost` in one
-  transaction) stores `golive_post_settings(id)` in `post_versions.settings` and
+  next version_no, `InsertPublishedVersionFromPost`, `SetPublishedVersionOnPost`, then the
+  content image links with `SyncPostContentMedia`, which never moves the featured image's
+  order-0 row (#389), in one transaction) stores `golive_post_settings(id)` in `post_versions.settings` and
   `posts.published_settings`: title, description, featured image (`_thumbnail_id`/`_url` meta)
   and sorted `term_ids`. The SQL function is the one definition of the shape; the SEO fields
   (#357) and authors (#319) join it by redefining it. Unpublish NULLs it; a version from before

@@ -45,7 +45,6 @@ func expectPublishWrites(store *mockdb.MockStore, beforeRead func()) {
 			beforeRead()
 			return db.PublishPostTxResult{VersionID: 1, VersionNo: 1, BlockDoc: validBlockDoc()}, nil
 		})
-	store.EXPECT().GetMediaByPostWithOrder(gomock.Any(), int64(1)).Times(1).Return([]db.GetMediaByPostWithOrderRow{}, nil)
 }
 
 // TestPublishFlushesCollab: the flush reaches the collab server with its

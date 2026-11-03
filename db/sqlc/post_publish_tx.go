@@ -14,6 +14,11 @@ type PublishPostTxParams struct {
 	Label     sql.NullString
 	Message   sql.NullString
 	CreatedBy sql.NullInt64
+	// ContentMediaIDs gives the image media ids of the published body in
+	// document order (the api package parses it). Their post_media links are
+	// synced with SyncPostContentMedia, which leaves the featured image (order
+	// 0) alone. Nil leaves the links as they are.
+	ContentMediaIDs func(blockDoc json.RawMessage) []int64
 }
 
 type PublishPostTxResult struct {
@@ -26,10 +31,13 @@ type PublishPostTxResult struct {
 // PublishPostTx publishes the post's working copy (#136, #358) in one
 // transaction: lock the post, write the next version with its block_doc and
 // settings (one INSERT ... SELECT, so both are the same moment's), and point
-// the post's published snapshot at it. Before, the blocks were read and the
-// version written in separate statements, so a concurrent publish could take
-// the same version_no, and settings weren't saved at all. sql.ErrNoRows: no
-// such post.
+// the post's published snapshot at it, then sync the content image links
+// (#389). Before, the blocks were read and the version written in separate
+// statements, so a concurrent publish could take the same version_no, and
+// settings weren't saved at all. The links were synced after the commit, one
+// CreatePostMedia upsert per image, which moved a featured image that was also
+// in the content from order 0 to its content position. sql.ErrNoRows: no such
+// post.
 func (store *SQLStore) PublishPostTx(ctx context.Context, arg PublishPostTxParams) (PublishPostTxResult, error) {
 	var result PublishPostTxResult
 	err := store.execTx(ctx, func(q *Queries) error {
@@ -56,6 +64,14 @@ func (store *SQLStore) PublishPostTx(ctx context.Context, arg PublishPostTxParam
 			PublishedBlockDoc:  pqtype.NullRawMessage{RawMessage: version.BlockDoc, Valid: true},
 		}); err != nil {
 			return fmt.Errorf("set published version: %w", err)
+		}
+		if arg.ContentMediaIDs != nil {
+			if err := q.SyncPostContentMedia(ctx, SyncPostContentMediaParams{
+				PostID:   arg.PostID,
+				MediaIds: arg.ContentMediaIDs(version.BlockDoc),
+			}); err != nil {
+				return fmt.Errorf("sync content media: %w", err)
+			}
 		}
 		result = PublishPostTxResult{VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: version.BlockDoc}
 		return nil

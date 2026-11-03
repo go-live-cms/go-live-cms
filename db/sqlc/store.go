@@ -690,7 +690,7 @@ func (store *SQLStore) CreatePostWithMediaTx(ctx context.Context, arg CreatePost
 			}
 		}
 
-		for i, mediaID := range arg.MediaIDs {
+		for i, mediaID := range uniqueMediaIDs(arg.MediaIDs) {
 
 			_, err := q.GetMedia(ctx, mediaID)
 			if err != nil {
@@ -742,6 +742,21 @@ func (store *SQLStore) DeleteMediaTx(ctx context.Context, arg DeleteMediaTxParam
 	return err
 }
 
+// uniqueMediaIDs keeps the first position of each media id. CreatePostMedia
+// upserts on (post_id, media_id), so a repeated id would move its row to the
+// later position, the featured image (order 0) included (#389).
+func uniqueMediaIDs(ids []int64) []int64 {
+	seen := make(map[int64]bool, len(ids))
+	unique := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			unique = append(unique, id)
+		}
+	}
+	return unique
+}
+
 func (store *SQLStore) UpdatePostMediaTx(ctx context.Context, arg UpdatePostMediaTxParams) error {
 	err := store.ExecTx(ctx, func(q *Queries) error {
 
@@ -755,7 +770,7 @@ func (store *SQLStore) UpdatePostMediaTx(ctx context.Context, arg UpdatePostMedi
 			return err
 		}
 
-		for i, mediaID := range arg.MediaIDs {
+		for i, mediaID := range uniqueMediaIDs(arg.MediaIDs) {
 
 			_, err := q.GetMedia(ctx, mediaID)
 			if err != nil {

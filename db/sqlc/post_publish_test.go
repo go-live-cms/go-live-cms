@@ -174,3 +174,61 @@ func TestUnpublishKeepsHistory(t *testing.T) {
 	_, err = testQueries.UnpublishPost(ctx, -1)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }
+
+// Publish syncs the content image links from the published body in its own
+// transaction (#389). The featured image is also in the content here: its
+// link stays at order 0. Publish used to upsert one link per content image, so
+// it moved to order 1 and the post lost its featured image while the
+// _thumbnail_* meta still named it.
+func TestPublishPostTxSyncsContentMedia(t *testing.T) {
+	ctx := context.Background()
+	f := createSettingsFixture(t) // a draft with f.media as its featured image
+	_, inline := createTestMedia(t)
+	_, stale := createTestMedia(t)
+	_, err := testQueries.CreatePostMedia(ctx, CreatePostMediaParams{PostID: f.post.ID, MediaID: stale.ID, Order: 1})
+	require.NoError(t, err)
+	doc := collabDocWithImages(inline.ID, f.media.ID)
+	writeBlockDocAround(t, f.post.ID, doc)
+
+	var parsed json.RawMessage
+	_, err = testStore.PublishPostTx(ctx, PublishPostTxParams{
+		PostID: f.post.ID,
+		ContentMediaIDs: func(blockDoc json.RawMessage) []int64 {
+			parsed = blockDoc
+			return []int64{inline.ID, f.media.ID}
+		},
+	})
+	require.NoError(t, err)
+	require.JSONEq(t, string(doc), string(parsed), "the extractor gets the published body")
+
+	require.Equal(t, map[int64]int32{
+		f.media.ID: 0, // still the featured image
+		inline.ID:  1,
+	}, contentMediaOrder(t, f.post.ID))
+	featured, err := testQueries.GetFeaturedImage(ctx, f.post.ID)
+	require.NoError(t, err)
+	require.Equal(t, f.media.ID, featured.MediaID)
+
+	// Publishing again with the featured image the only content image keeps
+	// it featured and drops the other link.
+	writeBlockDocAround(t, f.post.ID, collabDocWithImages(f.media.ID))
+	_, err = testStore.PublishPostTx(ctx, PublishPostTxParams{
+		PostID:          f.post.ID,
+		ContentMediaIDs: func(json.RawMessage) []int64 { return []int64{f.media.ID} },
+	})
+	require.NoError(t, err)
+	require.Equal(t, map[int64]int32{f.media.ID: 0}, contentMediaOrder(t, f.post.ID))
+}
+
+// Without an extractor publish leaves the links alone.
+func TestPublishPostTxWithoutContentMediaIDs(t *testing.T) {
+	ctx := context.Background()
+	f := createSettingsFixture(t)
+	_, linked := createTestMedia(t)
+	_, err := testQueries.CreatePostMedia(ctx, CreatePostMediaParams{PostID: f.post.ID, MediaID: linked.ID, Order: 1})
+	require.NoError(t, err)
+
+	_, err = testStore.PublishPostTx(ctx, PublishPostTxParams{PostID: f.post.ID})
+	require.NoError(t, err)
+	require.Equal(t, map[int64]int32{f.media.ID: 0, linked.ID: 1}, contentMediaOrder(t, f.post.ID))
+}
