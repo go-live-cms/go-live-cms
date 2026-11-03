@@ -1,14 +1,13 @@
 // users_routes implements HTTP route registration with role-based access control.
 //
 // Organizes user endpoints into three access tiers:
-//   - **Public**: Profile discovery without authentication
+//   - **Signed in**: profiles by username (#393; public author pages are /public/authors)
 //   - **Authenticated**: Self-service account management
 //   - **Admin**: User administration and system management
 //
 // # Route Organization
 //
 // Routes are grouped by access level for clear security boundaries:
-//   - Public routes require no authentication
 //   - Auth routes require valid Bearer token
 //   - Admin routes require Bearer token + admin role
 //
@@ -20,7 +19,7 @@
 //
 // # Security Boundaries
 //
-// Clear separation between public profile access and sensitive operations.
+// No user route is public (#393).
 // Admin-only routes are protected by dedicated middleware ensuring proper authorization.
 package api
 
@@ -37,7 +36,7 @@ import (
 //   - GET /me (authenticated self profile)
 //   - GET /id/:id (admin lookup by ID)
 //   - GET /email/:email (admin lookup by email)
-//   - GET /:username (public profile - registered last to avoid conflicts)
+//   - GET /:username (signed-in profile lookup - registered last to avoid conflicts)
 //   - POST / (admin create)
 //   - PUT /:id (self or admin update)
 //   - DELETE /:id (admin delete)
@@ -66,6 +65,8 @@ func (server *Server) RegisterUserRoutes(v1 *gin.RouterGroup) {
 	// field-level rules enforced inside the handler, not by middleware.
 	usersAuth.PUT("/:id", server.updateUser) // PUT /api/v1/users/123 (self or admin)
 
-	// Public profile access by username (registered last to avoid parameter conflicts)
-	users.GET("/:username", server.getUserByUsername) // GET /api/v1/users/johndoe
+	// Profile by username (registered last to avoid parameter conflicts). Signed-in
+	// users only (#393): it has the id and role, and would let anyone check which
+	// usernames exist. Public author pages use /public/authors (#350).
+	usersAuth.GET("/:username", server.getUserByUsername) // GET /api/v1/users/johndoe
 }

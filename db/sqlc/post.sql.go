@@ -102,20 +102,27 @@ func (q *Queries) CopyPostTaxonomyTerms(ctx context.Context, arg CopyPostTaxonom
 
 const countFilteredPosts = `-- name: CountFilteredPosts :one
 SELECT COUNT(*) AS total FROM posts
-WHERE 
+WHERE
     ($1::text = '' OR post_type = $1)
     AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR user_id = $3)
+    AND ($4::bigint = 0 OR user_id = $4 OR post_status = 'published')
 `
 
 type CountFilteredPostsParams struct {
 	PostType   string `json:"post_type"`
 	PostStatus string `json:"post_status"`
 	UserID     int64  `json:"user_id"`
+	ViewerID   int64  `json:"viewer_id"`
 }
 
 func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countFilteredPosts, arg.PostType, arg.PostStatus, arg.UserID)
+	row := q.db.QueryRowContext(ctx, countFilteredPosts,
+		arg.PostType,
+		arg.PostStatus,
+		arg.UserID,
+		arg.ViewerID,
+	)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -126,6 +133,7 @@ SELECT post_status, COUNT(*) AS total FROM posts
 WHERE
     ($1::text = '' OR post_type = $1)
     AND ($2::bigint = 0 OR user_id = $2)
+    AND ($3::bigint = 0 OR user_id = $3 OR post_status = 'published')
 GROUP BY post_status
 ORDER BY post_status
 `
@@ -133,6 +141,7 @@ ORDER BY post_status
 type CountPostsByStatusParams struct {
 	PostType string `json:"post_type"`
 	UserID   int64  `json:"user_id"`
+	ViewerID int64  `json:"viewer_id"`
 }
 
 type CountPostsByStatusRow struct {
@@ -141,9 +150,9 @@ type CountPostsByStatusRow struct {
 }
 
 // The admin list's status tabs (#340): one count per status, with the list's
-// type and owner filters.
+// type and owner filters, counting only what the caller may read (#393).
 func (q *Queries) CountPostsByStatus(ctx context.Context, arg CountPostsByStatusParams) ([]CountPostsByStatusRow, error) {
-	rows, err := q.db.QueryContext(ctx, countPostsByStatus, arg.PostType, arg.UserID)
+	rows, err := q.db.QueryContext(ctx, countPostsByStatus, arg.PostType, arg.UserID, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,15 +190,17 @@ const countPostsByTypeFiltered = `-- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts
 WHERE post_type = $1
     AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
+    AND ($3::bigint = 0 OR user_id = $3 OR post_status = 'published')
 `
 
 type CountPostsByTypeFilteredParams struct {
 	PostType   string `json:"post_type"`
 	PostStatus string `json:"post_status"`
+	ViewerID   int64  `json:"viewer_id"`
 }
 
 func (q *Queries) CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPostsByTypeFiltered, arg.PostType, arg.PostStatus)
+	row := q.db.QueryRowContext(ctx, countPostsByTypeFiltered, arg.PostType, arg.PostStatus, arg.ViewerID)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -500,26 +511,30 @@ WHERE
     ($1::text = '' OR post_type = $1)
     AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR user_id = $3)  -- Add user filter
+    -- What the caller may read (#393): 0 = everything (moderators, /public);
+    -- a contributor's id = their own posts plus published ones (canReadPost).
+    AND ($4::bigint = 0 OR user_id = $4 OR post_status = 'published')
 ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN menu_order END DESC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN created_at END ASC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN created_at END DESC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN title END ASC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN title END DESC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN menu_order END ASC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $5::text = 'asc' THEN id END ASC,
+    CASE WHEN $6::text = 'asc' THEN id END ASC,
     id DESC
-LIMIT $7
-OFFSET $6
+LIMIT $8
+OFFSET $7
 `
 
 type ListPostsParams struct {
 	PostType      string `json:"post_type"`
 	PostStatus    string `json:"post_status"`
 	UserID        int64  `json:"user_id"`
+	ViewerID      int64  `json:"viewer_id"`
 	SortColumn    string `json:"sort_column"`
 	SortDirection string `json:"sort_direction"`
 	OffsetCount   int32  `json:"offset_count"`
@@ -553,6 +568,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,
@@ -632,26 +648,28 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
+    AND ($4::bigint = 0 OR p.user_id = $4 OR p.post_status = 'published')  -- #393, as in ListPosts
 ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $6::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $7
-OFFSET $6
+LIMIT $8
+OFFSET $7
 `
 
 type ListPostsWithAllMetaParams struct {
 	PostType      string `json:"post_type"`
 	PostStatus    string `json:"post_status"`
 	UserID        int64  `json:"user_id"`
+	ViewerID      int64  `json:"viewer_id"`
 	SortColumn    string `json:"sort_column"`
 	SortDirection string `json:"sort_direction"`
 	OffsetCount   int32  `json:"offset_count"`
@@ -687,6 +705,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,
@@ -758,26 +777,28 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
+    AND ($4::bigint = 0 OR p.user_id = $4 OR p.post_status = 'published')  -- #393, as in ListPosts
 ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $6::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $7
-OFFSET $6
+LIMIT $8
+OFFSET $7
 `
 
 type ListPostsWithMetaParams struct {
 	PostType      string `json:"post_type"`
 	PostStatus    string `json:"post_status"`
 	UserID        int64  `json:"user_id"`
+	ViewerID      int64  `json:"viewer_id"`
 	SortColumn    string `json:"sort_column"`
 	SortDirection string `json:"sort_direction"`
 	OffsetCount   int32  `json:"offset_count"`
@@ -813,6 +834,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,

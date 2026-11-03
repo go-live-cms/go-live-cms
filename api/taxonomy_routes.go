@@ -16,9 +16,12 @@
 // # Authentication Strategy
 //
 // **Public Read Operations**:
-//   - All GET endpoints for browsing types, terms, and associations
+//   - GET endpoints for browsing types and terms (taxonomy config, #393 audit)
 //   - Search and discovery functionality for content organization
 //   - Popular terms and statistics for trending content
+//
+// **Protected Reads** (#393): a term's posts (moderators) and a post's
+// working terms (content roles, canReadPost): they show unpublished posts.
 //
 // **Protected Write Operations**:
 //   - All POST, PUT, DELETE operations require Bearer access tokens
@@ -92,7 +95,9 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	terms.GET("/slug/:slug", server.getTaxonomyTermBySlug) // GET /api/v1/taxonomy/terms/slug/:slug
 
 	// Parameterized routes with sub-paths
-	terms.GET("/:id/posts", server.getTaxonomyTermPosts) // GET /api/v1/taxonomy/terms/:id/posts
+	// Posts at any status with their working fields (#393): moderators only. The
+	// public site lists a term's posts through /public/taxonomies/... (#348).
+	terms.GET("/:id/posts", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.getTaxonomyTermPosts) // GET /api/v1/taxonomy/terms/:id/posts
 
 	// Basic parameterized routes (most greedy) - must be last
 	terms.GET("/:id", server.getTaxonomyTermByID) // GET /api/v1/taxonomy/terms/:id
@@ -105,7 +110,9 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	// Cross-Module Integration
 	// Post-taxonomy term associations for bidirectional relationships
 	// Note: This could alternatively live in posts_routes.go for module cohesion
-	v1.GET("/posts/:id/taxonomy-terms", server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomy-terms
+	// The working term set (#393): content roles, canReadPost in the handler. The
+	// public site reads the published terms from /public/posts/:id (#358).
+	v1.GET("/posts/:id/taxonomy-terms", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomy-terms
 
 	// One term at a time (editor-or-admin role), so concurrent editors don't
 	// overwrite each other's assignments

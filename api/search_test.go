@@ -312,8 +312,8 @@ func TestSearchPostsAdmin(t *testing.T) {
 			query:  "q=notes&user_id=" + strconv.FormatInt(contributor.ID, 10),
 			caller: &contributor,
 			expect: func(store *mockdb.MockStore) {
-				store.EXPECT().CountSearchPosts(gomock.Any(), db.CountSearchPostsParams{Query: "notes", UserID: contributor.ID}).Return(int64(0), nil)
-				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{Query: "notes", UserID: contributor.ID, LimitCount: 10}).Return([]db.SearchPostsWithMetaRow{}, nil)
+				store.EXPECT().CountSearchPosts(gomock.Any(), db.CountSearchPostsParams{Query: "notes", UserID: contributor.ID, ViewerID: contributor.ID}).Return(int64(0), nil)
+				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{Query: "notes", UserID: contributor.ID, ViewerID: contributor.ID, LimitCount: 10}).Return([]db.SearchPostsWithMetaRow{}, nil)
 			},
 			wantStatus: http.StatusOK,
 		},

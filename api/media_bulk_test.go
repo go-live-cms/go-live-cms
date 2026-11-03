@@ -381,6 +381,7 @@ func TestGetMediaPostsAPI(t *testing.T) {
 			require.NoError(t, err)
 
 			recorder := httptest.NewRecorder()
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
 		})

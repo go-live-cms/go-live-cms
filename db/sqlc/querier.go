@@ -49,7 +49,7 @@ type Querier interface {
 	CountMissingAltMedia(ctx context.Context) (CountMissingAltMediaRow, error)
 	CountPasswordResetTokensSince(ctx context.Context, arg CountPasswordResetTokensSinceParams) (int64, error)
 	// The admin list's status tabs (#340): one count per status, with the list's
-	// type and owner filters.
+	// type and owner filters, counting only what the caller may read (#393).
 	CountPostsByStatus(ctx context.Context, arg CountPostsByStatusParams) ([]CountPostsByStatusRow, error)
 	CountPostsByTaxonomyTerm(ctx context.Context, taxonomyTermID int64) (int64, error)
 	CountPostsByType(ctx context.Context, postType string) (int64, error)

@@ -1,75 +1,80 @@
 // Package api — Posts route registration
 //
-// Registers all post-related HTTP routes, with auth middleware applied selectively.
+// Registers all post-related HTTP routes. Every route here needs a Bearer
+// access token and a content role (#393).
 //
 // Route Structure
-//   - Public reads: GET /posts, /posts/counts, /posts/:id, /posts/type/:type, /posts/user/:id
-//   - Protected writes: POST/PUT/DELETE /posts (require Bearer auth)
-//   - Post meta: /posts/:id/meta (GET public, POST/DELETE protected)
-//   - Featured images: /posts/:id/featured-image (GET public, POST/DELETE protected)
-//   - Media links: /posts/:id/media (GET public, POST/DELETE protected)
+//   - Reads: GET /posts, /posts/counts, /posts/:id, /posts/type/:type, /posts/user/:id,
+//     /posts/:id/{meta,featured-image,media}. They serve the admin's working copy
+//     (every status, working title/excerpt/meta), so contributors read only their own
+//     posts and published ones (canReadPost, postsViewerID). The public site reads
+//     published snapshots from /public (public_routes.go), never these.
+//   - Writes: POST/PUT/DELETE /posts, meta, featured image, media links
 //
 // Middleware Behavior
-//   - authMiddleware: Enforced for create/update/delete operations
-//   - No auth middleware: Applied to public read operations (adjust as needed)
+//   - authMiddleware + requireContentAuthor on every route; the handler then
+//     decides per post (auth_posts.go)
+//   - publish/unpublish/revisions: requireContentEditor
 package api
 
 import "github.com/gin-gonic/gin"
 
 // RegisterPostRoutes configures all post-related routes on the provided router group.
-// Apply auth middleware selectively: writes are protected, reads are public.
 func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 	posts := rg.Group("/posts")
+	// Every post route serves or changes the working copy (#393), so every one
+	// takes a token and a content role; the handlers' per-post rules build on it.
+	auth := authMiddleware(server.tokenMaker, server.store)
+	author := requireContentAuthor(server)
 	{
-		// Public reads (put static routes before the greedy :id route)
-		posts.GET("", server.getPosts)
-		posts.GET("/counts", server.getPostCounts)
-		// The admin list's search box (#145): signed-in content roles only
-		posts.GET("/search", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.searchPosts)
-		posts.GET("/type/:type", server.getPostsByType)
-		posts.GET("/user/:id", server.getPostsByUser)
-		posts.GET("/slug/:slug", server.getPostBySlug)
-		posts.GET("/:id", server.getPostByID)
+		// Reads (put static routes before the greedy :id route)
+		posts.GET("", auth, author, server.getPosts)
+		posts.GET("/counts", auth, author, server.getPostCounts)
+		// The admin list's search box (#145)
+		posts.GET("/search", auth, author, server.searchPosts)
+		posts.GET("/type/:type", auth, author, server.getPostsByType)
+		posts.GET("/user/:id", auth, author, server.getPostsByUser)
+		posts.GET("/slug/:slug", auth, author, server.getPostBySlug)
+		posts.GET("/:id", auth, author, server.getPostByID)
 
-		// Protected writes. Any content role reaches them; the handler decides per
+		// Writes. Any content role reaches them; the handler decides per
 		// post (auth_posts.go: contributors only their own, #135)
-		posts.POST("", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createPost)
-		posts.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updatePost)
-		posts.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePost)
+		posts.POST("", auth, author, server.createPost)
+		posts.PUT("/:id", auth, author, server.updatePost)
+		posts.DELETE("/:id", auth, author, server.deletePost)
 		// A draft copy owned by the caller (#354); the handler checks read access.
-		posts.POST("/:id/duplicate", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.duplicatePost)
+		posts.POST("/:id/duplicate", auth, author, server.duplicatePost)
 
 		// Post meta operations
-		posts.GET("/:id/meta", server.getPostMeta)
-		posts.POST("/:id/meta", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createOrUpdatePostMeta)
-		posts.DELETE("/:id/meta/:key", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePostMetaByKey)
+		posts.GET("/:id/meta", auth, author, server.getPostMeta)
+		posts.POST("/:id/meta", auth, author, server.createOrUpdatePostMeta)
+		posts.DELETE("/:id/meta/:key", auth, author, server.deletePostMetaByKey)
 
 		// Featured image operations
-		posts.GET("/:id/featured-image/full", server.getFeaturedImageFull)
-		posts.GET("/:id/featured-image", server.getFeaturedImageQuick)
-		posts.POST("/:id/featured-image", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.setFeaturedImage)
-		posts.DELETE("/:id/featured-image", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.removeFeaturedImage)
+		posts.GET("/:id/featured-image/full", auth, author, server.getFeaturedImageFull)
+		posts.GET("/:id/featured-image", auth, author, server.getFeaturedImageQuick)
+		posts.POST("/:id/featured-image", auth, author, server.setFeaturedImage)
+		posts.DELETE("/:id/featured-image", auth, author, server.removeFeaturedImage)
 
 		// Post-Media link operations
-		posts.GET("/:id/media", server.getPostMedia)
-		posts.POST("/:id/media", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createPostMedia)
-		posts.DELETE("/:id/media/:media_id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePostMedia)
+		posts.GET("/:id/media", auth, author, server.getPostMedia)
+		posts.POST("/:id/media", auth, author, server.createPostMedia)
+		posts.DELETE("/:id/media/:media_id", auth, author, server.deletePostMedia)
 
-		// Block Spec v1 operations. The working-copy GET stays role-free (any
-		// authenticated user may load the editor doc); only the collab server
-		// writes it (PUT /internal/posts/:id/collab, #206).
-		posts.GET("/:id/blocks", authMiddleware(server.tokenMaker, server.store), server.getPostBlocks)
-		posts.POST("/:id/publish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.publishPost)
-		posts.POST("/:id/unpublish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.unpublishPost)
+		// Block Spec v1 operations. The working copy is read with canReadPost;
+		// only the collab server writes it (PUT /internal/posts/:id/collab, #206).
+		posts.GET("/:id/blocks", auth, author, server.getPostBlocks)
+		posts.POST("/:id/publish", auth, requireContentEditor(server), server.publishPost)
+		posts.POST("/:id/unpublish", auth, requireContentEditor(server), server.unpublishPost)
 
 		// Revisions (#136): published snapshots; restoring the blocks happens in the
 		// editor, the settings (#358) come back through restore-settings
-		posts.GET("/:id/versions", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.listPostVersions)
-		posts.GET("/:id/versions/:version_no", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.getPostVersion)
-		posts.POST("/:id/versions/:version_no/restore-settings", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.restorePostVersionSettings)
+		posts.GET("/:id/versions", auth, requireContentEditor(server), server.listPostVersions)
+		posts.GET("/:id/versions/:version_no", auth, requireContentEditor(server), server.getPostVersion)
+		posts.POST("/:id/versions/:version_no/restore-settings", auth, requireContentEditor(server), server.restorePostVersionSettings)
 
 		// Working vs published settings (#358): whether a settings change waits for Update
-		posts.GET("/:id/settings", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getPostSettingsState)
+		posts.GET("/:id/settings", auth, author, server.getPostSettingsState)
 
 	}
 }

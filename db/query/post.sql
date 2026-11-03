@@ -67,6 +67,9 @@ WHERE
     (@post_type::text = '' OR post_type = @post_type)
     AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR user_id = @user_id)  -- Add user filter
+    -- What the caller may read (#393): 0 = everything (moderators, /public);
+    -- a contributor's id = their own posts plus published ones (canReadPost).
+    AND (@viewer_id::bigint = 0 OR user_id = @viewer_id OR post_status = 'published')
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -148,6 +151,7 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')  -- #393, as in ListPosts
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -169,25 +173,28 @@ OFFSET @offset_count;
 
 -- name: CountFilteredPosts :one
 SELECT COUNT(*) AS total FROM posts
-WHERE 
+WHERE
     (@post_type::text = '' OR post_type = @post_type)
     AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id::bigint = 0 OR user_id = @user_id);
+    AND (@user_id::bigint = 0 OR user_id = @user_id)
+    AND (@viewer_id::bigint = 0 OR user_id = @viewer_id OR post_status = 'published');
 
 -- name: CountPostsByStatus :many
 -- The admin list's status tabs (#340): one count per status, with the list's
--- type and owner filters.
+-- type and owner filters, counting only what the caller may read (#393).
 SELECT post_status, COUNT(*) AS total FROM posts
 WHERE
     (@post_type::text = '' OR post_type = @post_type)
     AND (@user_id::bigint = 0 OR user_id = @user_id)
+    AND (@viewer_id::bigint = 0 OR user_id = @viewer_id OR post_status = 'published')
 GROUP BY post_status
 ORDER BY post_status;
 
 -- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts
 WHERE post_type = @post_type
-    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')));
+    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    AND (@viewer_id::bigint = 0 OR user_id = @viewer_id OR post_status = 'published');
 
 
 -- name: ListPostsWithAllMeta :many
@@ -227,6 +234,7 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')  -- #393, as in ListPosts
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts

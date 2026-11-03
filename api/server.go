@@ -329,12 +329,13 @@ func validateCORSOrigins(origins []string) error {
 //   - /api/v1/invitations: list/create/resend/revoke invitations (admin)
 //   - /api/v1/sessions: list/block (auth required)
 //   - /api/v1/users: CRUD; some endpoints require auth (see handlers)
-//   - /api/v1/posts: CRUD, meta, media links, featured image helpers
+//   - /api/v1/posts: CRUD, meta, media links, featured image helpers; every
+//     route needs a content role (#393: the working copy is not public)
 //   - /api/v1/post-types: read-only lookup
 //   - /api/v1/taxonomy-types: CRUD/lookup
 //   - /api/v1/taxonomy-terms: CRUD, lookup, popular, search, posts
 //   - /api/v1/taxonomies: legacy aliases for terms (back-compat)
-//   - /api/v1/media: upload/batch, search, popular, CRUD, relations
+//   - /api/v1/media: upload/batch, search, popular, CRUD, relations (content roles)
 //   - /api/v1/collab: collab socket ticket minting (the WS server verifies and burns them)
 //   - Static /uploads → ./uploads (serve uploaded files)
 //
@@ -413,7 +414,8 @@ func (server *Server) setupRoutes() error {
 
 	// Legacy taxonomy association route (moved from posts section)
 	posts := v1.Group("/posts")
-	posts.GET("/:id/taxonomies", server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
+	// Same handler and rules as /posts/:id/taxonomy-terms: the working terms (#393).
+	posts.GET("/:id/taxonomies", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
 
 	postTypes := v1.Group("/post-types")
 	postTypes.GET("", server.getPostTypes)                                                                                    // GET /api/v1/post-types

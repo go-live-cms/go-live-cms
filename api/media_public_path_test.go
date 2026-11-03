@@ -60,7 +60,9 @@ func TestGetMediaReturnsServedPath(t *testing.T) {
 	store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(media.ID)).Times(1).Return(media, nil)
 
 	recorder := httptest.NewRecorder()
-	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/media/%d", media.ID), nil))
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/media/%d", media.ID), nil)
+	signInAs(t, server, store, request, testReader)
+	server.router.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	var body struct {
@@ -89,7 +91,9 @@ func TestListMediaReturnsServedPaths(t *testing.T) {
 	store.EXPECT().CountMedia(gomock.Any(), gomock.Any()).Times(1).Return(int64(2), nil)
 
 	recorder := httptest.NewRecorder()
-	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/media", nil))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/media", nil)
+	signInAs(t, server, store, request, testReader)
+	server.router.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	var body struct {
@@ -113,7 +117,9 @@ func TestGetFeaturedImageQuickMapsStoredPath(t *testing.T) {
 		Return(db.PostMetum{MetaKey: "_thumbnail_url", MetaValue: sql.NullString{String: server.config.UploadPath + "/hero.png", Valid: true}}, nil)
 
 	recorder := httptest.NewRecorder()
-	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/posts/5/featured-image", nil))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/posts/5/featured-image", nil)
+	signInAs(t, server, store, request, testReader)
+	server.router.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code)
 
 	var body struct {

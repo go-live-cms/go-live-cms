@@ -81,6 +81,7 @@ func TestGetPostCounts(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			request, err := http.NewRequest(http.MethodGet, tc.url, nil)
 			require.NoError(t, err)
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 
 			require.Equal(t, tc.wantStatus, recorder.Code)

@@ -15,8 +15,11 @@
 //     their post is not published (canEditPostDetails). Otherwise a
 //     contributor could change or remove published content without the
 //     publish permission.
-//   - Contributors may also watch any post's working copy live, read-only
-//     (canReadPostBlocks: collab tickets).
+//   - Reading (#393): every /api/v1/posts* read serves the working copy, so
+//     it needs a content role, and a contributor reads only their own posts
+//     and published ones (canReadPost; the lists filter the same way with
+//     postsViewerID). They may watch those live, read-only (collab tickets).
+//     Anonymous readers get /public only: published snapshots.
 //   - Publishing, unpublishing and revisions are moderator-only
 //     (requireContentEditor on those routes).
 //
@@ -69,12 +72,40 @@ func canEditPost(user db.User, post db.Post) bool {
 	return canModeratePosts(user) || (hasRole(user, RoleContributor) && post.UserID == user.ID)
 }
 
-// canReadPostBlocks reports whether the user may read the post's working copy
-// live: a collab ticket (#206), read-only unless canEditPost.
-// Every content role may, as GET /posts/:id/blocks lets any signed-in user
-// load any working copy. The post must still exist (authorizePost: 404).
-func canReadPostBlocks(user db.User, _ db.Post) bool {
-	return hasRole(user, RoleAdmin, RoleEditor, RoleContributor)
+// canReadPost reports whether the user may read the post's working copy: the
+// row, meta, featured image, media links and terms through /api/v1/posts*, the
+// blocks, and a collab ticket (#206, read-only unless canEditPost). Moderators
+// may read any post; a contributor their own posts at any status and any
+// published post, never someone else's draft or archived post (#393). The post
+// must still exist (authorizePost: 404).
+func canReadPost(user db.User, post db.Post) bool {
+	if canModeratePosts(user) {
+		return true
+	}
+	if !hasRole(user, RoleContributor) {
+		return false
+	}
+	return post.UserID == user.ID || strings.EqualFold(post.PostStatus, postStatusPublished)
+}
+
+// postsViewerID is canReadPost for the list queries' viewer_id: 0 for a
+// moderator (every post), else the caller's id (their own posts plus
+// published ones). Only call it behind requireContentAuthor.
+func postsViewerID(user db.User) int64 {
+	if canModeratePosts(user) {
+		return 0
+	}
+	return user.ID
+}
+
+// callerViewerID is postsViewerID for the authenticated caller. ok=false means
+// the response was already written (callerUser).
+func (server *Server) callerViewerID(c *gin.Context) (int64, bool) {
+	user, ok := server.callerUser(c)
+	if !ok {
+		return 0, false
+	}
+	return postsViewerID(user), true
 }
 
 // canEditPostDetails reports whether the user may change the post's live

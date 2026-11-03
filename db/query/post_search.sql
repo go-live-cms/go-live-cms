@@ -113,6 +113,8 @@ WHERE
     AND (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)
+    -- What the caller may read (#393, as in ListPosts): 0 = everything.
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
 ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), @query::text)) DESC, p.created_at DESC, p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
@@ -129,4 +131,5 @@ WHERE
              @@ websearch_to_tsquery(golive_search_config(), @query::text)))
     AND (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id::bigint = 0 OR p.user_id = @user_id);
+    AND (@user_id::bigint = 0 OR p.user_id = @user_id)
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published');

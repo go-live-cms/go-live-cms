@@ -48,7 +48,9 @@ func TestListMediaMissingAltFilter(t *testing.T) {
 	}).Times(1).Return(int64(1), nil)
 
 	recorder := httptest.NewRecorder()
-	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/media?limit=24&type=image&missing_alt=true", nil))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/media?limit=24&type=image&missing_alt=true", nil)
+	signInAs(t, server, store, request, testReader)
+	server.router.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 
 	var body struct {
@@ -75,7 +77,9 @@ func TestListMediaMissingAltInvalid(t *testing.T) {
 	store.EXPECT().ListMedia(gomock.Any(), gomock.Any()).Times(0)
 
 	recorder := httptest.NewRecorder()
-	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/media?missing_alt=maybe", nil))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/media?missing_alt=maybe", nil)
+	signInAs(t, server, store, request, testReader)
+	server.router.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusBadRequest, recorder.Code)
 }
 
@@ -87,7 +91,9 @@ func TestListMediaCountError(t *testing.T) {
 	store.EXPECT().CountMedia(gomock.Any(), gomock.Any()).Return(int64(0), sql.ErrConnDone)
 
 	recorder := httptest.NewRecorder()
-	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/media", nil))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/media", nil)
+	signInAs(t, server, store, request, testReader)
+	server.router.ServeHTTP(recorder, request)
 	require.Equal(t, http.StatusInternalServerError, recorder.Code)
 }
 

@@ -386,13 +386,25 @@ func TestCreateUserGuards(t *testing.T) {
 // TestGetUserByUsernameAPI: the public profile route needs no auth and must
 // never expose the email or password hash.
 func TestGetUserByUsernameAPI(t *testing.T) {
-	_, _, user := guardUsers()
+	_, editor, user := guardUsers()
 
 	testCases := []struct {
 		name          string
+		anonymous     bool
 		buildStubs    func(store *mockdb.MockStore)
 		checkResponse func(t *testing.T, recorder *httptest.ResponseRecorder)
 	}{
+		{
+			// It has the id and role, and would enumerate accounts (#393).
+			name:      "Anonymous",
+			anonymous: true,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusUnauthorized, recorder.Code)
+			},
+		},
 		{
 			name: "OK",
 			buildStubs: func(store *mockdb.MockStore) {
@@ -444,7 +456,12 @@ func TestGetUserByUsernameAPI(t *testing.T) {
 			tc.buildStubs(store)
 
 			server := newTestServer(t, store)
-			recorder := sendAuthedJSON(t, server, http.MethodGet, "/api/v1/users/"+user.Username, nil, nil)
+			var caller *db.User
+			if !tc.anonymous {
+				caller = &editor
+				stubRoleLookup(store, editor)
+			}
+			recorder := sendAuthedJSON(t, server, http.MethodGet, "/api/v1/users/"+user.Username, nil, caller)
 			tc.checkResponse(t, recorder)
 		})
 	}

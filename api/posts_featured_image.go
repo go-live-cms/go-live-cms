@@ -123,6 +123,10 @@ func (server *Server) getFeaturedImageQuick(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
 		return
 	}
+	// The working copy's image; the public site reads /public/posts/:id (#393).
+	if !server.authorizePost(c, postID, canReadPost) {
+		return
+	}
 
 	thumbnailMeta, err := server.store.GetPostMetaByKey(c.Request.Context(), db.GetPostMetaByKeyParams{
 		PostID:  postID,
@@ -151,6 +155,9 @@ func (server *Server) getFeaturedImageFull(c *gin.Context) {
 	postID, err := strconv.ParseInt(postIDStr, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+	if !server.authorizePost(c, postID, canReadPost) {
 		return
 	}
 

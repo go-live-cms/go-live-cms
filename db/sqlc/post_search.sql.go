@@ -68,6 +68,7 @@ WHERE
     AND ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)
+    AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')
 `
 
 type CountSearchPostsParams struct {
@@ -75,6 +76,7 @@ type CountSearchPostsParams struct {
 	PostType   string `json:"post_type"`
 	PostStatus string `json:"post_status"`
 	UserID     int64  `json:"user_id"`
+	ViewerID   int64  `json:"viewer_id"`
 }
 
 // SearchPostsWithMeta's total, with the same filters.
@@ -84,6 +86,7 @@ func (q *Queries) CountSearchPosts(ctx context.Context, arg CountSearchPostsPara
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 	)
 	var total int64
 	err := row.Scan(&total)
@@ -118,9 +121,11 @@ WHERE
     AND ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)
+    -- What the caller may read (#393, as in ListPosts): 0 = everything.
+    AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')
 ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), $1::text)) DESC, p.created_at DESC, p.id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type SearchPostsWithMetaParams struct {
@@ -128,6 +133,7 @@ type SearchPostsWithMetaParams struct {
 	PostType    string `json:"post_type"`
 	PostStatus  string `json:"post_status"`
 	UserID      int64  `json:"user_id"`
+	ViewerID    int64  `json:"viewer_id"`
 	OffsetCount int32  `json:"offset_count"`
 	LimitCount  int32  `json:"limit_count"`
 }
@@ -164,6 +170,7 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)

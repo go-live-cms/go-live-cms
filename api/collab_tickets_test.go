@@ -69,13 +69,22 @@ func TestCreateCollabTicket(t *testing.T) {
 			},
 		},
 		{
-			// A read-only live view (#206): the collab server asks the API whether
-			// the connection may write.
-			name:   "ContributorGetsTicketForOthersPost",
-			body:   gin.H{"doc": "post-12"},
+			// A read-only live view (#206) of a published post: the collab server
+			// asks the API whether the connection may write.
+			name:   "ContributorGetsTicketForOthersPublishedPost",
+			body:   gin.H{"doc": "post-15"},
 			caller: &contributor,
 			checkResponse: func(t *testing.T, _ *Server, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			// Someone else's draft is not a contributor's to read (#393).
+			name:   "ContributorRefusedOthersDraft",
+			body:   gin.H{"doc": "post-12"},
+			caller: &contributor,
+			checkResponse: func(t *testing.T, _ *Server, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusForbidden, recorder.Code)
 			},
 		},
 		{
@@ -146,6 +155,7 @@ func TestCreateCollabTicket(t *testing.T) {
 			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(db.Post{ID: 12, UserID: editor.ID}, nil).AnyTimes()
 			store.EXPECT().GetPost(gomock.Any(), int64(13)).Return(db.Post{ID: 13, UserID: contributor.ID}, nil).AnyTimes()
 			store.EXPECT().GetPost(gomock.Any(), int64(14)).Return(db.Post{}, sql.ErrNoRows).AnyTimes()
+			store.EXPECT().GetPost(gomock.Any(), int64(15)).Return(db.Post{ID: 15, UserID: editor.ID, PostStatus: "published"}, nil).AnyTimes()
 
 			server := newTestServer(t, store)
 			recorder := postCollabTicket(t, server, tc.body, tc.caller)

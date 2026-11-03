@@ -18,14 +18,14 @@ type collabTicketMaker interface {
 // createCollabTicket mints a collab ticket for the caller and one document.
 //
 // Authentication: Bearer access token. Admins and editors may get a ticket
-// for any post, contributors for any post whose working copy they may read
-// (canReadPostBlocks, #135, #206): a read-only live view unless they may edit
+// for any post, contributors for their own posts and published ones
+// (canReadPost, #135, #206, #393): a read-only live view unless they may edit
 // it. The ticket carries no role: the collab server asks the API.
 //
 // Returns:
 //   - 200 OK: { "ticket": "v4.public…", "expires_at": "…" }
 //   - 400 Bad Request: missing or malformed doc name
-//   - 401/403: see authMiddleware, requireContentAuthor and canReadPostBlocks
+//   - 401/403: see authMiddleware, requireContentAuthor and canReadPost
 //   - 404 Not Found: a contributor asked for a post that doesn't exist
 func (server *Server) createCollabTicket(c *gin.Context) {
 	var req createCollabTicketRequest
@@ -41,7 +41,7 @@ func (server *Server) createCollabTicket(c *gin.Context) {
 	// The collab server also serves read-only connections, so anyone who may
 	// read the working copy gets a ticket; the server makes the connection
 	// read-only when the access endpoint answers can_edit=false (#206).
-	if !server.authorizePost(c, postID, canReadPostBlocks) {
+	if !server.authorizePost(c, postID, canReadPost) {
 		return
 	}
 
