@@ -3,7 +3,7 @@ import { EditorContent, useEditor } from "@tiptap/react"
 import { getSchema } from "@tiptap/core"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { authManager } from "@gl-admin/lib/auth"
-import { setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
+import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { CollabSaveStatus, type SaveState } from "@gl-admin/lib/collaboration/CollabSaveStatus"
 import type { CollabAccess, HocuspocusCollaboration } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
@@ -85,6 +85,13 @@ export interface EditorRef {
   publish: () => Promise<{ versionId: number; versionNo: number } | undefined>
   // Load a stored version into the working copy through the editor (#136)
   restoreVersion: (doc: BlockDocV1) => Promise<{ saved: boolean }>
+  /**
+   * A new post's body (no collab doc yet) as Block Spec, for `POST /posts`: the collab
+   * server's own bridge (pmToBlockDoc), so marks, attrs and theme blocks reach the seed as
+   * the store would write them. Null when the body is empty or the post exists (its body
+   * is the server's, rule 11).
+   */
+  getBlockDoc: () => BlockDocV1 | null
   getSaveStatus: () => { isSaving: boolean; isPublishing: boolean; saveStatus: "saved" | "saving" | "error" | null }
 }
 
@@ -285,6 +292,11 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
         if (!collab || !saveStatus || !editor || readOnly) throw new Error("Restoring needs the collaborative editor")
         const { saved } = await restoreVersionLive(editor, doc, collab.doc, saveStatus)
         return { saved }
+      },
+      getBlockDoc: () => {
+        // An existing post's body (bound, or the static view) is the server's.
+        if (collab || postId || !editor || editor.isDestroyed || editor.isEmpty) return null
+        return pmToBlockDoc(editor.state.doc)
       },
       getSaveStatus: () => ({ isSaving: saveState === "saving", isPublishing, saveStatus: saveState }),
     }),

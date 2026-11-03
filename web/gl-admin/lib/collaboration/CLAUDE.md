@@ -65,7 +65,10 @@ every server boot — **read process logs from the very top**.
   in again" (`authManager.logout("session-expired")`). Publish waits for the server to have every
   local edit, then calls publish; the API flushes. `useCollabPresence` and `PostForm`
   (title saved on its own via `PUT /posts/:id`; a new post sends its body as `block_doc`
-  with `POST /posts`) share the same connection.
+  with `POST /posts`) share the same connection. That body is the unbound editor's
+  document through `pmToBlockDoc` (`EditorRef.getBlockDoc`, null when empty), the bridge
+  the server stores with. **Never build it from the editor's HTML** (#384): an HTML
+  converter kept text only, so every mark typed before the first save was lost.
 - `blockBridge.ts`: `pmToBlockDoc` / `blockDocToPM(WithReport)` / `setEditorBlockDoc`.
   Pure conversion (notes below).
 - `fragmentBridge.ts`: `seedFragment` / `fragmentToBlockDoc`: Block Spec v1 ⇄ the
