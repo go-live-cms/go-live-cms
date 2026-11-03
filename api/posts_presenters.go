@@ -192,6 +192,14 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 	}
 }
 
+// toPublicPostWithMetaResponse is toPostWithMetaResponse for the public site:
+// the post's published title, excerpt and featured image (#358).
+func toPublicPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
+	resp := toPostWithMetaResponse(post)
+	applyPublishedSettings(&resp, post.PublishedSettings)
+	return resp
+}
+
 // decodePostAuthors reads the authors column; [] when it's empty or invalid.
 func decodePostAuthors(data []byte) []PostAuthorResponse {
 	var authors []PostAuthorResponse

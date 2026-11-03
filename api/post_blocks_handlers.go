@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/token"
-	"github.com/sqlc-dev/pqtype"
 )
 
 // BlockDocV1 represents Block Spec v1 document structure
@@ -286,54 +286,27 @@ func (server *Server) publishPost(c *gin.Context) {
 		return
 	}
 
-	// Get current working copy
-	currentBlocks, err := server.store.GetPostBlocks(c, postID)
+	// One transaction: the version gets the working copy's blocks and settings
+	// (title, excerpt, featured image, terms; #358), and the post's published
+	// snapshot points at it.
+	version, err := server.store.PublishPostTx(c, db.PublishPostTxParams{
+		PostID:    postID,
+		Label:     stringToNullString(req.Label),
+		Message:   stringToNullString(req.Message),
+		CreatedBy: sql.NullInt64{Int64: userID, Valid: true},
+	})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get current blocks"})
-		return
-	}
-
-	// Get next version number
-	nextVersionNo, err := server.store.GetNextVersionNoForPost(c, postID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get next version number"})
-		return
-	}
-
-	// Create version snapshot
-	version, err := server.store.InsertPostVersion(c, db.InsertPostVersionParams{
-		PostID:    postID,
-		VersionNo: nextVersionNo,
-		Label:     stringToNullString(req.Label),
-		Message:   stringToNullString(req.Message),
-		BlockDoc:  currentBlocks.Content,
-		CreatedBy: sql.NullInt64{Int64: userID, Valid: true},
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create version snapshot"})
-		return
-	}
-
-	// Update posts table with published version
-	err = server.store.SetPublishedVersionOnPost(c, db.SetPublishedVersionOnPostParams{
-		ID:                 postID,
-		PublishedVersionID: sql.NullInt64{Int64: version.ID, Valid: true},
-		PublishedBlockDoc:  pqtype.NullRawMessage{RawMessage: currentBlocks.Content, Valid: true},
-	})
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to set published version"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish post"})
 		return
 	}
 
 	// Sync post_media associations for images in published content
 	var publishedDoc BlockDocV1
-	if err := json.Unmarshal(currentBlocks.Content, &publishedDoc); err == nil {
+	if err := json.Unmarshal(version.BlockDoc, &publishedDoc); err == nil {
 		if err := server.syncPostMediaAssociations(c, postID, &publishedDoc); err != nil {
 			// Log error but don't fail the request - version was already published
 			server.requestLog(c).Warn("failed to sync media associations on publish", "post_id", postID, "error", err)
@@ -341,7 +314,7 @@ func (server *Server) publishPost(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, PublishResponse{
-		VersionID: version.ID,
+		VersionID: version.VersionID,
 		VersionNo: version.VersionNo,
 	})
 }

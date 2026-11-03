@@ -90,7 +90,7 @@ func (q *Queries) CountSearchPosts(ctx context.Context, arg CountSearchPostsPara
 const searchPostsWithMeta = `-- name: SearchPostsWithMeta :many
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -141,6 +141,7 @@ type SearchPostsWithMetaRow struct {
 	ChangedAt         time.Time             `json:"changed_at"`
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug              string                `json:"slug"`
+	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
 	Meta              interface{}           `json:"meta"`
 	Authors           json.RawMessage       `json:"authors"`
 }
@@ -180,6 +181,7 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
 			&i.Slug,
+			&i.PublishedSettings,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {
@@ -201,7 +203,11 @@ const searchPublicPosts = `-- name: SearchPublicPosts :many
 WITH q AS (
     SELECT websearch_to_tsquery(golive_search_config(), $1::text) AS tsq
 ), hits AS (
-    SELECT p.id, p.title, p.description, p.slug, p.post_type, p.created_at, p.changed_at,
+    -- The published title and excerpt (#358), which the document indexes too.
+    SELECT p.id,
+           COALESCE(p.published_settings->>'title', p.title)::text AS title,
+           COALESCE(p.published_settings->>'description', p.description)::text AS description,
+           p.slug, p.post_type, p.created_at, p.changed_at,
            ps.body_text, ts_rank(ps.document, q.tsq) AS rank
     FROM post_search ps
     JOIN posts p ON p.id = ps.post_id

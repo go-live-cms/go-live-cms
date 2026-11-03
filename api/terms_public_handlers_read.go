@@ -102,7 +102,7 @@ func (server *Server) listPublicTermPosts(c *gin.Context) {
 	posts := make([]PostWithMetaResponse, len(rows))
 	for i, row := range rows {
 		// Same columns as ListPostsWithMeta, so the row converts directly.
-		posts[i] = toPostWithMetaResponse(db.ListPostsWithMetaRow(row))
+		posts[i] = toPublicPostWithMetaResponse(db.ListPostsWithMetaRow(row))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"term":       toPublicTermResponse(term),

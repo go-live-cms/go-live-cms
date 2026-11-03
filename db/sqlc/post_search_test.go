@@ -139,10 +139,13 @@ func TestSearchPublicPostsTermNamesAreWeightedLikeDescriptions(t *testing.T) {
 	publishSearchPost(t, inBody, searchDoc(word))
 	require.Equal(t, []int64{inBody.ID}, publicSearchIDs(t, word, ""))
 
-	// Renaming the term and linking it both reach the index (triggers).
+	// Renaming the term and linking it both reach the index (triggers). The post
+	// is published, so the link counts once it is updated (#358).
 	_, err := testQueries.db.ExecContext(context.Background(), `UPDATE taxonomy_terms SET name = $2 WHERE id = $1`, term.ID, "Topic "+word)
 	require.NoError(t, err)
-	tagPost(t, tagged, term)
+	linkTerms(t, tagged, term)
+	require.Equal(t, []int64{inBody.ID}, publicSearchIDs(t, word, ""))
+	publishSearchPost(t, tagged, searchDoc("plain"))
 	require.Equal(t, []int64{tagged.ID, inBody.ID}, publicSearchIDs(t, word, ""))
 
 	// A private taxonomy's terms don't make a post findable.
@@ -150,12 +153,48 @@ func TestSearchPublicPostsTermNamesAreWeightedLikeDescriptions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []int64{inBody.ID}, publicSearchIDs(t, word, ""))
 
-	// Unlinking removes it again.
+	// Unlinking removes it again, on Update.
 	_, err = testQueries.db.ExecContext(context.Background(), `UPDATE taxonomy_types SET public = true WHERE id = $1`, taxonomy.ID)
 	require.NoError(t, err)
 	require.Equal(t, []int64{tagged.ID, inBody.ID}, publicSearchIDs(t, word, ""))
 	require.NoError(t, testQueries.RemovePostFromTaxonomyTerm(context.Background(), RemovePostFromTaxonomyTermParams{PostID: tagged.ID, TaxonomyTermID: term.ID}))
+	require.Equal(t, []int64{tagged.ID, inBody.ID}, publicSearchIDs(t, word, ""))
+	publishSearchPost(t, tagged, searchDoc("plain"))
 	require.Equal(t, []int64{inBody.ID}, publicSearchIDs(t, word, ""))
+
+	// Deleting a term takes it out of the published terms (and the index) at once:
+	// there is nothing left to show.
+	linkTerms(t, tagged, term)
+	publishSearchPost(t, tagged, searchDoc("plain"))
+	require.Equal(t, []int64{tagged.ID, inBody.ID}, publicSearchIDs(t, word, ""))
+	require.NoError(t, testQueries.DeleteTaxonomyTerm(context.Background(), term.ID))
+	require.Equal(t, []int64{inBody.ID}, publicSearchIDs(t, word, ""))
+}
+
+// The published title and excerpt are what search finds and shows (#358): editing
+// them on a published post changes nothing until Update; a draft is indexed by
+// its working ones.
+func TestSearchPublicPostsPublishedTitle(t *testing.T) {
+	ctx := context.Background()
+	owner := createRandomUser(t)
+	oldWord, newWord := searchWord(t), searchWord(t)
+
+	post := createSearchPost(t, owner, searchPostSpec{title: "Title " + oldWord, description: "plain excerpt"})
+	publishSearchPost(t, post, searchDoc("plain body"))
+	require.Equal(t, []int64{post.ID}, publicSearchIDs(t, oldWord, ""))
+
+	_, err := testQueries.db.ExecContext(ctx, `UPDATE posts SET title = $2 WHERE id = $1`, post.ID, "Title "+newWord)
+	require.NoError(t, err)
+	require.Equal(t, []int64{post.ID}, publicSearchIDs(t, oldWord, ""))
+	require.Empty(t, publicSearchIDs(t, newWord, ""))
+	rows, err := testQueries.SearchPublicPosts(ctx, SearchPublicPostsParams{Query: oldWord, LimitCount: 10})
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	require.Equal(t, "Title "+oldWord, rows[0].Title)
+
+	publishSearchPost(t, post, searchDoc("plain body"))
+	require.Empty(t, publicSearchIDs(t, oldWord, ""))
+	require.Equal(t, []int64{post.ID}, publicSearchIDs(t, newWord, ""))
 }
 
 func TestSearchPublicPostsOnlyPublishedSnapshots(t *testing.T) {

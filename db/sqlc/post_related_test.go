@@ -43,7 +43,17 @@ func createRelatedTestPost(t *testing.T, user User, postType, status string, cre
 	return post
 }
 
+// tagPost links the terms to the post. The public site shows a published post's
+// published terms (#358), so for one it also does what Update does to them:
+// published_settings becomes the post's current settings. linkTerms only links.
 func tagPost(t *testing.T, post Post, terms ...TaxonomyTerm) {
+	linkTerms(t, post, terms...)
+	if post.PostStatus == "published" {
+		republishSettings(t, post.ID)
+	}
+}
+
+func linkTerms(t *testing.T, post Post, terms ...TaxonomyTerm) {
 	for _, term := range terms {
 		_, err := testQueries.AddPostToTaxonomyTerm(context.Background(), AddPostToTaxonomyTermParams{
 			PostID:         post.ID,
@@ -51,6 +61,14 @@ func tagPost(t *testing.T, post Post, terms ...TaxonomyTerm) {
 		})
 		require.NoError(t, err)
 	}
+}
+
+// republishSettings copies the post's working settings into published_settings,
+// the settings half of an Update.
+func republishSettings(t *testing.T, postID int64) {
+	_, err := testQueries.db.ExecContext(context.Background(),
+		`UPDATE posts SET published_settings = golive_post_settings(id) WHERE id = $1`, postID)
+	require.NoError(t, err)
 }
 
 func relatedTestTerm(t *testing.T, taxonomy string) TaxonomyTerm {

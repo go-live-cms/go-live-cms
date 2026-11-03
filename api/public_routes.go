@@ -7,6 +7,11 @@ import "github.com/gin-gonic/gin"
 func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 	posts := rg.Group("/posts")
 	{
+		// What the public site shows of a post: its published settings (#358).
+		// The post page, and the feeds and short lists (RSS, sitemap, latest posts)
+		posts.GET("", server.listPublicPosts)
+		posts.GET("/slug/:slug", server.getPublicPostBySlug)
+		posts.GET("/:id", server.getPublicPost)
 		// Published block content for SSR
 		posts.GET("/:id/blocks", server.getPublicPostBlocks)
 		// Older/newer and related posts for the post page (#351, posts_related.go)

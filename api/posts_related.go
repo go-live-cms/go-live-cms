@@ -150,7 +150,7 @@ func toAdjacentPostResponse(row db.ListAdjacentPostsRow) PostWithMetaResponse {
 		ID: row.ID, Title: row.Title, Description: row.Description, UserID: row.UserID,
 		Username: row.Username, Url: row.Url, PostType: row.PostType, PostStatus: row.PostStatus,
 		PostParent: row.PostParent, MenuOrder: row.MenuOrder, CreatedAt: row.CreatedAt,
-		ChangedAt: row.ChangedAt, Slug: row.Slug, Meta: row.Meta, Authors: row.Authors,
+		ChangedAt: row.ChangedAt, Slug: row.Slug, PublishedSettings: row.PublishedSettings, Meta: row.Meta, Authors: row.Authors,
 	}).PostWithMetaResponse
 }
 
@@ -162,7 +162,7 @@ func toRelatedPostResponse(row db.ListRelatedPostsRow) RelatedPostResponse {
 	metaMap := make(map[string]interface{})
 	decodeJSONBestEffort(row.Meta, &metaMap)
 
-	return RelatedPostResponse{
+	resp := RelatedPostResponse{
 		PostWithMetaResponse: PostWithMetaResponse{
 			ID:          row.ID,
 			Title:       row.Title,
@@ -183,4 +183,7 @@ func toRelatedPostResponse(row db.ListRelatedPostsRow) RelatedPostResponse {
 		SharedCategories: row.SharedCategories,
 		SharedTags:       row.SharedTags,
 	}
+	// The published title, excerpt and featured image (#358).
+	applyPublishedSettings(&resp.PostWithMetaResponse, row.PublishedSettings)
+	return resp
 }

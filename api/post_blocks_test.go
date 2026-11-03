@@ -164,24 +164,12 @@ func TestPublishPostAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetPostBlocks(gomock.Any(), int64(1)).
+					PublishPostTx(gomock.Any(), db.PublishPostTxParams{
+						PostID:    1,
+						CreatedBy: sql.NullInt64{Int64: 1, Valid: true},
+					}).
 					Times(1).
-					Return(db.GetPostBlocksRow{
-						Content:  validBlockDoc(),
-						Revision: 1,
-					}, nil)
-				store.EXPECT().
-					GetNextVersionNoForPost(gomock.Any(), int64(1)).
-					Times(1).
-					Return(int32(1), nil)
-				store.EXPECT().
-					InsertPostVersion(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(db.InsertPostVersionRow{ID: 1, VersionNo: 1}, nil)
-				store.EXPECT().
-					SetPublishedVersionOnPost(gomock.Any(), gomock.Any()).
-					Times(1).
-					Return(nil)
+					Return(db.PublishPostTxResult{VersionID: 1, VersionNo: 1, BlockDoc: validBlockDoc()}, nil)
 				store.EXPECT().
 					GetMediaByPostWithOrder(gomock.Any(), int64(1)).
 					Times(1).
@@ -204,7 +192,7 @@ func TestPublishPostAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetPostBlocks(gomock.Any(), gomock.Any()).
+					PublishPostTx(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -219,9 +207,9 @@ func TestPublishPostAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetPostBlocks(gomock.Any(), int64(999)).
+					PublishPostTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.GetPostBlocksRow{}, sql.ErrNoRows)
+					Return(db.PublishPostTxResult{}, sql.ErrNoRows)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -235,16 +223,9 @@ func TestPublishPostAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					GetPostBlocks(gomock.Any(), int64(1)).
+					PublishPostTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.GetPostBlocksRow{
-						Content:  validBlockDoc(),
-						Revision: 1,
-					}, nil)
-				store.EXPECT().
-					GetNextVersionNoForPost(gomock.Any(), int64(1)).
-					Times(1).
-					Return(int32(0), fmt.Errorf("db error"))
+					Return(db.PublishPostTxResult{}, fmt.Errorf("db error"))
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)

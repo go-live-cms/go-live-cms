@@ -9,6 +9,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 const clearMenuLocation = `-- name: ClearMenuLocation :exec
@@ -180,6 +182,7 @@ const listMenuItemsWithTargets = `-- name: ListMenuItemsWithTargets :many
 SELECT
   mi.id, mi.menu_id, mi.parent_id, mi.sort_order, mi.item_type, mi.label,
   mi.post_id, mi.term_id, mi.post_type, mi.url,
+  p.published_settings AS post_published_settings,
   p.title AS post_title, p.slug AS post_slug, p.post_type AS post_post_type, p.post_status AS post_status,
   ppt.public AS post_type_public, ppt.is_active AS post_type_active,
   t.name AS term_name, t.slug AS term_slug, tt.name AS taxonomy_name, tt.public AS taxonomy_public,
@@ -195,34 +198,36 @@ ORDER BY mi.sort_order, mi.id
 `
 
 type ListMenuItemsWithTargetsRow struct {
-	ID             int64          `json:"id"`
-	MenuID         int64          `json:"menu_id"`
-	ParentID       sql.NullInt64  `json:"parent_id"`
-	SortOrder      int32          `json:"sort_order"`
-	ItemType       string         `json:"item_type"`
-	Label          string         `json:"label"`
-	PostID         sql.NullInt64  `json:"post_id"`
-	TermID         sql.NullInt64  `json:"term_id"`
-	PostType       sql.NullString `json:"post_type"`
-	Url            string         `json:"url"`
-	PostTitle      sql.NullString `json:"post_title"`
-	PostSlug       sql.NullString `json:"post_slug"`
-	PostPostType   sql.NullString `json:"post_post_type"`
-	PostStatus     sql.NullString `json:"post_status"`
-	PostTypePublic sql.NullBool   `json:"post_type_public"`
-	PostTypeActive sql.NullBool   `json:"post_type_active"`
-	TermName       sql.NullString `json:"term_name"`
-	TermSlug       sql.NullString `json:"term_slug"`
-	TaxonomyName   sql.NullString `json:"taxonomy_name"`
-	TaxonomyPublic sql.NullBool   `json:"taxonomy_public"`
-	ArchiveLabel   sql.NullString `json:"archive_label"`
-	ArchivePublic  sql.NullBool   `json:"archive_public"`
-	ArchiveActive  sql.NullBool   `json:"archive_active"`
+	ID                    int64                 `json:"id"`
+	MenuID                int64                 `json:"menu_id"`
+	ParentID              sql.NullInt64         `json:"parent_id"`
+	SortOrder             int32                 `json:"sort_order"`
+	ItemType              string                `json:"item_type"`
+	Label                 string                `json:"label"`
+	PostID                sql.NullInt64         `json:"post_id"`
+	TermID                sql.NullInt64         `json:"term_id"`
+	PostType              sql.NullString        `json:"post_type"`
+	Url                   string                `json:"url"`
+	PostPublishedSettings pqtype.NullRawMessage `json:"post_published_settings"`
+	PostTitle             sql.NullString        `json:"post_title"`
+	PostSlug              sql.NullString        `json:"post_slug"`
+	PostPostType          sql.NullString        `json:"post_post_type"`
+	PostStatus            sql.NullString        `json:"post_status"`
+	PostTypePublic        sql.NullBool          `json:"post_type_public"`
+	PostTypeActive        sql.NullBool          `json:"post_type_active"`
+	TermName              sql.NullString        `json:"term_name"`
+	TermSlug              sql.NullString        `json:"term_slug"`
+	TaxonomyName          sql.NullString        `json:"taxonomy_name"`
+	TaxonomyPublic        sql.NullBool          `json:"taxonomy_public"`
+	ArchiveLabel          sql.NullString        `json:"archive_label"`
+	ArchivePublic         sql.NullBool          `json:"archive_public"`
+	ArchiveActive         sql.NullBool          `json:"archive_active"`
 }
 
 // A menu's items with what their URL and visibility are resolved from: the
 // post (and its type), the term (and its taxonomy) or the archive's post type.
-// A target that no longer exists comes back as NULLs.
+// A target that no longer exists comes back as NULLs. A post's published
+// settings come along: readers see its published title (#358, resolveMenuItem).
 func (q *Queries) ListMenuItemsWithTargets(ctx context.Context, menuID int64) ([]ListMenuItemsWithTargetsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listMenuItemsWithTargets, menuID)
 	if err != nil {
@@ -243,6 +248,7 @@ func (q *Queries) ListMenuItemsWithTargets(ctx context.Context, menuID int64) ([
 			&i.TermID,
 			&i.PostType,
 			&i.Url,
+			&i.PostPublishedSettings,
 			&i.PostTitle,
 			&i.PostSlug,
 			&i.PostPostType,

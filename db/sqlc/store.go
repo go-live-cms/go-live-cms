@@ -63,6 +63,9 @@ type Store interface {
 
 	StorePostCollabTx(ctx context.Context, arg StorePostCollabTxParams) (StorePostCollabTxResult, error)
 
+	PublishPostTx(ctx context.Context, arg PublishPostTxParams) (PublishPostTxResult, error)
+	RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error)
+
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)
 	ReplaceMenuItemsTx(ctx context.Context, arg ReplaceMenuItemsTxParams) ([]MenuItem, error)
 

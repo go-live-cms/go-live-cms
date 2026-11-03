@@ -14,6 +14,9 @@ import (
 type Querier interface {
 	// Then activate the specified theme
 	ActivateTheme(ctx context.Context, id int64) (Theme, error)
+	// Restoring a version's settings (#358), after RemoveAllPostTaxonomies: link the
+	// given terms that still exist. Deleted terms are skipped, not an error.
+	AddExistingTermsToPost(ctx context.Context, arg AddExistingTermsToPostParams) error
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockAllSessionsForUser(ctx context.Context, userID int64) error
@@ -131,6 +134,10 @@ type Querier interface {
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
 	GetPostMeta(ctx context.Context, postID int64) ([]PostMetum, error)
 	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
+	// The editor's view of a post's settings (#358): the working ones, the published
+	// ones (NULL when nothing is published) and whether they differ, i.e. whether a
+	// settings change is waiting for Update.
+	GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error)
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
 	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
@@ -157,10 +164,15 @@ type Querier interface {
 	// public, active post types tagged with the term or, for a hierarchical taxonomy,
 	// any term below it (a parent category's page includes its children's posts). The
 	// subtree is a recursive CTE over parent_id; UNION (not UNION ALL) drops repeats,
-	// so even a parent cycle ends.
+	// so even a parent cycle ends. "Tagged" means the published terms
+	// (post_published_terms, #358), so a term change on a published post shows here
+	// only after Update.
 	// The term of a public taxonomy by type name and slug, with the type's label.
 	GetPublicTerm(ctx context.Context, arg GetPublicTermParams) (GetPublicTermRow, error)
 	GetPublishedPostBlocks(ctx context.Context, id int64) (GetPublishedPostBlocksRow, error)
+	// The terms a published post shows on the site (#358): its published set, in the
+	// shape of GetPostTaxonomyTerms.
+	GetPublishedPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPublishedPostTaxonomyTermsRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error)
@@ -185,6 +197,10 @@ type Querier interface {
 	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	InsertPostVersion(ctx context.Context, arg InsertPostVersionParams) (InsertPostVersionRow, error)
+	// The new version is the post's working copy as stored now: block_doc and its
+	// settings (title, excerpt, featured image, terms; golive_post_settings, #358),
+	// read in the same statement so they belong together.
+	InsertPublishedVersionFromPost(ctx context.Context, arg InsertPublishedVersionFromPostParams) (InsertPublishedVersionFromPostRow, error)
 	InvalidatePasswordResetTokensForUser(ctx context.Context, userID int64) error
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
 	// Older/newer and related posts for the public post page (#351).
@@ -206,7 +222,8 @@ type Querier interface {
 	ListMediaPathsIn(ctx context.Context, paths []string) ([]string, error)
 	// A menu's items with what their URL and visibility are resolved from: the
 	// post (and its type), the term (and its taxonomy) or the archive's post type.
-	// A target that no longer exists comes back as NULLs.
+	// A target that no longer exists comes back as NULLs. A post's published
+	// settings come along: readers see its published title (#358, resolveMenuItem).
 	ListMenuItemsWithTargets(ctx context.Context, menuID int64) ([]ListMenuItemsWithTargetsRow, error)
 	ListMenus(ctx context.Context) ([]ListMenusRow, error)
 	// What the admin Users page shows. Invitations that expired over 30 days ago
@@ -251,10 +268,11 @@ type Querier interface {
 	// post's terms count ('' = all), and @term_id to one of them (0 = all; the sidebar's
 	// "In <category>" names one category). With @with_fallback the latest posts fill the rest
 	// when fewer share a term; without it only posts sharing one are returned. The
-	// current post never appears.
+	// current post never appears. Terms are the published ones (post_published_terms,
+	// #358): a term added to a published post counts once it is updated.
 	//
-	// The candidates are the posts sharing a term (unique_post_taxonomy_term for the
-	// current post's terms, idx_post_taxonomy_term_id for the posts in them) plus the
+	// The candidates are the posts sharing a term (the primary key for the
+	// current post's terms, idx_post_published_terms_term_id for the posts in them) plus the
 	// latest @limit_count published posts (idx_posts_published_type_created_id), so the
 	// ranking never scans the whole posts table. Those are enough: if fewer than
 	// @limit_count published posts share a term, the latest ones fill the gap.
@@ -271,6 +289,9 @@ type Querier interface {
 	// acquire in the same order and cannot deadlock each other.
 	LockAdminUserIDs(ctx context.Context) ([]int64, error)
 	LockPostForCollabStore(ctx context.Context, id int64) (LockPostForCollabStoreRow, error)
+	// Publish runs in one transaction from here (PublishPostTx): two publishes of
+	// one post queue on this lock instead of racing for the same version_no.
+	LockPostForPublish(ctx context.Context, id int64) (int64, error)
 	// Taken by refresh-token rotation so it cannot interleave with a password
 	// change on the same user (which holds the row FOR UPDATE).
 	LockUserForShare(ctx context.Context, id int64) error
@@ -287,6 +308,9 @@ type Querier interface {
 	// name, description, alt and the focal point alone, so a concurrent metadata
 	// edit is never overwritten by a stale read.
 	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
+	// Restoring a version's settings (#358): the working title and excerpt. Only the
+	// working copy changes; the published settings stay until Update.
+	RestorePostTitleAndDescription(ctx context.Context, arg RestorePostTitleAndDescriptionParams) (Post, error)
 	RevokeOpenUserInvitationsByEmail(ctx context.Context, email string) error
 	RevokeUserInvitation(ctx context.Context, id int64) (int64, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
@@ -321,7 +345,9 @@ type Querier interface {
 	SetPostTypeActive(ctx context.Context, arg SetPostTypeActiveParams) error
 	SetPostTypeActiveByRegisteredBy(ctx context.Context, arg SetPostTypeActiveByRegisteredByParams) error
 	// Publishing also makes the post public: post_status follows the snapshot, so a
-	// post published from the editor is not left as 'draft' in the database.
+	// post published from the editor is not left as 'draft' in the database. The
+	// published settings are the version's (#358); without a version (a post created
+	// as published, the dev seed) they are the post's current ones.
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
@@ -335,8 +361,8 @@ type Querier interface {
 	TouchMenu(ctx context.Context, id int64) error
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
-	// Back to draft and drop the public snapshot (#136). The snapshot stays in
-	// post_versions, so it can still be viewed and restored.
+	// Back to draft and drop the public snapshot (#136), settings included (#358).
+	// The snapshot stays in post_versions, so it can still be viewed and restored.
 	UnpublishPost(ctx context.Context, id int64) (Post, error)
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	// Metadata-only update used by PUT /media/:id. The file columns (media_path,

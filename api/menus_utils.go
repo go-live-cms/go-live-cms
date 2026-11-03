@@ -94,7 +94,8 @@ func resolveMenuItem(row db.ListMenuItemsWithTargetsRow, urlStructure string) re
 			item.Status = menuItemMissing
 			break
 		}
-		fallback = row.PostTitle.String
+		// The title the site shows (#358): the published one, if any.
+		fallback, _ = publicTitleAndDescription(row.PostTitle.String, "", row.PostPublishedSettings)
 		item.URL = menuPostPath(row.PostPostType.String, row.PostSlug.String, row.PostID.Int64, urlStructure)
 		switch {
 		case !row.PostTypePublic.Bool || !row.PostTypeActive.Bool:

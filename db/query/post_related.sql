@@ -29,7 +29,7 @@ WITH adjacent AS (
 SELECT
     a.direction,
     p.id, p.title, p.description, p.user_id, p.username, p.url,
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.slug,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.slug, p.published_settings,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -54,16 +54,17 @@ JOIN posts p ON p.id = a.id;
 -- post's terms count ('' = all), and @term_id to one of them (0 = all; the sidebar's
 -- "In <category>" names one category). With @with_fallback the latest posts fill the rest
 -- when fewer share a term; without it only posts sharing one are returned. The
--- current post never appears.
+-- current post never appears. Terms are the published ones (post_published_terms,
+-- #358): a term added to a published post counts once it is updated.
 --
--- The candidates are the posts sharing a term (unique_post_taxonomy_term for the
--- current post's terms, idx_post_taxonomy_term_id for the posts in them) plus the
+-- The candidates are the posts sharing a term (the primary key for the
+-- current post's terms, idx_post_published_terms_term_id for the posts in them) plus the
 -- latest @limit_count published posts (idx_posts_published_type_created_id), so the
 -- ranking never scans the whole posts table. Those are enough: if fewer than
 -- @limit_count published posts share a term, the latest ones fill the gap.
 WITH current_terms AS (
     SELECT ptr.taxonomy_term_id, (ty.name = 'category') AS is_category
-    FROM post_taxonomy_relationships ptr
+    FROM post_published_terms ptr
     JOIN taxonomy_terms tt ON tt.id = ptr.taxonomy_term_id
     JOIN taxonomy_types ty ON ty.id = tt.taxonomy_type_id
     WHERE ptr.post_id = @post_id::bigint
@@ -75,7 +76,7 @@ shared AS (
         ptr.post_id,
         count(*) FILTER (WHERE ct.is_category) AS shared_categories,
         count(*) FILTER (WHERE NOT ct.is_category) AS shared_tags
-    FROM post_taxonomy_relationships ptr
+    FROM post_published_terms ptr
     JOIN current_terms ct ON ct.taxonomy_term_id = ptr.taxonomy_term_id
     WHERE ptr.post_id <> @post_id::bigint
     GROUP BY ptr.post_id
@@ -92,7 +93,7 @@ latest AS (
 )
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.slug,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.slug, p.published_settings,
     COALESCE(s.shared_categories, 0)::int AS shared_categories,
     COALESCE(s.shared_tags, 0)::int AS shared_tags,
     (

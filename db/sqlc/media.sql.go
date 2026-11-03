@@ -795,7 +795,7 @@ func (q *Queries) GetPostMediaCount(ctx context.Context, postID int64) (int64, e
 
 const getPostWithMedia = `-- name: GetPostWithMedia :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
     COALESCE(
         json_agg(
             json_build_object(
@@ -837,6 +837,7 @@ type GetPostWithMediaRow struct {
 	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
+	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
 	Media              interface{}           `json:"media"`
 }
 
@@ -861,6 +862,7 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.PublishedVersionID,
 		&i.PublishedBlockDoc,
 		&i.Slug,
+		&i.PublishedSettings,
 		&i.Media,
 	)
 	return i, err
@@ -946,7 +948,7 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 
 const getPostsByUserWithMedia = `-- name: GetPostsByUserWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
     COALESCE(
         json_agg(
             json_build_object(
@@ -997,6 +999,7 @@ type GetPostsByUserWithMediaRow struct {
 	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
+	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
 	Media              interface{}           `json:"media"`
 }
 
@@ -1027,6 +1030,7 @@ func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUse
 			&i.PublishedVersionID,
 			&i.PublishedBlockDoc,
 			&i.Slug,
+			&i.PublishedSettings,
 			&i.Media,
 		); err != nil {
 			return nil, err
@@ -1266,7 +1270,7 @@ func (q *Queries) ListMediaPathsIn(ctx context.Context, paths []string) ([]strin
 
 const listPostsWithMedia = `-- name: ListPostsWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1315,6 +1319,7 @@ type ListPostsWithMediaRow struct {
 	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
+	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
 	Media              interface{}           `json:"media"`
 }
 
@@ -1345,6 +1350,7 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 			&i.PublishedVersionID,
 			&i.PublishedBlockDoc,
 			&i.Slug,
+			&i.PublishedSettings,
 			&i.Media,
 		); err != nil {
 			return nil, err

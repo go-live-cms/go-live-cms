@@ -54,11 +54,13 @@ RETURNING *;
 
 -- A menu's items with what their URL and visibility are resolved from: the
 -- post (and its type), the term (and its taxonomy) or the archive's post type.
--- A target that no longer exists comes back as NULLs.
+-- A target that no longer exists comes back as NULLs. A post's published
+-- settings come along: readers see its published title (#358, resolveMenuItem).
 -- name: ListMenuItemsWithTargets :many
 SELECT
   mi.id, mi.menu_id, mi.parent_id, mi.sort_order, mi.item_type, mi.label,
   mi.post_id, mi.term_id, mi.post_type, mi.url,
+  p.published_settings AS post_published_settings,
   p.title AS post_title, p.slug AS post_slug, p.post_type AS post_post_type, p.post_status AS post_status,
   ppt.public AS post_type_public, ppt.is_active AS post_type_active,
   t.name AS term_name, t.slug AS term_slug, tt.name AS taxonomy_name, tt.public AS taxonomy_public,

@@ -19,7 +19,11 @@
 WITH q AS (
     SELECT websearch_to_tsquery(golive_search_config(), @query::text) AS tsq
 ), hits AS (
-    SELECT p.id, p.title, p.description, p.slug, p.post_type, p.created_at, p.changed_at,
+    -- The published title and excerpt (#358), which the document indexes too.
+    SELECT p.id,
+           COALESCE(p.published_settings->>'title', p.title)::text AS title,
+           COALESCE(p.published_settings->>'description', p.description)::text AS description,
+           p.slug, p.post_type, p.created_at, p.changed_at,
            ps.body_text, ts_rank(ps.document, q.tsq) AS rank
     FROM post_search ps
     JOIN posts p ON p.id = ps.post_id
@@ -82,7 +86,7 @@ GROUP BY p.post_type;
 -- working copy is never indexed.
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm

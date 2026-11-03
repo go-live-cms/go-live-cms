@@ -412,12 +412,16 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 
 - `post_search` (`000024`): one row per post, `document` (tsvector: title A, description B,
   public taxonomies' term names B, published body C) and `body_text` (the published body as
-  plain text, for excerpts). **Triggers keep it current**, not handlers: posts insert, and
-  updates of title/description/`published_version_id`/`published_block_doc` (so publish and
-  unpublish), term links added/removed, a term renamed, a taxonomy's `public` flipped. The
-  body is read from the `post_versions` row publish points at (else `published_block_doc`),
-  never `block_doc`: collab stores don't fire them. `golive_block_doc_text(jsonb)` extracts
-  the text in reading order (`text`, `code`, caption runs, `cite`, children).
+  plain text, for excerpts). A published post is indexed by its **published** title,
+  excerpt and terms (`published_settings`, #358; 000026), a draft by its working ones, so a
+  settings edit on a published post reaches search on Update (the admin search box too).
+  **Triggers keep it current**, not handlers: posts insert, and updates of
+  title/description/`published_version_id`/`published_block_doc`/`published_settings` (so
+  publish and unpublish), term links added/removed (working and published), a term renamed,
+  a taxonomy's `public` flipped. The body is read from the `post_versions` row publish points
+  at (else `published_block_doc`), never `block_doc`: collab stores don't fire them.
+  `golive_block_doc_text(jsonb)` extracts the text in reading order (`text`, `code`, caption
+  runs, `cite`, children).
 - The text search config is `golive_search_config()`: the site language's (#330, below).
 - Queries (`db/query/post_search.sql`) use `websearch_to_tsquery`: any input is valid. Rank:
   `ts_rank` (weights), then newest. `GET /public/search?q=&type=all|post|page&page=`
@@ -486,4 +490,20 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   the editor restores through Yjs and the collab server's store persists it. The only
   `block_doc` writer for an existing post is the collab server's
   `PUT /internal/posts/:id/collab`.
+- **Settings snapshots (#358, `000026`, `post_settings.go`):** publish (`PublishPostTx`: lock,
+  next version_no, `InsertPublishedVersionFromPost`, `SetPublishedVersionOnPost` in one
+  transaction) stores `golive_post_settings(id)` in `post_versions.settings` and
+  `posts.published_settings`: title, description, featured image (`_thumbnail_id`/`_url` meta)
+  and sorted `term_ids`. The SQL function is the one definition of the shape; the SEO fields
+  (#357) and authors (#319) join it by redefining it. Unpublish NULLs it; a version from before
+  #358 has NULL (the migration backfilled only current versions). `post_published_terms` is the
+  published term set as rows, kept equal to `published_settings.term_ids` by a trigger (never
+  write it by hand); term archives, related posts and `/public/terms` join it. **Every public
+  read shows published settings:** `/public/posts[/:id|/slug/:slug]` (the post page, feeds),
+  the `/public` lists (`applyPublishedSettings`, `toPublicPostWithMetaResponse`), search and
+  menu titles. `/api/v1/posts*` stays the working copy (the admin). The **slug is not in the
+  snapshot** on purpose: it changes at once, with its conflict check. Restoring: the editor
+  restores the blocks (rule 9), then `POST /posts/:id/versions/:no/restore-settings`
+  (`RestorePostSettingsTx`) writes the version's settings into the working copy only;
+  `GET /posts/:id/settings` says whether they differ from the published ones.
 </content>

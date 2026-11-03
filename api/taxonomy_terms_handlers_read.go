@@ -705,34 +705,7 @@ func (server *Server) getPostTaxonomyTerms(c *gin.Context) {
 	// Build comprehensive term responses
 	termResponses := make([]TaxonomyTermResponse, len(taxonomyTerms))
 	for i, term := range taxonomyTerms {
-		response := TaxonomyTermResponse{
-			ID:               term.ID,
-			Name:             term.Name,
-			Slug:             term.Slug,
-			Description:      term.Description.String,
-			TaxonomyTypeID:   term.TaxonomyTypeID,
-			TaxonomyTypeName: term.TaxonomyTypeName,
-			CreatedAt:        term.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		}
-
-		// Handle optional relationships
-		if term.ParentID.Valid {
-			response.ParentID = &term.ParentID.Int64
-		}
-
-		if term.SortOrder.Valid {
-			response.SortOrder = &term.SortOrder.Int32
-		}
-
-		// Parse metadata
-		if term.Meta.Valid {
-			var meta map[string]interface{}
-			if err := json.Unmarshal(term.Meta.RawMessage, &meta); err == nil {
-				response.Meta = meta
-			}
-		}
-
-		termResponses[i] = response
+		termResponses[i] = toPostTaxonomyTermResponse(term)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -743,4 +716,36 @@ func (server *Server) getPostTaxonomyTerms(c *gin.Context) {
 			"count":   len(termResponses),
 		},
 	})
+}
+
+// toPostTaxonomyTermResponse shapes one of a post's terms (GET
+// /posts/:id/taxonomy-terms, and the published terms of /public/posts/:id).
+func toPostTaxonomyTermResponse(term db.GetPostTaxonomyTermsRow) TaxonomyTermResponse {
+	response := TaxonomyTermResponse{
+		ID:               term.ID,
+		Name:             term.Name,
+		Slug:             term.Slug,
+		Description:      term.Description.String,
+		TaxonomyTypeID:   term.TaxonomyTypeID,
+		TaxonomyTypeName: term.TaxonomyTypeName,
+		CreatedAt:        term.CreatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+
+	// Handle optional relationships
+	if term.ParentID.Valid {
+		response.ParentID = &term.ParentID.Int64
+	}
+
+	if term.SortOrder.Valid {
+		response.SortOrder = &term.SortOrder.Int32
+	}
+
+	// Parse metadata
+	if term.Meta.Valid {
+		var meta map[string]interface{}
+		if err := json.Unmarshal(term.Meta.RawMessage, &meta); err == nil {
+			response.Meta = meta
+		}
+	}
+	return response
 }
