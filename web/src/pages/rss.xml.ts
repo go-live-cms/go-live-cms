@@ -1,7 +1,7 @@
 import rss from "@astrojs/rss"
 import type { APIRoute } from "astro"
 import type { Post } from "@gl-admin/lib/api/types"
-import { getPostsByType } from "../lib/api"
+import { getPublishedPosts } from "../lib/api"
 import { cacheControl, metaDescription, normalizeUrlStructure, postPath, resolveSiteUrl } from "../lib/seo"
 import { getSiteSettings } from "../lib/siteSettings"
 import { log } from "../lib/log"
@@ -18,7 +18,8 @@ export const GET: APIRoute = async ({ url }) => {
   const structure = normalizeUrlStructure(site.urlStructure)
   let posts: Post[]
   try {
-    posts = (await getPostsByType("post", { status: "published", sort: "date_desc", limit: 20 })).data
+    // Published titles and excerpts (#358): an edit waits for Update here too.
+    posts = (await getPublishedPosts("post", { sort: "date_desc", limit: 20 })).data
   } catch (error) {
     log.error("rss_posts_fetch_failed", { error })
     return new Response("Feed temporarily unavailable", {

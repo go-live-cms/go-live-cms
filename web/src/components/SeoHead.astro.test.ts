@@ -136,12 +136,19 @@ describe("theme layouts", () => {
   })
 
   it("the default error layout is noindex", async () => {
-    const container = await AstroContainer.create()
-    const html = await container.renderToString(DefaultErrorLayout, {
-      props: { status: 404, title: "Page not found", message: "Gone." },
-      request: new Request("http://web:4321/nope"),
-    })
-    expect(head(html)).toContain('<meta name="robots" content="noindex, nofollow">')
-    expect(head(html)).not.toContain('rel="canonical"')
+    // The 404's recent posts fail soft; fail them at once rather than wait on a DNS
+    // lookup of the API host, which took most of the test's time budget.
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("fetch failed"))))
+    try {
+      const container = await AstroContainer.create()
+      const html = await container.renderToString(DefaultErrorLayout, {
+        props: { status: 404, title: "Page not found", message: "Gone." },
+        request: new Request("http://web:4321/nope"),
+      })
+      expect(head(html)).toContain('<meta name="robots" content="noindex, nofollow">')
+      expect(head(html)).not.toContain('rel="canonical"')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

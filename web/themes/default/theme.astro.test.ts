@@ -11,12 +11,12 @@ const getSiteSettings = vi.fn()
 vi.mock("@/lib/siteSettings", () => ({
   getSiteSettings: (...args: unknown[]) => getSiteSettings(...args),
 }))
-const getPostsByType = vi.fn()
+const getPublishedPosts = vi.fn()
 const getAdjacentPosts = vi.fn()
 const getRelatedPosts = vi.fn()
 vi.mock("@/lib/api", () => ({
   getTaxonomyTypes: async () => [{ name: "tag", label: "Tags" }],
-  getPostsByType: (...args: unknown[]) => getPostsByType(...args),
+  getPublishedPosts: (...args: unknown[]) => getPublishedPosts(...args),
   getAdjacentPosts: (...args: unknown[]) => getAdjacentPosts(...args),
   getRelatedPosts: (...args: unknown[]) => getRelatedPosts(...args),
   getFeaturedImageUrl: async () => null,
@@ -78,7 +78,7 @@ let container: AstroContainer
 beforeEach(async () => {
   // React renders the post body (BlockRenderer).
   container = await AstroContainer.create({ renderers: await loadRenderers([reactRenderer()]) })
-  getPostsByType.mockReset()
+  getPublishedPosts.mockReset()
   getAdjacentPosts.mockReset().mockResolvedValue({ previous: null, next: null })
   getRelatedPosts.mockReset().mockResolvedValue([])
   getMenu.mockReset()
@@ -525,10 +525,12 @@ describe("term page (#348)", () => {
 
 describe("error layout", () => {
   it("404: a search form and recent posts at their slug URLs", async () => {
-    getPostsByType.mockResolvedValue({ data: [{ ...post, title: "Recent one" }], meta: {} })
+    getPublishedPosts.mockResolvedValue({ data: [{ ...post, title: "Recent one" }], meta: {} })
     const html = await render(ErrorLayout, { status: 404, title: "Page not found", message: "Gone." })
     expect(html).toContain("This page isn’t here")
     expect(html).toContain('<a href="/post/hello-world">Recent one</a>')
+    // The published titles (#358): the public list, not the admin's /posts.
+    expect(getPublishedPosts).toHaveBeenCalledWith("post", { sort: "date_desc", limit: 3 })
     expect(html).toMatch(/<form role="search" class="search-form" action="\/search" method="get">/)
     expect(html).toMatch(/<input id="q404" type="search" name="q"/)
     expect(html).toContain('<meta name="robots" content="noindex, nofollow">')
@@ -538,7 +540,7 @@ describe("error layout", () => {
     const html = await render(ErrorLayout, { status: 500, title: "Something went wrong", message: "Oops." })
     expect(html).toContain("Something went wrong on our side")
     expect(html).toContain("Try again")
-    expect(getPostsByType).not.toHaveBeenCalled()
+    expect(getPublishedPosts).not.toHaveBeenCalled()
     expect(getMenu).not.toHaveBeenCalled()
   })
 })

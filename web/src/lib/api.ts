@@ -251,6 +251,41 @@ export async function getPublicPostsPage(type: string, page: number): Promise<Pu
   return { posts: body.posts || [], pagination: body.pagination }
 }
 
-export async function getPublishedPosts(params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
-  return getPosts({ ...params, status: "published" })
+// A published post as the site shows it (#358, GET /public/posts/:id or
+// /public/posts/slug/:slug): its published title, excerpt, featured image and terms,
+// never the working ones an editor is changing. Drafts, archived posts and unknown
+// ids/slugs are null; other failures throw, with the status.
+export interface PublicPost {
+  post: Post
+  featured_image: { id: number | null; url: string } | null
+  taxonomy_terms: TaxonomyTerm[]
+}
+
+export async function getPublicPost(idOrSlug: string | number): Promise<PublicPost | null> {
+  const key = String(idOrSlug)
+  const path = /^\d+$/.test(key) ? `/public/posts/${key}` : `/public/posts/slug/${encodeURIComponent(key)}`
+  const response = await fetch(`${SERVER_MEDIA_URL}${path}`, { headers: requestIdHeaders() })
+  if (response.status === 404) return null
+  if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status} loading a post`), { status: response.status })
+  const body = await response.json()
+  if (!body?.post) return null
+  return { post: body.post, featured_image: body.featured_image ?? null, taxonomy_terms: body.taxonomy_terms ?? [] }
+}
+
+// A public type's published posts with their published titles and excerpts (#358,
+// GET /public/posts): the feeds and short "latest posts" lists. Same sort and paging
+// parameters as getPosts; a type that isn't public is an error (404).
+export async function getPublishedPosts(type: string, params: Pick<PostQueryParams, "limit" | "offset" | "sort" | "order"> = {}): Promise<ApiResponse<Post>> {
+  const searchParams = new URLSearchParams({ type })
+  if (params.limit) searchParams.set("limit", params.limit.toString())
+  if (params.offset) searchParams.set("offset", params.offset.toString())
+  if (params.sort) searchParams.set("sort", params.sort)
+  if (params.order) searchParams.set("order", params.order)
+  const response = await fetch(`${SERVER_MEDIA_URL}/public/posts?${searchParams}`, { headers: requestIdHeaders() })
+  if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status} listing ${type} posts`), { status: response.status })
+  const body = await response.json()
+  return {
+    data: body.posts || [],
+    meta: body.meta || { count: 0, limit: 20, offset: 0, total: 0 },
+  }
 }
