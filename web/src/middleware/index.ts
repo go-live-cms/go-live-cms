@@ -1,3 +1,4 @@
+import type { APIContext, MiddlewareNext } from "astro"
 import { defineMiddleware } from "astro:middleware"
 import fs from "node:fs"
 import path from "node:path"
@@ -11,6 +12,8 @@ import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { shouldNoindex } from "../lib/seo"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
+import { log } from "../lib/log"
+import { requestIdFrom, runWithLogContext } from "./requestContext"
 
 // Themes are bundled at build time (#272): Vite resolves these globs when the image is
 // built (lazily: nothing loads until called), so a theme copied in later has no entry.
@@ -18,11 +21,22 @@ import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
 const THEME_CONFIGS = import.meta.glob<Record<string, any>>("../../themes/*/theme.config.ts")
 const THEME_FUNCTIONS = import.meta.glob<Record<string, any>>("../../themes/*/functions.ts")
 
-export const onRequest = defineMiddleware(async (context, next) => {
+// Every log line written while a request is handled carries its id (Caddy's X-Request-ID,
+// which the API proxy also forwards) and route pattern, never the raw path (#378).
+export const onRequest = defineMiddleware((context, next) => {
+  const proxied = !import.meta.env.DEV && isApiProxyPath(context.url.pathname)
+  const requestId = requestIdFrom(context.request.headers)
+  context.locals.requestId = requestId
+  return runWithLogContext({ request_id: requestId, route: proxied ? "api_proxy" : context.routePattern }, () =>
+    handleRequest(context, next, proxied),
+  )
+})
+
+async function handleRequest(context: APIContext, next: MiddlewareNext, proxied: boolean): Promise<Response> {
   const url = new URL(context.request.url)
 
   // Production only: in dev the Vite proxy handles these before Astro (apiProxy.ts).
-  if (!import.meta.env.DEV && isApiProxyPath(url.pathname)) {
+  if (proxied) {
     let clientAddress: string | undefined
     try {
       clientAddress = context.clientAddress
@@ -42,10 +56,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       try {
         const loadConfig = THEME_CONFIGS[`../../themes/${theme.slug}/theme.config.ts`]
         if (!loadConfig) {
-          console.error(
-            `Theme "${theme.slug}" is not in this build. Themes are bundled at build time: ` +
-              `add it to web/themes and rebuild the web and api images. Using its CSS only.`,
-          )
+          // Themes are bundled at build time: add it to web/themes and rebuild the web
+          // and api images. Until then it gets its CSS only.
+          log.error("theme_not_in_build", { theme: theme.slug })
           context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
         } else {
           const configModule = await loadConfig()
@@ -60,7 +73,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
           }
         }
       } catch (error) {
-        console.error(`Failed to load theme config for ${theme.slug}:`, error)
+        log.error("theme_config_load_failed", { theme: theme.slug, error })
         // Fallback to default CSS path
         context.locals.themeCssPath = `/themes/${theme.slug}/styles/theme.css`
       }
@@ -107,11 +120,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
       } catch (error) {
         // functions.ts is optional - silently continue if not found
         if (error.code !== "ERR_MODULE_NOT_FOUND") {
-          console.error(`Failed to load theme functions for ${theme.slug}:`, error)
+          log.error("theme_functions_load_failed", { theme: theme.slug, error })
         }
       }
     } catch (error) {
-      console.error("Failed to get active theme, using default:", error)
+      log.error("active_theme_fetch_failed", { fallback: "default", error })
       context.locals.activeTheme = "default"
       context.locals.themeCssPath = "/themes/default/styles/theme.css"
     }
@@ -160,7 +173,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   return withRobotsHeader(await next(), url.pathname)
-})
+}
 
 // X-Robots-Tag: noindex on error responses (404/500, whatever the theme's
 // error layout emits) and non-public pages such as /gl-admin and /login (#137).

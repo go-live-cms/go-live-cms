@@ -13,6 +13,8 @@
 
 import { defineThemeFunctions } from "../../src/lib/theme-api"
 import type { ThemeFunctionsContext, ThemeEndpoint } from "../../src/lib/theme-api"
+// The web server's structured logger (#378): one JSON line per record, with the request id.
+import { log } from "../../src/lib/log"
 
 /**
  * Setup function - called once when theme loads
@@ -22,7 +24,7 @@ import type { ThemeFunctionsContext, ThemeEndpoint } from "../../src/lib/theme-a
  * - One-time initialization
  */
 async function setup(context: ThemeFunctionsContext): Promise<void> {
-  console.log(`[Example Theme] Running setup for ${context.themeSlug}`)
+  log.debug("example_theme_setup", { theme: context.themeSlug })
 
   // Example: Set default theme option if not exists
   const menuSettings = await context.settings.get("header_menu")
@@ -34,7 +36,7 @@ async function setup(context: ThemeFunctionsContext): Promise<void> {
         { label: "About", url: "/about" },
       ],
     })
-    console.log("[Example Theme] Initialized default menu")
+    log.info("example_theme_default_menu_initialized")
   }
 
   // Register custom post type declared in theme.config.ts
@@ -48,10 +50,10 @@ async function setup(context: ThemeFunctionsContext): Promise<void> {
       icon: "shopping-bag",
       supports: ["title", "content", "description", "featured_image"],
     })
-    console.log("[Example Theme] Registered product post type")
+    log.debug("example_theme_post_type_registered", { post_type: "product" })
   } catch (error) {
     // Safe to ignore — upsert semantics mean this is idempotent
-    console.warn("[Example Theme] Post type registration note:", error)
+    log.warn("example_theme_post_type_registration_failed", { post_type: "product", error })
   }
 }
 
@@ -68,7 +70,7 @@ async function beforeRender(context: ThemeFunctionsContext): Promise<void> {
     const menuSettings = await context.settings.get("header_menu")
     context.locals.themeMenu = menuSettings
   } catch (error) {
-    console.error("[Example Theme] Error loading menu:", error)
+    log.error("example_theme_menu_load_failed", { error })
   }
 
   // Example: Inject featured posts on homepage
@@ -80,9 +82,8 @@ async function beforeRender(context: ThemeFunctionsContext): Promise<void> {
         limit: 3,
       })
       context.locals.featuredPosts = featuredPosts
-      console.log("[Example Theme] Injected featured posts")
     } catch (error) {
-      console.error("[Example Theme] Error loading featured posts:", error)
+      log.error("example_theme_featured_posts_load_failed", { error })
     }
   }
 

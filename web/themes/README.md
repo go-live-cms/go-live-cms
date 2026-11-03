@@ -648,7 +648,7 @@ async function beforeRender(context: ThemeFunctionsContext): Promise<void> {
     const menu = await context.settings.get("header_menu")
     context.locals.themeMenu = menu
   } catch (error) {
-    console.error("[Theme] Error loading menu:", error)
+    log.error("theme_menu_load_failed", { error })
   }
 
   // Inject featured posts only on homepage
@@ -1245,12 +1245,18 @@ export default defineThemeFunctions({
 
 ### Handle Errors Gracefully
 
+Log server-side failures with the web server's logger, `import { log } from "@/lib/log"`
+(`../../src/lib/log` from `functions.ts`), not `console`: it writes one JSON line per record
+with the request id, like the API (#378). Keep the message a fixed `snake_case` name, put the
+variable parts in fields, pass the error as `error`, and never log tokens, cookies or query
+strings.
+
 ```typescript
 async function beforeRender(context: ThemeFunctionsContext): Promise<void> {
   try {
     context.locals.recentPosts = await context.apiClient.getPosts({ limit: 5 })
   } catch (error) {
-    console.error("[Theme] Failed to load recent posts:", error)
+    log.error("theme_recent_posts_load_failed", { error })
     context.locals.recentPosts = [] // Always set fallback data
   }
 }

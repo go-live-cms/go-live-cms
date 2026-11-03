@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { footerColumns, getMenu, normalizeMenu, safeMenuHref, withCurrent, type MenuLink } from "./menus"
+import { log } from "./log"
 
 const link = (id: number, url: string, children: MenuLink[] = []): MenuLink => ({ id, label: `L${id}`, url, children })
 
@@ -74,7 +75,7 @@ describe("getMenu", () => {
     const missing = vi.fn(async () => new Response("{}", { status: 404 }))
     expect(await getMenu("footer", missing as unknown as typeof fetch)).toBeNull()
 
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const warn = vi.spyOn(log, "warn").mockImplementation(() => {})
     const broken = vi.fn(async () => new Response("{}", { status: 500 }))
     expect(await getMenu("footer", broken as unknown as typeof fetch)).toBeNull()
     const down = vi.fn(async () => {

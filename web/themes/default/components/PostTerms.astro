@@ -7,6 +7,7 @@
  */
 import { getTaxonomyTypes } from '@/lib/api'
 import type { LinkedTerm } from '@/lib/termPage'
+import { log } from '@/lib/log'
 
 interface Props {
   terms?: LinkedTerm[]
@@ -32,7 +33,7 @@ if (terms.some((term) => term.taxonomy_type_name && !labels.has(term.taxonomy_ty
   try {
     for (const type of await getTaxonomyTypes()) if (!labels.has(type.name)) labels.set(type.name, type.label)
   } catch (error) {
-    console.warn('[PostTerms] Could not fetch taxonomy types:', error)
+    log.warn('taxonomy_types_fetch_failed', { error })
   }
 }
 const label = (type: string) => labels.get(type) ?? type

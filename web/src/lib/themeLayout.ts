@@ -3,6 +3,8 @@
  * layouts/{kind}/{variant}.astro, then its default variant, then the default theme's.
  * Pages pass their own import.meta.glob map, whose keys are relative to the page.
  */
+import { log } from "./log"
+
 type LayoutGlob = Record<string, () => Promise<unknown>>
 
 export function themeLayoutCandidates(prefix: string, themeSlug: string, kind: string, variant = "default"): string[] {
@@ -23,7 +25,7 @@ export async function loadThemeLayout(glob: LayoutGlob, candidates: string[]): P
       const module = (await load()) as { default?: unknown }
       if (module.default) return module.default
     } catch (error) {
-      console.warn(`Failed to load layout ${path}:`, error)
+      log.warn("theme_layout_load_failed", { layout: path, error })
     }
   }
   return null

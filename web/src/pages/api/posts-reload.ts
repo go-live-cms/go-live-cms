@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { SERVER_API_URL } from "../../../gl-admin/lib/server-api-url";
+import { log } from "../../lib/log";
 
 export const GET: APIRoute = async () => {
   // Server-side fetch, so the runtime SERVER_API_URL (the internal network address),
@@ -26,7 +27,7 @@ export const GET: APIRoute = async () => {
       },
     });
   } catch (error) {
-    console.error("API route error:", error);
+    log.error("posts_reload_failed", { error });
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },

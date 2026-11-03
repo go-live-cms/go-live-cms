@@ -5,6 +5,7 @@
  */
 import type { Post, TaxonomyTerm } from "@gl-admin/lib/api/types"
 import { getAdjacentPosts, getRelatedPosts } from "./api"
+import { log } from "./log"
 import { toListedPost, type ListedPost } from "./postList"
 import { normalizeUrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
@@ -57,7 +58,7 @@ export async function loadPostEnd(
   source: PostEndSource = apiSource,
 ): Promise<PostEndData> {
   const warn = (part: string) => (error: unknown) => {
-    console.warn(`[post end] Could not fetch ${part} for post ${post.id}:`, error)
+    log.warn("post_end_fetch_failed", { part, post_id: post.id, error })
     return null
   }
   const category = options.inCategory ? primaryCategory(terms) : undefined

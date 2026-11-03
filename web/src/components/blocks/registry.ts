@@ -1,4 +1,6 @@
 import type { BlockConfig, BlockComponent } from "./types"
+// Browser-safe: the admin loads this module too (ThemeContext).
+import { log } from "../../lib/log"
 
 /**
  * Block Registry
@@ -57,10 +59,10 @@ class BlockRegistry {
       const config = module.default || Object.values(module).find((exp: any) => exp?.type && exp?.component)
       if (config) {
         this.register(config)
-        console.log(`[Block Registry] Dynamically registered: ${config.type}`)
+        log.debug("block_registered", { type: config.type })
       }
     } catch (error) {
-      console.error(`[Block Registry] Failed to load block from ${modulePath}:`, error)
+      log.error("block_module_load_failed", { module: modulePath, error })
     }
   }
 
@@ -87,26 +89,18 @@ const systemBlockModules = import.meta.glob<{ default: BlockConfig }>("./*/index
   eager: true,
 })
 
-console.log("[Block Registry] System block paths:", Object.keys(systemBlockModules))
-
 Object.values(systemBlockModules).forEach((module) => {
   blockRegistry.register(module.default)
 })
 
-// Log registered blocks for verification
-console.log(
-  `[Block Registry] Registered ${blockRegistry.getAll().length} system blocks:`,
-  blockRegistry.getTypes().join(", ")
-)
+// One line at module load, and only in dev (#378).
+log.debug("system_blocks_registered", { count: blockRegistry.getAll().length, types: blockRegistry.getTypes() })
 
 // Export function to load theme blocks dynamically
 export async function registerThemeBlocks(themeSlug: string, blocks?: Array<{ type: string; modulePath: string }>) {
   if (!blocks || blocks.length === 0) {
-    console.log(`[Block Registry] No custom blocks for theme: ${themeSlug}`)
     return
   }
-
-  console.log(`[Block Registry] Loading ${blocks.length} blocks for theme: ${themeSlug}`)
 
   // Dynamic import of editor block registry (only in client-side context)
   let editorBlockRegistry: any
@@ -114,7 +108,7 @@ export async function registerThemeBlocks(themeSlug: string, blocks?: Array<{ ty
     const editorModule = await import("../../../gl-admin/components/editor/blocks/index")
     editorBlockRegistry = editorModule.editorBlockRegistry
   } catch (e) {
-    console.log("[Block Registry] Editor block registry not available (SSR context)")
+    // SSR context: there is no editor registry.
   }
 
   for (const block of blocks) {
@@ -132,18 +126,14 @@ export async function registerThemeBlocks(themeSlug: string, blocks?: Array<{ ty
           Object.values(module).find((exp: any) => exp?.title && exp?.command)
         if (editorConfig) {
           editorBlockRegistry.register(editorConfig)
-          console.log(`[Editor Block Registry] Registered: ${editorConfig.title}`)
         }
       } catch (error) {
-        console.error(`[Editor Block Registry] Failed to load editor config from ${block.modulePath}:`, error)
+        log.error("editor_block_config_load_failed", { module: block.modulePath, error })
       }
     }
   }
 
-  console.log(
-    `[Block Registry] Total blocks after theme load: ${blockRegistry.getAll().length}`,
-    blockRegistry.getTypes().join(", ")
-  )
+  log.debug("theme_blocks_registered", { theme: themeSlug, count: blockRegistry.getAll().length, types: blockRegistry.getTypes() })
 }
 
 export default blockRegistry

@@ -8,6 +8,7 @@ import { getPostAuthors } from '../../lib/authorPage'
 import { getSiteSettings } from '../../lib/siteSettings'
 import { getCachedTaxonomyTypes, isTermRoute, linkTerms, termPath, TERM_ARCHIVE_ROUTE } from '../../lib/termPage'
 import type { AuthorProfile, Post, TaxonomyTerm, TaxonomyType } from '@gl-admin/lib/api/types'
+import { log } from '../../lib/log'
 
 // WordPress-style: Auto-discover all theme layouts using glob imports
 // This allows dropping in new themes without modifying code
@@ -23,20 +24,18 @@ export async function getStaticPaths() {
     const types = await getPostTypes()
     if (types && types.length > 0) {
       postTypes = types.map(t => t.name)
-      console.log('Discovered post types:', postTypes)
     }
   } catch (error) {
-    console.warn('Could not fetch post types, using defaults:', error)
+    log.warn('post_types_fetch_failed', { fallback: postTypes, error })
   }
-  
+
   // Fetch settings to determine URL structure
   let urlStructure = 'id' // default
   try {
     const settings = await getSettings()
     urlStructure = settings.post_url_structure || 'id'
-    console.log('Using URL structure:', urlStructure)
   } catch (error) {
-    console.warn('Could not fetch settings, using ID-based URLs:', error)
+    log.warn('settings_fetch_failed', { fallback: 'id urls', error })
   }
   
   const paths: Array<{
@@ -63,11 +62,11 @@ export async function getStaticPaths() {
         })
       })
     } catch (error) {
-      console.warn(`Error fetching posts for type: ${postType}`, error)
+      log.warn('posts_by_type_fetch_failed', { post_type: postType, error })
     }
   }
-  
-  console.log(`Generated ${paths.length} paths with structure: ${urlStructure}`)
+
+  log.debug('static_paths_generated', { count: paths.length, url_structure: urlStructure })
   return paths
 }
 
@@ -80,7 +79,7 @@ let publicTypes: string[] | null = null
 try {
   publicTypes = await getPublicPostTypeNames()
 } catch (error) {
-  console.warn('Could not fetch post types:', error)
+  log.warn('post_types_fetch_failed', { error })
 }
 const typeIsPublic = !publicTypes || publicTypes.includes(postType)
 
@@ -131,8 +130,9 @@ if (!fullPost) {
     fullPost = postResponse?.post
   } catch (error) {
     // An unknown id or slug (crawlers, old links) is an ordinary 404, not an error.
+    // No id: it is the raw URL segment (api/CLAUDE.md, never log raw paths).
     if ((error as { status?: number })?.status !== 404) {
-      console.error(`Error fetching ${postType} ${id}:`, error)
+      log.error('post_fetch_failed', { post_type: postType, by: isNumeric ? 'id' : 'slug', error })
     }
   }
   if (!fullPost) {
@@ -144,7 +144,7 @@ if (!fullPost) {
 }
 
 if (!fullPost || !fullPost.title) {
-  console.error(`Full ${postType} data is invalid for ID:`, id)
+  log.error('post_data_invalid', { post_type: postType, post_id: fullPost?.id })
   return new Response(null, {
     status: 404,
     statusText: 'Post Content Not Found'
@@ -171,7 +171,7 @@ if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
       (fullPost as any).content = filtered
     }
   } catch (error) {
-    console.error('[Theme] Error in filterContent:', error)
+    log.error('theme_function_failed', { function: 'filterContent', post_id: fullPost.id, error })
     // Continue with unfiltered content
   }
 }
@@ -182,15 +182,15 @@ if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
 // bios. A failed lookup renders the post with its owner in the byline and no cards.
 const [postTerms, taxonomyTypes, authors] = await Promise.all([
   getPostTaxonomyTerms(fullPost.id).catch((error): TaxonomyTerm[] => {
-    console.warn(`Could not fetch terms for ${postType} ${fullPost.id}:`, error)
+    log.warn('post_terms_fetch_failed', { post_id: fullPost.id, error })
     return []
   }),
   getCachedTaxonomyTypes().catch((error): TaxonomyType[] => {
-    console.warn('Could not fetch taxonomy types:', error)
+    log.warn('taxonomy_types_fetch_failed', { error })
     return []
   }),
   getPostAuthors(fullPost.id).catch((error): AuthorProfile[] => {
-    console.warn(`Could not fetch authors for ${postType} ${fullPost.id}:`, error)
+    log.warn('post_authors_fetch_failed', { post_id: fullPost.id, error })
     return []
   }),
 ])
@@ -212,7 +212,7 @@ const LayoutComponent = await loadThemeLayout(
 )
 
 if (!LayoutComponent) {
-  console.error(`No layout found for ${postType}/${layoutVariant} in any fallback`)
+  log.error('post_layout_not_found', { theme: themeSlug, post_type: postType, variant: layoutVariant })
   return new Response(null, {
     status: 500,
     statusText: 'Layout Not Found'
