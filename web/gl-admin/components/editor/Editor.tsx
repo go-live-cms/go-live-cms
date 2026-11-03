@@ -88,8 +88,8 @@ export interface EditorRef {
   /**
    * A new post's body (no collab doc yet) as Block Spec, for `POST /posts`: the collab
    * server's own bridge (pmToBlockDoc), so marks, attrs and theme blocks reach the seed as
-   * the store would write them. Null when the body is empty or the editor is bound (its
-   * body is the server's, rule 11).
+   * the store would write them. Null when the body is empty or the post exists (its body
+   * is the server's, rule 11).
    */
   getBlockDoc: () => BlockDocV1 | null
   getSaveStatus: () => { isSaving: boolean; isPublishing: boolean; saveStatus: "saved" | "saving" | "error" | null }
@@ -294,7 +294,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
         return { saved }
       },
       getBlockDoc: () => {
-        if (collab || !editor || editor.isDestroyed || editor.isEmpty) return null
+        // An existing post's body (bound, or the static view) is the server's.
+        if (collab || postId || !editor || editor.isDestroyed || editor.isEmpty) return null
         return pmToBlockDoc(editor.state.doc)
       },
       getSaveStatus: () => ({ isSaving: saveState === "saving", isPublishing, saveStatus: saveState }),

@@ -315,6 +315,7 @@ describe("a new post's body (#384)", () => {
   const BODY =
     '<p>Some <strong>bold</strong> and <a href="https://example.com/x">a link</a></p>' +
     "<ul><li><p>one <em>two</em></p></li><li><p><strong>three</strong></p></li></ul>" +
+    '<img src="/uploads/media/a.png" alt="A house" data-media-id="321">' +
     `<div data-block-type="${alert.type}" data-variant="warning">Mind <strong>this</strong></div>`
 
   type PMJson = { type: string; text?: string; marks?: { type: string; attrs?: Record<string, unknown> }[]; content?: PMJson[] }
@@ -340,6 +341,8 @@ describe("a new post's body (#384)", () => {
     const [callout] = ofType(doc, alert.type)
     expect(callout.attrs).toMatchObject({ variant: "warning" })
     expect(marked(pmOf(callout))).toEqual(["bold:this"])
+    // A number, or the public page loses srcset and the file's "Used in" misses the post (#342).
+    expect(ofType(doc, "image")[0].attrs).toMatchObject({ mediaId: 321, src: "/uploads/media/a.png", alt: "A house" })
   }
 
   it("is built from the editor's document with the collab bridge, keeps every mark, and the seeded editor has them", async () => {
@@ -367,7 +370,7 @@ describe("a new post's body (#384)", () => {
     expectMarks(stored)
   })
 
-  it("is null while the body is empty, and for a bound editor (its body is the server's)", async () => {
+  it("is null while the body is empty, and for an existing post (its body is the server's)", async () => {
     const ref = await mount({ postId: undefined })
     await until(() => !!pm(), "the new-post editor")
     expect(ref.current!.getBlockDoc()).toBeNull()
