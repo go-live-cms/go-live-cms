@@ -52,7 +52,6 @@ type Querier interface {
 	CountSearchPosts(ctx context.Context, arg CountSearchPostsParams) (int64, error)
 	// Counting functions
 	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
-	CountTotalMedia(ctx context.Context) (int64, error)
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)

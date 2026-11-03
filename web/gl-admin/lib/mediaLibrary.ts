@@ -38,10 +38,11 @@ export function hasAltText(media: Pick<Media, "media_path" | "mime_type">): bool
   return kind === "image" || kind === "vector"
 }
 
-// Missing alt text (#325), the API's rule for GET /media?missing_alt=true: an image that
-// isn't marked decorative and whose alt is empty or only whitespace.
-export function missingAlt(media: Pick<Media, "media_path" | "mime_type" | "alt" | "decorative">): boolean {
-  return hasAltText(media) && !media.decorative && !(media.alt ?? "").trim()
+// Missing alt text (#325), exactly the API's rule for GET /media?missing_alt=true and the
+// Home count: an image/* MIME type (no extension fallback, or a tile could be tagged and
+// still be left out of the filter), not decorative, alt empty or only whitespace.
+export function missingAlt(media: Pick<Media, "mime_type" | "alt" | "decorative">): boolean {
+  return (media.mime_type || "").startsWith("image/") && !media.decorative && !(media.alt ?? "").trim()
 }
 
 // The hint under the alt text field.

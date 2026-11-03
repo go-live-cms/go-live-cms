@@ -273,7 +273,8 @@ SELECT
     m.mime_type,
     m.original_filename,
     m.created_at,
-    m.changed_at
+    m.changed_at,
+    m.decorative
 FROM post_media pm
 JOIN media m ON pm.media_id = m.id
 WHERE pm.post_id = $1 AND pm."order" = 0
@@ -439,9 +440,6 @@ ORDER BY
     pm."order" ASC,
     p.created_at DESC;
 
-
--- name: CountTotalMedia :one
-SELECT COUNT(*) AS total FROM media;
 
 -- name: CountMedia :one
 -- The total for GET /media: the rows ListMedia pages through, same filters.

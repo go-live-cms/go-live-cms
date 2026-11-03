@@ -79,7 +79,8 @@
   }
 
   &__tag,
-  &__badge {
+  &__badge,
+  &__alt {
     align-items: center;
     border-radius: var(--radius-sm);
     display: flex;
@@ -128,18 +129,10 @@
   // "No alt text" (#325), opposite the format tag on the same ring. Select mode puts the
   // check box in this corner, so the tile hides it then.
   &__alt {
-    align-items: center;
     background: var(--warning-bg);
-    border-radius: var(--radius-sm);
     box-shadow: 0 0 0 1px var(--background);
     color: var(--warning-label);
-    display: flex;
-    font-size: 11px;
-    font-weight: 600;
-    height: 20px;
-    line-height: 1;
-    padding: 0 6px;
-    position: absolute;
+    left: auto;
     right: var(--space-2);
     top: var(--space-2);
     white-space: nowrap;

@@ -73,17 +73,6 @@ func (q *Queries) CountMissingAltMedia(ctx context.Context) (CountMissingAltMedi
 	return i, err
 }
 
-const countTotalMedia = `-- name: CountTotalMedia :one
-SELECT COUNT(*) AS total FROM media
-`
-
-func (q *Queries) CountTotalMedia(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTotalMedia)
-	var total int64
-	err := row.Scan(&total)
-	return total, err
-}
-
 const createMedia = `-- name: CreateMedia :one
 INSERT INTO media (
     name,
@@ -285,7 +274,8 @@ SELECT
     m.mime_type,
     m.original_filename,
     m.created_at,
-    m.changed_at
+    m.changed_at,
+    m.decorative
 FROM post_media pm
 JOIN media m ON pm.media_id = m.id
 WHERE pm.post_id = $1 AND pm."order" = 0
@@ -307,6 +297,7 @@ type GetFeaturedImageRow struct {
 	OriginalFilename string    `json:"original_filename"`
 	CreatedAt        time.Time `json:"created_at"`
 	ChangedAt        time.Time `json:"changed_at"`
+	Decorative       bool      `json:"decorative"`
 }
 
 func (q *Queries) GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error) {
@@ -327,6 +318,7 @@ func (q *Queries) GetFeaturedImage(ctx context.Context, postID int64) (GetFeatur
 		&i.OriginalFilename,
 		&i.CreatedAt,
 		&i.ChangedAt,
+		&i.Decorative,
 	)
 	return i, err
 }

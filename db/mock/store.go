@@ -364,21 +364,6 @@ func (mr *MockStoreMockRecorder) CountTaxonomyTerms(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).CountTaxonomyTerms), arg0, arg1)
 }
 
-// CountTotalMedia mocks base method.
-func (m *MockStore) CountTotalMedia(arg0 context.Context) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CountTotalMedia", arg0)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CountTotalMedia indicates an expected call of CountTotalMedia.
-func (mr *MockStoreMockRecorder) CountTotalMedia(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTotalMedia", reflect.TypeOf((*MockStore)(nil).CountTotalMedia), arg0)
-}
-
 // CountTotalPosts mocks base method.
 func (m *MockStore) CountTotalPosts(arg0 context.Context) (int64, error) {
 	m.ctrl.T.Helper()

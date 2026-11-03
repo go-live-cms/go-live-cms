@@ -117,6 +117,9 @@ describe("missing alt text (#325)", () => {
     expect(missingAlt(image({ decorative: true }))).toBe(false)
     expect(missingAlt(image({ media_path: "uploads/a.pdf", mime_type: "application/pdf" }))).toBe(false)
     expect(missingAlt(image({ media_path: "uploads/a.mp4", mime_type: "video/mp4" }))).toBe(false)
+    // The API decides by MIME type alone; an extension doesn't make it an image here
+    // either, so a tagged tile is always in the filter.
+    expect(missingAlt(image({ mime_type: "" }))).toBe(false)
   })
 
   it("read-only views say whether there's none on purpose", () => {

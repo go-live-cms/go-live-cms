@@ -51,13 +51,19 @@ export default function MediaPanel({ media, canWrite, asDrawer, onClose, onUpdat
     setDecorative(!!media.decorative)
   }, [media.id, media.alt, media.decorative])
 
-  // An empty alt text can be saved (#325): the tile then shows "No alt text".
-  const dirty = alt.trim() !== (media.alt || "").trim() || decorative !== !!media.decorative
+  // An empty alt text can be saved (#325): the tile then shows "No alt text". Only what
+  // changed is sent, so ticking "Decorative image" leaves the stored alt as it is.
+  const altChanged = alt.trim() !== (media.alt || "").trim()
+  const decorativeChanged = decorative !== !!media.decorative
+  const dirty = altChanged || decorativeChanged
 
   const saveAlt = async () => {
     setSaving(true)
     try {
-      const { media: saved } = await updateMedia(media.id, { alt: alt.trim(), decorative })
+      const { media: saved } = await updateMedia(media.id, {
+        ...(altChanged ? { alt: alt.trim() } : {}),
+        ...(decorativeChanged ? { decorative } : {}),
+      })
       onUpdated({ ...media, ...saved, post_count: saved.post_count ?? media.post_count })
       toast.success("Alt text saved")
     } catch (e) {

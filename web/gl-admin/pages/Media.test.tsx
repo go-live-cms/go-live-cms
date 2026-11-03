@@ -333,7 +333,8 @@ describe("Media library: missing alt text (#325)", () => {
 
     const save = Array.from(panel.querySelectorAll("button")).find((b) => b.textContent === "Save")!
     await act(async () => save.click())
-    expect(api.updateMedia).toHaveBeenCalledWith(1, { alt: "", decorative: true })
+    // Only what changed: the stored alt is left alone.
+    expect(api.updateMedia).toHaveBeenCalledWith(1, { decorative: true })
     // The saved row replaces the tile's: no tag any more.
     expect(tileFor(1).querySelector(".gl-media-tile__alt")).toBeNull()
   })
