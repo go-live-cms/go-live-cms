@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-live-cms/go-live-cms/api"
@@ -55,19 +56,33 @@ func main() {
 		fatal("cannot set up server", err)
 	}
 
+	// SIGTERM (docker stop) or Ctrl+C: stop taking requests, let those in flight
+	// and the scheduler's publish in flight finish, then exit.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Scheduled publishing (#147): every replica runs it; claims keep them apart.
+	schedulerDone := make(chan struct{})
+	go func() {
+		defer close(schedulerDone)
+		server.RunScheduledPublishing(ctx, config.ScheduledPublishInterval)
+	}()
+
 	// Server-to-server routes (collab WS role lookup, metrics) run on their own
 	// listener, which must not be published to the internet.
 	go func() {
 		slog.Info("starting internal API", "address", config.InternalServerAddress)
-		if err := server.StartInternal(config.InternalServerAddress); err != nil {
+		if err := server.ServeInternal(ctx, config.InternalServerAddress); err != nil {
 			fatal("cannot start internal server", err)
 		}
 	}()
 
 	slog.Info("starting API", "address", config.ServerAddress)
-	if err := server.Start(config.ServerAddress); err != nil {
+	if err := server.Serve(ctx, config.ServerAddress); err != nil {
 		fatal("cannot start server", err)
 	}
+	<-schedulerDone
+	slog.Info("API stopped")
 }
 
 // runBackfillVariants implements `main backfill-variants [-all]`: generates

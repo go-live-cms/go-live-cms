@@ -158,6 +158,44 @@
     }
   }
 
+  // Publish date (#147): opens the Schedule dialog.
+  &__date {
+    align-items: center;
+    background: var(--background);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: var(--space-2);
+    height: 36px;
+    padding: 0 10px;
+    text-align: left;
+    width: 100%;
+
+    svg {
+      color: var(--text-secondary);
+      flex: none;
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--background-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      background: var(--background-subtle);
+      border-color: var(--border-color);
+      cursor: default;
+    }
+  }
+
   &__url-prefix {
     color: var(--text-secondary);
     padding-left: 10px;

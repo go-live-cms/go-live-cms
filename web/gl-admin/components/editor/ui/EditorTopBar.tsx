@@ -14,9 +14,9 @@ import "@gl-admin/assets/styles/components/editor/editor-top-bar.scss"
 // The editor's top bar (#341, "Post editor" on the redesign canvas): breadcrumb and
 // status, what is happening to your edits, who's here, settings, view, and the publish
 // button with its menu. Everything it does was there before the redesign; features in
-// the design without a backend yet (Comments, Schedule…, Move to trash, "N edits
+// the design without a backend yet (Comments, Move to trash, "N edits
 // waiting", click an avatar to jump to its cursor) stay out until their issues land
-// (table on #341).
+// (table on #341). Schedule… (#147) opens ScheduleDialog, which PostForm owns.
 
 type SaveStatus = "saved" | "saving" | "error" | null
 
@@ -50,6 +50,11 @@ type EditorTopBarProps = {
   liveUrl?: string | null
   // History preview (#136): replaces the actions while a version is shown.
   viewing?: { label: string; onBack: () => void; onRestore: () => void } | null
+  // A scheduled post's publish_at (#147): the pill shows it in site time.
+  publishAt?: string | null
+  // Opens the Schedule dialog (a draft) or Reschedule (a scheduled post).
+  onSchedule?: () => void
+  onCancelSchedule?: () => Promise<void>
   // A published post's title, excerpt, featured image or terms differ from the live ones
   // (#358): they reach the site on Update.
   settingsPending?: boolean
@@ -199,12 +204,16 @@ export default function EditorTopBar({
   viewing,
   settingsPending = false,
   contentPending = false,
+  publishAt,
+  onSchedule,
+  onCancelSchedule,
 }: EditorTopBarProps) {
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   const [busy, setBusy] = useState(false)
   const published = postStatus === "published"
   const unpublishedChanges = published && (settingsPending || contentPending)
   const archived = postStatus === "archived"
+  const scheduled = postStatus === "scheduled"
   // Publishing needs the server: off until connected (the API flushes the collab server).
   const connected = mode === "create" || live
   const publishDisabled = viewOnly || isSaving || isPublishing || busy || !connected
@@ -246,7 +255,9 @@ export default function EditorTopBar({
           </Pill>
         ) : (
           <>
-            {mode === "edit" && <PostStatusPill status={postStatus || "draft"} unpublishedChanges={unpublishedChanges} />}
+            {mode === "edit" && (
+              <PostStatusPill status={postStatus || "draft"} unpublishedChanges={unpublishedChanges} publishAt={publishAt} withTime />
+            )}
             {viewOnly && mode === "edit" && (
               <Pill tone="neutral" icon={<LockIcon size={12} />} className="editor-top-bar__pill">
                 View only
@@ -337,7 +348,7 @@ export default function EditorTopBar({
                 >
                   {published ? "Update" : "Publish"}
                 </Button>
-                {mode === "edit" && (onUnpublish || onArchive) && (
+                {mode === "edit" && (onUnpublish || onArchive || onSchedule) && (
                   <Menu
                     label="Publish options"
                     placement="bottom-end"
@@ -367,6 +378,20 @@ export default function EditorTopBar({
                     >
                       {published ? "Update now" : "Publish now"}
                     </MenuItem>
+                    {!published && onSchedule && (
+                      <MenuItem
+                        onSelect={onSchedule}
+                        disabled={publishDisabled}
+                        description={scheduled ? "Pick another date and time" : "Publish it at a date and time"}
+                      >
+                        {scheduled ? "Reschedule…" : "Schedule…"}
+                      </MenuItem>
+                    )}
+                    {scheduled && onCancelSchedule && (
+                      <MenuItem onSelect={() => run(onCancelSchedule)} description="Keep it as a draft">
+                        Cancel schedule
+                      </MenuItem>
+                    )}
                     <MenuSeparator />
                     {published && onUnpublish && (
                       <MenuItem onSelect={() => setConfirmUnpublish(true)} description="Take it off the site and keep it as a draft">

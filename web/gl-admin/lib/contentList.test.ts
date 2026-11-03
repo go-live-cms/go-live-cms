@@ -27,11 +27,12 @@ const post = (over: Record<string, unknown> = {}) => ({
 })
 
 describe("status tabs", () => {
-  it("gives moderators All, Published, Changes not published, Drafts and Archived", () => {
-    expect(listTabs("editor").map((t) => t.id)).toEqual(["all", "published", "changes", "draft", "archived"])
-    expect(listTabs("admin").map((t) => t.id)).toEqual(["all", "published", "changes", "draft", "archived"])
+  it("gives moderators All, Published, Changes not published, Drafts, Scheduled and Archived", () => {
+    expect(listTabs("editor").map((t) => t.id)).toEqual(["all", "published", "changes", "draft", "scheduled", "archived"])
+    expect(listTabs("admin").map((t) => t.id)).toEqual(["all", "published", "changes", "draft", "scheduled", "archived"])
     // #326: published posts, filtered to those with changes not published.
     expect(findTab(listTabs("editor"), "changes")).toMatchObject({ status: "published", unpublishedChanges: true })
+    expect(findTab(listTabs("editor"), "scheduled")).toMatchObject({ label: "Scheduled", status: "scheduled" })
   })
 
   it("gives contributors All, My posts and Published", () => {
@@ -206,5 +207,27 @@ describe("last edited", () => {
     expect(editedPhrase(at(2026, 9, 26, 9, 0), now)).toBe("Edited yesterday")
     expect(editedPhrase(at(2026, 9, 27, 13, 0), now)).toBe("Edited 2 hours ago")
     expect(editedPhrase(at(2026, 9, 22, 9, 0), now)).toBe("Edited Oct 22")
+  })
+})
+
+// Scheduled publishing (#147): scheduled posts have their tab, count in All, and are
+// read-only to the contributor who owns them (the API's canEditPost).
+describe("scheduled posts", () => {
+  const counts = { draft: 2, published: 3, scheduled: 4, archived: 1 }
+
+  it("counts them in All and in their tab, not archived posts", () => {
+    const tabs = listTabs("editor")
+    expect(tabCount(findTab(tabs, "all"), counts)).toBe(9)
+    expect(tabCount(findTab(tabs, "scheduled"), counts)).toBe(4)
+  })
+
+  it("makes a contributor's own scheduled post view-only", () => {
+    expect(postAccess(contributor, post({ post_status: "scheduled" }))).toEqual({ canEdit: false, note: "scheduled by an editor" })
+    expect(postAccess(editor, post({ post_status: "scheduled" })).canEdit).toBe(true)
+  })
+
+  it("offers Publish (now) on a scheduled row, and no delete to its contributor", () => {
+    expect(rowActions(editor, post({ post_status: "scheduled" }))).toEqual(["duplicate", "publish", "archive", "delete"])
+    expect(rowActions(contributor, post({ post_status: "scheduled" }))).toEqual(["duplicate"])
   })
 })
