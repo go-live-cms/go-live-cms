@@ -27,6 +27,10 @@ import {
 import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 
+// After the collab server stores a changed body, how long to wait for the next store of the
+// same burst of typing before re-reading "Changes not published" (#326).
+const STORED_REFRESH_DELAY_MS = 500
+
 // A failed publish (#341, "Publish failed"): the banner offers Try again, and after a
 // second failure "Copy error details" for support.
 type PublishFailure = { attempts: number; message: string; requestId: string | null; storeFailed: boolean }
@@ -152,22 +156,38 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   }, [])
 
   // Settings (#358): on a published post, the title, excerpt, featured image and terms
-  // reach the site only on Update. `settingsPending` says they differ from the live ones
-  // (GET /posts/:id/settings), re-read after each settings save, publish and restore.
+  // reach the site only on Update. `settingsPending` says they differ from the live ones,
+  // `contentPending` that the body does (#326): together they're "Changes not published".
+  // Both come from GET /posts/:id/settings, re-read after each settings save, publish and
+  // restore, and whenever the collab server stores a changed body (anyone's edits).
   const [settingsPending, setSettingsPending] = useState(false)
+  const [contentPending, setContentPending] = useState(false)
   // Bumped when a restored version changed the featured image and terms, to reload them.
   const [settingsKey, setSettingsKey] = useState(0)
+  // Only the latest read's answer counts: reads overlap while collaborators type.
+  const settingsReadRef = useRef(0)
   const refreshSettingsState = async () => {
     if (mode !== "edit" || !initialData?.id) return
+    const read = ++settingsReadRef.current
     try {
       const token = authManager.getAccessToken()
       if (token) blockAPIClient.setAuthToken(token)
-      setSettingsPending((await blockAPIClient.getSettingsState(initialData.id)).changed)
+      const state = await blockAPIClient.getSettingsState(initialData.id)
+      if (read !== settingsReadRef.current) return
+      setSettingsPending(state.changed)
+      setContentPending(state.blocks_changed)
     } catch (error) {
       // Only the hint depends on it.
       console.error("Failed to read the settings state:", error)
     }
   }
+  // Stores come every few seconds while people type: one read per burst.
+  const storedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const handleStored = () => {
+    clearTimeout(storedTimerRef.current)
+    storedTimerRef.current = setTimeout(() => void refreshSettingsState(), STORED_REFRESH_DELAY_MS)
+  }
+  useEffect(() => () => clearTimeout(storedTimerRef.current), [])
   useEffect(() => {
     void refreshSettingsState()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -384,6 +404,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       setFormData((prev) => ({ ...prev, post_status: "draft" }))
       setRevisionsKey((k) => k + 1)
       setSettingsPending(false)
+      setContentPending(false)
       showSuccess("Unpublished: the post is a draft again")
     } catch (error) {
       showError("Failed to unpublish")
@@ -639,6 +660,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         onRestoreToDrafts={collabEnabled && canPublish ? handleRestoreToDrafts : undefined}
         liveUrl={liveUrl}
         settingsPending={settingsPending}
+        contentPending={contentPending}
         viewing={
           viewingVersion
             ? {
@@ -784,6 +806,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                     .catch(() => {})
                 }
               }}
+              onStored={handleStored}
               onPublishStart={() => {
                 setIsSubmitting(true)
               }}
@@ -791,8 +814,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                 setIsSubmitting(false)
                 setFormData((prev) => ({ ...prev, post_status: "published" }))
                 setRevisionsKey((k) => k + 1)
-                // The settings went out with it (#358).
+                // The settings went out with it (#358), and the body (#326). Re-read: someone
+                // may have typed since the snapshot.
                 setSettingsPending(false)
+                setContentPending(false)
+                void refreshSettingsState()
               }}
               onPublishError={() => {
                 // handlePublish shows the "Publish failed" banner.

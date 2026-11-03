@@ -7,13 +7,29 @@
 //   - normalizePostSlug: Turns a title or requested slug into a URL segment
 //   - resolvePostSort: Validates and normalizes the sort/order query parameters
 //   - containsString: Case-sensitive substring check
+//   - parseUnpublishedChangesFilter: The list's "Changes not published" filter
 package api
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"unicode"
 )
+
+// parseUnpublishedChangesFilter reads the lists' unpublished_changes parameter
+// (#326): true keeps only published posts whose working copy differs from what
+// the site shows. Absent or false: no filter.
+func parseUnpublishedChangesFilter(value string) (bool, error) {
+	if value == "" {
+		return false, nil
+	}
+	only, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, errors.New("invalid unpublished_changes parameter")
+	}
+	return only, nil
+}
 
 // postSlugFallback is used when a title or requested slug has no usable characters.
 const postSlugFallback = "post"

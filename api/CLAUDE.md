@@ -567,4 +567,18 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   restores the blocks (rule 9), then `POST /posts/:id/versions/:no/restore-settings`
   (`RestorePostSettingsTx`) writes the version's settings into the working copy only;
   `GET /posts/:id/settings` says whether they differ from the published ones.
+- **Changes not published (#326, `000030`):** `has_unpublished_changes` = `post_status =
+  'published'` and the working copy differs from what the site shows: the body
+  (`posts.block_doc_hash` vs `published_block_hash`, stored generated md5 columns of the jsonb
+  text, so no writer maintains them) or the settings (`golive_post_settings_changed`, the same
+  comparison as above). One definition, `golive_post_has_unpublished_changes(...)`, used by
+  `ListPosts*`, `SearchPostsWithMeta`, `CountFilteredPosts`, `CountPostsByStatus` (its
+  `unpublished_changes` column → `/posts/counts`' `unpublished_changes`),
+  `GetPostHasUnpublishedChanges` (GET `/posts/:id` and `/slug/:slug`, published posts only) and
+  `GetPostSettingsState` (`blocks_changed`, `has_unpublished_changes`). `ListPostsWithMeta`
+  computes it only with `with_unpublished_changes` (the public lists share the query and skip
+  it). Content, not revisions: an edit undone before the next publish is no change.
+  `unpublished_changes=true` filters `GET /posts`, `/posts/type/:type` and `/posts/search`.
+  The JSON field is omitted when false, and the public
+  presenters clear it (the authors/terms queries select `false` to keep the shared row type).
 </content>

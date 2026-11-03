@@ -15,12 +15,16 @@ export type ListTab = {
   status: string
   // Only the signed-in user's own posts (user_id).
   mine?: boolean
+  // Only published posts with changes not published (#326, unpublished_changes).
+  unpublishedChanges?: boolean
 }
 
 // Hidden until their issues land: Scheduled (#147) after Drafts, Trash (#327) last.
+// "Changes not published" (#326) is a subset of Published: the publishers' to-do list.
 export const MODERATOR_TABS: ListTab[] = [
   { id: "all", label: "All", status: ACTIVE_STATUSES },
   { id: "published", label: "Published", status: "published" },
+  { id: "changes", label: "Changes not published", status: "published", unpublishedChanges: true },
   { id: "draft", label: "Drafts", status: "draft" },
   { id: "archived", label: "Archived", status: "archived" },
 ]
@@ -44,8 +48,15 @@ export function findTab(tabs: ListTab[], id: string | null | undefined): ListTab
 export type StatusCounts = Record<string, number>
 
 // How many posts a tab lists, from GET /posts/counts. `mine` are the counts for the
-// signed-in user's posts. null while either is still loading (the tab shows a skeleton).
-export function tabCount(tab: ListTab, counts: StatusCounts | null, mine: StatusCounts | null = null): number | null {
+// signed-in user's posts, `unpublishedChanges` the response's unpublished_changes (#326).
+// null while either is still loading (the tab shows a skeleton).
+export function tabCount(
+  tab: ListTab,
+  counts: StatusCounts | null,
+  mine: StatusCounts | null = null,
+  unpublishedChanges: number | null = null
+): number | null {
+  if (tab.unpublishedChanges) return unpublishedChanges
   const source = tab.mine ? mine : counts
   if (!source) return null
   const statuses = tab.status ? tab.status.split(",") : Object.keys(source)

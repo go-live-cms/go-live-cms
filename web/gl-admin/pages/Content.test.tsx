@@ -120,8 +120,8 @@ describe("Posts list", () => {
     api.getPostCounts.mockImplementation(never)
     await render("/content/post")
 
-    expect(tabs()).toEqual(["All", "Published", "Drafts", "Archived"])
-    expect(container.querySelectorAll("[role='tab'] .gl-skeleton")).toHaveLength(4)
+    expect(tabs()).toEqual(["All", "Published", "Changes not published", "Drafts", "Archived"])
+    expect(container.querySelectorAll("[role='tab'] .gl-skeleton")).toHaveLength(5)
     expect(container.querySelector(".gl-table-scroll")?.getAttribute("aria-busy")).toBe("true")
     expect(container.querySelector("[role='status']")?.textContent).toBe("Loading posts…")
     expect(text()).not.toContain("No posts yet")
@@ -139,13 +139,35 @@ describe("Posts list", () => {
 
   it("shows the tab counts, All leaving archived out", async () => {
     api.getPosts.mockImplementation(() => list([post(1)]))
-    api.getPostCounts.mockResolvedValue({ counts: { draft: 12, published: 31, archived: 4 }, total: 47 })
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 12, published: 31, archived: 4 }, total: 47, unpublished_changes: 2 })
     await render("/content/post")
 
-    expect(tabs()).toEqual(["All43", "Published31", "Drafts12", "Archived4"])
+    expect(tabs()).toEqual(["All43", "Published31", "Changes not published2", "Drafts12", "Archived4"])
     expect(api.getPosts).toHaveBeenCalledWith(expect.objectContaining({ type: "post", status: "draft,published", sort: "changed_at", order: "desc" }))
     expect(text()).toContain("Post 1")
     expect(text()).toContain("/post/post-1")
+  })
+
+  // #326: published posts whose working copy differs from the live one.
+  it("lists published posts with changes not published in their tab, with the pill", async () => {
+    api.getPosts.mockImplementation(() =>
+      list([post(1, { post_status: "published", has_unpublished_changes: true }), post(2, { post_status: "published" })])
+    )
+    api.getPostCounts.mockResolvedValue({ counts: { published: 2 }, total: 2, unpublished_changes: 1 })
+    await render("/content/post?view=changes")
+
+    expect(api.getPosts).toHaveBeenCalledWith(expect.objectContaining({ status: "published", unpublished_changes: "true" }))
+    const pills = Array.from(container.querySelectorAll("tbody .gl-pill")).map((p) => p.textContent)
+    expect(pills).toEqual(["Changes not published", "Published"])
+    expect(container.querySelector("tbody .gl-pill--accent")?.textContent).toBe("Changes not published")
+  })
+
+  it("leaves the filter off the other tabs", async () => {
+    api.getPosts.mockImplementation(() => list([]))
+    api.getPostCounts.mockResolvedValue({ counts: { published: 2 }, total: 2, unpublished_changes: 1 })
+    await render("/content/post?view=published")
+
+    expect(api.getPosts.mock.calls[0][0]).not.toHaveProperty("unpublished_changes")
   })
 
   it("says a tab is empty when other tabs aren't", async () => {
@@ -302,6 +324,14 @@ describe("Posts list search (#145)", () => {
     expect(text()).toContain("Clear search")
   })
 
+  it("searches within Changes not published", async () => {
+    api.getPostCounts.mockResolvedValue({ counts: { published: 2 }, total: 2, unpublished_changes: 1 })
+    api.searchPosts.mockImplementation(() => list([]))
+    await render("/content/post?view=changes&q=launch")
+
+    expect(api.searchPosts).toHaveBeenCalledWith(expect.objectContaining({ q: "launch", status: "published", unpublished_changes: "true" }))
+  })
+
   it("passes the contributor's own-posts filter on", async () => {
     api.user.role = "contributor"
     api.getPostCounts.mockResolvedValue({ counts: { draft: 2 }, total: 2 })
@@ -347,10 +377,26 @@ describe("Pages list", () => {
     )
     await render("/content/page")
 
-    expect(tabs()).toEqual(["All3", "Published2", "Drafts1", "Archived0"])
+    expect(tabs()).toEqual(["All3", "Published2", "Changes not published0", "Drafts1", "Archived0"])
     const titles = Array.from(container.querySelectorAll("tbody .gl-content-list__link")).map((a) => a.textContent)
     expect(titles).toEqual(["Home", "About", "Team"])
     expect(text()).toContain(", level 2")
+  })
+
+  it("filters the tree to pages with changes not published (#326)", async () => {
+    api.getPosts.mockImplementation(() =>
+      list([
+        post(1, { title: "About", post_type: "page", post_status: "published", has_unpublished_changes: true }),
+        post(2, { title: "Team", post_type: "page", post_status: "published", post_parent: 1 }),
+        post(3, { title: "Home", post_type: "page", post_status: "draft" }),
+      ])
+    )
+    await render("/content/page?view=changes")
+
+    expect(tabs()).toContain("Changes not published1")
+    const titles = Array.from(container.querySelectorAll("tbody .gl-content-list__link")).map((a) => a.textContent)
+    expect(titles).toEqual(["About"])
+    expect(container.querySelector("tbody .gl-pill")?.textContent).toBe("Changes not published")
   })
 
   it("shows the empty state when there are no pages", async () => {

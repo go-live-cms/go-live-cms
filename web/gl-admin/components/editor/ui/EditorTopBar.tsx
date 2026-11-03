@@ -51,9 +51,12 @@ type EditorTopBarProps = {
   // History preview (#136): replaces the actions while a version is shown.
   viewing?: { label: string; onBack: () => void; onRestore: () => void } | null
   // A published post's title, excerpt, featured image or terms differ from the live ones
-  // (#358): they reach the site on Update. The full "Changes not published" status,
-  // blocks included, is #326.
+  // (#358): they reach the site on Update.
   settingsPending?: boolean
+  // A published post's body differs from the live one (#326), from anyone's edits.
+  // Either of the two is "Changes not published": the status pill says so, and the
+  // save state next to Update says what goes live.
+  contentPending?: boolean
 }
 
 const SpinnerIcon = () => (
@@ -105,7 +108,8 @@ export function SaveState({
   connection,
   viewOnly,
   settingsPending,
-}: Pick<EditorTopBarProps, "mode" | "saveStatus" | "connection" | "viewOnly" | "settingsPending">) {
+  contentPending,
+}: Pick<EditorTopBarProps, "mode" | "saveStatus" | "connection" | "viewOnly" | "settingsPending" | "contentPending">) {
   let content: ReactNode = null
   let tone = ""
   // The session-ended dialog says what happened; nothing here is waiting to be sent.
@@ -154,7 +158,11 @@ export function SaveState({
     content = (
       <>
         <CheckIcon size={14} />
-        {settingsPending ? "Saved · settings go live on Update" : "Saved"}
+        {contentPending
+          ? "Saved · changes go live on Update"
+          : settingsPending
+            ? "Saved · settings go live on Update"
+            : "Saved"}
       </>
     )
   }
@@ -190,10 +198,12 @@ export default function EditorTopBar({
   liveUrl,
   viewing,
   settingsPending = false,
+  contentPending = false,
 }: EditorTopBarProps) {
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   const [busy, setBusy] = useState(false)
   const published = postStatus === "published"
+  const unpublishedChanges = published && (settingsPending || contentPending)
   const archived = postStatus === "archived"
   // Publishing needs the server: off until connected (the API flushes the collab server).
   const connected = mode === "create" || live
@@ -236,7 +246,7 @@ export default function EditorTopBar({
           </Pill>
         ) : (
           <>
-            {mode === "edit" && <PostStatusPill status={postStatus || "draft"} />}
+            {mode === "edit" && <PostStatusPill status={postStatus || "draft"} unpublishedChanges={unpublishedChanges} />}
             {viewOnly && mode === "edit" && (
               <Pill tone="neutral" icon={<LockIcon size={12} />} className="editor-top-bar__pill">
                 View only
@@ -268,6 +278,7 @@ export default function EditorTopBar({
               connection={connection}
               viewOnly={viewOnly}
               settingsPending={published && settingsPending}
+              contentPending={published && contentPending}
             />
 
             {people.length > 0 && (

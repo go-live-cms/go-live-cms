@@ -69,6 +69,9 @@ every server boot — **read process logs from the very top**.
   document through `pmToBlockDoc` (`EditorRef.getBlockDoc`, null when empty), the bridge
   the server stores with. **Never build it from the editor's HTML** (#384): an HTML
   converter kept text only, so every mark typed before the first save was lost.
+  `onStored` (#326) only listens to the server's `stored` messages (`block_doc: "written"`,
+  anyone's edits) so the form can re-read "Changes not published"; it changes no sync
+  behaviour.
 - `blockBridge.ts`: `pmToBlockDoc` / `blockDocToPM(WithReport)` / `setEditorBlockDoc`.
   Pure conversion (notes below).
 - `fragmentBridge.ts`: `seedFragment` / `fragmentToBlockDoc`: Block Spec v1 ⇄ the

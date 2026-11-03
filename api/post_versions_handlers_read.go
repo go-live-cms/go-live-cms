@@ -170,11 +170,18 @@ type PostSettingsStateResponse struct {
 	// Changed: the post is published and its settings differ from the published
 	// ones, so a settings change waits for Update.
 	Changed bool `json:"changed"`
+	// BlocksChanged: the post is published and its working body differs from the
+	// published one (#326).
+	BlocksChanged bool `json:"blocks_changed"`
+	// HasUnpublishedChanges: the posts list's flag, a published post with either
+	// of the two (#326). The editor re-reads it after every store of the body.
+	HasUnpublishedChanges bool `json:"has_unpublished_changes"`
 }
 
-// getPostSettingsState handles GET /posts/:id/settings: the editor's "settings
-// changes wait for Update" state. It carries the working title, excerpt, image and
-// terms, so the caller must be able to read the post (canReadPost, #393).
+// getPostSettingsState handles GET /posts/:id/settings: the editor's "changes
+// wait for Update" state, settings (#358) and body (#326). It carries the working
+// title, excerpt, image and terms, so the caller must be able to read the post
+// (canReadPost, #393).
 func (server *Server) getPostSettingsState(c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -199,5 +206,11 @@ func (server *Server) getPostSettingsState(c *gin.Context) {
 		return
 	}
 	published, _ := decodePostSettings(row.PublishedSettings)
-	c.JSON(http.StatusOK, PostSettingsStateResponse{Working: *working, Published: published, Changed: row.Changed})
+	c.JSON(http.StatusOK, PostSettingsStateResponse{
+		Working:               *working,
+		Published:             published,
+		Changed:               row.Changed,
+		BlocksChanged:         row.BlocksChanged,
+		HasUnpublishedChanges: row.HasUnpublishedChanges,
+	})
 }

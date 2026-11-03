@@ -122,6 +122,7 @@ func TestListPostsSortParams(t *testing.T) {
 				store.EXPECT().
 					ListPostsWithMeta(gomock.Any(), db.ListPostsWithMetaParams{
 						PostType: postType.Name, UserID: int64(0), SortColumn: s.Column, SortDirection: s.Direction, LimitCount: 10,
+						WithUnpublishedChanges: true,
 					}).
 					Return([]db.ListPostsWithMetaRow{}, nil)
 				store.EXPECT().CountPostsByTypeFiltered(gomock.Any(), gomock.Any()).Return(int64(0), nil)

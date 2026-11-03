@@ -125,10 +125,11 @@ func (server *Server) getPublicSearch(c *gin.Context) {
 }
 
 // searchPosts handles GET /posts/search?q=: the admin posts list's search box.
-// The list's filters (type, status, user_id) and paging (limit, offset) work as
-// on GET /posts, and so do its permissions: it finds only the posts the list
-// shows the caller (contributors: their own and published ones, #393). Rows
-// are ranked like the public search and shaped like GET /posts?with_meta=true.
+// The list's filters (type, status, user_id, unpublished_changes) and paging
+// (limit, offset) work as on GET /posts, and so do its permissions: it finds only
+// the posts the list shows the caller (contributors: their own and published
+// ones, #393). Rows are ranked like the public search and shaped like GET
+// /posts?with_meta=true.
 func (server *Server) searchPosts(c *gin.Context) {
 	query := normalizeSearchQuery(c.Query("q"))
 	limit, err := strconv.ParseInt(c.DefaultQuery("limit", "10"), 10, 32)
@@ -154,6 +155,11 @@ func (server *Server) searchPosts(c *gin.Context) {
 	}
 	postType := c.Query("type")
 	status := c.Query("status")
+	unpublishedChanges, err := parseUnpublishedChangesFilter(c.Query("unpublished_changes"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	viewerID, ok := server.callerViewerID(c)
 	if !ok {
@@ -165,24 +171,26 @@ func (server *Server) searchPosts(c *gin.Context) {
 	if query != "" {
 		ctx := c.Request.Context()
 		total, err = server.store.CountSearchPosts(ctx, db.CountSearchPostsParams{
-			Query:      query,
-			PostType:   postType,
-			PostStatus: status,
-			UserID:     userID,
-			ViewerID:   viewerID,
+			Query:              query,
+			PostType:           postType,
+			PostStatus:         status,
+			UserID:             userID,
+			UnpublishedChanges: unpublishedChanges,
+			ViewerID:           viewerID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search posts"})
 			return
 		}
 		rows, err := server.store.SearchPostsWithMeta(ctx, db.SearchPostsWithMetaParams{
-			Query:       query,
-			PostType:    postType,
-			PostStatus:  status,
-			UserID:      userID,
-			ViewerID:    viewerID,
-			OffsetCount: int32(offset),
-			LimitCount:  int32(limit),
+			Query:              query,
+			PostType:           postType,
+			PostStatus:         status,
+			UserID:             userID,
+			UnpublishedChanges: unpublishedChanges,
+			ViewerID:           viewerID,
+			OffsetCount:        int32(offset),
+			LimitCount:         int32(limit),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search posts"})
