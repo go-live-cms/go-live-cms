@@ -254,7 +254,10 @@ func TestGetMediaPostsAPI(t *testing.T) {
 	media := randomMedia()
 	posts := []db.GetPostsByMediaRow{
 		{ID: 11, Title: "First", Username: "alice", PostType: "post", PostStatus: "published", MediaOrder: 0, RelationshipType: "attachment", PostParent: sql.NullInt64{Int64: 3, Valid: true}},
-		{ID: 12, Title: "Second", Username: "bob", PostType: "page", PostStatus: "draft", MediaOrder: 1, RelationshipType: "gallery"},
+		{ID: 12, Title: "Second", Username: "bob", PostType: "page", PostStatus: "draft", MediaOrder: 1, RelationshipType: "gallery",
+			Blocks: json.RawMessage(`[{"id":"b1","type":"image"},{"id":"b2","type":"image"}]`)},
+		{ID: 13, Title: "Third", PostType: "post", MediaOrder: 0, RelationshipType: "featured",
+			Blocks: json.RawMessage(`[{"id":"c1","type":"image"}]`)},
 	}
 
 	testCases := []struct {
@@ -284,14 +287,26 @@ func TestGetMediaPostsAPI(t *testing.T) {
 				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
 				require.Equal(t, media.ID, rsp.Media.ID)
 				require.Equal(t, media.ID, rsp.Meta.MediaID)
-				require.Equal(t, 2, rsp.Meta.Count)
-				require.Len(t, rsp.Posts, 2)
+				require.Equal(t, 3, rsp.Meta.Count)
+				require.Len(t, rsp.Posts, 3)
 				require.Equal(t, int64(11), rsp.Posts[0].Post.ID)
 				require.Equal(t, "attachment", rsp.Posts[0].RelationshipType)
 				require.NotNil(t, rsp.Posts[0].Post.PostParent)
 				require.Equal(t, int64(3), *rsp.Posts[0].Post.PostParent)
 				require.Nil(t, rsp.Posts[1].Post.PostParent)
 				require.Equal(t, int32(1), rsp.Posts[1].MediaOrder)
+
+				// How each post uses it (#176): a link no block shows is
+				// "attached"; blocks in document order; the featured image first.
+				require.Equal(t, []MediaUsage{{Type: "attached"}}, rsp.Posts[0].Usages)
+				require.Equal(t, []MediaUsage{
+					{Type: "block", BlockID: "b1", BlockType: "image"},
+					{Type: "block", BlockID: "b2", BlockType: "image"},
+				}, rsp.Posts[1].Usages)
+				require.Equal(t, []MediaUsage{
+					{Type: "featured"},
+					{Type: "block", BlockID: "c1", BlockType: "image"},
+				}, rsp.Posts[2].Usages)
 			},
 		},
 		{

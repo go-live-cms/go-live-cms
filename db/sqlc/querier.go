@@ -375,17 +375,26 @@ type Querier interface {
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
-	// Makes the post's content image links (order > 0) match media_ids, in
-	// document order (the collab store, publish and duplicate). Ids without a
-	// media row are skipped (a stale mediaId must not fail the store), and the
-	// featured image link (order 0) is never moved or removed, even when the
-	// featured image is also in the content (#389). A repeated id keeps its first
-	// position (one row per media, or the upsert would touch the same row twice
-	// and fail).
+	// Makes the post's content image links (order > 0) match the doc's media
+	// blocks, in document order (the collab store, publish and duplicate). The
+	// three arrays are parallel, one entry per block: media_ids[i] is shown by
+	// block block_ids[i] of type block_types[i]. Ids without a media row are
+	// skipped (a stale mediaId must not fail the store). One row per media: its
+	// order is the media's first position among the doc's distinct media ids (1,
+	// 2, ..., a skipped id keeping its slot) and its blocks every block showing it
+	// (#176). The featured image link
+	// (order 0) is never moved or removed, even when the featured image is also in
+	// the content (#389); only its blocks follow the doc.
+	// Unchanged rows are left alone: the collab store runs this every few seconds.
 	SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error
 	TouchMenu(ctx context.Context, id int64) error
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
 	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
+	// Removes the post's featured image link (order 0). An image that is also in
+	// the content (blocks, #176) keeps its row as a content link, placed after
+	// the others until the next sync puts it at its document position; deleting
+	// the row would drop that use until then.
+	UnlinkPostFeaturedMedia(ctx context.Context, postID int64) error
 	// Back to draft and drop the public snapshot (#136), settings included (#358).
 	// The snapshot stays in post_versions, so it can still be viewed and restored.
 	UnpublishPost(ctx context.Context, id int64) (Post, error)

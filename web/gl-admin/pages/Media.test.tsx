@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // The media library page (#342): loading and empty states, the filtered empty state,
-// the side panel with its "Used in" list, and missing alt text (#325).
+// the side panel with its "Used in" list, missing alt text (#325) and paste to upload (#28).
 
 const api = vi.hoisted(() => ({
   user: { id: 7, username: "elena", full_name: "Elena V.", role: "editor" } as Record<string, unknown>,
@@ -78,6 +78,16 @@ async function render(path = "/media") {
 }
 
 const text = () => container.textContent ?? ""
+
+// A paste of `files` on `target` (jsdom has no ClipboardEvent data, so the event
+// carries a stand-in clipboard). Returns the event, to check defaultPrevented.
+function paste(target: EventTarget, files: File[]): Event {
+  const event = new Event("paste", { bubbles: true, cancelable: true })
+  const items = files.map((f) => ({ kind: "file", type: f.type, getAsFile: () => f }))
+  Object.defineProperty(event, "clipboardData", { value: { items, files } })
+  target.dispatchEvent(event)
+  return event
+}
 
 beforeEach(() => {
   container = document.createElement("div")
@@ -312,6 +322,48 @@ describe("Media library: missing alt text (#325)", () => {
     const form = api.createMedia.mock.calls[0][0] as FormData
     expect(form.get("name")).toBe("team-photo.jpg")
     expect(form.has("alt")).toBe(false)
+  })
+
+  it("a pasted image uploads like a chosen file, under a generated name (#28)", async () => {
+    api.getMedia.mockImplementation(() => page([file(1)]))
+    api.createMedia.mockResolvedValue({ media: file(2) })
+    await render()
+    expect(text()).toContain("Paste or drop images to upload")
+
+    await act(async () => {
+      paste(document.body, [new File(["x"], "image.png", { type: "image/png" }), new File(["y"], "notes.txt", { type: "text/plain" })])
+    })
+    expect(api.createMedia).toHaveBeenCalledTimes(1)
+    const form = api.createMedia.mock.calls[0][0] as FormData
+    expect(form.get("name")).toMatch(/^pasted-\d{8}-\d{6}\.png$/)
+    expect((form.get("file") as File).type).toBe("image/png")
+  })
+
+  it("leaves pastes into the search box, and pastes without an image, alone (#28)", async () => {
+    api.getMedia.mockImplementation(() => page([file(1)]))
+    await render()
+    const search = container.querySelector<HTMLInputElement>("input[type=search]")!
+    let event!: Event
+    await act(async () => {
+      event = paste(search, [new File(["x"], "image.png", { type: "image/png" })])
+    })
+    expect(event.defaultPrevented).toBe(false)
+    await act(async () => {
+      event = paste(document.body, [new File(["x"], "notes.txt", { type: "text/plain" })])
+    })
+    expect(event.defaultPrevented).toBe(false)
+    expect(api.createMedia).not.toHaveBeenCalled()
+  })
+
+  it("a role that can't upload gets no paste upload (#28)", async () => {
+    api.user.role = "subscriber"
+    api.getMedia.mockImplementation(() => page([file(1)]))
+    await render()
+    expect(text()).not.toContain("Paste or drop images")
+    await act(async () => {
+      paste(document.body, [new File(["x"], "image.png", { type: "image/png" })])
+    })
+    expect(api.createMedia).not.toHaveBeenCalled()
   })
 
   it("the panel marks an image decorative, which turns its alt text off", async () => {

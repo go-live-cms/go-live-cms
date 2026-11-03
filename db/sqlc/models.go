@@ -96,9 +96,10 @@ type Post struct {
 }
 
 type PostMedium struct {
-	PostID  int64 `json:"post_id"`
-	MediaID int64 `json:"media_id"`
-	Order   int32 `json:"order"`
+	PostID  int64           `json:"post_id"`
+	MediaID int64           `json:"media_id"`
+	Order   int32           `json:"order"`
+	Blocks  json.RawMessage `json:"blocks"`
 }
 
 type PostMetum struct {

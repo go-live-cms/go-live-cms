@@ -173,14 +173,18 @@ func TestPublishPostAPI(t *testing.T) {
 						require.False(t, arg.Message.Valid)
 						// The content image links are synced in the transaction
 						// (#389), from the image blocks in document order.
-						require.NotNil(t, arg.ContentMediaIDs)
-						require.Equal(t, []int64{7, 3}, arg.ContentMediaIDs(json.RawMessage(
+						require.NotNil(t, arg.ContentMedia)
+						require.Equal(t, []db.ContentMediaUse{
+							{MediaID: 7, BlockID: "b", BlockType: "image"},
+							{MediaID: 3, BlockID: "a", BlockType: "image"},
+							{MediaID: 7, BlockID: "c", BlockType: "image"},
+						}, arg.ContentMedia(json.RawMessage(
 							`{"doc_version":1,"blocks_order":["b","a","c","d"],"blocks":{`+
 								`"a":{"type":"image","attrs":{"mediaId":3}},`+
 								`"b":{"type":"image","attrs":{"mediaId":7}},`+
 								`"c":{"type":"image","attrs":{"mediaId":7}},`+
 								`"d":{"type":"paragraph"}}}`)))
-						require.Empty(t, arg.ContentMediaIDs(json.RawMessage(`{"blocks":[]}`)))
+						require.Empty(t, arg.ContentMedia(json.RawMessage(`{"blocks":[]}`)))
 						return db.PublishPostTxResult{VersionID: 1, VersionNo: 1, BlockDoc: validBlockDoc()}, nil
 					})
 			},

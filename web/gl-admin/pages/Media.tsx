@@ -12,6 +12,7 @@ import { toast } from "@gl-admin/components/ui/Toast"
 import { getMedia, getMediaById, createMedia } from "@gl-admin/lib/api/media"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { MEDIA_SORTS, MISSING_ALT_PARAM, TYPE_FILTERS, countLine, findMediaSort } from "@gl-admin/lib/mediaLibrary"
+import { ignoresPaste, pastedImages } from "@gl-admin/lib/mediaPaste"
 import { canCreateContent, canWriteMedia } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useListParams } from "@gl-admin/lib/hooks/useListParams"
@@ -23,7 +24,7 @@ import "@gl-admin/assets/styles/pages/media.scss"
 
 // The media library (#342): the grid with variant previews, search, the type filter, the
 // "Missing alt text" filter (#325, ?alt=missing) and sort (all in the URL), bulk select
-// and delete, uploads by button or drop, and a side panel for the open file (?file=id)
+// and delete, uploads by button, drop or paste (#28), and a side panel for the open file (?file=id)
 // with "Edit details" for the detail page.
 //
 // The board's "1.2 GB" total has no API (the count line shows files only).
@@ -163,6 +164,24 @@ export default function Media() {
 
   const chooseFiles = () => fileInput.current?.click()
 
+  // Ctrl/Cmd+V anywhere on the page uploads the clipboard's images (#28), except into a
+  // text field or a dialog. A paste with no image is left to the browser. The listener
+  // reads the latest `upload` through a ref, so it's added once.
+  const uploadRef = useRef(upload)
+  uploadRef.current = upload
+  useEffect(() => {
+    if (!canUpload) return
+    const onPaste = (e: ClipboardEvent) => {
+      if (ignoresPaste(e.target)) return
+      const images = pastedImages(e.clipboardData)
+      if (images.length === 0) return
+      e.preventDefault()
+      uploadRef.current(images)
+    }
+    document.addEventListener("paste", onPaste)
+    return () => document.removeEventListener("paste", onPaste)
+  }, [canUpload])
+
   const onDragOver = (e: DragEvent) => {
     if (!canUpload || !e.dataTransfer.types.includes("Files")) return
     e.preventDefault()
@@ -251,7 +270,7 @@ export default function Media() {
         <h2>{canUpload ? "Drop files here to upload" : "No media yet"}</h2>
         <p>
           {canUpload
-            ? "Images, video, audio and documents (PDF, DOC, TXT), up to 50 MB each. Anything you upload can be used in any post or page."
+            ? "Images, video, audio and documents (PDF, DOC, TXT), up to 50 MB each. You can also paste an image. Anything you upload can be used in any post or page."
             : "Nothing has been uploaded yet. Your role can't upload media; ask an administrator."}
         </p>
       </div>
@@ -279,6 +298,7 @@ export default function Media() {
           <h1>Media</h1>
           {!loading && !error && <span className="gl-media__count">{countLine(total)}</span>}
           <div className="gl-media__spacer" />
+          {canUpload && !libraryEmpty && <span className="gl-media__paste-hint">Paste or drop images to upload</span>}
           {canUpload && (
             <Button variant="primary" icon={<UploadIcon />} onClick={chooseFiles}>
               Upload

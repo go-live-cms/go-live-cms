@@ -14,15 +14,16 @@ import (
 
 // collabDocWithImages is a Block Spec v1 doc with one image block per media id.
 func collabDocWithImages(mediaIDs ...int64) json.RawMessage {
-	order := []string{}
-	blocks := map[string]any{}
+	return docWithBlocks(imageUses(mediaIDs...)...)
+}
+
+// imageUses are the content media uses of collabDocWithImages(mediaIDs...).
+func imageUses(mediaIDs ...int64) []ContentMediaUse {
+	uses := make([]ContentMediaUse, len(mediaIDs))
 	for i, id := range mediaIDs {
-		blockID := fmt.Sprintf("img-%d", i)
-		order = append(order, blockID)
-		blocks[blockID] = map[string]any{"type": "image", "attrs": map[string]any{"mediaId": id}}
+		uses[i] = ContentMediaUse{MediaID: id, BlockID: fmt.Sprintf("img-%d", i), BlockType: "image"}
 	}
-	doc, _ := json.Marshal(map[string]any{"doc_version": 1, "blocks_order": order, "blocks": blocks})
-	return doc
+	return uses
 }
 
 // contentMediaOrder returns the post's media links as media id -> order.
@@ -293,7 +294,7 @@ func TestStorePostCollabTxSyncsContentMedia(t *testing.T) {
 		Epoch:    uuid.New(),
 		BlockDoc: collabDocWithImages(added.ID, missingMediaID, kept.ID, featured.ID, added.ID),
 		// added.ID twice: one link, at its first position.
-		MediaIDs: []int64{added.ID, missingMediaID, kept.ID, featured.ID, added.ID},
+		ContentMedia: imageUses(added.ID, missingMediaID, kept.ID, featured.ID, added.ID),
 	})
 	require.NoError(t, err)
 
@@ -316,11 +317,11 @@ func TestStorePostCollabTxPublishedPostKeepsMedia(t *testing.T) {
 	publishPost(t, post.ID, post.UserID, "")
 
 	_, err = testStore.StorePostCollabTx(ctx, StorePostCollabTxParams{
-		PostID:   post.ID,
-		State:    []byte{1},
-		Epoch:    uuid.New(),
-		BlockDoc: collabDocWithImages(other.ID),
-		MediaIDs: []int64{other.ID},
+		PostID:       post.ID,
+		State:        []byte{1},
+		Epoch:        uuid.New(),
+		BlockDoc:     collabDocWithImages(other.ID),
+		ContentMedia: imageUses(other.ID),
 	})
 	require.NoError(t, err)
 	require.Equal(t, map[int64]int32{linked.ID: 1}, contentMediaOrder(t, post.ID))

@@ -14,11 +14,11 @@ type PublishPostTxParams struct {
 	Label     sql.NullString
 	Message   sql.NullString
 	CreatedBy sql.NullInt64
-	// ContentMediaIDs gives the image media ids of the published body in
-	// document order (the api package parses it). Their post_media links are
-	// synced with SyncPostContentMedia, which leaves the featured image (order
-	// 0) alone. Nil leaves the links as they are.
-	ContentMediaIDs func(blockDoc json.RawMessage) []int64
+	// ContentMedia gives the image blocks of the published body in document
+	// order (the api package parses it). Their post_media links are synced
+	// with SyncPostContentMedia, which leaves the featured image's order (0)
+	// alone. Nil leaves the links as they are.
+	ContentMedia func(blockDoc json.RawMessage) []ContentMediaUse
 }
 
 type PublishPostTxResult struct {
@@ -65,11 +65,8 @@ func (store *SQLStore) PublishPostTx(ctx context.Context, arg PublishPostTxParam
 		}); err != nil {
 			return fmt.Errorf("set published version: %w", err)
 		}
-		if arg.ContentMediaIDs != nil {
-			if err := q.SyncPostContentMedia(ctx, SyncPostContentMediaParams{
-				PostID:   arg.PostID,
-				MediaIds: arg.ContentMediaIDs(version.BlockDoc),
-			}); err != nil {
+		if arg.ContentMedia != nil {
+			if err := syncContentMedia(ctx, q, arg.PostID, arg.ContentMedia(version.BlockDoc)); err != nil {
 				return fmt.Errorf("sync content media: %w", err)
 			}
 		}
@@ -118,7 +115,7 @@ func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePos
 			return fmt.Errorf("restore title: %w", err)
 		}
 
-		if err := q.DeletePostMediaByOrder(ctx, DeletePostMediaByOrderParams{PostID: arg.PostID, Order: 0}); err != nil {
+		if err := q.UnlinkPostFeaturedMedia(ctx, arg.PostID); err != nil {
 			return fmt.Errorf("remove featured image: %w", err)
 		}
 		for _, key := range []string{"_thumbnail_id", "_thumbnail_url"} {

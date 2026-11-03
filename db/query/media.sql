@@ -258,6 +258,29 @@ WHERE post_id = $1 AND media_id = $2;
 DELETE FROM post_media 
 WHERE post_id = $1 AND "order" = $2;
 
+-- name: UnlinkPostFeaturedMedia :exec
+-- Removes the post's featured image link (order 0). An image that is also in
+-- the content (blocks, #176) keeps its row as a content link, placed after
+-- the others until the next sync puts it at its document position; deleting
+-- the row would drop that use until then.
+WITH featured AS (
+    SELECT pm.media_id, pm.blocks
+    FROM post_media pm
+    WHERE pm.post_id = @post_id AND pm."order" = 0
+), removed AS (
+    DELETE FROM post_media pm
+    USING featured
+    WHERE pm.post_id = @post_id
+      AND pm.media_id = featured.media_id
+      AND featured.blocks = '[]'::jsonb
+)
+UPDATE post_media pm
+SET "order" = (SELECT COALESCE(MAX(o."order"), 0) + 1 FROM post_media o WHERE o.post_id = @post_id)
+FROM featured
+WHERE pm.post_id = @post_id
+  AND pm.media_id = featured.media_id
+  AND featured.blocks <> '[]'::jsonb;
+
 -- name: GetFeaturedImage :one
 SELECT 
     pm.post_id,
@@ -423,7 +446,10 @@ SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at,
     COALESCE(pm."order", 0) as media_order,
-    CASE 
+    -- The content blocks showing it (#176); [] for the featured image alone
+    -- or a link made some other way.
+    COALESCE(pm.blocks, '[]'::jsonb)::jsonb as blocks,
+    CASE
         WHEN pm.media_id IS NOT NULL AND pm."order" = 0 THEN 'featured'
         WHEN pm.media_id IS NOT NULL AND pm."order" > 0 THEN 'gallery'
         WHEN meta.meta_value IS NOT NULL THEN 'featured'

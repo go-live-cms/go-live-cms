@@ -96,10 +96,11 @@ func (doc *BlockDocV1) prepareForStore(themeBlocks ThemeBlockManifest) error {
 	return nil
 }
 
-// extractMediaIDsFromBlocks extracts all mediaId values from image blocks in the document
-func (doc *BlockDocV1) extractMediaIDsFromBlocks() []int64 {
-	mediaIDs := make([]int64, 0)
-	seen := make(map[int64]bool)
+// contentMediaUses lists the document's image blocks with a mediaId, in
+// document order, for the post_media sync (#176): each block is one use, so a
+// media shown twice gives two.
+func (doc *BlockDocV1) contentMediaUses() []db.ContentMediaUse {
+	uses := make([]db.ContentMediaUse, 0)
 
 	for _, blockID := range doc.BlocksOrder {
 		block, exists := doc.Blocks[blockID]
@@ -131,24 +132,23 @@ func (doc *BlockDocV1) extractMediaIDsFromBlocks() []int64 {
 		}
 
 		mediaID := int64(mediaIDFloat)
-		if mediaID > 0 && !seen[mediaID] {
-			seen[mediaID] = true
-			mediaIDs = append(mediaIDs, mediaID)
+		if mediaID > 0 {
+			uses = append(uses, db.ContentMediaUse{MediaID: mediaID, BlockID: blockID, BlockType: blockType})
 		}
 	}
 
-	return mediaIDs
+	return uses
 }
 
-// publishedContentMediaIDs gives PublishPostTx the image media ids of the
-// published body, in document order. A body that doesn't parse as a block doc
-// has no content images.
-func publishedContentMediaIDs(blockDoc json.RawMessage) []int64 {
+// publishedContentMedia gives PublishPostTx the image blocks of the published
+// body, in document order. A body that doesn't parse as a block doc has no
+// content images.
+func publishedContentMedia(blockDoc json.RawMessage) []db.ContentMediaUse {
 	var doc BlockDocV1
 	if err := json.Unmarshal(blockDoc, &doc); err != nil {
 		return nil
 	}
-	return doc.extractMediaIDsFromBlocks()
+	return doc.contentMediaUses()
 }
 
 // BlockDocResponse wraps the block document for API responses
@@ -247,11 +247,11 @@ func (server *Server) publishPost(c *gin.Context) {
 	// snapshot points at it, and the content image links follow the published
 	// body without moving the featured image's (#389).
 	version, err := server.store.PublishPostTx(c, db.PublishPostTxParams{
-		PostID:          postID,
-		Label:           stringToNullString(req.Label),
-		Message:         stringToNullString(req.Message),
-		CreatedBy:       sql.NullInt64{Int64: userID, Valid: true},
-		ContentMediaIDs: publishedContentMediaIDs,
+		PostID:       postID,
+		Label:        stringToNullString(req.Label),
+		Message:      stringToNullString(req.Message),
+		CreatedBy:    sql.NullInt64{Int64: userID, Valid: true},
+		ContentMedia: publishedContentMedia,
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
