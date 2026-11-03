@@ -65,11 +65,11 @@ func (server *Server) RegisterSessionRoutes(v1 *gin.RouterGroup) {
 	auth.POST("/register", server.rateLimits.register.perIP(), server.register)                                        // POST /api/v1/auth/register
 	auth.POST("/login", server.rateLimits.loginIP.perIP(), server.cookieOriginGuard, server.loginUser)                 // POST /api/v1/auth/login (+ per-username limit in the handler)
 	auth.POST("/refresh", server.rateLimits.refresh.perIP(), server.cookieOriginGuard, server.renewAccessToken)        // POST /api/v1/auth/refresh
-	auth.POST("/logout", server.cookieOriginGuard, authMiddleware(server.tokenMaker, server.store), server.logoutUser) // POST /api/v1/auth/logout
+	auth.POST("/logout", server.cookieOriginGuard, server.requireAuth(), server.logoutUser) // POST /api/v1/auth/logout
 
 	// Session management endpoints - uniformly protected
 	sessions := v1.Group("/sessions")
-	sessions.Use(authMiddleware(server.tokenMaker, server.store))
+	sessions.Use(server.requireAuth())
 	sessions.GET("", server.getUserSessions)    // GET /api/v1/sessions
 	sessions.PUT("/block", server.blockSession) // PUT /api/v1/sessions/block
 }

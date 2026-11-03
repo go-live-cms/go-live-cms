@@ -243,43 +243,7 @@ func TestUpdateUser(t *testing.T) {
 	require.Equal(t, arg.Role, user2.Role)
 }
 
-func TestDeleteUserWithTransferTx(t *testing.T) {
-	user, post := createTestUserWithPosts(t)
-
-	adminUser := createTestUser(t)
-
-	err := testStore.DeleteUserWithTransferTx(context.Background(), DeleteUserWithTransferTxParams{
-		UserID:       user.ID,
-		TransferToID: adminUser.ID,
-	})
-	require.NoError(t, err)
-
-	deletedUser, err := testQueries.GetUser(context.Background(), user.ID)
-	require.Error(t, err)
-	require.EqualError(t, err, "sql: no rows in result set")
-	require.Empty(t, deletedUser)
-
-	existingPost, err := testQueries.GetPost(context.Background(), post.Post.ID)
-	require.NoError(t, err)
-	require.NotEmpty(t, existingPost)
-	require.Equal(t, adminUser.ID, existingPost.UserID)
-	require.Equal(t, adminUser.Username, existingPost.Username)
-}
-
-func TestDeleteUserTx_NuclearOption(t *testing.T) {
-	user, post := createTestUserWithPosts(t)
-
-	err := testStore.DeleteUserTx(context.Background(), user.ID)
-	require.NoError(t, err)
-
-	deletedUser, err := testQueries.GetUser(context.Background(), user.ID)
-	require.Error(t, err)
-	require.Empty(t, deletedUser)
-
-	deletedPost, err := testQueries.GetPost(context.Background(), post.Post.ID)
-	require.Error(t, err)
-	require.Empty(t, deletedPost)
-}
+// Removal with reassignment: user_members_test.go (RemoveUserTx, #333).
 
 func TestDeleteUser_WithoutTransaction_ShouldFail(t *testing.T) {
 	user, _ := createTestUserWithPosts(t)

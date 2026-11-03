@@ -70,7 +70,7 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	// Protected: create new taxonomy type definitions
 	types := tg.Group("/types")
 	types.GET("", server.getTaxonomyTypes)                                                                                   // GET /api/v1/taxonomy/types
-	types.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createTaxonomyType) // POST /api/v1/taxonomy/types
+	types.POST("", server.requireAuth(), requireContentEditor(server), server.createTaxonomyType) // POST /api/v1/taxonomy/types
 
 	// Type-Specific Term Browsing (must come before generic type lookup to avoid conflicts)
 	// Public: list terms within specific taxonomy types
@@ -98,9 +98,9 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	terms.GET("/:id", server.getTaxonomyTermByID) // GET /api/v1/taxonomy/terms/:id
 
 	// Protected term management operations (editor-or-admin role)
-	terms.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createTaxonomyTerm)       // POST /api/v1/taxonomy/terms
-	terms.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy/terms/:id
-	terms.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy/terms/:id
+	terms.POST("", server.requireAuth(), requireContentEditor(server), server.createTaxonomyTerm)       // POST /api/v1/taxonomy/terms
+	terms.PUT("/:id", server.requireAuth(), requireContentEditor(server), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy/terms/:id
+	terms.DELETE("/:id", server.requireAuth(), requireContentEditor(server), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy/terms/:id
 
 	// Cross-Module Integration
 	// Post-taxonomy term associations for bidirectional relationships
@@ -109,6 +109,6 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 
 	// One term at a time (editor-or-admin role), so concurrent editors don't
 	// overwrite each other's assignments
-	v1.PUT("/posts/:id/taxonomy-terms/:term_id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.addPostTaxonomyTerm)       // PUT /api/v1/posts/:id/taxonomy-terms/:term_id
-	v1.DELETE("/posts/:id/taxonomy-terms/:term_id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.removePostTaxonomyTerm) // DELETE /api/v1/posts/:id/taxonomy-terms/:term_id
+	v1.PUT("/posts/:id/taxonomy-terms/:term_id", server.requireAuth(), requireContentEditor(server), server.addPostTaxonomyTerm)       // PUT /api/v1/posts/:id/taxonomy-terms/:term_id
+	v1.DELETE("/posts/:id/taxonomy-terms/:term_id", server.requireAuth(), requireContentEditor(server), server.removePostTaxonomyTerm) // DELETE /api/v1/posts/:id/taxonomy-terms/:term_id
 }

@@ -52,15 +52,15 @@ func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	media := v1.Group("/media")
 
 	// Write operations - require Bearer authentication + editor-or-admin role
-	media.POST("", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createMedia)              // Single upload
-	media.POST("/batch", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createMediaBulk)    // Batch upload (original path)
-	media.POST("/bulk", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createMediaBulk)     // Batch upload (alias for compatibility)
-	media.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updateMedia)           // Update metadata
-	media.POST("/:id/replace", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.replaceMedia) // Swap the file, keep id/metadata
-	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deleteMedia)        // Delete (admin/editor: any media)
+	media.POST("", server.requireAuth(), requireContentAuthor(server), server.createMedia)              // Single upload
+	media.POST("/batch", server.requireAuth(), requireContentAuthor(server), server.createMediaBulk)    // Batch upload (original path)
+	media.POST("/bulk", server.requireAuth(), requireContentAuthor(server), server.createMediaBulk)     // Batch upload (alias for compatibility)
+	media.PUT("/:id", server.requireAuth(), requireContentAuthor(server), server.updateMedia)           // Update metadata
+	media.POST("/:id/replace", server.requireAuth(), requireContentAuthor(server), server.replaceMedia) // Swap the file, keep id/metadata
+	media.DELETE("/:id", server.requireAuth(), requireContentAuthor(server), server.deleteMedia)        // Delete (admin/editor: any media)
 
 	// The admin home's "N images have no alt text" count (#325), for content roles.
-	media.GET("/missing-alt", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getMissingAltSummary)
+	media.GET("/missing-alt", server.requireAuth(), requireContentAuthor(server), server.getMissingAltSummary)
 
 	// Read operations - public access for content consumption
 	media.GET("", server.getMedia)                // List/paginate/filter

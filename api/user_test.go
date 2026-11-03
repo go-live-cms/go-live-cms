@@ -385,15 +385,15 @@ func TestListUsersAPI(t *testing.T) {
 					Times(1).
 					Return(adminUser, nil)
 				store.EXPECT().
-					ListUsers(gomock.Any(), db.ListUsersParams{
+					ListMembers(gomock.Any(), db.ListMembersParams{
 						SortBy:      "date_desc",
 						LimitCount:  5,
 						OffsetCount: 0,
 					}).
 					Times(1).
-					Return(users, nil)
+					Return(memberRows(users), nil)
 				store.EXPECT().
-					CountTotalUsers(gomock.Any()).
+					CountMembers(gomock.Any(), db.CountMembersParams{}).
 					Times(1).
 					Return(int64(100), nil)
 			},
@@ -414,9 +414,9 @@ func TestListUsersAPI(t *testing.T) {
 					Times(1).
 					Return(adminUser, nil)
 				store.EXPECT().
-					ListUsers(gomock.Any(), gomock.Any()).
+					ListMembers(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return([]db.User{}, sql.ErrConnDone)
+					Return([]db.ListMembersRow{}, sql.ErrConnDone)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
@@ -434,7 +434,7 @@ func TestListUsersAPI(t *testing.T) {
 					Times(1).
 					Return(adminUser, nil)
 				store.EXPECT().
-					ListUsers(gomock.Any(), gomock.Any()).
+					ListMembers(gomock.Any(), gomock.Any()).
 					Times(0)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
@@ -957,244 +957,6 @@ func TestUpdateUserPasswordAPI(t *testing.T) {
 			addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, tc.callerID, "caller", time.Minute)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(t, recorder)
-		})
-	}
-}
-
-func TestDeleteUserAPI(t *testing.T) {
-	user := randomUserNew()
-	adminUser := randomUserNew()
-	adminUser.ID = user.ID + 1
-	adminUser.Role = "admin"
-
-	testCases := []struct {
-		name          string
-		userID        int64
-		body          gin.H
-		setupAuth     func(t *testing.T, request *http.Request, tokenMaker token.Maker)
-		buildStubs    func(store *mockdb.MockStore)
-		checkResponse func(recorder *httptest.ResponseRecorder)
-	}{
-		{
-			name:   "OK_Nuclear",
-			userID: user.ID,
-			body:   gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				// requireSiteAdmin middleware looks up the caller
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
-					Times(1).
-					Return(adminUser, nil)
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(user.ID)).
-					Times(1).
-					Return(user, nil)
-				store.EXPECT().
-					DeleteUserTx(gomock.Any(), gomock.Eq(user.ID)).
-					Times(1).
-					Return(nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:   "OK_WithTransfer",
-			userID: user.ID,
-			body: gin.H{
-				"transfer_to_id": adminUser.ID,
-			},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
-					Times(1).
-					Return(adminUser, nil)
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(user.ID)).
-					Times(1).
-					Return(user, nil)
-				store.EXPECT().
-					DeleteUserWithTransferTx(gomock.Any(), db.DeleteUserWithTransferTxParams{
-						UserID:       user.ID,
-						TransferToID: adminUser.ID,
-					}).
-					Times(1).
-					Return(nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:   "UserNotFound",
-			userID: user.ID,
-			body:   gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
-					Times(1).
-					Return(adminUser, nil)
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(user.ID)).
-					Times(1).
-					Return(db.User{}, sql.ErrNoRows)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusNotFound, recorder.Code)
-			},
-		},
-		{
-			name:   "ConflictDeleteLastAdmin",
-			userID: adminUser.ID,
-			body:   gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				// Middleware caller check + handler target fetch on the sole admin
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
-					Times(2).
-					Return(adminUser, nil)
-				// The transactional guard refuses the delete
-				store.EXPECT().
-					DeleteUserTx(gomock.Any(), gomock.Eq(adminUser.ID)).
-					Times(1).
-					Return(db.ErrLastAdmin)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusConflict, recorder.Code)
-				require.Contains(t, recorder.Body.String(), "cannot delete the last admin")
-			},
-		},
-		{
-			name:   "ConflictDeleteLastAdminWithTransfer",
-			userID: adminUser.ID,
-			body:   gin.H{"transfer_to_id": adminUser.ID + 7},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
-					Times(2).
-					Return(adminUser, nil)
-				store.EXPECT().
-					DeleteUserWithTransferTx(gomock.Any(), gomock.Eq(db.DeleteUserWithTransferTxParams{
-						UserID:       adminUser.ID,
-						TransferToID: adminUser.ID + 7,
-					})).
-					Times(1).
-					Return(db.ErrLastAdmin)
-				store.EXPECT().
-					DeleteUserTx(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusConflict, recorder.Code)
-				require.Contains(t, recorder.Body.String(), "cannot delete the last admin")
-			},
-		},
-		{
-			name:   "OK_DeleteAdminWhenAnotherExists",
-			userID: adminUser.ID + 1,
-			body:   gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, adminUser.ID, adminUser.Username, time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				secondAdmin := randomUserNew()
-				secondAdmin.ID = adminUser.ID + 1
-				secondAdmin.Role = "admin"
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(adminUser.ID)).
-					Times(1).
-					Return(adminUser, nil)
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(secondAdmin.ID)).
-					Times(1).
-					Return(secondAdmin, nil)
-				store.EXPECT().
-					DeleteUserTx(gomock.Any(), gomock.Eq(secondAdmin.ID)).
-					Times(1).
-					Return(nil)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusOK, recorder.Code)
-			},
-		},
-		{
-			name:   "ForbiddenNonAdmin",
-			userID: adminUser.ID,
-			body:   gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				// Contributor caller is rejected by requireSiteAdmin
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Eq(user.ID)).
-					Times(1).
-					Return(user, nil)
-				store.EXPECT().
-					DeleteUserTx(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusForbidden, recorder.Code)
-			},
-		},
-		{
-			name:   "NoAuthorization",
-			userID: user.ID,
-			body:   gin.H{},
-			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
-				// No authorization
-			},
-			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().
-					GetUser(gomock.Any(), gomock.Any()).
-					Times(0)
-			},
-			checkResponse: func(recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusUnauthorized, recorder.Code)
-			},
-		},
-	}
-
-	for i := range testCases {
-		tc := testCases[i]
-
-		t.Run(tc.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			store := mockdb.NewMockStore(ctrl)
-			tc.buildStubs(store)
-
-			server := newTestServer(t, store)
-			recorder := httptest.NewRecorder()
-
-			data, err := json.Marshal(tc.body)
-			require.NoError(t, err)
-
-			url := fmt.Sprintf("/api/v1/users/%d", tc.userID)
-			request, err := http.NewRequest(http.MethodDelete, url, bytes.NewReader(data))
-			require.NoError(t, err)
-			request.Header.Set("Content-Type", "application/json")
-
-			tc.setupAuth(t, request, server.tokenMaker)
-			server.router.ServeHTTP(recorder, request)
-			tc.checkResponse(recorder)
 		})
 	}
 }

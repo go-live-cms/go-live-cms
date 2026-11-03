@@ -9,7 +9,31 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/lib/pq"
 )
+
+const countMembers = `-- name: CountMembers :one
+SELECT count(*) FROM users u
+WHERE ($1::text = ''
+        OR u.full_name ILIKE $1
+        OR u.username ILIKE $1
+        OR u.email ILIKE $1)
+    AND ($2::text = '' OR lower(u.role) = lower($2))
+`
+
+type CountMembersParams struct {
+	Pattern string `json:"pattern"`
+	Role    string `json:"role"`
+}
+
+// ListMembers' filters, for its total.
+func (q *Queries) CountMembers(ctx context.Context, arg CountMembersParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMembers, arg.Pattern, arg.Role)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const countTotalUsers = `-- name: CountTotalUsers :one
 SELECT COUNT(*) AS total FROM users
@@ -31,7 +55,7 @@ INSERT INTO users (
     role
 ) VALUES (
     $1, $2, $3, $4, $5
-) RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website
+) RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at
 `
 
 type CreateUserParams struct {
@@ -62,18 +86,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.Bio,
 		&i.Website,
+		&i.LastActiveAt,
 	)
 	return i, err
-}
-
-const deletePostsByUserID = `-- name: DeletePostsByUserID :exec
-DELETE FROM posts
-WHERE user_id = $1
-`
-
-func (q *Queries) DeletePostsByUserID(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deletePostsByUserID, userID)
-	return err
 }
 
 const deleteUser = `-- name: DeleteUser :exec
@@ -83,16 +98,6 @@ WHERE id = $1
 
 func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteUser, id)
-	return err
-}
-
-const deleteUserPostsByUserID = `-- name: DeleteUserPostsByUserID :exec
-DELETE FROM user_posts
-WHERE user_id = $1
-`
-
-func (q *Queries) DeleteUserPostsByUserID(ctx context.Context, userID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteUserPostsByUserID, userID)
 	return err
 }
 
@@ -107,7 +112,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, id int64) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at FROM users
 WHERE id = $1 LIMIT 1
 `
 
@@ -125,12 +130,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Role,
 		&i.Bio,
 		&i.Website,
+		&i.LastActiveAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at FROM users
 WHERE email = $1
 LIMIT 1
 `
@@ -149,12 +155,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Role,
 		&i.Bio,
 		&i.Website,
+		&i.LastActiveAt,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at FROM users
 WHERE username = $1
 LIMIT 1
 `
@@ -173,12 +180,97 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Role,
 		&i.Bio,
 		&i.Website,
+		&i.LastActiveAt,
 	)
 	return i, err
 }
 
+const listMembers = `-- name: ListMembers :many
+SELECT u.id, u.username, u.full_name, u.email, u.hashed_password, u.password_changed_at, u.created_at, u.role, u.bio, u.website, u.last_active_at,
+    (SELECT count(*) FROM posts p WHERE p.user_id = u.id)::bigint AS posts_owned
+FROM users u
+WHERE ($1::text = ''
+        OR u.full_name ILIKE $1
+        OR u.username ILIKE $1
+        OR u.email ILIKE $1)
+    AND ($2::text = '' OR lower(u.role) = lower($2))
+ORDER BY
+    CASE WHEN $3::text = 'date_asc' THEN u.created_at END ASC,
+    CASE WHEN $3::text = 'date_desc' THEN u.created_at END DESC,
+    CASE WHEN $3::text = 'username_asc' THEN u.username END ASC,
+    CASE WHEN $3::text = 'username_desc' THEN u.username END DESC,
+    CASE WHEN $3::text = 'email_asc' THEN u.email END ASC,
+    CASE WHEN $3::text = 'email_desc' THEN u.email END DESC,
+    CASE WHEN $3::text = 'role_asc' THEN u.role END ASC,
+    CASE WHEN $3::text = 'role_desc' THEN u.role END DESC,
+    CASE WHEN $3::text = 'id_asc' THEN u.id END ASC,
+    CASE WHEN $3::text = 'id_desc' THEN u.id END DESC,
+    u.id DESC
+LIMIT $5
+OFFSET $4
+`
+
+type ListMembersParams struct {
+	Pattern     string `json:"pattern"`
+	Role        string `json:"role"`
+	SortBy      string `json:"sort_by"`
+	OffsetCount int32  `json:"offset_count"`
+	LimitCount  int32  `json:"limit_count"`
+}
+
+type ListMembersRow struct {
+	User       User  `json:"user"`
+	PostsOwned int64 `json:"posts_owned"`
+}
+
+// The Users screen (#333): ListUsers' sorts, plus a search (pattern: an ILIKE pattern
+// the API escapes, ” = all) over name, username and email, a role filter (” = all),
+// and each member's posts owned (posts.user_id, every type and status), counted in the
+// same query.
+func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMembers,
+		arg.Pattern,
+		arg.Role,
+		arg.SortBy,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMembersRow{}
+	for rows.Next() {
+		var i ListMembersRow
+		if err := rows.Scan(
+			&i.User.ID,
+			&i.User.Username,
+			&i.User.FullName,
+			&i.User.Email,
+			&i.User.HashedPassword,
+			&i.User.PasswordChangedAt,
+			&i.User.CreatedAt,
+			&i.User.Role,
+			&i.User.Bio,
+			&i.User.Website,
+			&i.User.LastActiveAt,
+			&i.PostsOwned,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at FROM users
 ORDER BY
     CASE WHEN $1 = 'date_asc' THEN created_at END ASC,
     CASE WHEN $1 = 'date_desc' THEN created_at END DESC,
@@ -221,6 +313,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Role,
 			&i.Bio,
 			&i.Website,
+			&i.LastActiveAt,
 		); err != nil {
 			return nil, err
 		}
@@ -290,13 +383,110 @@ func (q *Queries) LockUserForUpdate(ctx context.Context, id int64) error {
 	return err
 }
 
+const lockUsersForUpdate = `-- name: LockUsersForUpdate :many
+SELECT id, username FROM users
+WHERE id = ANY($1::bigint[])
+ORDER BY id
+FOR UPDATE
+`
+
+type LockUsersForUpdateRow struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+}
+
+// Row-locks the given users in id order (RemoveUserTx: the member and the one who
+// receives their posts), so two removals that name each other can't deadlock.
+func (q *Queries) LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error) {
+	rows, err := q.db.QueryContext(ctx, lockUsersForUpdate, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []LockUsersForUpdateRow{}
+	for rows.Next() {
+		var i LockUsersForUpdateRow
+		if err := rows.Scan(&i.ID, &i.Username); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reassignPostBylines = `-- name: ReassignPostBylines :exec
+UPDATE user_posts up
+SET user_id = $1
+WHERE up.user_id = $2
+    AND up.post_id = ANY($3::bigint[])
+    AND NOT EXISTS (
+        SELECT 1 FROM user_posts o WHERE o.post_id = up.post_id AND o.user_id = $1
+    )
+`
+
+type ReassignPostBylinesParams struct {
+	ToID    int64   `json:"to_id"`
+	FromID  int64   `json:"from_id"`
+	PostIds []int64 `json:"post_ids"`
+}
+
+// The removed member's byline (user_posts, #319) on the posts that just moved goes to
+// the new owner, unless they are already credited there. Credits on anyone else's
+// posts are deleted with the account (ON DELETE CASCADE).
+func (q *Queries) ReassignPostBylines(ctx context.Context, arg ReassignPostBylinesParams) error {
+	_, err := q.db.ExecContext(ctx, reassignPostBylines, arg.ToID, arg.FromID, pq.Array(arg.PostIds))
+	return err
+}
+
+const reassignPostsOwner = `-- name: ReassignPostsOwner :many
+UPDATE posts
+SET user_id = $1, username = $2
+WHERE user_id = $3
+RETURNING id
+`
+
+type ReassignPostsOwnerParams struct {
+	ToID       int64  `json:"to_id"`
+	ToUsername string `json:"to_username"`
+	FromID     int64  `json:"from_id"`
+}
+
+func (q *Queries) ReassignPostsOwner(ctx context.Context, arg ReassignPostsOwnerParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, reassignPostsOwner, arg.ToID, arg.ToUsername, arg.FromID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setUserPassword = `-- name: SetUserPassword :one
 UPDATE users
 SET
     hashed_password = $2,
     password_changed_at = $3
 WHERE id = $1
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at
 `
 
 type SetUserPasswordParams struct {
@@ -319,24 +509,63 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 		&i.Role,
 		&i.Bio,
 		&i.Website,
+		&i.LastActiveAt,
 	)
 	return i, err
 }
 
-const transferPostsToAdmin = `-- name: TransferPostsToAdmin :exec
-UPDATE posts 
-SET user_id = $2, username = (SELECT username FROM users WHERE id = $2)
-WHERE user_id = $1
+const setUserRole = `-- name: SetUserRole :one
+UPDATE users
+SET role = $1
+WHERE id = $2
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at
 `
 
-type TransferPostsToAdminParams struct {
-	UserID   int64 `json:"user_id"`
-	UserID_2 int64 `json:"user_id_2"`
+type SetUserRoleParams struct {
+	Role string `json:"role"`
+	ID   int64  `json:"id"`
 }
 
-func (q *Queries) TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error {
-	_, err := q.db.ExecContext(ctx, transferPostsToAdmin, arg.UserID, arg.UserID_2)
-	return err
+func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, setUserRole, arg.Role, arg.ID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.FullName,
+		&i.Email,
+		&i.HashedPassword,
+		&i.PasswordChangedAt,
+		&i.CreatedAt,
+		&i.Role,
+		&i.Bio,
+		&i.Website,
+		&i.LastActiveAt,
+	)
+	return i, err
+}
+
+const touchUserLastActive = `-- name: TouchUserLastActive :execrows
+UPDATE users
+SET last_active_at = now()
+WHERE id = $1
+    AND (last_active_at IS NULL
+        OR last_active_at < now() - make_interval(secs => $2::float8))
+`
+
+type TouchUserLastActiveParams struct {
+	ID            int64   `json:"id"`
+	MinAgeSeconds float64 `json:"min_age_seconds"`
+}
+
+// Stamps last_active_at unless it is newer than min_age_seconds, so concurrent
+// requests and the API's own check (authMiddleware) write at most once per interval.
+func (q *Queries) TouchUserLastActive(ctx context.Context, arg TouchUserLastActiveParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, touchUserLastActive, arg.ID, arg.MinAgeSeconds)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updatePostsUsername = `-- name: UpdatePostsUsername :exec
@@ -368,7 +597,7 @@ SET
     bio = COALESCE($8, bio),
     website = COALESCE($9, website)
 WHERE id = $1
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at
 `
 
 type UpdateUserParams struct {
@@ -407,22 +636,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Role,
 		&i.Bio,
 		&i.Website,
+		&i.LastActiveAt,
 	)
 	return i, err
-}
-
-const updateUserPostsOwnership = `-- name: UpdateUserPostsOwnership :exec
-UPDATE user_posts 
-SET user_id = $2
-WHERE user_id = $1
-`
-
-type UpdateUserPostsOwnershipParams struct {
-	UserID   int64 `json:"user_id"`
-	UserID_2 int64 `json:"user_id_2"`
-}
-
-func (q *Queries) UpdateUserPostsOwnership(ctx context.Context, arg UpdateUserPostsOwnershipParams) error {
-	_, err := q.db.ExecContext(ctx, updateUserPostsOwnership, arg.UserID, arg.UserID_2)
-	return err
 }

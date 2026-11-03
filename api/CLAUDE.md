@@ -15,9 +15,9 @@ is split into consistently-named files in `api/`:
 - `*_utils.go` — domain helpers
 
 `server.go` builds the Gin engine, CORS, and registers all route groups under
-`/api/v1` (+ a `/public` group for SSR). Auth via
-`authMiddleware(server.tokenMaker, server.store)`; the payload is under context key
-`authorization_payload` (`getAuthPayload(c)`).
+`/api/v1` (+ a `/public` group for SSR). Auth via `server.requireAuth()`
+(`authMiddleware` with the server's token maker, store and `LAST_ACTIVE_INTERVAL`); the
+payload is under context key `authorization_payload` (`getAuthPayload(c)`).
 
 Some domains also keep a docs-only module entry file (`posts.go`, `users.go`,
 `media.go`, `taxonomies.go`, `sessions.go`, `themes.go`) holding package-level docs
@@ -164,7 +164,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 `newTestConfig`; `newCollabTestServer` points at your own). History and the guards:
 `docs/operations/collab-cutover.md`.
 
-- **API → collab calls** (`collab_internal_client.go`) use `COLLAB_INTERNAL_URL` +
+- **API → collab calls** (`collab_internal_client.go`: the publish flush, and the
+  best-effort user re-check of #333) use `COLLAB_INTERNAL_URL` +
   `COLLAB_INTERNAL_SECRET` (Bearer). `NewServer` trims both (URL also of trailing `/`)
   and refuses to start without them. The secret is NOT the one the collab server sends to
   the API (that's `ROLE_LOOKUP_SECRET`). **Before** reading `block_doc`, publish calls
@@ -259,6 +260,52 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `includeSubDomains` (it reaches the site's host through the `/api` proxy,
   which may be the apex domain). Don't add a
   `Cross-Origin-Resource-Policy`: the web app loads `/uploads` cross-origin.
+
+## Users screen: last active, search, role change, removal (#333)
+
+- **Last active** (`users.last_active_at`, `000030`): `authMiddleware` stamps it when the
+  row it already loaded is at least `LAST_ACTIVE_INTERVAL` old (default `5m`; **0 = off,
+  so a zero `Config` (tests) never writes it**), and so do `startSession` (login, accept,
+  self password change) and refresh rotation, after the commit. `TouchUserLastActive` re-checks
+  the age in SQL, so a burst of requests writes once. A failed write is logged
+  (`last_active_update_failed`) and never fails the request. Tests that want it set the
+  interval (`newRateLimitedTestServer`).
+- **`GET /users`** (admin) is `ListMembers` + `CountMembers`: `?q=` (name, username or
+  email; ILIKE substring, wildcards escaped by `memberSearchPattern`, ≤100), `?role=`, the
+  old sorts, and per row `last_active_at` (null = none) and `posts_owned` (`posts.user_id`,
+  every type and status) in the same query. `meta.total` is the filtered count.
+- **`PUT /users/:id/role {role}`** (admin) → `ChangeUserRoleTx`; `PUT /users/:id` with a
+  role still works. Both refuse the last admin (409, `code: last_admin`), the caller
+  included: `guardLastAdmin` locks every admin row inside the transaction, so two
+  concurrent demotions of the last two admins can't both pass (tested against the DB).
+- **Role changes apply at once.** The API reads the role from the DB on every request, so
+  a demoted member's access tokens lose the rights at once (the token's `role` is
+  informational, and refresh tokens carry none). For open documents the API then calls the
+  collab server's `POST /internal/users/:id/recheck` (`recheckCollabUser`, after the
+  commit, in the background, best effort): it re-checks their connections now instead of
+  at the next `COLLAB_ACCESS_RECHECK_MS` (#313), so an editor demoted to contributor drops
+  to read-only on someone else's post. If that call fails the periodic re-check still
+  catches it.
+- **`DELETE /users/:id {transfer_to_id}`** (admin; the body is required) →
+  `RemoveUserTx`, one transaction. **Removal is a hard delete** of the user row, so the
+  username and email can be invited again and nothing has to filter "deleted" users:
+  - refused for the last admin (409 `last_admin`), for yourself (409
+    `cannot_remove_self`), and for a recipient that is the member or doesn't exist (400
+    `invalid_transfer_target`);
+  - the member and the recipient are locked in id order (`LockUsersForUpdate`); every post
+    they own moves to the recipient (`user_id` and the denormalized `username`), with
+    their byline (`user_posts`, #319) on those posts unless the recipient is already
+    credited; their media move too (`media.user_id` has no ON DELETE);
+  - their sessions are deleted, which revokes every refresh token; a still-valid access
+    token gets 403 at once (no user row); their open collab connections close on the
+    re-check above;
+  - what goes with the row: their bylines on **other people's** posts (CASCADE), reset
+    tokens (CASCADE). What stays without them: revisions they published
+    (`post_versions.created_by` → NULL, `000030`; it had no ON DELETE, so removing anyone
+    who had published used to fail), invitations they sent (`invited_by` → NULL; still
+    valid, revocable from the list), `post_ydoc_state.last_editor_id` (NULL).
+  - The old no-transfer delete (`DeleteUserTx`), which deleted the member's posts and media
+    rows, is gone.
 
 ## Invitations, password reset, mail (#148)
 

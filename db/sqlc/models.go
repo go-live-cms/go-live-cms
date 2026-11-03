@@ -242,16 +242,17 @@ type ThemeSetting struct {
 }
 
 type User struct {
-	ID                int64     `json:"id"`
-	Username          string    `json:"username"`
-	FullName          string    `json:"full_name"`
-	Email             string    `json:"email"`
-	HashedPassword    string    `json:"hashed_password"`
-	PasswordChangedAt time.Time `json:"password_changed_at"`
-	CreatedAt         time.Time `json:"created_at"`
-	Role              string    `json:"role"`
-	Bio               string    `json:"bio"`
-	Website           string    `json:"website"`
+	ID                int64        `json:"id"`
+	Username          string       `json:"username"`
+	FullName          string       `json:"full_name"`
+	Email             string       `json:"email"`
+	HashedPassword    string       `json:"hashed_password"`
+	PasswordChangedAt time.Time    `json:"password_changed_at"`
+	CreatedAt         time.Time    `json:"created_at"`
+	Role              string       `json:"role"`
+	Bio               string       `json:"bio"`
+	Website           string       `json:"website"`
+	LastActiveAt      sql.NullTime `json:"last_active_at"`
 }
 
 type UserInvitation struct {

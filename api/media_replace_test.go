@@ -567,7 +567,7 @@ func TestReplaceMediaOwnerScopedRole(t *testing.T) {
 			defer ctrl.Finish()
 			store := mockdb.NewMockStore(ctrl)
 			server := newTestServer(t, store)
-			server.router.POST("/owner-scoped/media/:id/replace", authMiddleware(server.tokenMaker, server.store), server.replaceMedia)
+			server.router.POST("/owner-scoped/media/:id/replace", server.requireAuth(), server.replaceMedia)
 
 			media, original := replaceFixture(t, server, tc.ownerID)
 			store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(media.ID)).Times(1).Return(media, nil)

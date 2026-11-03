@@ -510,7 +510,7 @@ func TestUpdateMediaRequestErrors(t *testing.T) {
 			// TestMediaWriteOwnerScopedRole, so the contributor reaches the
 			// owner-scoped branch.
 			server := newTestServer(t, store)
-			server.router.PUT("/owner-scoped/media/:id", authMiddleware(server.tokenMaker, server.store), server.updateMedia)
+			server.router.PUT("/owner-scoped/media/:id", server.requireAuth(), server.updateMedia)
 
 			request, err := http.NewRequest(http.MethodPut, "/owner-scoped/media/"+tc.mediaID, strings.NewReader(tc.body))
 			require.NoError(t, err)

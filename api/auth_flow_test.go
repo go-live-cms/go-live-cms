@@ -468,3 +468,48 @@ func TestAuthFlowKeyRotationDB(t *testing.T) {
 	require.Equal(t, "k4.loc.2026-11", session.RefreshKid.String)
 	require.Equal(t, http.StatusOK, flowRefresh(strict, newCookie).Code)
 }
+
+// Last active (#333): login stamps last_active_at; requests and a refresh inside
+// LAST_ACTIVE_INTERVAL don't write it again.
+func TestAuthFlowLastActive(t *testing.T) {
+	store := authFlowStore(t)
+	server := authFlowServer(t, store, func(c *util.Config) { c.LastActiveInterval = 5 * time.Minute })
+	user := authFlowUser(t, store)
+	ctx := context.Background()
+	lastActive := func() sql.NullTime {
+		row, err := store.GetUser(ctx, user.ID)
+		require.NoError(t, err)
+		return row.LastActiveAt
+	}
+	require.False(t, lastActive().Valid)
+
+	access, cookie := flowLogin(t, server, user)
+	stamped := lastActive()
+	require.True(t, stamped.Valid)
+
+	// Within the interval: requests and a refresh leave it as it is.
+	require.Equal(t, http.StatusOK, flowGetMe(server, access))
+	refreshed := flowRefresh(server, cookie)
+	require.Equal(t, http.StatusOK, refreshed.Code, refreshed.Body.String())
+	require.True(t, lastActive().Time.Equal(stamped.Time))
+	// Stale rows: TestAuthMiddlewareLastActive and db's TestTouchUserLastActive.
+}
+
+// Removing a member (#333) ends every way back in: their access token gets 403
+// at once (the row is gone) and their refresh token 401 (sessions deleted).
+func TestAuthFlowRemovedMember(t *testing.T) {
+	store := authFlowStore(t)
+	server := authFlowServer(t, store, nil)
+	member := authFlowUser(t, store)
+	recipient := authFlowUser(t, store)
+
+	access, cookie := flowLogin(t, server, member)
+	require.Equal(t, http.StatusOK, flowGetMe(server, access))
+
+	_, err := store.RemoveUserTx(context.Background(), db.RemoveUserTxParams{UserID: member.ID, ReassignTo: recipient.ID})
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusForbidden, flowGetMe(server, access))
+	require.Equal(t, http.StatusUnauthorized, flowRefresh(server, cookie).Code)
+	require.Empty(t, userSessions(t, store, member.ID))
+}

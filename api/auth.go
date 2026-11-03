@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -51,8 +52,12 @@ const (
 // Example (route protection):
 //
 //	r := gin.Default()
-//	r.GET("/me", authMiddleware(maker), func(c *gin.Context) { /* ... */ })
-func authMiddleware(tokenMaker token.Maker, store db.Store) gin.HandlerFunc {
+//	r.GET("/me", server.requireAuth(), func(c *gin.Context) { /* ... */ })
+//
+// lastActiveInterval > 0 also stamps the caller's last_active_at (#333) when the
+// loaded row says it is at least that old (recordActivity), so it writes at most
+// once per interval per user; 0 (a zero Config: tests) turns that off.
+func authMiddleware(tokenMaker token.Maker, store db.Store, lastActiveInterval time.Duration) gin.HandlerFunc {
 	return gin.HandlerFunc(func(ctx *gin.Context) {
 		authorizationHeader := ctx.GetHeader(authorizationHeaderKey)
 
@@ -105,11 +110,49 @@ func authMiddleware(tokenMaker token.Maker, store db.Store) gin.HandlerFunc {
 			return
 		}
 
+		if lastActiveStale(user, lastActiveInterval, time.Now()) {
+			recordActivity(ctx, store, user.ID, lastActiveInterval)
+		}
+
 		// make payload and caller available to handlers
 		ctx.Set(authorizationPayloadKey, payload)
 		ctx.Set(authorizationUserKey, user)
 		ctx.Next()
 	})
+}
+
+// requireAuth is authMiddleware with this server's token maker, store and
+// last-active interval: what every authenticated route group uses.
+func (server *Server) requireAuth() gin.HandlerFunc {
+	return authMiddleware(server.tokenMaker, server.store, server.config.LastActiveInterval)
+}
+
+// lastActiveStale reports whether the user's last_active_at is at least interval
+// old (or unset), i.e. whether this request should stamp it. interval 0 = never.
+func lastActiveStale(user db.User, interval time.Duration, now time.Time) bool {
+	if interval <= 0 {
+		return false
+	}
+	return !user.LastActiveAt.Valid || now.Sub(user.LastActiveAt.Time) >= interval
+}
+
+// recordActivity stamps last_active_at (#333). TouchUserLastActive re-checks the
+// age in SQL, so concurrent requests still write once. It never fails the
+// request: "last active" is informational.
+func recordActivity(ctx *gin.Context, store db.Store, userID int64, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	_, err := store.TouchUserLastActive(ctx.Request.Context(), db.TouchUserLastActiveParams{
+		ID:            userID,
+		MinAgeSeconds: interval.Seconds(),
+	})
+	if err != nil {
+		slog.Warn("last_active_update_failed",
+			requestIDKey, requestIDFromContext(ctx),
+			"user_id", userID,
+			"error", err.Error())
+	}
 }
 
 // issuedBeforePasswordChange reports whether a token predates the user's
