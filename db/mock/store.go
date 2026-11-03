@@ -124,6 +124,21 @@ func (mr *MockStoreMockRecorder) BlockSession(arg0, arg1 interface{}) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockSession", reflect.TypeOf((*MockStore)(nil).BlockSession), arg0, arg1)
 }
 
+// CancelPostSchedule mocks base method.
+func (m *MockStore) CancelPostSchedule(arg0 context.Context, arg1 int64) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelPostSchedule", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CancelPostSchedule indicates an expected call of CancelPostSchedule.
+func (mr *MockStoreMockRecorder) CancelPostSchedule(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelPostSchedule", reflect.TypeOf((*MockStore)(nil).CancelPostSchedule), arg0, arg1)
+}
+
 // CheckSlugExists mocks base method.
 func (m *MockStore) CheckSlugExists(arg0 context.Context, arg1 db.CheckSlugExistsParams) (bool, error) {
 	m.ctrl.T.Helper()
@@ -152,6 +167,21 @@ func (m *MockStore) CheckURLExists(arg0 context.Context, arg1 string) (bool, err
 func (mr *MockStoreMockRecorder) CheckURLExists(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckURLExists", reflect.TypeOf((*MockStore)(nil).CheckURLExists), arg0, arg1)
+}
+
+// ClaimDueScheduledPosts mocks base method.
+func (m *MockStore) ClaimDueScheduledPosts(arg0 context.Context, arg1 db.ClaimDueScheduledPostsParams) ([]db.ClaimDueScheduledPostsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimDueScheduledPosts", arg0, arg1)
+	ret0, _ := ret[0].([]db.ClaimDueScheduledPostsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimDueScheduledPosts indicates an expected call of ClaimDueScheduledPosts.
+func (mr *MockStoreMockRecorder) ClaimDueScheduledPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimDueScheduledPosts", reflect.TypeOf((*MockStore)(nil).ClaimDueScheduledPosts), arg0, arg1)
 }
 
 // ClaimPasswordResetToken mocks base method.
@@ -2714,6 +2744,21 @@ func (mr *MockStoreMockRecorder) LockPostForPublish(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForPublish", reflect.TypeOf((*MockStore)(nil).LockPostForPublish), arg0, arg1)
 }
 
+// LockScheduledPostClaim mocks base method.
+func (m *MockStore) LockScheduledPostClaim(arg0 context.Context, arg1 db.LockScheduledPostClaimParams) (db.LockScheduledPostClaimRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockScheduledPostClaim", arg0, arg1)
+	ret0, _ := ret[0].(db.LockScheduledPostClaimRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockScheduledPostClaim indicates an expected call of LockScheduledPostClaim.
+func (mr *MockStoreMockRecorder) LockScheduledPostClaim(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockScheduledPostClaim", reflect.TypeOf((*MockStore)(nil).LockScheduledPostClaim), arg0, arg1)
+}
+
 // LockUserForShare mocks base method.
 func (m *MockStore) LockUserForShare(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -2769,6 +2814,36 @@ func (m *MockStore) PublishPostTx(arg0 context.Context, arg1 db.PublishPostTxPar
 func (mr *MockStoreMockRecorder) PublishPostTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishPostTx", reflect.TypeOf((*MockStore)(nil).PublishPostTx), arg0, arg1)
+}
+
+// PublishScheduledPostTx mocks base method.
+func (m *MockStore) PublishScheduledPostTx(arg0 context.Context, arg1 db.PublishScheduledPostTxParams) (db.PublishPostTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishScheduledPostTx", arg0, arg1)
+	ret0, _ := ret[0].(db.PublishPostTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishScheduledPostTx indicates an expected call of PublishScheduledPostTx.
+func (mr *MockStoreMockRecorder) PublishScheduledPostTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishScheduledPostTx", reflect.TypeOf((*MockStore)(nil).PublishScheduledPostTx), arg0, arg1)
+}
+
+// RecordScheduledPublishFailure mocks base method.
+func (m *MockStore) RecordScheduledPublishFailure(arg0 context.Context, arg1 db.RecordScheduledPublishFailureParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordScheduledPublishFailure", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RecordScheduledPublishFailure indicates an expected call of RecordScheduledPublishFailure.
+func (mr *MockStoreMockRecorder) RecordScheduledPublishFailure(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordScheduledPublishFailure", reflect.TypeOf((*MockStore)(nil).RecordScheduledPublishFailure), arg0, arg1)
 }
 
 // RefreshPublishedSettings mocks base method.
@@ -2974,6 +3049,21 @@ func (m *MockStore) SaveMenuTx(arg0 context.Context, arg1 db.SaveMenuTxParams) (
 func (mr *MockStoreMockRecorder) SaveMenuTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveMenuTx", reflect.TypeOf((*MockStore)(nil).SaveMenuTx), arg0, arg1)
+}
+
+// SchedulePost mocks base method.
+func (m *MockStore) SchedulePost(arg0 context.Context, arg1 db.SchedulePostParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SchedulePost", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SchedulePost indicates an expected call of SchedulePost.
+func (mr *MockStoreMockRecorder) SchedulePost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchedulePost", reflect.TypeOf((*MockStore)(nil).SchedulePost), arg0, arg1)
 }
 
 // SearchMediaByName mocks base method.

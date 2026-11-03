@@ -109,6 +109,11 @@ func (server *Server) createPost(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "contributors can only create drafts authored by themselves"})
 		return
 	}
+	// A scheduled post needs its time: create a draft, then schedule it.
+	if req.PostStatus == postStatusScheduled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": scheduleThroughScheduleRoute})
+		return
+	}
 	// Nesting under a post files it into that post's hierarchy: a contributor
 	// may only use a parent they can edit.
 	if req.PostParent != nil && !server.authorizePost(c, *req.PostParent, canEditPost) {
@@ -301,6 +306,13 @@ func (server *Server) updatePost(c *gin.Context) {
 	// Setting the status here is publishing/unpublishing by another route.
 	if req.PostStatus != "" && !strings.EqualFold(req.PostStatus, existingPost.PostStatus) && !canModeratePosts(caller) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "changing the post status requires the editor role"})
+		return
+	}
+	// The editor sends a scheduled post's status back unchanged; scheduling one
+	// takes a time (PUT /posts/:id/schedule). Any other status ends a schedule
+	// (UpdatePost clears it).
+	if req.PostStatus == postStatusScheduled && existingPost.PostStatus != postStatusScheduled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": scheduleThroughScheduleRoute})
 		return
 	}
 	// Same parent rule as createPost, for a changed parent only.

@@ -386,7 +386,7 @@ SET title = $2,
     description = $3,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type RestorePostTitleAndDescriptionParams struct {
@@ -419,6 +419,12 @@ func (q *Queries) RestorePostTitleAndDescription(ctx context.Context, arg Restor
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 	)
 	return i, err
 }
@@ -431,7 +437,13 @@ SET published_version_id = $1::bigint,
         (SELECT v.settings FROM post_versions v WHERE v.id = $1::bigint),
         golive_post_settings(posts.id)
     ),
-    post_status = 'published'
+    post_status = 'published',
+    publish_at = NULL,
+    publish_scheduled_by = NULL,
+    publish_attempts = 0,
+    publish_next_attempt_at = NULL,
+    publish_failed_at = NULL,
+    publish_error = NULL
 WHERE id = $3::bigint
 `
 
@@ -444,7 +456,9 @@ type SetPublishedVersionOnPostParams struct {
 // Publishing also makes the post public: post_status follows the snapshot, so a
 // post published from the editor is not left as 'draft' in the database. The
 // published settings are the version's (#358); without a version (a post created
-// as published, the dev seed) they are the post's current ones.
+// as published, the dev seed) they are the post's current ones. A schedule (#147)
+// is done once the post is published, by the scheduler or by hand: its time and
+// retry state are cleared.
 func (q *Queries) SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error {
 	_, err := q.db.ExecContext(ctx, setPublishedVersionOnPost, arg.PublishedVersionID, arg.PublishedBlockDoc, arg.ID)
 	return err
@@ -457,7 +471,7 @@ SET post_status = 'draft',
     published_block_doc = NULL,
     published_settings = NULL
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 // Back to draft and drop the public snapshot (#136), settings included (#358).
@@ -484,6 +498,12 @@ func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 	)
 	return i, err
 }

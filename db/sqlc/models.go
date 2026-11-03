@@ -75,24 +75,30 @@ type PasswordResetToken struct {
 }
 
 type Post struct {
-	ID                 int64                 `json:"id"`
-	Title              string                `json:"title"`
-	Description        string                `json:"description"`
-	UserID             int64                 `json:"user_id"`
-	Username           string                `json:"username"`
-	Url                string                `json:"url"`
-	PostType           string                `json:"post_type"`
-	PostStatus         string                `json:"post_status"`
-	PostParent         sql.NullInt64         `json:"post_parent"`
-	MenuOrder          int32                 `json:"menu_order"`
-	CreatedAt          time.Time             `json:"created_at"`
-	ChangedAt          time.Time             `json:"changed_at"`
-	BlockDoc           json.RawMessage       `json:"block_doc"`
-	BlockRevision      int64                 `json:"block_revision"`
-	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
-	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug               string                `json:"slug"`
-	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
+	ID                   int64                 `json:"id"`
+	Title                string                `json:"title"`
+	Description          string                `json:"description"`
+	UserID               int64                 `json:"user_id"`
+	Username             string                `json:"username"`
+	Url                  string                `json:"url"`
+	PostType             string                `json:"post_type"`
+	PostStatus           string                `json:"post_status"`
+	PostParent           sql.NullInt64         `json:"post_parent"`
+	MenuOrder            int32                 `json:"menu_order"`
+	CreatedAt            time.Time             `json:"created_at"`
+	ChangedAt            time.Time             `json:"changed_at"`
+	BlockDoc             json.RawMessage       `json:"block_doc"`
+	BlockRevision        int64                 `json:"block_revision"`
+	PublishedVersionID   sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                 string                `json:"slug"`
+	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	PublishAt            sql.NullTime          `json:"publish_at"`
+	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
+	PublishAttempts      int32                 `json:"publish_attempts"`
+	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
+	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
+	PublishError         sql.NullString        `json:"publish_error"`
 }
 
 type PostMedium struct {

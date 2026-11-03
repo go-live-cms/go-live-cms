@@ -62,7 +62,7 @@ WHERE p.id = $1
 GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at;
 
 -- name: ListPosts :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug, published_settings FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug, published_settings, publish_at FROM posts
 WHERE 
     (@post_type::text = '' OR post_type = @post_type)
     AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
@@ -102,6 +102,13 @@ SET title = COALESCE($1, title),
     post_status = COALESCE($7, post_status),
     post_parent = COALESCE($8, post_parent),
     menu_order = COALESCE($9, menu_order),
+    -- Moving a scheduled post to another status ends its schedule (#147); only
+    -- SchedulePost sets one (the handler refuses 'scheduled' here otherwise).
+    publish_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_at END,
+    publish_scheduled_by = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_scheduled_by END,
+    publish_next_attempt_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_next_attempt_at END,
+    publish_failed_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_failed_at END,
+    publish_error = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_error END,
     changed_at = now()
 WHERE id = $10
 RETURNING *;
@@ -125,6 +132,8 @@ WHERE post_type = $1;
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    -- A scheduled post's time, for the list's "Scheduled · Nov 3" pill (#147).
+    p.publish_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (

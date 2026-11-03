@@ -163,6 +163,7 @@ WITH RECURSIVE subtree AS (
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    p.publish_at,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -213,6 +214,7 @@ type ListPublishedPostsByTermRow struct {
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug              string                `json:"slug"`
 	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
+	PublishAt         sql.NullTime          `json:"publish_at"`
 	Meta              interface{}           `json:"meta"`
 	Authors           json.RawMessage       `json:"authors"`
 }
@@ -244,6 +246,7 @@ func (q *Queries) ListPublishedPostsByTerm(ctx context.Context, arg ListPublishe
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.PublishAt,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

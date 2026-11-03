@@ -865,7 +865,7 @@ func (q *Queries) GetPostMediaCount(ctx context.Context, postID int64) (int64, e
 
 const getPostWithMedia = `-- name: GetPostWithMedia :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
     COALESCE(
         json_agg(
             json_build_object(
@@ -890,25 +890,31 @@ GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.usern
 `
 
 type GetPostWithMediaRow struct {
-	ID                 int64                 `json:"id"`
-	Title              string                `json:"title"`
-	Description        string                `json:"description"`
-	UserID             int64                 `json:"user_id"`
-	Username           string                `json:"username"`
-	Url                string                `json:"url"`
-	PostType           string                `json:"post_type"`
-	PostStatus         string                `json:"post_status"`
-	PostParent         sql.NullInt64         `json:"post_parent"`
-	MenuOrder          int32                 `json:"menu_order"`
-	CreatedAt          time.Time             `json:"created_at"`
-	ChangedAt          time.Time             `json:"changed_at"`
-	BlockDoc           json.RawMessage       `json:"block_doc"`
-	BlockRevision      int64                 `json:"block_revision"`
-	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
-	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug               string                `json:"slug"`
-	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
-	Media              interface{}           `json:"media"`
+	ID                   int64                 `json:"id"`
+	Title                string                `json:"title"`
+	Description          string                `json:"description"`
+	UserID               int64                 `json:"user_id"`
+	Username             string                `json:"username"`
+	Url                  string                `json:"url"`
+	PostType             string                `json:"post_type"`
+	PostStatus           string                `json:"post_status"`
+	PostParent           sql.NullInt64         `json:"post_parent"`
+	MenuOrder            int32                 `json:"menu_order"`
+	CreatedAt            time.Time             `json:"created_at"`
+	ChangedAt            time.Time             `json:"changed_at"`
+	BlockDoc             json.RawMessage       `json:"block_doc"`
+	BlockRevision        int64                 `json:"block_revision"`
+	PublishedVersionID   sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                 string                `json:"slug"`
+	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	PublishAt            sql.NullTime          `json:"publish_at"`
+	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
+	PublishAttempts      int32                 `json:"publish_attempts"`
+	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
+	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
+	PublishError         sql.NullString        `json:"publish_error"`
+	Media                interface{}           `json:"media"`
 }
 
 func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMediaRow, error) {
@@ -933,6 +939,12 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 		&i.Media,
 	)
 	return i, err
@@ -1023,7 +1035,7 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 
 const getPostsByUserWithMedia = `-- name: GetPostsByUserWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1057,25 +1069,31 @@ type GetPostsByUserWithMediaParams struct {
 }
 
 type GetPostsByUserWithMediaRow struct {
-	ID                 int64                 `json:"id"`
-	Title              string                `json:"title"`
-	Description        string                `json:"description"`
-	UserID             int64                 `json:"user_id"`
-	Username           string                `json:"username"`
-	Url                string                `json:"url"`
-	PostType           string                `json:"post_type"`
-	PostStatus         string                `json:"post_status"`
-	PostParent         sql.NullInt64         `json:"post_parent"`
-	MenuOrder          int32                 `json:"menu_order"`
-	CreatedAt          time.Time             `json:"created_at"`
-	ChangedAt          time.Time             `json:"changed_at"`
-	BlockDoc           json.RawMessage       `json:"block_doc"`
-	BlockRevision      int64                 `json:"block_revision"`
-	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
-	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug               string                `json:"slug"`
-	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
-	Media              interface{}           `json:"media"`
+	ID                   int64                 `json:"id"`
+	Title                string                `json:"title"`
+	Description          string                `json:"description"`
+	UserID               int64                 `json:"user_id"`
+	Username             string                `json:"username"`
+	Url                  string                `json:"url"`
+	PostType             string                `json:"post_type"`
+	PostStatus           string                `json:"post_status"`
+	PostParent           sql.NullInt64         `json:"post_parent"`
+	MenuOrder            int32                 `json:"menu_order"`
+	CreatedAt            time.Time             `json:"created_at"`
+	ChangedAt            time.Time             `json:"changed_at"`
+	BlockDoc             json.RawMessage       `json:"block_doc"`
+	BlockRevision        int64                 `json:"block_revision"`
+	PublishedVersionID   sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                 string                `json:"slug"`
+	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	PublishAt            sql.NullTime          `json:"publish_at"`
+	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
+	PublishAttempts      int32                 `json:"publish_attempts"`
+	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
+	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
+	PublishError         sql.NullString        `json:"publish_error"`
+	Media                interface{}           `json:"media"`
 }
 
 func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error) {
@@ -1106,6 +1124,12 @@ func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUse
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.PublishAt,
+			&i.PublishScheduledBy,
+			&i.PublishAttempts,
+			&i.PublishNextAttemptAt,
+			&i.PublishFailedAt,
+			&i.PublishError,
 			&i.Media,
 		); err != nil {
 			return nil, err
@@ -1359,7 +1383,7 @@ func (q *Queries) ListMediaPathsIn(ctx context.Context, paths []string) ([]strin
 
 const listPostsWithMedia = `-- name: ListPostsWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1391,25 +1415,31 @@ type ListPostsWithMediaParams struct {
 }
 
 type ListPostsWithMediaRow struct {
-	ID                 int64                 `json:"id"`
-	Title              string                `json:"title"`
-	Description        string                `json:"description"`
-	UserID             int64                 `json:"user_id"`
-	Username           string                `json:"username"`
-	Url                string                `json:"url"`
-	PostType           string                `json:"post_type"`
-	PostStatus         string                `json:"post_status"`
-	PostParent         sql.NullInt64         `json:"post_parent"`
-	MenuOrder          int32                 `json:"menu_order"`
-	CreatedAt          time.Time             `json:"created_at"`
-	ChangedAt          time.Time             `json:"changed_at"`
-	BlockDoc           json.RawMessage       `json:"block_doc"`
-	BlockRevision      int64                 `json:"block_revision"`
-	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
-	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug               string                `json:"slug"`
-	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
-	Media              interface{}           `json:"media"`
+	ID                   int64                 `json:"id"`
+	Title                string                `json:"title"`
+	Description          string                `json:"description"`
+	UserID               int64                 `json:"user_id"`
+	Username             string                `json:"username"`
+	Url                  string                `json:"url"`
+	PostType             string                `json:"post_type"`
+	PostStatus           string                `json:"post_status"`
+	PostParent           sql.NullInt64         `json:"post_parent"`
+	MenuOrder            int32                 `json:"menu_order"`
+	CreatedAt            time.Time             `json:"created_at"`
+	ChangedAt            time.Time             `json:"changed_at"`
+	BlockDoc             json.RawMessage       `json:"block_doc"`
+	BlockRevision        int64                 `json:"block_revision"`
+	PublishedVersionID   sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                 string                `json:"slug"`
+	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	PublishAt            sql.NullTime          `json:"publish_at"`
+	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
+	PublishAttempts      int32                 `json:"publish_attempts"`
+	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
+	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
+	PublishError         sql.NullString        `json:"publish_error"`
+	Media                interface{}           `json:"media"`
 }
 
 func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error) {
@@ -1440,6 +1470,12 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.PublishAt,
+			&i.PublishScheduledBy,
+			&i.PublishAttempts,
+			&i.PublishNextAttemptAt,
+			&i.PublishFailedAt,
+			&i.PublishError,
 			&i.Media,
 		); err != nil {
 			return nil, err

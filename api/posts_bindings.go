@@ -11,7 +11,8 @@
 //     predate the identifier pattern createPostType enforces)
 //   - Slug: optional, up to 255; normalized (normalizePostSlug) and made
 //     unique (-2, -3, ...) rather than rejected, so no `slug` format tag
-//   - PostStatus: draft|published|archived enum
+//   - PostStatus: draft|published|scheduled|archived enum (scheduled only through
+//     PUT /posts/:id/schedule, #147)
 //   - AuthorIDs: 1-20 ids, required for create
 //   - MediaIDs/TaxonomyIDs: up to 500 ids
 //   - Meta: key 1-255 chars of [A-Za-z0-9._:-], value up to 64 KiB
@@ -30,7 +31,7 @@ type CreatePostRequest struct {
 	Url         string  `json:"url" binding:"required,max=2048,http_url"`
 	Slug        string  `json:"slug" binding:"omitempty,max=255"`
 	PostType    string  `json:"post_type" binding:"omitempty,max=50,excludesall=/\\"`
-	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published archived"`
+	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published scheduled archived"`
 	PostParent  *int64  `json:"post_parent" binding:"omitempty"`
 	MenuOrder   int32   `json:"menu_order" binding:"omitempty"`
 	AuthorIDs   []int64 `json:"author_ids" binding:"required,min=1,max=20"`
@@ -53,7 +54,7 @@ type UpdatePostRequest struct {
 	Url         string  `json:"url" binding:"omitempty,max=2048,http_url"`
 	Slug        string  `json:"slug" binding:"omitempty,max=255"`
 	PostType    string  `json:"post_type" binding:"omitempty,max=50,excludesall=/\\"`
-	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published archived"`
+	PostStatus  string  `json:"post_status" binding:"omitempty,oneof=draft published scheduled archived"`
 	PostParent  *int64  `json:"post_parent" binding:"omitempty"`
 	MenuOrder   int32   `json:"menu_order" binding:"omitempty"`
 	MediaIDs    []int64 `json:"media_ids" binding:"omitempty,max=500"`

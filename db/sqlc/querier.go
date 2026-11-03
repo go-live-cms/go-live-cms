@@ -21,9 +21,18 @@ type Querier interface {
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockAllSessionsForUser(ctx context.Context, userID int64) error
 	BlockSession(ctx context.Context, id uuid.UUID) error
+	// Unscheduling: back to draft, the time cleared. No row: not scheduled (or missing).
+	CancelPostSchedule(ctx context.Context, id int64) (Post, error)
 	// exclude_id skips the post being edited; pass 0 when creating.
 	CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error)
 	CheckURLExists(ctx context.Context, url string) (bool, error)
+	// Claims up to max_posts due scheduled posts for this replica: FOR UPDATE SKIP
+	// LOCKED, so two replicas running it at once never pick the same row, and the
+	// claim (publish_next_attempt_at = now + lease) makes the others skip it until
+	// the lease ends, which only matters if this replica dies mid-publish. The
+	// returned publish_next_attempt_at is the claim's fencing token. A row locked by
+	// something else (a collab store) is skipped this round, not waited for.
+	ClaimDueScheduledPosts(ctx context.Context, arg ClaimDueScheduledPostsParams) ([]ClaimDueScheduledPostsRow, error)
 	// Single-use: like ClaimUserInvitation, only one claim can match.
 	ClaimPasswordResetToken(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	// Marks a valid invitation accepted in one statement, so two concurrent
@@ -311,12 +320,19 @@ type Querier interface {
 	// Publish runs in one transaction from here (PublishPostTx): two publishes of
 	// one post queue on this lock instead of racing for the same version_no.
 	LockPostForPublish(ctx context.Context, id int64) (int64, error)
+	// Inside PublishScheduledPostTx: the post, locked, if it is still scheduled under
+	// this claim. No row: it was cancelled, rescheduled, published by hand, deleted
+	// or claimed again after this claim's lease ran out; nothing is published.
+	LockScheduledPostClaim(ctx context.Context, arg LockScheduledPostClaimParams) (LockScheduledPostClaimRow, error)
 	// Taken by refresh-token rotation so it cannot interleave with a password
 	// change on the same user (which holds the row FOR UPDATE).
 	LockUserForShare(ctx context.Context, id int64) error
 	// Serializes a password change against concurrent refresh-token rotation
 	// (see UpdateUserTx and LockUserForShare).
 	LockUserForUpdate(ctx context.Context, id int64) error
+	// A failed attempt under this claim: the reason the editor shows, and the next try
+	// after the backoff. 0 rows: the schedule changed meanwhile, nothing to record.
+	RecordScheduledPublishFailure(ctx context.Context, arg RecordScheduledPublishFailureParams) (int64, error)
 	// The dev seed (#358): published posts whose terms and featured images were linked
 	// after they were published get them in their published settings.
 	RefreshPublishedSettings(ctx context.Context, ids []int64) error
@@ -336,6 +352,13 @@ type Querier interface {
 	RevokeOpenUserInvitationsByEmail(ctx context.Context, email string) error
 	RevokeUserInvitation(ctx context.Context, id int64) (int64, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
+	// Scheduled publishing (#147, 000030). The scheduler is api/scheduled_publish.go;
+	// the publish itself is PublishScheduledPostTx (db/sqlc/post_publish_tx.go).
+	// Schedules a draft, or moves a scheduled post to a new time. No row: the post is
+	// missing or neither a draft nor scheduled (a published post's update is #335). A
+	// new time starts over: no attempts, no failure and no claim, so a publish still
+	// in flight for the old time is fenced off.
+	SchedulePost(ctx context.Context, arg SchedulePostParams) (Post, error)
 	SearchMediaByName(ctx context.Context, arg SearchMediaByNameParams) ([]SearchMediaByNameRow, error)
 	// The admin posts list's search: the list's filters (type, status, owner) plus
 	// the search, ranked. Same columns as ListPostsWithMeta, so the handler shapes
@@ -371,7 +394,9 @@ type Querier interface {
 	// Publishing also makes the post public: post_status follows the snapshot, so a
 	// post published from the editor is not left as 'draft' in the database. The
 	// published settings are the version's (#358); without a version (a post created
-	// as published, the dev seed) they are the post's current ones.
+	// as published, the dev seed) they are the post's current ones. A schedule (#147)
+	// is done once the post is published, by the scheduler or by hand: its time and
+	// retry state are cleared.
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
