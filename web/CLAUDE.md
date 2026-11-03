@@ -324,6 +324,16 @@ are the most fragile part of the codebase. **Before editing anything under
   (`LiveGate` waits for the setting before mounting; connecting doesn't); never a `useEditor`
   dependency, so a change never recreates a bound editor. "Allowed embeds" stays hidden until
   #352 (the API stores and checks `editor_allowed_embeds`).
+- **Scheduled publishing (#147):** the Publish menu's Schedule… / Reschedule… / Cancel schedule
+  and the sidebar's Publish date open `components/editor/ui/ScheduleDialog.tsx` (owned by
+  `PostForm`); a scheduled post shows a banner (Reschedule, Cancel schedule) or, after a failed
+  attempt, "Scheduled publish failed" (`schedule_failure`), and polls `GET /posts/:id` once its
+  time has come. Times are picked and shown in the **site's** zone (`lib/schedule.ts`: `zonedToUtc`
+  mirrors the API's `siteLocalToUTC`, DST gaps refused; pills "Scheduled · Nov 3"); the dialog
+  sends the wall-clock time as `local`. `PostStatus` takes `publishAt` and reads the zone through
+  `useSiteDateSettings` (one cached `/settings` load; Settings resets it on save). The list's
+  Scheduled tab and "All" (`draft,published,scheduled`) are in `lib/contentList.ts`; a
+  contributor's own scheduled post is view-only (`canEditPost`, as the API).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

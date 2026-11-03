@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -485,4 +486,34 @@ func (server *Server) Start(address string) error {
 // Blocks until the listener fails.
 func (server *Server) StartInternal(address string) error {
 	return server.internalRouter.Run(address)
+}
+
+// shutdownTimeout is how long Serve and ServeInternal give requests in flight
+// once ctx is done (Docker's stop grace period is 10s).
+const shutdownTimeout = 8 * time.Second
+
+// Serve is Start until ctx is done, then a graceful shutdown: no new
+// connections, requests in flight get shutdownTimeout to finish. main.go uses
+// it so a SIGTERM also stops the scheduler cleanly (scheduled_publish.go).
+func (server *Server) Serve(ctx context.Context, address string) error {
+	return serveUntil(ctx, address, server.router)
+}
+
+// ServeInternal is StartInternal with Serve's shutdown.
+func (server *Server) ServeInternal(ctx context.Context, address string) error {
+	return serveUntil(ctx, address, server.internalRouter)
+}
+
+func serveUntil(ctx context.Context, address string, handler http.Handler) error {
+	srv := &http.Server{Addr: address, Handler: handler}
+	failed := make(chan error, 1)
+	go func() { failed <- srv.ListenAndServe() }()
+	select {
+	case err := <-failed:
+		return err
+	case <-ctx.Done():
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	return srv.Shutdown(shutdownCtx)
 }

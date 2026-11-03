@@ -43,8 +43,8 @@ import "@gl-admin/assets/styles/pages/content-list.scss"
 // changes not published (#326) shows that pill, and editors get a tab for them.
 //
 // Hidden until their issues land: the Author / Category / Tag filters, bulk
-// selection and actions, Import (#150), Trash (#327), Scheduled (#147) and the Category
-// column.
+// selection and actions, Import (#150), Trash (#327) and the Category column.
+// Scheduled posts (#147) have their tab and a "Scheduled · Nov 3" pill in site time.
 
 type ContentProps = { title?: string }
 
@@ -207,7 +207,12 @@ function PostsList({ typeName, postType, title }: ListProps) {
       name: "Status",
       width: "9.5rem",
       render: (_, row) => (
-        <PostStatus status={row?.post_status || null} iconPath={row?.post_status || null} unpublishedChanges={row?.has_unpublished_changes} />
+        <PostStatus
+          status={row?.post_status || null}
+          iconPath={row?.post_status || null}
+          unpublishedChanges={row?.has_unpublished_changes}
+          publishAt={row?.publish_at}
+        />
       ),
     },
     { key: "authors", name: "Authors", width: "6rem", render: (_, row) => <Byline post={row} /> },
@@ -377,7 +382,12 @@ function PostCards({ posts, structure, user }: { posts: Post[] | null; structure
           <Link to={`/content/edit/${post.id}`} className="gl-post-cards__link">
             <span className="gl-post-cards__title">{post.title || "Untitled"}</span>
             <span className="gl-post-cards__meta">
-              <PostStatus status={post.post_status} iconPath={post.post_status} unpublishedChanges={post.has_unpublished_changes} />
+              <PostStatus
+                status={post.post_status}
+                iconPath={post.post_status}
+                unpublishedChanges={post.has_unpublished_changes}
+                publishAt={post.publish_at}
+              />
               <Byline post={post} size={20} />
               <LastEdited post={post} />
             </span>

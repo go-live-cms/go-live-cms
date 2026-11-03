@@ -141,6 +141,21 @@ export interface Post {
   // /public/posts rows only: the published "Hide from search engines" (#357), which
   // keeps the post out of the sitemap.
   noindex?: boolean
+  // When a scheduled post publishes (#147), UTC ISO; null unless post_status is
+  // "scheduled".
+  publish_at?: string | null
+  // The last failed attempt to publish it on schedule (GET /posts/:id only).
+  schedule_failure?: ScheduleFailure | null
+}
+
+// Why a scheduled post isn't live yet: the scheduler retries at next_attempt_at.
+export interface ScheduleFailure {
+  failed_at: string
+  // "collab_flush_failed": the collaboration server couldn't save the latest edits.
+  // "publish_failed": the publish itself failed.
+  reason: string
+  attempts: number
+  next_attempt_at: string | null
 }
 
 // A post's SEO settings as the admin edits them (PUT /posts/:id/seo replaces them).

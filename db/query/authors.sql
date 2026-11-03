@@ -29,6 +29,7 @@ SELECT
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     -- ListPostsWithMeta's column (#326); the public site never shows it.
     false::boolean AS has_unpublished_changes,
+    p.publish_at,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm

@@ -65,7 +65,8 @@ GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.usern
 SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     -- Changes not published (#326): a published post whose working copy (body or
     -- settings) differs from what the site shows. Migration 000030.
-    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
+    p.publish_at
 FROM posts p
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
@@ -107,9 +108,19 @@ SET title = COALESCE($1, title),
     username = COALESCE($4, username),
     url = COALESCE($5, url),
     post_type = COALESCE($6, post_type),
-    post_status = COALESCE($7, post_status),
+    -- 'scheduled' only ever stays (#147): the handler allows it unchanged, and if the
+    -- scheduler published or someone cancelled meanwhile there is no time to keep, so
+    -- the status the row has now stays (the publish_at CHECK would refuse it otherwise).
+    post_status = CASE WHEN COALESCE($7, post_status) = 'scheduled' AND publish_at IS NULL THEN post_status ELSE COALESCE($7, post_status) END,
     post_parent = COALESCE($8, post_parent),
     menu_order = COALESCE($9, menu_order),
+    -- Moving a scheduled post to another status ends its schedule (#147); only
+    -- SchedulePost sets one (the handler refuses 'scheduled' here otherwise).
+    publish_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_at END,
+    publish_scheduled_by = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_scheduled_by END,
+    publish_next_attempt_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_next_attempt_at END,
+    publish_failed_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_failed_at END,
+    publish_error = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_error END,
     changed_at = now()
 WHERE id = $10
 RETURNING *;
@@ -149,6 +160,8 @@ SELECT
     -- Changes not published (#326), for the admin only: the public lists share this
     -- query and pass false, so they don't pay for the settings comparison.
     (@with_unpublished_changes::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
+    -- A scheduled post's time, for the list's "Scheduled · Nov 3" pill (#147).
+    p.publish_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (

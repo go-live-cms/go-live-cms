@@ -163,6 +163,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
           status={row?.page.post_status || null}
           iconPath={row?.page.post_status || null}
           unpublishedChanges={row?.page.has_unpublished_changes}
+          publishAt={row?.page.publish_at}
         />
       ),
     },

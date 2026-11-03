@@ -9,7 +9,11 @@
 //   - Admins and editors (canModeratePosts) may do anything to any post.
 //   - Contributors may create posts (always as drafts, owned by themselves)
 //     and edit their own posts' working copy (the collab socket), at any
-//     status. The working copy only goes live when a moderator publishes.
+//     status but scheduled. The working copy only goes live when a moderator
+//     publishes, and scheduling (#147) is that decision made in advance: the
+//     scheduler publishes whatever the working copy holds then, so a
+//     contributor's later edits would go live unreviewed. Their scheduled post
+//     is read-only to them until a moderator cancels the schedule.
 //   - What is live on the public site (title, slug, status, meta, featured
 //     image, media links, the row itself) a contributor may change only while
 //     their post is not published (canEditPostDetails). Otherwise a
@@ -20,7 +24,7 @@
 //     and published ones (canReadPost; the lists filter the same way with
 //     postsViewerID). They may watch those live, read-only (collab tickets).
 //     Anonymous readers get /public only: published snapshots.
-//   - Publishing, unpublishing and revisions are moderator-only
+//   - Publishing, scheduling, unpublishing and revisions are moderator-only
 //     (requireContentEditor on those routes).
 //
 // The owner is posts.user_id. Everything is read from the DB, never the token.
@@ -38,6 +42,10 @@ import (
 
 // postStatusPublished is the status publishPost sets and the public site reads.
 const postStatusPublished = "published"
+
+// postStatusScheduled is a draft waiting for its publish_at (#147). It isn't
+// public: every public read requires postStatusPublished.
+const postStatusScheduled = "scheduled"
 
 // requireContentAuthor gates routes any content role may reach: creating
 // posts and media, and the per-post write routes, where the handler then
@@ -67,9 +75,15 @@ func canCreatePost(user db.User, authorIDs []int64, status string) bool {
 }
 
 // canEditPost reports whether the user may edit the post's working copy: a
-// read-write collab connection. The working copy is not public.
+// read-write collab connection. The working copy is not public, but a
+// scheduled post's goes live at its time without another review, so its
+// contributor owner may only watch it (#147).
 func canEditPost(user db.User, post db.Post) bool {
-	return canModeratePosts(user) || (hasRole(user, RoleContributor) && post.UserID == user.ID)
+	if canModeratePosts(user) {
+		return true
+	}
+	return hasRole(user, RoleContributor) && post.UserID == user.ID &&
+		!strings.EqualFold(post.PostStatus, postStatusScheduled)
 }
 
 // canReadPost reports whether the user may read the post's working copy: the
@@ -110,7 +124,8 @@ func (server *Server) callerViewerID(c *gin.Context) (int64, bool) {
 
 // canEditPostDetails reports whether the user may change the post's live
 // fields (title, slug, meta, featured image, media links) or delete it. An
-// owner without moderation rights can do that only while it isn't published.
+// owner without moderation rights can do that only while it isn't published
+// (or scheduled, which canEditPost already refuses).
 func canEditPostDetails(user db.User, post db.Post) bool {
 	if canModeratePosts(user) {
 		return true

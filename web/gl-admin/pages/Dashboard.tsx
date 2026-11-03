@@ -203,7 +203,7 @@ function RecentCard({ post }: { post: Post | null }) {
   }
   return (
     <Link to={`/content/edit/${post.id}`} className="gl-home__card">
-      <PostStatus status={post.post_status} iconPath={post.post_status} unpublishedChanges={post.has_unpublished_changes} />
+      <PostStatus status={post.post_status} iconPath={post.post_status} unpublishedChanges={post.has_unpublished_changes} publishAt={post.publish_at} />
       <span className="gl-home__card-title">{post.title || "Untitled"}</span>
       <span className="gl-home__card-meta">
         <Byline post={post} size={20} />

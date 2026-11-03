@@ -1,0 +1,164 @@
+// The Schedule dialog (#147, "Schedule update dialog" on the redesign canvas): date and
+// time on one row, the month calendar under them, the time zone line last.
+
+.gl-schedule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+
+  &__fields {
+    display: grid;
+    gap: var(--space-3);
+    grid-template-columns: minmax(0, 1fr) 120px;
+  }
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  &__label {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  &__control {
+    background: var(--background);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    font: inherit;
+    height: 36px;
+    min-width: 0;
+    padding: 0 10px;
+
+    &:focus-visible {
+      border-color: var(--focus-ring);
+      box-shadow: 0 0 0 2px var(--accent-subtle-hover);
+      outline: none;
+    }
+
+    &[aria-invalid="true"] {
+      border-color: var(--danger-text);
+    }
+  }
+
+  &__date {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    gap: var(--space-2);
+    text-align: left;
+
+    svg {
+      color: var(--text-secondary);
+      flex: none;
+    }
+  }
+
+  &__calendar {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: var(--space-3);
+  }
+
+  &__month {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  &__month-label {
+    font-weight: 600;
+  }
+
+  &__nav {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: grid;
+    height: 28px;
+    place-items: center;
+    width: 28px;
+
+    &:hover:not(:disabled) {
+      background: var(--background-hover);
+    }
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.4;
+    }
+  }
+
+  &__grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__row {
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    text-align: center;
+  }
+
+  &__weekday {
+    color: var(--text-secondary);
+    display: grid;
+    font-size: 12px;
+    height: 24px;
+    place-items: center;
+  }
+
+  &__day {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    height: 34px;
+    width: 100%;
+
+    &:hover:not(:disabled):not(.is-selected) {
+      background: var(--background-hover);
+    }
+
+    &.is-today {
+      font-weight: 600;
+    }
+
+    &.is-selected {
+      background: var(--accent-solid);
+      color: var(--accent-on);
+      font-weight: 600;
+    }
+
+    &:disabled {
+      color: var(--text-placeholder);
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &__zone {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 16px;
+  }
+}

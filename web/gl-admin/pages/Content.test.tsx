@@ -120,8 +120,8 @@ describe("Posts list", () => {
     api.getPostCounts.mockImplementation(never)
     await render("/content/post")
 
-    expect(tabs()).toEqual(["All", "Published", "Changes not published", "Drafts", "Archived"])
-    expect(container.querySelectorAll("[role='tab'] .gl-skeleton")).toHaveLength(5)
+    expect(tabs()).toEqual(["All", "Published", "Changes not published", "Drafts", "Scheduled", "Archived"])
+    expect(container.querySelectorAll("[role='tab'] .gl-skeleton")).toHaveLength(6)
     expect(container.querySelector(".gl-table-scroll")?.getAttribute("aria-busy")).toBe("true")
     expect(container.querySelector("[role='status']")?.textContent).toBe("Loading posts…")
     expect(text()).not.toContain("No posts yet")
@@ -142,8 +142,8 @@ describe("Posts list", () => {
     api.getPostCounts.mockResolvedValue({ counts: { draft: 12, published: 31, archived: 4 }, total: 47, unpublished_changes: 2 })
     await render("/content/post")
 
-    expect(tabs()).toEqual(["All43", "Published31", "Changes not published2", "Drafts12", "Archived4"])
-    expect(api.getPosts).toHaveBeenCalledWith(expect.objectContaining({ type: "post", status: "draft,published", sort: "changed_at", order: "desc" }))
+    expect(tabs()).toEqual(["All43", "Published31", "Changes not published2", "Drafts12", "Scheduled0", "Archived4"])
+    expect(api.getPosts).toHaveBeenCalledWith(expect.objectContaining({ type: "post", status: "draft,published,scheduled", sort: "changed_at", order: "desc" }))
     expect(text()).toContain("Post 1")
     expect(text()).toContain("/post/post-1")
   })
@@ -318,7 +318,7 @@ describe("Posts list search (#145)", () => {
     await render("/content/post?q=quantum")
 
     expect(api.getPosts).not.toHaveBeenCalled()
-    expect(api.searchPosts).toHaveBeenCalledWith(expect.objectContaining({ q: "quantum", status: "draft,published" }))
+    expect(api.searchPosts).toHaveBeenCalledWith(expect.objectContaining({ q: "quantum", status: "draft,published,scheduled" }))
     expect(container.querySelector<HTMLInputElement>(".gl-content-list__search input")!.value).toBe("quantum")
     expect(text()).toContain("No posts match “quantum”")
     expect(text()).toContain("Clear search")
@@ -377,7 +377,7 @@ describe("Pages list", () => {
     )
     await render("/content/page")
 
-    expect(tabs()).toEqual(["All3", "Published2", "Changes not published0", "Drafts1", "Archived0"])
+    expect(tabs()).toEqual(["All3", "Published2", "Changes not published0", "Drafts1", "Scheduled0", "Archived0"])
     const titles = Array.from(container.querySelectorAll("tbody .gl-content-list__link")).map((a) => a.textContent)
     expect(titles).toEqual(["Home", "About", "Team"])
     expect(text()).toContain(", level 2")

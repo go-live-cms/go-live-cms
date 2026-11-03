@@ -228,6 +228,12 @@ type Config struct {
 	InvitationTTL    time.Duration `mapstructure:"INVITATION_TTL"`
 	PasswordResetTTL time.Duration `mapstructure:"PASSWORD_RESET_TTL"`
 
+	// ScheduledPublishInterval is how often the API looks for scheduled posts
+	// that are due (#147, api/scheduled_publish.go). 30s by default, so a post
+	// goes live within a minute of its time; 0 turns the scheduler off in this
+	// process (another replica may still run it). Tests shorten it.
+	ScheduledPublishInterval time.Duration `mapstructure:"SCHEDULED_PUBLISH_INTERVAL"`
+
 	// RateLimitExemptCIDRs is a comma-separated list of client IPs/CIDRs that
 	// skip the general limit (the auth limits still apply). Use it for trusted
 	// server-side callers that funnel many users through one address, such as
@@ -337,6 +343,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("PUBLIC_BASE_URL", "")
 	viper.SetDefault("INVITATION_TTL", "72h")
 	viper.SetDefault("PASSWORD_RESET_TTL", "1h")
+	viper.SetDefault("SCHEDULED_PUBLISH_INTERVAL", "30s")
 
 	// Required, so deliberately no default. Bind it explicitly instead: viper's
 	// Unmarshal only sees AutomaticEnv values for keys it already knows from a
@@ -409,6 +416,10 @@ func LoadConfig(path string) (config Config, err error) {
 
 	if config.InvitationTTL <= 0 || config.PasswordResetTTL <= 0 {
 		return config, fmt.Errorf("INVITATION_TTL and PASSWORD_RESET_TTL must be positive durations")
+	}
+
+	if config.ScheduledPublishInterval < 0 {
+		return config, fmt.Errorf("SCHEDULED_PUBLISH_INTERVAL must be 0 (off) or a positive duration")
 	}
 
 	if _, err = config.PasetoPreviousPublicKeys(); err != nil {

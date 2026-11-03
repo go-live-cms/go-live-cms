@@ -56,8 +56,8 @@ the collab server.
   - Admins/editors (`canModeratePosts`) may do anything to any post.
   - Contributors may create posts, but only drafts authored by themselves
     (`canCreatePost`). They may edit their own posts' **working copy** (a read-write
-    collab connection: `canEditPost`) at any status, and watch live, read-only, the posts
-    they may read (`canReadPost`).
+    collab connection: `canEditPost`) at any status but scheduled (#147), and watch live,
+    read-only, the posts they may read (`canReadPost`).
   - The **live** fields (PUT `/posts/:id`, meta, featured image, media links, DELETE)
     only while their post isn't published (`canEditPostDetails`). Otherwise they could
     change or remove published content without the publish permission. For the same
@@ -571,6 +571,34 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   configuration (en-US → en-GB doesn't), in the settings update's transaction.
 - The sanitizer has no embed path yet: iframe/embed nodes are always dropped
   (`disallowedNodeTypes`). The embed block (#352) is what reads the allowlist.
+
+## Scheduled publishing (#147)
+
+- `000033`: `posts.publish_at` (UTC) + status `scheduled` (CHECK: scheduled ⇔ `publish_at` set),
+  `publish_scheduled_by` (the version's `created_by`), and the retry state `publish_attempts`,
+  `publish_next_attempt_at` (claim lease / next retry), `publish_failed_at`, `publish_error`
+  (a reason code). `PUT /posts/:id/schedule` (`{"local":"2026-11-03T09:00"}` in the site's zone,
+  or `{"publish_at": RFC 3339}`; future, ≤5 years) and `DELETE` (back to draft), both
+  `requireContentEditor` (`posts_schedule.go`). Only a draft or a scheduled post (409 otherwise;
+  a published post's update is #335). `siteLocalToUTC` refuses a time the clocks skip and takes
+  the first of one that happens twice; the web's `lib/schedule.ts` mirrors it. POST/PUT `/posts`
+  refuse `post_status: "scheduled"` (400) unless unchanged; any other status set through PUT
+  clears the schedule (`UpdatePost`), and so does every publish (`SetPublishedVersionOnPost`).
+- **Contributors:** their scheduled post is read-only to them (`canEditPost` false, so the
+  collab re-check demotes them): the scheduler publishes the working copy unreviewed.
+- **The scheduler** (`scheduled_publish.go`, `RunScheduledPublishing` from `main.go`,
+  `SCHEDULED_PUBLISH_INTERVAL`, 30s, 0 = off) runs in every replica. `ClaimDueScheduledPosts`
+  takes one due row `FOR UPDATE SKIP LOCKED` and stamps a 2-minute lease; the row lock is NOT
+  held across the flush (the collab store locks the same row). Then the Publish button's path:
+  `flushCollabDoc` → `PublishScheduledPostTx` (lock, check still scheduled under this claim's
+  lease value = the fencing token, `publishLockedPost`, shared with `PublishPostTx`).
+  `db.ErrScheduleChanged` = cancelled/rescheduled/published/reclaimed meanwhile, nothing written.
+  A failure is recorded (`RecordScheduledPublishFailure`, backoff 30s → 10 min, forever) and
+  shown by `GET /posts/:id` as `schedule_failure`. Each attempt logs with its own `request_id`
+  (also sent on the flush). Shutdown: `main.go`'s SIGTERM context stops the loop after the
+  attempt in flight (`Serve`/`ServeInternal` drain HTTP too). Tests: `scheduled_publish_test.go`
+  (real DB: due-only, two replicas, fencing, flush failure, shutdown, routes, not public) and
+  `posts_schedule_test.go`.
 
 ## Theme blocks (#376)
 

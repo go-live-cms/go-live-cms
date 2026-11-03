@@ -11,6 +11,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"time"
 
@@ -40,6 +41,24 @@ type PostResponse struct {
 	// SEO is the working SEO settings (#357), the admin's; the public site gets
 	// the published ones (publicPostView.SEO), never these.
 	SEO *PostSEOResponse `json:"seo,omitempty"`
+	// PublishAt is when a scheduled post publishes (#147), in UTC; null unless
+	// post_status is "scheduled".
+	PublishAt *time.Time `json:"publish_at"`
+	// ScheduleFailure is the last failed attempt to publish it on schedule,
+	// while it is still scheduled (the editor's "Scheduled publish failed").
+	ScheduleFailure *ScheduleFailureResponse `json:"schedule_failure,omitempty"`
+}
+
+// ScheduleFailureResponse says why a scheduled post isn't live yet (#147) and
+// when the scheduler tries again.
+type ScheduleFailureResponse struct {
+	FailedAt time.Time `json:"failed_at"`
+	// Reason is a code: scheduledPublishCollabFlushFailed or
+	// scheduledPublishFailed (scheduled_publish.go).
+	Reason   string `json:"reason"`
+	Attempts int32  `json:"attempts"`
+	// NextAttemptAt is the next try (it may already be in progress).
+	NextAttemptAt *time.Time `json:"next_attempt_at"`
 }
 
 // PostWithMetaResponse includes post-specific meta data
@@ -58,7 +77,9 @@ type PostWithMetaResponse struct {
 	CreatedAt       time.Time              `json:"created_at"`
 	ChangedAt       time.Time              `json:"changed_at"`
 	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
-	Meta            map[string]interface{} `json:"meta,omitempty"`
+	// PublishAt as in PostResponse: the list's "Scheduled · Nov 3" pill (#147).
+	PublishAt *time.Time             `json:"publish_at"`
+	Meta      map[string]interface{} `json:"meta,omitempty"`
 	// Every credited author (user_posts), in byline order (#340).
 	Authors []PostAuthorResponse `json:"authors"`
 	// HasUnpublishedChanges (#326): published, and the working copy (body or
@@ -136,6 +157,8 @@ func toPostResponse(post db.Post) PostResponse {
 		ChangedAt:       post.ChangedAt,
 		PublishedBlocks: publishedBlocks,
 		SEO:             toPostSEOResponse(post),
+		PublishAt:       nullTimePtr(post.PublishAt),
+		ScheduleFailure: scheduleFailure(post),
 	}
 }
 
@@ -152,22 +175,22 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 	}
 
 	return PostResponse{
-		ID:              post.ID,
-		Title:           post.Title,
-		Description:     post.Description,
-		UserID:          post.UserID,
-		Username:        post.Username,
-		Url:             post.Url,
-		Slug:            post.Slug,
-		PostType:        post.PostType,
-		PostStatus:      post.PostStatus,
-		PostParent:      postParent,
-		MenuOrder:       post.MenuOrder,
-		CreatedAt:       post.CreatedAt,
-		ChangedAt:       post.ChangedAt,
-		PublishedBlocks: publishedBlocks,
-
+		ID:                    post.ID,
+		Title:                 post.Title,
+		Description:           post.Description,
+		UserID:                post.UserID,
+		Username:              post.Username,
+		Url:                   post.Url,
+		Slug:                  post.Slug,
+		PostType:              post.PostType,
+		PostStatus:            post.PostStatus,
+		PostParent:            postParent,
+		MenuOrder:             post.MenuOrder,
+		CreatedAt:             post.CreatedAt,
+		ChangedAt:             post.ChangedAt,
+		PublishedBlocks:       publishedBlocks,
 		HasUnpublishedChanges: post.HasUnpublishedChanges,
+		PublishAt:             nullTimePtr(post.PublishAt),
 	}
 }
 
@@ -205,6 +228,7 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 		CreatedAt:       post.CreatedAt,
 		ChangedAt:       post.ChangedAt,
 		PublishedBlocks: publishedBlocks,
+		PublishAt:       nullTimePtr(post.PublishAt),
 		Meta:            metaMap,
 		Authors:         decodePostAuthors(post.Authors),
 
@@ -220,6 +244,28 @@ func toPublicPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResp
 	resp.HasUnpublishedChanges = false
 	applyPublishedSettings(&resp, post.PublishedSettings)
 	return resp
+}
+
+// nullTimePtr is a nullable timestamp for a response, in UTC.
+func nullTimePtr(t sql.NullTime) *time.Time {
+	if !t.Valid {
+		return nil
+	}
+	utc := t.Time.UTC()
+	return &utc
+}
+
+// scheduleFailure is a scheduled post's last failed publish attempt, or nil.
+func scheduleFailure(post db.Post) *ScheduleFailureResponse {
+	if post.PostStatus != postStatusScheduled || !post.PublishFailedAt.Valid {
+		return nil
+	}
+	return &ScheduleFailureResponse{
+		FailedAt:      post.PublishFailedAt.Time.UTC(),
+		Reason:        post.PublishError.String,
+		Attempts:      post.PublishAttempts,
+		NextAttemptAt: nullTimePtr(post.PublishNextAttemptAt),
+	}
 }
 
 // decodePostAuthors reads the authors column; [] when it's empty or invalid.

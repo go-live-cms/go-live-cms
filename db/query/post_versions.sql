@@ -28,7 +28,9 @@ RETURNING id, version_no, block_doc;
 -- Publishing also makes the post public: post_status follows the snapshot, so a
 -- post published from the editor is not left as 'draft' in the database. The
 -- published settings are the version's (#358); without a version (a post created
--- as published, the dev seed) they are the post's current ones.
+-- as published, the dev seed) they are the post's current ones. A schedule (#147)
+-- is done once the post is published, by the scheduler or by hand: its time and
+-- retry state are cleared.
 UPDATE posts
 SET published_version_id = sqlc.narg(published_version_id)::bigint,
     published_block_doc = sqlc.narg(published_block_doc)::jsonb,
@@ -36,7 +38,13 @@ SET published_version_id = sqlc.narg(published_version_id)::bigint,
         (SELECT v.settings FROM post_versions v WHERE v.id = sqlc.narg(published_version_id)::bigint),
         golive_post_settings(posts.id)
     ),
-    post_status = 'published'
+    post_status = 'published',
+    publish_at = NULL,
+    publish_scheduled_by = NULL,
+    publish_attempts = 0,
+    publish_next_attempt_at = NULL,
+    publish_failed_at = NULL,
+    publish_error = NULL
 WHERE id = sqlc.arg(id)::bigint;
 
 -- name: UnpublishPost :one

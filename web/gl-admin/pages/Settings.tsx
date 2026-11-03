@@ -3,6 +3,7 @@ import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { getSettings, updateSettings, type Settings } from "@gl-admin/lib/api/settings"
 import { authManager } from "@gl-admin/lib/auth"
 import { setEditorSettings } from "@gl-admin/lib/editorSettings"
+import { resetSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { toast } from "@gl-admin/components/ui/Toast"
 import Input from "@gl-admin/components/ui/Input"
 import RadioGroup from "@gl-admin/components/ui/RadioGroup"
@@ -134,6 +135,8 @@ const SettingsPage: React.FC = () => {
       setSaving(true)
       const token = authManager.getState().accessToken || undefined
       const updatedSettings = await updateSettings(toUpdateRequest(draft), token)
+      // Scheduled times (#147) are shown in the site's zone: re-read it.
+      resetSiteDateSettings()
 
       setSettings(updatedSettings)
       setDraft(toDraft(updatedSettings))

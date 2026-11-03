@@ -253,7 +253,7 @@ INSERT INTO posts (
     block_doc
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url
+) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type CreatePostsParams struct {
@@ -311,6 +311,12 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		&i.SocialImageID,
 		&i.Noindex,
 		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 	)
 	return i, err
 }
@@ -359,7 +365,7 @@ func (q *Queries) DeleteUserPost(ctx context.Context, postID int64) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts 
 WHERE id = $1 LIMIT 1
 `
 
@@ -392,12 +398,18 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.SocialImageID,
 		&i.Noindex,
 		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 	)
 	return i, err
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts 
 WHERE slug = $1 LIMIT 1
 `
 
@@ -430,12 +442,18 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.SocialImageID,
 		&i.Noindex,
 		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 	)
 	return i, err
 }
 
 const getPostChildren = `-- name: GetPostChildren :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts
 WHERE post_parent = $1
 ORDER BY menu_order ASC, title ASC
 `
@@ -475,6 +493,12 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 			&i.SocialImageID,
 			&i.Noindex,
 			&i.CanonicalUrl,
+			&i.PublishAt,
+			&i.PublishScheduledBy,
+			&i.PublishAttempts,
+			&i.PublishNextAttemptAt,
+			&i.PublishFailedAt,
+			&i.PublishError,
 		); err != nil {
 			return nil, err
 		}
@@ -506,7 +530,7 @@ func (q *Queries) GetPostHasUnpublishedChanges(ctx context.Context, id int64) (b
 
 const getPostWithMeta = `-- name: GetPostWithMeta :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -521,32 +545,38 @@ GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.usern
 `
 
 type GetPostWithMetaRow struct {
-	ID                 int64                 `json:"id"`
-	Title              string                `json:"title"`
-	Description        string                `json:"description"`
-	UserID             int64                 `json:"user_id"`
-	Username           string                `json:"username"`
-	Url                string                `json:"url"`
-	PostType           string                `json:"post_type"`
-	PostStatus         string                `json:"post_status"`
-	PostParent         sql.NullInt64         `json:"post_parent"`
-	MenuOrder          int32                 `json:"menu_order"`
-	CreatedAt          time.Time             `json:"created_at"`
-	ChangedAt          time.Time             `json:"changed_at"`
-	BlockDoc           json.RawMessage       `json:"block_doc"`
-	BlockRevision      int64                 `json:"block_revision"`
-	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
-	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug               string                `json:"slug"`
-	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
-	BlockDocHash       sql.NullString        `json:"block_doc_hash"`
-	PublishedBlockHash sql.NullString        `json:"published_block_hash"`
-	SeoTitle           string                `json:"seo_title"`
-	SeoDescription     string                `json:"seo_description"`
-	SocialImageID      sql.NullInt64         `json:"social_image_id"`
-	Noindex            bool                  `json:"noindex"`
-	CanonicalUrl       string                `json:"canonical_url"`
-	Meta               interface{}           `json:"meta"`
+	ID                   int64                 `json:"id"`
+	Title                string                `json:"title"`
+	Description          string                `json:"description"`
+	UserID               int64                 `json:"user_id"`
+	Username             string                `json:"username"`
+	Url                  string                `json:"url"`
+	PostType             string                `json:"post_type"`
+	PostStatus           string                `json:"post_status"`
+	PostParent           sql.NullInt64         `json:"post_parent"`
+	MenuOrder            int32                 `json:"menu_order"`
+	CreatedAt            time.Time             `json:"created_at"`
+	ChangedAt            time.Time             `json:"changed_at"`
+	BlockDoc             json.RawMessage       `json:"block_doc"`
+	BlockRevision        int64                 `json:"block_revision"`
+	PublishedVersionID   sql.NullInt64         `json:"published_version_id"`
+	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                 string                `json:"slug"`
+	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	BlockDocHash         sql.NullString        `json:"block_doc_hash"`
+	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
+	SeoTitle             string                `json:"seo_title"`
+	SeoDescription       string                `json:"seo_description"`
+	SocialImageID        sql.NullInt64         `json:"social_image_id"`
+	Noindex              bool                  `json:"noindex"`
+	CanonicalUrl         string                `json:"canonical_url"`
+	PublishAt            sql.NullTime          `json:"publish_at"`
+	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
+	PublishAttempts      int32                 `json:"publish_attempts"`
+	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
+	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
+	PublishError         sql.NullString        `json:"publish_error"`
+	Meta                 interface{}           `json:"meta"`
 }
 
 func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMetaRow, error) {
@@ -578,6 +608,12 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 		&i.SocialImageID,
 		&i.Noindex,
 		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 		&i.Meta,
 	)
 	return i, err
@@ -587,7 +623,8 @@ const listPosts = `-- name: ListPosts :many
 SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     -- Changes not published (#326): a published post whose working copy (body or
     -- settings) differs from what the site shows. Migration 000030.
-    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
+    p.publish_at
 FROM posts p
 WHERE 
     ($1::text = '' OR p.post_type = $1)
@@ -642,6 +679,7 @@ type ListPostsRow struct {
 	Slug                  string                `json:"slug"`
 	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
 	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
+	PublishAt             sql.NullTime          `json:"publish_at"`
 }
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
@@ -684,6 +722,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.Slug,
 			&i.PublishedSettings,
 			&i.HasUnpublishedChanges,
+			&i.PublishAt,
 		); err != nil {
 			return nil, err
 		}
@@ -852,6 +891,8 @@ SELECT
     -- Changes not published (#326), for the admin only: the public lists share this
     -- query and pass false, so they don't pay for the settings comparison.
     ($1::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
+    -- A scheduled post's time, for the list's "Scheduled · Nov 3" pill (#147).
+    p.publish_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -925,6 +966,7 @@ type ListPostsWithMetaRow struct {
 	Slug                  string                `json:"slug"`
 	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
 	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
+	PublishAt             sql.NullTime          `json:"publish_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
 }
@@ -970,6 +1012,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.Slug,
 			&i.PublishedSettings,
 			&i.HasUnpublishedChanges,
+			&i.PublishAt,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {
@@ -994,12 +1037,22 @@ SET title = COALESCE($1, title),
     username = COALESCE($4, username),
     url = COALESCE($5, url),
     post_type = COALESCE($6, post_type),
-    post_status = COALESCE($7, post_status),
+    -- 'scheduled' only ever stays (#147): the handler allows it unchanged, and if the
+    -- scheduler published or someone cancelled meanwhile there is no time to keep, so
+    -- the status the row has now stays (the publish_at CHECK would refuse it otherwise).
+    post_status = CASE WHEN COALESCE($7, post_status) = 'scheduled' AND publish_at IS NULL THEN post_status ELSE COALESCE($7, post_status) END,
     post_parent = COALESCE($8, post_parent),
     menu_order = COALESCE($9, menu_order),
+    -- Moving a scheduled post to another status ends its schedule (#147); only
+    -- SchedulePost sets one (the handler refuses 'scheduled' here otherwise).
+    publish_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_at END,
+    publish_scheduled_by = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_scheduled_by END,
+    publish_next_attempt_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_next_attempt_at END,
+    publish_failed_at = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_failed_at END,
+    publish_error = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_error END,
     changed_at = now()
 WHERE id = $10
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type UpdatePostParams struct {
@@ -1055,6 +1108,12 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.SocialImageID,
 		&i.Noindex,
 		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 	)
 	return i, err
 }
@@ -1068,7 +1127,7 @@ SET seo_title = $1,
     canonical_url = $5,
     changed_at = now()
 WHERE id = $6
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type UpdatePostSEOParams struct {
@@ -1118,6 +1177,12 @@ func (q *Queries) UpdatePostSEO(ctx context.Context, arg UpdatePostSEOParams) (P
 		&i.SocialImageID,
 		&i.Noindex,
 		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 	)
 	return i, err
 }
@@ -1127,7 +1192,7 @@ UPDATE posts
 SET slug = $2,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type UpdatePostSlugParams struct {
@@ -1164,6 +1229,12 @@ func (q *Queries) UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) 
 		&i.SocialImageID,
 		&i.Noindex,
 		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
 	)
 	return i, err
 }

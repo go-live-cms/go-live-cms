@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/sqlc-dev/pqtype"
 )
@@ -44,34 +46,86 @@ func (store *SQLStore) PublishPostTx(ctx context.Context, arg PublishPostTxParam
 		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
 			return err
 		}
-		next, err := q.GetNextVersionNoForPost(ctx, arg.PostID)
-		if err != nil {
-			return fmt.Errorf("next version number: %w", err)
+		var err error
+		result, err = publishLockedPost(ctx, q, arg)
+		return err
+	})
+	return result, err
+}
+
+// publishLockedPost is the publish itself, for a post whose row the
+// transaction has locked: PublishPostTx (the Publish button) and
+// PublishScheduledPostTx (the scheduler, #147) share it, so a scheduled post
+// is published exactly like one published by hand. SetPublishedVersionOnPost
+// also clears any schedule.
+func publishLockedPost(ctx context.Context, q *Queries, arg PublishPostTxParams) (PublishPostTxResult, error) {
+	next, err := q.GetNextVersionNoForPost(ctx, arg.PostID)
+	if err != nil {
+		return PublishPostTxResult{}, fmt.Errorf("next version number: %w", err)
+	}
+	version, err := q.InsertPublishedVersionFromPost(ctx, InsertPublishedVersionFromPostParams{
+		PostID:    arg.PostID,
+		VersionNo: next,
+		Label:     arg.Label,
+		Message:   arg.Message,
+		CreatedBy: arg.CreatedBy,
+	})
+	if err != nil {
+		return PublishPostTxResult{}, fmt.Errorf("insert version: %w", err)
+	}
+	if err := q.SetPublishedVersionOnPost(ctx, SetPublishedVersionOnPostParams{
+		ID:                 arg.PostID,
+		PublishedVersionID: sql.NullInt64{Int64: version.ID, Valid: true},
+		PublishedBlockDoc:  pqtype.NullRawMessage{RawMessage: version.BlockDoc, Valid: true},
+	}); err != nil {
+		return PublishPostTxResult{}, fmt.Errorf("set published version: %w", err)
+	}
+	if arg.ContentMedia != nil {
+		if err := syncContentMedia(ctx, q, arg.PostID, arg.ContentMedia(version.BlockDoc)); err != nil {
+			return PublishPostTxResult{}, fmt.Errorf("sync content media: %w", err)
 		}
-		version, err := q.InsertPublishedVersionFromPost(ctx, InsertPublishedVersionFromPostParams{
-			PostID:    arg.PostID,
-			VersionNo: next,
-			Label:     arg.Label,
-			Message:   arg.Message,
-			CreatedBy: arg.CreatedBy,
+	}
+	return PublishPostTxResult{VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: version.BlockDoc}, nil
+}
+
+type PublishScheduledPostTxParams struct {
+	PostID int64
+	// Claim is the claim's fencing token, ClaimDueScheduledPosts'
+	// publish_next_attempt_at.
+	Claim time.Time
+	// ContentMedia as in PublishPostTxParams.
+	ContentMedia func(blockDoc json.RawMessage) []ContentMediaUse
+}
+
+// ErrScheduleChanged: PublishScheduledPostTx found the post no longer
+// scheduled under the claim (cancelled, rescheduled, published by hand,
+// deleted, or claimed again after the lease ran out). Nothing was written.
+var ErrScheduleChanged = errors.New("the post's schedule changed since it was claimed")
+
+// PublishScheduledPostTx publishes a scheduled post the scheduler claimed
+// (#147): lock the row and check, under the lock, that it is still scheduled
+// under this claim, then publishLockedPost, the Publish button's path. The
+// version is credited to whoever scheduled it. The check is what makes the
+// publish happen once: a second replica, or the same post claimed again after
+// a lease ran out, finds it published (or reclaimed) and gets
+// ErrScheduleChanged. The caller flushes the collab document first, outside
+// the transaction: the collab store locks this row too.
+func (store *SQLStore) PublishScheduledPostTx(ctx context.Context, arg PublishScheduledPostTxParams) (PublishPostTxResult, error) {
+	var result PublishPostTxResult
+	err := store.execTx(ctx, func(q *Queries) error {
+		claim, err := q.LockScheduledPostClaim(ctx, LockScheduledPostClaimParams{ID: arg.PostID, Claim: arg.Claim})
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrScheduleChanged
+		}
+		if err != nil {
+			return fmt.Errorf("lock scheduled post: %w", err)
+		}
+		result, err = publishLockedPost(ctx, q, PublishPostTxParams{
+			PostID:       arg.PostID,
+			CreatedBy:    claim.PublishScheduledBy,
+			ContentMedia: arg.ContentMedia,
 		})
-		if err != nil {
-			return fmt.Errorf("insert version: %w", err)
-		}
-		if err := q.SetPublishedVersionOnPost(ctx, SetPublishedVersionOnPostParams{
-			ID:                 arg.PostID,
-			PublishedVersionID: sql.NullInt64{Int64: version.ID, Valid: true},
-			PublishedBlockDoc:  pqtype.NullRawMessage{RawMessage: version.BlockDoc, Valid: true},
-		}); err != nil {
-			return fmt.Errorf("set published version: %w", err)
-		}
-		if arg.ContentMedia != nil {
-			if err := syncContentMedia(ctx, q, arg.PostID, arg.ContentMedia(version.BlockDoc)); err != nil {
-				return fmt.Errorf("sync content media: %w", err)
-			}
-		}
-		result = PublishPostTxResult{VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: version.BlockDoc}
-		return nil
+		return err
 	})
 	return result, err
 }
