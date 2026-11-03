@@ -11,7 +11,7 @@ import (
 
 // #160: BlockAllSessionsForUser (logout everywhere, password change/reset,
 // refresh reuse) is served by the partial index on the user's live sessions
-// (000028), and the refresh_token_hash index is still there for refresh.
+// (000029), and the refresh_token_hash index is still there for refresh.
 func TestSessionIndexesServeTheirQueries(t *testing.T) {
 	ctx := context.Background()
 	user := createTestUser(t)

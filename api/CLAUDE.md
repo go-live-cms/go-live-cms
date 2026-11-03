@@ -140,7 +140,7 @@ the collab server.
   (or, arriving after the commit, counts as reuse). Already-issued access tokens are
   not revoked by any of these (they live `ACCESS_TOKEN_DURATION`); only a password
   change cuts them short. `auth_flow_test.go` (#162) runs these flows against the
-  real database; `BlockAllSessionsForUser` uses the partial index `000028` (#160).
+  real database; `BlockAllSessionsForUser` uses the partial index `000029` (#160).
 
 ## Tests
 
