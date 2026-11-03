@@ -10,6 +10,7 @@ import { getActiveTheme } from "../../../lib/api"
 import { ThemeSettingsImpl } from "../../../lib/theme-settings"
 import { ThemeAPIClientImpl } from "../../../lib/theme-api-client"
 import { safeExecute } from "../../../lib/theme-api"
+import { log } from "../../../lib/log"
 import type { ThemeFunctions, ThemeFunctionsContext } from "../../../lib/theme-api"
 
 export const prerender = false
@@ -83,7 +84,7 @@ export const ALL: APIRoute = async (context) => {
 
     return response
   } catch (error) {
-    console.error("[Theme Endpoints] Error:", error)
+    log.error("theme_endpoint_failed", { error })
     return new Response(
       JSON.stringify({
         error: "Internal server error",

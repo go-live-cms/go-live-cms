@@ -6,6 +6,7 @@
 import { getSettings } from "@/lib/api"
 import { SITE_TITLE } from "@/consts"
 import { normalizeDateSettings, type DateSettings } from "@/lib/siteDates"
+import { log } from "@/lib/log"
 
 export interface SiteSettings extends DateSettings {
   title: string
@@ -30,7 +31,7 @@ async function loadSiteSettings(): Promise<SiteSettings> {
       }),
     ])
   } catch (error) {
-    console.warn("[theme] Could not fetch settings:", error)
+    log.warn("site_settings_fetch_failed", { error })
   } finally {
     clearTimeout(timer)
   }

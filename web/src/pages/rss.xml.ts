@@ -4,6 +4,7 @@ import type { Post } from "@gl-admin/lib/api/types"
 import { getPostsByType } from "../lib/api"
 import { cacheControl, metaDescription, normalizeUrlStructure, postPath, resolveSiteUrl } from "../lib/seo"
 import { getSiteSettings } from "../lib/siteSettings"
+import { log } from "../lib/log"
 
 // The site's latest published posts (#345; it used to list the Astro starter's sample
 // markdown). Post pages are server-rendered, so the feed is built from the API.
@@ -19,7 +20,7 @@ export const GET: APIRoute = async ({ url }) => {
   try {
     posts = (await getPostsByType("post", { status: "published", sort: "date_desc", limit: 20 })).data
   } catch (error) {
-    console.error("[rss] Failed to fetch posts:", error)
+    log.error("rss_posts_fetch_failed", { error })
     return new Response("Feed temporarily unavailable", {
       status: 503,
       headers: { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "300" },

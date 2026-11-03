@@ -10,6 +10,7 @@
  */
 import type { Post } from "@gl-admin/lib/api/types"
 import { SERVER_API_URL } from "@gl-admin/lib/server-api-url"
+import { log } from "./log"
 import { getPostsByType } from "./api"
 import { pagePath, type Pagination } from "./pagination"
 import { getPublic } from "./publicApi"
@@ -223,7 +224,7 @@ export async function getTopics(limit = 6): Promise<SearchLink[]> {
       .filter((term) => term.name?.trim() && term.slug)
       .map((term) => ({ label: term.name as string, href: termPath("category", term.slug as string) }))
   } catch (error) {
-    console.warn("[search] Could not fetch topics:", error)
+    log.warn("search_topics_fetch_failed", { error })
     return []
   }
 }
@@ -234,7 +235,7 @@ export async function getRecentPosts(structure: UrlStructure, limit = 3): Promis
     const posts: Post[] = (await getPostsByType("post", { status: "published", sort: "date_desc", limit })).data
     return posts.map((post) => ({ label: post.title, href: postPath({ ...post, post_type: post.post_type || "post" }, structure) }))
   } catch (error) {
-    console.warn("[search] Could not fetch recent posts:", error)
+    log.warn("search_recent_posts_fetch_failed", { error })
     return []
   }
 }

@@ -15,6 +15,7 @@ import SearchForm from '../../components/SearchForm.astro'
 import { getPostsByType } from '@/lib/api'
 import { normalizeUrlStructure, postPath } from '@/lib/seo'
 import { getSiteSettings } from '@/lib/siteSettings'
+import { log } from '@/lib/log'
 import type { Post } from '@gl-admin/lib/api/types'
 
 interface Props {
@@ -34,7 +35,7 @@ if (is404) {
   try {
     recent = (await getPostsByType('post', { status: 'published', sort: 'date_desc', limit: 3 })).data
   } catch (error) {
-    console.warn('[theme] Could not fetch recent posts for the 404 page:', error)
+    log.warn('error_page_recent_posts_fetch_failed', { error })
   }
 }
 const structure = normalizeUrlStructure(site.urlStructure)

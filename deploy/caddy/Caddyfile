@@ -13,6 +13,26 @@
 # message, not the URL, but a rollback to a pre-#284 release puts it back in the URL
 # (#233), and the API/web already log requests without query strings.
 
+{
+	# The error log (http.log.error, e.g. a 502 from /collab while collab restarts) follows
+	# the API's logging policy (#377, api/CLAUDE.md "Observability"): the error, status,
+	# duration, method, host and path, but no client IP, request headers (User-Agent,
+	# Origin, ...) or query string. The filter applies to every log the default logger
+	# writes; a field a log doesn't have is skipped.
+	log default {
+		format filter {
+			wrap json
+			fields {
+				request>remote_ip delete
+				request>remote_port delete
+				request>client_ip delete
+				request>headers delete
+				request>uri regexp \?.*$ ""
+			}
+		}
+	}
+}
+
 {$SITE_ADDRESS:localhost} {
 	# A fresh id per request, replacing any the client sent. The web server passes it
 	# to the API and the collab server forwards it on its access lookup, so one id ties a

@@ -6,6 +6,7 @@
 
 import type { ThemeAPIClient } from "./theme-api"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
+import { log } from "./log"
 
 // API origin (no /api/v1), from the runtime SERVER_API_URL. The paths below add /api/v1.
 const API_BASE_URL = SERVER_MEDIA_URL
@@ -53,7 +54,7 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
 
       return await response.json()
     } catch (error) {
-      console.error("[ThemeAPIClient] Error fetching posts:", error)
+      log.error("theme_api_request_failed", { call: "getPosts", error })
       return []
     }
   }
@@ -75,7 +76,7 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
 
       return await response.json()
     } catch (error) {
-      console.error("[ThemeAPIClient] Error fetching post:", error)
+      log.error("theme_api_request_failed", { call: "getPost", error })
       return null
     }
   }
@@ -102,7 +103,7 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
         throw new Error(`Failed to register post type: ${response.statusText}`)
       }
     } catch (error) {
-      console.error("[ThemeAPIClient] Error registering post type:", error)
+      log.error("theme_api_request_failed", { call: "registerPostType", error })
       throw error
     }
   }
@@ -124,7 +125,7 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
 
       return await response.json()
     } catch (error) {
-      console.error("[ThemeAPIClient] Error fetching taxonomy terms:", error)
+      log.error("theme_api_request_failed", { call: "getTaxonomyTerms", error })
       return []
     }
   }
@@ -151,7 +152,7 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
 
       return await response.json()
     } catch (error) {
-      console.error("[ThemeAPIClient] Error fetching media:", error)
+      log.error("theme_api_request_failed", { call: "getMedia", error })
       return []
     }
   }

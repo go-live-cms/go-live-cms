@@ -6,6 +6,8 @@
 // Node server, which has no Vite, so the middleware forwards them with this instead.
 // Astro's own /api routes (/api/theme, /api/posts-reload) are not under /api/v1.
 
+import { log } from "../lib/log"
+
 const HOP_BY_HOP_REQUEST = [
   "connection",
   "keep-alive",
@@ -63,7 +65,8 @@ export async function proxyToApi(
       duplex: "half",
     } as RequestInit)
   } catch (error) {
-    console.error("API proxy: upstream request failed:", error)
+    // No path: the API's policy logs routes by template, and the proxy has none.
+    log.error("api_proxy_upstream_failed", { method: request.method, error })
     return new Response(JSON.stringify({ error: "API unavailable" }), {
       status: 502,
       headers: { "Content-Type": "application/json" },

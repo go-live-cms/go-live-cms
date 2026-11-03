@@ -4,6 +4,7 @@ import FormattedDate from "@/components/FormattedDate.astro"
 import { SITE_TITLE } from "@/consts"
 import { getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
 import type { TaxonomyType } from "@gl-admin/lib/api/types"
+import { log } from "@/lib/log"
 
 let taxonomies: TaxonomyType[] = []
 let error: string | null = null
@@ -13,7 +14,7 @@ try {
   taxonomies = response.data || []
 } catch (e) {
   error = e instanceof Error ? e.message : "Failed to fetch taxonomies"
-  console.error("Error fetching taxonomies:", e)
+  log.error("taxonomies_fetch_failed", { error: e })
 }
 ---
 

@@ -6,6 +6,7 @@
 
 import type { ThemeConfig } from "../../themes/default/theme.config"
 import { getActiveTheme } from "./api"
+import { log } from "./log"
 
 export interface ThemeInfo {
   id: string
@@ -23,7 +24,7 @@ export async function getActiveThemeId(): Promise<string> {
     const theme = await getActiveTheme()
     return theme.slug
   } catch (error) {
-    console.error("Failed to get active theme, falling back to default:", error)
+    log.error("active_theme_fetch_failed", { fallback: "default", error })
     return "default"
   }
 }
@@ -36,7 +37,7 @@ export async function loadThemeConfig(themeId: string): Promise<ThemeConfig> {
     const config = await import(`../../themes/${themeId}/theme.config.ts`)
     return config.default || config.themeConfig
   } catch (error) {
-    console.error(`Failed to load theme config for: ${themeId}`, error)
+    log.error("theme_config_load_failed", { theme: themeId, error })
     throw new Error(`Theme not found: ${themeId}`)
   }
 }
@@ -87,7 +88,7 @@ export async function resolveLayoutPath(postType: string, variant: string = "def
   const layoutConfig = config.layouts[postType]?.[variant]
 
   if (!layoutConfig) {
-    console.warn(`Layout variant '${variant}' not found for post type '${postType}', falling back to 'default'`)
+    log.warn("layout_variant_not_found", { post_type: postType, variant, fallback: "default" })
     const defaultLayout = config.layouts[postType]?.default
     if (!defaultLayout) {
       throw new Error(`No default layout found for post type: ${postType}`)
@@ -112,7 +113,7 @@ export async function getPostLayoutVariant(post: any, postType: string): Promise
 
     return "default"
   } catch (error) {
-    console.error("Failed to get layout variant from database, using default:", error)
+    log.error("layout_variant_fetch_failed", { fallback: "default", error })
     return "default"
   }
 }

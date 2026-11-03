@@ -5,6 +5,7 @@
  * /post/page/N/ (page/[n].astro), rewritten here with Astro.locals.listPageNumber set.
  */
 import { getPostTypes } from '../../lib/api'
+import { log } from '../../lib/log'
 import { loadPostList } from '../../lib/postList'
 import { pageTitleSuffix, resolveListRequest } from '../../lib/pagination'
 import { loadThemeLayout, themeLayoutCandidates } from '../../lib/themeLayout'
@@ -29,7 +30,7 @@ try {
   }
   label = type.label
 } catch (error) {
-  console.warn('Could not fetch post types:', error)
+  log.warn('post_types_fetch_failed', { error })
 }
 const heading = label || (postType === 'page' ? 'Pages' : `${postType.charAt(0).toUpperCase()}${postType.slice(1)}s`)
 

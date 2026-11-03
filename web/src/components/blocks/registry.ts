@@ -1,5 +1,7 @@
 import type { BlockConfig, BlockComponent } from "./types"
 import { blockPathParts, installedThemeBlocks, type InstalledThemeBlock } from "@gl-admin/lib/theme-blocks/installed"
+// Browser-safe: the admin loads this module too (the revision preview renders blocks).
+import { log } from "../../lib/log"
 
 /**
  * Block Registry
@@ -71,11 +73,12 @@ const systemBlockModules = import.meta.glob<{ default: BlockConfig }>("./*/index
   eager: true,
 })
 
-console.log("[Block Registry] System block paths:", Object.keys(systemBlockModules))
-
 Object.values(systemBlockModules).forEach((module) => {
   blockRegistry.register(module.default)
 })
+
+// One line at module load, and only in dev (#378).
+log.debug("system_blocks_registered", { count: blockRegistry.getAll().length, types: blockRegistry.getTypes() })
 
 // Theme blocks (#376): every installed theme block's public renderer
 // (themes/<slug>/blocks/<Name>/render.tsx), resolved when the image is built, like the

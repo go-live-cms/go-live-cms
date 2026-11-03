@@ -12,6 +12,7 @@
  * must still render then.
  */
 import ErrorLayout from '@/layouts/ErrorLayout.astro'
+import { log } from '@/lib/log'
 
 interface Props {
   status: number
@@ -38,7 +39,7 @@ for (const candidatePath of fallbackChain) {
       LayoutComponent = layoutModule.default
       break
     } catch (error) {
-      console.warn(`Failed to load error layout ${candidatePath}:`, error)
+      log.warn('error_layout_load_failed', { layout: candidatePath, error })
     }
   }
 }

@@ -3,6 +3,7 @@ import React from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import BlockRenderer from "./BlockRenderer"
+import { log } from "../lib/log"
 
 // Theme blocks on the public page (#376): an installed one renders with its theme's
 // renderer, whichever theme is active; one whose theme isn't in this build renders nothing.
@@ -48,7 +49,7 @@ describe("theme blocks in BlockRenderer (#376)", () => {
   })
 
   it("a block of a theme that isn't installed renders nothing, and is logged once", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const warn = vi.spyOn(log, "warn").mockImplementation(() => {})
     const gone = doc({
       "blk-para-00000001": { id: "blk-para-00000001", type: "paragraph", version: 1, attrs: { text: "Before" } },
       "blk-gone-00000001": { id: "blk-gone-00000001", type: "theme:gone/widget", version: 3, attrs: { text: "secret" } },
@@ -57,7 +58,7 @@ describe("theme blocks in BlockRenderer (#376)", () => {
     renderToStaticMarkup(<BlockRenderer doc={gone} />)
     expect(html).toContain("Before")
     expect(html).not.toContain("secret")
-    expect(warn.mock.calls.filter(([message]) => String(message).includes("theme:gone/widget"))).toHaveLength(1)
+    expect(warn.mock.calls.filter(([, fields]) => fields?.type === "theme:gone/widget")).toHaveLength(1)
     warn.mockRestore()
   })
 })

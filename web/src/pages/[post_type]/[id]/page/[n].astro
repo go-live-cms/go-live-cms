@@ -6,6 +6,7 @@
  * 404s (posts have no pages).
  */
 import { getPublicPostTypeNames } from '../../../../lib/api'
+import { log } from '../../../../lib/log'
 import { resolveListRequest } from '../../../../lib/pagination'
 import { isTermRoute, termPath, TERM_ARCHIVE_ROUTE } from '../../../../lib/termPage'
 
@@ -17,7 +18,7 @@ let publicTypes: string[] | null = null
 try {
   publicTypes = await getPublicPostTypeNames()
 } catch (error) {
-  console.warn('Could not fetch post types:', error)
+  log.warn('post_types_fetch_failed', { error })
 }
 if (!(await isTermRoute(taxonomy, publicTypes))) {
   return new Response(null, { status: 404 })

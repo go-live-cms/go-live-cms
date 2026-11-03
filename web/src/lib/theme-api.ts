@@ -6,6 +6,7 @@
  */
 
 import type { APIContext } from "astro"
+import { log } from "./log"
 
 /**
  * API client for interacting with Go Live CMS backend
@@ -235,7 +236,7 @@ export async function safeExecute<T>(
   try {
     return await withTimeout(fn(), 5000, `${functionName} timed out`)
   } catch (error) {
-    console.error(`[Theme: ${themeSlug}] Error in ${functionName}:`, error)
+    log.error("theme_function_failed", { theme: themeSlug, function: functionName, error })
     return fallback
   }
 }

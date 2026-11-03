@@ -37,6 +37,14 @@ browser ──https──▶ caddy :443 ──/collab──▶ collab:1235 ─�
   fixed addresses (`172.28.0.11` caddy, `172.28.0.10` web, `TRUSTED_PROXIES`), and Caddy
   drops any `X-Forwarded-For` a client sends. If a cloud load balancer sits in front of
   Caddy, add its range as Caddy `trusted_proxies` (see the Caddyfile comment).
+- **Logs.** Every service writes one JSON object per line (`docker compose logs <service>`).
+  `api`, `web` and `collab` carry the request id Caddy sets (`X-Request-ID`). Caddy's error
+  log (e.g. a 502 from `/collab` while `collab` restarts during a deploy) keeps the error,
+  status, duration, method, host and path, and drops the client IP, the request headers
+  and the query string (#377): the proxy follows the API's policy (`api/CLAUDE.md`,
+  Observability) of no IPs, user agents or raw query strings. If an abuse investigation
+  needs client IPs, change the filter in the Caddyfile for that investigation and revert it
+  afterwards.
 - `web` and `collab` run as the `node` user. The `api` image still runs as root.
 
 ### API URLs: server side vs browser
@@ -57,7 +65,7 @@ Decision (#272): themes are part of the build, not loaded at runtime.
 - Vite resolves the middleware's theme globs (`themes/*/theme.config.ts`,
   `functions.ts`) and the theme `.astro` layouts (`import.meta.glob`) when the web image
   is built. A theme copied into a running container can't load: the server logs
-  `Theme "<slug>" is not in this build` and falls back to the theme's CSS only. Don't
+  `theme_not_in_build` (with the `theme` slug) and falls back to the theme's CSS only. Don't
   mount a volume over `/app/themes`.
 - The API registers themes by scanning `web/themes` on startup, so the API image ships
   that directory too (`Dockerfile`, `.dockerignore`).
