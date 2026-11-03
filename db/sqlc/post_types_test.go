@@ -88,14 +88,21 @@ func TestListPostTypes(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(postTypes), 5) // Should include our created types plus default ones
 
-	// Verify they are ordered by menu_position ASC, name ASC
+	// Verify they are ordered by menu_position ASC, name ASC. Names are compared the way
+	// ORDER BY does, with the database's collation: under en_US.utf8 (CI's postgres:12)
+	// "stagger" sorts before "Thatcherite", which Go's byte order ('T' < 's') disagrees with.
+	nameLessOrEqual := func(a, b string) bool {
+		var le bool
+		require.NoError(t, testQueries.db.QueryRowContext(context.Background(), `SELECT $1::text <= $2::text`, a, b).Scan(&le))
+		return le
+	}
 	for i := 1; i < len(postTypes); i++ {
 		prev := postTypes[i-1]
 		curr := postTypes[i]
 
 		if prev.MenuPosition.Valid && curr.MenuPosition.Valid {
 			if prev.MenuPosition.Int32 == curr.MenuPosition.Int32 {
-				require.LessOrEqual(t, prev.Name, curr.Name, "When menu_position is equal, should be ordered by name")
+				require.True(t, nameLessOrEqual(prev.Name, curr.Name), "When menu_position is equal, should be ordered by name: %q before %q", prev.Name, curr.Name)
 			} else {
 				require.LessOrEqual(t, prev.MenuPosition.Int32, curr.MenuPosition.Int32, "Should be ordered by menu_position")
 			}
