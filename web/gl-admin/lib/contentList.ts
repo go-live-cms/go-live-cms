@@ -6,7 +6,8 @@ import type { Post, PostSortField, SortOrder } from "@gl-admin/lib/api/types"
 // and how "last edited" reads. A UI hint only (lib/roles.ts): the API enforces it.
 
 // "All" leaves archived posts out: archiving hides a post from the site and from All.
-export const ACTIVE_STATUSES = "draft,published"
+// Scheduled posts (#147) are in it: they're drafts with a publish time.
+export const ACTIVE_STATUSES = "draft,published,scheduled"
 
 export type ListTab = {
   id: string
@@ -17,11 +18,12 @@ export type ListTab = {
   mine?: boolean
 }
 
-// Hidden until their issues land: Scheduled (#147) after Drafts, Trash (#327) last.
+// Hidden until its issue lands: Trash (#327), last.
 export const MODERATOR_TABS: ListTab[] = [
   { id: "all", label: "All", status: ACTIVE_STATUSES },
   { id: "published", label: "Published", status: "published" },
   { id: "draft", label: "Drafts", status: "draft" },
+  { id: "scheduled", label: "Scheduled", status: "scheduled" },
   { id: "archived", label: "Archived", status: "archived" },
 ]
 
@@ -93,6 +95,10 @@ export function postAccess(user: PermissionUser | null | undefined, post: ListPo
     if (isContentModerator(user?.role)) return { canEdit: true }
     const live = post.post_status?.toLowerCase() === "published"
     return { canEdit: true, note: live ? "an editor publishes your changes" : "your draft" }
+  }
+  // Their own scheduled post (#147): read-only until an editor cancels the schedule.
+  if (user && post.user_id === user.id && post.post_status?.toLowerCase() === "scheduled") {
+    return { canEdit: false, note: "scheduled by an editor" }
   }
   const credited = !!user && !!post.authors?.some((a) => a.id === user.id)
   return { canEdit: false, note: credited ? `You’re credited · ${ownerName(post)} owns it` : undefined }

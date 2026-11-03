@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { createPost, getPostById, updatePost } from "@gl-admin/lib/api/posts"
+import { cancelPostSchedule, createPost, getPostById, schedulePost, updatePost } from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
@@ -11,6 +11,9 @@ import { CollabStoreError } from "@gl-admin/lib/collaboration/CollabSaveStatus"
 import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import EditorTopBar, { ArchiveIcon, OfflineIcon } from "@gl-admin/components/editor/ui/EditorTopBar"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
+import ScheduleDialog from "@gl-admin/components/editor/ui/ScheduleDialog"
+import { useSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
+import { formatScheduleTime, scheduleFailureMessage, zoneCity } from "@gl-admin/lib/schedule"
 import { VersionPreview, versionTime } from "@gl-admin/components/editor/ui/RevisionsPanel"
 import Notice from "@gl-admin/components/ui/Notice"
 import Button from "@gl-admin/components/ui/Button"
@@ -31,12 +34,17 @@ import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 // second failure "Copy error details" for support.
 type PublishFailure = { attempts: number; message: string; requestId: string | null; storeFailed: boolean }
 
+// Scheduled publishing (#147): when the time has come, how long to wait before the first
+// look (the scheduler runs every 30s) and between looks.
+const SCHEDULE_POLL_DELAY_MS = 5_000
+const SCHEDULE_POLL_MS = 15_000
+
 interface PostFormData {
   title: string
   slug: string
   content: string
   excerpt: string
-  post_status: "draft" | "published" | "archived"
+  post_status: "draft" | "published" | "scheduled" | "archived"
 }
 
 interface PostFormProps {
@@ -125,6 +133,12 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   // A user who can't edit the post still gets the live doc, read-only (the collab server
   // makes that connection read-only).
   const collabEnabled = mode === "edit" && roleVerified
+
+  // Scheduled publishing (#147): the time (UTC ISO) and the last failed attempt, if any.
+  const [publishAt, setPublishAt] = useState<string | null>(initialData?.publish_at ?? null)
+  const [scheduleFailure, setScheduleFailure] = useState(initialData?.schedule_failure ?? null)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
+  const dateSettings = useSiteDateSettings()
 
   const { status: collabStatus, users: collabUsers, unsynced } = useCollabPresence(initialData?.id, collabEnabled)
   const connection = useConnectionView(collabStatus, collabEnabled)
@@ -354,8 +368,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         if (result) {
           setPublishFailure(null)
           showSuccess(wasPublished ? "Post updated" : "Post published")
-          // Update the post status in the form data
+          // Update the post status in the form data. Publishing ends a schedule (#147).
           setFormData((prev) => ({ ...prev, post_status: "published" }))
+          setPublishAt(null)
+          setScheduleFailure(null)
         }
       } catch (error) {
         console.error("Block publish failed:", error)
@@ -406,6 +422,71 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   }
   const handleArchive = () => setStatus("archived", "Post archived", "Couldn't archive the post")
   const handleRestoreToDrafts = () => setStatus("draft", "Restored to drafts", "Couldn't restore the post to drafts")
+
+  // Schedule or reschedule (#147): `local` is the dialog's time in the site's zone. A
+  // rejection is shown in the dialog.
+  const handleSchedule = async (local: string) => {
+    if (!canPublish || !initialData?.id) return
+    await saveTitle()
+    const { post } = await schedulePost(initialData.id, local)
+    const rescheduled = formData.post_status === "scheduled"
+    setFormData((prev) => ({ ...prev, post_status: "scheduled" }))
+    setPublishAt(post.publish_at ?? null)
+    setScheduleFailure(null)
+    toast.success(`${rescheduled ? "Rescheduled" : "Scheduled"} for ${formatScheduleTime(post.publish_at ?? local, dateSettings, { withTime: true })}`)
+  }
+
+  const handleCancelSchedule = async () => {
+    if (!canPublish || !initialData?.id) return
+    try {
+      await cancelPostSchedule(initialData.id)
+      setFormData((prev) => ({ ...prev, post_status: "draft" }))
+      setPublishAt(null)
+      setScheduleFailure(null)
+      toast.success("Schedule cancelled: the post is a draft again")
+    } catch (error) {
+      toast.error(errorMessage(error, "Couldn't cancel the schedule"))
+    }
+  }
+
+  // The scheduler publishes in the API: once the time has come, re-read the post until it
+  // isn't scheduled any more (or a failure shows), so this tab follows.
+  const scheduledId = formData.post_status === "scheduled" && publishAt ? initialData?.id : undefined
+  useEffect(() => {
+    if (!scheduledId || !publishAt) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const check = async () => {
+      try {
+        const { post } = await getPostById(scheduledId)
+        if (cancelled) return
+        setScheduleFailure(post.schedule_failure ?? null)
+        if (post.post_status !== "scheduled") {
+          setFormData((prev) => ({ ...prev, post_status: post.post_status as PostFormData["post_status"] }))
+          setPublishAt(null)
+          if (post.post_status === "published") {
+            setRevisionsKey((k) => k + 1)
+            toast.success("The scheduled post is live")
+          }
+          return
+        }
+        if (post.publish_at !== publishAt) {
+          setPublishAt(post.publish_at ?? null)
+          return
+        }
+      } catch {
+        // Try again on the next round.
+      }
+      if (!cancelled) timer = setTimeout(check, SCHEDULE_POLL_MS)
+    }
+    const wait = Math.max(0, new Date(publishAt).getTime() - Date.now()) + SCHEDULE_POLL_DELAY_MS
+    // setTimeout overflows past ~24.8 days; a schedule further out is checked on reload.
+    if (wait < 2 ** 31 - 1) timer = setTimeout(check, wait)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [scheduledId, publishAt])
 
   // Load a version into the working copy through the live editor, so collaborators
   // get it via Yjs (rule 9). Publishing afterwards makes it live (as a new version).
@@ -611,6 +692,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const signedIn = authManager.getState().user
   const others = Array.from(new Map(collabUsers.filter((u) => u.id !== signedIn?.id).map((u) => [u.id ?? -u.clientId, u])).values())
   const archived = formData.post_status === "archived"
+  const scheduled = formData.post_status === "scheduled"
   const historyEnabled = mode === "edit" && collabEnabled && canPublish && !contentReadOnly
 
   return (
@@ -639,6 +721,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         onRestoreToDrafts={collabEnabled && canPublish ? handleRestoreToDrafts : undefined}
         liveUrl={liveUrl}
         settingsPending={settingsPending}
+        publishAt={formData.post_status === "scheduled" ? publishAt : null}
+        onSchedule={collabEnabled && canPublish && formData.post_status !== "published" ? () => setScheduleOpen(true) : undefined}
+        onCancelSchedule={collabEnabled && canPublish ? handleCancelSchedule : undefined}
         viewing={
           viewingVersion
             ? {
@@ -649,6 +734,16 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             : null
         }
       />
+
+      {mode === "edit" && canPublish && (
+        <ScheduleDialog
+          isOpen={scheduleOpen}
+          onClose={() => setScheduleOpen(false)}
+          publishAt={scheduled ? publishAt : null}
+          settings={dateSettings}
+          onSchedule={handleSchedule}
+        />
+      )}
 
       {/* Banners across the editor: only when you need to act or wait. */}
       {connection === "offline" && !contentReadOnly && (
@@ -686,6 +781,54 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           )}
         </Notice>
       )}
+      {scheduled && scheduleFailure && (
+        <Notice
+          tone="danger"
+          live="alert"
+          inline
+          className="post-editor__banner"
+          title="Scheduled publish failed"
+          actions={
+            canPublish ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={handlePublish} loading={isSubmitting} disabled={collabStatus !== "connected"}>
+                  Publish now
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => void handleCancelSchedule()}>
+                  Cancel schedule
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          {scheduleFailureMessage(scheduleFailure, dateSettings)}
+        </Notice>
+      )}
+      {scheduled && publishAt && !scheduleFailure && (
+        <Notice
+          tone="info"
+          live="status"
+          inline
+          className="post-editor__banner"
+          title={`Scheduled for ${formatScheduleTime(publishAt, dateSettings, { withTime: true })}`}
+          actions={
+            canPublish ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setScheduleOpen(true)}>
+                  Reschedule
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => void handleCancelSchedule()}>
+                  Cancel schedule
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          {canPublish
+            ? `${zoneCity(dateSettings.timeZone)} time. It goes live with its content as it is then; edits until then are included.`
+            : "An editor scheduled it. It's read-only until they cancel the schedule."}
+        </Notice>
+      )}
       {archived && mode === "edit" && (
         <div className="post-editor__archived" role="note">
           <ArchiveIcon size={16} />
@@ -721,7 +864,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             </div>
 
             <div className="post-editor__content">
-              {roleVerified && contentReadOnly && (
+              {/* Their own scheduled post has its banner above (#147). */}
+              {roleVerified && contentReadOnly && !(scheduled && me?.id === initialData?.user_id) && (
                 <Notice tone="info" live="status" className="post-editor__notice">
                   <strong>View-only:</strong> you can edit only posts you wrote. You still see others' changes as they
                   type.
@@ -790,6 +934,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               onPublishSuccess={(result) => {
                 setIsSubmitting(false)
                 setFormData((prev) => ({ ...prev, post_status: "published" }))
+                setPublishAt(null)
+                setScheduleFailure(null)
                 setRevisionsKey((k) => k + 1)
                 // The settings went out with it (#358).
                 setSettingsPending(false)
@@ -819,6 +965,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           onSettingsSaved={() => void refreshSettingsState()}
           settingsKey={settingsKey}
           settingsPending={settingsPending}
+          publishAt={scheduled ? publishAt : null}
+          onSchedule={collabEnabled && canPublish ? () => setScheduleOpen(true) : undefined}
           history={
             historyEnabled && initialData?.id
               ? {

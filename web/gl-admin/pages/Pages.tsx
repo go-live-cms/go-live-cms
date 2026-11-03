@@ -156,7 +156,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
       key: "depth",
       name: "Status",
       width: "9.5rem",
-      render: (_, row) => <PostStatus status={row?.page.post_status || null} iconPath={row?.page.post_status || null} />,
+      render: (_, row) => <PostStatus status={row?.page.post_status || null} iconPath={row?.page.post_status || null} publishAt={row?.page.publish_at} />,
     },
     { key: "orphan", name: "Last edited", width: "8.5rem", render: (_, row) => <LastEdited post={row?.page ?? null} /> },
   ]

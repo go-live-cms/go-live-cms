@@ -134,6 +134,38 @@ export async function updatePost(id: string | number, data: Partial<Post>): Prom
   return response.json()
 }
 
+// Scheduled publishing (#147, editors and admins): schedule a draft, or move a
+// scheduled post to a new time. `local` is a wall-clock time in the site's time zone
+// ("2026-11-03T09:00"); the API converts it and answers with the post (publish_at in UTC).
+export async function schedulePost(id: string | number, local: string): Promise<{ post: Post }> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/schedule`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ local }),
+  })
+
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Scheduling the post failed" })
+  }
+
+  return response.json()
+}
+
+// "Cancel schedule": the post goes back to draft.
+export async function cancelPostSchedule(id: string | number): Promise<{ post: Post }> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/schedule`, {
+    method: "DELETE",
+  })
+
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Cancelling the schedule failed" })
+  }
+
+  return response.json()
+}
+
 // A draft copy owned by the caller (#354): same type, parent, terms, featured image
 // and description, the working copy's content with new block ids. Not its versions.
 export async function duplicatePost(id: string | number): Promise<{ post: Post }> {

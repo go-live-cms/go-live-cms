@@ -153,3 +153,15 @@ describe("roleChoices (the invite dialog)", () => {
     expect(ROLE_DESCRIPTIONS.admin).toMatch(/users, themes and settings/)
   })
 })
+
+// #147: a scheduled post goes live without another review, so its contributor owner only
+// watches it (canEditPost / canEditPostDetails in api/auth_posts.go).
+describe("scheduled posts", () => {
+  const scheduled = { user_id: owner.id, post_status: "scheduled" }
+  it("are read-only to their contributor owner, editable by moderators", () => {
+    expect(canEditPost(owner, scheduled)).toBe(false)
+    expect(canEditPostDetails(owner, scheduled)).toBe(false)
+    expect(canEditPost({ id: 99, role: "editor" }, scheduled)).toBe(true)
+    expect(postEditorAccess(owner, "edit", scheduled)).toEqual({ content: false, details: false, publish: false })
+  })
+})
