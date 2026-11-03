@@ -422,7 +422,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - `post_search` (`000024`): one row per post, `document` (tsvector: title A, description B,
   public taxonomies' term names B, published body C) and `body_text` (the published body as
   plain text, for excerpts). A published post is indexed by its **published** title,
-  excerpt and terms (`published_settings`, #358; 000026), a draft by its working ones, so a
+  excerpt and terms (`published_settings`, #358; 000027), a draft by its working ones, so a
   settings edit on a published post reaches search on Update (the admin search box too).
   **Triggers keep it current**, not handlers: posts insert, and updates of
   title/description/`published_version_id`/`published_block_doc`/`published_settings` (so
@@ -499,7 +499,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   the editor restores through Yjs and the collab server's store persists it. The only
   `block_doc` writer for an existing post is the collab server's
   `PUT /internal/posts/:id/collab`.
-- **Settings snapshots (#358, `000026`, `post_settings.go`):** publish (`PublishPostTx`: lock,
+- **Settings snapshots (#358, `000027`, `post_settings.go`):** publish (`PublishPostTx`: lock,
   next version_no, `InsertPublishedVersionFromPost`, `SetPublishedVersionOnPost` in one
   transaction) stores `golive_post_settings(id)` in `post_versions.settings` and
   `posts.published_settings`: title, description, featured image (`_thumbnail_id`/`_url` meta)

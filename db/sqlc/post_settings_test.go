@@ -310,12 +310,12 @@ func TestPublicPostMeta(t *testing.T) {
 	require.JSONEq(t, `{"other": "kept"}`, string(got))
 }
 
-// The migration's backfill (000026): run its statements on a post in the
+// The migration's backfill (000027): run its statements on a post in the
 // pre-#358 state (published, no settings recorded), inside a transaction that
 // is rolled back so the shared test database is left alone.
 func TestPostSettingsBackfillMigration(t *testing.T) {
 	ctx := context.Background()
-	up, err := os.ReadFile("../migration/000026_post_settings_snapshot.up.sql")
+	up, err := os.ReadFile("../migration/000027_post_settings_snapshot.up.sql")
 	require.NoError(t, err)
 	backfill := string(up)
 	start := strings.Index(backfill, "-- Backfill:")

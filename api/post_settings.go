@@ -3,7 +3,7 @@
 // Publishing saves a post's settings with its blocks: each version stores them
 // (post_versions.settings) and the published ones sit next to published_block_doc
 // (posts.published_settings). The database builds the snapshot
-// (golive_post_settings, migration 000026), so the shape lives in one place:
+// (golive_post_settings, migration 000027), so the shape lives in one place:
 // title, excerpt (description), featured image and term ids. The SEO fields
 // (#357) and byline authors (#319) join it later.
 //
