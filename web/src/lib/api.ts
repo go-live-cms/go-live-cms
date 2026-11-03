@@ -1,6 +1,7 @@
 import type { Post, PostSortOption, SortOrder, PaginationParams, ApiResponse, TaxonomyTerm, TaxonomyType } from "../../gl-admin/lib/api/types"
 import { SERVER_API_URL, SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 import type { Pagination } from "./pagination"
+import { requestIdHeaders } from "./log"
 
 const API_BASE = typeof window === "undefined" ? SERVER_API_URL : "/api/v1"
 
@@ -17,6 +18,7 @@ export async function apiCall(endpoint: string, options: ApiOptions = {}) {
     method,
     headers: {
       "Content-Type": "application/json",
+      ...requestIdHeaders(),
     },
   }
 
@@ -96,7 +98,7 @@ export async function getPostById(id: string | number): Promise<{ post: Post }> 
 // The post with this id, or null when the API answers 404. Other failures throw, so
 // a caller can tell "no such post" from "the API is down".
 export async function findPostById(id: string | number): Promise<Post | null> {
-  const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(String(id))}`)
+  const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(String(id))}`, { headers: requestIdHeaders() })
   if (response.status === 404) return null
   if (!response.ok) throw new Error(`HTTP ${response.status} loading post ${id}`)
   return (await response.json()).post ?? null
@@ -134,7 +136,10 @@ export interface AdjacentPosts {
 const PUBLIC_EXTRAS_TIMEOUT_MS = 3000
 
 async function publicApiCall(endpoint: string) {
-  const response = await fetch(`${SERVER_MEDIA_URL}/public${endpoint}`, { signal: AbortSignal.timeout(PUBLIC_EXTRAS_TIMEOUT_MS) })
+  const response = await fetch(`${SERVER_MEDIA_URL}/public${endpoint}`, {
+    headers: requestIdHeaders(),
+    signal: AbortSignal.timeout(PUBLIC_EXTRAS_TIMEOUT_MS),
+  })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   return response.json()
 }
@@ -239,7 +244,7 @@ export interface PublicPostPage {
 // type isn't public or the page is past the end. Other failures throw.
 export async function getPublicPostsPage(type: string, page: number): Promise<PublicPostPage | null> {
   const query = page > 1 ? `?page=${page}` : ""
-  const response = await fetch(`${SERVER_MEDIA_URL}/public/posts/type/${encodeURIComponent(type)}${query}`)
+  const response = await fetch(`${SERVER_MEDIA_URL}/public/posts/type/${encodeURIComponent(type)}${query}`, { headers: requestIdHeaders() })
   if (response.status === 404) return null
   if (!response.ok) throw new Error(`HTTP ${response.status} listing ${type} posts`)
   const body = await response.json()

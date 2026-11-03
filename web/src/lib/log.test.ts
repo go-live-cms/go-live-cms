@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createLogger, safeUrl, type LogContext, type LogFields, type LogLevel } from "./log"
+import { createLogger, requestIdHeaders, safeUrl, type LogContext, type LogLevel } from "./log"
 import { requestIdFrom, runWithLogContext } from "../middleware/requestContext"
 
 const NOW = new Date("2026-11-02T12:00:00.000Z")
@@ -9,7 +9,7 @@ const NOW = new Date("2026-11-02T12:00:00.000Z")
 function capture(options: { debug?: boolean; context?: () => LogContext | undefined } = {}) {
   const lines: Array<{ level: LogLevel; line: string }> = []
   const logger = createLogger({
-    write: (level: LogLevel, line: string, _msg: string, _fields: LogFields) => lines.push({ level, line }),
+    write: (level: LogLevel, line: string) => lines.push({ level, line }),
     now: () => NOW,
     debug: options.debug ?? false,
     ...(options.context ? { context: options.context } : {}),
@@ -152,6 +152,11 @@ describe("request context", () => {
       })
     await Promise.all([handle("request-a-1", 5), handle("request-b-1", 1)])
     for (const record of records()) expect(record.request_id).toBe(record.id)
+  })
+
+  it("hands the request id to server-side API calls", () => {
+    expect(requestIdHeaders()).toEqual({})
+    expect(runWithLogContext({ request_id: "req-12345678", route: "/" }, requestIdHeaders)).toEqual({ "X-Request-ID": "req-12345678" })
   })
 
   it("takes a well-formed X-Request-ID and makes one up otherwise", () => {

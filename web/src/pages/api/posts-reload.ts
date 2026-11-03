@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { SERVER_API_URL } from "../../../gl-admin/lib/server-api-url";
-import { log } from "../../lib/log";
+import { log, requestIdHeaders } from "../../lib/log";
 
 export const GET: APIRoute = async () => {
   // Server-side fetch, so the runtime SERVER_API_URL (the internal network address),
@@ -8,7 +8,7 @@ export const GET: APIRoute = async () => {
   const API_BASE = SERVER_API_URL;
 
   try {
-    const response = await fetch(`${API_BASE}/posts`);
+    const response = await fetch(`${API_BASE}/posts`, { headers: requestIdHeaders() });
 
     if (!response.ok) {
       return new Response(JSON.stringify({ error: "Failed to fetch posts" }), {

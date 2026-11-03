@@ -10,7 +10,7 @@
  */
 import type { Post } from "@gl-admin/lib/api/types"
 import { SERVER_API_URL } from "@gl-admin/lib/server-api-url"
-import { log } from "./log"
+import { log, requestIdHeaders } from "./log"
 import { getPostsByType } from "./api"
 import { pagePath, type Pagination } from "./pagination"
 import { getPublic } from "./publicApi"
@@ -215,7 +215,7 @@ export async function getPublicSearch(query: string, type: SearchType, page: num
 export async function getTopics(limit = 6): Promise<SearchLink[]> {
   try {
     const response = await fetch(`${SERVER_API_URL}/taxonomy/terms/popular?type=category&limit=${limit}`, {
-      headers: { Accept: "application/json" },
+      headers: { Accept: "application/json", ...requestIdHeaders() },
       signal: AbortSignal.timeout(TOPICS_TIMEOUT_MS),
     })
     if (!response.ok) return []

@@ -40,7 +40,7 @@ export function currentLogContext() {
   }
 }
 
-const CONSOLE_LEVELS = { log: "info", info: "info", warn: "warn", error: "error", debug: "debug", trace: "debug" }
+const CONSOLE_LEVELS = { log: "info", info: "info", dir: "info", warn: "warn", error: "error", debug: "debug", trace: "debug" }
 
 function argText(arg) {
   if (typeof arg === "string") return arg
@@ -52,20 +52,25 @@ function argText(arg) {
   }
 }
 
+// Without Node's util.format (start.mjs passes it): the arguments joined by spaces.
+const joinArgs = (...args) => args.map(argText).join(" ")
+
 /**
  * One console call as a log line: {time, level, msg: "console", request_id, route, text}.
- * A call that already wrote one JSON object is kept as it is.
+ * A call that already wrote one JSON object is kept, with its strings scrubbed.
  * @param {keyof typeof CONSOLE_LEVELS} method
  * @param {unknown[]} args
  * @param {Date} [now]
+ * @param {(...args: unknown[]) => string} [format] util.format, so "%s" etc. apply
  * @returns {string}
  */
-export function consoleRecord(method, args, now = new Date()) {
-  const text = args.map(argText).join(" ")
+export function consoleRecord(method, args, now = new Date(), format = joinArgs) {
+  const text = format(...args)
   const trimmed = text.trim()
   if (trimmed.startsWith("{") && !trimmed.includes("\n")) {
     try {
-      if (JSON.parse(trimmed)?.level) return trimmed
+      const parsed = JSON.parse(trimmed)
+      if (parsed?.level) return JSON.stringify(parsed, (_key, value) => (typeof value === "string" ? scrubText(value) : value))
     } catch {
       // Not JSON: wrap it like any other text.
     }
@@ -85,14 +90,15 @@ export function consoleRecord(method, args, now = new Date()) {
  * the streams directly, so its lines don't pass through here.
  * @param {{ write(chunk: string): unknown }} stdout
  * @param {{ write(chunk: string): unknown }} stderr
+ * @param {(...args: unknown[]) => string} [format]
  */
-export function installConsoleJson(stdout, stderr) {
+export function installConsoleJson(stdout, stderr, format = joinArgs) {
   for (const method of Object.keys(CONSOLE_LEVELS)) {
     const level = CONSOLE_LEVELS[method]
     console[method] = (...args) => {
       if (level === "debug") return
       const stream = level === "warn" || level === "error" ? stderr : stdout
-      stream.write(`${consoleRecord(method, args)}\n`)
+      stream.write(`${consoleRecord(method, args, new Date(), format)}\n`)
     }
   }
 }

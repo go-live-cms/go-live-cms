@@ -6,7 +6,7 @@
 // Node server, which has no Vite, so the middleware forwards them with this instead.
 // Astro's own /api routes (/api/theme, /api/posts-reload) are not under /api/v1.
 
-import { log } from "../lib/log"
+import { log, requestIdHeaders } from "../lib/log"
 
 const HOP_BY_HOP_REQUEST = [
   "connection",
@@ -50,6 +50,9 @@ export async function proxyToApi(
     const prior = headers.get("x-forwarded-for")
     headers.set("x-forwarded-for", prior ? `${prior}, ${clientAddress}` : clientAddress)
   }
+  // The id this request logs under (Caddy's, or the one the middleware made up when it
+  // was missing or malformed), so the API's lines match the web's.
+  for (const [name, value] of Object.entries(requestIdHeaders())) headers.set(name, value)
   headers.set("x-forwarded-host", url.host)
   headers.set("x-forwarded-proto", url.protocol.replace(/:$/, ""))
 

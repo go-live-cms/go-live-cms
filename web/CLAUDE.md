@@ -84,6 +84,8 @@ are the most fragile part of the codebase. **Before editing anything under
   `debug` is dev only. The middleware runs each request in `runWithLogContext`
   (`src/middleware/requestContext.ts`, AsyncLocalStorage), so every line carries Caddy's
   `X-Request-ID` (also `Astro.locals.requestId`) and `context.routePattern` without passing them.
+  Every SSR fetch to the API spreads `requestIdHeaders()` into its headers (the proxy sets it
+  too), so the API logs the call under the same id; add it to any new one.
   `log.ts` has no Node imports and logs to the console in a browser, so shared code (block
   registry, `BlockRenderer`) may use it. Browser-only admin code and the collab server
   (`logEvent`) don't. Tests spy on it: `vi.spyOn(log, "warn")`. The production image starts

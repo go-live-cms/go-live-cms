@@ -11,7 +11,7 @@
 
 import type { ThemeSettings } from "./theme-api"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
-import { log } from "./log"
+import { log, requestIdHeaders } from "./log"
 
 // API origin (no /api/v1), from the runtime SERVER_API_URL. The paths below add /api/v1.
 const API_BASE_URL = SERVER_MEDIA_URL
@@ -26,8 +26,9 @@ export class ThemeSettingsImpl implements ThemeSettings {
   }
 
   private getHeaders(): HeadersInit {
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      ...requestIdHeaders(),
     }
 
     if (this.authToken) {

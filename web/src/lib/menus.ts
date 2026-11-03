@@ -6,7 +6,7 @@
  * follow.
  */
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
-import { log } from "./log"
+import { log, requestIdHeaders } from "./log"
 
 export interface MenuLink {
   id: number
@@ -39,7 +39,10 @@ export async function getMenu(location: string, fetcher: typeof fetch = fetch, t
     }, timeoutMs)
   })
   const load = async () => {
-    const response = await fetcher(`${SERVER_MEDIA_URL}/public/menus/${encodeURIComponent(location)}`, { signal: controller.signal })
+    const response = await fetcher(`${SERVER_MEDIA_URL}/public/menus/${encodeURIComponent(location)}`, {
+      headers: requestIdHeaders(),
+      signal: controller.signal,
+    })
     if (response.status === 404) return null
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     return normalizeMenu(await response.json())

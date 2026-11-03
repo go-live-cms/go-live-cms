@@ -6,7 +6,7 @@ import FormattedDate from "@/components/FormattedDate.astro"
 import BlockRenderer from "@/components/BlockRenderer"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
-import { log } from "@/lib/log"
+import { log, requestIdHeaders } from "@/lib/log"
 
 type Props = CollectionEntry<'blog'>['data'] & {
   postId?: number;
@@ -20,7 +20,7 @@ if (postId) {
   try {
     // Server-side fetch: the runtime SERVER_API_URL, not the build-time PUBLIC_API_URL.
     // /public sits at the API root, not under /api/v1.
-    const response = await fetch(`${SERVER_MEDIA_URL}/public/posts/${postId}/blocks`);
+    const response = await fetch(`${SERVER_MEDIA_URL}/public/posts/${postId}/blocks`, { headers: requestIdHeaders() });
     if (response.ok) {
       const data = await response.json();
       blockDoc = data.doc;

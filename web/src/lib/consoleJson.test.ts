@@ -1,3 +1,4 @@
+import { format } from "node:util"
 import { afterEach, describe, expect, it } from "vitest"
 import { consoleRecord, installConsoleJson, scrubText } from "../../server/logFormat.mjs"
 import { runWithLogContext } from "../middleware/requestContext"
@@ -26,9 +27,15 @@ describe("consoleRecord", () => {
     expect(record.text).toMatch(/^failed: TypeError: fetch failed\n\s+at /)
   })
 
-  it("keeps a line that is already a JSON record", () => {
+  it("keeps a line that is already a JSON record, scrubbed", () => {
     const own = '{"time":"t","level":"warn","event":"collab_reconnect"}'
     expect(consoleRecord("log", [own], NOW)).toBe(own)
+    const leaky = '{"level":"warn","url":"http://api:8080/x?token=abc","auth":"Bearer abc.def"}'
+    expect(JSON.parse(consoleRecord("log", [leaky], NOW))).toEqual({ level: "warn", url: "http://api:8080/x", auth: "Bearer [REDACTED]" })
+  })
+
+  it("applies format specifiers with the formatter it is given", () => {
+    expect(JSON.parse(consoleRecord("warn", ["%s failed after %dms", "menu", 120], NOW, format)).text).toBe("menu failed after 120ms")
   })
 
   it("strips query strings and tokens and carries the request context", () => {
