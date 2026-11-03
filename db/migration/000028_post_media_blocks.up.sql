@@ -28,7 +28,7 @@ WITH docs AS (
   WHERE EXISTS (SELECT 1 FROM post_media pm WHERE pm.post_id = p.id)
 ), uses AS (
   SELECT d.post_id,
-         trunc((d.doc -> 'blocks' -> o.block_id -> 'attrs' ->> 'mediaId')::numeric)::bigint AS media_id,
+         trunc((d.doc -> 'blocks' -> o.block_id -> 'attrs' ->> 'mediaId')::numeric) AS media_id,
          o.block_id,
          o.ord
   FROM docs d
@@ -39,10 +39,12 @@ WITH docs AS (
     AND d.doc -> 'blocks' -> o.block_id ->> 'type' = 'image'
     AND jsonb_typeof(d.doc -> 'blocks' -> o.block_id -> 'attrs' -> 'mediaId') = 'number'
 ), per_media AS (
-  SELECT post_id, media_id,
+  -- Compared as numeric before the bigint cast: an out-of-range mediaId (the
+  -- Go side skips it) must not fail the migration.
+  SELECT post_id, media_id::bigint AS media_id,
          jsonb_agg(jsonb_build_object('id', block_id, 'type', 'image') ORDER BY ord) AS blocks
   FROM uses
-  WHERE media_id > 0
+  WHERE media_id BETWEEN 1 AND 9223372036854775807
   GROUP BY post_id, media_id
 )
 UPDATE post_media pm

@@ -28,15 +28,17 @@ describe("pastedImages", () => {
     expect(files.map((f) => [f.name, f.type])).toEqual([["pasted-20261103-140509.png", "image/png"]])
   })
 
-  it("takes several images, numbering the unnamed ones and keeping real names", () => {
-    const jpeg = new File(["y"], "", { type: "image/jpeg" })
+  it("takes several copied files, keeping their names", () => {
     const holiday = png("holiday.png")
-    const files = pastedImages(
-      clipboard([{ kind: "file", file: png() }, { kind: "file", file: holiday }, { kind: "file", file: jpeg }]),
-      when
-    )
-    expect(files.map((f) => f.name)).toEqual(["pasted-20261103-140509.png", "holiday.png", "pasted-20261103-140509-2.jpg"])
-    expect(files[1]).toBe(holiday) // a named file is passed through as is
+    const beach = new File(["y"], "beach.jpg", { type: "image/jpeg" })
+    const files = pastedImages(clipboard([{ kind: "file", file: holiday }, { kind: "file", file: beach }]), when)
+    expect(files).toEqual([holiday, beach]) // passed through as they are
+  })
+
+  it("uploads the clipboard's one picture once, though offered in several formats", () => {
+    const tiff = new File(["y"], "image.tiff", { type: "image/tiff" })
+    const files = pastedImages(clipboard([{ kind: "file", file: png() }, { kind: "file", file: tiff }]), when)
+    expect(files.map((f) => f.name)).toEqual(["pasted-20261103-140509.png"])
   })
 
   it("falls back to `files` when the items have none", () => {
@@ -52,9 +54,9 @@ describe("pastedImages", () => {
 })
 
 describe("pasted file names", () => {
-  it("stamp the local date and time, with a counter for the second and later", () => {
+  it("stamp the local date and time", () => {
     expect(pastedFileName("image/png", when)).toBe("pasted-20261103-140509.png")
-    expect(pastedFileName("image/webp", when, 2)).toBe("pasted-20261103-140509-3.webp")
+    expect(pastedFileName("image/webp", when)).toBe("pasted-20261103-140509.webp")
   })
 
   it("take the extension from the MIME type", () => {

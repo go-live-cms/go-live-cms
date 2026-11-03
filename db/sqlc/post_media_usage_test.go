@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -193,15 +194,17 @@ func TestPostMediaBlocksBackfillMigration(t *testing.T) {
 		require.NoError(t, err)
 	}
 	// The featured image is in the body too, after the inline image's two
-	// blocks; a paragraph, a non-numeric mediaId and a missing block are skipped.
+	// blocks; a paragraph, a non-numeric or out-of-range mediaId and a missing
+	// block are skipped (the out-of-range one must not fail the migration).
 	writeBlockDocAround(t, draft.post.ID, json.RawMessage(`{"doc_version":1,
-		"blocks_order":["i1","p","f1","i2","bad","gone"],
+		"blocks_order":["i1","p","f1","i2","bad","huge","gone"],
 		"blocks":{
-			"i1":{"type":"image","attrs":{"mediaId":`+jsonInt(inline.ID)+`}},
+			"i1":{"type":"image","attrs":{"mediaId":`+fmt.Sprint(inline.ID)+`}},
 			"p":{"type":"paragraph"},
-			"f1":{"type":"image","attrs":{"mediaId":`+jsonInt(featured.ID)+`}},
-			"i2":{"type":"image","attrs":{"mediaId":`+jsonInt(inline.ID)+`}},
-			"bad":{"type":"image","attrs":{"mediaId":"`+jsonInt(attached.ID)+`"}}}}`))
+			"f1":{"type":"image","attrs":{"mediaId":`+fmt.Sprint(featured.ID)+`}},
+			"i2":{"type":"image","attrs":{"mediaId":`+fmt.Sprint(inline.ID)+`}},
+			"bad":{"type":"image","attrs":{"mediaId":"`+fmt.Sprint(attached.ID)+`"}},
+			"huge":{"type":"image","attrs":{"mediaId":1e20}}}}`))
 
 	// A published post: its working copy moved on, its links follow the
 	// published body.
@@ -242,9 +245,4 @@ func TestPostMediaBlocksBackfillMigration(t *testing.T) {
 		inline.ID:          {imageBlock("pub")},
 	}, mediaBlocks(t, tx, published.post.ID))
 	require.Equal(t, map[int64][]usageBlock{empty.media.ID: {}}, mediaBlocks(t, tx, empty.post.ID))
-}
-
-func jsonInt(n int64) string {
-	b, _ := json.Marshal(n)
-	return string(b)
 }

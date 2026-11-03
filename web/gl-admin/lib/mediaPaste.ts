@@ -34,11 +34,11 @@ const pad = (n: number) => String(n).padStart(2, "0")
 
 // pasted-20261103-142530.png, in local time: when the browser gives the clipboard image
 // no name of its own.
-export function pastedFileName(mimeType: string, when: Date, index = 0): string {
+export function pastedFileName(mimeType: string, when: Date): string {
   const stamp =
     `${when.getFullYear()}${pad(when.getMonth() + 1)}${pad(when.getDate())}-` +
     `${pad(when.getHours())}${pad(when.getMinutes())}${pad(when.getSeconds())}`
-  return `pasted-${stamp}${index > 0 ? `-${index + 1}` : ""}.${imageExtension(mimeType)}`
+  return `pasted-${stamp}.${imageExtension(mimeType)}`
 }
 
 // Chrome and Firefox call every image pasted from a screenshot or a web page
@@ -49,6 +49,11 @@ function hasOwnName(file: File): boolean {
 
 // The images in a paste, named. Anything else on the clipboard (text, HTML, other
 // files) is left out; an empty result means the paste isn't ours.
+//
+// Copied files (several at once from a file manager) each keep their name. An unnamed
+// image is the clipboard's one picture (a screenshot, "Copy image"), which a browser may
+// offer in several formats (image/png and image/tiff on macOS): only the first is kept,
+// or the same picture would upload twice.
 export function pastedImages(data: DataTransfer | null, when = new Date()): File[] {
   if (!data) return []
   let files: File[] = []
@@ -59,12 +64,13 @@ export function pastedImages(data: DataTransfer | null, when = new Date()): File
   }
   // Older browsers expose clipboard files only through `files`.
   if (files.length === 0) files = Array.from(data.files ?? [])
-  let unnamed = 0
+  let pictureTaken = false
   return files
     .filter((file) => file.type.startsWith("image/"))
-    .map((file) =>
-      hasOwnName(file)
-        ? file
-        : new File([file], pastedFileName(file.type, when, unnamed++), { type: file.type, lastModified: file.lastModified })
-    )
+    .flatMap((file) => {
+      if (hasOwnName(file)) return [file]
+      if (pictureTaken) return []
+      pictureTaken = true
+      return [new File([file], pastedFileName(file.type, when), { type: file.type, lastModified: file.lastModified })]
+    })
 }

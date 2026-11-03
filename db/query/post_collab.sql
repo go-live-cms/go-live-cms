@@ -92,4 +92,7 @@ SELECT @post_id, wanted.media_id, wanted.ord, wanted.blocks
 FROM wanted
 ON CONFLICT (post_id, media_id) DO UPDATE
 SET "order" = CASE WHEN post_media."order" = 0 THEN 0 ELSE EXCLUDED."order" END,
-    blocks = EXCLUDED.blocks;
+    blocks = EXCLUDED.blocks
+-- Unchanged rows are left alone: the collab store runs this every few seconds.
+WHERE post_media.blocks IS DISTINCT FROM EXCLUDED.blocks
+   OR (post_media."order" > 0 AND post_media."order" IS DISTINCT FROM EXCLUDED."order");

@@ -14,15 +14,7 @@ import (
 
 // collabDocWithImages is a Block Spec v1 doc with one image block per media id.
 func collabDocWithImages(mediaIDs ...int64) json.RawMessage {
-	order := []string{}
-	blocks := map[string]any{}
-	for i, id := range mediaIDs {
-		blockID := fmt.Sprintf("img-%d", i)
-		order = append(order, blockID)
-		blocks[blockID] = map[string]any{"type": "image", "attrs": map[string]any{"mediaId": id}}
-	}
-	doc, _ := json.Marshal(map[string]any{"doc_version": 1, "blocks_order": order, "blocks": blocks})
-	return doc
+	return docWithBlocks(imageUses(mediaIDs...)...)
 }
 
 // imageUses are the content media uses of collabDocWithImages(mediaIDs...).

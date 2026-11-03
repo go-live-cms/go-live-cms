@@ -180,8 +180,9 @@ are the most fragile part of the codebase. **Before editing anything under
   access is `canWriteMedia` (`lib/roles.ts`). **Paste to upload (#28):** Ctrl/Cmd+V on the
   library uploads the clipboard's images through the same `upload` as the button and drop
   (`lib/mediaPaste.ts`, tested): ignored in text fields and dialogs, other clipboard
-  content ignored, an unnamed (or Chrome/Firefox's generic `image.png`) image becomes
-  `pasted-YYYYMMDD-HHMMSS[-N].<ext>`.
+  content ignored. Copied files keep their names; the clipboard's unnamed picture (or
+  Chrome/Firefox's generic `image.png`) is uploaded once, in its first format, as
+  `pasted-YYYYMMDD-HHMMSS.<ext>`.
 - **Missing alt text (#325):** alt is optional on upload (the admin no longer sends the
   file's stem) and an image may be marked **decorative** (`media.decorative`). Missing =
   an image (SVG too), not decorative, alt empty or only whitespace: `missingAlt` in

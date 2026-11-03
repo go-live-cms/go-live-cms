@@ -106,6 +106,8 @@ FROM wanted
 ON CONFLICT (post_id, media_id) DO UPDATE
 SET "order" = CASE WHEN post_media."order" = 0 THEN 0 ELSE EXCLUDED."order" END,
     blocks = EXCLUDED.blocks
+WHERE post_media.blocks IS DISTINCT FROM EXCLUDED.blocks
+   OR (post_media."order" > 0 AND post_media."order" IS DISTINCT FROM EXCLUDED."order")
 `
 
 type SyncPostContentMediaParams struct {
@@ -125,6 +127,7 @@ type SyncPostContentMediaParams struct {
 // (#176). The featured image link
 // (order 0) is never moved or removed, even when the featured image is also in
 // the content (#389); only its blocks follow the doc.
+// Unchanged rows are left alone: the collab store runs this every few seconds.
 func (q *Queries) SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error {
 	_, err := q.db.ExecContext(ctx, syncPostContentMedia,
 		arg.PostID,

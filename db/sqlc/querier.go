@@ -385,6 +385,7 @@ type Querier interface {
 	// (#176). The featured image link
 	// (order 0) is never moved or removed, even when the featured image is also in
 	// the content (#389); only its blocks follow the doc.
+	// Unchanged rows are left alone: the collab store runs this every few seconds.
 	SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error
 	TouchMenu(ctx context.Context, id int64) error
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
