@@ -132,22 +132,31 @@ describe("postAccess (Your access)", () => {
 })
 
 describe("rowActions", () => {
-  it("offers moderators publish, archive and delete on a draft", () => {
-    expect(rowActions(editor, post())).toEqual(["publish", "archive", "delete"])
+  it("offers moderators duplicate, publish, archive and delete on a draft", () => {
+    expect(rowActions(editor, post())).toEqual(["duplicate", "publish", "archive", "delete"])
   })
 
   it("offers unpublish on a published post", () => {
-    expect(rowActions(editor, post({ post_status: "published" }))).toEqual(["unpublish", "archive", "delete"])
+    expect(rowActions(editor, post({ post_status: "published" }))).toEqual(["duplicate", "unpublish", "archive", "delete"])
   })
 
   it("doesn't archive an archived post again", () => {
-    expect(rowActions(editor, post({ post_status: "archived" }))).toEqual(["publish", "delete"])
+    expect(rowActions(editor, post({ post_status: "archived" }))).toEqual(["duplicate", "publish", "delete"])
   })
 
   it("lets a contributor only delete their own unpublished post", () => {
-    expect(rowActions(contributor, post())).toEqual(["delete"])
-    expect(rowActions(contributor, post({ post_status: "published" }))).toEqual([])
-    expect(rowActions(contributor, post({ user_id: 3 }))).toEqual([])
+    expect(rowActions(contributor, post())).toEqual(["duplicate", "delete"])
+    expect(rowActions(contributor, post({ post_status: "published" }))).toEqual(["duplicate"])
+  })
+
+  // #354: the copy is a draft they own, so any content role may duplicate a post it can read.
+  it("lets a contributor duplicate someone else's post", () => {
+    expect(rowActions(contributor, post({ user_id: 3 }))).toEqual(["duplicate"])
+  })
+
+  it("offers nothing to a role that can't create posts", () => {
+    expect(rowActions({ id: 9, role: "user" }, post())).toEqual([])
+    expect(rowActions(null, post())).toEqual([])
   })
 })
 

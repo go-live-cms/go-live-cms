@@ -1,4 +1,4 @@
-import { canEditPost, canEditPostDetails, isContentModerator, type PermissionUser } from "@gl-admin/lib/roles"
+import { canCreateContent, canEditPost, canEditPostDetails, isContentModerator, type PermissionUser } from "@gl-admin/lib/roles"
 import type { Post, PostSortField, SortOrder } from "@gl-admin/lib/api/types"
 
 // The posts list's rules (#340), as data so they're testable: which status tabs a role
@@ -98,16 +98,22 @@ export function postAccess(user: PermissionUser | null | undefined, post: ListPo
   return { canEdit: false, note: credited ? `You’re credited · ${ownerName(post)} owns it` : undefined }
 }
 
-// The row actions that exist today (#340); the design's Duplicate, View on site and
-// Move to trash (#327) wait for theirs.
-export type RowAction = "publish" | "unpublish" | "archive" | "delete"
+// The row actions that exist today (#340, Duplicate #354); the design's View on site
+// and Move to trash (#327) wait for theirs.
+export type RowAction = "duplicate" | "publish" | "unpublish" | "archive" | "delete"
 
-// Publishing, unpublishing and archiving (a status change) are moderator-only in the
-// API. Deleting needs canEditPostDetails: a contributor may delete their own post only
-// while it isn't published.
+// The toast after Duplicate, which then opens the copy in the editor.
+export const DUPLICATED_MESSAGE = "Duplicated. You’re editing the copy."
+
+// Duplicating needs read access and the right to create posts: any content role, on
+// any post (the copy is a draft the caller owns). Publishing, unpublishing and
+// archiving (a status change) are moderator-only in the API. Deleting needs
+// canEditPostDetails: a contributor may delete their own post only while it isn't
+// published.
 export function rowActions(user: PermissionUser | null | undefined, post: ListPost): RowAction[] {
   const status = post.post_status?.toLowerCase()
   const actions: RowAction[] = []
+  if (canCreateContent(user?.role)) actions.push("duplicate")
   if (isContentModerator(user?.role)) {
     actions.push(status === "published" ? "unpublish" : "publish")
     if (status !== "archived") actions.push("archive")

@@ -134,6 +134,20 @@ export async function updatePost(id: string | number, data: Partial<Post>): Prom
   return response.json()
 }
 
+// A draft copy owned by the caller (#354): same type, parent, terms, featured image
+// and description, the working copy's content with new block ids. Not its versions.
+export async function duplicatePost(id: string | number): Promise<{ post: Post }> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/duplicate`, {
+    method: "POST",
+  })
+
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Duplicate post failed" })
+  }
+
+  return response.json()
+}
+
 export async function deletePost(id: string | number): Promise<any> {
   const response = await authenticatedFetch(`/api/v1/posts/${id}`, {
     method: "DELETE",

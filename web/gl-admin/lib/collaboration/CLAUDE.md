@@ -165,8 +165,10 @@ kept so references in code stay valid.
    `onLoadDocument` is the only place a doc is seeded, and only when no stored Yjs state
    matches the post's current `block_revision`. The client never seeds and never writes
    content outside the editor (no REST save exists any more). The only writers of
-   `block_doc` are the collab server's store (`PUT /internal/posts/:id/collab`) and
-   `POST /posts` for a new post's initial body (nothing is live yet). A server-side
+   `block_doc` are the collab server's store (`PUT /internal/posts/:id/collab`), and for a
+   new post's initial body (nothing is live yet) `POST /posts` and `POST
+   /posts/:id/duplicate` (#354: a copy with new block ids and no Yjs state, seeded like
+   any new post; `duplicatePost.collab.test.ts`). A server-side
    restore, import or migration tool would have to go through the collab server
    (`openDirectConnection`, #286), not `UPDATE posts`.
 
