@@ -130,7 +130,9 @@ WHERE post_type = $1;
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
-    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
+    -- Changes not published (#326), for the admin only: the public lists share this
+    -- query and pass false, so they don't pay for the settings comparison.
+    (@with_unpublished_changes::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -206,9 +208,10 @@ FROM posts p
 WHERE p.id = $1;
 
 -- name: CountPostsByTypeFiltered :one
-SELECT COUNT(*) AS total FROM posts
-WHERE post_type = @post_type
-    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')));
+SELECT COUNT(*) AS total FROM posts p
+WHERE p.post_type = @post_type
+    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
 
 
 -- name: ListPostsWithAllMeta :many

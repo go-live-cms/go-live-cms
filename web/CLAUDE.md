@@ -127,8 +127,8 @@ are the most fragile part of the codebase. **Before editing anything under
   live ones (the API's `has_unpublished_changes`; `api/CLAUDE.md`). `PostStatusPill` takes
   `unpublishedChanges` (accent pill, `UNPUBLISHED_CHANGES_LABEL`); the posts list and Pages
   tree show it, editors get a "Changes not published" tab (`status=published` +
-  `unpublished_changes=true`, count from `/posts/counts`' `unpublished_changes`), Home counts
-  them. In the editor `PostForm` reads `blocks_changed`/`changed` from `GET /posts/:id/settings`
+  `unpublished_changes=true`, count from `/posts/counts`' `unpublished_changes`), and editors'
+  Home counts them (linking to that tab, which contributors don't have). In the editor `PostForm` reads `blocks_changed`/`changed` from `GET /posts/:id/settings`
   on open, after settings saves, publish and restore, and on `Editor`'s `onStored` (the collab
   server's `stored` with `block_doc: "written"`, anyone's edits; debounced), so the top bar's
   pill and "Saved · changes go live on Update" follow collaborators live.

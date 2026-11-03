@@ -157,6 +157,8 @@ type Querier interface {
 	// blocks_changed: the post is published and its working body differs from the
 	// published one; has_unpublished_changes: the list's flag, either of the two on
 	// a published post (#326).
+	// (The flag as golive_post_has_unpublished_changes defines it, from the two halves so the
+	// settings are compared once.)
 	GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error)
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)

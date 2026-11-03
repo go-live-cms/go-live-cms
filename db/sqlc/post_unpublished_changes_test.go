@@ -35,10 +35,15 @@ func unpublishedChanges(t *testing.T, f settingsFixture) bool {
 	require.Len(t, list, 1)
 	require.Equal(t, detail, list[0].HasUnpublishedChanges, "ListPosts")
 
-	withMeta, err := testQueries.ListPostsWithMeta(ctx, ListPostsWithMetaParams{UserID: f.post.UserID, LimitCount: 10})
+	withMeta, err := testQueries.ListPostsWithMeta(ctx, ListPostsWithMetaParams{UserID: f.post.UserID, WithUnpublishedChanges: true, LimitCount: 10})
 	require.NoError(t, err)
 	require.Len(t, withMeta, 1)
 	require.Equal(t, detail, withMeta[0].HasUnpublishedChanges, "ListPostsWithMeta")
+	// The public lists share the query and don't ask for the flag.
+	public, err := testQueries.ListPostsWithMeta(ctx, ListPostsWithMetaParams{UserID: f.post.UserID, LimitCount: 10})
+	require.NoError(t, err)
+	require.Len(t, public, 1)
+	require.False(t, public[0].HasUnpublishedChanges, "ListPostsWithMeta without the flag")
 
 	allMeta, err := testQueries.ListPostsWithAllMeta(ctx, ListPostsWithAllMetaParams{UserID: f.post.UserID, LimitCount: 10})
 	require.NoError(t, err)
@@ -46,7 +51,7 @@ func unpublishedChanges(t *testing.T, f settingsFixture) bool {
 	require.Equal(t, detail, allMeta[0].HasUnpublishedChanges, "ListPostsWithAllMeta")
 
 	// The "Changes not published" tab: the filter keeps the post exactly when flagged.
-	filtered, err := testQueries.ListPostsWithMeta(ctx, ListPostsWithMetaParams{UserID: f.post.UserID, UnpublishedChanges: true, LimitCount: 10})
+	filtered, err := testQueries.ListPostsWithMeta(ctx, ListPostsWithMetaParams{UserID: f.post.UserID, UnpublishedChanges: true, WithUnpublishedChanges: true, LimitCount: 10})
 	require.NoError(t, err)
 	require.Equal(t, detail, len(filtered) == 1, "filtered list")
 	plain, err := testQueries.ListPosts(ctx, ListPostsParams{UserID: f.post.UserID, UnpublishedChanges: true, LimitCount: 10})

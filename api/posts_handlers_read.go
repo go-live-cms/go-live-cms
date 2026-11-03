@@ -124,10 +124,12 @@ func (server *Server) getPosts(c *gin.Context) {
 				PostStatus:         status,
 				UserID:             userID,
 				UnpublishedChanges: unpublishedChanges,
-				SortColumn:         sorting.Column,
-				SortDirection:      sorting.Direction,
-				OffsetCount:        int32(offset),
-				LimitCount:         int32(limit),
+				// The admin list: has_unpublished_changes (#326).
+				WithUnpublishedChanges: true,
+				SortColumn:             sorting.Column,
+				SortDirection:          sorting.Direction,
+				OffsetCount:            int32(offset),
+				LimitCount:             int32(limit),
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts with meta"})
@@ -371,6 +373,11 @@ func (server *Server) getPostsByType(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": sortErr.Error()})
 		return
 	}
+	unpublishedChanges, err := parseUnpublishedChangesFilter(c.Query("unpublished_changes"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -401,13 +408,14 @@ func (server *Server) getPostsByType(c *gin.Context) {
 		switch metaLevel {
 		case "full", "all":
 			posts, err := server.store.ListPostsWithAllMeta(c.Request.Context(), db.ListPostsWithAllMetaParams{
-				PostType:      postType,
-				PostStatus:    status,
-				UserID:        int64(0),
-				SortColumn:    sorting.Column,
-				SortDirection: sorting.Direction,
-				OffsetCount:   int32(offset),
-				LimitCount:    int32(limit),
+				PostType:           postType,
+				PostStatus:         status,
+				UserID:             int64(0),
+				UnpublishedChanges: unpublishedChanges,
+				SortColumn:         sorting.Column,
+				SortDirection:      sorting.Direction,
+				OffsetCount:        int32(offset),
+				LimitCount:         int32(limit),
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts by type with all meta"})
@@ -420,8 +428,9 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			}
 
 			totalCount, err := server.store.CountPostsByTypeFiltered(c.Request.Context(), db.CountPostsByTypeFilteredParams{
-				PostType:   postType,
-				PostStatus: status,
+				PostType:           postType,
+				PostStatus:         status,
+				UnpublishedChanges: unpublishedChanges,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
@@ -446,13 +455,15 @@ func (server *Server) getPostsByType(c *gin.Context) {
 
 		default:
 			posts, err := server.store.ListPostsWithMeta(c.Request.Context(), db.ListPostsWithMetaParams{
-				PostType:      postType,
-				PostStatus:    status,
-				UserID:        int64(0),
-				SortColumn:    sorting.Column,
-				SortDirection: sorting.Direction,
-				OffsetCount:   int32(offset),
-				LimitCount:    int32(limit),
+				PostType:               postType,
+				PostStatus:             status,
+				UserID:                 int64(0),
+				UnpublishedChanges:     unpublishedChanges,
+				WithUnpublishedChanges: true,
+				SortColumn:             sorting.Column,
+				SortDirection:          sorting.Direction,
+				OffsetCount:            int32(offset),
+				LimitCount:             int32(limit),
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts by type with meta"})
@@ -465,8 +476,9 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			}
 
 			totalCount, err := server.store.CountPostsByTypeFiltered(c.Request.Context(), db.CountPostsByTypeFilteredParams{
-				PostType:   postType,
-				PostStatus: status,
+				PostType:           postType,
+				PostStatus:         status,
+				UnpublishedChanges: unpublishedChanges,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
@@ -490,13 +502,14 @@ func (server *Server) getPostsByType(c *gin.Context) {
 		}
 	} else {
 		posts, err := server.store.ListPosts(c.Request.Context(), db.ListPostsParams{
-			PostType:      postType,
-			PostStatus:    status,
-			UserID:        int64(0),
-			SortColumn:    sorting.Column,
-			SortDirection: sorting.Direction,
-			OffsetCount:   int32(offset),
-			LimitCount:    int32(limit),
+			PostType:           postType,
+			PostStatus:         status,
+			UserID:             int64(0),
+			UnpublishedChanges: unpublishedChanges,
+			SortColumn:         sorting.Column,
+			SortDirection:      sorting.Direction,
+			OffsetCount:        int32(offset),
+			LimitCount:         int32(limit),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts by type"})
@@ -509,8 +522,9 @@ func (server *Server) getPostsByType(c *gin.Context) {
 		}
 
 		totalCount, err := server.store.CountPostsByTypeFiltered(c.Request.Context(), db.CountPostsByTypeFilteredParams{
-			PostType:   postType,
-			PostStatus: status,
+			PostType:           postType,
+			PostStatus:         status,
+			UnpublishedChanges: unpublishedChanges,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})

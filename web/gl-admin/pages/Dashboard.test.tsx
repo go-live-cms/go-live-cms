@@ -110,6 +110,7 @@ describe("Home", () => {
     expect(api.getPostCounts).toHaveBeenCalledWith({ type: "post", user_id: 7 })
     expect(api.getPosts).toHaveBeenCalledWith(expect.objectContaining({ user_id: 7, status: "draft" }))
     expect(counts()[0]).toBe("Your published posts=31")
-    expect(counts()[1]).toBe("Your changes not published=2")
+    // The Changes not published count is the editors' (their tab).
+    expect(counts().some((c) => c.includes("not published"))).toBe(false)
   })
 })

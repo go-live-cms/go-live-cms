@@ -192,18 +192,20 @@ func (q *Queries) CountPostsByType(ctx context.Context, postType string) (int64,
 }
 
 const countPostsByTypeFiltered = `-- name: CountPostsByTypeFiltered :one
-SELECT COUNT(*) AS total FROM posts
-WHERE post_type = $1
-    AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
+SELECT COUNT(*) AS total FROM posts p
+WHERE p.post_type = $1
+    AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
+    AND (NOT $3::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 `
 
 type CountPostsByTypeFilteredParams struct {
-	PostType   string `json:"post_type"`
-	PostStatus string `json:"post_status"`
+	PostType           string `json:"post_type"`
+	PostStatus         string `json:"post_status"`
+	UnpublishedChanges bool   `json:"unpublished_changes"`
 }
 
 func (q *Queries) CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPostsByTypeFiltered, arg.PostType, arg.PostStatus)
+	row := q.db.QueryRowContext(ctx, countPostsByTypeFiltered, arg.PostType, arg.PostStatus, arg.UnpublishedChanges)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -791,7 +793,9 @@ const listPostsWithMeta = `-- name: ListPostsWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
-    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
+    -- Changes not published (#326), for the admin only: the public lists share this
+    -- query and pass false, so they don't pay for the settings comparison.
+    ($1::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -812,35 +816,36 @@ SELECT
     )::jsonb as authors
 FROM posts p
 WHERE 
-    ($1::text = '' OR p.post_type = $1)
-    AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
-    AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
-    AND (NOT $4::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    ($2::text = '' OR p.post_type = $2)
+    AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
+    AND ($4::bigint = 0 OR p.user_id = $4)  -- Add user filter
+    AND (NOT $5::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $6::text = 'created_at' AND $7::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $6::text = 'created_at' AND $7::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $6::text = 'title' AND $7::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $6::text = 'title' AND $7::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $6::text = 'menu_order' AND $7::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $6::text = 'menu_order' AND $7::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $6::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $7::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $8
-OFFSET $7
+LIMIT $9
+OFFSET $8
 `
 
 type ListPostsWithMetaParams struct {
-	PostType           string `json:"post_type"`
-	PostStatus         string `json:"post_status"`
-	UserID             int64  `json:"user_id"`
-	UnpublishedChanges bool   `json:"unpublished_changes"`
-	SortColumn         string `json:"sort_column"`
-	SortDirection      string `json:"sort_direction"`
-	OffsetCount        int32  `json:"offset_count"`
-	LimitCount         int32  `json:"limit_count"`
+	WithUnpublishedChanges bool   `json:"with_unpublished_changes"`
+	PostType               string `json:"post_type"`
+	PostStatus             string `json:"post_status"`
+	UserID                 int64  `json:"user_id"`
+	UnpublishedChanges     bool   `json:"unpublished_changes"`
+	SortColumn             string `json:"sort_column"`
+	SortDirection          string `json:"sort_direction"`
+	OffsetCount            int32  `json:"offset_count"`
+	LimitCount             int32  `json:"limit_count"`
 }
 
 type ListPostsWithMetaRow struct {
@@ -870,6 +875,7 @@ type ListPostsWithMetaRow struct {
 // keep the 0001-01-01 sentinel and rank by creation time instead.
 func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsWithMeta,
+		arg.WithUnpublishedChanges,
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,

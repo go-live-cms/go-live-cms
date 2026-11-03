@@ -91,6 +91,29 @@ func TestListPostsUnpublishedChanges(t *testing.T) {
 		})
 	}
 
+	// /posts/type/:type takes the same filter, and its count follows it.
+	t.Run("FilterByType", func(t *testing.T) {
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		store.EXPECT().GetPostType(gomock.Any(), "page").Return(db.PostType{Name: "page"}, nil)
+		store.EXPECT().ListPostsWithMeta(gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, arg db.ListPostsWithMetaParams) ([]db.ListPostsWithMetaRow, error) {
+			require.True(t, arg.UnpublishedChanges)
+			require.True(t, arg.WithUnpublishedChanges)
+			return []db.ListPostsWithMetaRow{{ID: 3, PostStatus: "published", HasUnpublishedChanges: true}}, nil
+		})
+		store.EXPECT().
+			CountPostsByTypeFiltered(gomock.Any(), db.CountPostsByTypeFilteredParams{PostType: "page", PostStatus: "published", UnpublishedChanges: true}).
+			Return(int64(1), nil)
+		recorder := serveGet(t, store, "/api/v1/posts/type/page?status=published&unpublished_changes=true&with_meta=true")
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Contains(t, recorder.Body.String(), `"has_unpublished_changes":true`)
+	})
+
+	t.Run("InvalidFilterByType", func(t *testing.T) {
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		store.EXPECT().GetPostType(gomock.Any(), gomock.Any()).Times(0)
+		require.Equal(t, http.StatusBadRequest, serveGet(t, store, "/api/v1/posts/type/page?unpublished_changes=maybe").Code)
+	})
+
 	t.Run("InvalidFilter", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		store.EXPECT().CountFilteredPosts(gomock.Any(), gomock.Any()).Times(0)

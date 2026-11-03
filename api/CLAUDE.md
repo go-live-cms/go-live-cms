@@ -559,8 +559,10 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `ListPosts*`, `SearchPostsWithMeta`, `CountFilteredPosts`, `CountPostsByStatus` (its
   `unpublished_changes` column → `/posts/counts`' `unpublished_changes`),
   `GetPostHasUnpublishedChanges` (GET `/posts/:id` and `/slug/:slug`, published posts only) and
-  `GetPostSettingsState` (`blocks_changed`, `has_unpublished_changes`). Content, not revisions:
-  an edit undone before the next publish is no change. `unpublished_changes=true` filters
-  `GET /posts` and `/posts/search`. The JSON field is omitted when false, and the public
+  `GetPostSettingsState` (`blocks_changed`, `has_unpublished_changes`). `ListPostsWithMeta`
+  computes it only with `with_unpublished_changes` (the public lists share the query and skip
+  it). Content, not revisions: an edit undone before the next publish is no change.
+  `unpublished_changes=true` filters `GET /posts`, `/posts/type/:type` and `/posts/search`.
+  The JSON field is omitted when false, and the public
   presenters clear it (the authors/terms queries select `false` to keep the shared row type).
 </content>

@@ -78,12 +78,18 @@ WHERE v.post_id = $1
 -- blocks_changed: the post is published and its working body differs from the
 -- published one; has_unpublished_changes: the list's flag, either of the two on
 -- a published post (#326).
+-- (The flag as golive_post_has_unpublished_changes defines it, from the two halves so the
+-- settings are compared once.)
 SELECT golive_post_settings(p.id)::jsonb AS working,
        p.published_settings,
-       golive_post_settings_changed(p.id, p.published_settings)::boolean AS changed,
-       (p.post_status = 'published' AND p.block_doc_hash IS DISTINCT FROM p.published_block_hash)::boolean AS blocks_changed,
-       golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes
+       s.changed::boolean AS changed,
+       b.changed::boolean AS blocks_changed,
+       (p.post_status = 'published' AND (b.changed OR s.changed))::boolean AS has_unpublished_changes
 FROM posts p
+CROSS JOIN LATERAL (SELECT golive_post_settings_changed(p.id, p.published_settings) AS changed) s
+CROSS JOIN LATERAL (
+    SELECT p.post_status = 'published' AND p.block_doc_hash IS DISTINCT FROM p.published_block_hash AS changed
+) b
 WHERE p.id = $1;
 
 -- name: RefreshPublishedSettings :exec

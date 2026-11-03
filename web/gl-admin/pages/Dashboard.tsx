@@ -162,11 +162,9 @@ export default function Dashboard() {
               <h2 id="home-counts">At a glance</h2>
               <dl className="gl-home__counts">
                 <Count label={own ? "Your published posts" : "Published posts"} value={data?.counts.published} to={own ? "/content/post?view=mine" : "/content/post?view=published"} />
-                <Count
-                  label={own ? "Your changes not published" : "Changes not published"}
-                  value={data?.counts.changes}
-                  to={own ? "/content/post?view=mine" : "/content/post?view=changes"}
-                />
+                {/* Editors' to-do list (#326): it opens their Changes not published tab, which
+                    contributors don't have (an editor publishes their changes). */}
+                {!own && <Count label="Changes not published" value={data?.counts.changes} to="/content/post?view=changes" />}
                 <Count label={own ? "Your drafts" : "Drafts"} value={data?.counts.drafts} to={own ? "/content/post?view=mine" : "/content/post?view=draft"} />
                 <Count label={own ? "Your pages" : "Pages"} value={data?.counts.pages} to="/content/page" />
                 <Count label="Media files" value={data?.counts.media} to="/media" />
