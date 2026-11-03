@@ -289,3 +289,80 @@ describe("access re-check (recheck.ts)", () => {
     for (const line of logs) expect(line).not.toMatch(/ticket|token|secret|v4\.public/i)
   })
 })
+
+// checkUser (#333): the API asks for a user's connections to be looked up again right
+// after a role change or a removal, instead of waiting for the interval.
+describe("access re-check on demand (checkUser)", () => {
+  it("re-checks every doc the user has open now, and only theirs", async () => {
+    const checks = recheck()
+    const onPost12 = new FakeConnection()
+    const onPost13 = new FakeConnection()
+    const someoneElse = new FakeConnection()
+    checks.add(onPost12, { userId: "2", issuedAt: ISSUED, docName: DOC })
+    checks.add(onPost13, { userId: "2", issuedAt: ISSUED, docName: "post-13" })
+    checks.add(someoneElse, { userId: "3", issuedAt: ISSUED, docName: DOC })
+
+    api.users.set("2", { role: "contributor" }) // demoted
+    expect(checks.checkUser("2")).toBe(2)
+    await clock.advance(1)
+    expect(onPost12.readOnly).toBe(true)
+    expect(onPost13.readOnly).toBe(true)
+    expect(onPost12.messages).toEqual([{ type: "access", mode: "read", reason: "demoted" }])
+    expect(api.accessCalls).toBe(2)
+
+    // Back on the interval afterwards: no extra lookups until it's due.
+    await clock.advance(MINUTE - 10)
+    expect(api.accessCalls).toBe(2)
+    await clock.advance(10)
+    expect(api.accessCalls).toBe(5)
+  })
+
+  it("closes a removed user's connections at once", async () => {
+    const checks = recheck()
+    const conn = new FakeConnection()
+    checks.add(conn, { userId: "2", issuedAt: ISSUED, docName: DOC })
+    api.users.delete("2")
+    checks.checkUser("2")
+    await clock.advance(1)
+    expect(conn.closed).toEqual({ code: 4403, reason: ACCESS_REVOKED })
+    expect(checks.size).toBe(0)
+    expect(clock.pending).toBe(0)
+  })
+
+  it("looks again after a lookup that was already in flight", async () => {
+    let release: () => void = () => {}
+    let calls = 0
+    const checks = recheck({
+      fetchAccess: async (identity, docName) => {
+        calls++
+        // The first lookup reads the API before the demotion commits.
+        const access = await api.fetchAccess(identity, docName)
+        if (calls === 1) await new Promise<void>((resolve) => (release = resolve))
+        return access
+      },
+    })
+    const conn = new FakeConnection()
+    checks.add(conn, { userId: "2", issuedAt: ISSUED, docName: DOC })
+
+    const running = clock.advance(MINUTE) // the periodic check starts and waits
+    await vi.waitFor(() => expect(calls).toBe(1))
+    api.users.set("2", { role: "contributor" })
+    expect(checks.checkUser("2")).toBe(1)
+    release()
+    await running
+    expect(conn.readOnly).toBe(false) // the first lookup saw the old role
+
+    await clock.advance(1)
+    expect(calls).toBe(2)
+    expect(conn.readOnly).toBe(true)
+  })
+
+  it("does nothing for a user with nothing open, or once stopped", () => {
+    const checks = recheck()
+    expect(checks.checkUser("2")).toBe(0)
+    checks.add(new FakeConnection(), { userId: "2", issuedAt: ISSUED, docName: DOC })
+    checks.stop()
+    expect(checks.checkUser("2")).toBe(0)
+    expect(clock.pending).toBe(0)
+  })
+})

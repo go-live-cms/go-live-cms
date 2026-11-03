@@ -9,6 +9,13 @@
 //        400  not a collab doc name
 //        401  missing or wrong "Authorization: Bearer <COLLAB_INTERNAL_SECRET>"
 //        503  the store failed (publish must not go ahead with a stale block_doc)
+//   POST /internal/users/:id/recheck       → look up the access of the user's open
+//                                            connections now (recheck.ts `checkUser`;
+//                                            the API calls it after a role change or a
+//                                            removal, #333). Answers once it is queued.
+//        200 {"docs": n}  how many of their (user, doc) groups are being re-checked
+//        400  not a user id
+//        401  missing or wrong secret
 //
 // Must NOT import yjs.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
@@ -26,6 +33,8 @@ export interface FlushResult {
 export interface InternalServerOptions {
   secret: string
   flush(docName: string): Promise<FlushResult>
+  /** Re-checks the user's open connections now; returns how many docs. */
+  recheckUser(userId: string): number
 }
 
 /** Constant-time "Authorization: Bearer <secret>" check. An empty secret rejects everything. */
@@ -37,13 +46,14 @@ export function bearerMatches(header: string | string[] | undefined, secret: str
 }
 
 const FLUSH_PATH = /^\/internal\/documents\/([^/]+)\/flush$/
+const RECHECK_PATH = /^\/internal\/users\/([^/]+)\/recheck$/
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" })
   res.end(JSON.stringify(body))
 }
 
-export function createInternalHandler({ secret, flush }: InternalServerOptions) {
+export function createInternalHandler({ secret, flush, recheckUser }: InternalServerOptions) {
   return async (req: IncomingMessage, res: ServerResponse) => {
     const requestId = requestIdFrom(req.headers["x-request-id"])
     res.setHeader("X-Request-ID", requestId)
@@ -52,6 +62,20 @@ export function createInternalHandler({ secret, flush }: InternalServerOptions) 
     if (path === "/healthz") {
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, { error: "method not allowed" })
       return send(res, 200, { ok: true })
+    }
+
+    const recheck = RECHECK_PATH.exec(path)
+    if (recheck) {
+      if (req.method !== "POST") return send(res, 405, { error: "method not allowed" })
+      if (!bearerMatches(req.headers.authorization, secret)) {
+        logEvent("warn", "collab_recheck_denied", { request_id: requestId })
+        return send(res, 401, { error: "unauthorized" })
+      }
+      const userId = recheck[1]
+      if (!/^[1-9][0-9]{0,18}$/.test(userId)) return send(res, 400, { error: "invalid user id" })
+      const docs = recheckUser(userId)
+      logEvent("info", "collab_recheck", { request_id: requestId, user_id: userId, docs })
+      return send(res, 200, { docs })
     }
 
     const match = FLUSH_PATH.exec(path)
