@@ -12,6 +12,9 @@ COPY package*.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY collab-server ./collab-server
 COPY gl-admin ./gl-admin
+# The installed themes' block definitions (themes/*/blocks/*/index.ts, #376) are bundled;
+# adding or changing a theme block means rebuilding this image.
+COPY themes ./themes
 RUN node collab-server/build.mjs /out/server.mjs
 
 FROM node:24-alpine

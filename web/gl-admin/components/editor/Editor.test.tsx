@@ -9,6 +9,7 @@ import { EDITOR_FRAGMENT } from "@gl-admin/lib/collaboration/schemaGuard"
 import { RECHECK_MS, startRelay, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 import { acquireHocuspocus, releaseHocuspocus } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { tiptapExtensionRegistry } from "./utils/extensionRegistry"
+import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 
 // The editor (#206 P3, #283), mounted for real against the in-process collab
 // server: the theme gate, the schema gate (rule 10: theme extensions must be registered
@@ -16,14 +17,9 @@ import { tiptapExtensionRegistry } from "./utils/extensionRegistry"
 // remount, publish without a client save, restore through the editor, and access changes
 // while open (#313).
 
-// jsdom has no layout: Range lacks getClientRects/getBoundingClientRect, which
-// ProseMirror's scrollIntoView calls when the editor focuses itself after mounting.
-// (On a timing-dependent tick that otherwise surfaces as an uncaught TypeError.)
-const emptyRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) })
-Range.prototype.getClientRects ??= function () {
-  return Object.assign([], { item: () => null }) as unknown as DOMRectList
-}
-Range.prototype.getBoundingClientRect ??= emptyRect as unknown as () => DOMRect
+// The editor focuses itself after mounting; on a timing-dependent tick a missing layout
+// API surfaces as an uncaught TypeError.
+stubJsdomRangeLayout()
 
 const state = vi.hoisted(() => ({ relay: null as any, user: "1", themeLoaded: true }))
 

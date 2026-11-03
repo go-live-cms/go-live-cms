@@ -10,6 +10,7 @@ import {
   type BlockID,
   type CaptionText,
 } from "../blocks-spec"
+import { attrProblem, isThemeBlockType, themeBlockSpecOf, type ThemeBlockSpec } from "../blocks-spec/themeBlocks"
 import type { Editor } from "@tiptap/core"
 
 // Simple block id generator
@@ -100,6 +101,9 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
     // No ID, invalid ID, or duplicate ID - generate new one
     id = generateId()
   }
+
+  const themeSpec = themeBlockSpecOf(node.type)
+  if (themeSpec) return themeNodeToBlock(node, id, themeSpec)
 
   switch (node.type.name) {
     case "paragraph":
@@ -221,6 +225,61 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         },
       }
   }
+}
+
+/**
+ * An installed theme block (#376). Its declared attrs are canonical in the block's
+ * `attrs`, like a quote's `cite`, and never in its `pm`, which keeps only the content: the
+ * API validates `attrs` against the manifest, and nothing can disagree with them.
+ */
+function themeNodeToBlock(node: PMNode, id: BlockID, spec: ThemeBlockSpec): Block {
+  const json = node.toJSON() as { type: string; content?: unknown[] }
+  return {
+    id,
+    type: spec.type,
+    version: spec.version,
+    attrs: {
+      ...declaredAttrs(spec, node.attrs),
+      pm: json.content ? { type: json.type, content: json.content } : { type: json.type },
+      text: node.textContent || undefined,
+    },
+  }
+}
+
+/**
+ * A stored theme block as node JSON for `schema`. An installed one is built from its
+ * declared attrs (a stored pm's attrs are ignored) and its pm content, or its text. A
+ * version newer than this build reads, or a theme block whose theme isn't installed,
+ * throws, so the block is dropped: hidden from the editor and kept as stored (#213).
+ */
+function themeBlockToPM(block: Block, schema: Schema, baseAttrs: Record<string, unknown>): any {
+  const spec = themeBlockSpecOf(schema.nodes[block.type])
+  if (!spec) throw new Error(`theme block type ${block.type} is not installed in this build`)
+  if (typeof block.version !== "number" || block.version > spec.version) {
+    throw new Error(`${block.type} version ${block.version} is newer than this build reads (${spec.version})`)
+  }
+  const attrs = block.attrs as Record<string, unknown>
+  const pm = attrs.pm as { content?: unknown[] } | undefined
+  const content = Array.isArray(pm?.content)
+    ? pm.content
+    : typeof attrs.text === "string" && attrs.text !== ""
+      ? [{ type: "text", text: attrs.text }]
+      : undefined
+  return { type: block.type, attrs: { ...declaredAttrs(spec, attrs), ...baseAttrs }, ...(content ? { content } : {}) }
+}
+
+/**
+ * The declared attrs of `source` (a node's or a stored block's attrs) that are set and
+ * valid. Anything else is left out, so the default applies: a value the spec doesn't
+ * allow (a peer's bad update, a theme that narrowed an attr without a new version) costs
+ * that attr, never the store of the whole post.
+ */
+function declaredAttrs(spec: ThemeBlockSpec, source: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(spec.attrs)
+      .filter(([name, attr]) => source[name] !== null && source[name] !== undefined && attrProblem(attr, source[name]) === null)
+      .map(([name]) => [name, source[name]]),
+  )
 }
 
 /**
@@ -534,7 +593,9 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       }
 
     default:
-      // Custom/theme block - reconstruct from stored PM JSON
+      if (isThemeBlockType(block.type)) return themeBlockToPM(block, ctx.schema, baseAttrs)
+      // Any other custom block (a type from before #376's namespaced theme blocks):
+      // reconstruct from stored PM JSON (a stand-in keeps it, schemaWithStandIns).
       const customAttrs = block.attrs as Record<string, any>
       if (customAttrs.pm) {
         return {

@@ -8,7 +8,7 @@ import * as Y from "yjs"
 import { Server, type Document, type Hocuspocus } from "@hocuspocus/server"
 import type { Schema } from "prosemirror-model"
 import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
-import { getCoreSchema } from "../gl-admin/lib/collaboration/schema"
+import { getInstalledCollabSchema } from "../gl-admin/lib/theme-blocks/collabSchema"
 import { isCollabDocName, postIdOf, TicketReplayGuard, type TicketClaims } from "./access"
 import type { CollabStoreBody, InternalApi } from "./api"
 import { AuthRejection, createAuthenticate, DENY, type CollabContext } from "./auth"
@@ -25,6 +25,7 @@ export interface CollabServerOptions {
   /** onStoreDocument debounce (ms). */
   debounce?: number
   maxDebounce?: number
+  /** Default: the core schema plus every installed theme block (#376). */
   schema?: Schema
   newEpoch?: () => string
   /** First retry delay after a failed store (doubles up to 60s). */
@@ -81,7 +82,7 @@ export function createCollabServer(options: CollabServerOptions) {
     address = "0.0.0.0",
     debounce = 2000,
     maxDebounce = 10_000,
-    schema = getCoreSchema(),
+    schema = getInstalledCollabSchema(),
     newEpoch,
     storeRetryMs = 2000,
   } = options

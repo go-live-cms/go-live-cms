@@ -62,12 +62,11 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
 const collabSchemas = new Map<string, Schema>()
 
 /**
- * The editor's schema built headlessly: the core extensions plus `themeExtensions`, a
- * theme's **headless** node definitions (no NodeView, so no React import; see
- * `themes/example/blocks/Alert/AlertSchema.ts`). A theme block with a real definition
- * here is checked like any core block; one without gets a stand-in
- * (schemaWithStandIns). Cached per extension list: building a schema is not free and the
- * result is immutable.
+ * The editor's schema built headlessly: the core extensions plus `themeExtensions`,
+ * theme blocks' **headless** nodes (no NodeView, so no React import; see
+ * `themes/example/blocks/Alert/index.ts`). The collab server uses every installed one
+ * (`getInstalledCollabSchema`, #376). Cached per extension list: building a schema is not
+ * free and the result is immutable.
  */
 export function getCollabSchema(themeExtensions: AnyExtension[] = []): Schema {
   const key = themeExtensions.map((extension) => extension.name).join(",")
@@ -102,10 +101,10 @@ const standInSchemas = new WeakMap<Schema, Map<string, Schema>>()
 /**
  * `base` plus a permissive stand-in for every node and mark type in `roots` (ProseMirror
  * JSON, e.g. a block doc's `attrs.pm` values or `yXmlFragmentToProsemirrorJSON` output)
- * that `base` doesn't know: in practice, theme blocks and marks (#206).
+ * that `base` doesn't know: in practice, custom types from before #376's namespaced theme
+ * blocks, or nodes from a newer build (#206).
  *
- * Why: the collab server can only load a theme's headless definitions (getCollabSchema),
- * and a theme may not ship them, but it must never lose theme content. Without a type,
+ * Why: the collab server must never lose content it can't check. Without a type,
  * `blockDocToPMWithReport` drops the block (nodeFromJSON throws on an unknown type) and
  * `fragmentToBlockDoc` can't build it. A stand-in keeps the node or mark and its
  * attributes exactly as stored; the editor still renders it with the real extension.

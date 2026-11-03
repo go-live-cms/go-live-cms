@@ -1,4 +1,6 @@
 import type { BlockDocV1, Block } from "../blocks-spec"
+import { installedThemeBlocks } from "../theme-blocks/installed"
+import { themeBlockAttrsFromElement } from "../theme-blocks/define"
 
 export function htmlToBlockDoc(html: string): BlockDocV1 {
   if (typeof window === "undefined") {
@@ -174,7 +176,18 @@ export function htmlToBlockDoc(html: string): BlockDocV1 {
       default:
         // Check for custom block elements (e.g., <div data-block-type="alert">)
         const blockType = element.getAttribute("data-block-type")
-        if (blockType) {
+        const themeBlock = blockType ? installedThemeBlocks.find((block) => block.type === blockType) : undefined
+        if (themeBlock) {
+          // An installed theme block (#376): its declared attrs, parsed by its spec (a
+          // number stays a number), or the API would refuse the new post.
+          blocks[id] = {
+            id,
+            type: themeBlock.type,
+            version: themeBlock.version,
+            attrs: { ...themeBlockAttrsFromElement(themeBlock, element), text: element.textContent || undefined },
+          }
+          blocksOrder.push(id)
+        } else if (blockType) {
           // Collect all data-* attributes as block attrs
           const customAttrs: Record<string, unknown> = {
             text: element.textContent || undefined,

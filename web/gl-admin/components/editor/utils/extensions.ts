@@ -11,6 +11,7 @@ import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
+import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 
 const headingLabel = (lvl?: number) => {
@@ -132,12 +133,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       }
     }
 
-    // Add dynamically registered theme extensions
-    const themeExtensions = tiptapExtensionRegistry.getAll()
-    if (themeExtensions.length > 0) {
-      console.log(`[Editor] Adding ${themeExtensions.length} theme extensions to editor`)
-      baseExtensions.push(...themeExtensions)
-    }
+    // Every installed theme block (#376), whichever theme is active: the collab server's
+    // schema has them all (getInstalledCollabSchema), so the editor must too, or a block
+    // of an inactive theme would trip the schema gate (rule 10). Then any extras.
+    baseExtensions.push(...installedThemeBlockEditors.map((block) => block.extension), ...tiptapExtensionRegistry.getAll())
 
     return baseExtensions
   }

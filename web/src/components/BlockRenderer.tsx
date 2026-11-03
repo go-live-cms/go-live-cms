@@ -1,11 +1,14 @@
 import React from "react"
 import type { BlockDocV1, Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
+import { isThemeBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
 // Browser-safe: the admin's revision preview renders this component too.
 import { log } from "../lib/log"
+
+const unknownTypesLogged = new Set<string>()
 
 interface BlockRendererProps {
   doc: BlockDocV1
@@ -38,9 +41,21 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
     const Component = blockRegistry.getComponent(block.type)
 
     if (!Component) {
-      log.warn("unknown_block_type", { type: block.type })
+      // A block nothing in this build renders: a theme block whose theme was removed
+      // (#376), or a type from an older build. It stays in the stored doc (the editor
+      // keeps it hidden, not deleted); here it renders nothing. Logged once per type, not
+      // on every request.
+      if (!unknownTypesLogged.has(block.type)) {
+        unknownTypesLogged.add(block.type)
+        log.warn("unknown_block_type", { type: block.type })
+      }
       return null
     }
+
+    // A theme block written by a newer build of its theme than this one (e.g. after a
+    // rollback, #376): its attrs may mean something this renderer doesn't know, so it
+    // renders nothing, like a block of a removed theme. It stays in the stored doc.
+    if (isThemeBlockType(block.type) && block.version > (blockRegistry.get(block.type)?.version ?? 1)) return null
 
     // WordPress-style shared props - every component gets the same interface
     return (

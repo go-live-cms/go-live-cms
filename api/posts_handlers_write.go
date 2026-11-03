@@ -112,7 +112,7 @@ func (server *Server) createPost(c *gin.Context) {
 
 	blockDoc := []byte(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
 	if req.BlockDoc != nil {
-		if err := req.BlockDoc.prepareForStore(); err != nil {
+		if err := req.BlockDoc.prepareForStore(server.themeBlocks); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

@@ -156,7 +156,7 @@ func (server *Server) putInternalPostCollab(c *gin.Context) {
 		arg.BaseRevision = sql.NullInt64{Int64: *req.BaseRevision, Valid: true}
 	}
 	if req.BlockDoc != nil {
-		if err := req.BlockDoc.prepareForStore(); err != nil {
+		if err := req.BlockDoc.prepareForStore(server.themeBlocks); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

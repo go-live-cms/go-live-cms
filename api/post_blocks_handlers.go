@@ -60,8 +60,9 @@ func (doc *BlockDocV1) deduplicateBlocksOrder() {
 // prepareForStore checks and normalizes a block document before it is
 // written to block_doc: by the collab server's PUT /internal/posts/:id/collab,
 // or as a new post's initial body (POST /posts). It modifies doc in place; an error means
-// the document must be refused (400).
-func (doc *BlockDocV1) prepareForStore() error {
+// the document must be refused (400). themeBlocks is the installed theme blocks'
+// manifest (theme_blocks.go, #376).
+func (doc *BlockDocV1) prepareForStore(themeBlocks ThemeBlockManifest) error {
 	// Size/depth limits before any walk over the tree (#139).
 	if err := doc.checkLimits(); err != nil {
 		return err
@@ -75,6 +76,11 @@ func (doc *BlockDocV1) prepareForStore() error {
 	// node types, and unsafe highlight colors. Best-effort, never rejects the save.
 	// publishPost reads this already-sanitized working copy, so it's covered too.
 	doc.sanitize()
+
+	// Installed theme blocks (#376): undeclared attrs stripped, invalid values refused.
+	if err := doc.applyThemeBlocks(themeBlocks); err != nil {
+		return err
+	}
 
 	// Validate Block Spec v1
 	if doc.DocVersion != 1 {

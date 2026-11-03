@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isThemeBlockType, themeBlockIssues, type ThemeBlockLookup } from "./themeBlocks"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string
@@ -167,7 +168,9 @@ export type CustomBlock = BaseBlock<
     pm?: any
     text?: string
     [key: string]: unknown
-  }
+  },
+  // A theme block's version is its theme's (#376).
+  number
 >
 
 export type Block =
@@ -288,9 +291,14 @@ export const zListItem = zBase.extend({
   }),
 })
 
-/** Catch-all for theme/custom block types not in the known set */
+/**
+ * Catch-all for theme/custom block types not in the known set. Any version: a theme
+ * block keeps the version its theme wrote even when that theme isn't installed here.
+ * An installed theme block is also checked against its spec (validateBlockDoc).
+ */
 export const zCustomBlock = zBase.extend({
   type: z.string(),
+  version: z.number().int().positive(),
   attrs: z.record(z.unknown()),
   children: z.array(zBlockID).optional(),
 })
@@ -338,10 +346,29 @@ export const zBlockDocV1 = z
     }
   })
 
+export interface ValidateOptions {
+  /**
+   * The installed theme blocks (#376), e.g. `themeBlockLookup(schema)`. A block of one of
+   * them must also match its spec: a version this build reads, valid declared attrs.
+   */
+  themeBlocks?: ThemeBlockLookup
+}
+
 // Utility functions. Both throw a ZodError on invalid input and otherwise return the
 // input itself, never a stripped copy.
-export function validateBlockDoc(doc: unknown): BlockDocV1 {
+export function validateBlockDoc(doc: unknown, { themeBlocks }: ValidateOptions = {}): BlockDocV1 {
   zBlockDocV1.parse(doc)
+  if (themeBlocks) {
+    const issues: z.ZodIssue[] = []
+    for (const [key, block] of Object.entries((doc as BlockDocV1).blocks)) {
+      const spec = isThemeBlockType(block.type) ? themeBlocks(block.type) : undefined
+      if (!spec) continue
+      for (const issue of themeBlockIssues(spec, block)) {
+        issues.push({ code: z.ZodIssueCode.custom, path: ["blocks", key, ...issue.path], message: issue.message })
+      }
+    }
+    if (issues.length > 0) throw new z.ZodError(issues)
+  }
   return doc as BlockDocV1
 }
 

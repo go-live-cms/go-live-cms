@@ -26,6 +26,21 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 | `internal.ts` | Internal HTTP listener: `/healthz`, flush. |
 | `logsafe.ts` | `logEvent`, `requestIdFrom`, `docNameForLog`, `clientContextForLog`. |
 | `probe.ts`, `build.mjs`, `singleYjsInstance.mjs`, `main.ts` | Single-instance probe, esbuild bundle and its yjs plugin, entry point. |
+| `importMetaGlob.mjs` | esbuild plugin: Vite's eager `import.meta.glob` (the installed theme blocks, #376). |
+
+## Theme blocks (#376)
+
+The server converts with `getInstalledCollabSchema()` (the default `schema` of
+`createCollabServer`): the core schema plus every installed theme block's headless node,
+from `themes/*/blocks/*/index.ts`. `build.mjs` resolves that glob with `importMetaGlob`
+when the bundle is built, so **adding or changing a theme block means rebuilding this
+image** (the Dockerfile copies `themes/`). The build **fails** if a theme's `editor.ts` or
+`render.tsx`, or React, gets into the bundle: only headless definitions belong here. The
+store validates installed theme blocks against their spec (`themeBlockLookup(schema)`),
+the same rules as the API, and `collab_listening` logs `theme_blocks` (checked by
+`process.test.ts`, which also stores an alert through the real bundle). Blocks of a theme
+that isn't in the bundle are dropped at seed and kept in `meta.dropped`. Details:
+`gl-admin/lib/collaboration/CLAUDE.md`, "Theme blocks".
 
 Tests: `npx vitest run --project collab-server` (from `web/`; plain Node env).
 `testkit.ts` has signed tickets, `FakeCollabApi` (the #280 contract in memory, and over

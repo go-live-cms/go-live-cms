@@ -1,5 +1,6 @@
 import type { BlockConfig, BlockComponent } from "./types"
-// Browser-safe: the admin loads this module too (ThemeContext).
+import { blockPathParts, installedThemeBlocks, type InstalledThemeBlock } from "@gl-admin/lib/theme-blocks/installed"
+// Browser-safe: the admin loads this module too (the revision preview renders blocks).
 import { log } from "../../lib/log"
 
 /**
@@ -50,23 +51,6 @@ class BlockRegistry {
   }
 
   /**
-   * Register a block dynamically at runtime from a module
-   */
-  async registerFromModule(modulePath: string): Promise<void> {
-    try {
-      const module = await import(/* @vite-ignore */ modulePath)
-      // Look for: default export, or named export matching <type>Config pattern
-      const config = module.default || Object.values(module).find((exp: any) => exp?.type && exp?.component)
-      if (config) {
-        this.register(config)
-        log.debug("block_registered", { type: config.type })
-      }
-    } catch (error) {
-      log.error("block_module_load_failed", { module: modulePath, error })
-    }
-  }
-
-  /**
    * Get all registered block types
    */
   getAll(): BlockConfig[] {
@@ -96,44 +80,40 @@ Object.values(systemBlockModules).forEach((module) => {
 // One line at module load, and only in dev (#378).
 log.debug("system_blocks_registered", { count: blockRegistry.getAll().length, types: blockRegistry.getTypes() })
 
-// Export function to load theme blocks dynamically
-export async function registerThemeBlocks(themeSlug: string, blocks?: Array<{ type: string; modulePath: string }>) {
-  if (!blocks || blocks.length === 0) {
-    return
-  }
+// Theme blocks (#376): every installed theme block's public renderer
+// (themes/<slug>/blocks/<Name>/render.tsx), resolved when the image is built, like the
+// system blocks above. Registered whichever theme is active, so a post keeps its theme
+// blocks when the site switches themes; a block of a theme that isn't in this build
+// renders nothing (BlockRenderer).
+const themeRenderers = import.meta.glob<{ default?: BlockComponent }>("../../../themes/*/blocks/*/render.tsx", {
+  eager: true,
+})
 
-  // Dynamic import of editor block registry (only in client-side context)
-  let editorBlockRegistry: any
-  try {
-    const editorModule = await import("../../../gl-admin/components/editor/blocks/index")
-    editorBlockRegistry = editorModule.editorBlockRegistry
-  } catch (e) {
-    // SSR context: there is no editor registry.
-  }
-
-  for (const block of blocks) {
-    // Register SSR block
-    await blockRegistry.registerFromModule(block.modulePath)
-
-    // Register editor block (if in client context)
-    if (editorBlockRegistry) {
-      try {
-        const module = await import(/* @vite-ignore */ block.modulePath)
-        // Look for: named export matching <type>EditorConfig, or generic 'editorConfig'
-        const editorConfig =
-          module[`${block.type}EditorConfig`] ||
-          module.editorConfig ||
-          Object.values(module).find((exp: any) => exp?.title && exp?.command)
-        if (editorConfig) {
-          editorBlockRegistry.register(editorConfig)
-        }
-      } catch (error) {
-        log.error("editor_block_config_load_failed", { module: block.modulePath, error })
-      }
+/**
+ * The BlockConfigs for `renderers` (a glob of the blocks' render.tsx): each must sit next
+ * to an installed definition (index.ts) and default-export a component. Throws otherwise;
+ * themeBlocks.loadable.test.ts runs it over the repository's themes.
+ */
+export function themeBlockConfigs(
+  renderers: Record<string, { default?: BlockComponent }>,
+  definitions: InstalledThemeBlock[] = installedThemeBlocks,
+): BlockConfig[] {
+  return Object.entries(renderers).map(([path, module]) => {
+    const parts = blockPathParts(path)
+    const definition = parts && definitions.find((d) => d.dir === `${parts.slug}/${parts.dir}`)
+    if (!definition) throw new Error(`theme block ${path}: no index.ts definition in the same directory`)
+    if (typeof module.default !== "function") throw new Error(`theme block ${path}: render.tsx must default-export a component`)
+    return {
+      type: definition.type,
+      version: definition.version,
+      name: definition.title,
+      category: "design",
+      icon: "",
+      component: module.default,
     }
-  }
-
-  log.debug("theme_blocks_registered", { theme: themeSlug, count: blockRegistry.getAll().length, types: blockRegistry.getTypes() })
+  })
 }
+
+themeBlockConfigs(themeRenderers).forEach((config) => blockRegistry.register(config))
 
 export default blockRegistry

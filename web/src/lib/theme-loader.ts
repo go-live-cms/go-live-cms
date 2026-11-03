@@ -119,25 +119,6 @@ export async function getPostLayoutVariant(post: any, postType: string): Promise
 }
 
 /**
- * Load layout component dynamically
- */
-export async function loadLayoutComponent(postType: string, variant: string = "default"): Promise<any> {
-  try {
-    const layoutPath = await resolveLayoutPath(postType, variant)
-
-    // Remove leading slash for dynamic import
-    const importPath = layoutPath.startsWith("/") ? "../." + layoutPath : layoutPath
-
-    const component = await import(/* @vite-ignore */ importPath)
-    return component.default
-  } catch (error) {
-    log.error("layout_component_load_failed", { post_type: postType, variant, error })
-    // TODO: Phase 2 - Implement system fallback theme
-    throw new Error(`Critical: Failed to load layout ${postType}/${variant}`)
-  }
-}
-
-/**
  * Get theme customizations
  * Phase 1: Returns empty object (no customizations yet)
  * Phase 2: Queries database for theme customizations

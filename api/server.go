@@ -62,6 +62,10 @@ type Server struct {
 	// pingDB backs /readyz: store.Ping, a field so tests can stub it.
 	pingDB func(ctx context.Context) error
 
+	// themeBlocks is web/themes/blocks.manifest.json (theme_blocks.go, #376): the
+	// installed theme blocks prepareForStore validates. Empty in test mode.
+	themeBlocks ThemeBlockManifest
+
 	// maxUploadBytes is config.MaxUploadSize parsed once (media uploads).
 	maxUploadBytes int64
 	// mediaReplaceMu serializes POST /media/:id/replace, so two replaces of
@@ -182,6 +186,17 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 
 	// Sync themes from filesystem on startup (skip in test mode)
 	if !config.IsTestMode {
+		manifest, found, err := LoadThemeBlockManifest(themeBlockManifestPath)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			server.logger.Info("loaded theme block manifest", "path", themeBlockManifestPath, "theme_blocks", len(manifest.Blocks))
+		} else {
+			server.logger.Warn("no theme block manifest; theme block attrs are not validated", "path", themeBlockManifestPath)
+		}
+		server.themeBlocks = manifest
+
 		themesPath := filepath.Join("web", "themes")
 		discoveredThemes, err := ScanThemesDirectory(themesPath)
 		if err != nil {

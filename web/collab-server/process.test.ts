@@ -16,6 +16,9 @@ import type { Server } from "node:http"
 import { DENY } from "./auth"
 import { appendParagraph, connect, FakeCollabApi, paragraphDoc, paragraphs, serveFakeApi, ticketKeys, waitFor, type Client } from "./testkit"
 import { canonical } from "../gl-admin/lib/collaboration/fragmentBridge.fixtures"
+import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
+import { installedThemeBlocks } from "../gl-admin/lib/theme-blocks/installed"
+import * as Y from "yjs"
 
 const run = promisify(execFile)
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -138,10 +141,25 @@ describe("the bundled server process", () => {
     }
   })
 
+  it("was built with every installed theme block (#376)", () => {
+    const listening = JSON.parse(stdout.split("\n").find((l) => l.includes('"collab_listening"'))!)
+    expect(listening.theme_blocks).toEqual(installedThemeBlocks.map((block) => block.type))
+    expect(listening.theme_blocks).toContain("theme:example/alert")
+  })
+
   it("flush requires the secret, and stores the live doc through the API", async () => {
     const editor = open("2")
     await editor.outcome
     appendParagraph(editor.doc, "flush me", "blk-flush-me-001")
+    // A theme block, which the bundle converts with its real definition (#376).
+    const fragment = editor.doc.getXmlFragment(EDITOR_FRAGMENT)
+    editor.doc.transact(() => {
+      const alert = new Y.XmlElement("theme:example/alert")
+      fragment.insert(fragment.length, [alert])
+      alert.setAttribute("data-block-id", "blk-flush-alert-1")
+      alert.setAttribute("variant", "error")
+      alert.insert(0, [new Y.XmlText("Careful")])
+    })
     await new Promise((resolve) => setTimeout(resolve, 300))
 
     const flush = (auth?: string) =>
@@ -151,6 +169,11 @@ describe("the bundled server process", () => {
     const res = await flush(`Bearer ${FLUSH_SECRET}`)
     expect(res.status).toBe(200)
     expect(api.posts.get("12")!.block_doc!.blocks_order).toContain("blk-flush-me-001")
+    expect(api.posts.get("12")!.block_doc!.blocks["blk-flush-alert-1"]).toMatchObject({
+      type: "theme:example/alert",
+      version: 1,
+      attrs: { variant: "error", text: "Careful" },
+    })
     expect((await fetch(`${internalUrl}/healthz`)).status).toBe(200)
   })
 

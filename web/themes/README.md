@@ -21,13 +21,12 @@ A comprehensive guide to building themes for Go Live CMS. Themes control the ent
   - [Custom Endpoints](#custom-endpoints)
 - [Theme Context API](#theme-context-api)
 - [Custom Blocks](#custom-blocks)
-  - [Block Architecture](#block-architecture)
-  - [Creating a Custom Block](#creating-a-custom-block)
-  - [1. SSR Component (BlockName.tsx)](#1-ssr-component-blocknametsx)
-  - [2. Tiptap Extension (BlockExtension.ts)](#2-tiptap-extension-blockextensiontsx)
-  - [3. Editor Node View (BlockNodeView.tsx)](#3-editor-node-view-blocknodeviewtsx)
-  - [4. Block Index (index.ts)](#4-block-index-indexts)
-  - [5. Register in theme.config.ts](#5-register-in-themeconfigts)
+  - [How blocks are loaded (build time only)](#how-blocks-are-loaded-build-time-only)
+  - [Block types are namespaced](#block-types-are-namespaced)
+  - [1. Definition (index.ts)](#1-definition-indexts)
+  - [2. Editor (editor.ts)](#2-editor-editorts)
+  - [3. Public renderer (render.tsx)](#3-public-renderer-rendertsx)
+  - [When a theme is removed](#when-a-theme-is-removed)
   - [Built-in Block Types](#built-in-block-types)
 - [Design Tokens & Dark Mode](#design-tokens--dark-mode)
 - [How Theme Loading Works](#how-theme-loading-works)
@@ -48,7 +47,7 @@ Go Live CMS themes follow a WordPress-inspired architecture adapted for modern T
 | `wp_enqueue_script()`              | `assets.scripts[]` in config          |
 | Template hierarchy                 | `layouts/{post_type}/{variant}.astro` |
 | `header.php` / `footer.php`        | `base.astro` (optional shared layout) |
-| `register_block_type()`            | `blocks[]` in config + block module   |
+| `register_block_type()`            | a `blocks/<Name>/` directory          |
 | `add_action('init')`               | `setup()` hook                        |
 | `add_action('template_redirect')`  | `beforeRender()` hook                 |
 | `apply_filters('the_content')`     | `filterContent()` hook                |
@@ -61,7 +60,7 @@ Go Live CMS themes follow a WordPress-inspired architecture adapted for modern T
 2. **Astro middleware** loads the active theme's `theme.config.ts` and `functions.ts` on every request
 3. **Route handler** resolves the correct layout file (`themes/{slug}/layouts/{postType}/{variant}.astro`)
 4. **Layout** renders using `<BlockRenderer>` to turn the post's `published_blocks` (BlockDocV1) into HTML
-5. **Admin editor** (React + TipTap) loads custom block extensions from the theme for editing
+5. **Admin editor** (React + TipTap) has every installed theme block built in (see [Custom Blocks](#custom-blocks))
 
 ---
 
@@ -160,7 +159,7 @@ Set your theme as active via the admin panel or the API (`PUT /themes/:id/activa
 
 ```
 themes/my-theme/
-  theme.config.ts              # Required — metadata, assets, blocks
+  theme.config.ts              # Required — metadata, assets, layouts
   layouts/
     post/default.astro         # Required — default post layout
     page/default.astro         # Required — default page layout
@@ -185,12 +184,12 @@ themes/my-theme/
       default.astro            # Default page layout
       fullwidth.astro          # Full-width page variant
 
-  blocks/                      # Custom blocks (optional)
+  blocks/                      # Custom blocks (optional; see "Custom Blocks")
     Alert/
-      AlertBlock.tsx           # SSR render component
-      AlertExtension.ts        # TipTap editor extension
-      AlertNodeView.tsx        # Editor in-place preview
-      index.ts                 # Registration exports
+      index.ts                 # Headless definition: Block Spec + TipTap node (no React)
+      editor.ts                # Admin only: node view + slash-menu entry
+      render.tsx               # Public renderer (SSR)
+      AlertNodeView.tsx        # Anything else the block needs
 
   styles/
     theme.css                  # Compiled CSS (any build tool)
@@ -207,7 +206,7 @@ The Go backend validates that every theme has `theme.config.ts` and the required
 
 ## Theme Configuration (`theme.config.ts`)
 
-This is the only required file beyond layouts. It defines your theme's metadata, assets, layout variants, and custom blocks.
+This is the only required file beyond layouts. It defines your theme's metadata, assets and layout variants. Custom blocks are not listed here: each `blocks/<Name>/` directory is one (see [Custom Blocks](#custom-blocks)).
 
 ### Simple Configuration
 
@@ -231,12 +230,6 @@ export interface ThemeConfig {
     styles: Array<{ src: string; media?: string }>
     scripts?: Array<{ src: string; defer?: boolean; async?: boolean; type?: string }>
   }
-
-  // Custom blocks registered by this theme
-  blocks?: Array<{
-    type: string // Block type identifier (e.g. "alert")
-    modulePath: string // Absolute path from web root (e.g. "/themes/my-theme/blocks/Alert/index.ts")
-  }>
 }
 ```
 
@@ -259,11 +252,6 @@ export const themeConfig: ThemeConfig = {
     styles: [{ src: "/themes/my-theme/styles/theme.css", media: "all" }],
     scripts: [{ src: "/themes/my-theme/scripts/theme.js", defer: true }],
   },
-
-  blocks: [
-    { type: "alert", modulePath: "/themes/my-theme/blocks/Alert/index.ts" },
-    { type: "callout", modulePath: "/themes/my-theme/blocks/Callout/index.ts" },
-  ],
 }
 
 export default themeConfig
@@ -533,7 +521,7 @@ import BlockRenderer from '@/components/BlockRenderer'
 
 - Always use `client:load` — BlockRenderer is a React component that needs hydration
 - `BlockRenderer` looks up each block's render component from the block registry
-- Custom theme blocks are automatically registered when the theme loads
+- Every installed theme block's `render.tsx` is registered when the image is built (a block of a removed theme renders nothing)
 - The output is wrapped in `<div class="block-content">...</div>`
 
 **Never** try to render `post.content` — that field does not exist. Always use `post.published_blocks` with `BlockRenderer`.
@@ -813,76 +801,107 @@ The currently authenticated user, or `null` if not logged in.
 
 ## Custom Blocks
 
-Themes can define custom block types that appear in the admin editor's slash command menu and render on the frontend.
+Themes can define custom block types that appear in the admin editor's slash command menu, are edited live by several people at once, are stored and published like core blocks, and render on the public site. The example theme's `Alert` block (`themes/example/blocks/Alert/`) is the reference.
 
-### Block Architecture
+### How blocks are loaded (build time only)
 
-Each custom block has three parts that work together:
+A block is a directory, not a `theme.config.ts` entry:
 
-| File                | Purpose                  | Where it runs                                           |
-| ------------------- | ------------------------ | ------------------------------------------------------- |
-| `BlockName.tsx`     | SSR render component     | Frontend (Astro/React) — renders the block for visitors |
-| `BlockExtension.ts` | TipTap Node definition   | Admin editor — defines the block in ProseMirror schema  |
-| `BlockNodeView.tsx` | Editor preview component | Admin editor — how the block looks while editing        |
-| `index.ts`          | Registration exports     | Both — ties everything together                         |
+```
+themes/<slug>/blocks/<Name>/
+  index.ts      # Headless definition: Block Spec + TipTap node. No React, no DOM.
+  editor.ts     # Admin only: the node with its React node view, and the slash-menu entry.
+  render.tsx    # The public renderer (server-side React).
+```
 
-**Registration flow:**
+Every image resolves these files **when it is built**, never by URL at runtime (the production web server can't serve TypeScript):
 
-1. `theme.config.ts` lists blocks in the `blocks[]` array
-2. On the **frontend**, the SSR block registry dynamically imports the block module and registers the `component` from the `BlockConfig` export
-3. In the **admin editor**, the `ThemeContext` dynamically imports the block module and registers:
-   - The TipTap extension (so the editor schema knows about the block)
-   - The editor config (so the block appears in the slash command menu)
+| Consumer             | Loads                    | How                                                    |
+| -------------------- | ------------------------ | ------------------------------------------------------ |
+| Admin editor         | `index.ts` + `editor.ts` | Vite `import.meta.glob` (`gl-admin/lib/theme-blocks/`) |
+| Public site (SSR)    | `index.ts` + `render.tsx`| Vite `import.meta.glob` (`src/components/blocks/registry.ts`) |
+| Collab server        | `index.ts` only          | esbuild bundle (`collab-server/importMetaGlob.mjs`)    |
+| API (Go)             | `themes/blocks.manifest.json` | Generated from `index.ts` by `npm run themes:manifest` |
 
-### Creating a Custom Block
+> **Adding or changing a block means rebuilding the web, collab and api images** (from the same commit), after running `npm run themes:manifest` in `web/` and committing `themes/blocks.manifest.json`. `npm run build` and the test suite (`themeBlocks.loadable.test.ts`) fail if the manifest is stale or a block directory isn't loadable.
 
-Here's a complete example of a custom Alert block.
+Every **installed** block (every block in the build) works whichever theme is active: the editor can edit it, the collab server stores it, the API validates it, and the public page renders it. Only the slash menu is per theme: it offers the active theme's blocks.
 
-### 1. SSR Component (`AlertBlock.tsx`)
+### Block types are namespaced
 
-This renders the block on the frontend for visitors:
+A block's type is `theme:<slug>/<block>`, e.g. `theme:example/alert`. It is also the ProseMirror node name. `<slug>` must be the theme's directory name (letters, digits, `-` and `_`), `<block>` lowercase letters, digits and `-`. Core types never contain `:`, so a theme block can't shadow a core block or another theme's. A build refuses a type outside the theme's namespace or declared twice.
+
+### 1. Definition (`index.ts`)
+
+```typescript
+import { defineThemeBlock } from "@gl-admin/lib/theme-blocks/define"
+
+export const ALERT_VARIANTS = ["info", "success", "warning", "error"] as const
+
+export default defineThemeBlock({
+  type: "theme:example/alert",
+  version: 1,
+  title: "Alert",
+  attrs: {
+    variant: { type: "string", enum: ALERT_VARIANTS, default: "info" },
+  },
+  content: "inline*", // default; "" makes a leaf block with attrs only
+})
+```
+
+- **Keep this file headless:** import only `@gl-admin/lib/theme-blocks/define` and plain code. The collab server bundles it, and its build fails if React or your `editor.ts`/`render.tsx` end up in the bundle.
+- `defineThemeBlock` builds the TipTap node for you: name = `type`, `group: "block"`, the declared attrs (plus the `data-block-id` every block needs), and HTML parse/render rules on `div[data-block-type="<type>"]` with `data-<attr>` attributes.
+- **Attrs** are JSON scalars: `{ type: "string", default, enum?, maxLength? }`, `{ type: "number", default, enum?, integer?, minimum?, maximum? }` or `{ type: "boolean", default }`. Names are camelCase letters and digits; `pm`, `text` and anything starting with `on` are reserved. Every attr needs a valid `default`.
+- **Content** is a ProseMirror content expression over core types and groups (`inline*`, `text*`, `paragraph+`, `block+`, …). A theme block is one node: it can't define child node types.
+- **Version:** the newest Block.version your renderer reads. Bump it when you change what a stored attr means; a stored block with a newer version than the build reads is kept but hidden from the editor.
+
+**What is stored** (`block_doc`, Block Spec v1):
+
+```json
+{
+  "id": "…",
+  "type": "theme:example/alert",
+  "version": 1,
+  "attrs": {
+    "variant": "warning",
+    "pm": { "type": "theme:example/alert", "content": [{ "type": "text", "text": "Mind the gap" }] },
+    "text": "Mind the gap"
+  }
+}
+```
+
+Declared attrs live on the block's `attrs`, the content in `attrs.pm` (and its plain text in `attrs.text`, which search indexes). The API strips undeclared attrs and refuses invalid values, with the same rules the collab server applies before it stores.
+
+### 2. Editor (`editor.ts`)
+
+```typescript
+import { themeBlockEditor } from "@gl-admin/lib/theme-blocks/editor"
+import alert from "./index"
+import { AlertNodeView } from "./AlertNodeView"
+
+export default themeBlockEditor(alert, {
+  nodeView: AlertNodeView,
+  icon: "⚠️",
+  description: "Colored alert box for important messages",
+  aliases: ["alert", "warning", "notice", "callout"],
+})
+```
+
+The node view is a normal TipTap React node view (`ReactNodeViewProps`): wrap it in `<NodeViewWrapper>`, put `<NodeViewContent>` where people type, read attrs from `node.attrs` and change them with `updateAttributes` (every collaborator sees the change). Mark controls that aren't text `contentEditable={false}`, and disable them when `!editor.isEditable` (read-only viewers). Don't add schema in the node view: it must stay the definition's node.
+
+### 3. Public renderer (`render.tsx`)
 
 ```tsx
 import React from "react"
-import type { BlockComponentProps } from "../../../../src/components/blocks/types"
+import type { BlockComponentProps } from "@/components/blocks/types"
+import { themeBlockAttrs } from "@gl-admin/lib/blocks-spec/themeBlocks"
+import alert from "./index"
 
 const AlertBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent }) => {
-  const attrs = block.attrs as { variant?: string; message?: string; text?: string; pm?: any }
-  const variant = attrs.variant || "info"
-
-  // getBlockContent() renders ProseMirror content (preserves bold, italic, links, etc.)
-  // Falls back to plain text attributes if no PM content exists
-  const content = getBlockContent(block) || attrs.text || attrs.message || "Alert message"
-
-  const styles: Record<string, { bg: string; border: string; text: string; icon: string }> = {
-    info: { bg: "#dbeafe", border: "#3b82f6", text: "#1e40af", icon: "ℹ️" },
-    success: { bg: "#d1fae5", border: "#10b981", text: "#065f46", icon: "✓" },
-    warning: { bg: "#fef3c7", border: "#f59e0b", text: "#92400e", icon: "⚠️" },
-    error: { bg: "#fee2e2", border: "#ef4444", text: "#991b1b", icon: "✕" },
-  }
-
-  const style = styles[variant] || styles.info
-
+  const { variant } = themeBlockAttrs(alert, block.attrs) // declared attrs, with defaults
   return (
-    <div
-      key={block.id}
-      style={{
-        padding: "1rem 1.25rem",
-        backgroundColor: style.bg,
-        border: `2px solid ${style.border}`,
-        borderRadius: "0.5rem",
-        color: style.text,
-        marginBottom: "1rem",
-        display: "flex",
-        alignItems: "flex-start",
-        gap: "0.75rem",
-      }}
-    >
-      <span style={{ fontSize: "1.25rem", flexShrink: 0 }}>{style.icon}</span>
-      <div style={{ flex: 1 }}>
-        <strong style={{ display: "block", marginBottom: "0.25rem", textTransform: "capitalize" }}>{variant}</strong>
-        <div>{content}</div>
-      </div>
+    <div className={`my-alert my-alert--${variant}`} role="note">
+      {getBlockContent(block)}
     </div>
   )
 }
@@ -900,205 +919,11 @@ The `BlockComponentProps` interface gives every block:
 | `getBlockContent` | `(block: Block) => ReactNode`       | Get block content from PM data or fallback text |
 | `renderBlock`     | `(blockId: string) => ReactElement` | Render a child block by ID (for nested blocks)  |
 
-### 2. TipTap Extension (`AlertExtension.ts`)
+Read attrs through `themeBlockAttrs`: it applies defaults and ignores invalid values. A block can render under any active theme (it stays installed), so either style it inline, as the example does, or make sure your class names degrade gracefully without your stylesheet.
 
-This tells the editor's ProseMirror schema about your block:
+### When a theme is removed
 
-```typescript
-import { Node } from "@tiptap/core"
-import { ReactNodeViewRenderer } from "@tiptap/react"
-import { AlertNodeView } from "./AlertNodeView.tsx"
-
-export const AlertExtension = Node.create({
-  name: "alert", // Must match the block type
-
-  group: "block", // Makes it a block-level node
-
-  content: "text*", // What content it can contain (text with marks)
-
-  addAttributes() {
-    return {
-      variant: {
-        default: "info",
-        parseHTML: (el) => el.getAttribute("data-variant"),
-        renderHTML: (attrs) => ({ "data-variant": attrs.variant }),
-      },
-      message: {
-        default: "This is an alert message",
-        parseHTML: (el) => el.getAttribute("data-message"),
-        renderHTML: (attrs) => ({ "data-message": attrs.message }),
-      },
-      // Required: block ID tracking for the BlockDoc format
-      "data-block-id": {
-        default: null,
-        parseHTML: (el) => el.getAttribute("data-block-id"),
-        renderHTML: (attrs) => {
-          if (!attrs["data-block-id"]) return {}
-          return { "data-block-id": attrs["data-block-id"] }
-        },
-      },
-    }
-  },
-
-  parseHTML() {
-    return [{ tag: "div[data-block-type='alert']" }]
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return ["div", { "data-block-type": "alert", ...HTMLAttributes }, 0]
-  },
-
-  addNodeView() {
-    return ReactNodeViewRenderer(AlertNodeView)
-  },
-})
-```
-
-**Key rules for extensions:**
-
-- `name` must exactly match your block `type`
-- `group: "block"` makes it a top-level block
-- `content: "text*"` for text content, `"block+"` for container blocks, or empty string for void blocks (like dividers)
-- Always include a `data-block-id` attribute
-- `parseHTML` should match on `data-block-type` attribute
-- `renderHTML` must output `data-block-type` for round-trip HTML parsing
-- Use `ReactNodeViewRenderer` for custom editor rendering
-
-### 3. Editor Node View (`AlertNodeView.tsx`)
-
-This controls how the block looks in the admin editor while editing:
-
-```tsx
-import React from "react"
-import { NodeViewWrapper, NodeViewContent } from "@tiptap/react"
-
-export const AlertNodeView = ({ node }: any) => {
-  const variant = node.attrs.variant || "info"
-
-  const styles: Record<string, { bg: string; border: string; text: string; icon: string }> = {
-    info: { bg: "#dbeafe", border: "#3b82f6", text: "#1e40af", icon: "ℹ️" },
-    success: { bg: "#d1fae5", border: "#10b981", text: "#065f46", icon: "✓" },
-    warning: { bg: "#fef3c7", border: "#f59e0b", text: "#92400e", icon: "⚠️" },
-    error: { bg: "#fee2e2", border: "#ef4444", text: "#991b1b", icon: "✕" },
-  }
-
-  const style = styles[variant] || styles.info
-
-  return (
-    <NodeViewWrapper>
-      <div
-        style={{
-          padding: "1rem 1.25rem",
-          backgroundColor: style.bg,
-          border: `2px solid ${style.border}`,
-          borderRadius: "0.5rem",
-          color: style.text,
-          marginBottom: "1rem",
-          display: "flex",
-          alignItems: "flex-start",
-          gap: "0.75rem",
-        }}
-      >
-        <span style={{ fontSize: "1.25rem", flexShrink: 0 }}>{style.icon}</span>
-        <div style={{ flex: 1 }}>
-          <strong style={{ display: "block", marginBottom: "0.25rem", textTransform: "capitalize" }}>{variant}</strong>
-          {/* NodeViewContent makes the text area editable */}
-          <NodeViewContent as="div" />
-        </div>
-      </div>
-    </NodeViewWrapper>
-  )
-}
-```
-
-**Key points:**
-
-- Always wrap in `<NodeViewWrapper>` — TipTap requires this
-- Use `<NodeViewContent>` for editable regions — this is where users type
-- Access attributes via `node.attrs`
-- Style it to match your SSR component for visual consistency
-
-### 4. Block Index (`index.ts`)
-
-This file ties everything together with three named exports:
-
-```typescript
-import type { BlockConfig } from "../../../../src/components/blocks/types"
-import type { Block } from "../../../../gl-admin/components/editor/blocks/index"
-import AlertBlock from "./AlertBlock.tsx"
-import { AlertExtension } from "./AlertExtension"
-
-// 1. SSR block config — used by BlockRenderer on the frontend
-export const alertConfig: BlockConfig = {
-  type: "alert",
-  name: "Alert",
-  category: "design",
-  description: "Colored alert box for important messages",
-  icon: "⚠️",
-  keywords: ["alert", "warning", "notice", "callout"],
-  priority: 60,
-  component: AlertBlock,
-  hasChildren: false,
-  attributes: {
-    variant: { type: "string", default: "info", enum: ["info", "success", "warning", "error"] },
-    message: { type: "string", default: "This is an alert message" },
-  },
-}
-
-// 2. Editor slash command config — appears in the "/" menu in the editor
-export const alertEditorConfig: Block = {
-  title: "Alert",
-  description: "Colored alert box for important messages",
-  icon: "⚠️",
-  aliases: ["alert", "warning", "notice", "callout"],
-  command: ({ editor, range }) => {
-    editor
-      .chain()
-      .focus()
-      .deleteRange(range)
-      .insertContent({
-        type: "alert",
-        attrs: { variant: "info", message: "This is an alert message" },
-        content: [{ type: "text", text: "This is an alert message" }],
-      })
-      .run()
-  },
-}
-
-// 3. TipTap extension — registered in the editor schema
-export const alertExtension = AlertExtension
-
-// Default export for SSR registry
-export default alertConfig
-```
-
-**Export naming convention:**
-
-The system uses a flexible lookup to find your exports:
-
-| Export        | Discovery pattern                                                                       |
-| ------------- | --------------------------------------------------------------------------------------- |
-| SSR config    | `default` export, or any export matching `BlockConfig` shape (has `type` + `component`) |
-| Editor config | `{type}EditorConfig`, or `editorConfig`, or any export with `title` + `command`         |
-| Extension     | `{type}Extension`, or `extension`, or any TipTap `Extension`/`Node` export              |
-
-You can use any naming convention — the registry will find your exports. The explicit naming (e.g. `alertConfig`, `alertEditorConfig`, `alertExtension`) is recommended for clarity.
-
-### 5. Register in `theme.config.ts`
-
-Add your block to the `blocks[]` array:
-
-```typescript
-blocks: [
-  {
-    type: "alert",
-    modulePath: "/themes/my-theme/blocks/Alert/index.ts",
-  },
-]
-```
-
-- `type` must match the TipTap extension `name` and the `BlockConfig.type`
-- `modulePath` is an absolute path from the web root
+Blocks of a theme that is no longer in the build are never deleted. The editor hides them (the post shows a hidden-blocks notice; the rest stays editable) and every save keeps them where they were; the API stores them unvalidated; the public page renders nothing for them. Reinstalling the theme brings them back.
 
 ### Built-in Block Types
 
@@ -1107,15 +932,14 @@ These are always available and don't need registration:
 | Type           | Description                                               |
 | -------------- | --------------------------------------------------------- |
 | `paragraph`    | Text paragraph with alignment support                     |
-| `heading`      | Heading levels 1-3                                        |
-| `blockquote`   | Block quote                                               |
+| `heading`      | Heading levels 1-6                                        |
+| `blockquote`   | Block quote with optional citation                        |
 | `code_block`   | Code block with syntax highlighting                       |
 | `divider`      | Horizontal rule                                           |
-| `image`        | Image with alt text, title, and media library integration |
+| `image`        | Image with alt text, caption, width and media library integration |
 | `bullet_list`  | Unordered list                                            |
 | `ordered_list` | Ordered list                                              |
-
-Custom blocks can use any `type` string not in this list. The block type system is fully extensible — custom types are automatically handled throughout the persistence pipeline (save, load, and render).
+| `list_item`    | A list's item                                             |
 
 ---
 
@@ -1220,11 +1044,9 @@ Understanding the full lifecycle helps when debugging:
 
 ### 4. Admin Editor (Block Editing)
 
-1. `ThemeContext` reads `window.__ACTIVE_THEME__` (injected by middleware)
-2. Dynamically imports the active theme's `theme.config.ts`
-3. Registers custom TipTap extensions from `blocks[]` → editor schema knows about custom blocks
-4. Registers custom editor blocks → slash command menu shows custom blocks
-5. Registers SSR block configs → block registry has render components
+1. The editor's schema already has every installed theme block (`themes/*/blocks/*/editor.ts`, resolved when the admin is built), whichever theme is active
+2. `ThemeContext` reads `window.__ACTIVE_THEME__` (injected by middleware) and loads its `theme.config.ts` from the build
+3. It adds the active theme's blocks to the slash command menu
 
 ---
 
@@ -1292,7 +1114,7 @@ context.locals.posts = featured
 
 ### Match Editor and SSR Styles
 
-Keep your `AlertNodeView.tsx` (editor) and `AlertBlock.tsx` (frontend) visually consistent. Users expect WYSIWYG — what they see in the editor should match the published page.
+Keep your node view (editor) and `render.tsx` (frontend) visually consistent. Users expect WYSIWYG — what they see in the editor should match the published page.
 
 ### Use a Base Layout
 
@@ -1376,32 +1198,27 @@ Theme settings are automatically namespaced by slug. Your theme cannot access an
 
 **Solutions:**
 
-1. Verify `blocks[]` in `theme.config.ts` has the correct `type` and `modulePath`
-2. Check that `index.ts` exports an editor config with `title`, `description`, and `command`
-3. Ensure the TipTap extension is exported (the schema must know about the node type)
-4. Check browser console for import errors
+1. The theme must be the active one: the slash menu only offers the active theme's blocks
+2. `blocks/<Name>/editor.ts` must default-export `themeBlockEditor(...)`
+3. The admin image must have been rebuilt since the block was added (`npm test` runs `themeBlocks.loadable.test.ts`, which names what's wrong)
 
 ### "Unknown node type" error in editor
 
-**Symptom:** Console shows `Unknown node type: alert` when loading a post.
+**Symptom:** The editor opens a post read-only, naming a block type it can't show.
 
-**Cause:** The TipTap extension wasn't registered before the editor initialized.
+**Cause:** The live document has a node type this admin build doesn't have: the web image is older than the collab image, or the type predates namespaced theme blocks (#376).
 
-**Fix:** The `ThemeContext` should load extensions before the editor. If you see this, ensure:
-
-1. The extension is exported from your block's `index.ts`
-2. The `modulePath` in `theme.config.ts` is correct
-3. The theme is active
+**Fix:** Rebuild and deploy the web, collab and api images from the same commit.
 
 ### Custom block saves but disappears on reload
 
-**Symptom:** Block is visible while editing, but gone after page refresh.
+**Symptom:** Block is visible while editing, but gone after page refresh, or the editor shows "couldn't save".
 
 **Solutions:**
 
-1. Verify the extension `name` matches the block `type` exactly
-2. Ensure the `data-block-id` attribute is defined in `addAttributes()`
-3. Check the saved data in the API response — `published_blocks` should contain your block type
+1. The collab image must include the block: rebuild it (it bundles `blocks/*/index.ts`)
+2. The api image must have a current `themes/blocks.manifest.json` (`npm run themes:manifest`): an attr value the manifest doesn't allow is refused
+3. Check the collab container logs for `collab_store_invalid` (an attr value outside its spec)
 
 ### Theme functions not loading
 
@@ -1457,7 +1274,9 @@ Theme settings are automatically namespaced by slug. Your theme cannot access an
 | `web/themes/*/theme.config.ts`                              | Theme configuration                           |
 | `web/themes/*/functions.ts`                                 | Server-side hooks                             |
 | `web/themes/*/layouts/**/*.astro`                           | Layout templates                              |
-| `web/themes/*/blocks/*/index.ts`                            | Custom block modules                          |
+| `web/themes/*/blocks/*/{index,editor,render}`               | Custom blocks (definition, editor, renderer)  |
+| `web/themes/blocks.manifest.json`                           | Theme block specs for the API (generated)     |
+| `web/gl-admin/lib/theme-blocks/`                            | `defineThemeBlock`, `themeBlockEditor`, the globs |
 | `web/src/lib/theme-api.ts`                                  | Type definitions for functions API            |
 | `web/src/components/blocks/types.ts`                        | `BlockConfig` and `BlockComponentProps` types |
 | `web/src/components/BlockRenderer.tsx`                      | SSR block renderer                            |
