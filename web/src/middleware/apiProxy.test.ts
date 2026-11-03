@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
 import { log } from "../lib/log"
+import { runWithLogContext } from "./requestContext"
 
 describe("isApiProxyPath", () => {
   it("matches the Go API and uploads", () => {
@@ -43,6 +44,15 @@ describe("proxyToApi", () => {
     expect(headers.get("cookie")).toBe("a=b")
     expect(headers.has("host")).toBe(false)
     expect(await new Response(init?.body as BodyInit).text()).toBe('{"title":"x"}')
+  })
+
+  it("sends the API the request id the web logs under", async () => {
+    const fetchImpl = upstream({ status: 200 })
+    const req = new Request("https://cms.example.com/api/v1/posts", { headers: { "X-Request-ID": "bad id" } })
+
+    await runWithLogContext({ request_id: "req-12345678" }, () => proxyToApi(req, "198.51.100.7", "http://api:8080", fetchImpl))
+
+    expect((fetchImpl.mock.calls[0][1]?.headers as Headers).get("x-request-id")).toBe("req-12345678")
   })
 
   it("drops Expect, which Node's fetch refuses to send", async () => {

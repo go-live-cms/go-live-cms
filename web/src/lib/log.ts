@@ -16,7 +16,7 @@
 // this module has no Node imports. Anything else that writes to the console in
 // production (Astro itself) is wrapped by server/start.mjs with the same scrubbing.
 
-import { currentLogContext, scrubText, setLogContextSource } from "../../server/logFormat.mjs"
+import { currentLogContext, isSensitiveKey, scrubText, setLogContextSource } from "../../server/logFormat.mjs"
 
 export type LogLevel = "debug" | "info" | "warn" | "error"
 export type LogFields = Record<string, unknown>
@@ -36,7 +36,7 @@ export interface Logger {
 export interface LoggerOptions {
   // Receives each finished line (no trailing newline). Default: stdout, or stderr for
   // warn/error, on the server; the console in a browser.
-  write?: (level: LogLevel, line: string, msg: string, fields: LogFields) => void
+  write?: (level: LogLevel, line: string, msg: string) => void
   // Whether debug records are written. Default: only in `astro dev`, never in the
   // production build (or vitest).
   debug?: boolean
@@ -48,8 +48,6 @@ export interface LoggerOptions {
 // Called once by the middleware's request context module.
 export { setLogContextSource }
 
-// The same key list as the API's redactSensitiveAttr.
-const SENSITIVE_KEY = /authorization|cookie|password|secret|token|ticket|hash/i
 // A field holding a URL or path gets its query removed even when it isn't absolute.
 const URL_KEY = /^(url|uri|path|href|endpoint)$|_(url|uri|path)$/i
 // Keys the record itself owns: a field can't overwrite them.
@@ -92,7 +90,7 @@ function errorFields(error: unknown): LogFields {
 }
 
 function replacer(this: unknown, key: string, value: unknown): unknown {
-  if (key && SENSITIVE_KEY.test(key)) return "[REDACTED]"
+  if (key && isSensitiveKey(key)) return "[REDACTED]"
   if (value instanceof Error) return errorFields(value)
   // A URL object arrives here as its href (URL#toJSON), so URL fields are strings too.
   if (typeof value === "string") return scrubText(key && URL_KEY.test(key) ? safeUrl(value) : value)
@@ -121,15 +119,25 @@ export function formatRecord(level: LogLevel, msg: string, fields: LogFields, co
   }
 }
 
-function defaultWrite(level: LogLevel, line: string, msg: string, fields: LogFields): void {
+function defaultWrite(level: LogLevel, line: string, msg: string): void {
   const proc = (globalThis as { process?: { stdout?: { write?: unknown }; stderr?: { write?: unknown } } }).process
   const stream = level === "warn" || level === "error" ? proc?.stderr : proc?.stdout
   if (typeof stream?.write === "function") {
     ;(stream.write as (chunk: string) => void)(`${line}\n`)
     return
   }
-  // Browser (shared code in the admin): the console shows objects better than JSON.
-  console[level](msg, fields)
+  // Browser (shared code in the admin): the console shows objects better than JSON. The
+  // record, not the raw fields, so the same redaction applies.
+  console[level](msg, JSON.parse(line))
+}
+
+// Headers for a server-side call to the API: this request's id, so the API logs the call
+// under the same request_id as the web's lines (it keeps an incoming id only from
+// TRUSTED_PROXIES, which lists the web container). Empty outside a request and in the
+// browser.
+export function requestIdHeaders(): Record<string, string> {
+  const id = currentLogContext()?.request_id
+  return id ? { "X-Request-ID": id } : {}
 }
 
 export function createLogger(options: LoggerOptions = {}): Logger {
@@ -140,7 +148,7 @@ export function createLogger(options: LoggerOptions = {}): Logger {
 
   const emit = (level: LogLevel, msg: string, fields: LogFields = {}) => {
     if (level === "debug" && !debug) return
-    write(level, formatRecord(level, msg, fields, context(), now()), msg, fields)
+    write(level, formatRecord(level, msg, fields, context(), now()), msg)
   }
   return {
     debug: (msg, fields) => emit("debug", msg, fields),

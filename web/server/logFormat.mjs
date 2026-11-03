@@ -10,6 +10,17 @@ const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi
 // eslint-disable-next-line no-control-regex
 const ANSI = /\x1b\[[0-9;]*m/g
 const MAX_STRING = 8192
+// The same key list as the API's redactSensitiveAttr.
+const SENSITIVE_KEY = /authorization|cookie|password|secret|token|ticket|hash/i
+
+/**
+ * Whether a field with this name must be blanked: it names a credential.
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isSensitiveKey(key) {
+  return SENSITIVE_KEY.test(key)
+}
 
 /**
  * A string as it may be logged: without URL query strings, bearer tokens or colour
@@ -40,7 +51,7 @@ export function currentLogContext() {
   }
 }
 
-const CONSOLE_LEVELS = { log: "info", info: "info", warn: "warn", error: "error", debug: "debug", trace: "debug" }
+const CONSOLE_LEVELS = { log: "info", info: "info", dir: "info", warn: "warn", error: "error", debug: "debug", trace: "debug" }
 
 function argText(arg) {
   if (typeof arg === "string") return arg
@@ -52,20 +63,29 @@ function argText(arg) {
   }
 }
 
+// Without Node's util.format (start.mjs passes it): the arguments joined by spaces.
+const joinArgs = (...args) => args.map(argText).join(" ")
+
 /**
  * One console call as a log line: {time, level, msg: "console", request_id, route, text}.
- * A call that already wrote one JSON object is kept as it is.
+ * A call that already wrote one JSON object is kept, with its strings scrubbed.
  * @param {keyof typeof CONSOLE_LEVELS} method
  * @param {unknown[]} args
  * @param {Date} [now]
+ * @param {(...args: unknown[]) => string} [format] util.format, so "%s" etc. apply
  * @returns {string}
  */
-export function consoleRecord(method, args, now = new Date()) {
-  const text = args.map(argText).join(" ")
+export function consoleRecord(method, args, now = new Date(), format = joinArgs) {
+  const text = format(...args)
   const trimmed = text.trim()
   if (trimmed.startsWith("{") && !trimmed.includes("\n")) {
     try {
-      if (JSON.parse(trimmed)?.level) return trimmed
+      const parsed = JSON.parse(trimmed)
+      if (parsed?.level) {
+        return JSON.stringify(parsed, (key, value) =>
+          key && isSensitiveKey(key) ? "[REDACTED]" : typeof value === "string" ? scrubText(value) : value,
+        )
+      }
     } catch {
       // Not JSON: wrap it like any other text.
     }
@@ -85,14 +105,33 @@ export function consoleRecord(method, args, now = new Date()) {
  * the streams directly, so its lines don't pass through here.
  * @param {{ write(chunk: string): unknown }} stdout
  * @param {{ write(chunk: string): unknown }} stderr
+ * @param {(...args: unknown[]) => string} [format]
  */
-export function installConsoleJson(stdout, stderr) {
+export function installConsoleJson(stdout, stderr, format = joinArgs) {
   for (const method of Object.keys(CONSOLE_LEVELS)) {
     const level = CONSOLE_LEVELS[method]
     console[method] = (...args) => {
       if (level === "debug") return
       const stream = level === "warn" || level === "error" ? stderr : stdout
-      stream.write(`${consoleRecord(method, args)}\n`)
+      // console.dir's second argument is inspect options, not something to print.
+      const printed = method === "dir" ? args.slice(0, 1) : args
+      stream.write(`${consoleRecord(method, printed, new Date(), format)}\n`)
     }
   }
+}
+
+/**
+ * What Node writes to stderr itself goes through the console too: process warnings
+ * (deprecations, MaxListeners) replace Node's own printer, and a crash (an uncaught
+ * exception, or an unhandled rejection, which Node turns into one) is logged as one
+ * record and still exits 1, as Node would. Call after installConsoleJson.
+ * @param {{ removeAllListeners(event: string): unknown, on(event: string, listener: (value: unknown) => void): unknown, exit(code: number): unknown }} proc
+ */
+export function installProcessJson(proc) {
+  proc.removeAllListeners("warning")
+  proc.on("warning", (warning) => console.warn(warning))
+  proc.on("uncaughtException", (error) => {
+    console.error("uncaught exception:", error)
+    proc.exit(1)
+  })
 }

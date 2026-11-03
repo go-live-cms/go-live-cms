@@ -37,8 +37,10 @@ browser ──https──▶ caddy :443 ──/collab──▶ collab:1235 ─�
   fixed addresses (`172.28.0.11` caddy, `172.28.0.10` web, `TRUSTED_PROXIES`), and Caddy
   drops any `X-Forwarded-For` a client sends. If a cloud load balancer sits in front of
   Caddy, add its range as Caddy `trusted_proxies` (see the Caddyfile comment).
-- **Logs.** Every service writes one JSON object per line (`docker compose logs <service>`).
-  `api`, `web` and `collab` carry the request id Caddy sets (`X-Request-ID`). Caddy's error
+- **Logs.** `caddy`, `api`, `web` and `collab` write one JSON object per line (`docker
+  compose logs <service>`); `postgres` writes Postgres's own text format. `api`, `web` and
+  `collab` carry the request id Caddy sets (`X-Request-ID`), and `web` sends it on its
+  calls to the API, so one id finds a page view's lines in both. Caddy's error
   log (e.g. a 502 from `/collab` while `collab` restarts during a deploy) keeps the error,
   status, duration, method, host and path, and drops the client IP, the request headers
   and the query string (#377): the proxy follows the API's policy (`api/CLAUDE.md`,

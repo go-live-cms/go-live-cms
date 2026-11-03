@@ -3,7 +3,10 @@
 // loads, so Astro's own output (startup banner, uncaught page errors) is structured
 // like the app's src/lib/log.ts lines. The middleware loads only on the first request,
 // too late for the banner, hence a wrapper rather than code in the app.
-import { installConsoleJson } from "./logFormat.mjs"
+import { format } from "node:util"
+import { installConsoleJson, installProcessJson } from "./logFormat.mjs"
 
-installConsoleJson(process.stdout, process.stderr)
+installConsoleJson(process.stdout, process.stderr, format)
+installProcessJson(process)
+
 await import("../dist/server/entry.mjs")
