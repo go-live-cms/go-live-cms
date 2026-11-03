@@ -10,6 +10,17 @@ const BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi
 // eslint-disable-next-line no-control-regex
 const ANSI = /\x1b\[[0-9;]*m/g
 const MAX_STRING = 8192
+// The same key list as the API's redactSensitiveAttr.
+const SENSITIVE_KEY = /authorization|cookie|password|secret|token|ticket|hash/i
+
+/**
+ * Whether a field with this name must be blanked: it names a credential.
+ * @param {string} key
+ * @returns {boolean}
+ */
+export function isSensitiveKey(key) {
+  return SENSITIVE_KEY.test(key)
+}
 
 /**
  * A string as it may be logged: without URL query strings, bearer tokens or colour
@@ -70,7 +81,11 @@ export function consoleRecord(method, args, now = new Date(), format = joinArgs)
   if (trimmed.startsWith("{") && !trimmed.includes("\n")) {
     try {
       const parsed = JSON.parse(trimmed)
-      if (parsed?.level) return JSON.stringify(parsed, (_key, value) => (typeof value === "string" ? scrubText(value) : value))
+      if (parsed?.level) {
+        return JSON.stringify(parsed, (key, value) =>
+          key && isSensitiveKey(key) ? "[REDACTED]" : typeof value === "string" ? scrubText(value) : value,
+        )
+      }
     } catch {
       // Not JSON: wrap it like any other text.
     }
@@ -98,7 +113,25 @@ export function installConsoleJson(stdout, stderr, format = joinArgs) {
     console[method] = (...args) => {
       if (level === "debug") return
       const stream = level === "warn" || level === "error" ? stderr : stdout
-      stream.write(`${consoleRecord(method, args, new Date(), format)}\n`)
+      // console.dir's second argument is inspect options, not something to print.
+      const printed = method === "dir" ? args.slice(0, 1) : args
+      stream.write(`${consoleRecord(method, printed, new Date(), format)}\n`)
     }
   }
+}
+
+/**
+ * What Node writes to stderr itself goes through the console too: process warnings
+ * (deprecations, MaxListeners) replace Node's own printer, and a crash (an uncaught
+ * exception, or an unhandled rejection, which Node turns into one) is logged as one
+ * record and still exits 1, as Node would. Call after installConsoleJson.
+ * @param {{ removeAllListeners(event: string): unknown, on(event: string, listener: (value: unknown) => void): unknown, exit(code: number): unknown }} proc
+ */
+export function installProcessJson(proc) {
+  proc.removeAllListeners("warning")
+  proc.on("warning", (warning) => console.warn(warning))
+  proc.on("uncaughtException", (error) => {
+    console.error("uncaught exception:", error)
+    proc.exit(1)
+  })
 }

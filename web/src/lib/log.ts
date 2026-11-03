@@ -16,7 +16,7 @@
 // this module has no Node imports. Anything else that writes to the console in
 // production (Astro itself) is wrapped by server/start.mjs with the same scrubbing.
 
-import { currentLogContext, scrubText, setLogContextSource } from "../../server/logFormat.mjs"
+import { currentLogContext, isSensitiveKey, scrubText, setLogContextSource } from "../../server/logFormat.mjs"
 
 export type LogLevel = "debug" | "info" | "warn" | "error"
 export type LogFields = Record<string, unknown>
@@ -48,8 +48,6 @@ export interface LoggerOptions {
 // Called once by the middleware's request context module.
 export { setLogContextSource }
 
-// The same key list as the API's redactSensitiveAttr.
-const SENSITIVE_KEY = /authorization|cookie|password|secret|token|ticket|hash/i
 // A field holding a URL or path gets its query removed even when it isn't absolute.
 const URL_KEY = /^(url|uri|path|href|endpoint)$|_(url|uri|path)$/i
 // Keys the record itself owns: a field can't overwrite them.
@@ -92,7 +90,7 @@ function errorFields(error: unknown): LogFields {
 }
 
 function replacer(this: unknown, key: string, value: unknown): unknown {
-  if (key && SENSITIVE_KEY.test(key)) return "[REDACTED]"
+  if (key && isSensitiveKey(key)) return "[REDACTED]"
   if (value instanceof Error) return errorFields(value)
   // A URL object arrives here as its href (URL#toJSON), so URL fields are strings too.
   if (typeof value === "string") return scrubText(key && URL_KEY.test(key) ? safeUrl(value) : value)
