@@ -32,6 +32,34 @@ export function isRasterImage(media: Pick<Media, "media_path" | "mime_type">): b
   return mediaKind(media) === "image"
 }
 
+// Alt text applies to images, SVGs included (the fields show for both).
+export function hasAltText(media: Pick<Media, "media_path" | "mime_type">): boolean {
+  const kind = mediaKind(media)
+  return kind === "image" || kind === "vector"
+}
+
+// Missing alt text (#325), the API's rule for GET /media?missing_alt=true: an image that
+// isn't marked decorative and whose alt is empty or only whitespace.
+export function missingAlt(media: Pick<Media, "media_path" | "mime_type" | "alt" | "decorative">): boolean {
+  return hasAltText(media) && !media.decorative && !(media.alt ?? "").trim()
+}
+
+// The hint under the alt text field.
+export function altHint(decorative: boolean): string {
+  return decorative
+    ? "Not used while the image is marked decorative."
+    : "Describe what the image shows, for people who can't see it."
+}
+
+// The alt text as read-only views show it.
+export function altTextValue(media: Pick<Media, "alt" | "decorative">): string {
+  if (media.decorative) return "None, decorative image"
+  return media.alt?.trim() || "None"
+}
+
+// The "Missing alt text" filter, ?alt=missing in the library's URL.
+export const MISSING_ALT_PARAM = { name: "alt", value: "missing" } as const
+
 // The tag in a tile's corner: the file format ("JPG", "PDF").
 export function formatTag(media: Pick<Media, "media_path">): string {
   return fileExtension(media.media_path).toUpperCase() || "FILE"

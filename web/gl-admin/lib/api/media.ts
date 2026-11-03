@@ -10,6 +10,8 @@ export interface MediaQueryParams extends PaginationParams {
   type?: string // file type filter (image, video, etc.)
   user_id?: number
   with_counts?: boolean
+  // Only images missing their alt text (not decorative, alt empty), #325.
+  missing_alt?: boolean
 }
 
 export async function getMedia(params: MediaQueryParams = {}): Promise<ApiResponse<Media>> {
@@ -63,8 +65,15 @@ export async function createMedia(formData: FormData, token?: string): Promise<a
 
 export async function updateMedia(
   id: number,
-  // focal_point: null clears it; leave it out to keep it.
-  data: { name?: string; description?: string; alt?: string; focal_point?: FocalPoint | null },
+  // focal_point: null clears it; leave it out to keep it. An empty name or description
+  // keeps it, but an empty alt clears it (#325). Leave out what doesn't change.
+  data: {
+    name?: string
+    description?: string
+    alt?: string
+    decorative?: boolean
+    focal_point?: FocalPoint | null
+  },
   token?: string
 ): Promise<any> {
   const response = await authenticatedFetch(`/api/v1/media/${id}`, {
@@ -96,6 +105,22 @@ export async function deleteMedia(id: number, token?: string): Promise<any> {
 export async function getMediaPosts(mediaId: number): Promise<MediaPostLink[]> {
   const response = await apiCall(`/media/${mediaId}/posts`)
   return response.posts || []
+}
+
+export interface MissingAltSummary {
+  // Images missing their alt text (the library's "Missing alt text" filter).
+  media_count: number
+  // Published posts using at least one of them.
+  published_post_count: number
+}
+
+// For Home's "N images have no alt text · used in M published posts" (#324, #325).
+export async function getMissingAltSummary(): Promise<MissingAltSummary> {
+  const response = await apiCall("/media/missing-alt")
+  return {
+    media_count: response.media_count ?? 0,
+    published_post_count: response.published_post_count ?? 0,
+  }
 }
 
 export class MediaUploadError extends Error {

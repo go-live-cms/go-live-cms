@@ -1,15 +1,23 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import Button, { IconButton } from "@gl-admin/components/ui/Button"
-import Textarea from "@gl-admin/components/ui/Textarea"
 import Drawer from "@gl-admin/components/ui/Drawer"
 import { CloseIcon, CopyIcon, DownloadIcon, TrashIcon } from "@gl-admin/components/ui/icons"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { getMediaVariantPreviewURL, updateMedia } from "@gl-admin/lib/api/media"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { formatDate } from "@gl-admin/utils/formatting"
-import { formatDimensions, formatFileSize, isRasterImage, mediaKind, typeLabel } from "@gl-admin/lib/mediaLibrary"
+import {
+  altTextValue,
+  formatDimensions,
+  formatFileSize,
+  hasAltText,
+  isRasterImage,
+  mediaKind,
+  typeLabel,
+} from "@gl-admin/lib/mediaLibrary"
 import type { Media } from "@gl-admin/lib/types"
+import AltTextField from "./AltTextField"
 import { KindIcon } from "./MediaCard"
 import UsedIn, { useUsedIn } from "./UsedIn"
 import { copyMediaURL, downloadMedia } from "./mediaActions"
@@ -26,13 +34,13 @@ type MediaPanelProps = {
 }
 
 // The library's side panel (#342): a preview, Copy URL / Download / Delete, the alt
-// text, the file's facts, where it's used, and "Edit details" for the rest (name,
-// description, focal point, replace) on the detail page.
+// text and "Decorative image" (#325), the file's facts, where it's used, and "Edit
+// details" for the rest (name, description, focal point, replace) on the detail page.
 //
-// Hidden until #325 lands: the "Decorative image" option. The board's Caption field has
-// no backend (media has no caption) and is left out.
+// The board's Caption field has no backend (media has no caption) and is left out.
 export default function MediaPanel({ media, canWrite, asDrawer, onClose, onUpdated, onDelete }: MediaPanelProps) {
   const [alt, setAlt] = useState(media.alt || "")
+  const [decorative, setDecorative] = useState(!!media.decorative)
   const [saving, setSaving] = useState(false)
   const usedIn = useUsedIn(media.id)
   const kind = mediaKind(media)
@@ -40,14 +48,16 @@ export default function MediaPanel({ media, canWrite, asDrawer, onClose, onUpdat
   // A different file, or this one saved elsewhere: start from what's stored.
   useEffect(() => {
     setAlt(media.alt || "")
-  }, [media.id, media.alt])
+    setDecorative(!!media.decorative)
+  }, [media.id, media.alt, media.decorative])
 
-  const dirty = alt.trim() !== (media.alt || "")
+  // An empty alt text can be saved (#325): the tile then shows "No alt text".
+  const dirty = alt.trim() !== (media.alt || "").trim() || decorative !== !!media.decorative
 
   const saveAlt = async () => {
     setSaving(true)
     try {
-      const { media: saved } = await updateMedia(media.id, { alt: alt.trim() })
+      const { media: saved } = await updateMedia(media.id, { alt: alt.trim(), decorative })
       onUpdated({ ...media, ...saved, post_count: saved.post_count ?? media.post_count })
       toast.success("Alt text saved")
     } catch (e) {
@@ -85,29 +95,37 @@ export default function MediaPanel({ media, canWrite, asDrawer, onClose, onUpdat
         )}
       </div>
 
-      {(kind === "image" || kind === "vector") &&
+      {hasAltText(media) &&
         (canWrite ? (
           <form
             className="gl-media-panel__alt"
             onSubmit={(e) => {
               e.preventDefault()
-              if (dirty && alt.trim()) saveAlt()
+              if (dirty) saveAlt()
             }}
           >
-            <Textarea
+            <AltTextField
               id="media-panel-alt"
-              label="Alt text"
-              rows={3}
-              value={alt}
-              onChange={(e) => setAlt(e.currentTarget.value)}
-              hint="Describe what the image shows for people using screen readers."
+              alt={alt}
+              decorative={decorative}
+              onAltChange={setAlt}
+              onDecorativeChange={setDecorative}
+              disabled={saving}
             />
             {dirty && (
               <div className="gl-media-panel__alt-actions">
-                <Button type="submit" variant="primary" size="sm" loading={saving} disabled={!alt.trim()}>
+                <Button type="submit" variant="primary" size="sm" loading={saving}>
                   Save
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setAlt(media.alt || "")} disabled={saving}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAlt(media.alt || "")
+                    setDecorative(!!media.decorative)
+                  }}
+                  disabled={saving}
+                >
                   Cancel
                 </Button>
               </div>
@@ -116,7 +134,7 @@ export default function MediaPanel({ media, canWrite, asDrawer, onClose, onUpdat
         ) : (
           <div className="gl-media-panel__field">
             <span className="gl-media-panel__label">Alt text</span>
-            <p className="gl-media-panel__value">{media.alt || "None"}</p>
+            <p className="gl-media-panel__value">{altTextValue(media)}</p>
           </div>
         ))}
 

@@ -23,6 +23,23 @@ const image = (attrs: Record<string, unknown>, version = 2) =>
   ({ id: "blk-image-000001", type: "image", version, attrs: { src: "/uploads/a.png", alt: "A", ...attrs } }) as unknown as Block
 
 describe("ImageBlock", () => {
+  it("renders a decorative image (#325) with alt=\"\" whatever the block says", () => {
+    const block = image({ mediaId: 12 }, 1)
+    const doc = (decorative: boolean) =>
+      ({
+        doc_version: 1,
+        blocks_order: [first.id, block.id],
+        blocks: { [first.id]: first, [block.id]: block },
+        media: { "12": { media_path: "/uploads/other.png", width: 0, height: 0, decorative } },
+      }) as unknown as BlockDocV1
+    const html = (decorative: boolean) =>
+      renderToStaticMarkup(
+        <ImageBlock block={block} doc={doc(decorative)} renderContent={renderContent} getBlockContent={getBlockContent} renderBlock={() => null} />,
+      )
+    expect(html(true)).toContain('alt=""')
+    expect(html(false)).toContain('alt="A"')
+  })
+
   it("renders an old image (no caption, no width) as the bare <img> it always was", () => {
     const html = render(ImageBlock, image({}, 1))
     expect(html).toBe('<img src="/uploads/a.png" loading="lazy" decoding="async" alt="A"/>')

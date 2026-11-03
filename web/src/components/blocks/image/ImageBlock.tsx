@@ -6,14 +6,17 @@ import { blockMediaFor, ImageSizesContext, isFirstImageBlock, responsiveImageAtt
 
 const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
   const attrs = block.attrs as Record<string, unknown>
-  const alt = (attrs?.alt as string) || ""
   const title = attrs?.title as string | undefined
   const sizes = useContext(ImageSizesContext)
+  const media = blockMediaFor(doc, attrs?.mediaId)
+  // A decorative image (#325) is skipped by screen readers whatever alt text the block
+  // was inserted with.
+  const alt = media?.decorative ? "" : (attrs?.alt as string) || ""
 
   // srcset/sizes from the media's variants and object-position from its
   // focal point, when the API attached them (#255); src is always the
   // block's own (sanitized) URL.
-  const image = responsiveImageAttrs(attrs?.src as string | undefined, blockMediaFor(doc, attrs?.mediaId), sizes)
+  const image = responsiveImageAttrs(attrs?.src as string | undefined, media, sizes)
   // The first image is usually above the fold (and often the LCP element):
   // don't make it wait for lazy loading.
   const eager = isFirstImageBlock(doc, block.id)

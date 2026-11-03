@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react"
 import Modal from "@gl-admin/components/ui/Modal"
 import { getMedia, getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
+import { missingAlt } from "@gl-admin/lib/mediaLibrary"
 import type { Media } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/components/editor/featured-image-selector.scss"
 
@@ -140,6 +141,7 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
             >
               <div className="gl-featured-image-selector__thumbnail">
                 <img src={getImageUrl(media)} alt={media.alt || media.name} loading="lazy" />
+                {missingAlt(media) && <span className="gl-featured-image-selector__alt">No alt text</span>}
 
                 {currentFeaturedImage?.id === media.id && (
                   <div className="gl-featured-image-selector__selected-indicator">

@@ -1,6 +1,14 @@
 import React from "react"
 import { getMediaVariantPreviewURL } from "@gl-admin/lib/api/media"
-import { formatDuration, formatTag, isRasterImage, mediaKind, mediaMetaLine, type MediaKind } from "@gl-admin/lib/mediaLibrary"
+import {
+  formatDuration,
+  formatTag,
+  isRasterImage,
+  mediaKind,
+  mediaMetaLine,
+  missingAlt,
+  type MediaKind,
+} from "@gl-admin/lib/mediaLibrary"
 import { CheckIcon } from "@gl-admin/components/ui/icons"
 import type { Media } from "@gl-admin/lib/types"
 import "@gl-admin/assets/styles/components/media/media-card.scss"
@@ -15,9 +23,8 @@ interface Props {
 }
 
 // One tile of the library grid (#342): the thumb variant (the grid never needs the
-// full-size file), the format tag, and the name with its size.
-//
-// Hidden until #325 lands: the "No alt text" tag in the top-right corner.
+// full-size file), the format tag, the "No alt text" tag (#325; not in select mode, where
+// the check box takes that corner), and the name with its size.
 const MediaCard: React.FC<Props> = ({ media, onClick, pressed = false, selectable = false }) => {
   const kind = mediaKind(media)
   // A missing file (or a failed load) shows the kind icon instead of a broken image.
@@ -46,6 +53,7 @@ const MediaCard: React.FC<Props> = ({ media, onClick, pressed = false, selectabl
         )}
         <span className={`gl-media-tile__tag gl-media-tile__tag--${kind}`}>{formatTag(media)}</span>
         {duration && <span className="gl-media-tile__badge">{duration}</span>}
+        {missingAlt(media) && !selectable && <span className="gl-media-tile__alt">No alt text</span>}
         {selectable && (
           <span className={`gl-media-tile__check${pressed ? " is-checked" : ""}`} aria-hidden="true">
             {pressed && <CheckIcon size={14} />}

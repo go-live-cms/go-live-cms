@@ -160,6 +160,26 @@
     width: 24px;
   }
 
+  // "No alt text" (#325), the library tile's tag: a warning before inserting the image.
+  // Top-left, so it never sits under the selected check.
+  &__alt {
+    align-items: center;
+    background: var(--warning-bg);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 0 1px var(--background);
+    color: var(--warning-label);
+    display: flex;
+    font-size: 11px;
+    font-weight: 600;
+    height: 20px;
+    left: var(--space-2);
+    line-height: 1;
+    padding: 0 6px;
+    position: absolute;
+    top: var(--space-2);
+    white-space: nowrap;
+  }
+
   &__info {
     padding: var(--space-2) var(--space-3);
   }
