@@ -95,6 +95,11 @@ type Post struct {
 	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
 	BlockDocHash       sql.NullString        `json:"block_doc_hash"`
 	PublishedBlockHash sql.NullString        `json:"published_block_hash"`
+	SeoTitle           string                `json:"seo_title"`
+	SeoDescription     string                `json:"seo_description"`
+	SocialImageID      sql.NullInt64         `json:"social_image_id"`
+	Noindex            bool                  `json:"noindex"`
+	CanonicalUrl       string                `json:"canonical_url"`
 }
 
 type PostMedium struct {
@@ -244,16 +249,17 @@ type ThemeSetting struct {
 }
 
 type User struct {
-	ID                int64     `json:"id"`
-	Username          string    `json:"username"`
-	FullName          string    `json:"full_name"`
-	Email             string    `json:"email"`
-	HashedPassword    string    `json:"hashed_password"`
-	PasswordChangedAt time.Time `json:"password_changed_at"`
-	CreatedAt         time.Time `json:"created_at"`
-	Role              string    `json:"role"`
-	Bio               string    `json:"bio"`
-	Website           string    `json:"website"`
+	ID                int64        `json:"id"`
+	Username          string       `json:"username"`
+	FullName          string       `json:"full_name"`
+	Email             string       `json:"email"`
+	HashedPassword    string       `json:"hashed_password"`
+	PasswordChangedAt time.Time    `json:"password_changed_at"`
+	CreatedAt         time.Time    `json:"created_at"`
+	Role              string       `json:"role"`
+	Bio               string       `json:"bio"`
+	Website           string       `json:"website"`
+	LastActiveAt      sql.NullTime `json:"last_active_at"`
 }
 
 type UserInvitation struct {

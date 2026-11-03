@@ -415,13 +415,13 @@ func (server *Server) setupRoutes() error {
 	// Legacy taxonomy association route (moved from posts section)
 	posts := v1.Group("/posts")
 	// Same handler and rules as /posts/:id/taxonomy-terms: the working terms (#393).
-	posts.GET("/:id/taxonomies", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
+	posts.GET("/:id/taxonomies", server.requireAuth(), requireContentAuthor(server), server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomies
 
 	postTypes := v1.Group("/post-types")
-	postTypes.GET("", server.getPostTypes)                                                                                    // GET /api/v1/post-types
-	postTypes.GET("/:name", server.getPostType)                                                                               // GET /api/v1/post-types/:name
-	postTypes.POST("", authMiddleware(server.tokenMaker, server.store), requireSiteAdmin(server), server.createPostType)      // POST /api/v1/post-types (admin)
-	postTypes.PUT("/:name", authMiddleware(server.tokenMaker, server.store), requireSiteAdmin(server), server.updatePostType) // PUT /api/v1/post-types/:name (admin)
+	postTypes.GET("", server.getPostTypes)                                                         // GET /api/v1/post-types
+	postTypes.GET("/:name", server.getPostType)                                                    // GET /api/v1/post-types/:name
+	postTypes.POST("", server.requireAuth(), requireSiteAdmin(server), server.createPostType)      // POST /api/v1/post-types (admin)
+	postTypes.PUT("/:name", server.requireAuth(), requireSiteAdmin(server), server.updatePostType) // PUT /api/v1/post-types/:name (admin)
 
 	// Taxonomy module routes (see taxonomy_routes.go for complete definitions)
 	server.RegisterTaxonomyRoutes(v1)
@@ -444,6 +444,9 @@ func (server *Server) setupRoutes() error {
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 
+	// Public on purpose: published pages embed these files. Stored names
+	// carry 128 random bits (saveUploadedFile, #399), so a file only a draft
+	// uses can't be found by guessing its name; no directory listing.
 	// no-cache: browsers may keep uploads but must revalidate (a cheap 304),
 	// because POST /media/:id/replace swaps a file in place at the same URL
 	// that posts already embed.

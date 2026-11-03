@@ -1342,7 +1342,7 @@ func TestMediaWriteOwnerScopedRole(t *testing.T) {
 			stubRoleLookup(store, contributor)
 
 			server := newTestServer(t, store)
-			auth := authMiddleware(server.tokenMaker, server.store)
+			auth := server.requireAuth()
 			server.router.PUT("/owner-scoped/media/:id", auth, server.updateMedia)
 			server.router.DELETE("/owner-scoped/media/:id", auth, server.deleteMedia)
 

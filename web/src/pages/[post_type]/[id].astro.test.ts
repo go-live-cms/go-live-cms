@@ -92,6 +92,60 @@ describe("[post_type]/[id] route", () => {
     expect(urls.some((url) => url.startsWith(`${SERVER_API_URL}/posts/7`))).toBe(false)
   })
 
+  // #357: the published SEO, never the working one (the admin's GET /posts/:id).
+  it("builds the head from the published SEO", async () => {
+    process.env.SITE_URL = "https://example.org"
+    try {
+      stubApi(
+        json(200, {
+          ...publishedView,
+          seo: {
+            title: "Published SEO title",
+            description: "Published SEO description",
+            noindex: true,
+            canonical_url: "https://elsewhere.example/original",
+            image: { url: "/uploads/media/_variants/share.png/social.png", width: 1200, height: 630, alt: "Two documents" },
+          },
+        }),
+      )
+      const response = await render()
+      expect(response.status).toBe(200)
+      const html = await response.text()
+      const head = html.match(/<head>([\s\S]*?)<\/head>/)?.[1] ?? ""
+      expect(head).toContain("<title>Published SEO title · Field Notes</title>")
+      expect(head).toContain('<meta name="description" content="Published SEO description">')
+      expect(head).toContain('<link rel="canonical" href="https://elsewhere.example/original">')
+      expect(head).toContain('<meta name="robots" content="noindex">')
+      expect(head).toContain('<meta property="og:image" content="https://example.org/uploads/media/_variants/share.png/social.png">')
+      expect(head).toContain('<meta property="og:image:width" content="1200">')
+      expect(head).toContain('<meta name="twitter:card" content="summary_large_image">')
+      const ld = head.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)?.[1]
+      expect(JSON.parse(ld ?? "{}")).toMatchObject({ "@type": "Article", headline: "Published SEO title", author: [{ name: "ana" }] })
+      // The page's own heading stays the post title.
+      expect(html).toMatch(/<h1[^>]*>\s*Published title\s*<\/h1>/)
+    } finally {
+      delete process.env.SITE_URL
+    }
+  })
+
+  it("without SEO fields: the post title, and the first paragraph when there's no excerpt", async () => {
+    stubApi(
+      json(200, {
+        ...publishedView,
+        post: { ...publishedView.post, description: "" },
+        seo: { title: "", description: "", noindex: false, canonical_url: "", image: null },
+      }),
+    )
+    const response = await render()
+    const head = (await response.text()).match(/<head>([\s\S]*?)<\/head>/)?.[1] ?? ""
+    expect(head).toContain("<title>Published title · Field Notes</title>")
+    expect(head).toContain('<meta name="description" content="Published body">')
+    expect(head).toContain('<link rel="canonical" href="http://web:4321/post/7">')
+    expect(head).not.toContain('name="robots"')
+    // No social image from the API, so the published featured image.
+    expect(head).toContain('<meta property="og:image" content="http://web:4321/uploads/media/published.jpg">')
+  })
+
   it("404s what the public endpoint doesn't serve (a draft, an unpublished post)", async () => {
     stubApi(json(404, { error: "post not found" }))
     const response = await render()

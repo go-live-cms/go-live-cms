@@ -51,7 +51,7 @@ import "github.com/gin-gonic/gin"
 // the v1 router group to maintain consistent API versioning.
 func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	// The whole library is for content roles (#393).
-	media := v1.Group("/media", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server))
+	media := v1.Group("/media", server.requireAuth(), requireContentAuthor(server))
 
 	// Write operations
 	media.POST("", server.createMedia)              // Single upload

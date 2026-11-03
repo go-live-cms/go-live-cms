@@ -3,6 +3,7 @@
 // so they are unit-tested in seo.test.ts; the routes and SeoHead.astro wire them up.
 
 import type { Post } from "../../gl-admin/lib/api/types"
+import type { BlockDocV1 } from "../../gl-admin/lib/blocks-spec"
 
 export type UrlStructure = "id" | "slug"
 
@@ -13,11 +14,22 @@ export interface SeoMeta {
   prev?: string
   next?: string
   image?: string | null
+  // The image's size and alt text, for og:image:width/height/alt (#357).
+  imageWidth?: number
+  imageHeight?: number
+  imageAlt?: string
   type?: "website" | "article"
+  // A page that isn't public (sign-in, errors, search): "noindex, nofollow", no
+  // canonical, and no site settings lookup.
   noindex?: boolean
+  // A public page its author hid from search engines (#357, a post's "Hide from
+  // search engines"): `robots` noindex and nothing else, it renders like any page.
+  hideFromSearch?: boolean
   siteName?: string
   publishedTime?: string
   modifiedTime?: string
+  // schema.org JSON-LD for the page (a post's Article, articleJsonLd).
+  jsonLd?: Record<string, unknown>
 }
 
 export interface SitemapEntry {
@@ -119,6 +131,124 @@ export function publicImageUrl(
   } catch {
     return undefined
   }
+}
+
+// Post SEO (#357) -----------------------------------------------------------------
+
+// The admin's soft limits (never enforced): what search results usually show.
+export const SEO_TITLE_GUIDE = 60
+export const SEO_DESCRIPTION_GUIDE = 160
+
+// A published post's SEO, as /public/posts/:id answers it: "" means "use the
+// post's own" (title; excerpt, then first paragraph), and the image is already
+// the social image or the featured image, as its 1200 x 630 crop when it has one.
+export interface PostSeo {
+  title: string
+  description: string
+  noindex: boolean
+  canonical_url: string
+  image: { url: string; width: number; height: number; alt: string } | null
+}
+
+// <title> (#357, decision 2): "<SEO title or post title> · <site name>". The
+// 60-character guide counts the first part only.
+export function pageTitle(title: string, siteName?: string | null): string {
+  const name = (siteName || "").trim()
+  const own = title.trim()
+  if (!own) return name
+  return name && name !== own ? `${own} · ${name}` : own
+}
+
+// The home page's <title>: the site name, with the tagline (#330) when it has one.
+export function homeTitle(siteName: string, tagline?: string | null): string {
+  const line = (tagline || "").trim()
+  return line ? `${siteName} · ${line}` : siteName
+}
+
+// The plain text of a block's PM JSON: its text runs, in order.
+function pmText(node: unknown): string {
+  if (!node || typeof node !== "object") return ""
+  const { text, content } = node as { text?: unknown; content?: unknown }
+  if (typeof text === "string") return text
+  return Array.isArray(content) ? content.map(pmText).join("") : ""
+}
+
+// The text of a post's first non-empty top-level paragraph, what themes show
+// when the post has no excerpt (#357). "" when it has none.
+export function firstParagraphText(doc: BlockDocV1 | null | undefined): string {
+  if (!doc?.blocks || !Array.isArray(doc.blocks_order)) return ""
+  for (const id of doc.blocks_order) {
+    const block = doc.blocks[id]
+    if (block?.type !== "paragraph") continue
+    const attrs = (block.attrs || {}) as { text?: unknown; pm?: unknown }
+    const text = (typeof attrs.text === "string" && attrs.text.trim() ? attrs.text : pmText(attrs.pm)).replace(/\s+/g, " ").trim()
+    if (text) return text
+  }
+  return ""
+}
+
+// A post's excerpt for lists and previews (#357: the excerpt is optional): the
+// excerpt (cut at maxLength), else its first paragraph cut at a word before 160
+// characters. On the post's own page a theme shows only a real excerpt as its
+// dek: the first paragraph is right below it.
+export function postExcerpt(post: Pick<Post, "description" | "published_blocks">, maxLength = SEO_DESCRIPTION_GUIDE): string {
+  return metaDescription(post.description, maxLength) || metaDescription(firstParagraphText(post.published_blocks))
+}
+
+// A post's meta description: the SEO description, else the excerpt, else the first
+// paragraph. All three plain text, cut at a word before 160 characters.
+export function postDescription(post: Pick<Post, "description" | "published_blocks">, seo?: Pick<PostSeo, "description"> | null): string {
+  return metaDescription(seo?.description) || postExcerpt(post)
+}
+
+// The canonical URL of a post: its SEO canonical URL when set (an absolute
+// http(s) URL, checked by the API; checked again here), else its own path.
+export function postCanonical(ownPath: string, seo?: Pick<PostSeo, "canonical_url"> | null): string {
+  const custom = seo?.canonical_url?.trim()
+  if (custom) {
+    try {
+      const url = new URL(custom)
+      if ((url.protocol === "http:" || url.protocol === "https:") && !/\s/.test(custom)) return url.toString()
+    } catch {
+      // Not a URL: the post's own address.
+    }
+  }
+  return ownPath
+}
+
+// schema.org Article for a post page (#357): headline, dates, authors and image.
+export function articleJsonLd(input: {
+  headline: string
+  description?: string
+  url: string
+  image?: string
+  datePublished?: string
+  dateModified?: string
+  authors?: { name: string; url?: string }[]
+  publisher?: string
+}): Record<string, unknown> {
+  const ld: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: input.headline,
+    mainEntityOfPage: input.url,
+  }
+  if (input.description) ld.description = input.description
+  if (input.image) ld.image = [input.image]
+  if (input.datePublished) ld.datePublished = input.datePublished
+  if (input.dateModified) ld.dateModified = input.dateModified
+  const authors = (input.authors || []).filter((a) => a.name)
+  if (authors.length > 0) {
+    ld.author = authors.map((a) => ({ "@type": "Person", name: a.name, ...(a.url ? { url: a.url } : {}) }))
+  }
+  if (input.publisher) ld.publisher = { "@type": "Organization", name: input.publisher }
+  return ld
+}
+
+// JSON-LD as the text of a <script type="application/ld+json">: "<" escaped, so
+// no value can close the element.
+export function jsonLdText(data: Record<string, unknown>): string {
+  return JSON.stringify(data).replace(/</g, "\\u003c")
 }
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", apos: "'", nbsp: " " }
@@ -244,8 +374,9 @@ export const MAX_SITEMAP_URLS = 50_000
 // and every published post at its canonical URL with lastmod from changed_at.
 // Only public types are listed, so admin routes never appear, and only
 // published posts (drafts, including unpublished posts, and archived posts are
-// skipped even if the API returned them). Term archives (#348), then author pages
-// (#350), come last.
+// skipped even if the API returned them). A post hidden from search engines
+// (#357: its published noindex) is left out. Term archives (#348), then author
+// pages (#350), come last.
 export async function collectSitemapEntries(siteUrl: string, source: SitemapSource): Promise<SitemapEntry[]> {
   // Independent of the posts walk, so they run alongside it.
   const authorsPromise = source.getAuthors?.() ?? Promise.resolve([])
@@ -265,6 +396,7 @@ export async function collectSitemapEntries(siteUrl: string, source: SitemapSour
         const page = await source.getPublishedPosts(type, PAGE_SIZE, offset)
         for (const post of page) {
           if (post.post_status !== "published" || (post.post_type && post.post_type !== type)) continue
+          if (post.noindex) continue
           const lastmod = postLastmod(post)
           if (lastmod && (!newest || lastmod > newest)) newest = lastmod
           postEntries.push({ loc: absoluteUrl(siteUrl, postPath({ ...post, post_type: type }, structure)), lastmod })

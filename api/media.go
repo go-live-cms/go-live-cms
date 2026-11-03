@@ -20,7 +20,9 @@
 // # Limits & Safety
 // Max size: util.Config.MaxUploadSize (e.g., "10MB"), enforced on the body
 // while it is read; larger uploads get 413.
-// Filenames sanitized; duplicates auto-suffixed (file_2.jpg).
+// Filenames sanitized and stored with 128 random bits (file-<32 hex>.jpg):
+// /uploads is public, so a draft-only image must not have a guessable URL
+// (#399). original_filename keeps the uploader's (cleaned) name.
 //
 // # Images (#255)
 // Image metadata (EXIF/GPS/XMP) is stripped on upload and replace, and

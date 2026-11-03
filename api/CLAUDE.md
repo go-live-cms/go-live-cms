@@ -15,9 +15,9 @@ is split into consistently-named files in `api/`:
 - `*_utils.go` — domain helpers
 
 `server.go` builds the Gin engine, CORS, and registers all route groups under
-`/api/v1` (+ a `/public` group for SSR). Auth via
-`authMiddleware(server.tokenMaker, server.store)`; the payload is under context key
-`authorization_payload` (`getAuthPayload(c)`).
+`/api/v1` (+ a `/public` group for SSR). Auth via `server.requireAuth()`
+(`authMiddleware` with the server's token maker, store and `LAST_ACTIVE_INTERVAL`); the
+payload is under context key `authorization_payload` (`getAuthPayload(c)`).
 
 Some domains also keep a docs-only module entry file (`posts.go`, `users.go`,
 `media.go`, `taxonomies.go`, `sessions.go`, `themes.go`) holding package-level docs
@@ -73,7 +73,7 @@ the collab server.
   - Never compare `post.UserID` or roles in a handler. Block-level permissions and
     org/site scoping are out of scope.
 - **Reads are not public (#393).** Every `/api/v1/posts*` route serves the working copy
-  (any status, working title/excerpt/meta), so every one takes `authMiddleware` +
+  (any status, working title/excerpt/meta), so every one takes `server.requireAuth()` +
   `requireContentAuthor`, as do `/media*`, `/users/:username`, `/posts/:id/taxonomy-terms`
   and `/posts/:id/taxonomies` (`/taxonomy/terms/:id/posts`: `requireContentEditor`).
   `canReadPost`: moderators any post, contributors their own (any status) and published
@@ -95,8 +95,13 @@ the collab server.
   Replace strip the original's EXIF/GPS/XMP/text metadata losslessly (a JPEG keeps
   only its orientation) and generate `thumb`/`medium`/`large` variants (320/800/1600
   long edge, never upscaled, pure Go via `golang.org/x/image`, JPEG or PNG if
-  transparent) in `<dir>/_variants/<file>/`. They're **staged** and only moved into
-  place once the DB agrees (`stagedVariants.commit`), so a failed Replace keeps the
+  transparent) in `<dir>/_variants/<file>/`, plus **`social`** (#357): a 1200 x 630 crop
+  around the focal point (`socialCrop`, from the original; a smaller image gives a
+  smaller 1.91:1 crop), regenerated when PUT sets the focal point
+  (`restageMediaVariants`, through `SetMediaVariantsTx`). It's not the whole image, so
+  block media (`resizedOnly`) and srcsets leave it out. The backfill's "missing" includes
+  rows without a `social` key, so run `main backfill-variants` once after deploying #357.
+  They're **staged** and only moved into place once the DB agrees (`stagedVariants.commit`), so a failed Replace keeps the
   old set; Delete removes the directory (`removeMediaVariants`). The `variants`
   column (jsonb, `{}` = none) and `focal_x`/`focal_y` (0..1, both or neither; CHECK
   constraint) are returned as `variants` / `focal_point`. `variants` is
@@ -130,6 +135,15 @@ the collab server.
   compose); responses map it to where `/uploads` serves it (`/uploads/media/x.jpg`)
   via `server.mediaResponse` / `publicMediaPath`. The admin uses it directly as the
   image URL, so never return a media row through bare `toMediaResponse`.
+- **Stored names are unguessable (#399).** `/uploads` is a public static route (published
+  pages embed it; no directory listing), so the file name is what keeps a draft-only image
+  private. Every new file goes through `saveUploadedFile`: `<cleaned name>-<32 hex><ext>`
+  (128 random bits, `O_EXCL`, a failed write leaves nothing), variants under that name.
+  `original_filename` and the default `name`/description use the readable
+  `cleanUploadFilename`, never the stored name. Replace keeps the path. Files from before
+  #399 (dev/seed only: no deployment had uploads) keep their names: renaming would mean
+  rewriting `src` inside `post_ydoc_state`, `block_doc`, versions and `_thumbnail_url`. Never
+  write an upload under a name a client chose or can predict.
 - **Password change revokes everything.** `UpdateUserTx{PasswordChanged: true}`
   locks the user row, stamps `password_changed_at` itself, and blocks every
   session. `authMiddleware` then rejects access tokens whose `iat` is before
@@ -177,7 +191,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 `newTestConfig`; `newCollabTestServer` points at your own). History and the guards:
 `docs/operations/collab-cutover.md`.
 
-- **API → collab calls** (`collab_internal_client.go`) use `COLLAB_INTERNAL_URL` +
+- **API → collab calls** (`collab_internal_client.go`: the publish flush, and the
+  best-effort user re-check of #333) use `COLLAB_INTERNAL_URL` +
   `COLLAB_INTERNAL_SECRET` (Bearer). `NewServer` trims both (URL also of trailing `/`)
   and refuses to start without them. The secret is NOT the one the collab server sends to
   the API (that's `ROLE_LOOKUP_SECRET`). **Before** reading `block_doc`, publish calls
@@ -273,6 +288,53 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `includeSubDomains` (it reaches the site's host through the `/api` proxy,
   which may be the apex domain). Don't add a
   `Cross-Origin-Resource-Policy`: the web app loads `/uploads` cross-origin.
+
+## Users screen: last active, search, role change, removal (#333)
+
+- **Last active** (`users.last_active_at`, `000032`): `authMiddleware` stamps it when the
+  row it already loaded is at least `LAST_ACTIVE_INTERVAL` old (default `5m`; **0 = off,
+  so a zero `Config` (tests) never writes it**), and so do `startSession` (login, accept,
+  self password change) and refresh rotation, after the commit. `TouchUserLastActive` re-checks
+  the age in SQL, so a burst of requests writes once, and skips a locked row (`FOR UPDATE SKIP
+  LOCKED`: a role change locks every admin) instead of making the request wait. A failed write is logged
+  (`last_active_update_failed`) and never fails the request. Tests that want it set the
+  interval (`newRateLimitedTestServer`).
+- **`GET /users`** (admin) is `ListMembers` + `CountMembers`: `?q=` (name, username or
+  email; ILIKE substring, wildcards escaped by `memberSearchPattern`, ≤100), `?role=`, the
+  old sorts, and per row `last_active_at` (null = none) and `posts_owned` (`posts.user_id`,
+  every type and status) in the same query. `meta.total` is the filtered count.
+- **`PUT /users/:id/role {role}`** (admin) → `ChangeUserRoleTx`; `PUT /users/:id` with a
+  role still works. Both refuse the last admin (409, `code: last_admin`), the caller
+  included: `guardLastAdmin` locks every admin row inside the transaction, so two
+  concurrent demotions of the last two admins can't both pass (tested against the DB).
+- **Role changes apply at once.** The API reads the role from the DB on every request, so
+  a demoted member's access tokens lose the rights at once (the token's `role` is
+  informational, and refresh tokens carry none). For open documents the API then calls the
+  collab server's `POST /internal/users/:id/recheck` (`recheckCollabUser`, after the
+  commit, in the background, best effort): it re-checks their connections now instead of
+  at the next `COLLAB_ACCESS_RECHECK_MS` (#313), so an editor demoted to contributor drops
+  to read-only on someone else's post. If that call fails the periodic re-check still
+  catches it.
+- **`DELETE /users/:id {transfer_to_id}`** (admin; the body is required) →
+  `RemoveUserTx`, one transaction. **Removal is a hard delete** of the user row, so the
+  username and email can be invited again and nothing has to filter "deleted" users:
+  - refused for the last admin (409 `last_admin`), for yourself (409
+    `cannot_remove_self`), and for a recipient that is the member or doesn't exist (400
+    `invalid_transfer_target`);
+  - the member and the recipient are locked in id order (`LockUsersForUpdate`); every post
+    they own moves to the recipient (`user_id` and the denormalized `username`), with
+    their byline (`user_posts`, #319) on those posts unless the recipient is already
+    credited; their media move too (`media.user_id` has no ON DELETE);
+  - their sessions are deleted, which revokes every refresh token; a still-valid access
+    token gets 403 at once (no user row); their open collab connections close on the
+    re-check above;
+  - what goes with the row: their bylines on **other people's** posts (CASCADE), reset
+    tokens (CASCADE). What stays without them: revisions they published
+    (`post_versions.created_by` → NULL, `000032`; it had no ON DELETE, so removing anyone
+    who had published used to fail), invitations they sent (`invited_by` → NULL; still
+    valid, revocable from the list), `post_ydoc_state.last_editor_id` (NULL).
+  - The old no-transfer delete (`DeleteUserTx`), which deleted the member's posts and media
+    rows, is gone.
 
 ## Invitations, password reset, mail (#148)
 
@@ -554,9 +616,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   next version_no, `InsertPublishedVersionFromPost`, `SetPublishedVersionOnPost`, then the
   content image links with `SyncPostContentMedia`, which never moves the featured image's
   order-0 row (#389), in one transaction) stores `golive_post_settings(id)` in `post_versions.settings` and
-  `posts.published_settings`: title, description, featured image (`_thumbnail_id`/`_url` meta)
-  and sorted `term_ids`. The SQL function is the one definition of the shape; the SEO fields
-  (#357) and authors (#319) join it by redefining it. Unpublish NULLs it; a version from before
+  `posts.published_settings`: title, description, featured image (`_thumbnail_id`/`_url` meta),
+  sorted `term_ids` and the SEO fields (#357, below). The SQL function is the one definition
+  of the shape; authors (#319) join it by redefining it. Unpublish NULLs it; a version from before
   #358 has NULL (the migration backfilled only current versions). `post_published_terms` is the
   published term set as rows, kept equal to `published_settings.term_ids` by a trigger (never
   write it by hand); term archives, related posts and `/public/terms` join it. **Every public
@@ -581,4 +643,23 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `unpublished_changes=true` filters `GET /posts`, `/posts/type/:type` and `/posts/search`.
   The JSON field is omitted when false, and the public
   presenters clear it (the authors/terms queries select `false` to keep the shared row type).
+
+## Post SEO (#357, `000031`, `posts_seo.go`)
+
+- Typed columns on `posts`: `seo_title`, `seo_description` (`''` = the post's title /
+  excerpt), `social_image_id` (FK media, `ON DELETE SET NULL`; NULL = the featured image),
+  `noindex`, `canonical_url` (`''` = its own URL). `golive_post_settings()` snapshots them,
+  so an SEO edit on a published post waits for Update; 000031 gave older snapshots the
+  defaults. `golive_post_settings_changed` (#326) ignores a published social image deleted since.
+- `PUT /posts/:id/seo` replaces them all (`requireContentEditor`: contributors see them
+  read-only, decision 7). Title ≤255 single line, description ≤500 (the admin's 60/160 are
+  soft guides), `validCanonicalURL` (absolute http(s), host, no spaces/userinfo), the social
+  image must exist and be an image (400 otherwise).
+- The working values are `seo` on `PostResponse` (admin). `/public/posts/:id|slug` answer the
+  **published** ones as `seo` (`resp.Post.SEO` is cleared there) with `image` resolved:
+  social image, else featured image, as its `social` variant when it has one.
+  `/public/posts` rows carry the published `noindex` for the sitemap (nothing else hides the
+  post). Restore-settings restores them (`RestorePostSEO`).
+- **The excerpt is optional** (`description`: `max=500`, no minimum; on PUT absent keeps,
+  `""` clears).
 </content>

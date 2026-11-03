@@ -11,7 +11,7 @@ package api
 import "github.com/gin-gonic/gin"
 
 func (server *Server) registerMenuRoutes(v1 *gin.RouterGroup) {
-	menus := v1.Group("/menus", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server))
+	menus := v1.Group("/menus", server.requireAuth(), requireContentEditor(server))
 	menus.GET("", server.listMenus)
 	menus.POST("", server.createMenu)
 	menus.GET("/:id", server.getMenu)

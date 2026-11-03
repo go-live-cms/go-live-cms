@@ -160,13 +160,14 @@ RETURNING *;
 -- Pages through image media by id for the variant backfill. With
 -- only_missing, rows that already have variants are skipped, and so are
 -- images whose known long edge is at most min_long_edge (they never get any;
--- {} is their final state, not "not processed yet").
+-- {} is their final state, not "not processed yet"). Rows with variants but no
+-- social crop (made before #357) count as missing.
 SELECT * FROM media
 WHERE mime_type LIKE 'image/%' AND id > sqlc.arg('after_id')
   AND (
     NOT sqlc.arg('only_missing')::boolean
     OR (
-      variants = '{}'::jsonb
+      variants -> 'social' IS NULL
       AND (width = 0 OR height = 0 OR GREATEST(width, height) > sqlc.arg('min_long_edge')::int)
     )
   )

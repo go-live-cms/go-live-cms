@@ -56,6 +56,7 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"mime/multipart"
@@ -106,14 +107,15 @@ func (server *Server) createMedia(c *gin.Context) {
 		return
 	}
 
-	mediaPath, actualFilename, err := saveUploadedFileWithOriginalName(file, header, server.config.UploadPath)
+	originalFilename := cleanUploadFilename(header.Filename)
+	mediaPath, err := saveUploadedFile(file, originalFilename, server.config.UploadPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
 		return
 	}
 
 	var width, height int32
-	if isImageFile(actualFilename) {
+	if isImageFile(mediaPath) {
 		w, h, imgErr := getImageDimensions(mediaPath)
 		if imgErr == nil {
 			width, height = w, h
@@ -121,7 +123,7 @@ func (server *Server) createMedia(c *gin.Context) {
 	}
 
 	// Strip the original's metadata and generate its variants (#255).
-	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, header.Size)
+	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, header.Size, nil)
 	variants := staged.commitForNewRow(server.requestLog(c))
 	removeStored := func() {
 		os.Remove(mediaPath)
@@ -135,11 +137,11 @@ func (server *Server) createMedia(c *gin.Context) {
 
 	name := req.Name
 	if name == "" {
-		name = strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename))
+		name = strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename))
 	}
 	description := req.Description
 	if description == "" {
-		description = fmt.Sprintf("Uploaded file: %s", actualFilename)
+		description = fmt.Sprintf("Uploaded file: %s", originalFilename)
 	}
 	// No alt text stays empty (#325): the file name is no description of the
 	// image, and an empty alt is what the admin's "No alt text" flags.
@@ -157,7 +159,7 @@ func (server *Server) createMedia(c *gin.Context) {
 		Height:           height,
 		Duration:         0,
 		UserID:           userID,
-		OriginalFilename: actualFilename,
+		OriginalFilename: originalFilename,
 		Variants:         variants,
 	}
 
@@ -290,24 +292,25 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 		return db.Medium{}, fmt.Sprintf("failed to read %s", fileHeader.Filename)
 	}
 
-	mediaPath, actualFilename, err := saveUploadedFileWithOriginalName(file, fileHeader, server.config.UploadPath)
+	originalFilename := cleanUploadFilename(fileHeader.Filename)
+	mediaPath, err := saveUploadedFile(file, originalFilename, server.config.UploadPath)
 	if err != nil {
 		return db.Medium{}, fmt.Sprintf("failed to save %s: %v", fileHeader.Filename, err)
 	}
 
 	var width, height int32
-	if isImageFile(actualFilename) {
+	if isImageFile(mediaPath) {
 		w, h, err := getImageDimensions(mediaPath)
 		if err == nil {
 			width, height = w, h
 		}
 	}
 
-	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, fileHeader.Size)
+	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, fileHeader.Size, nil)
 
 	media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
-		Name:        strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename)),
-		Description: fmt.Sprintf("Uploaded file: %s", fileHeader.Filename),
+		Name:        strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename)),
+		Description: fmt.Sprintf("Uploaded file: %s", originalFilename),
 		// No alt text: a bulk upload has none to give, and the file name isn't
 		// one (#325). The admin flags these until someone writes it.
 		Alt:              "",
@@ -318,7 +321,7 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 		Height:           height,
 		Duration:         0, // Set to 0 for non-video files
 		UserID:           userID,
-		OriginalFilename: actualFilename,
+		OriginalFilename: originalFilename,
 		Variants:         staged.commitForNewRow(server.requestLog(c)),
 	})
 	if err != nil {
@@ -407,14 +410,13 @@ func (server *Server) replaceMedia(c *gin.Context) {
 		return
 	}
 
-	ext := filepath.Ext(header.Filename)
 	params := db.ReplaceMediaFileParams{
 		ID:               id,
 		MediaPath:        media.MediaPath,
 		FileSize:         header.Size,
 		MimeType:         mimeType,
 		Duration:         media.Duration,
-		OriginalFilename: cleanFilename(strings.TrimSuffix(header.Filename, ext)) + ext,
+		OriginalFilename: cleanUploadFilename(header.Filename),
 	}
 
 	// In place when the current file is ours, else as a new upload.
@@ -428,13 +430,12 @@ func (server *Server) replaceMedia(c *gin.Context) {
 			return
 		}
 	} else {
-		newPath, actualFilename, err := saveUploadedFileWithOriginalName(file, header, server.config.UploadPath)
+		newPath, err := saveUploadedFile(file, params.OriginalFilename, server.config.UploadPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
 			return
 		}
 		params.MediaPath = newPath
-		params.OriginalFilename = actualFilename
 		storedPath = newPath
 	}
 
@@ -447,7 +448,8 @@ func (server *Server) replaceMedia(c *gin.Context) {
 	// New variants are staged aside; the old ones stay until the row is
 	// updated, so a failed replace leaves the original and its variants.
 	var staged *stagedVariants
-	params.FileSize, staged = prepareStoredImage(server.requestLog(c), server.config.UploadPath, storedPath, mimeType, header.Size)
+	// The focal point stays with a replace, so the new social crop uses it.
+	params.FileSize, staged = prepareStoredImage(server.requestLog(c), server.config.UploadPath, storedPath, mimeType, header.Size, focalPointFrom(media.FocalX, media.FocalY))
 	params.Variants = staged.column()
 
 	updated, err := server.store.ReplaceMediaFile(c.Request.Context(), params)
@@ -571,10 +573,55 @@ func (server *Server) updateMedia(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update media"})
 		return
 	}
+	// The social crop is cut around the focal point (#357).
+	if setFocal {
+		updatedMedia = server.restageMediaVariants(c, updatedMedia)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"media": server.mediaResponse(updatedMedia),
 	})
+}
+
+// restageMediaVariants regenerates an image's variants after its focal point
+// changed, so the social crop follows it. It writes through SetMediaVariantsTx,
+// like the backfill: the row is locked and must still be the one just updated,
+// so a concurrent replace or edit wins. Best effort: on failure the old crop
+// stays (logged) and the edit still succeeds. Returns the row to answer with.
+func (server *Server) restageMediaVariants(c *gin.Context, media db.Medium) db.Medium {
+	if !strings.HasPrefix(media.MimeType, "image/") || len(parseMediaVariants(media.Variants)) == 0 {
+		return media // no variants to update (too small, animated, not ours)
+	}
+	release := acquireImagePipeline()
+	staged, err := stageImageVariants(server.config.UploadPath, media.MediaPath, focalPointFrom(media.FocalX, media.FocalY))
+	release()
+	if staged == nil {
+		return media
+	}
+	if err != nil && !noVariantsReason(err) {
+		staged.discard()
+		server.requestLog(c).Warn("media: regenerating variants for the focal point failed", "media_id", media.ID, "error", err)
+		return media
+	}
+	raw := json.RawMessage(`{}`)
+	if column := staged.column(); column.Valid {
+		raw = column.RawMessage
+	}
+	updated, err := server.store.SetMediaVariantsTx(c.Request.Context(), db.SetMediaVariantsTxParams{
+		ID:          media.ID,
+		MediaPath:   media.MediaPath,
+		ChangedAt:   media.ChangedAt,
+		Variants:    raw,
+		CommitFiles: staged.commit,
+	})
+	if err != nil {
+		staged.discard()
+		if !errors.Is(err, db.ErrMediaChanged) && !errors.Is(err, sql.ErrNoRows) {
+			server.requestLog(c).Warn("media: saving variants for the focal point failed", "media_id", media.ID, "error", err)
+		}
+		return media
+	}
+	return updated
 }
 
 // deleteMedia handles DELETE /media/:id - deletion with filesystem cleanup.

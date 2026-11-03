@@ -42,8 +42,8 @@ type Store interface {
 	DuplicatePostTx(ctx context.Context, arg DuplicatePostTxParams) (Post, error)
 	DeletePostTx(ctx context.Context, id int64) error
 
-	DeleteUserTx(ctx context.Context, id int64) error
-	DeleteUserWithTransferTx(ctx context.Context, arg DeleteUserWithTransferTxParams) error
+	RemoveUserTx(ctx context.Context, arg RemoveUserTxParams) (RemoveUserTxResult, error)
+	ChangeUserRoleTx(ctx context.Context, arg SetUserRoleParams) (User, error)
 	UpdateUserTx(ctx context.Context, arg UpdateUserTxParams) (UpdateUserTxResult, error)
 
 	CreateUserInvitationTx(ctx context.Context, arg CreateUserInvitationParams) (UserInvitation, error)
@@ -199,43 +199,121 @@ func (store *SQLStore) DeletePostTx(ctx context.Context, id int64) error {
 	return err
 }
 
-func (store *SQLStore) DeleteUserTx(ctx context.Context, id int64) error {
+// ChangeUserRoleTx sets a user's role (#333). Moving the role off admin first runs
+// guardLastAdmin, which locks every admin row until commit, so two demotions racing
+// for the last two admins can't both pass: the second re-reads the first's demotion
+// and gets ErrLastAdmin. sql.ErrNoRows if the user doesn't exist.
+func (store *SQLStore) ChangeUserRoleTx(ctx context.Context, arg SetUserRoleParams) (User, error) {
+	var user User
 	err := store.execTx(ctx, func(q *Queries) error {
+		if !strings.EqualFold(arg.Role, "admin") {
+			if err := guardLastAdmin(ctx, q, arg.ID); err != nil {
+				return err
+			}
+		}
+		var err error
+		user, err = q.SetUserRole(ctx, arg)
+		return err
+	})
+	return user, err
+}
 
-		err := guardLastAdmin(ctx, q, id)
-		if err != nil {
+// ErrReassignToRemovedUser is returned by RemoveUserTx when the posts would go to
+// the member being removed.
+var ErrReassignToRemovedUser = errors.New("posts can't be reassigned to the member being removed")
+
+// ErrReassignTargetNotFound is returned by RemoveUserTx when the user who should
+// receive the posts doesn't exist.
+var ErrReassignTargetNotFound = errors.New("the user to reassign posts to doesn't exist")
+
+type RemoveUserTxParams struct {
+	UserID int64
+	// ReassignTo receives the posts and media the member owns.
+	ReassignTo int64
+}
+
+type RemoveUserTxResult struct {
+	// PostsReassigned is the number of posts that changed owner.
+	PostsReassigned int
+}
+
+// RemoveUserTx removes a member (#333), in one transaction:
+//   - refuses the last admin (guardLastAdmin, which also serializes removals and
+//     demotions of admins),
+//   - locks the member and the recipient (LockUsersForUpdate, id order),
+//   - moves every post they own (posts.user_id) to the recipient, with their byline
+//     on those posts (ReassignPostBylines), and the media they uploaded,
+//   - deletes their sessions, which revokes every refresh token,
+//   - deletes the user row. Their bylines on other people's posts, reset tokens and
+//     invitation links go with it (ON DELETE CASCADE / SET NULL); revisions they
+//     published keep a NULL created_by (000032).
+//
+// sql.ErrNoRows if the member doesn't exist.
+func (store *SQLStore) RemoveUserTx(ctx context.Context, arg RemoveUserTxParams) (RemoveUserTxResult, error) {
+	var result RemoveUserTxResult
+	if arg.UserID == arg.ReassignTo {
+		return result, ErrReassignToRemovedUser
+	}
+	err := store.execTx(ctx, func(q *Queries) error {
+		if err := guardLastAdmin(ctx, q, arg.UserID); err != nil {
 			return err
 		}
 
-		err = q.DeleteUserSessions(ctx, id)
+		locked, err := q.LockUsersForUpdate(ctx, []int64{arg.UserID, arg.ReassignTo})
 		if err != nil {
 			return err
 		}
+		var found, recipient *LockUsersForUpdateRow
+		for i := range locked {
+			switch locked[i].ID {
+			case arg.UserID:
+				found = &locked[i]
+			case arg.ReassignTo:
+				recipient = &locked[i]
+			}
+		}
+		if found == nil {
+			return sql.ErrNoRows
+		}
+		if recipient == nil {
+			return ErrReassignTargetNotFound
+		}
 
-		err = q.DeleteUserPostsByUserID(ctx, id)
+		moved, err := q.ReassignPostsOwner(ctx, ReassignPostsOwnerParams{
+			FromID:     arg.UserID,
+			ToID:       recipient.ID,
+			ToUsername: recipient.Username,
+		})
 		if err != nil {
 			return err
 		}
+		result.PostsReassigned = len(moved)
 
-		err = q.DeleteMediaByUserID(ctx, id)
-		if err != nil {
+		if len(moved) > 0 {
+			if err := q.ReassignPostBylines(ctx, ReassignPostBylinesParams{
+				FromID:  arg.UserID,
+				ToID:    recipient.ID,
+				PostIds: moved,
+			}); err != nil {
+				return err
+			}
+		}
+
+		if err := q.TransferMediaToUser(ctx, TransferMediaToUserParams{
+			UserID:   arg.UserID,
+			UserID_2: recipient.ID,
+		}); err != nil {
 			return err
 		}
 
-		err = q.DeletePostsByUserID(ctx, id)
-		if err != nil {
+		if err := q.DeleteUserSessions(ctx, arg.UserID); err != nil {
 			return err
 		}
 
-		err = q.DeleteUser(ctx, id)
-		if err != nil {
-			return err
-		}
-
-		return nil
+		return q.DeleteUser(ctx, arg.UserID)
 	})
 
-	return err
+	return result, err
 }
 
 type UpdateUserTxParams struct {
@@ -325,59 +403,6 @@ func (store *SQLStore) UpdateUserTx(ctx context.Context, arg UpdateUserTxParams)
 	})
 
 	return result, err
-}
-
-type DeleteUserWithTransferTxParams struct {
-	UserID       int64
-	TransferToID int64
-}
-
-func (store *SQLStore) DeleteUserWithTransferTx(ctx context.Context, arg DeleteUserWithTransferTxParams) error {
-	err := store.execTx(ctx, func(q *Queries) error {
-
-		err := guardLastAdmin(ctx, q, arg.UserID)
-		if err != nil {
-			return err
-		}
-
-		err = q.TransferPostsToAdmin(ctx, TransferPostsToAdminParams{
-			UserID:   arg.UserID,
-			UserID_2: arg.TransferToID,
-		})
-		if err != nil {
-			return err
-		}
-
-		err = q.UpdateUserPostsOwnership(ctx, UpdateUserPostsOwnershipParams{
-			UserID:   arg.UserID,
-			UserID_2: arg.TransferToID,
-		})
-		if err != nil {
-			return err
-		}
-
-		err = q.TransferMediaToUser(ctx, TransferMediaToUserParams{
-			UserID:   arg.UserID,
-			UserID_2: arg.TransferToID,
-		})
-		if err != nil {
-			return err
-		}
-
-		err = q.DeleteUserSessions(ctx, arg.UserID)
-		if err != nil {
-			return err
-		}
-
-		err = q.DeleteUser(ctx, arg.UserID)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	return err
 }
 
 type CreatePostWithTaxonomyTermsTxParams struct {

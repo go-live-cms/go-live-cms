@@ -390,6 +390,8 @@ export function createCollabServer(options: CollabServerOptions) {
       return hocuspocus
     },
     flush,
+    /** Re-checks a user's open connections now (internal listener, #333). */
+    recheckUser: (userId: string) => recheck.checkUser(userId),
     /** Open connections the access re-check is tracking. */
     get recheckedConnections(): number {
       return recheck.size

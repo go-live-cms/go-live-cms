@@ -207,6 +207,8 @@ func (server *Server) startSession(ctx *gin.Context, v4Maker *token.PasetoV4Make
 	server.setRefreshCookie(ctx, refreshToken, now.Add(server.config.RefreshTokenDuration))
 
 	logSecurityEvent(ctx, LogSessionCreated, session.ID.String(), user.ID, "")
+	// Signing in is activity (#333); the request that follows may not come for a while.
+	recordActivity(ctx, server.store, user.ID, server.config.LastActiveInterval)
 
 	return session, nil
 }
@@ -459,6 +461,8 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 
 	// Log successful refresh
 	logSecurityEvent(ctx, LogSessionRefreshed, newSessionID.String(), userID, fmt.Sprintf("Old session: %s", session.ID.String()))
+	// After the commit, outside the user-row lock. Throttled in SQL (#333).
+	recordActivity(ctx, server.store, userID, server.config.LastActiveInterval)
 
 	// Return new access token
 	accessExpiresAt := now.Add(server.config.AccessTokenDuration)

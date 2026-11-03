@@ -152,6 +152,19 @@ are the most fragile part of the codebase. **Before editing anything under
   env); the other tests stay in the plain `unit` project. Without `SITE_URL`,
   robots/sitemap are sent `private, no-store` (the URL came from the Host header);
   the sitemap is cached in memory for 10 minutes.
+- **Post SEO (#357):** the post route builds the head from `getPublicPost`'s `seo` (the
+  *published* values, never the admin's): `<title>` = `pageTitle(SEO title or title, site
+  name)` ("X · Site"; the home page is `homeTitle`, site · tagline), description =
+  `postDescription` (SEO description → excerpt → first paragraph, cut before 160),
+  canonical = `postCanonical`, `og:image`/`twitter:image` from the API's resolved image (the
+  1200 x 630 `social` variant) with width/height/alt, `hideFromSearch` → `robots` noindex
+  (canonical and OG stay), and an Article JSON-LD (`articleJsonLd`, `jsonLdText`). The
+  sitemap skips `/public/posts` rows with `noindex`; RSS, archives and search keep them.
+  The excerpt is optional: lists use `postExcerpt` (the first paragraph without one).
+  Admin: the settings panel's SEO tab is `components/editor/ui/PostSeoPanel.tsx`, rules in
+  `lib/postSeo.ts` (tested); `PostForm` saves it debounced through `updatePostSEO` (and
+  before Update), editors and admins only. Media `variants.social` is that crop; srcsets
+  never include it.
 - **App shell (#339):** the sidebar's links come from `components/sidebar/nav.ts`
   (`buildNavigation`, role-filtered with `lib/roles.ts`; tested in `nav.test.ts`). At
   ≤768px it's the shared `Drawer` (`bare`), so focus trap, Escape and focus return are
@@ -187,6 +200,14 @@ are the most fragile part of the codebase. **Before editing anything under
   API's minimum, "Not your email or name", and "different from the current one"). `Input` masks
   refuse characters such as `! & : ?`; pass `unmasked` for free text the API validates.
   Saving a post type fires `POST_TYPES_CHANGED` so the sidebar reloads its menu.
+- **Users screen (#333):** search (debounced, `GET /users?q=`: name, username or email), the
+  Posts owned and Last active columns, and the row menu: Change role (also the role cell's
+  button; `ChangeRoleModal`, `PUT /users/:id/role`) and Remove (`RemoveMemberModal`: who
+  receives their posts and media, you by default; `DELETE /users/:id {transfer_to_id}`).
+  Rules and messages are `lib/members.ts` (tested): "Now" within the API's 5-minute write
+  interval, then `formatLastEdited`; no Remove on your own row; the API's `last_admin`,
+  `cannot_remove_self` and `invalid_transfer_target` codes. Changing your own role refreshes
+  `authManager`'s user.
 - **Media library and detail (#342):** `/media` (grid, side panel for `?file=id`, at
   ≤768px a Drawer) and `/media/:id` (focal point with crop previews, Replace, fields,
   "Used in"). The rules (kinds, tags, filters, "Used in" rows, object-position) live in

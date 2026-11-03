@@ -164,7 +164,7 @@ func TestAuthMiddlewareRejections(t *testing.T) {
 			server := newTestServer(t, store)
 			server.router.GET(
 				"/auth-test",
-				authMiddleware(server.tokenMaker, server.store),
+				server.requireAuth(),
 				func(c *gin.Context) { c.Status(http.StatusOK) },
 			)
 

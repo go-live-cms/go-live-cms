@@ -72,8 +72,8 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	// Public: browse and discover taxonomy types
 	// Protected: create new taxonomy type definitions
 	types := tg.Group("/types")
-	types.GET("", server.getTaxonomyTypes)                                                                                   // GET /api/v1/taxonomy/types
-	types.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createTaxonomyType) // POST /api/v1/taxonomy/types
+	types.GET("", server.getTaxonomyTypes)                                                        // GET /api/v1/taxonomy/types
+	types.POST("", server.requireAuth(), requireContentEditor(server), server.createTaxonomyType) // POST /api/v1/taxonomy/types
 
 	// Type-Specific Term Browsing (must come before generic type lookup to avoid conflicts)
 	// Public: list terms within specific taxonomy types
@@ -97,25 +97,25 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	// Parameterized routes with sub-paths
 	// Posts at any status with their working fields (#393): moderators only. The
 	// public site lists a term's posts through /public/taxonomies/... (#348).
-	terms.GET("/:id/posts", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.getTaxonomyTermPosts) // GET /api/v1/taxonomy/terms/:id/posts
+	terms.GET("/:id/posts", server.requireAuth(), requireContentEditor(server), server.getTaxonomyTermPosts) // GET /api/v1/taxonomy/terms/:id/posts
 
 	// Basic parameterized routes (most greedy) - must be last
 	terms.GET("/:id", server.getTaxonomyTermByID) // GET /api/v1/taxonomy/terms/:id
 
 	// Protected term management operations (editor-or-admin role)
-	terms.POST("", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.createTaxonomyTerm)       // POST /api/v1/taxonomy/terms
-	terms.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy/terms/:id
-	terms.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy/terms/:id
+	terms.POST("", server.requireAuth(), requireContentEditor(server), server.createTaxonomyTerm)       // POST /api/v1/taxonomy/terms
+	terms.PUT("/:id", server.requireAuth(), requireContentEditor(server), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy/terms/:id
+	terms.DELETE("/:id", server.requireAuth(), requireContentEditor(server), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy/terms/:id
 
 	// Cross-Module Integration
 	// Post-taxonomy term associations for bidirectional relationships
 	// Note: This could alternatively live in posts_routes.go for module cohesion
 	// The working term set (#393): content roles, canReadPost in the handler. The
 	// public site reads the published terms from /public/posts/:id (#358).
-	v1.GET("/posts/:id/taxonomy-terms", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomy-terms
+	v1.GET("/posts/:id/taxonomy-terms", server.requireAuth(), requireContentAuthor(server), server.getPostTaxonomyTerms) // GET /api/v1/posts/:id/taxonomy-terms
 
 	// One term at a time (editor-or-admin role), so concurrent editors don't
 	// overwrite each other's assignments
-	v1.PUT("/posts/:id/taxonomy-terms/:term_id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.addPostTaxonomyTerm)       // PUT /api/v1/posts/:id/taxonomy-terms/:term_id
-	v1.DELETE("/posts/:id/taxonomy-terms/:term_id", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.removePostTaxonomyTerm) // DELETE /api/v1/posts/:id/taxonomy-terms/:term_id
+	v1.PUT("/posts/:id/taxonomy-terms/:term_id", server.requireAuth(), requireContentEditor(server), server.addPostTaxonomyTerm)       // PUT /api/v1/posts/:id/taxonomy-terms/:term_id
+	v1.DELETE("/posts/:id/taxonomy-terms/:term_id", server.requireAuth(), requireContentEditor(server), server.removePostTaxonomyTerm) // DELETE /api/v1/posts/:id/taxonomy-terms/:term_id
 }

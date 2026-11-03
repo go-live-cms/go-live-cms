@@ -286,7 +286,7 @@ func (q *Queries) GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]Get
 }
 
 const getPostsByMultipleTaxonomyTerms = `-- name: GetPostsByMultipleTaxonomyTerms :many
-SELECT DISTINCT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash
+SELECT DISTINCT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url
 FROM posts p
 JOIN post_taxonomy_relationships ptr ON p.id = ptr.post_id
 WHERE ptr.taxonomy_term_id = ANY($1::bigint[])
@@ -337,6 +337,11 @@ func (q *Queries) GetPostsByMultipleTaxonomyTerms(ctx context.Context, arg GetPo
 			&i.PublishedSettings,
 			&i.BlockDocHash,
 			&i.PublishedBlockHash,
+			&i.SeoTitle,
+			&i.SeoDescription,
+			&i.SocialImageID,
+			&i.Noindex,
+			&i.CanonicalUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -352,7 +357,7 @@ func (q *Queries) GetPostsByMultipleTaxonomyTerms(ctx context.Context, arg GetPo
 }
 
 const getPostsByTaxonomyTerm = `-- name: GetPostsByTaxonomyTerm :many
-SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash
+SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url
 FROM posts p
 JOIN post_taxonomy_relationships ptr ON p.id = ptr.post_id
 WHERE ptr.taxonomy_term_id = $1
@@ -410,6 +415,11 @@ func (q *Queries) GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxo
 			&i.PublishedSettings,
 			&i.BlockDocHash,
 			&i.PublishedBlockHash,
+			&i.SeoTitle,
+			&i.SeoDescription,
+			&i.SocialImageID,
+			&i.Noindex,
+			&i.CanonicalUrl,
 		); err != nil {
 			return nil, err
 		}

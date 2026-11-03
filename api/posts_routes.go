@@ -24,7 +24,7 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 	posts := rg.Group("/posts")
 	// Every post route serves or changes the working copy (#393), so every one
 	// takes a token and a content role; the handlers' per-post rules build on it.
-	auth := authMiddleware(server.tokenMaker, server.store)
+	auth := server.requireAuth()
 	author := requireContentAuthor(server)
 	{
 		// Reads (put static routes before the greedy :id route)
@@ -72,6 +72,9 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/:id/versions", auth, requireContentEditor(server), server.listPostVersions)
 		posts.GET("/:id/versions/:version_no", auth, requireContentEditor(server), server.getPostVersion)
 		posts.POST("/:id/versions/:version_no/restore-settings", auth, requireContentEditor(server), server.restorePostVersionSettings)
+
+		// SEO settings (#357): editors and admins; contributors see them read-only
+		posts.PUT("/:id/seo", auth, requireContentEditor(server), server.updatePostSEO)
 
 		// Working vs published settings (#358): whether a settings change waits for Update
 		posts.GET("/:id/settings", auth, author, server.getPostSettingsState)
