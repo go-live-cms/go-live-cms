@@ -171,6 +171,14 @@ are the most fragile part of the codebase. **Before editing anything under
   API's minimum, "Not your email or name", and "different from the current one"). `Input` masks
   refuse characters such as `! & : ?`; pass `unmasked` for free text the API validates.
   Saving a post type fires `POST_TYPES_CHANGED` so the sidebar reloads its menu.
+- **Users screen (#333):** search (debounced, `GET /users?q=`: name, username or email), the
+  Posts owned and Last active columns, and the row menu: Change role (also the role cell's
+  button; `ChangeRoleModal`, `PUT /users/:id/role`) and Remove (`RemoveMemberModal`: who
+  receives their posts and media, you by default; `DELETE /users/:id {transfer_to_id}`).
+  Rules and messages are `lib/members.ts` (tested): "Now" within the API's 5-minute write
+  interval, then `formatLastEdited`; no Remove on your own row; the API's `last_admin`,
+  `cannot_remove_self` and `invalid_transfer_target` codes. Changing your own role refreshes
+  `authManager`'s user.
 - **Media library and detail (#342):** `/media` (grid, side panel for `?file=id`, at
   ≤768px a Drawer) and `/media/:id` (focal point with crop previews, Replace, fields,
   "Used in"). The rules (kinds, tags, filters, "Used in" rows, object-position) live in

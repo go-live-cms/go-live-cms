@@ -1,23 +1,28 @@
-import React, { useCallback, useState, useEffect } from "react"
+import React, { useCallback, useState, useEffect, useMemo } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import Pagination from "@gl-admin/components/ui/Pagination"
 import UserRole from "@gl-admin/components/ui/UserRole"
 import Avatar from "@gl-admin/components/ui/Avatar"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
-import Button from "@gl-admin/components/ui/Button"
+import Button, { IconButton } from "@gl-admin/components/ui/Button"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
+import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
-import { PlusIcon } from "@gl-admin/components/ui/icons"
+import { ChevronDownIcon, MoreIcon, PlusIcon, SearchIcon } from "@gl-admin/components/ui/icons"
 import { getUsers } from "@gl-admin/lib/api/users"
 import type { User, ApiMeta } from "@gl-admin/lib/api/types"
-import { AuthManager } from "@gl-admin/lib/auth"
-import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
+import { AuthManager, authManager } from "@gl-admin/lib/auth"
+import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
+import { USER_ROLE_OPTIONS, roleLabel } from "@gl-admin/lib/roles"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import { canRemoveMember, lastActiveLabel, memberName, removedNotice, roleChangedNotice } from "@gl-admin/lib/members"
 import { formatDate, plural } from "@gl-admin/utils/formatting"
 import InviteUserModal from "@gl-admin/components/users/InviteUserModal"
 import PendingInvitations from "@gl-admin/components/users/PendingInvitations"
+import ChangeRoleModal from "@gl-admin/components/users/ChangeRoleModal"
+import RemoveMemberModal from "@gl-admin/components/users/RemoveMemberModal"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
 import { invitationSentNotice } from "@gl-admin/lib/invitations"
 import type { InvitationResult } from "@gl-admin/lib/api/invitations"
@@ -26,9 +31,12 @@ import "@gl-admin/assets/styles/pages/workspace.scss"
 // Users (#148, restyled in #343, the "Users · invite" board). The route is admin-only
 // (AdminOnly in app.tsx), like every user-management endpoint (requireSiteAdmin).
 //
-// Hidden until their issues land (#333): member search, the Posts owned and Last
-// active columns, changing a role from the list and removing a member (the row menu).
-// A member's details, role included, are edited on their own page as before.
+// #333: member search (name, username or email; GET /users?q=), the Posts owned and
+// Last active columns, and the row menu: Change role (also the role cell's button) and
+// Remove, which asks who receives their posts. The rules are lib/members.ts.
+
+// How long the search box waits for typing to stop before it searches.
+const SEARCH_DEBOUNCE_MS = 250
 
 const SORT_OPTIONS = [
     { label: "Default", value: "" },
@@ -60,9 +68,37 @@ const Users: React.FC = () => {
         showSentNotice(result)
     }
     const showInvitationError = useCallback((message: string) => showError(message), [])
+    const me = useAuthUser()
     const initialFilters = { role: "", sort: "" }
     const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>(initialFilters)
-    const filtered = selectedFilters.role !== "" || selectedFilters.sort !== ""
+    const [searchText, setSearchText] = useState("")
+    const [search, setSearch] = useState("")
+    const filtered = selectedFilters.role !== "" || selectedFilters.sort !== "" || search !== ""
+    // Bumped after a role change or a removal, so the list reloads.
+    const [reloadKey, setReloadKey] = useState(0)
+    const [roleTarget, setRoleTarget] = useState<User | null>(null)
+    const [removeTarget, setRemoveTarget] = useState<User | null>(null)
+
+    useEffect(() => {
+        const timer = setTimeout(() => setSearch(searchText.trim()), SEARCH_DEBOUNCE_MS)
+        return () => clearTimeout(timer)
+    }, [searchText])
+
+    const query = useMemo(() => ({ ...selectedFilters, q: search }), [selectedFilters, search])
+
+    const roleChanged = (user: User) => {
+        setRoleTarget(null)
+        showSuccess(roleChangedNotice(user))
+        setReloadKey((k) => k + 1)
+        // Your own role: the sidebar and the admin-only pages follow it.
+        if (me && user.id === me.id) void authManager.refreshUser()
+    }
+
+    const removed = (member: User, recipient: User, moved: number) => {
+        setRemoveTarget(null)
+        showSuccess(removedNotice(member, recipient, moved), 6000)
+        setReloadKey((k) => k + 1)
+    }
 
     const columns: TableColumnWithRender<User>[] = [
         {
@@ -90,19 +126,74 @@ const Users: React.FC = () => {
             key: "role",
             name: "Role",
             width: "10rem",
-            render: (_, row) => <UserRole role={row?.role || null} />,
+            render: (_, row) =>
+                row ? (
+                    <button
+                        type="button"
+                        className="gl-member__role"
+                        aria-label={`Role for ${memberName(row)}: ${roleLabel(row.role)}. Change role`}
+                        onClick={() => setRoleTarget(row)}
+                    >
+                        <UserRole role={row.role} />
+                        <ChevronDownIcon />
+                    </button>
+                ) : (
+                    <UserRole role={null} />
+                ),
         },
         {
-            key: "created_at",
-            name: "Joined",
+            key: "posts_owned",
+            name: "Posts owned",
+            width: "7rem",
+            render: (_, row) =>
+                row ? <span className="gl-workspace__muted">{row.posts_owned ?? 0}</span> : <Skeleton shape="text" width={24} />,
+        },
+        {
+            key: "last_active_at",
+            name: "Last active",
             width: "9rem",
             render: (_, row) =>
-                row ? <span className="gl-workspace__muted">{formatDate(row.created_at)}</span> : <Skeleton shape="text" width={80} />,
+                row ? (
+                    <span className="gl-workspace__muted" title={row.last_active_at ? formatDate(row.last_active_at) : undefined}>
+                        {lastActiveLabel(row.last_active_at)}
+                    </span>
+                ) : (
+                    <Skeleton shape="text" width={80} />
+                ),
+        },
+        {
+            key: "id",
+            name: "Actions",
+            width: "3.5rem",
+            render: (_, row) =>
+                row && (
+                    <Menu
+                        label={`Actions for ${memberName(row)}`}
+                        placement="bottom-end"
+                        trigger={(props) => (
+                            <IconButton {...props} size="sm" aria-label={`More for ${memberName(row)}`} icon={<MoreIcon />} />
+                        )}
+                    >
+                        <MenuItem onSelect={() => navigate(`/users/edit/${row.id}`)}>Edit details</MenuItem>
+                        <MenuItem onSelect={() => setRoleTarget(row)}>Change role</MenuItem>
+                        <MenuSeparator />
+                        <MenuItem
+                            danger
+                            disabled={!canRemoveMember(row, me)}
+                            description={canRemoveMember(row, me) ? "Their posts go to someone you choose" : "Another administrator can remove you"}
+                            onSelect={() => setRemoveTarget(row)}
+                        >
+                            Remove
+                        </MenuItem>
+                    </Menu>
+                ),
         },
     ]
 
     const clearFilters = () => {
         setSelectedFilters(initialFilters)
+        setSearchText("")
+        setSearch("")
     }
 
     const fetchData = useCallback(
@@ -111,10 +202,12 @@ const Users: React.FC = () => {
             const response = await getUsers({ limit, offset, ...query }, token || "")
             const total = response.meta.total ?? 0
             // The unfiltered total is the member count in the subtitle.
-            if (!query.role) setMemberCount(total)
+            if (!query.role && !query.q) setMemberCount(total)
             return { data: response.data, total }
         },
-        []
+        // A new function reloads the page (Pagination refetches when it changes).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [reloadKey]
     )
 
     useEffect(() => {
@@ -153,6 +246,8 @@ const Users: React.FC = () => {
                 onCount={setPendingCount}
             />
             <InviteUserModal isOpen={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={handleInvited} />
+            <ChangeRoleModal member={roleTarget} me={me} onClose={() => setRoleTarget(null)} onChanged={roleChanged} />
+            <RemoveMemberModal member={removeTarget} me={me} onClose={() => setRemoveTarget(null)} onRemoved={removed} />
             <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
 
             <section className="gl-workspace__section" aria-labelledby="gl-members-title">
@@ -160,6 +255,17 @@ const Users: React.FC = () => {
                     <h2 className="gl-workspace__section-title" id="gl-members-title">
                         Members
                     </h2>
+                    <label className="gl-users__search">
+                        <SearchIcon />
+                        <span className="gl-workspace__sr">Search members</span>
+                        <input
+                            type="search"
+                            placeholder="Search members"
+                            value={searchText}
+                            maxLength={100}
+                            onChange={(e) => setSearchText(e.currentTarget.value)}
+                        />
+                    </label>
                     {filtered && (
                         <Button variant="ghost" size="sm" onClick={clearFilters}>
                             Clear filters
@@ -178,7 +284,7 @@ const Users: React.FC = () => {
                         onChange={(value) => setSelectedFilters((prev) => ({ ...prev, sort: value }))}
                     />
                 </div>
-                <Pagination fetchData={fetchData} token={accessToken} query={selectedFilters || {}}>
+                <Pagination fetchData={fetchData} token={accessToken} query={query}>
                     {({ data, loading, error, retry }) => {
                         if (error) {
                             return (
@@ -196,11 +302,11 @@ const Users: React.FC = () => {
                             )
                         }
                         if (!loading && data.length === 0) {
-                            return selectedFilters.role ? (
+                            return selectedFilters.role || search ? (
                                 <EmptyState
                                     icon="search"
-                                    title="No users match these filters"
-                                    description="Try another role, or clear the filters."
+                                    title={search ? `No members match “${search}”` : "No users match these filters"}
+                                    description={search ? "Search looks at names, usernames and emails." : "Try another role, or clear the filters."}
                                     action={
                                         <Button variant="secondary" onClick={clearFilters}>
                                             Clear filters

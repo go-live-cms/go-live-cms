@@ -92,7 +92,7 @@ async function fetchUsersExample() {
   const usersResponse = await getUsers({
     limit: 50,
     sort: "username_asc",
-    search: "admin",
+    q: "admin",
   })
 
   console.log("Users:", usersResponse.data)
