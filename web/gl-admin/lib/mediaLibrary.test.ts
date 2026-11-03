@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
+  altHint,
+  altTextValue,
   countLine,
   findMediaSort,
   focalObjectPosition,
@@ -8,6 +10,7 @@ import {
   formatTag,
   mediaKind,
   mediaMetaLine,
+  missingAlt,
   replaceHint,
   typeLabel,
   usedInHeading,
@@ -98,5 +101,35 @@ describe("focalObjectPosition", () => {
     expect(focalObjectPosition({ x: 0.29, y: 0.6 })).toBe("29% 60%")
     expect(focalObjectPosition({ x: 0.3333, y: 1 })).toBe("33.3% 100%")
     expect(focalObjectPosition(null)).toBe("50% 50%")
+  })
+})
+
+describe("missing alt text (#325)", () => {
+  const image = (over: Record<string, unknown> = {}) =>
+    ({ media_path: "uploads/a.png", mime_type: "image/png", alt: "", decorative: false, ...over }) as Parameters<typeof missingAlt>[0]
+
+  it("is an image, not decorative, whose alt is empty or only whitespace", () => {
+    expect(missingAlt(image())).toBe(true)
+    expect(missingAlt(image({ alt: " \t\n " }))).toBe(true)
+    expect(missingAlt(image({ alt: undefined }))).toBe(true)
+    expect(missingAlt(image({ media_path: "uploads/a.svg", mime_type: "image/svg+xml" }))).toBe(true)
+    expect(missingAlt(image({ alt: "A red roof" }))).toBe(false)
+    expect(missingAlt(image({ decorative: true }))).toBe(false)
+    expect(missingAlt(image({ media_path: "uploads/a.pdf", mime_type: "application/pdf" }))).toBe(false)
+    expect(missingAlt(image({ media_path: "uploads/a.mp4", mime_type: "video/mp4" }))).toBe(false)
+    // The API decides by MIME type alone; an extension doesn't make it an image here
+    // either, so a tagged tile is always in the filter.
+    expect(missingAlt(image({ mime_type: "" }))).toBe(false)
+  })
+
+  it("read-only views say whether there's none on purpose", () => {
+    expect(altTextValue({ alt: "A red roof" })).toBe("A red roof")
+    expect(altTextValue({ alt: "  " })).toBe("None")
+    expect(altTextValue({ alt: "A red roof", decorative: true })).toBe("None, decorative image")
+  })
+
+  it("the field's hint follows the decorative option", () => {
+    expect(altHint(false)).toMatch(/^Describe what the image shows/)
+    expect(altHint(true)).toBe("Not used while the image is marked decorative.")
   })
 })

@@ -33,6 +33,12 @@ type Querier interface {
 	// Frees a location for another menu (assigning a location moves it).
 	ClearMenuLocation(ctx context.Context, arg ClearMenuLocationParams) error
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
+	// The total for GET /media: the rows ListMedia pages through, same filters.
+	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
+	// Home's "N images have no alt text · used in M published posts" (#325, #324):
+	// images missing their alt text (the rule in ListMedia), and how many
+	// published posts use at least one of them through post_media.
+	CountMissingAltMedia(ctx context.Context) (CountMissingAltMediaRow, error)
 	CountPasswordResetTokensSince(ctx context.Context, arg CountPasswordResetTokensSinceParams) (int64, error)
 	// The admin list's status tabs (#340): one count per status, with the list's
 	// type and owner filters.
@@ -49,7 +55,6 @@ type Querier interface {
 	CountSearchPosts(ctx context.Context, arg CountSearchPostsParams) (int64, error)
 	// Counting functions
 	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
-	CountTotalMedia(ctx context.Context) (int64, error)
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
@@ -216,6 +221,10 @@ type Querier interface {
 	// images whose known long edge is at most min_long_edge (they never get any;
 	// {} is their final state, not "not processed yet").
 	ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error)
+	// published_post_count is how many of the posts using it (post_media) are
+	// published. $7 keeps only images missing their alt text (#325): not
+	// decorative, and alt empty or only whitespace. CountMedia and
+	// CountMissingAltMedia use the same rule; keep the three in step.
 	ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error)
 	// Which of the given media_path values some media row uses (the dev seed
 	// restores only sample files a row still references).
@@ -367,7 +376,8 @@ type Querier interface {
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	// Metadata-only update used by PUT /media/:id. The file columns (media_path,
 	// file_size, mime_type, dimensions, original_filename) are set on upload and
-	// deliberately not writable here. NULL args keep the current value.
+	// deliberately not writable here. NULL args keep the current value; an alt of
+	// '' clears it (#325).
 	UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error)
 	UpdateMenu(ctx context.Context, arg UpdateMenuParams) (Menu, error)
 	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)

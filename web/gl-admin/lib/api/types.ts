@@ -107,6 +107,10 @@ export interface Media {
   variants?: Partial<Record<MediaVariantName, MediaVariant>>
   // Point of interest (0..1 from the top-left), null when unset.
   focal_point?: FocalPoint | null
+  // The image needs no alt text (a background, a divider) and is rendered alt="" (#325).
+  decorative?: boolean
+  // GET /media only: how many of the posts using it are published.
+  published_post_count?: number
 }
 
 export interface Post {

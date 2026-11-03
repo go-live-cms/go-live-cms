@@ -15,15 +15,62 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
-const countTotalMedia = `-- name: CountTotalMedia :one
-SELECT COUNT(*) AS total FROM media
+const countMedia = `-- name: CountMedia :one
+SELECT COUNT(*) AS total FROM media m
+WHERE
+    ($1::text = '' OR m.mime_type LIKE $1::text || '%')
+    AND ($2::bigint = 0 OR m.user_id = $2::bigint)
+    AND ($3::text = '' OR (m.name ILIKE '%' || $3::text || '%' OR m.description ILIKE '%' || $3::text || '%'))
+    AND (NOT $4::boolean OR (m.mime_type LIKE 'image/%' AND NOT m.decorative AND m.alt !~ '\S'))
 `
 
-func (q *Queries) CountTotalMedia(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countTotalMedia)
+type CountMediaParams struct {
+	MimePrefix string `json:"mime_prefix"`
+	UserID     int64  `json:"user_id"`
+	Search     string `json:"search"`
+	MissingAlt bool   `json:"missing_alt"`
+}
+
+// The total for GET /media: the rows ListMedia pages through, same filters.
+func (q *Queries) CountMedia(ctx context.Context, arg CountMediaParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countMedia,
+		arg.MimePrefix,
+		arg.UserID,
+		arg.Search,
+		arg.MissingAlt,
+	)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
+}
+
+const countMissingAltMedia = `-- name: CountMissingAltMedia :one
+WITH missing AS (
+    SELECT m.id FROM media m
+    WHERE m.mime_type LIKE 'image/%' AND NOT m.decorative AND m.alt !~ '\S'
+)
+SELECT
+    (SELECT COUNT(*) FROM missing)::bigint AS media_count,
+    (SELECT COUNT(DISTINCT pm.post_id)
+       FROM post_media pm
+       JOIN missing ON missing.id = pm.media_id
+       JOIN posts p ON p.id = pm.post_id
+      WHERE p.post_status = 'published')::bigint AS published_post_count
+`
+
+type CountMissingAltMediaRow struct {
+	MediaCount         int64 `json:"media_count"`
+	PublishedPostCount int64 `json:"published_post_count"`
+}
+
+// Home's "N images have no alt text · used in M published posts" (#325, #324):
+// images missing their alt text (the rule in ListMedia), and how many
+// published posts use at least one of them through post_media.
+func (q *Queries) CountMissingAltMedia(ctx context.Context) (CountMissingAltMediaRow, error) {
+	row := q.db.QueryRowContext(ctx, countMissingAltMedia)
+	var i CountMissingAltMediaRow
+	err := row.Scan(&i.MediaCount, &i.PublishedPostCount)
+	return i, err
 }
 
 const createMedia = `-- name: CreateMedia :one
@@ -39,7 +86,8 @@ INSERT INTO media (
     height,
     duration,
     original_filename,
-    variants
+    variants,
+    decorative
 ) VALUES (
     $1,
     $2,
@@ -52,8 +100,9 @@ INSERT INTO media (
     $9,
     $10,
     $11,
-    COALESCE($12::jsonb, '{}'::jsonb)
-) RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y
+    COALESCE($12::jsonb, '{}'::jsonb),
+    $13
+) RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
 `
 
 type CreateMediaParams struct {
@@ -69,6 +118,7 @@ type CreateMediaParams struct {
 	Duration         int32                 `json:"duration"`
 	OriginalFilename string                `json:"original_filename"`
 	Variants         pqtype.NullRawMessage `json:"variants"`
+	Decorative       bool                  `json:"decorative"`
 }
 
 // variants is NULL for media without generated variants, stored as {}.
@@ -86,6 +136,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		arg.Duration,
 		arg.OriginalFilename,
 		arg.Variants,
+		arg.Decorative,
 	)
 	var i Medium
 	err := row.Scan(
@@ -107,6 +158,7 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) (Mediu
 		&i.Variants,
 		&i.FocalX,
 		&i.FocalY,
+		&i.Decorative,
 	)
 	return i, err
 }
@@ -222,7 +274,8 @@ SELECT
     m.mime_type,
     m.original_filename,
     m.created_at,
-    m.changed_at
+    m.changed_at,
+    m.decorative
 FROM post_media pm
 JOIN media m ON pm.media_id = m.id
 WHERE pm.post_id = $1 AND pm."order" = 0
@@ -244,6 +297,7 @@ type GetFeaturedImageRow struct {
 	OriginalFilename string    `json:"original_filename"`
 	CreatedAt        time.Time `json:"created_at"`
 	ChangedAt        time.Time `json:"changed_at"`
+	Decorative       bool      `json:"decorative"`
 }
 
 func (q *Queries) GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error) {
@@ -264,12 +318,13 @@ func (q *Queries) GetFeaturedImage(ctx context.Context, postID int64) (GetFeatur
 		&i.OriginalFilename,
 		&i.CreatedAt,
 		&i.ChangedAt,
+		&i.Decorative,
 	)
 	return i, err
 }
 
 const getMedia = `-- name: GetMedia :one
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative FROM media
 WHERE id = $1 LIMIT 1
 `
 
@@ -295,12 +350,13 @@ func (q *Queries) GetMedia(ctx context.Context, id int64) (Medium, error) {
 		&i.Variants,
 		&i.FocalX,
 		&i.FocalY,
+		&i.Decorative,
 	)
 	return i, err
 }
 
 const getMediaByIDs = `-- name: GetMediaByIDs :many
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative FROM media
 WHERE id = ANY($1::bigint[])
 `
 
@@ -332,6 +388,7 @@ func (q *Queries) GetMediaByIDs(ctx context.Context, ids []int64) ([]Medium, err
 			&i.Variants,
 			&i.FocalX,
 			&i.FocalY,
+			&i.Decorative,
 		); err != nil {
 			return nil, err
 		}
@@ -347,7 +404,7 @@ func (q *Queries) GetMediaByIDs(ctx context.Context, ids []int64) ([]Medium, err
 }
 
 const getMediaByPost = `-- name: GetMediaByPost :many
-SELECT m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y FROM media m
+SELECT m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative FROM media m
 JOIN post_media pm ON m.id = pm.media_id
 WHERE pm.post_id = $1
 ORDER BY pm."order", m.created_at
@@ -381,6 +438,7 @@ func (q *Queries) GetMediaByPost(ctx context.Context, postID int64) ([]Medium, e
 			&i.Variants,
 			&i.FocalX,
 			&i.FocalY,
+			&i.Decorative,
 		); err != nil {
 			return nil, err
 		}
@@ -397,7 +455,7 @@ func (q *Queries) GetMediaByPost(ctx context.Context, postID int64) ([]Medium, e
 
 const getMediaByPostWithOrder = `-- name: GetMediaByPostWithOrder :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
     pm."order" as media_order
 FROM media m
 JOIN post_media pm ON m.id = pm.media_id
@@ -424,6 +482,7 @@ type GetMediaByPostWithOrderRow struct {
 	Variants         json.RawMessage `json:"variants"`
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
+	Decorative       bool            `json:"decorative"`
 	MediaOrder       int32           `json:"media_order"`
 }
 
@@ -455,6 +514,7 @@ func (q *Queries) GetMediaByPostWithOrder(ctx context.Context, postID int64) ([]
 			&i.Variants,
 			&i.FocalX,
 			&i.FocalY,
+			&i.Decorative,
 			&i.MediaOrder,
 		); err != nil {
 			return nil, err
@@ -472,7 +532,7 @@ func (q *Queries) GetMediaByPostWithOrder(ctx context.Context, postID int64) ([]
 
 const getMediaByUser = `-- name: GetMediaByUser :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
@@ -480,7 +540,7 @@ WHERE
     m.user_id = $1
     AND ($2 = '' OR m.mime_type LIKE $2 || '%')
     AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -525,6 +585,7 @@ type GetMediaByUserRow struct {
 	Variants         json.RawMessage `json:"variants"`
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
+	Decorative       bool            `json:"decorative"`
 	PostCount        int64           `json:"post_count"`
 }
 
@@ -563,6 +624,7 @@ func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) 
 			&i.Variants,
 			&i.FocalX,
 			&i.FocalY,
+			&i.Decorative,
 			&i.PostCount,
 		); err != nil {
 			return nil, err
@@ -579,7 +641,7 @@ func (q *Queries) GetMediaByUser(ctx context.Context, arg GetMediaByUserParams) 
 }
 
 const getMediaForUpdate = `-- name: GetMediaForUpdate :one
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative FROM media
 WHERE id = $1 LIMIT 1
 FOR UPDATE
 `
@@ -608,6 +670,7 @@ func (q *Queries) GetMediaForUpdate(ctx context.Context, id int64) (Medium, erro
 		&i.Variants,
 		&i.FocalX,
 		&i.FocalY,
+		&i.Decorative,
 	)
 	return i, err
 }
@@ -626,11 +689,11 @@ func (q *Queries) GetMediaPostCount(ctx context.Context, mediaID int64) (int64, 
 
 const getPopularMedia = `-- name: GetPopularMedia :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
     COUNT(pm.post_id) as post_count
 FROM media m
 JOIN post_media pm ON m.id = pm.media_id
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative
 HAVING COUNT(pm.post_id) > 0
 ORDER BY COUNT(pm.post_id) DESC
 LIMIT $1
@@ -655,6 +718,7 @@ type GetPopularMediaRow struct {
 	Variants         json.RawMessage `json:"variants"`
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
+	Decorative       bool            `json:"decorative"`
 	PostCount        int64           `json:"post_count"`
 }
 
@@ -686,6 +750,7 @@ func (q *Queries) GetPopularMedia(ctx context.Context, limit int32) ([]GetPopula
 			&i.Variants,
 			&i.FocalX,
 			&i.FocalY,
+			&i.Decorative,
 			&i.PostCount,
 		); err != nil {
 			return nil, err
@@ -1059,7 +1124,7 @@ func (q *Queries) GetUserMediaCount(ctx context.Context, userID int64) (int64, e
 }
 
 const listImageMediaAfter = `-- name: ListImageMediaAfter :many
-SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y FROM media
+SELECT id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative FROM media
 WHERE mime_type LIKE 'image/%' AND id > $1
   AND (
     NOT $2::boolean
@@ -1116,6 +1181,7 @@ func (q *Queries) ListImageMediaAfter(ctx context.Context, arg ListImageMediaAft
 			&i.Variants,
 			&i.FocalX,
 			&i.FocalY,
+			&i.Decorative,
 		); err != nil {
 			return nil, err
 		}
@@ -1131,16 +1197,19 @@ func (q *Queries) ListImageMediaAfter(ctx context.Context, arg ListImageMediaAft
 }
 
 const listMedia = `-- name: ListMedia :many
-SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y,
-    COUNT(pm.post_id) as post_count
+SELECT
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
+    COUNT(pm.post_id) as post_count,
+    COUNT(DISTINCT pm.post_id) FILTER (WHERE p.post_status = 'published') as published_post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
-WHERE 
+LEFT JOIN posts p ON p.id = pm.post_id
+WHERE
     ($1 = '' OR m.mime_type LIKE $1 || '%')
     AND ($2 = 0 OR m.user_id = $2)
     AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
+    AND (NOT $7::boolean OR (m.mime_type LIKE 'image/%' AND NOT m.decorative AND m.alt !~ '\S'))
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -1164,30 +1233,37 @@ type ListMediaParams struct {
 	Column4 interface{} `json:"column_4"`
 	Limit   int32       `json:"limit"`
 	Offset  int32       `json:"offset"`
+	Column7 bool        `json:"column_7"`
 }
 
 type ListMediaRow struct {
-	ID               int64           `json:"id"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description"`
-	Alt              string          `json:"alt"`
-	MediaPath        string          `json:"media_path"`
-	UserID           int64           `json:"user_id"`
-	CreatedAt        time.Time       `json:"created_at"`
-	ChangedAt        time.Time       `json:"changed_at"`
-	FileSize         int64           `json:"file_size"`
-	MimeType         string          `json:"mime_type"`
-	Width            int32           `json:"width"`
-	Height           int32           `json:"height"`
-	Duration         int32           `json:"duration"`
-	OriginalFilename string          `json:"original_filename"`
-	Metadata         json.RawMessage `json:"metadata"`
-	Variants         json.RawMessage `json:"variants"`
-	FocalX           sql.NullFloat64 `json:"focal_x"`
-	FocalY           sql.NullFloat64 `json:"focal_y"`
-	PostCount        int64           `json:"post_count"`
+	ID                 int64           `json:"id"`
+	Name               string          `json:"name"`
+	Description        string          `json:"description"`
+	Alt                string          `json:"alt"`
+	MediaPath          string          `json:"media_path"`
+	UserID             int64           `json:"user_id"`
+	CreatedAt          time.Time       `json:"created_at"`
+	ChangedAt          time.Time       `json:"changed_at"`
+	FileSize           int64           `json:"file_size"`
+	MimeType           string          `json:"mime_type"`
+	Width              int32           `json:"width"`
+	Height             int32           `json:"height"`
+	Duration           int32           `json:"duration"`
+	OriginalFilename   string          `json:"original_filename"`
+	Metadata           json.RawMessage `json:"metadata"`
+	Variants           json.RawMessage `json:"variants"`
+	FocalX             sql.NullFloat64 `json:"focal_x"`
+	FocalY             sql.NullFloat64 `json:"focal_y"`
+	Decorative         bool            `json:"decorative"`
+	PostCount          int64           `json:"post_count"`
+	PublishedPostCount int64           `json:"published_post_count"`
 }
 
+// published_post_count is how many of the posts using it (post_media) are
+// published. $7 keeps only images missing their alt text (#325): not
+// decorative, and alt empty or only whitespace. CountMedia and
+// CountMissingAltMedia use the same rule; keep the three in step.
 func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMediaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listMedia,
 		arg.Column1,
@@ -1196,6 +1272,7 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMed
 		arg.Column4,
 		arg.Limit,
 		arg.Offset,
+		arg.Column7,
 	)
 	if err != nil {
 		return nil, err
@@ -1223,7 +1300,9 @@ func (q *Queries) ListMedia(ctx context.Context, arg ListMediaParams) ([]ListMed
 			&i.Variants,
 			&i.FocalX,
 			&i.FocalY,
+			&i.Decorative,
 			&i.PostCount,
+			&i.PublishedPostCount,
 		); err != nil {
 			return nil, err
 		}
@@ -1379,7 +1458,7 @@ SET
     variants = COALESCE($8::jsonb, '{}'::jsonb),
     changed_at = now()
 WHERE id = $9
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
 `
 
 type ReplaceMediaFileParams struct {
@@ -1430,13 +1509,14 @@ func (q *Queries) ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFilePara
 		&i.Variants,
 		&i.FocalX,
 		&i.FocalY,
+		&i.Decorative,
 	)
 	return i, err
 }
 
 const searchMediaByName = `-- name: SearchMediaByName :many
 SELECT 
-    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y,
+    m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative,
     COUNT(pm.post_id) as post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
@@ -1444,7 +1524,7 @@ WHERE
     (m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%')
     AND ($2 = '' OR m.mime_type LIKE $2 || '%')
     AND ($3 = 0 OR m.user_id = $3)
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -1489,6 +1569,7 @@ type SearchMediaByNameRow struct {
 	Variants         json.RawMessage `json:"variants"`
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
+	Decorative       bool            `json:"decorative"`
 	PostCount        int64           `json:"post_count"`
 }
 
@@ -1527,6 +1608,7 @@ func (q *Queries) SearchMediaByName(ctx context.Context, arg SearchMediaByNamePa
 			&i.Variants,
 			&i.FocalX,
 			&i.FocalY,
+			&i.Decorative,
 			&i.PostCount,
 		); err != nil {
 			return nil, err
@@ -1546,7 +1628,7 @@ const setMediaVariants = `-- name: SetMediaVariants :one
 UPDATE media
 SET variants = $1
 WHERE id = $2
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
 `
 
 type SetMediaVariantsParams struct {
@@ -1578,6 +1660,7 @@ func (q *Queries) SetMediaVariants(ctx context.Context, arg SetMediaVariantsPara
 		&i.Variants,
 		&i.FocalX,
 		&i.FocalY,
+		&i.Decorative,
 	)
 	return i, err
 }
@@ -1613,7 +1696,7 @@ SET
     original_filename = COALESCE($11, original_filename),
     changed_at = now()
 WHERE id = $1
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
 `
 
 type UpdateMediaParams struct {
@@ -1664,6 +1747,7 @@ func (q *Queries) UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Mediu
 		&i.Variants,
 		&i.FocalX,
 		&i.FocalY,
+		&i.Decorative,
 	)
 	return i, err
 }
@@ -1674,19 +1758,21 @@ SET
     name = COALESCE($1, name),
     description = COALESCE($2, description),
     alt = COALESCE($3, alt),
+    decorative = COALESCE($4::boolean, decorative),
     -- set_focal_point false keeps the focal point; true writes focal_x and
     -- focal_y, where NULL clears it.
-    focal_x = CASE WHEN $4::boolean THEN $5::double precision ELSE focal_x END,
-    focal_y = CASE WHEN $4::boolean THEN $6::double precision ELSE focal_y END,
+    focal_x = CASE WHEN $5::boolean THEN $6::double precision ELSE focal_x END,
+    focal_y = CASE WHEN $5::boolean THEN $7::double precision ELSE focal_y END,
     changed_at = now()
-WHERE id = $7
-RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y
+WHERE id = $8
+RETURNING id, name, description, alt, media_path, user_id, created_at, changed_at, file_size, mime_type, width, height, duration, original_filename, metadata, variants, focal_x, focal_y, decorative
 `
 
 type UpdateMediaMetadataParams struct {
 	Name          sql.NullString  `json:"name"`
 	Description   sql.NullString  `json:"description"`
 	Alt           sql.NullString  `json:"alt"`
+	Decorative    sql.NullBool    `json:"decorative"`
 	SetFocalPoint bool            `json:"set_focal_point"`
 	FocalX        sql.NullFloat64 `json:"focal_x"`
 	FocalY        sql.NullFloat64 `json:"focal_y"`
@@ -1695,12 +1781,14 @@ type UpdateMediaMetadataParams struct {
 
 // Metadata-only update used by PUT /media/:id. The file columns (media_path,
 // file_size, mime_type, dimensions, original_filename) are set on upload and
-// deliberately not writable here. NULL args keep the current value.
+// deliberately not writable here. NULL args keep the current value; an alt of
+// ” clears it (#325).
 func (q *Queries) UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetadataParams) (Medium, error) {
 	row := q.db.QueryRowContext(ctx, updateMediaMetadata,
 		arg.Name,
 		arg.Description,
 		arg.Alt,
+		arg.Decorative,
 		arg.SetFocalPoint,
 		arg.FocalX,
 		arg.FocalY,
@@ -1726,6 +1814,7 @@ func (q *Queries) UpdateMediaMetadata(ctx context.Context, arg UpdateMediaMetada
 		&i.Variants,
 		&i.FocalX,
 		&i.FocalY,
+		&i.Decorative,
 	)
 	return i, err
 }

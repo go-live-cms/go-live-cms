@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
+import AltTextField from "@gl-admin/components/media/AltTextField"
 import FocalPointPicker, { FocalCropPreviews, formatFocalPoint } from "@gl-admin/components/media/FocalPointPicker"
 import { KindIcon } from "@gl-admin/components/media/MediaCard"
 import UsedIn, { useUsedIn } from "@gl-admin/components/media/UsedIn"
@@ -16,9 +17,11 @@ import { getMediaById, getMediaVariantPreviewURL, replaceMediaFile, updateMedia 
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { formatDate } from "@gl-admin/utils/formatting"
 import {
+  altTextValue,
   formatDimensions,
   formatFileSize,
   formatTag,
+  hasAltText,
   isRasterImage,
   mediaKind,
   replaceHint,
@@ -31,9 +34,8 @@ import "@gl-admin/assets/styles/pages/media.scss"
 // A media file's detail page (#342, the "Media detail" board): the focal point with crop
 // previews, Replace file, name / alt text / description, where it's used, and its facts.
 // Saving and replacing work as the old edit modal did: the focal point is saved with the
-// fields, and Replace keeps the id, URL, name, description and alt text.
-//
-// Hidden until #325 lands: the "Decorative image" option under the alt text.
+// fields, and Replace keeps the id, URL, name, description and alt text. The alt text has
+// the "Decorative image" option (#325) and, unlike name and description, may be cleared.
 
 type Fields = { name: string; alt: string; description: string }
 
@@ -55,6 +57,7 @@ export default function MediaDetail() {
   const [reload, setReload] = useState(0)
   const [fields, setFields] = useState<Fields>({ name: "", alt: "", description: "" })
   const [focalPoint, setFocalPoint] = useState<FocalPoint | null>(null)
+  const [decorative, setDecorative] = useState(false)
   const [saving, setSaving] = useState(false)
   // null when no replace is running; otherwise the upload fraction (0..1).
   const [replaceProgress, setReplaceProgress] = useState<number | null>(null)
@@ -73,6 +76,7 @@ export default function MediaDetail() {
         setMedia(media)
         setFields(fieldsOf(media))
         setFocalPoint(media.focal_point ?? null)
+        setDecorative(!!media.decorative)
       })
       .catch((e) => live && setLoadError(e))
     return () => {
@@ -96,22 +100,32 @@ export default function MediaDetail() {
   const current = media.focal_point ?? null
   const focalChanged = focalPoint?.x !== current?.x || focalPoint?.y !== current?.y
   const stored = fieldsOf(media)
+  const decorativeChanged = decorative !== !!media.decorative
   const dirty =
-    focalChanged || fields.name !== stored.name || fields.alt !== stored.alt || fields.description !== stored.description
-  // The API reads an empty field as "keep it", so clearing one would save as a silent
-  // revert; say so instead and hold Save.
-  const clearedError = (key: keyof Fields) =>
+    focalChanged ||
+    decorativeChanged ||
+    fields.name !== stored.name ||
+    fields.alt !== stored.alt ||
+    fields.description !== stored.description
+  // The API reads an empty name or description as "keep it", so clearing one would save
+  // as a silent revert; say so instead and hold Save. An empty alt text is saved as such.
+  const clearedError = (key: "name" | "description") =>
     stored[key] && !fields[key].trim() ? "This can't be empty. Type a new value, or discard the change." : undefined
-  const anyCleared = (["name", "alt", "description"] as const).some((key) => clearedError(key))
+  const anyCleared = (["name", "description"] as const).some((key) => clearedError(key))
 
   const save = async () => {
     setSaving(true)
     try {
-      const updated = await updateMedia(media.id, focalChanged ? { ...fields, focal_point: focalPoint } : fields)
+      const updated = await updateMedia(media.id, {
+        ...fields,
+        ...(decorativeChanged ? { decorative } : {}),
+        ...(focalChanged ? { focal_point: focalPoint } : {}),
+      })
       const saved = { ...(updated.media as Media), post_count: (updated.media as Media).post_count ?? media.post_count }
       setMedia(saved)
       setFields(fieldsOf(saved))
       setFocalPoint(saved.focal_point ?? null)
+      setDecorative(!!saved.decorative)
       toast.success("Changes saved")
     } catch (e) {
       toast.error(errorMessage(e, "Couldn't save the changes"))
@@ -260,16 +274,14 @@ export default function MediaDetail() {
               }}
             >
               <Input id="media-name" title="Name" value={fields.name} onChange={set("name")} disabled={busy} error={clearedError("name")} />
-              {(kind === "image" || kind === "vector") && (
-                <Textarea
+              {hasAltText(media) && (
+                <AltTextField
                   id="media-alt"
-                  label="Alt text"
-                  rows={3}
-                  value={fields.alt}
-                  onChange={set("alt")}
+                  alt={fields.alt}
+                  decorative={decorative}
+                  onAltChange={(alt) => setFields((prev) => ({ ...prev, alt }))}
+                  onDecorativeChange={setDecorative}
                   disabled={busy}
-                  error={clearedError("alt")}
-                  hint="Describe what the image shows, for people who can't see it."
                 />
               )}
               <Textarea id="media-description" label="Description" rows={3} value={fields.description} onChange={set("description")} disabled={busy} error={clearedError("description")} />
@@ -285,6 +297,7 @@ export default function MediaDetail() {
                     onClick={() => {
                       setFields(stored)
                       setFocalPoint(current)
+                      setDecorative(!!media.decorative)
                     }}
                   >
                     Discard changes
@@ -295,7 +308,7 @@ export default function MediaDetail() {
           ) : (
             <dl className="gl-media-facts gl-media-facts--stacked">
               <dt>Alt text</dt>
-              <dd>{media.alt || "None"}</dd>
+              <dd>{altTextValue(media)}</dd>
               <dt>Description</dt>
               <dd>{media.description || "None"}</dd>
             </dl>

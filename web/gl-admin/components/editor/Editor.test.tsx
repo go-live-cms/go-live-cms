@@ -4,8 +4,12 @@ import { createRoot, type Root } from "react-dom/client"
 import { Node } from "@tiptap/core"
 import type * as Y from "yjs"
 import { paragraphs } from "../../../collab-server/testkit"
-import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { validateBlockDoc, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { themeBlockLookup } from "@gl-admin/lib/blocks-spec/themeBlocks"
+import { fragmentToBlockDoc } from "@gl-admin/lib/collaboration/fragmentBridge"
 import { EDITOR_FRAGMENT } from "@gl-admin/lib/collaboration/schemaGuard"
+import { getInstalledCollabSchema } from "@gl-admin/lib/theme-blocks/collabSchema"
+import alert from "../../../themes/example/blocks/Alert/index"
 import { RECHECK_MS, startRelay, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 import { acquireHocuspocus, releaseHocuspocus } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { tiptapExtensionRegistry } from "./utils/extensionRegistry"
@@ -301,5 +305,81 @@ describe("Editor", () => {
     // Once: the old Y.Doc's structs were not merged in.
     expect(pm()!.textContent).not.toContain("Careful")
     expect(paragraphs(relay.api.storedDoc(String(POST))).filter((t) => t === "Reseeded").length).toBeLessThanOrEqual(1)
+  })
+})
+
+// A new post has no collab doc: its body reaches the server only as the block_doc sent
+// with POST /posts, which the server seeds from on first open (#384). Built from the HTML,
+// it kept text only, so every mark typed before the first save was lost.
+describe("a new post's body (#384)", () => {
+  const BODY =
+    '<p>Some <strong>bold</strong> and <a href="https://example.com/x">a link</a></p>' +
+    "<ul><li><p>one <em>two</em></p></li><li><p><strong>three</strong></p></li></ul>" +
+    '<img src="/uploads/media/a.png" alt="A house" data-media-id="321">' +
+    `<div data-block-type="${alert.type}" data-variant="warning">Mind <strong>this</strong></div>`
+
+  type PMJson = { type: string; text?: string; marks?: { type: string; attrs?: Record<string, unknown> }[]; content?: PMJson[] }
+  // "<mark>:<text>" for every marked text run in a block's pm.
+  const marked = (pm: unknown): string[] => {
+    const out: string[] = []
+    const walk = (node: PMJson) => {
+      for (const mark of node.marks ?? []) out.push(`${mark.type}:${node.text}`)
+      node.content?.forEach(walk)
+    }
+    walk(pm as PMJson)
+    return out
+  }
+  const ofType = (doc: BlockDocV1, type: string) => Object.values(doc.blocks).filter((block) => block.type === type)
+  const pmOf = (block: { attrs: unknown }) => (block.attrs as { pm?: unknown }).pm
+
+  function expectMarks(doc: BlockDocV1) {
+    const [paragraph] = ofType(doc, "paragraph")
+    expect(marked(pmOf(paragraph))).toEqual(["bold:bold", "link:a link"])
+    const link = (pmOf(paragraph) as PMJson).content!.find((run) => run.text === "a link")!.marks![0]
+    expect(link.attrs).toMatchObject({ href: "https://example.com/x" })
+    expect(ofType(doc, "list_item").flatMap((item) => marked(pmOf(item)))).toEqual(["italic:two", "bold:three"])
+    const [callout] = ofType(doc, alert.type)
+    expect(callout.attrs).toMatchObject({ variant: "warning" })
+    expect(marked(pmOf(callout))).toEqual(["bold:this"])
+    // A number, or the public page loses srcset and the file's "Used in" misses the post (#342).
+    expect(ofType(doc, "image")[0].attrs).toMatchObject({ mediaId: 321, src: "/uploads/media/a.png", alt: "A house" })
+  }
+
+  it("is built from the editor's document with the collab bridge, keeps every mark, and the seeded editor has them", async () => {
+    const ref = await mount({ postId: undefined, value: BODY })
+    await until(() => !!pm()?.textContent?.includes("Mind"), "the new-post editor")
+    const body = ref.current!.getBlockDoc()!
+    expectMarks(body)
+    const schema = getInstalledCollabSchema()
+    expect(validateBlockDoc(body, { themeBlocks: themeBlockLookup(schema) })).toBe(body)
+
+    // Save draft and reload: the collab server seeds the post from that block_doc.
+    await act(async () => root.unmount())
+    root = createRoot(container)
+    await relay.destroy()
+    relay = await startRelay({ blockDoc: body, revision: 1 })
+    state.relay = relay
+    await mount()
+    await until(() => !!pm()?.textContent?.includes("Mind"), "the bound editor")
+    expect([...pm()!.querySelectorAll("strong")].map((el) => el.textContent)).toEqual(["bold", "three", "this"])
+    expect(pm()!.querySelector("em")?.textContent).toBe("two")
+    expect(pm()!.querySelector('a[href="https://example.com/x"]')?.textContent).toBe("a link")
+    // What the server's next store would write.
+    const stored = fragmentToBlockDoc(serverFragment(), schema)
+    expect(stored.blocks_order).toEqual(body.blocks_order)
+    expectMarks(stored)
+  })
+
+  it("is null while the body is empty, and for an existing post (its body is the server's)", async () => {
+    const ref = await mount({ postId: undefined })
+    await until(() => !!pm(), "the new-post editor")
+    expect(ref.current!.getBlockDoc()).toBeNull()
+
+    tiptapExtensionRegistry.register(Callout)
+    await act(async () => root.unmount())
+    root = createRoot(container)
+    const bound = await mount()
+    await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
+    expect(bound.current!.getBlockDoc()).toBeNull()
   })
 })

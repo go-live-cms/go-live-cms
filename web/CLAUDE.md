@@ -174,8 +174,16 @@ are the most fragile part of the codebase. **Before editing anything under
   "Used in"). The rules (kinds, tags, filters, "Used in" rows, object-position) live in
   `lib/mediaLibrary.ts` (tested). "Used in" is `GET /media/:id/posts`, i.e. `post_media`:
   the featured image (order 0) and the image blocks the collab store syncs (> 0), merged
-  per post. Write access is `canWriteMedia` (`lib/roles.ts`). Hidden until #325: the
-  "No alt text" tag/filter and "Decorative image".
+  per post. Write access is `canWriteMedia` (`lib/roles.ts`).
+- **Missing alt text (#325):** alt is optional on upload (the admin no longer sends the
+  file's stem) and an image may be marked **decorative** (`media.decorative`). Missing =
+  an image (SVG too), not decorative, alt empty or only whitespace: `missingAlt` in
+  `lib/mediaLibrary.ts`, the same rule as the API's `GET /media?missing_alt=true`. Tiles and
+  the editor's image picker (`FeaturedImageSelector`, UI only) show "No alt text"; the
+  library's filter is `?alt=missing`. `AltTextField` (panel and detail page) holds the alt
+  text and "Decorative image"; an empty alt saves as empty (name and description still
+  can't be cleared). The public `ImageBlock` renders `alt=""` when `doc.media[id].decorative`.
+  Home's count is `getMissingAltSummary()` (`GET /media/missing-alt`), for #324.
 - **Account pages (#344):** `/login`, `/forgot-password`, `/reset-password` and
   `/accept-invite` are Astro pages (no React) on `src/layouts/AccountPage.astro`, styled by
   `pages/login.scss` with the #338 class names (`gl-input`, `gl-button`, `gl-notice`,

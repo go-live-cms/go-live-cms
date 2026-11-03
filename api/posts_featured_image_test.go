@@ -191,6 +191,24 @@ func TestGetFeaturedImageFullAPI(t *testing.T) {
 			},
 		},
 		{
+			// #325: a decorative image's stored alt text isn't handed out.
+			name:   "Decorative",
+			postID: post.ID,
+			buildStubs: func(store *mockdb.MockStore) {
+				row := db.GetFeaturedImageRow{PostID: post.ID, MediaID: 3, Alt: "A wavy line", Decorative: true}
+				store.EXPECT().GetFeaturedImage(gomock.Any(), gomock.Any()).Times(1).Return(row, nil)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+				var resp struct {
+					FeaturedImage map[string]interface{} `json:"featured_image"`
+				}
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+				require.Equal(t, "", resp.FeaturedImage["alt"])
+				require.Equal(t, true, resp.FeaturedImage["decorative"])
+			},
+		},
+		{
 			name:        "InvalidID",
 			urlOverride: "/api/v1/posts/abc/featured-image/full",
 			buildStubs: func(store *mockdb.MockStore) {

@@ -7,11 +7,11 @@ import { DeleteMediaDialog } from "@gl-admin/components/media/mediaActions"
 import Button from "@gl-admin/components/ui/Button"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
-import { SearchIcon, UploadIcon } from "@gl-admin/components/ui/icons"
+import { CheckIcon, PlusIcon, SearchIcon, UploadIcon } from "@gl-admin/components/ui/icons"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { getMedia, getMediaById, createMedia } from "@gl-admin/lib/api/media"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { MEDIA_SORTS, TYPE_FILTERS, countLine, findMediaSort } from "@gl-admin/lib/mediaLibrary"
+import { MEDIA_SORTS, MISSING_ALT_PARAM, TYPE_FILTERS, countLine, findMediaSort } from "@gl-admin/lib/mediaLibrary"
 import { canCreateContent, canWriteMedia } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useListParams } from "@gl-admin/lib/hooks/useListParams"
@@ -21,12 +21,12 @@ import type { Media as MediaItem } from "@gl-admin/lib/types"
 import "@gl-admin/assets/styles/pages/content-list.scss"
 import "@gl-admin/assets/styles/pages/media.scss"
 
-// The media library (#342): the grid with variant previews, search, the type filter and
-// sort (all in the URL), bulk select and delete, uploads by button or drop, and a side
-// panel for the open file (?file=id) with "Edit details" for the detail page.
+// The media library (#342): the grid with variant previews, search, the type filter, the
+// "Missing alt text" filter (#325, ?alt=missing) and sort (all in the URL), bulk select
+// and delete, uploads by button or drop, and a side panel for the open file (?file=id)
+// with "Edit details" for the detail page.
 //
-// Hidden until #325 lands: the "Missing alt text" filter and the tiles' "No alt text"
-// tag. The board's "1.2 GB" total has no API (the count line shows files only).
+// The board's "1.2 GB" total has no API (the count line shows files only).
 
 const PAGE_SIZE = 24
 const ACCEPT = "image/*,video/*,audio/*,.pdf,.doc,.docx,.txt"
@@ -43,6 +43,7 @@ export default function Media() {
   const type = TYPE_FILTERS.some((t) => t.id === params.get("type")) ? params.get("type")! : ""
   const sort = findMediaSort(params.get("sort"))
   const search = params.get("q") ?? ""
+  const missingAltOnly = params.get(MISSING_ALT_PARAM.name) === MISSING_ALT_PARAM.value
   const openId = Number(params.get("file")) || null
 
   const [items, setItems] = useState<MediaItem[]>([])
@@ -85,7 +86,7 @@ export default function Media() {
     setSearchText((text) => (text.trim() === search ? text : search))
   }, [search])
 
-  const query = { search: search || undefined, type: type || undefined, sort }
+  const query = { search: search || undefined, type: type || undefined, missing_alt: missingAltOnly || undefined, sort }
 
   // Bumped by every fresh load, so a Load more answered after a filter change is dropped.
   const generation = useRef(0)
@@ -106,7 +107,7 @@ export default function Media() {
     return () => {
       live = false
     }
-  }, [search, type, sort, reload])
+  }, [search, type, missingAltOnly, sort, reload])
 
   const loadMore = async () => {
     setLoadingMore(true)
@@ -124,8 +125,9 @@ export default function Media() {
     }
   }
 
-  // Same fields as before the redesign: the file name as the name, its stem as the alt
-  // text (editable afterwards), and a description naming the file.
+  // The file name as the name and a description naming the file. No alt text (#325): the
+  // file's stem said nothing about the image, so the tile shows "No alt text" until
+  // someone writes one (or marks the image decorative).
   const upload = async (files: File[]) => {
     if (files.length === 0) return
     const batch = files.map((file, i) => ({ key: `${Date.now()}-${i}-${file.name}`, name: file.name, error: null }))
@@ -136,7 +138,6 @@ export default function Media() {
         form.append("file", file)
         form.append("name", file.name)
         form.append("description", `Uploaded file: ${file.name}`)
-        form.append("alt", file.name.split(".")[0])
         return createMedia(form)
       })
     )
@@ -211,14 +212,20 @@ export default function Media() {
     setSelected([])
   }
 
-  const hasFilters = !!(search || type)
+  const hasFilters = !!(search || type || missingAltOnly)
   const libraryEmpty = !loading && !error && items.length === 0 && !hasFilters && uploads.length === 0
+  // Only the alt text filter, and nothing left: every image has alt text.
+  const allAltDone = missingAltOnly && !search && !type
 
   const empty = hasFilters ? (
     <EmptyState
-      icon="search"
-      title="No media matches these filters"
-      description="Try another type or search, or clear the filters."
+      icon={allAltDone ? <CheckIcon size={24} /> : "search"}
+      title={allAltDone ? "No images are missing alt text" : "No media matches these filters"}
+      description={
+        allAltDone
+          ? "Every image has alt text or is marked decorative."
+          : "Try another type or search, or clear the filters."
+      }
       action={
         <Button
           variant="secondary"
@@ -227,10 +234,11 @@ export default function Media() {
             const next = new URLSearchParams(params)
             next.delete("q")
             next.delete("type")
+            next.delete(MISSING_ALT_PARAM.name)
             setSearchParams(next, { replace: true })
           }}
         >
-          Clear filters
+          {allAltDone ? "Show all media" : "Clear filters"}
         </Button>
       }
     />
@@ -341,6 +349,17 @@ export default function Media() {
                 ))}
               </fieldset>
               <div className="gl-media__spacer" />
+              <button
+                type="button"
+                className={`gl-media__alt-filter${missingAltOnly ? " is-on" : ""}`}
+                aria-pressed={missingAltOnly}
+                onClick={() =>
+                  setParam(MISSING_ALT_PARAM.name, missingAltOnly ? "" : MISSING_ALT_PARAM.value, "")
+                }
+              >
+                {missingAltOnly ? <CheckIcon size={14} /> : <PlusIcon size={14} />}
+                Missing alt text
+              </button>
               <FilterSelect
                 prefix="Sort"
                 options={MEDIA_SORTS}

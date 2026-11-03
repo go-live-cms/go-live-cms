@@ -95,6 +95,15 @@ the collab server.
   a time (`imagePipelineSlots`). Published docs served by `GET /posts/:id`, `/posts/slug/:slug`
   and `/public/posts/:id/blocks` get a derived `media` map for image blocks
   (`post_block_media.go`) so the renderer can emit `srcset` and `object-position`.
+- **Missing alt text (#325, `000026`):** alt is optional on upload (no file-name fallback;
+  bulk uploads store `""`), `PUT /media/:id` `alt: ""` clears it (absent keeps; name and
+  description still treat `""` as keep), and `media.decorative` marks an image whose empty
+  alt is intended. Missing = `mime_type LIKE 'image/%' AND NOT decorative AND alt !~ '\S'`,
+  written in three queries that must agree: `ListMedia` (`missing_alt=true`, plus
+  `published_post_count` per row), `CountMedia` (GET /media's `total`, now the filtered
+  count) and `CountMissingAltMedia` (`GET /media/missing-alt`, content roles:
+  `{media_count, published_post_count}`, published = `post_status`, via `post_media`).
+  `BlockMedia.decorative` makes the public renderer emit `alt=""`.
 - **`media_path` in responses is a URL path, not the stored value.** The DB holds
   the filesystem path (`<UPLOAD_PATH>/<file>`, e.g. `/app/uploads/media/x.jpg` in
   compose); responses map it to where `/uploads` serves it (`/uploads/media/x.jpg`)

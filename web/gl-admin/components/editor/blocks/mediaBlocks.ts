@@ -114,11 +114,13 @@ export class MediaBlockManager {
 
     if (imageNode && imageNode.type.name === "image") {
       // Keep the other attrs (the width, #346); the caption is the node's content and
-      // stays too. The media's description is not copied into the caption.
+      // stays too. The media's description is not copied into the caption, nor into the
+      // alt text: uploads have none by default (#325), and the description then reads
+      // "Uploaded file: name.jpg". A decorative image gets an empty alt.
       const transaction = state.tr.setNodeMarkup(imagePosition, imageNode.type, {
         ...imageNode.attrs,
         src: imageUrl,
-        alt: media.alt || media.description || "",
+        alt: media.decorative ? "" : media.alt?.trim() || "",
         title: media.name || "",
         mediaId: media.id,
       })
