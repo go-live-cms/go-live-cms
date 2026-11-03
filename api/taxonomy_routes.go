@@ -69,7 +69,7 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	// Public: browse and discover taxonomy types
 	// Protected: create new taxonomy type definitions
 	types := tg.Group("/types")
-	types.GET("", server.getTaxonomyTypes)                                                                                   // GET /api/v1/taxonomy/types
+	types.GET("", server.getTaxonomyTypes)                                                        // GET /api/v1/taxonomy/types
 	types.POST("", server.requireAuth(), requireContentEditor(server), server.createTaxonomyType) // POST /api/v1/taxonomy/types
 
 	// Type-Specific Term Browsing (must come before generic type lookup to avoid conflicts)
