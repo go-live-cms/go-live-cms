@@ -642,6 +642,8 @@ type CreateMediaAndLinkTxParams struct {
 	Order            int32
 	// Variants is the generated image variants (NULL stores {}).
 	Variants pqtype.NullRawMessage
+	// Decorative marks an image whose empty alt text is intended (#325).
+	Decorative bool
 }
 
 type CreateMediaAndLinkTxResult struct {
@@ -791,6 +793,7 @@ func (store *SQLStore) CreateMediaAndLinkTx(ctx context.Context, arg CreateMedia
 			Duration:         arg.Duration,
 			OriginalFilename: arg.OriginalFilename,
 			Variants:         arg.Variants,
+			Decorative:       arg.Decorative,
 		})
 		if err != nil {
 			return err

@@ -56,26 +56,30 @@ import (
 // Fields with zero values are conditionally included:
 //   - width, height, duration: Omitted if zero (not applicable for file type)
 //   - post_count: Only included in listing contexts with relationship data
+//   - published_post_count: Only in GET /media (how many of those posts are published)
 type MediaResponse struct {
-	ID               int64     `json:"id"`
-	Name             string    `json:"name"`
-	Description      string    `json:"description"`
-	Alt              string    `json:"alt"`
-	MediaPath        string    `json:"media_path"`
-	UserID           int64     `json:"user_id"`
-	CreatedAt        time.Time `json:"created_at"`
-	ChangedAt        time.Time `json:"changed_at"`
-	PostCount        *int64    `json:"post_count,omitempty"`
-	FileSize         int64     `json:"file_size"`
-	MimeType         string    `json:"mime_type"`
-	Width            *int32    `json:"width,omitempty"`
-	Height           *int32    `json:"height,omitempty"`
-	Duration         *int32    `json:"duration,omitempty"`
-	OriginalFilename string    `json:"original_filename"`
+	ID                 int64     `json:"id"`
+	Name               string    `json:"name"`
+	Description        string    `json:"description"`
+	Alt                string    `json:"alt"`
+	MediaPath          string    `json:"media_path"`
+	UserID             int64     `json:"user_id"`
+	CreatedAt          time.Time `json:"created_at"`
+	ChangedAt          time.Time `json:"changed_at"`
+	PostCount          *int64    `json:"post_count,omitempty"`
+	PublishedPostCount *int64    `json:"published_post_count,omitempty"`
+	FileSize           int64     `json:"file_size"`
+	MimeType           string    `json:"mime_type"`
+	Width              *int32    `json:"width,omitempty"`
+	Height             *int32    `json:"height,omitempty"`
+	Duration           *int32    `json:"duration,omitempty"`
+	OriginalFilename   string    `json:"original_filename"`
 	// Variants are the resized copies of an image (#255), keyed thumb/medium/large;
 	// {} when there are none. FocalPoint is null when unset.
 	Variants   MediaVariants `json:"variants"`
 	FocalPoint *FocalPoint   `json:"focal_point"`
+	// Decorative: the image needs no alt text and is rendered alt="" (#325).
+	Decorative bool `json:"decorative"`
 }
 
 // PopularMediaResponse extends MediaResponse with guaranteed post_count field.
@@ -101,6 +105,7 @@ type PopularMediaResponse struct {
 	// {} when there are none. FocalPoint is null when unset.
 	Variants   MediaVariants `json:"variants"`
 	FocalPoint *FocalPoint   `json:"focal_point"`
+	Decorative bool          `json:"decorative"`
 }
 
 // PostWithMediaOrderResponse combines post data with media relationship metadata.
@@ -143,6 +148,7 @@ func toMediaResponse(media db.Medium) MediaResponse {
 		OriginalFilename: media.OriginalFilename,
 		Variants:         variantsResponse(media.Variants),
 		FocalPoint:       focalPointFrom(media.FocalX, media.FocalY),
+		Decorative:       media.Decorative,
 	}
 }
 
@@ -161,23 +167,25 @@ func toMediaFromListRow(row db.ListMediaRow) MediaResponse {
 	}
 
 	return MediaResponse{
-		ID:               row.ID,
-		Name:             row.Name,
-		Description:      row.Description,
-		Alt:              row.Alt,
-		MediaPath:        row.MediaPath,
-		UserID:           row.UserID,
-		CreatedAt:        row.CreatedAt,
-		ChangedAt:        row.ChangedAt,
-		PostCount:        &row.PostCount,
-		FileSize:         row.FileSize,
-		MimeType:         row.MimeType,
-		Width:            width,
-		Height:           height,
-		Duration:         duration,
-		OriginalFilename: row.OriginalFilename,
-		Variants:         variantsResponse(row.Variants),
-		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
+		ID:                 row.ID,
+		Name:               row.Name,
+		Description:        row.Description,
+		Alt:                row.Alt,
+		MediaPath:          row.MediaPath,
+		UserID:             row.UserID,
+		CreatedAt:          row.CreatedAt,
+		ChangedAt:          row.ChangedAt,
+		PostCount:          &row.PostCount,
+		PublishedPostCount: &row.PublishedPostCount,
+		FileSize:           row.FileSize,
+		MimeType:           row.MimeType,
+		Width:              width,
+		Height:             height,
+		Duration:           duration,
+		OriginalFilename:   row.OriginalFilename,
+		Variants:           variantsResponse(row.Variants),
+		FocalPoint:         focalPointFrom(row.FocalX, row.FocalY),
+		Decorative:         row.Decorative,
 	}
 }
 
@@ -213,6 +221,7 @@ func toMediaFromUserRow(row db.GetMediaByUserRow) MediaResponse {
 		OriginalFilename: row.OriginalFilename,
 		Variants:         variantsResponse(row.Variants),
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
+		Decorative:       row.Decorative,
 	}
 }
 
@@ -248,6 +257,7 @@ func toMediaFromSearchRow(row db.SearchMediaByNameRow) MediaResponse {
 		OriginalFilename: row.OriginalFilename,
 		Variants:         variantsResponse(row.Variants),
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
+		Decorative:       row.Decorative,
 	}
 }
 
@@ -283,6 +293,7 @@ func toPopularMediaResponse(row db.GetPopularMediaRow) PopularMediaResponse {
 		OriginalFilename: row.OriginalFilename,
 		Variants:         variantsResponse(row.Variants),
 		FocalPoint:       focalPointFrom(row.FocalX, row.FocalY),
+		Decorative:       row.Decorative,
 	}
 }
 

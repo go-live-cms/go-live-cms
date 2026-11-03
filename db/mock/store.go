@@ -199,6 +199,36 @@ func (mr *MockStoreMockRecorder) CountFilteredPosts(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountFilteredPosts", reflect.TypeOf((*MockStore)(nil).CountFilteredPosts), arg0, arg1)
 }
 
+// CountMedia mocks base method.
+func (m *MockStore) CountMedia(arg0 context.Context, arg1 db.CountMediaParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountMedia", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountMedia indicates an expected call of CountMedia.
+func (mr *MockStoreMockRecorder) CountMedia(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountMedia", reflect.TypeOf((*MockStore)(nil).CountMedia), arg0, arg1)
+}
+
+// CountMissingAltMedia mocks base method.
+func (m *MockStore) CountMissingAltMedia(arg0 context.Context) (db.CountMissingAltMediaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountMissingAltMedia", arg0)
+	ret0, _ := ret[0].(db.CountMissingAltMediaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountMissingAltMedia indicates an expected call of CountMissingAltMedia.
+func (mr *MockStoreMockRecorder) CountMissingAltMedia(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountMissingAltMedia", reflect.TypeOf((*MockStore)(nil).CountMissingAltMedia), arg0)
+}
+
 // CountPasswordResetTokensSince mocks base method.
 func (m *MockStore) CountPasswordResetTokensSince(arg0 context.Context, arg1 db.CountPasswordResetTokensSinceParams) (int64, error) {
 	m.ctrl.T.Helper()
@@ -332,21 +362,6 @@ func (m *MockStore) CountTaxonomyTerms(arg0 context.Context, arg1 string) (int64
 func (mr *MockStoreMockRecorder) CountTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).CountTaxonomyTerms), arg0, arg1)
-}
-
-// CountTotalMedia mocks base method.
-func (m *MockStore) CountTotalMedia(arg0 context.Context) (int64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CountTotalMedia", arg0)
-	ret0, _ := ret[0].(int64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CountTotalMedia indicates an expected call of CountTotalMedia.
-func (mr *MockStoreMockRecorder) CountTotalMedia(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTotalMedia", reflect.TypeOf((*MockStore)(nil).CountTotalMedia), arg0)
 }
 
 // CountTotalPosts mocks base method.

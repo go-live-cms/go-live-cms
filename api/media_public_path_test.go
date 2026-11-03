@@ -86,7 +86,7 @@ func TestListMediaReturnsServedPaths(t *testing.T) {
 		{ID: 2, MediaPath: "/uploads/media/legacy.png"},
 	}
 	store.EXPECT().ListMedia(gomock.Any(), gomock.Any()).Times(1).Return(rows, nil)
-	store.EXPECT().CountTotalMedia(gomock.Any()).Times(1).Return(int64(2), nil)
+	store.EXPECT().CountMedia(gomock.Any(), gomock.Any()).Times(1).Return(int64(2), nil)
 
 	recorder := httptest.NewRecorder()
 	server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/media", nil))

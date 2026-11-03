@@ -166,11 +166,18 @@ func (server *Server) getFeaturedImageFull(c *gin.Context) {
 		return
 	}
 
+	// A decorative image's alt text is kept for the admin but must not be
+	// rendered (#325), so this response, which themes may render, gives "".
+	alt := featuredImage.Alt
+	if featuredImage.Decorative {
+		alt = ""
+	}
 	response := gin.H{
 		"id":                featuredImage.MediaID,
 		"name":              featuredImage.Name,
 		"description":       featuredImage.Description,
-		"alt":               featuredImage.Alt,
+		"alt":               alt,
+		"decorative":        featuredImage.Decorative,
 		"media_path":        publicMediaPath(server.config.UploadPath, featuredImage.MediaPath),
 		"file_size":         featuredImage.FileSize,
 		"mime_type":         featuredImage.MimeType,

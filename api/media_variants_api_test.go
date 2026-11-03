@@ -351,6 +351,7 @@ func TestAttachBlockMedia(t *testing.T) {
 				ID: 12, MediaPath: "/uploads/x.jpg", Width: 2000, Height: 1000,
 				Variants: json.RawMessage(`{"thumb":{"path":"/uploads/_variants/x.jpg/thumb.jpg","width":320,"height":160}}`),
 				FocalX:   sql.NullFloat64{Float64: 0.2, Valid: true}, FocalY: sql.NullFloat64{Float64: 0.8, Valid: true},
+				Decorative: true,
 			}}, nil
 		})
 
@@ -362,6 +363,7 @@ func TestAttachBlockMedia(t *testing.T) {
 		require.Equal(t, int32(2000), media["12"].Width)
 		require.Equal(t, &FocalPoint{X: 0.2, Y: 0.8}, media["12"].FocalPoint)
 		require.Equal(t, int32(320), media["12"].Variants["thumb"].Width)
+		require.True(t, media["12"].Decorative, "decorative reaches the renderer (#325)")
 	}
 	require.NotContains(t, noImages, "media")
 

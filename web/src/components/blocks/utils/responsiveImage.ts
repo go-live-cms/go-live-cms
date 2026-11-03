@@ -5,8 +5,9 @@ import { safeImageSrc } from "./safeUrl"
 // Image variants and focal point on the public site (#255).
 //
 // The API adds a "media" map to published docs (api/post_block_media.go):
-// for each image block's mediaId, the original's size, its resized variants
-// and its focal point. It is derived when the doc is served, never stored.
+// for each image block's mediaId, the original's size, its resized variants,
+// its focal point and whether it is decorative. It is derived when the doc is
+// served, never stored.
 
 export interface BlockMediaVariant {
   path: string
@@ -20,6 +21,8 @@ export interface BlockMedia {
   height: number
   variants?: Record<string, BlockMediaVariant>
   focal_point?: { x: number; y: number } | null
+  // The image needs no alt text: rendered alt="" (#325).
+  decorative?: boolean
 }
 
 // Default `sizes` for block images: a content column up to ~1000px wide.

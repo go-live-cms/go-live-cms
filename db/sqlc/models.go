@@ -41,6 +41,7 @@ type Medium struct {
 	Variants         json.RawMessage `json:"variants"`
 	FocalX           sql.NullFloat64 `json:"focal_x"`
 	FocalY           sql.NullFloat64 `json:"focal_y"`
+	Decorative       bool            `json:"decorative"`
 }
 
 type Menu struct {
