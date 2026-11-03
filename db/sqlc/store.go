@@ -246,7 +246,7 @@ type RemoveUserTxResult struct {
 //   - deletes their sessions, which revokes every refresh token,
 //   - deletes the user row. Their bylines on other people's posts, reset tokens and
 //     invitation links go with it (ON DELETE CASCADE / SET NULL); revisions they
-//     published keep a NULL created_by (000030).
+//     published keep a NULL created_by (000032).
 //
 // sql.ErrNoRows if the member doesn't exist.
 func (store *SQLStore) RemoveUserTx(ctx context.Context, arg RemoveUserTxParams) (RemoveUserTxResult, error) {

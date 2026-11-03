@@ -268,7 +268,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 
 ## Users screen: last active, search, role change, removal (#333)
 
-- **Last active** (`users.last_active_at`, `000030`): `authMiddleware` stamps it when the
+- **Last active** (`users.last_active_at`, `000032`): `authMiddleware` stamps it when the
   row it already loaded is at least `LAST_ACTIVE_INTERVAL` old (default `5m`; **0 = off,
   so a zero `Config` (tests) never writes it**), and so do `startSession` (login, accept,
   self password change) and refresh rotation, after the commit. `TouchUserLastActive` re-checks
@@ -307,7 +307,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
     re-check above;
   - what goes with the row: their bylines on **other people's** posts (CASCADE), reset
     tokens (CASCADE). What stays without them: revisions they published
-    (`post_versions.created_by` → NULL, `000030`; it had no ON DELETE, so removing anyone
+    (`post_versions.created_by` → NULL, `000032`; it had no ON DELETE, so removing anyone
     who had published used to fail), invitations they sent (`invited_by` → NULL; still
     valid, revocable from the list), `post_ydoc_state.last_editor_id` (NULL).
   - The old no-transfer delete (`DeleteUserTx`), which deleted the member's posts and media

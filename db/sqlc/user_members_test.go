@@ -136,7 +136,7 @@ func TestRemoveUserTx(t *testing.T) {
 	_, err = testQueries.GetSession(ctx, session.ID)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 
-	// The revision stays, with no author (000030).
+	// The revision stays, with no author (000032).
 	var createdBy sql.NullInt64
 	require.NoError(t, testStore.(*SQLStore).db.QueryRowContext(ctx,
 		`SELECT created_by FROM post_versions WHERE id = $1`, version.ID).Scan(&createdBy))
