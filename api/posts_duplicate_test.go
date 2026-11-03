@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -225,7 +227,9 @@ func TestCopyNames(t *testing.T) {
 
 	require.Equal(t, "https://site.test/post/my-post-copy", copyURL("https://site.test/post/my-post", "my-post", "my-post-copy"))
 	require.Equal(t, "https://site.test/p?id=1", copyURL("https://site.test/p?id=1", "my-post", "my-post-copy"))
-	require.Equal(t, "", copyURL("", "", "x-copy"))
+	// A bare url (older and seeded posts: "<slug>-<n>") or none: the copy's slug.
+	require.Equal(t, "x-copy", copyURL("x-1793717212610633263", "x", "x-copy"))
+	require.Equal(t, "x-copy", copyURL("", "", "x-copy"))
 }
 
 func TestDuplicatePostAPI(t *testing.T) {
@@ -286,7 +290,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &editor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				slugFree(store, "my-post-copy", false)
 				urlFree(store, "https://site.test/post/my-post-copy")
 				capture(store)
@@ -321,7 +325,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &editor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				slugFree(store, "my-post-copy", true)
 				slugFree(store, "my-post-copy-2", false)
 				urlFree(store, "https://site.test/post/my-post-copy-2")
@@ -338,7 +342,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &contributor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				store.EXPECT().GetPost(gomock.Any(), int64(50)).Return(db.Post{ID: 50, UserID: owner.ID, PostStatus: "draft"}, nil)
 				slugFree(store, "my-post-copy", false)
 				urlFree(store, "https://site.test/post/my-post-copy")
@@ -356,7 +360,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &contributor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				store.EXPECT().GetPost(gomock.Any(), int64(50)).Return(db.Post{ID: 50, UserID: contributor.ID, PostStatus: "published"}, nil)
 				slugFree(store, "my-post-copy", false)
 				urlFree(store, "https://site.test/post/my-post-copy")
@@ -372,7 +376,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &contributor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				store.EXPECT().GetPost(gomock.Any(), int64(50)).Return(db.Post{}, sql.ErrNoRows)
 				slugFree(store, "my-post-copy", false)
 				urlFree(store, "https://site.test/post/my-post-copy")
@@ -388,7 +392,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &contributor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				store.EXPECT().GetPost(gomock.Any(), int64(50)).Return(db.Post{}, sql.ErrConnDone)
 				noCopy(store)
 			},
@@ -459,7 +463,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &editor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				slugFree(store, "my-post-copy", false)
 				urlFree(store, "https://site.test/post/my-post-copy")
 				store.EXPECT().DuplicatePostTx(gomock.Any(), gomock.Any()).
@@ -475,7 +479,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &editor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				slugFree(store, "my-post-copy", false)
 				urlFree(store, "https://site.test/post/my-post-copy")
 				store.EXPECT().DuplicatePostTx(gomock.Any(), gomock.Any()).Return(db.Post{}, sql.ErrConnDone)
@@ -491,7 +495,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				broken := source
 				broken.BlockDoc = json.RawMessage(`[]`)
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(broken, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(broken, nil)
 				noCopy(store)
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
@@ -503,8 +507,42 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &editor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).Return(false, sql.ErrConnDone)
+				noCopy(store)
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+			},
+		},
+		{
+			name:   "x-copy … x-copy-99 all taken: a random suffix",
+			caller: &editor,
+			postID: "77",
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil)
+				store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).AnyTimes().
+					DoAndReturn(func(_ context.Context, arg db.CheckSlugExistsParams) (bool, error) {
+						return regexp.MustCompile(`^my-post-copy(-\d+)?$`).MatchString(arg.Slug), nil
+					})
+				store.EXPECT().CheckURLExists(gomock.Any(), gomock.Any()).Return(false, nil)
+				capture(store)
+			},
+			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+				require.Regexp(t, `^my-post-copy-[0-9a-f]{8}$`, got.Slug)
+				require.Equal(t, "https://site.test/post/"+got.Slug, got.Url)
+			},
+		},
+		{
+			name:   "the read after the flush fails",
+			caller: &editor,
+			postID: "77",
+			buildStubs: func(store *mockdb.MockStore) {
+				gomock.InOrder(
+					store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil),
+					store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(db.Post{}, sql.ErrConnDone),
+				)
 				noCopy(store)
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
@@ -516,7 +554,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 			caller: &editor,
 			postID: "77",
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil) // before and after the flush
 				slugFree(store, "my-post-copy", false)
 				store.EXPECT().CheckURLExists(gomock.Any(), gomock.Any()).Return(false, sql.ErrConnDone)
 				noCopy(store)
@@ -548,6 +586,71 @@ func TestDuplicatePostAPI(t *testing.T) {
 			tc.check(t, recorder)
 		})
 	}
+}
+
+// The copy is read after the collab server stored the last edits (as for
+// publish); if the flush fails nothing is copied.
+func TestDuplicatePostFlushesCollab(t *testing.T) {
+	v := loadDuplicateVectors(t)
+	editor := db.User{ID: 101, Username: "editor1", Role: RoleEditor}
+	source := db.Post{ID: 77, Title: "My post", Slug: "my-post", Url: "https://site.test/post/my-post", PostType: "post", BlockDoc: v.Source}
+
+	run := func(t *testing.T, collab http.HandlerFunc, buildStubs func(store *mockdb.MockStore)) *httptest.ResponseRecorder {
+		server := httptest.NewServer(collab)
+		t.Cleanup(server.Close)
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		buildStubs(store)
+		stubRoleLookup(store, editor)
+		api := newCollabTestServer(t, store, server.URL)
+		recorder := httptest.NewRecorder()
+		request, err := http.NewRequest(http.MethodPost, "/api/v1/posts/77/duplicate", nil)
+		require.NoError(t, err)
+		addAuthorization(t, request, api.tokenMaker, authorizationTypeBearer, editor.ID, editor.Username, time.Minute)
+		api.router.ServeHTTP(recorder, request)
+		return recorder
+	}
+
+	t.Run("copies what the flush stored", func(t *testing.T) {
+		var flushed atomic.Bool
+		var path string
+		stored := source
+		stored.BlockDoc = v.Duplicate // stands in for "the doc after the last store"
+		var got db.DuplicatePostTxParams
+		recorder := run(t, func(w http.ResponseWriter, r *http.Request) {
+			path = r.URL.Path
+			flushed.Store(true)
+			w.WriteHeader(http.StatusOK)
+		}, func(store *mockdb.MockStore) {
+			gomock.InOrder(
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).Return(source, nil),
+				store.EXPECT().GetPost(gomock.Any(), int64(77)).DoAndReturn(func(context.Context, int64) (db.Post, error) {
+					require.True(t, flushed.Load(), "block_doc was read before the flush")
+					return stored, nil
+				}),
+			)
+			store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).Return(false, nil)
+			store.EXPECT().CheckURLExists(gomock.Any(), gomock.Any()).Return(false, nil)
+			store.EXPECT().DuplicatePostTx(gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, arg db.DuplicatePostTxParams) (db.Post, error) {
+					got = arg
+					return db.Post{ID: 500}, nil
+				})
+		})
+		require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+		require.Equal(t, "/internal/documents/post-77/flush", path)
+		requireRegeneratedFrom(t, v.Duplicate, got.BlockDoc)
+	})
+
+	t.Run("a failed flush copies nothing", func(t *testing.T) {
+		recorder := run(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}, func(store *mockdb.MockStore) {
+			store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(1).Return(source, nil)
+			store.EXPECT().DuplicatePostTx(gomock.Any(), gomock.Any()).Times(0)
+		})
+		require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "nothing was duplicated")
+	})
 }
 
 // End to end against the test database (CI's Postgres; skipped without one):

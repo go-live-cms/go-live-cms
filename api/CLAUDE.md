@@ -177,8 +177,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **`POST /posts/:id/duplicate`** (#354, `posts_duplicate.go`) is the other new-post writer:
   a draft owned by the caller (any content role: read access + `canCreatePost`), title
   "<title> (copy)", slug `<slug>-copy` made unique, same type/description/terms/featured
-  image, parent kept only if the caller may nest under it (else top-level), and the source's
-  working copy with **every block id regenerated** (`regenerateBlockIDs`: keys, `id`,
+  image, parent kept only if the caller may nest under it (`mayNestUnder`, else top-level),
+  and the source's working copy, read after a collab flush like publish (503 if it fails),
+  with **every block id regenerated** (`regenerateBlockIDs`: keys, `id`,
   `blocks_order`, `children`, every `data-block-id` in `pm`). Never versions, comments,
   other meta or `post_ydoc_state`: the collab server seeds the copy from `block_doc`.
   The writes are one transaction (`DuplicatePostTx`); `copyPost` is the reusable part

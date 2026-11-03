@@ -47,7 +47,8 @@ const (
 	postSlugMax  = 255
 )
 
-// emptyBlockDoc is a new post's body when it has none (createPost's default).
+// emptyBlockDoc is a new post's body when it has none (createPost, and a copy
+// of a post that never had blocks).
 var emptyBlockDoc = json.RawMessage(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
 
 // postCopy is what copyPost needs besides the source: who owns the copy, and
@@ -71,6 +72,13 @@ func (server *Server) copyPost(ctx context.Context, source db.Post, opts postCop
 	}
 
 	slug, err := server.generateUniqueSlug(ctx, copySlug(source.Slug), 0)
+	if errors.Is(err, errSlugsExhausted) {
+		// x-copy … x-copy-99 are all taken: a random suffix instead, so a post
+		// copied that often (a template, #322) still copies.
+		random := "-" + uuid.NewString()[:8]
+		base := truncateRunes(copySlug(source.Slug), postSlugMax-len("-99")-len(random))
+		slug, err = server.generateUniqueSlug(ctx, base+random, 0)
+	}
 	if err != nil {
 		return db.Post{}, err
 	}
@@ -103,11 +111,13 @@ func (server *Server) copyPost(ctx context.Context, source db.Post, opts postCop
 // Anyone who can read the post (canReadPostBlocks) and create posts may
 // duplicate it: the copy is a draft they own, which canCreatePost allows a
 // contributor too. The source's parent is kept only if the caller may nest
-// under it (createPost's rule: canEditPost on the parent); otherwise the copy
-// is top-level.
+// under it (mayNestUnder, createPost's rule); otherwise the copy is top-level.
+//
+// Like publish, it flushes the collab server first so the copy has the last
+// edits; if that fails nothing is copied (503).
 //
 // Returns 201 {"post": ...}, 400 for a bad id, 403, 404 for a missing post,
-// 409 if a concurrent write took the slug or url.
+// 409 if a concurrent write took the slug or url, 503 if the flush failed.
 func (server *Server) duplicatePost(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -134,9 +144,32 @@ func (server *Server) duplicatePost(c *gin.Context) {
 		return
 	}
 
-	parent, ok := server.copyParent(c, caller, source.PostParent)
-	if !ok {
+	// Edits reach block_doc only when the collab server stores (debounced), so
+	// make it store now, as publish does, and copy what it stored. Otherwise the
+	// copy could miss the last seconds of editing.
+	if err := server.flushCollabDoc(c.Request.Context(), id, requestIDFromContext(c)); err != nil {
+		server.requestLog(c).Warn("collab flush before duplicate failed", "post_id", id, "error", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "the collaboration server could not save the latest edits; nothing was duplicated, try again"})
 		return
+	}
+	if source, err = server.store.GetPost(c.Request.Context(), id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+
+	parent := source.PostParent
+	if parent.Valid {
+		allowed, ok := server.mayNestUnder(c, caller, parent.Int64)
+		if !ok {
+			return
+		}
+		if !allowed {
+			parent = sql.NullInt64{}
+		}
 	}
 
 	post, err := server.copyPost(c.Request.Context(), source, postCopy{
@@ -157,28 +190,6 @@ func (server *Server) duplicatePost(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"post": toPostResponse(post)})
 }
 
-// copyParent is the copy's parent: the source's, if the caller may nest a
-// post under it. Moderators always may; a contributor only under a post they
-// can edit, else the copy has no parent. ok=false means a response was
-// written (the lookup failed).
-func (server *Server) copyParent(c *gin.Context, caller db.User, parent sql.NullInt64) (sql.NullInt64, bool) {
-	if !parent.Valid || canModeratePosts(caller) {
-		return parent, true
-	}
-	post, err := server.store.GetPost(c.Request.Context(), parent.Int64)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return sql.NullInt64{}, true
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get parent post"})
-		return sql.NullInt64{}, false
-	}
-	if !canEditPost(caller, post) {
-		return sql.NullInt64{}, true
-	}
-	return parent, true
-}
-
 // copyTitle is "<title> (copy)", the title cut (by runes) so the result fits
 // postTitleMax.
 func copyTitle(title string) string {
@@ -194,11 +205,16 @@ func copySlug(slug string) string {
 }
 
 // copyURL is the url a copy starts from: the source's with its slug segment
-// replaced by the copy's (the admin builds it as <origin>/<type>/<slug>), or
-// the source's as is, which generateUniqueURL then suffixes.
+// replaced by the copy's (the admin builds it as <origin>/<type>/<slug>). A
+// url without a path (older and seeded posts store a bare "<slug>-<n>") or an
+// empty one becomes the copy's slug. Any other url is kept, and
+// generateUniqueURL suffixes it.
 func copyURL(sourceURL, sourceSlug, slug string) string {
 	if sourceSlug != "" && strings.HasSuffix(sourceURL, "/"+sourceSlug) {
 		return strings.TrimSuffix(sourceURL, sourceSlug) + slug
+	}
+	if !strings.Contains(sourceURL, "/") {
+		return slug
 	}
 	return sourceURL
 }

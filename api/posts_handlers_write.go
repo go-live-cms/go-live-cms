@@ -14,6 +14,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -56,6 +57,10 @@ func (server *Server) generateUniqueURL(ctx context.Context, baseURL string) (st
 	return "", fmt.Errorf("unable to generate unique URL after %d attempts", counter)
 }
 
+// errSlugsExhausted is generateUniqueSlug's error when baseSlug and every
+// suffix up to -99 are taken.
+var errSlugsExhausted = errors.New("no free slug suffix")
+
 // generateUniqueSlug returns baseSlug, or baseSlug-2, -3, ... if another post
 // already uses it (the posts.slug unique index would otherwise reject the
 // write). excludeID is the post being edited; pass 0 when creating.
@@ -71,7 +76,7 @@ func (server *Server) generateUniqueSlug(ctx context.Context, baseSlug string, e
 		}
 		candidate = fmt.Sprintf("%s-%d", baseSlug, counter)
 	}
-	return "", fmt.Errorf("unable to generate unique slug for %q", baseSlug)
+	return "", fmt.Errorf("unable to generate unique slug for %q: %w", baseSlug, errSlugsExhausted)
 }
 
 // uniqueViolationMessage names the posts unique index a write tripped over.
@@ -110,7 +115,7 @@ func (server *Server) createPost(c *gin.Context) {
 		return
 	}
 
-	blockDoc := []byte(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
+	blockDoc := []byte(emptyBlockDoc)
 	if req.BlockDoc != nil {
 		if err := req.BlockDoc.prepareForStore(server.themeBlocks); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -247,7 +252,6 @@ func (server *Server) createPost(c *gin.Context) {
 
 	// If post was created as published, initialize published_block_doc with empty block document
 	if createParams.PostStatus == "published" {
-		emptyBlockDoc := []byte(`{"doc_version":1,"blocks_order":[],"blocks":{}}`)
 		err = server.store.SetPublishedVersionOnPost(c.Request.Context(), db.SetPublishedVersionOnPostParams{
 			ID:                 createdPost.ID,
 			PublishedVersionID: sql.NullInt64{Valid: false},
