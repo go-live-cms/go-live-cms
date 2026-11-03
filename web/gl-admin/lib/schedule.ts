@@ -81,15 +81,6 @@ export function zonedToUtc(local: string, zone: string): Date | null {
   return new Date(Math.min(...matches))
 }
 
-export function isValidTimeZone(zone: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: zone })
-    return true
-  } catch {
-    return false
-  }
-}
-
 // What's wrong with a time picked in the dialog, or null when the API will take it.
 export function scheduleError(local: string, zone: string, now: Date = new Date()): string | null {
   if (!LOCAL_RE.test(local)) return "Pick a date and a time (HH:MM)."

@@ -21,10 +21,10 @@ export function useSiteSettings(): Settings | null {
 }
 
 // One request for every pill on a page: list rows each show a scheduled time.
-let dateSettingsLoad: Promise<DateSettings> | null = null
+let dateSettingsLoad: Promise<DateSettings | null> | null = null
 let dateSettingsLoaded: DateSettings | null = null
 
-function loadDateSettings(): Promise<DateSettings> {
+function loadDateSettings(): Promise<DateSettings | null> {
   if (!dateSettingsLoad) {
     dateSettingsLoad = getSettings()
       .then((s) => {
@@ -32,9 +32,10 @@ function loadDateSettings(): Promise<DateSettings> {
         return dateSettingsLoaded
       })
       .catch(() => {
-        // Try again on the next mount; UTC meanwhile.
+        // Not loaded: callers keep `loaded: false` (the Schedule dialog can't schedule
+        // without the real zone). The next mount tries again.
         dateSettingsLoad = null
-        return DEFAULT_DATE_SETTINGS
+        return null
       })
   }
   return dateSettingsLoad
@@ -48,14 +49,18 @@ export function resetSiteDateSettings(): void {
 
 // The site's language, time zone (#330) and date format, for dates the admin shows in
 // site time (scheduled publishing, #147). The defaults (UTC) until they load; `loaded`
-// says whether they have.
+// says whether they have (false after a failed load too).
 export function useSiteDateSettings(): DateSettings & { loaded: boolean } {
   const [settings, setSettings] = useState<DateSettings | null>(dateSettingsLoaded)
 
   useEffect(() => {
-    if (dateSettingsLoaded) return
+    // Loaded between this render and this effect: take it now.
+    if (dateSettingsLoaded) {
+      setSettings(dateSettingsLoaded)
+      return
+    }
     let live = true
-    loadDateSettings().then((s) => live && setSettings(s))
+    loadDateSettings().then((s) => live && s && setSettings(s))
     return () => {
       live = false
     }

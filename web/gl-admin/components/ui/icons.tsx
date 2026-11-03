@@ -39,6 +39,13 @@ export const ChevronDownIcon = (p: IconProps) => (
   </Svg>
 )
 
+export const CalendarIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="18" rx="2" />
+    <path d="M16 2v4M8 2v4M3 10h18" />
+  </Svg>
+)
+
 export const ChevronLeftIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="m15 6-6 6 6 6" />

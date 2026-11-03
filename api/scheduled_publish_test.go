@@ -505,6 +505,19 @@ func TestScheduleRoutesRescheduleAndCancel(t *testing.T) {
 	got = reloadPost(t, store, other.ID)
 	require.Equal(t, "archived", got.PostStatus)
 	require.False(t, got.PublishAt.Valid)
+
+	// The handler lets "scheduled" through unchanged; if the scheduler published the
+	// post between its read and the write, the status stays (no constraint error).
+	raced := schedulePostAt(t, store, scheduleDraft(t, store, editor, scheduleWord()), editor, second)
+	_, err = store.PublishPostTx(context.Background(), db.PublishPostTxParams{PostID: raced.ID})
+	require.NoError(t, err)
+	updated, err := store.UpdatePost(context.Background(), db.UpdatePostParams{
+		ID: raced.ID, Title: "Renamed", Description: raced.Description, UserID: raced.UserID, Username: raced.Username,
+		Url: raced.Url, PostType: raced.PostType, PostStatus: postStatusScheduled, PostParent: raced.PostParent, MenuOrder: raced.MenuOrder,
+	})
+	require.NoError(t, err)
+	require.Equal(t, postStatusPublished, updated.PostStatus)
+	require.Equal(t, "Renamed", updated.Title)
 }
 
 // TestScheduledPostsAreNotPublic: until it publishes, a scheduled post is on no

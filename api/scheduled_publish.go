@@ -71,8 +71,10 @@ func scheduledPublishRetryAfter(attempts int32) time.Duration {
 }
 
 // RunScheduledPublishing publishes due scheduled posts every interval until ctx
-// is done, then returns once the attempt in flight has finished (it isn't cut
-// short: a shutdown never leaves a half-done publish). interval 0 turns it off.
+// is done, then returns once the attempt in flight has finished: it isn't cut
+// short by ctx. If the process is killed first (Docker's stop grace period is
+// 10s), the publish transaction rolls back as a whole and the claim's lease
+// runs out, so the post is tried again then. interval 0 turns it off.
 // main.go runs it beside the HTTP listeners.
 func (server *Server) RunScheduledPublishing(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
@@ -132,7 +134,8 @@ func (server *Server) publishScheduledPost(ctx context.Context, claim db.ClaimDu
 		return false
 	}
 
-	// Not cancelled with ctx: on shutdown the attempt in flight finishes.
+	// Not cancelled with ctx: on shutdown the attempt in flight finishes (or, if the
+	// process is killed, rolls back and is retried after the lease).
 	attemptCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), scheduledPublishTimeout)
 	defer cancel()
 

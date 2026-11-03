@@ -112,6 +112,19 @@ describe("ScheduleDialog", () => {
     expect(document.body.textContent).toContain("Only a draft can be scheduled")
   })
 
+  it("can't schedule until the site's zone is known", async () => {
+    const onSchedule = vi.fn(async () => {})
+    act(() =>
+      root.render(
+        <ScheduleDialog isOpen onClose={() => {}} publishAt={null} settings={{ ...newYork, loaded: false }} onSchedule={onSchedule} now={now} />
+      )
+    )
+    expect(document.body.textContent).toContain("Loading the site's time zone")
+    expect(byText("Schedule").disabled).toBe(true)
+    await click(byText("Schedule"))
+    expect(onSchedule).not.toHaveBeenCalled()
+  })
+
   it("moves through the months", async () => {
     render()
     expect(document.body.textContent).toContain("March 2026")

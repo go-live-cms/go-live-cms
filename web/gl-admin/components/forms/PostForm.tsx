@@ -433,7 +433,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     setFormData((prev) => ({ ...prev, post_status: "scheduled" }))
     setPublishAt(post.publish_at ?? null)
     setScheduleFailure(null)
-    toast.success(`${rescheduled ? "Rescheduled" : "Scheduled"} for ${formatScheduleTime(post.publish_at ?? local, dateSettings, { withTime: true })}`)
+    // publish_at is the stored instant; the wall-clock `local` would parse in the browser's zone.
+    const when = post.publish_at ? ` for ${formatScheduleTime(post.publish_at, dateSettings, { withTime: true })}` : ""
+    toast.success(`${rescheduled ? "Rescheduled" : "Scheduled"}${when}`)
   }
 
   const handleCancelSchedule = async () => {
@@ -472,6 +474,12 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         }
         if (post.publish_at !== publishAt) {
           setPublishAt(post.publish_at ?? null)
+          return
+        }
+        // After a failed attempt nothing changes before the next one (30s to 10 min away).
+        const next = post.schedule_failure?.next_attempt_at ? Date.parse(post.schedule_failure.next_attempt_at) : NaN
+        if (!cancelled && !Number.isNaN(next)) {
+          timer = setTimeout(check, Math.max(SCHEDULE_POLL_MS, next - Date.now() + SCHEDULE_POLL_DELAY_MS))
           return
         }
       } catch {

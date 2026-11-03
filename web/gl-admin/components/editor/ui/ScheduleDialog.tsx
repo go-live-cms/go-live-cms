@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import Modal from "@gl-admin/components/ui/Modal"
 import Button from "@gl-admin/components/ui/Button"
 import { FieldError } from "@gl-admin/components/ui/Input"
-import { ChevronLeftIcon, ChevronRightIcon } from "@gl-admin/components/ui/icons"
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@gl-admin/components/ui/icons"
 import {
   dateFieldLabel,
   defaultScheduleParts,
@@ -27,18 +27,14 @@ type ScheduleDialogProps = {
   onClose: () => void
   // The current schedule (Reschedule), else null.
   publishAt: string | null
-  settings: Pick<DateSettings, "language" | "timeZone">
+  // The site's zone and language. Until `loaded`, the zone isn't known and nothing can be
+  // scheduled: the API converts the time with the real one, so guessing UTC here would
+  // show and check a different time than the one stored.
+  settings: Pick<DateSettings, "language" | "timeZone"> & { loaded?: boolean }
   // Sends the wall-clock time ("2026-11-03T09:00"); a rejection's message is shown.
   onSchedule: (local: string) => Promise<void>
   now?: () => Date
 }
-
-const CalendarIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <rect x="3" y="4" width="18" height="18" rx="2" />
-    <path d="M16 2v4M8 2v4M3 10h18" />
-  </svg>
-)
 
 function addMonths(year: number, month: number, delta: number): { year: number; month: number } {
   const total = year * 12 + month + delta
@@ -52,6 +48,7 @@ function addDays(date: string, days: number): string {
 
 export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, onSchedule, now = () => new Date() }: ScheduleDialogProps) {
   const { language, timeZone } = settings
+  const zoneKnown = settings.loaded !== false
   const ids = useId()
   const [date, setDate] = useState("")
   const [time, setTime] = useState("09:00")
@@ -72,8 +69,9 @@ export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, o
     setView({ year: y, month: m - 1 })
     setTouched(false)
     setServerError(null)
+    // Again once the zone is known: the default day depends on it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen])
+  }, [isOpen, timeZone])
 
   const today = zonedParts(now(), timeZone).date
   const local = joinLocal(date, time)
@@ -108,7 +106,7 @@ export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, o
 
   const submit = async () => {
     setTouched(true)
-    if (error) return
+    if (error || !zoneKnown) return
     setBusy(true)
     setServerError(null)
     try {
@@ -137,7 +135,7 @@ export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, o
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={busy}>
+          <Button variant="primary" onClick={submit} loading={busy} disabled={!zoneKnown}>
             {rescheduling ? "Reschedule" : "Schedule"}
           </Button>
         </>
@@ -238,7 +236,7 @@ export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, o
         </div>
 
         <span id={`${ids}-zone`} className="gl-schedule__zone">
-          {timeZoneLine(timeZone, instant ?? now())}
+          {zoneKnown ? timeZoneLine(timeZone, instant ?? now()) : "Loading the site's time zone from Settings…"}
         </span>
         {shownError && <FieldError id={`${ids}-error`}>{shownError}</FieldError>}
       </div>

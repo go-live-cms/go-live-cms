@@ -99,7 +99,10 @@ SET title = COALESCE($1, title),
     username = COALESCE($4, username),
     url = COALESCE($5, url),
     post_type = COALESCE($6, post_type),
-    post_status = COALESCE($7, post_status),
+    -- 'scheduled' only ever stays (#147): the handler allows it unchanged, and if the
+    -- scheduler published or someone cancelled meanwhile there is no time to keep, so
+    -- the status the row has now stays (the publish_at CHECK would refuse it otherwise).
+    post_status = CASE WHEN COALESCE($7, post_status) = 'scheduled' AND publish_at IS NULL THEN post_status ELSE COALESCE($7, post_status) END,
     post_parent = COALESCE($8, post_parent),
     menu_order = COALESCE($9, menu_order),
     -- Moving a scheduled post to another status ends its schedule (#147); only
