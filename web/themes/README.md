@@ -765,11 +765,11 @@ Backend API client with these methods:
 
 | Method                     | Description                                                    |
 | -------------------------- | -------------------------------------------------------------- |
-| `getPosts(params?)`        | Fetch posts (supports `postType`, `status`, `limit`, `offset`) |
-| `getPost(id)`              | Get a single post by ID                                        |
+| `getPosts(params?)`        | A public type's published posts (`/public/posts`; `postType` (default `post`), `limit`, `offset`; `status` is ignored) |
+| `getPost(id)`              | A published post by ID (`/public/posts/:id`), or null       |
 | `registerPostType(config)` | Register a custom post type                                    |
 | `getTaxonomyTerms(type)`   | Get taxonomy terms                                             |
-| `getMedia(params?)`        | Get media items                                                |
+| `getMedia(params?)`        | Media items (`/api/v1/media`: needs a signed-in token, #393) |
 
 ### `context.settings: ThemeSettings`
 

@@ -6,7 +6,6 @@ import { postLayoutCandidates, themeLayoutCandidates } from "./themeLayout"
 const getPublicPostsPage = vi.fn()
 vi.mock("./api", () => ({
   getPublicPostsPage: (...args: unknown[]) => getPublicPostsPage(...args),
-  getFeaturedImageUrl: async () => null,
 }))
 vi.mock("./siteSettings", () => ({
   getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 2, urlStructure: "slug" }),
@@ -55,9 +54,10 @@ describe("listedThumbnail", () => {
     expect(listedThumbnail(row())).toBeNull()
   })
 
-  it("leaves an old filesystem path to the featured-image endpoint", () => {
-    expect(listedThumbnail(row({ _thumbnail_url: "./uploads/media/a.jpg" }))).toBeUndefined()
-    expect(listedThumbnail(row({ _thumbnail_url: "/app/uploads/media/a.jpg" }))).toBeUndefined()
+  // The featured-image endpoint that mapped them needs a sign-in (#393).
+  it("shows no image for an old filesystem path", () => {
+    expect(listedThumbnail(row({ _thumbnail_url: "./uploads/media/a.jpg" }))).toBeNull()
+    expect(listedThumbnail(row({ _thumbnail_url: "/app/uploads/media/a.jpg" }))).toBeNull()
   })
 })
 

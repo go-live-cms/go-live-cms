@@ -114,6 +114,13 @@ are the most fragile part of the codebase. **Before editing anything under
   rebuilding the web, collab and api images.** Every installed block works whichever
   theme is active; only the slash menu follows the active theme. Contract:
   `themes/README.md` ("Custom Blocks"); collab rules: `gl-admin/lib/collaboration/CLAUDE.md`.
+- **The public site never reads `/api/v1/posts*` or `/api/v1/media*` (#393):** they need a
+  sign-in (the admin's working copy, drafts included). Posts come from `/public` only
+  (`getPublicPost`, `getPublishedPosts`, `getPublicPostsPage` in `src/lib/api.ts`, which has
+  no working-copy helpers any more), and so does the theme API client's `getPosts`/`getPost`.
+  A with_meta row whose featured image is a pre-#201 filesystem path shows no image.
+  Contributors list their own posts and published ones; the admin sends its token on every
+  call (`apiCall`, `authenticatedFetch`, `blockAPI.ts`).
 - **Published settings (#358):** the public site never reads `/api/v1/posts*` for a post's
   title, excerpt, featured image or terms: those are the working copy (the admin's). The post
   route reads `getPublicPost` (`/public/posts/:id` or `/slug/:slug`: the published post,

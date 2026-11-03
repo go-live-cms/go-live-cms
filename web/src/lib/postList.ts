@@ -4,7 +4,7 @@
  * in postList.test.ts.
  */
 import type { Post } from "@gl-admin/lib/api/types"
-import { getFeaturedImageUrl, getPublicPostsPage, type PublicPostPage } from "./api"
+import { getPublicPostsPage, type PublicPostPage } from "./api"
 import { pageLinks, pagePath, type PageLinks } from "./pagination"
 import { normalizeUrlStructure, postPath, publicImageUrl, type SeoMeta, type UrlStructure } from "./seo"
 import { getSiteSettings } from "./siteSettings"
@@ -31,14 +31,13 @@ export interface PostListData {
   siteTagline?: string
 }
 
-// The featured image URL a with_meta list row carries (post meta _thumbnail_url): the URL,
-// null for none, or undefined when the stored value is not a URL (a pre-#201 filesystem
-// path, which only the API can map to /uploads).
-export function listedThumbnail(post: Post): string | null | undefined {
+// The featured image URL a with_meta list row carries (post meta _thumbnail_url), or null.
+// A stored value that is not a URL (a pre-#201 filesystem path) is null too: only the
+// admin's /api/v1/posts/:id/featured-image maps those, and it needs a sign-in (#393).
+export function listedThumbnail(post: Post): string | null {
   const value = (post as Post & { meta?: Record<string, unknown> }).meta?._thumbnail_url
-  if (value === undefined || value === null || value === "") return null
-  if (typeof value !== "string") return undefined
-  return /^https?:\/\//i.test(value) || value.startsWith("/uploads/") ? value : undefined
+  if (typeof value !== "string" || value === "") return null
+  return /^https?:\/\//i.test(value) || value.startsWith("/uploads/") ? value : null
 }
 
 // The list page's canonical URL and its rel="prev"/"next" neighbours, for SeoHead.
@@ -84,10 +83,7 @@ export function toListedPosts(data: Post[], fallbackType: string, structure: Url
 
 // One with_meta row (a list row, or a related/adjacent post, #351) with its link and image.
 export async function toListedPost(post: Post, postType: string, structure: UrlStructure, siteUrl: string): Promise<ListedPost> {
-  // with_meta rows carry the featured image URL; only rows whose stored value is an
-  // old filesystem path (before #201) need the featured-image endpoint to map it.
-  const stored = listedThumbnail(post)
-  const url = stored !== undefined ? stored : await getFeaturedImageUrl(post.id).catch(() => null)
+  const url = listedThumbnail(post)
   return {
     post,
     href: postPath({ ...post, post_type: post.post_type || postType }, structure),

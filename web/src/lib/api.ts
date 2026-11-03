@@ -68,61 +68,13 @@ export interface PostQueryParams extends PaginationParams {
   meta_level?: string
 }
 
-export async function getPosts(params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
-  const searchParams = new URLSearchParams()
-
-  if (params.limit) searchParams.set("limit", params.limit.toString())
-  if (params.offset) searchParams.set("offset", params.offset.toString())
-  if (params.sort) searchParams.set("sort", params.sort)
-  if (params.order) searchParams.set("order", params.order)
-  if (params.type) searchParams.set("type", params.type)
-  if (params.status) searchParams.set("status", params.status)
-  if (params.user_id) searchParams.set("user_id", params.user_id.toString())
-  if (params.with_meta) searchParams.set("with_meta", params.with_meta.toString())
-  if (params.meta_level) searchParams.set("meta_level", params.meta_level)
-
-  const queryString = searchParams.toString()
-  const endpoint = `/posts${queryString ? `?${queryString}` : ""}`
-
-  const response = await apiCall(endpoint)
-  return {
-    data: response.posts || [],
-    meta: response.meta || { count: 0, limit: 20, offset: 0, total: 0 },
-  }
-}
-
-export async function getPostById(id: string | number): Promise<{ post: Post }> {
-  return apiCall(`/posts/${id}`)
-}
-
-// The post with this id, or null when the API answers 404. Other failures throw, so
-// a caller can tell "no such post" from "the API is down".
-export async function findPostById(id: string | number): Promise<Post | null> {
-  const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(String(id))}`, { headers: requestIdHeaders() })
-  if (response.status === 404) return null
-  if (!response.ok) throw new Error(`HTTP ${response.status} loading post ${id}`)
-  return (await response.json()).post ?? null
-}
-
-export async function getPostBySlug(slug: string): Promise<{ post: Post }> {
-  return apiCall(`/posts/slug/${slug}`)
-}
-
-// URL of a post's featured image (stored as post meta), or null if it has none.
-export async function getFeaturedImageUrl(postId: string | number): Promise<string | null> {
-  const response = await apiCall(`/posts/${postId}/featured-image`)
-  return response?.featured_image?.url || null
-}
+// The public site never reads /api/v1/posts*: those routes serve the admin's working
+// copy (drafts, unpublished edits) and need a sign-in (#393). Posts come from the API's
+// /public group below (getPublicPost, getPublishedPosts, getPublicPostsPage).
 
 export async function getTaxonomyTypes(): Promise<TaxonomyType[]> {
   const response = await apiCall("/taxonomy/types")
   return response.taxonomy_types || []
-}
-
-// Categories, tags, ... assigned to a post (all taxonomy types).
-export async function getPostTaxonomyTerms(postId: string | number): Promise<TaxonomyTerm[]> {
-  const response = await apiCall(`/posts/${postId}/taxonomy-terms`)
-  return response.taxonomy_terms || []
 }
 
 // Older/newer and related posts (#351). These live on the API's /public group (for
@@ -230,10 +182,6 @@ export async function getPublicPostTypeNames(): Promise<string[]> {
   return types.filter((t) => t.is_active !== false && t.public !== false).map((t) => t.name)
 }
 
-export async function getPostsByType(type: string, params: PostQueryParams = {}): Promise<ApiResponse<Post>> {
-  return getPosts({ ...params, type })
-}
-
 export interface PublicPostPage {
   posts: Post[]
   pagination: Pagination
@@ -274,7 +222,7 @@ export async function getPublicPost(idOrSlug: string | number): Promise<PublicPo
 
 // A public type's published posts with their published titles and excerpts (#358,
 // GET /public/posts): the feeds and short "latest posts" lists. Same sort and paging
-// parameters as getPosts; a type that isn't public is an error (404).
+// parameters as the admin list (GET /posts); a type that isn't public is an error (404).
 export async function getPublishedPosts(type: string, params: Pick<PostQueryParams, "limit" | "offset" | "sort" | "order"> = {}): Promise<ApiResponse<Post>> {
   const searchParams = new URLSearchParams({ type })
   if (params.limit) searchParams.set("limit", params.limit.toString())

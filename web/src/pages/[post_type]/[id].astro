@@ -1,5 +1,5 @@
 ---
-import { getPostsByType, findPostById, getPublicPost, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
+import { getPublishedPosts, getPublicPost, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
 import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
@@ -45,9 +45,7 @@ export async function getStaticPaths() {
   
   for (const postType of postTypes) {
     try {
-      const { data: posts } = await getPostsByType(postType, { 
-        status: 'published'
-      })
+      const { data: posts } = await getPublishedPosts(postType)
       
       posts.forEach((post: Post) => {
         // Generate path based on URL structure setting
@@ -89,8 +87,9 @@ const typeIsPublic = !publicTypes || publicTypes.includes(postType)
 // so the front page pages even with the page type switched off. Only a 404 means "no
 // such page": an API error must not turn a real page's URL into a list (it throws, 500).
 if (postType === 'page' && parsePageSegment(id) !== null) {
-  const existing = typeIsPublic ? await findPostById(id) : null
-  if (!(existing?.post_status === 'published' && existing.post_type === 'page')) {
+  // /public answers only for a published post (#393: never the admin's /api/v1/posts).
+  const existing = typeIsPublic ? (await getPublicPost(id))?.post : null
+  if (existing?.post_type !== 'page') {
     const request = resolveListRequest(Astro.url, '/', id)
     // Temporary: whether /page/N is a page can change when one is published.
     if (request.kind === 'redirect') return Astro.redirect(request.location, 302)
@@ -116,8 +115,7 @@ if (!typeIsPublic) {
 
 // The post as the site shows it (#358): its published title, excerpt, featured image and
 // terms, never the working ones an editor is changing. The API answers only for a
-// published post with a published body; anything else is a 404 here. (The page check
-// above reads /posts/:id only for the status and type.)
+// published post; anything else is a 404 here.
 let fullPost: Post | undefined = post
 let publishedImage: string | null = null
 let publishedTerms: TaxonomyTerm[] = []
