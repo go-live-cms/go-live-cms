@@ -438,6 +438,24 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - The sanitizer has no embed path yet: iframe/embed nodes are always dropped
   (`disallowedNodeTypes`). The embed block (#352) is what reads the allowlist.
 
+## Theme blocks (#376)
+
+- Themes' custom blocks (`theme:<slug>/<block>`) are declared in TypeScript, so the web
+  build generates **`web/themes/blocks.manifest.json`** (type → version + attr specs;
+  committed, regenerated with `npm run themes:manifest` in `web/`). The image ships it
+  with `web/themes`. `NewServer` loads it (`LoadThemeBlockManifest`, outside test mode):
+  missing → warning, theme attrs unvalidated; present but invalid → startup error.
+  Rebuild the api image (with web and collab, same commit) when a theme block changes.
+- `prepareForStore(server.themeBlocks)` (`applyThemeBlocks`, `theme_blocks.go`), after the
+  generic sanitizer: for a type in the manifest, undeclared attrs are stripped (null =
+  unset), `pm.attrs` is removed (declared attrs are canonical on the block), and an
+  invalid value or a version outside 1..spec → **400**. A `theme:` type not in the manifest
+  (removed theme) is kept as is: refusing it would lose content.
+- The collab server applies the same rules first, so a valid edit is never refused here.
+  `web/gl-admin/lib/blocks-spec/themeBlockVectors.json` holds the shared cases
+  (`TestThemeBlockVectors` and the web's `themeBlocks.test.ts`). Handler tests get an
+  empty manifest; set `server.themeBlocks` (`loadRepoThemeBlocks`) to test with the real one.
+
 ## Gotchas
 
 - **Themes are discovered from disk** on startup (`ScanThemesDirectory("web/themes")`,

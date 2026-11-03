@@ -64,8 +64,13 @@ Decision (#272): themes are part of the build, not loaded at runtime.
 - Switching between the bundled themes works at runtime (admin → Themes), and their
   assets are served from `/themes/<slug>/…` for the allowlisted types only (css, js,
   images, fonts; #271). Theme source (`.ts`, `.astro`) returns 404.
-- **To add or change a theme**, commit it under `web/themes/` and deploy. Build the api
-  and web images from the same commit (CD does).
+- **Theme blocks** (#376, `themes/<slug>/blocks/<Name>/`) are in three images: the web
+  image (editor and public renderer), the collab image (it bundles their definitions) and
+  the api image (`web/themes/blocks.manifest.json`, which validates their attrs). Before
+  committing a block change, run `npm run themes:manifest` in `web/`; the web build fails
+  on a stale manifest.
+- **To add or change a theme**, commit it under `web/themes/` and deploy. Build the api,
+  web and collab images from the same commit (CD does).
 
 ## First-time VM setup
 
