@@ -91,19 +91,31 @@ describe("link tokens", () => {
 
 describe("validation", () => {
   it("applies the API's password rules", () => {
-    expect(validatePassword("12345", "12345")).toMatch(/at least 6/)
-    expect(validatePassword("secret-1", "secret-2")).toMatch(/do not match/)
-    expect(validatePassword("secret-1", "secret-1")).toBeNull()
+    expect(validatePassword("secret-1234", "secret-1234")).toMatch(/at least 12/)
+    expect(validatePassword("secret-12345", "secret-23456")).toMatch(/do not match/)
+    expect(validatePassword("secret-12345", "secret-12345")).toBeNull()
     // 72 bytes is bcrypt's limit; 30 emoji are 120 bytes.
     expect(validatePassword("😀".repeat(30), "😀".repeat(30))).toMatch(/too long/)
+    // The account's details, where the page knows them (#329).
+    expect(validatePassword("Ana@Example.com", "Ana@Example.com", ["ana@example.com"])).toMatch(/can't be your email, username or name/)
   })
 
   it("applies the accept-invite field rules", () => {
-    const ok = { username: " newbie ", full_name: "New Person", password: "secret-1", confirm_password: "secret-1" }
+    const ok = { username: " newbie ", full_name: "New Person", password: "secret-12345", confirm_password: "secret-12345" }
     expect(validateAcceptInvitation(ok)).toBeNull()
     expect(validateAcceptInvitation({ ...ok, username: "ab" })).toMatch(/Username/)
     expect(validateAcceptInvitation({ ...ok, full_name: " " })).toMatch(/Full name/)
     expect(validateAcceptInvitation({ ...ok, confirm_password: "other" })).toMatch(/match/)
+  })
+
+  it("refuses a password that is the username, name or invited email", () => {
+    const ok = { username: " longusername ", full_name: " Marisol Duarte ", password: "secret-12345", confirm_password: "secret-12345" }
+    const same = (password: string) => ({ ...ok, password, confirm_password: password })
+    expect(validateAcceptInvitation(same("LongUsername"))).toMatch(/can't be your email, username or name/)
+    expect(validateAcceptInvitation(same("marisol duarte"))).toMatch(/can't be your email, username or name/)
+    expect(validateAcceptInvitation(same("Invited@Example.com"), "invited@example.com")).toMatch(/can't be your email, username or name/)
+    // Without the preview the email is unknown; the API still checks it.
+    expect(validateAcceptInvitation(same("invited@example.com"))).toBeNull()
   })
 
   it("turns API codes into readable messages", () => {
@@ -199,12 +211,12 @@ describe("password fields", () => {
   it("counts towards the API's minimum, then shows it met", () => {
     const input = renderPasswordField()
     const rule = document.getElementById("pw-rule")!
-    expect(rule.textContent).toBe("At least 6 characters")
+    expect(rule.textContent).toBe("At least 12 characters")
     type(input, "abc")
-    expect(rule.textContent).toBe("At least 6 characters (3 so far)")
+    expect(rule.textContent).toBe("At least 12 characters (3 so far)")
     expect(rule.classList.contains("is-met")).toBe(false)
-    type(input, "abcdef")
-    expect(rule.textContent).toBe("At least 6 characters")
+    type(input, "abcdefghijkl")
+    expect(rule.textContent).toBe("At least 12 characters")
     expect(rule.classList.contains("is-met")).toBe(true)
   })
 
@@ -230,7 +242,7 @@ describe("password fields", () => {
     expect(input.getAttribute("aria-describedby")).toBe("errorMessage pw-rule")
     // Fixed: the error leaves, the hint stays.
     fetchMock.mockResolvedValue(json(200, { message: "ok" }))
-    fill({ pw: "long-enough", confirm_password: "long-enough" })
+    fill({ pw: "long-enough!", confirm_password: "long-enough!" })
     await submit(form)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(input.getAttribute("aria-describedby")).toBe("pw-rule")
@@ -256,11 +268,11 @@ describe("reset password page", () => {
     expect(window.location.hash).toBe("")
     fetchMock.mockResolvedValue(json(200, { message: "ok" }))
 
-    fill({ password: "new-secret", confirm_password: "new-secret" })
+    fill({ password: "new-secret-1", confirm_password: "new-secret-1" })
     await submit(form)
 
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/password/reset")
-    expect(sentBody()).toEqual({ token: TOKEN, password: "new-secret" })
+    expect(sentBody()).toEqual({ token: TOKEN, password: "new-secret-1" })
     expect(navigate).toHaveBeenCalledWith("/login?reason=password-reset")
   })
 
@@ -268,7 +280,7 @@ describe("reset password page", () => {
     setUrl(`/reset-password#token=${TOKEN}`)
     const form = renderPage("resetForm", ["password", "confirm_password"])
     mountResetPasswordPage(document, vi.fn())
-    fill({ password: "new-secret", confirm_password: "other-secret" })
+    fill({ password: "new-secret-1", confirm_password: "other-secret-1" })
     await submit(form)
     expect(fetchMock).not.toHaveBeenCalled()
     expect(errorText()).toMatch(/do not match/)
@@ -281,7 +293,7 @@ describe("reset password page", () => {
     mountResetPasswordPage(document, navigate)
     fetchMock.mockResolvedValue(json(400, { error: "this link is invalid or has expired", code: "invalid_token" }))
 
-    fill({ password: "new-secret", confirm_password: "new-secret" })
+    fill({ password: "new-secret-1", confirm_password: "new-secret-1" })
     await submit(form)
 
     expect(form.hidden).toBe(true)
@@ -304,9 +316,9 @@ describe("reloading a link page", () => {
     expect(form.hidden).toBe(false)
 
     fetchMock.mockResolvedValue(json(200, { message: "ok" }))
-    fill({ password: "new-secret", confirm_password: "new-secret" })
+    fill({ password: "new-secret-1", confirm_password: "new-secret-1" })
     await submit(form)
-    expect(sentBody()).toEqual({ token: TOKEN, password: "new-secret" })
+    expect(sentBody()).toEqual({ token: TOKEN, password: "new-secret-1" })
     expect(navigate).toHaveBeenCalled()
 
     // Used up: another reload shows the invalid-link panel.
@@ -336,7 +348,7 @@ describe("reloading a link page", () => {
 
 describe("accept invitation page", () => {
   const fields = ["username", "full_name", "password", "confirm_password"]
-  const valid = { username: " newbie ", full_name: " New Person ", password: "secret-1", confirm_password: "secret-1" }
+  const valid = { username: " newbie ", full_name: " New Person ", password: "secret-12345", confirm_password: "secret-12345" }
 
   it("shows who the invitation is for, then creates the account", async () => {
     setUrl(`/accept-invite#token=${TOKEN}`)
@@ -360,8 +372,20 @@ describe("accept invitation page", () => {
 
     expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/auth/invitations/accept")
     // Trimmed, and no role or email: the invitation decides those.
-    expect(sentBody(1)).toEqual({ token: TOKEN, username: "newbie", full_name: "New Person", password: "secret-1" })
+    expect(sentBody(1)).toEqual({ token: TOKEN, username: "newbie", full_name: "New Person", password: "secret-12345" })
     expect(navigate).toHaveBeenCalledWith("/login?reason=invite-accepted")
+  })
+
+  it("refuses the invited email as the password before sending it", async () => {
+    setUrl(`/accept-invite#token=${TOKEN}`)
+    const form = renderPage("acceptForm", fields)
+    fetchMock.mockResolvedValueOnce(json(200, { email: "new.person@example.com", role: "editor", expires_at: "2030-01-01T00:00:00Z" }))
+    await mountAcceptInvitePage(document, vi.fn())
+
+    fill({ ...valid, password: "New.Person@example.com", confirm_password: "New.Person@example.com" })
+    await submit(form)
+    expect(document.getElementById("errorMessage")!.textContent).toMatch(/can't be your email, username or name/)
+    expect(fetchMock).toHaveBeenCalledTimes(1) // the preview only
   })
 
   it("names the inviter, with their avatar", async () => {

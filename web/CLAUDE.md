@@ -143,7 +143,7 @@ are the most fragile part of the codebase. **Before editing anything under
   missing booleans and clears an empty description, so the form sends every field; Posts
   and Pages are built in and read-only), `lib/roles.ts` (`ROLE_DESCRIPTIONS` for the
   invite dialog) and `lib/profile.ts` (`newPasswordChecklist`: #344's `passwordRule`, the
-  API's real minimum, plus "different from the current one"). `Input` masks
+  API's minimum, "Not your email or name", and "different from the current one"). `Input` masks
   refuse characters such as `! & : ?`; pass `unmasked` for free text the API validates.
   Saving a post type fires `POST_TYPES_CHANGED` so the sidebar reloads its menu.
 - **Media library and detail (#342):** `/media` (grid, side panel for `?file=id`, at
@@ -160,7 +160,10 @@ are the most fragile part of the codebase. **Before editing anything under
   `lib/accountPages.ts` or `lib/loginPage.ts` (admin CSP: no inline scripts); the
   shared pieces are `components/account/`. The password minimum is `PASSWORD_MIN` in
   `lib/passwordRules.ts` (import-free, so pages render the hint server-side);
-  `passwordRules.test.ts` fails if the API's `min=` differs. The invite preview returns
+  `passwordRules.test.ts` fails if the API's `MinPasswordLength` (12, #329) differs or a
+  password binding stops using `new_password`. `passwordMatchesDetails` mirrors the API's
+  "not your email, username or name" check; forms pass the details they know (the reset
+  page knows none, so there only the API checks). The invite preview returns
   `invited_by` `{id, name}` or null.
 - **Image caption/width, quote citation (#346):** image and blockquote are Block Spec v2
   (`caption`, `align`; `cite`); the mapping and its rules are in

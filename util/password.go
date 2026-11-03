@@ -15,6 +15,10 @@ import (
 //
 // Uses bcrypt.DefaultCost for security. For configurable cost, see HashPasswordWithCost.
 //
+// The 6 here is only a floor for anything hashed, the dev seeder's accounts
+// included. The rule for a password a user sets is api.MinPasswordLength (#329),
+// applied by the request bindings before this is called.
+//
 // Parameters:
 //   - password: The plaintext password to hash (must be 6-72 characters)
 //

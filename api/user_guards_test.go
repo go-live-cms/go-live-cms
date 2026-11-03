@@ -104,7 +104,7 @@ func TestUpdateUserGuards(t *testing.T) {
 			name:     "EditorCannotResetAdminPassword",
 			caller:   editor,
 			targetID: fmt.Sprint(admin.ID),
-			body:     gin.H{"password": "taken-over"},
+			body:     gin.H{"password": "taken-over-12"},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().UpdateUserTx(gomock.Any(), gomock.Any()).Times(0)
 			},
@@ -352,7 +352,7 @@ func TestCreateUserGuards(t *testing.T) {
 		"username":  "newperson",
 		"email":     "new@example.com",
 		"full_name": "New Person",
-		"password":  "secret123",
+		"password":  "secret123456",
 		"role":      RoleAdmin,
 	}
 

@@ -392,9 +392,12 @@ func TestPostSearchConcurrentEditsKeepBothChanges(t *testing.T) {
 	require.NoError(t, txA.Commit())
 	require.NoError(t, <-done)
 
+	// Queried with the index's own configuration: since 000025 that is the site
+	// language's (english by default), whose stemmer cuts some of these random
+	// words ("…be" → "…b", "…ed"), so a 'simple' query missed one in ten.
 	var matchesTitle, matchesTerm bool
 	require.NoError(t, conn.QueryRowContext(ctx,
-		`SELECT document @@ to_tsquery('simple', $2), document @@ to_tsquery('simple', $3) FROM post_search WHERE post_id = $1`,
+		`SELECT document @@ to_tsquery(golive_search_config(), $2), document @@ to_tsquery(golive_search_config(), $3) FROM post_search WHERE post_id = $1`,
 		post.ID, titleWord, termWord).Scan(&matchesTitle, &matchesTerm))
 	require.True(t, matchesTitle, "the title edit was lost")
 	require.True(t, matchesTerm, "the term link was lost")

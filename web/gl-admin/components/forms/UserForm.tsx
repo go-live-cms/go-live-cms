@@ -7,6 +7,7 @@ import { createUser, updateUser } from "@gl-admin/lib/api/users"
 import type { User } from "@gl-admin/lib/api/types"
 import { AuthManager } from "@gl-admin/lib/auth"
 import { USER_ROLE_OPTIONS } from "@gl-admin/lib/roles"
+import { passwordHint } from "@gl-admin/lib/passwordRules"
 import { isValidEmail, validateNewPassword } from "@gl-admin/lib/profile"
 
 type UserFormMode = "create" | "edit"
@@ -123,13 +124,16 @@ export default function UserForm({
             // Sent as typed, like the API (no trimming).
             const pwd = formData.password || ""
             const cpwd = formData.confirm_password || ""
+            // Not the account's email, username or name: the ones in the form, and
+            // on an edit the saved ones too, as the API checks (#329).
+            const passwordDetails = [email, username, formData.full_name, initialData?.email, initialData?.username, initialData?.full_name]
 
             if (mode === "create") {
-                const invalid = validateNewPassword(pwd, cpwd)
+                const invalid = validateNewPassword(pwd, cpwd, "Password", passwordDetails)
                 if (invalid) throw new Error(invalid)
             } else {
                 if (pwd || cpwd) {
-                    const invalid = validateNewPassword(pwd, cpwd)
+                    const invalid = validateNewPassword(pwd, cpwd, "New password", passwordDetails)
                     if (invalid) throw new Error(invalid)
                     if (isSelf && !formData.current_password) {
                         throw new Error("Enter your current password to change it.")
@@ -232,6 +236,7 @@ export default function UserForm({
                             name="password"
                             value={formData.password || ""}
                             onChange={(e: any) => handleChange("password", e.currentTarget?.value ?? e.target?.value ?? "")}
+                            hint={passwordHint(formData.password || "")}
                         />
                         <Input
                             title="Confirm password"
@@ -280,6 +285,7 @@ export default function UserForm({
                                     name="password"
                                     value={formData.password || ""}
                                     onChange={(e: any) => handleChange("password", e.currentTarget?.value ?? e.target?.value ?? "")}
+                                    hint={passwordHint(formData.password || "")}
                                 />
                                 <Input
                                     title="Confirm New Password"

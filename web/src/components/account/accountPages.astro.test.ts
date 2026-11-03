@@ -3,7 +3,6 @@
 // and the admin CSP (#161) depend on.
 import { experimental_AstroContainer as AstroContainer } from "astro/container"
 import { beforeAll, describe, expect, it } from "vitest"
-import { PASSWORD_MIN } from "@gl-admin/lib/passwordRules"
 import Login from "../../pages/login/index.astro"
 import ForgotPassword from "../../pages/forgot-password/index.astro"
 import ResetPassword from "../../pages/reset-password/index.astro"
@@ -61,12 +60,13 @@ describe("password hints", () => {
   it.each([
     ["/reset-password", ResetPassword],
     ["/accept-invite", AcceptInvite],
-  ] as const)("%s states the API's minimum", async (_path, page) => {
+  ] as const)("%s states the API's minimum, 12 (#329)", async (_path, page) => {
     const html = await render(page)
-    expect(html).toContain(`At least ${PASSWORD_MIN} characters`)
+    expect(html).toContain("At least 12 characters")
     // Both the password and its confirmation.
-    expect(html.match(new RegExp(`minlength="${PASSWORD_MIN}"`, "g"))?.length).toBe(2)
-    expect(html).toMatch(/id="password"[^>]*aria-describedby="password-rule"/)
+    expect(html.match(/minlength="12"/g)?.length).toBe(2)
+    expect(html).toMatch(/id="password"[^>]*aria-describedby="password-rule password-details"/)
+    expect(html).toMatch(/id="password-details"[^>]*>Not your email or name</)
     expect(html).toMatch(/id="password-rule"[^>]*data-password-rule="password"/)
   })
 

@@ -122,15 +122,18 @@ export function dropLinkToken(win: Window): void {
 const runeLength = (s: string) => [...s].length
 const byteLength = (s: string) => new TextEncoder().encode(s).length
 
-export function validatePassword(password: string, confirm: string): string | null {
-  const invalid = validateNewPassword(password, confirm, "Password")
+// details: the account's email, username and name, where the page knows them.
+export function validatePassword(password: string, confirm: string, details: readonly (string | null | undefined)[] = []): string | null {
+  const invalid = validateNewPassword(password, confirm, "Password", details)
   if (invalid) return invalid
   if (byteLength(password) > PASSWORD_MAX_BYTES) return "Password is too long."
   return null
 }
 
-// Mirrors AcceptInvitationRequest's binding tags (api/account_bindings.go).
-export function validateAcceptInvitation(fields: AcceptInvitationFields): string | null {
+// Mirrors AcceptInvitationRequest's binding tags (api/account_bindings.go), and
+// the API's check that the password isn't the username, name or invited email
+// (email: from the preview, when it loaded).
+export function validateAcceptInvitation(fields: AcceptInvitationFields, email?: string): string | null {
   const username = fields.username.trim()
   const fullName = fields.full_name.trim()
   if (runeLength(username) < USERNAME_MIN || runeLength(username) > USERNAME_MAX) {
@@ -139,7 +142,7 @@ export function validateAcceptInvitation(fields: AcceptInvitationFields): string
   if (runeLength(fullName) < FULL_NAME_MIN || runeLength(fullName) > FULL_NAME_MAX) {
     return `Full name must be ${FULL_NAME_MIN}–${FULL_NAME_MAX} characters.`
   }
-  return validatePassword(fields.password, fields.confirm_password)
+  return validatePassword(fields.password, fields.confirm_password, [username, fullName, email])
 }
 
 export function isInvalidLinkError(err: unknown): boolean {
@@ -391,6 +394,9 @@ export async function mountAcceptInvitePage(
     return
   }
 
+  // The invitation's email, once the preview loads: a password can't be it.
+  let invitedEmail: string | undefined
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault()
     ui.hideError()
@@ -400,7 +406,7 @@ export async function mountAcceptInvitePage(
       password: field(form, "password"),
       confirm_password: field(form, "confirm_password"),
     }
-    const invalid = validateAcceptInvitation(fields)
+    const invalid = validateAcceptInvitation(fields, invitedEmail)
     if (invalid) {
       ui.showError(invalid)
       return
@@ -424,7 +430,9 @@ export async function mountAcceptInvitePage(
   // Show who the invitation is from and for; a dead link gets the invalid
   // panel now rather than after the form is filled in.
   try {
-    showInvitation(doc, await previewInvitation(token))
+    const invite = await previewInvitation(token)
+    invitedEmail = invite.email
+    showInvitation(doc, invite)
   } catch (err) {
     if (isInvalidLinkError(err)) {
       showInvalidLink(doc, form)

@@ -40,7 +40,7 @@ import (
 //   - username: Unique username (3-50 chars)
 //   - email: Valid email address
 //   - full_name: User's display name (2-100 chars)
-//   - password: Secure password (min 6 chars)
+//   - password: at least MinPasswordLength characters, not the email, username or name
 //   - role: User role (admin|editor|contributor)
 //
 // Authentication: Required (Bearer token + admin role)
@@ -59,6 +59,9 @@ func (server *Server) createUser(c *gin.Context) {
 	}
 	// Checked after trimming, as stored (normUsername below).
 	if !checkUsernameFormat(c, normUsername(req.Username)) {
+		return
+	}
+	if !checkPasswordDetails(c, req.Password, req.Email, req.Username, req.FullName) {
 		return
 	}
 
@@ -181,6 +184,13 @@ func (server *Server) updateUser(c *gin.Context) {
 	// access token alone cannot take over the account. Admins resetting
 	// someone else's password skip this.
 	passwordChanged := req.Password != ""
+	// Not the details the account has, nor the ones this request sets. Before
+	// the self-change limit, so a refused password doesn't use up the allowance.
+	if passwordChanged && !checkPasswordDetails(c, req.Password,
+		existingUser.Email, existingUser.Username, existingUser.FullName,
+		req.Email, req.Username, req.FullName) {
+		return
+	}
 	if passwordChanged && isSelf {
 		// Limited per user and client: guesses at current_password from one
 		// address are capped, but a token thief's guesses can't use up the
