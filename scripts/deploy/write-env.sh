@@ -75,6 +75,16 @@ for v in $REQUIRED_VARS; do
     add "$v" "$val"
   fi
 done
+# Renamed settings (#158), mapped by cd.yml only so they're refused here: dropping them
+# would silently end a key rotation's grace window on the next deploy.
+for pair in PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX:PASETO_V4_PREVIOUS_PUBLIC_KEYS \
+            PASETO_V4_PREVIOUS_LOCAL_KEY_HEX:PASETO_V4_PREVIOUS_LOCAL_KEYS; do
+  old="${pair%%:*}"; eval "val=\${$old:-}"
+  if [ -n "$val" ]; then
+    echo "::error::$old was renamed to ${pair#*:} (<kid>=<hex> entries): move it there and delete it (docs/operations/key-rotation.md)" >&2
+    missing=1
+  fi
+done
 [ "$missing" = 0 ] || exit 1
 
 for v in $OPTIONAL_VARS; do

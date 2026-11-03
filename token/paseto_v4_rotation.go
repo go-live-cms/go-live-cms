@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	p "aidanwoods.dev/go-paseto"
@@ -52,7 +54,7 @@ func (m *PasetoV4Maker) SetPreviousKeys(public, local map[string]string, until t
 		}
 		pub, err := p.NewV4AsymmetricPublicKeyFromHex(hex)
 		if err != nil {
-			return fmt.Errorf("previous public key %q: %w", kid, err)
+			return fmt.Errorf("previous public key %s: %w", kidForError(kid), err)
 		}
 		prev.public[kid] = pub
 	}
@@ -62,12 +64,22 @@ func (m *PasetoV4Maker) SetPreviousKeys(public, local map[string]string, until t
 		}
 		lk, err := p.V4SymmetricKeyFromHex(hex)
 		if err != nil {
-			return fmt.Errorf("previous local key %q: %w", kid, err)
+			return fmt.Errorf("previous local key %s: %w", kidForError(kid), err)
 		}
 		prev.local[kid] = lk
 	}
 	m.previous = prev
 	return nil
+}
+
+// kidForError quotes kid for an error message, unless it looks like key
+// material: an entry written the wrong way round (<hex>=<kid>) puts the key
+// where the KID goes, and startup errors are logged.
+func kidForError(kid string) string {
+	if len(kid) >= 32 && strings.Trim(strings.ToLower(kid), "0123456789abcdef") == "" {
+		return "(a KID that looks like a hex key: entries are <kid>=<hex>)"
+	}
+	return strconv.Quote(kid)
 }
 
 func checkPreviousKID(kid, currentKID, kind string) error {
@@ -85,9 +97,13 @@ func (m *PasetoV4Maker) inGraceWindow() bool {
 	return m.previous != nil && time.Now().Before(m.previous.until)
 }
 
+// footerParser only reads footers (UnsafeParseFooter checks no rules), so one
+// shared parser serves every verification.
+var footerParser = p.NewParser()
+
 // footerKID returns the "kid" of tok's footer, unverified (see above).
 func footerKID(protocol p.Protocol, tok string) (string, bool) {
-	raw, err := p.NewParser().UnsafeParseFooter(protocol, tok)
+	raw, err := footerParser.UnsafeParseFooter(protocol, tok)
 	if err != nil {
 		return "", false
 	}
@@ -103,32 +119,33 @@ func footerKID(protocol p.Protocol, tok string) (string, bool) {
 // publicKeyFor returns the key that must verify the v4.public access token
 // tok, chosen by its footer KID, or false when no usable key has that KID.
 func (m *PasetoV4Maker) publicKeyFor(tok string) (p.V4AsymmetricPublicKey, bool) {
-	kid, ok := footerKID(p.V4Public, tok)
-	if !ok {
-		return p.V4AsymmetricPublicKey{}, false
-	}
-	if kid == m.keys.AccessKID {
-		return m.keys.PublicKey, true
-	}
+	var previous map[string]p.V4AsymmetricPublicKey
 	if m.inGraceWindow() {
-		key, ok := m.previous.public[kid]
-		return key, ok
+		previous = m.previous.public
 	}
-	return p.V4AsymmetricPublicKey{}, false
+	return keyForKID(p.V4Public, tok, m.keys.AccessKID, m.keys.PublicKey, previous)
 }
 
 // localKeyFor is publicKeyFor for v4.local refresh tokens.
 func (m *PasetoV4Maker) localKeyFor(tok string) (p.V4SymmetricKey, bool) {
-	kid, ok := footerKID(p.V4Local, tok)
-	if !ok {
-		return p.V4SymmetricKey{}, false
-	}
-	if kid == m.keys.RefreshKID {
-		return m.keys.LocalKey, true
-	}
+	var previous map[string]p.V4SymmetricKey
 	if m.inGraceWindow() {
-		key, ok := m.previous.local[kid]
-		return key, ok
+		previous = m.previous.local
 	}
-	return p.V4SymmetricKey{}, false
+	return keyForKID(p.V4Local, tok, m.keys.RefreshKID, m.keys.LocalKey, previous)
+}
+
+// keyForKID picks the key tok's footer KID names: current for currentKID,
+// else the entry in previous (nil outside the grace window).
+func keyForKID[K any](protocol p.Protocol, tok, currentKID string, current K, previous map[string]K) (K, bool) {
+	kid, ok := footerKID(protocol, tok)
+	if !ok {
+		var none K
+		return none, false
+	}
+	if kid == currentKID {
+		return current, true
+	}
+	key, ok := previous[kid]
+	return key, ok
 }

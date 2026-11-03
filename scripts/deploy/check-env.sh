@@ -20,7 +20,8 @@ cd "$(dirname "$0")/../.."
 #   GOLIVE_IMAGE_REGISTRY, GOLIVE_IMAGE_TAG  exported by deploy.sh for each deploy
 #   COLLAB_INTERNAL_URL                      internal wiring (collab:1236); its default is
 #                                            the only right value in this stack
-NOT_FROM_ENV="GOLIVE_IMAGE_REGISTRY GOLIVE_IMAGE_TAG COLLAB_INTERNAL_URL"
+#   GOLIVE_SECRETS_REV                       computed by deploy.sh from the secrets' values
+NOT_FROM_ENV="GOLIVE_IMAGE_REGISTRY GOLIVE_IMAGE_TAG COLLAB_INTERNAL_URL GOLIVE_SECRETS_REV"
 
 WRITER=scripts/deploy/write-env.sh
 REQUIRED="$(sh "$WRITER" --list required)"
@@ -48,7 +49,11 @@ required_vars="$(printf '%s\n' $required_vars $secret_vars | sort -u)"
 for v in $all_vars; do
   if in_list "$v" "$NOT_FROM_ENV"; then continue; fi
   if ! in_list "$v" "$REQUIRED $OPTIONAL"; then
-    err "compose.yaml reads \${$v}, but $WRITER doesn't write it: add it there and to cd.yml, or to NOT_FROM_ENV in $0 with the reason"
+    if in_list "$v" "$secret_vars"; then
+      err "compose.yaml creates a secret from $v (environment: $v), but $WRITER doesn't write it: add it to REQUIRED_VARS there and to cd.yml"
+    else
+      err "compose.yaml reads \${$v}, but $WRITER doesn't write it: add it there and to cd.yml, or to NOT_FROM_ENV in $0 with the reason"
+    fi
   fi
 done
 for v in $required_vars; do

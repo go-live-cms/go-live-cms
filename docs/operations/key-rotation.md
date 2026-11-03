@@ -100,7 +100,11 @@ passes both as files.
 
 - **Rotate** them when someone with access to the secret store leaves, or on suspicion.
   Generate a new random value (`openssl rand -hex 32`), set it in the GitHub `production`
-  environment and deploy: `deploy.sh` recreates the API and the collab server together.
+  environment and deploy. Compose doesn't recreate a container when only a mounted
+  secret's value changes, so `deploy.sh` labels both services with a fingerprint of the
+  secrets (`GOLIVE_SECRETS_REV`): a changed secret recreates the API and the collab server
+  together, even when redeploying the same image. Without `deploy.sh`, run
+  `docker compose up -d --force-recreate api collab`.
 - **While the two sides disagree** (seconds, during the restart): new editor connections
   are refused as `access-unavailable` and the editor retries; open connections keep their
   mode (the access re-check fails open for `COLLAB_ACCESS_GRACE_MS`, 2 minutes); a publish

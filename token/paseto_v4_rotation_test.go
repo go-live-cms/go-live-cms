@@ -242,8 +242,15 @@ func TestSetPreviousKeysValidation(t *testing.T) {
 	require.ErrorContains(t, m.SetPreviousKeys(map[string]string{"": other.priv.Public().ExportHex()}, nil, soon), "needs a KID")
 	require.ErrorContains(t, m.SetPreviousKeys(nil, map[string]string{"": other.local.ExportHex()}, soon), "needs a KID")
 
+	// An entry written the wrong way round puts the key where the KID goes:
+	// the error must not repeat it.
+	secretHex := other.local.ExportHex()
+	err := m.SetPreviousKeys(nil, map[string]string{secretHex: "k4.loc.2026-01"}, soon)
+	require.ErrorContains(t, err, "looks like a hex key")
+	require.NotContains(t, err.Error(), secretHex)
+
 	// The current KID can't name a previous key: it would be ambiguous.
-	err := m.SetPreviousKeys(map[string]string{keys.accessKID: other.priv.Public().ExportHex()}, nil, soon)
+	err = m.SetPreviousKeys(map[string]string{keys.accessKID: other.priv.Public().ExportHex()}, nil, soon)
 	require.ErrorContains(t, err, "current access KID")
 	err = m.SetPreviousKeys(nil, map[string]string{keys.refreshKID: other.local.ExportHex()}, soon)
 	require.ErrorContains(t, err, "current refresh KID")

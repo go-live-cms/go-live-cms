@@ -667,6 +667,11 @@ func parseKIDKeys(name, value string) (map[string]string, error) {
 		if !ok || kid == "" || hex == "" {
 			return nil, fmt.Errorf("invalid %s: entry %d is not <kid>=<hex key>", name, i+1)
 		}
+		// Written the wrong way round (<hex>=<kid>): the key is where the KID
+		// goes, so never echo it.
+		if len(kid) >= 32 && strings.Trim(strings.ToLower(kid), "0123456789abcdef") == "" {
+			return nil, fmt.Errorf("invalid %s: entry %d has a hex key where the KID goes: write <kid>=<hex key>", name, i+1)
+		}
 		if _, dup := keys[kid]; dup {
 			return nil, fmt.Errorf("invalid %s: KID %q is listed twice", name, kid)
 		}

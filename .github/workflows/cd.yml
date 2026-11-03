@@ -195,6 +195,9 @@ jobs:
           PASETO_V4_PREVIOUS_PUBLIC_KEYS: ${{ secrets.PASETO_V4_PREVIOUS_PUBLIC_KEYS }}
           PASETO_V4_PREVIOUS_LOCAL_KEYS: ${{ secrets.PASETO_V4_PREVIOUS_LOCAL_KEYS }}
           PASETO_PREVIOUS_KEYS_VALID_UNTIL: ${{ vars.PASETO_PREVIOUS_KEYS_VALID_UNTIL }}
+          # Renamed in #158: mapped only so write-env.sh refuses them if still set.
+          PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX: ${{ secrets.PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX }}
+          PASETO_V4_PREVIOUS_LOCAL_KEY_HEX: ${{ secrets.PASETO_V4_PREVIOUS_LOCAL_KEY_HEX }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |

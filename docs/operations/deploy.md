@@ -180,7 +180,11 @@ mounts it read-only at `/run/secrets/<name>` in the services that need it; the A
 the collab server read `<NAME>_FILE`. So they don't show up in `docker inspect`,
 `/proc/<pid>/environ` or a crash dump of the environment. Nothing changes for CD: the
 `.env` it writes still holds them (mode 600), and `check-env.sh` checks each secret's
-source variable is in the required list.
+source variable is in the required list. Compose copies a secret in when it creates a
+container and doesn't recreate one when only the value changed, so `deploy.sh` exports
+`GOLIVE_SECRETS_REV`, a fingerprint of the values, which `compose.yaml` puts in a label on
+`api` and `collab`: a rotated secret recreates both together. By hand, use
+`docker compose up -d --force-recreate api collab` after changing one.
 
 Every secret the API reads accepts `<NAME>_FILE`: the PASETO keys, the
 `PASETO_V4_PREVIOUS_*_KEYS` lists, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET`,

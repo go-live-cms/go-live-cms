@@ -115,6 +115,10 @@ services:
       - paseto_v4_local_key
       - role_lookup_secret
       - collab_internal_secret
+    labels:
+      # Set by deploy.sh: changes when a secret's value does, so api and collab are
+      # recreated together (compose doesn't for a changed secret alone).
+      golive.secrets-rev: "${GOLIVE_SECRETS_REV:-}"
     volumes:
       - uploads:/app/uploads
     entrypoint: ["/app/wait-for.sh", "postgres:5432", "--", "/app/start.sh"]
@@ -190,6 +194,8 @@ services:
     secrets:
       - role_lookup_secret
       - collab_internal_secret
+    labels:
+      golive.secrets-rev: "${GOLIVE_SECRETS_REV:-}"
     depends_on:
       api:
         condition: service_healthy
@@ -238,7 +244,9 @@ networks:
 # them, so they aren't in the containers' environment (`docker inspect`, /proc/*/environ,
 # crash dumps). Each is created from the variable of the same purpose in the .env, so
 # CD (scripts/deploy/write-env.sh) and cmd/gen-prod-env are unchanged; every one is
-# required. To take them from a secrets manager instead of the .env, replace
+# required. Compose doesn't recreate a container when only a secret's value changes:
+# deploy.sh sets GOLIVE_SECRETS_REV for that; by hand, `up -d --force-recreate api collab`.
+# To take them from a secrets manager instead of the .env, replace
 # `environment:` with `file:` pointing at the file its agent writes
 # (docs/operations/deploy.md, "Secrets"). scripts/deploy/check-env.sh reads these names.
 secrets:

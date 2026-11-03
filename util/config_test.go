@@ -264,11 +264,14 @@ func TestParsePreviousPasetoKeys(t *testing.T) {
 		"a=":                    "entry 1 is not",
 		"a=1, a=2":              `KID "a" is listed twice`,
 		"k4.loc.2026=secret,x=": "entry 2",
+		// Reversed: the (secret) key where the KID goes.
+		"5ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2e75ec2=k4.loc.2026": "hex key where the KID goes",
 	} {
 		_, err := Config{PasetoV4PreviousLocalKeys: value}.PasetoPreviousLocalKeys()
 		require.ErrorContains(t, err, "PASETO_V4_PREVIOUS_LOCAL_KEYS", value)
 		require.ErrorContains(t, err, wantErr, value)
 		require.NotContains(t, err.Error(), "secret", "key material in the error")
+		require.NotContains(t, err.Error(), "5ec2e7", "key material in the error")
 	}
 }
 
