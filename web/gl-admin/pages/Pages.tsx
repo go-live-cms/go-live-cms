@@ -27,7 +27,7 @@ import "@gl-admin/assets/styles/pages/content-list.scss"
 // load in pages of 100 instead of through Pagination.
 //
 // Hidden until their issues land: search, the Front page badge and the Template column
-// (#336, templates #322), and "Changes not published" (#326).
+// (#336, templates #322). A published page with changes not published (#326) shows that pill.
 
 // The moderators' status tabs: pages have no "My posts" view.
 const TABS = MODERATOR_TABS
@@ -97,18 +97,20 @@ export default function Pages({ typeName, postType }: PagesProps) {
     for (const p of pages) c[p.post_status] = (c[p.post_status] ?? 0) + 1
     return c
   }, [pages])
+  // The "Changes not published" tab (#326): a subset of the published pages.
+  const changesCount = useMemo(() => (pages ? pages.filter((p) => p.has_unpublished_changes).length : null), [pages])
 
   const byId = useMemo(() => new Map((pages ?? []).map((p) => [p.id, p])), [pages])
 
   const rows = useMemo((): PageRow<Post>[] => {
     if (!pages) return []
     const statuses = tab.status.split(",")
-    const shown = pages.filter((p) => statuses.includes(p.post_status))
+    const shown = pages.filter((p) => statuses.includes(p.post_status) && (!tab.unpublishedChanges || p.has_unpublished_changes))
     if (layout === "tree") return buildPageTree(shown)
     return shown
       .sort((a, b) => Date.parse(lastEdited(b)) - Date.parse(lastEdited(a)) || b.id - a.id)
       .map((page) => ({ page, depth: 0, orphan: false }))
-  }, [pages, tab.status, layout])
+  }, [pages, tab.status, tab.unpublishedChanges, layout])
 
   const open = (post: Post) => navigate(`/content/edit/${post.id}`)
 
@@ -156,7 +158,14 @@ export default function Pages({ typeName, postType }: PagesProps) {
       key: "depth",
       name: "Status",
       width: "9.5rem",
-      render: (_, row) => <PostStatus status={row?.page.post_status || null} iconPath={row?.page.post_status || null} publishAt={row?.page.publish_at} />,
+      render: (_, row) => (
+        <PostStatus
+          status={row?.page.post_status || null}
+          iconPath={row?.page.post_status || null}
+          unpublishedChanges={row?.page.has_unpublished_changes}
+          publishAt={row?.page.publish_at}
+        />
+      ),
     },
     { key: "orphan", name: "Last edited", width: "8.5rem", render: (_, row) => <LastEdited post={row?.page ?? null} /> },
   ]
@@ -233,7 +242,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
       <Tabs
         label="Views"
         activation="manual"
-        tabs={TABS.map((t) => ({ id: t.id, label: t.label, count: tabCount(t, counts) }))}
+        tabs={TABS.map((t) => ({ id: t.id, label: t.label, count: tabCount(t, counts, null, changesCount) }))}
         value={tab.id}
         onChange={(id) => setParam("view", id, TABS[0].id)}
       />

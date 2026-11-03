@@ -93,6 +93,8 @@ type Post struct {
 	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug                 string                `json:"slug"`
 	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	BlockDocHash         sql.NullString        `json:"block_doc_hash"`
+	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
 	PublishAt            sql.NullTime          `json:"publish_at"`
 	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
 	PublishAttempts      int32                 `json:"publish_attempts"`

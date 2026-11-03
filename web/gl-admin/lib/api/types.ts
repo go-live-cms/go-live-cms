@@ -132,6 +132,9 @@ export interface Post {
   // Every credited author (user_posts) in byline order; only list rows fetched
   // with with_meta=true&meta_level=basic carry it (#340).
   authors?: PostAuthor[]
+  // "Changes not published" (#326): published, and the working copy (body or settings)
+  // differs from what the site shows. Lists and GET /posts/:id set it; absent = false.
+  has_unpublished_changes?: boolean
   // When a scheduled post publishes (#147), UTC ISO; null unless post_status is
   // "scheduled".
   publish_at?: string | null
@@ -159,6 +162,8 @@ export interface PostAuthor {
 export interface PostStatusCounts {
   counts: Record<string, number>
   total: number
+  // Published posts with changes not published (#326); also in counts.published.
+  unpublished_changes: number
 }
 
 export interface User {

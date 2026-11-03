@@ -62,11 +62,17 @@ WHERE p.id = $1
 GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at;
 
 -- name: ListPosts :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug, published_settings, publish_at FROM posts
+SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    -- Changes not published (#326): a published post whose working copy (body or
+    -- settings) differs from what the site shows. Migration 000030.
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
+    p.publish_at
+FROM posts p
 WHERE 
-    (@post_type::text = '' OR post_type = @post_type)
-    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id::bigint = 0 OR user_id = @user_id)  -- Add user filter
+    (@post_type::text = '' OR p.post_type = @post_type)
+    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
+    AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -135,6 +141,9 @@ WHERE post_type = $1;
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    -- Changes not published (#326), for the admin only: the public lists share this
+    -- query and pass false, so they don't pay for the settings comparison.
+    (@with_unpublished_changes::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
     -- A scheduled post's time, for the list's "Scheduled · Nov 3" pill (#147).
     p.publish_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
@@ -160,6 +169,7 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
+    AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -180,32 +190,48 @@ LIMIT @limit_count
 OFFSET @offset_count;
 
 -- name: CountFilteredPosts :one
-SELECT COUNT(*) AS total FROM posts
-WHERE 
-    (@post_type::text = '' OR post_type = @post_type)
-    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
-    AND (@user_id::bigint = 0 OR user_id = @user_id);
+SELECT COUNT(*) AS total FROM posts p
+WHERE
+    (@post_type::text = '' OR p.post_type = @post_type)
+    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    AND (@user_id::bigint = 0 OR p.user_id = @user_id)
+    AND (NOT @unpublished_changes::boolean
+         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
 
 -- name: CountPostsByStatus :many
 -- The admin list's status tabs (#340): one count per status, with the list's
--- type and owner filters.
-SELECT post_status, COUNT(*) AS total FROM posts
+-- type and owner filters. unpublished_changes: how many of them have changes
+-- not published (#326; only published posts can).
+SELECT p.post_status, COUNT(*) AS total,
+       COUNT(*) FILTER (
+           WHERE golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)
+       ) AS unpublished_changes
+FROM posts p
 WHERE
-    (@post_type::text = '' OR post_type = @post_type)
-    AND (@user_id::bigint = 0 OR user_id = @user_id)
-GROUP BY post_status
-ORDER BY post_status;
+    (@post_type::text = '' OR p.post_type = @post_type)
+    AND (@user_id::bigint = 0 OR p.user_id = @user_id)
+GROUP BY p.post_status
+ORDER BY p.post_status;
+
+-- name: GetPostHasUnpublishedChanges :one
+-- GET /posts/:id and /posts/slug/:slug (#326): ListPosts' has_unpublished_changes
+-- for one post.
+SELECT golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes
+FROM posts p
+WHERE p.id = $1;
 
 -- name: CountPostsByTypeFiltered :one
-SELECT COUNT(*) AS total FROM posts
-WHERE post_type = @post_type
-    AND (@post_status::text = '' OR post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')));
+SELECT COUNT(*) AS total FROM posts p
+WHERE p.post_type = @post_type
+    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
 
 
 -- name: ListPostsWithAllMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     -- Post custom meta
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
@@ -239,6 +265,7 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
+    AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts

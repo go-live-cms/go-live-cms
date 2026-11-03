@@ -1,9 +1,11 @@
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
+import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-// The status pill (#338) with a scheduled post's time (#147): "Scheduled · Nov 3" in the
-// site's time zone, one settings request for every pill on the page.
+// The status pill (#338), "Changes not published" for a published post whose working
+// copy differs from the live one (#326), and a scheduled post's time (#147): "Scheduled ·
+// Nov 3" in the site's time zone, one settings request for every pill on the page.
 
 const getSettings = vi.fn()
 vi.mock("@gl-admin/lib/api/settings", () => ({ getSettings: () => getSettings() }))
@@ -13,26 +15,61 @@ import { resetSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-let container: HTMLDivElement
-let root: Root
-beforeEach(() => {
-  resetSiteDateSettings()
-  getSettings.mockReset()
-  getSettings.mockResolvedValue({ site_language: "en-US", site_timezone: "America/Sao_Paulo", date_format: "month_day_year" })
-  container = document.createElement("div")
-  document.body.appendChild(container)
-  root = createRoot(container)
-})
-afterEach(() => {
-  act(() => root.unmount())
-  container.remove()
-})
-
-async function render(node: React.ReactNode) {
-  await act(async () => root.render(node))
+const pill = (markup: string) => {
+  const el = document.createElement("div")
+  el.innerHTML = markup
+  return el.querySelector(".gl-pill")
 }
 
 describe("PostStatus", () => {
+  it("names the status, with its tone", () => {
+    const published = pill(renderToStaticMarkup(<PostStatusPill status="published" />))
+    expect(published?.textContent).toBe("Published")
+    expect(published?.classList.contains("gl-pill--success")).toBe(true)
+    expect(pill(renderToStaticMarkup(<PostStatusPill status="draft" />))?.textContent).toBe("Draft")
+  })
+
+  it("says Changes not published for a published post with unpublished changes", () => {
+    const changed = pill(renderToStaticMarkup(<PostStatusPill status="published" unpublishedChanges />))
+    expect(changed?.textContent).toBe("Changes not published")
+    expect(changed?.classList.contains("gl-pill--accent")).toBe(true)
+    expect(pill(renderToStaticMarkup(<PostStatus status="published" iconPath="published" unpublishedChanges />))?.textContent).toBe(
+      "Changes not published"
+    )
+  })
+
+  it("ignores the flag on any other status", () => {
+    expect(pill(renderToStaticMarkup(<PostStatusPill status="draft" unpublishedChanges />))?.textContent).toBe("Draft")
+    expect(pill(renderToStaticMarkup(<PostStatusPill status="archived" unpublishedChanges />))?.textContent).toBe("Archived")
+  })
+
+  it("is a skeleton while the row loads", () => {
+    const markup = renderToStaticMarkup(<PostStatus status={null} iconPath={null} unpublishedChanges />)
+    expect(markup).toContain("gl-skeleton")
+    expect(markup).not.toContain("Changes not published")
+  })
+})
+
+describe("PostStatus for a scheduled post", () => {
+  let container: HTMLDivElement
+  let root: Root
+  beforeEach(() => {
+    resetSiteDateSettings()
+    getSettings.mockReset()
+    getSettings.mockResolvedValue({ site_language: "en-US", site_timezone: "America/Sao_Paulo", date_format: "month_day_year" })
+    container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  async function render(node: React.ReactNode) {
+    await act(async () => root.render(node))
+  }
+
   it("shows a scheduled post's day in the site's zone", async () => {
     // 01:30 UTC on the 4th is 22:30 on the 3rd in São Paulo.
     const year = new Date().getUTCFullYear()
@@ -52,7 +89,7 @@ describe("PostStatus", () => {
     expect(getSettings).toHaveBeenCalledTimes(1)
   })
 
-  it("keeps the other statuses as they were", async () => {
+  it("keeps the bare status without a time", async () => {
     await render(
       <>
         <PostStatusPill status="draft" />

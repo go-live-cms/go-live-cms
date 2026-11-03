@@ -865,7 +865,7 @@ func (q *Queries) GetPostMediaCount(ctx context.Context, postID int64) (int64, e
 
 const getPostWithMedia = `-- name: GetPostWithMedia :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
     COALESCE(
         json_agg(
             json_build_object(
@@ -908,6 +908,8 @@ type GetPostWithMediaRow struct {
 	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug                 string                `json:"slug"`
 	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	BlockDocHash         sql.NullString        `json:"block_doc_hash"`
+	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
 	PublishAt            sql.NullTime          `json:"publish_at"`
 	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
 	PublishAttempts      int32                 `json:"publish_attempts"`
@@ -939,6 +941,8 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,
@@ -1035,7 +1039,7 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 
 const getPostsByUserWithMedia = `-- name: GetPostsByUserWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1087,6 +1091,8 @@ type GetPostsByUserWithMediaRow struct {
 	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug                 string                `json:"slug"`
 	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	BlockDocHash         sql.NullString        `json:"block_doc_hash"`
+	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
 	PublishAt            sql.NullTime          `json:"publish_at"`
 	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
 	PublishAttempts      int32                 `json:"publish_attempts"`
@@ -1124,6 +1130,8 @@ func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUse
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.BlockDocHash,
+			&i.PublishedBlockHash,
 			&i.PublishAt,
 			&i.PublishScheduledBy,
 			&i.PublishAttempts,
@@ -1383,7 +1391,7 @@ func (q *Queries) ListMediaPathsIn(ctx context.Context, paths []string) ([]strin
 
 const listPostsWithMedia = `-- name: ListPostsWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1433,6 +1441,8 @@ type ListPostsWithMediaRow struct {
 	PublishedBlockDoc    pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug                 string                `json:"slug"`
 	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
+	BlockDocHash         sql.NullString        `json:"block_doc_hash"`
+	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
 	PublishAt            sql.NullTime          `json:"publish_at"`
 	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
 	PublishAttempts      int32                 `json:"publish_attempts"`
@@ -1470,6 +1480,8 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.BlockDocHash,
+			&i.PublishedBlockHash,
 			&i.PublishAt,
 			&i.PublishScheduledBy,
 			&i.PublishAttempts,

@@ -34,6 +34,10 @@ type PostResponse struct {
 	CreatedAt       time.Time              `json:"created_at"`
 	ChangedAt       time.Time              `json:"changed_at"`
 	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
+	// HasUnpublishedChanges (#326): published, and the working copy (body or
+	// settings) differs from what the site shows. Lists and GET /posts/:id set it;
+	// omitted when false.
+	HasUnpublishedChanges bool `json:"has_unpublished_changes,omitempty"`
 	// PublishAt is when a scheduled post publishes (#147), in UTC; null unless
 	// post_status is "scheduled".
 	PublishAt *time.Time `json:"publish_at"`
@@ -75,6 +79,10 @@ type PostWithMetaResponse struct {
 	Meta      map[string]interface{} `json:"meta,omitempty"`
 	// Every credited author (user_posts), in byline order (#340).
 	Authors []PostAuthorResponse `json:"authors"`
+	// HasUnpublishedChanges (#326): published, and the working copy (body or
+	// settings) differs from what the site shows. Lists and GET /posts/:id set it;
+	// omitted when false.
+	HasUnpublishedChanges bool `json:"has_unpublished_changes,omitempty"`
 }
 
 // PostAuthorResponse is one byline entry: public fields only.
@@ -103,6 +111,10 @@ type PostWithAllMetaResponse struct {
 	PostMeta        map[string]interface{} `json:"post_meta,omitempty"`
 	AuthorMeta      map[string]interface{} `json:"author_meta,omitempty"`
 	PostTypeMeta    map[string]interface{} `json:"post_type_meta,omitempty"`
+	// HasUnpublishedChanges (#326): published, and the working copy (body or
+	// settings) differs from what the site shows. Lists and GET /posts/:id set it;
+	// omitted when false.
+	HasUnpublishedChanges bool `json:"has_unpublished_changes,omitempty"`
 }
 
 // PostMetaResponse represents individual meta key-value pair responses
@@ -159,21 +171,22 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 	}
 
 	return PostResponse{
-		ID:              post.ID,
-		Title:           post.Title,
-		Description:     post.Description,
-		UserID:          post.UserID,
-		Username:        post.Username,
-		Url:             post.Url,
-		Slug:            post.Slug,
-		PostType:        post.PostType,
-		PostStatus:      post.PostStatus,
-		PostParent:      postParent,
-		MenuOrder:       post.MenuOrder,
-		CreatedAt:       post.CreatedAt,
-		ChangedAt:       post.ChangedAt,
-		PublishedBlocks: publishedBlocks,
-		PublishAt:       nullTimePtr(post.PublishAt),
+		ID:                    post.ID,
+		Title:                 post.Title,
+		Description:           post.Description,
+		UserID:                post.UserID,
+		Username:              post.Username,
+		Url:                   post.Url,
+		Slug:                  post.Slug,
+		PostType:              post.PostType,
+		PostStatus:            post.PostStatus,
+		PostParent:            postParent,
+		MenuOrder:             post.MenuOrder,
+		CreatedAt:             post.CreatedAt,
+		ChangedAt:             post.ChangedAt,
+		PublishedBlocks:       publishedBlocks,
+		HasUnpublishedChanges: post.HasUnpublishedChanges,
+		PublishAt:             nullTimePtr(post.PublishAt),
 	}
 }
 
@@ -214,6 +227,8 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 		PublishAt:       nullTimePtr(post.PublishAt),
 		Meta:            metaMap,
 		Authors:         decodePostAuthors(post.Authors),
+
+		HasUnpublishedChanges: post.HasUnpublishedChanges,
 	}
 }
 
@@ -221,6 +236,8 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 // the post's published title, excerpt and featured image (#358).
 func toPublicPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 	resp := toPostWithMetaResponse(post)
+	// The working copy is the admin's business.
+	resp.HasUnpublishedChanges = false
 	applyPublishedSettings(&resp, post.PublishedSettings)
 	return resp
 }
@@ -304,6 +321,8 @@ func toPostWithAllMetaResponse(post db.ListPostsWithAllMetaRow) PostWithAllMetaR
 		PostMeta:        postMetaMap,
 		AuthorMeta:      authorMetaMap,
 		PostTypeMeta:    postTypeMetaMap,
+
+		HasUnpublishedChanges: post.HasUnpublishedChanges,
 	}
 }
 
