@@ -38,16 +38,13 @@ func publishRequest(t *testing.T, server *Server, postID int64) *httptest.Respon
 }
 
 // expectPublishWrites stubs a successful publish of post 1. beforeRead runs
-// when publish reads the working copy.
+// when publish reads the working copy (PublishPostTx).
 func expectPublishWrites(store *mockdb.MockStore, beforeRead func()) {
-	store.EXPECT().GetPostBlocks(gomock.Any(), int64(1)).Times(1).
-		DoAndReturn(func(_ any, _ int64) (db.GetPostBlocksRow, error) {
+	store.EXPECT().PublishPostTx(gomock.Any(), gomock.Any()).Times(1).
+		DoAndReturn(func(_ any, _ db.PublishPostTxParams) (db.PublishPostTxResult, error) {
 			beforeRead()
-			return db.GetPostBlocksRow{Content: validBlockDoc(), Revision: 3}, nil
+			return db.PublishPostTxResult{VersionID: 1, VersionNo: 1, BlockDoc: validBlockDoc()}, nil
 		})
-	store.EXPECT().GetNextVersionNoForPost(gomock.Any(), int64(1)).Times(1).Return(int32(1), nil)
-	store.EXPECT().InsertPostVersion(gomock.Any(), gomock.Any()).Times(1).Return(db.InsertPostVersionRow{ID: 1, VersionNo: 1}, nil)
-	store.EXPECT().SetPublishedVersionOnPost(gomock.Any(), gomock.Any()).Times(1).Return(nil)
 	store.EXPECT().GetMediaByPostWithOrder(gomock.Any(), int64(1)).Times(1).Return([]db.GetMediaByPostWithOrderRow{}, nil)
 }
 
@@ -138,9 +135,7 @@ func TestPublishFlushFailureIs503(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			store := mockdb.NewMockStore(ctrl)
-			store.EXPECT().GetPostBlocks(gomock.Any(), gomock.Any()).Times(0)
-			store.EXPECT().InsertPostVersion(gomock.Any(), gomock.Any()).Times(0)
-			store.EXPECT().SetPublishedVersionOnPost(gomock.Any(), gomock.Any()).Times(0)
+			store.EXPECT().PublishPostTx(gomock.Any(), gomock.Any()).Times(0)
 			stubRoleLookup(store, publishEditor)
 
 			server := newCollabTestServer(t, store, tc.url)

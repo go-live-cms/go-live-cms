@@ -166,7 +166,7 @@ func (q *Queries) ListPublicAuthors(ctx context.Context, arg ListPublicAuthorsPa
 const listPublishedPostsByAuthor = `-- name: ListPublishedPostsByAuthor :many
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -212,6 +212,7 @@ type ListPublishedPostsByAuthorRow struct {
 	ChangedAt         time.Time             `json:"changed_at"`
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug              string                `json:"slug"`
+	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
 	Meta              interface{}           `json:"meta"`
 	Authors           json.RawMessage       `json:"authors"`
 }
@@ -242,6 +243,7 @@ func (q *Queries) ListPublishedPostsByAuthor(ctx context.Context, arg ListPublis
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
 			&i.Slug,
+			&i.PublishedSettings,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

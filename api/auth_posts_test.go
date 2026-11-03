@@ -190,8 +190,8 @@ func postPermRoutes() []postPermRoute {
 			path:    func(p db.Post) string { return fmt.Sprintf("/api/v1/posts/%d/publish", p.ID) },
 			allowed: moderatorOnly,
 			stubs: func(store *mockdb.MockStore, p db.Post, allowed bool) {
-				// An allowed publish stops at the (stubbed) missing working copy.
-				store.EXPECT().GetPostBlocks(gomock.Any(), p.ID).Times(timesIf(allowed)).Return(db.GetPostBlocksRow{}, sql.ErrNoRows)
+				// An allowed publish stops at the (stubbed) missing post.
+				store.EXPECT().PublishPostTx(gomock.Any(), gomock.Any()).Times(timesIf(allowed)).Return(db.PublishPostTxResult{}, sql.ErrNoRows)
 			},
 		},
 		{

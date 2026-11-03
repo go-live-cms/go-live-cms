@@ -151,27 +151,59 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       .catch((error) => console.error("Failed to fetch settings:", error))
   }, [])
 
-  // The collab server saves the content only, so the title is saved on its own, debounced,
-  // through PUT /posts/:id. Only for users who may change it.
+  // Settings (#358): on a published post, the title, excerpt, featured image and terms
+  // reach the site only on Update. `settingsPending` says they differ from the live ones
+  // (GET /posts/:id/settings), re-read after each settings save, publish and restore.
+  const [settingsPending, setSettingsPending] = useState(false)
+  // Bumped when a restored version changed the featured image and terms, to reload them.
+  const [settingsKey, setSettingsKey] = useState(0)
+  const refreshSettingsState = async () => {
+    if (mode !== "edit" || !initialData?.id) return
+    try {
+      const token = authManager.getAccessToken()
+      if (token) blockAPIClient.setAuthToken(token)
+      setSettingsPending((await blockAPIClient.getSettingsState(initialData.id)).changed)
+    } catch (error) {
+      // Only the hint depends on it.
+      console.error("Failed to read the settings state:", error)
+    }
+  }
+  useEffect(() => {
+    void refreshSettingsState()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, initialData?.id])
+
+  // The collab server saves the content only, so the title and excerpt are saved on their
+  // own, debounced, through PUT /posts/:id. Only for users who may change them.
   const savedTitleRef = useRef(initialData?.title ?? "")
+  const savedExcerptRef = useRef(initialData?.description ?? "")
   const titleSaveable = mode === "edit" && roleVerified && !detailsReadOnly && !!initialData?.id
   const saveTitle = async (): Promise<void> => {
+    if (!titleSaveable || !initialData?.id) return
     const title = formData.title.trim()
-    if (!titleSaveable || !initialData?.id || title === savedTitleRef.current || title.length < 3) return
-    await updatePost(initialData.id, { title })
-    savedTitleRef.current = title
+    const excerpt = formData.excerpt.trim()
+    // The API's limits (3+ characters for a title, 10+ for an excerpt): keep the last
+    // saved value until the new one is long enough.
+    const changes: Partial<Post> = {}
+    if (title !== savedTitleRef.current && title.length >= 3) changes.title = title
+    if (excerpt !== savedExcerptRef.current && excerpt.length >= 10) changes.description = excerpt
+    if (Object.keys(changes).length === 0) return
+    await updatePost(initialData.id, changes)
+    if (changes.title !== undefined) savedTitleRef.current = changes.title
+    if (changes.description !== undefined) savedExcerptRef.current = changes.description
+    void refreshSettingsState()
   }
   useEffect(() => {
     if (!titleSaveable) return
     const timer = setTimeout(() => {
       saveTitle().catch((error) => {
-        showError("Failed to save the title")
+        showError("Failed to save the title or excerpt")
         console.error("Title save failed:", error)
       })
     }, 1500)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.title, titleSaveable])
+  }, [formData.title, formData.excerpt, titleSaveable])
 
   const handlePostUpdate = (updates: Partial<Post>) => {
     setFormData((prev) => ({
@@ -203,6 +235,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       const urlParts = initialData.url.split("/")
       const slug = initialData.slug || urlParts[urlParts.length - 1] || ""
       savedTitleRef.current = initialData.title
+      savedExcerptRef.current = initialData.description
 
       setFormData({
         title: initialData.title,
@@ -350,6 +383,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       await blockAPIClient.unpublishPost(initialData.id)
       setFormData((prev) => ({ ...prev, post_status: "draft" }))
       setRevisionsKey((k) => k + 1)
+      setSettingsPending(false)
       showSuccess("Unpublished: the post is a draft again")
     } catch (error) {
       showError("Failed to unpublish")
@@ -375,16 +409,38 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
   // Load a version into the working copy through the live editor, so collaborators
   // get it via Yjs (rule 9). Publishing afterwards makes it live (as a new version).
+  // Its settings (title, excerpt, featured image, terms; #358) aren't in the Yjs doc:
+  // the API puts them back into the working copy once the blocks are in.
   const handleRestoreVersion = async (version: PostVersion) => {
-    if (contentReadOnly || !canPublish || !editorRef.current) return
+    if (contentReadOnly || !canPublish || !editorRef.current || !initialData?.id) return
     setIsRestoring(true)
     try {
       const { saved } = await editorRef.current.restoreVersion(version.doc)
+      const token = authManager.getAccessToken()
+      if (token) blockAPIClient.setAuthToken(token)
+      let settingsNote = ""
+      try {
+        const settings = await blockAPIClient.restoreVersionSettings(initialData.id, version.version_no)
+        if (settings.restored && settings.post) {
+          const { title, description } = settings.post
+          // Already saved: the debounced save mustn't send them again.
+          savedTitleRef.current = title
+          savedExcerptRef.current = description
+          setFormData((prev) => ({ ...prev, title, excerpt: description }))
+          setSettingsKey((k) => k + 1)
+        } else {
+          settingsNote = " This version was published before settings were saved with it, so only its content came back."
+        }
+      } catch (error) {
+        console.error("Restoring the version's settings failed:", error)
+        settingsNote = " Its title, excerpt, image and terms couldn't be restored."
+      }
+      void refreshSettingsState()
       const live = formData.post_status === "published" ? "Update" : "Publish"
       toast.success(
-        saved
+        (saved
           ? `Working copy restored to ${versionTime(version.created_at)}. ${live} to make it live.`
-          : `Working copy restored to ${versionTime(version.created_at)}; saving…`
+          : `Working copy restored to ${versionTime(version.created_at)}; saving…`) + settingsNote
       )
       setRevisionsKey((k) => k + 1)
       setConfirmRestore(false)
@@ -582,6 +638,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         onArchive={collabEnabled && canPublish ? handleArchive : undefined}
         onRestoreToDrafts={collabEnabled && canPublish ? handleRestoreToDrafts : undefined}
         liveUrl={liveUrl}
+        settingsPending={settingsPending}
         viewing={
           viewingVersion
             ? {
@@ -734,6 +791,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                 setIsSubmitting(false)
                 setFormData((prev) => ({ ...prev, post_status: "published" }))
                 setRevisionsKey((k) => k + 1)
+                // The settings went out with it (#358).
+                setSettingsPending(false)
               }}
               onPublishError={() => {
                 // handlePublish shows the "Publish failed" banner.
@@ -757,6 +816,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           onSlugChange={handleSlugChange}
           readOnly={detailsReadOnly}
           urlStructure={urlStructure}
+          onSettingsSaved={() => void refreshSettingsState()}
+          settingsKey={settingsKey}
+          settingsPending={settingsPending}
           history={
             historyEnabled && initialData?.id
               ? {
@@ -776,7 +838,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         onClose={() => !isRestoring && setConfirmRestore(false)}
         size="small"
         title={viewingVersion ? `Restore the version published ${versionTime(viewingVersion.created_at)}?` : undefined}
-        description="It replaces the working copy for everyone in this post, along with changes that haven't been published. The live post stays as it is until someone publishes."
+        description="It replaces the working copy for everyone in this post, its title, excerpt, image and terms included, along with changes that haven't been published. The live post stays as it is until someone publishes."
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirmRestore(false)} disabled={isRestoring}>

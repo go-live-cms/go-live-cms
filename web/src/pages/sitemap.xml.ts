@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro"
-import { getPostsByType, getPublicPostTypeNames, getSettings } from "../lib/api"
+import { getPublicPostTypeNames, getPublishedPosts, getSettings } from "../lib/api"
 import { getPublicAuthors } from "../lib/authorPage"
 import { getPublicTerms } from "../lib/termPage"
 import { log } from "../lib/log"
@@ -30,7 +30,7 @@ function buildSitemap(siteUrl: string): Promise<string> {
       }
     },
     getPublishedPosts: async (type, limit, offset) =>
-      (await getPostsByType(type, { status: "published", sort: "id", order: "asc", limit, offset })).data,
+      (await getPublishedPosts(type, { sort: "id", order: "asc", limit, offset })).data,
     // Term archives (#348) and author pages (#350). Without them the posts are still
     // worth listing.
     getTerms: () =>

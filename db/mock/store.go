@@ -67,6 +67,20 @@ func (mr *MockStoreMockRecorder) ActivateTheme(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ActivateTheme", reflect.TypeOf((*MockStore)(nil).ActivateTheme), arg0, arg1)
 }
 
+// AddExistingTermsToPost mocks base method.
+func (m *MockStore) AddExistingTermsToPost(arg0 context.Context, arg1 db.AddExistingTermsToPostParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddExistingTermsToPost", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddExistingTermsToPost indicates an expected call of AddExistingTermsToPost.
+func (mr *MockStoreMockRecorder) AddExistingTermsToPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddExistingTermsToPost", reflect.TypeOf((*MockStore)(nil).AddExistingTermsToPost), arg0, arg1)
+}
+
 // AddPostToTaxonomyTerm mocks base method.
 func (m *MockStore) AddPostToTaxonomyTerm(arg0 context.Context, arg1 db.AddPostToTaxonomyTermParams) (db.PostTaxonomyRelationship, error) {
 	m.ctrl.T.Helper()
@@ -1636,6 +1650,21 @@ func (mr *MockStoreMockRecorder) GetPostMetaByKey(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostMetaByKey", reflect.TypeOf((*MockStore)(nil).GetPostMetaByKey), arg0, arg1)
 }
 
+// GetPostSettingsState mocks base method.
+func (m *MockStore) GetPostSettingsState(arg0 context.Context, arg1 int64) (db.GetPostSettingsStateRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostSettingsState", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPostSettingsStateRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostSettingsState indicates an expected call of GetPostSettingsState.
+func (mr *MockStoreMockRecorder) GetPostSettingsState(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostSettingsState", reflect.TypeOf((*MockStore)(nil).GetPostSettingsState), arg0, arg1)
+}
+
 // GetPostTaxonomyTerms mocks base method.
 func (m *MockStore) GetPostTaxonomyTerms(arg0 context.Context, arg1 int64) ([]db.GetPostTaxonomyTermsRow, error) {
 	m.ctrl.T.Helper()
@@ -1844,6 +1873,21 @@ func (m *MockStore) GetPublishedPostBlocks(arg0 context.Context, arg1 int64) (db
 func (mr *MockStoreMockRecorder) GetPublishedPostBlocks(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublishedPostBlocks", reflect.TypeOf((*MockStore)(nil).GetPublishedPostBlocks), arg0, arg1)
+}
+
+// GetPublishedPostTaxonomyTerms mocks base method.
+func (m *MockStore) GetPublishedPostTaxonomyTerms(arg0 context.Context, arg1 int64) ([]db.GetPublishedPostTaxonomyTermsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPublishedPostTaxonomyTerms", arg0, arg1)
+	ret0, _ := ret[0].([]db.GetPublishedPostTaxonomyTermsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPublishedPostTaxonomyTerms indicates an expected call of GetPublishedPostTaxonomyTerms.
+func (mr *MockStoreMockRecorder) GetPublishedPostTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublishedPostTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).GetPublishedPostTaxonomyTerms), arg0, arg1)
 }
 
 // GetSession mocks base method.
@@ -2174,6 +2218,21 @@ func (m *MockStore) InsertPostVersion(arg0 context.Context, arg1 db.InsertPostVe
 func (mr *MockStoreMockRecorder) InsertPostVersion(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPostVersion", reflect.TypeOf((*MockStore)(nil).InsertPostVersion), arg0, arg1)
+}
+
+// InsertPublishedVersionFromPost mocks base method.
+func (m *MockStore) InsertPublishedVersionFromPost(arg0 context.Context, arg1 db.InsertPublishedVersionFromPostParams) (db.InsertPublishedVersionFromPostRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertPublishedVersionFromPost", arg0, arg1)
+	ret0, _ := ret[0].(db.InsertPublishedVersionFromPostRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InsertPublishedVersionFromPost indicates an expected call of InsertPublishedVersionFromPost.
+func (mr *MockStoreMockRecorder) InsertPublishedVersionFromPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPublishedVersionFromPost", reflect.TypeOf((*MockStore)(nil).InsertPublishedVersionFromPost), arg0, arg1)
 }
 
 // InvalidatePasswordResetTokensForUser mocks base method.
@@ -2640,6 +2699,21 @@ func (mr *MockStoreMockRecorder) LockPostForCollabStore(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForCollabStore", reflect.TypeOf((*MockStore)(nil).LockPostForCollabStore), arg0, arg1)
 }
 
+// LockPostForPublish mocks base method.
+func (m *MockStore) LockPostForPublish(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostForPublish", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostForPublish indicates an expected call of LockPostForPublish.
+func (mr *MockStoreMockRecorder) LockPostForPublish(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForPublish", reflect.TypeOf((*MockStore)(nil).LockPostForPublish), arg0, arg1)
+}
+
 // LockUserForShare mocks base method.
 func (m *MockStore) LockUserForShare(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -2680,6 +2754,35 @@ func (m *MockStore) Ping(arg0 context.Context) error {
 func (mr *MockStoreMockRecorder) Ping(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockStore)(nil).Ping), arg0)
+}
+
+// PublishPostTx mocks base method.
+func (m *MockStore) PublishPostTx(arg0 context.Context, arg1 db.PublishPostTxParams) (db.PublishPostTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishPostTx", arg0, arg1)
+	ret0, _ := ret[0].(db.PublishPostTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishPostTx indicates an expected call of PublishPostTx.
+func (mr *MockStoreMockRecorder) PublishPostTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishPostTx", reflect.TypeOf((*MockStore)(nil).PublishPostTx), arg0, arg1)
+}
+
+// RefreshPublishedSettings mocks base method.
+func (m *MockStore) RefreshPublishedSettings(arg0 context.Context, arg1 []int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RefreshPublishedSettings", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RefreshPublishedSettings indicates an expected call of RefreshPublishedSettings.
+func (mr *MockStoreMockRecorder) RefreshPublishedSettings(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshPublishedSettings", reflect.TypeOf((*MockStore)(nil).RefreshPublishedSettings), arg0, arg1)
 }
 
 // RemoveAllPostTaxonomies mocks base method.
@@ -2782,6 +2885,36 @@ func (m *MockStore) ResetPasswordTx(arg0 context.Context, arg1 db.ResetPasswordT
 func (mr *MockStoreMockRecorder) ResetPasswordTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPasswordTx", reflect.TypeOf((*MockStore)(nil).ResetPasswordTx), arg0, arg1)
+}
+
+// RestorePostSettingsTx mocks base method.
+func (m *MockStore) RestorePostSettingsTx(arg0 context.Context, arg1 db.RestorePostSettingsTxParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestorePostSettingsTx", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RestorePostSettingsTx indicates an expected call of RestorePostSettingsTx.
+func (mr *MockStoreMockRecorder) RestorePostSettingsTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestorePostSettingsTx", reflect.TypeOf((*MockStore)(nil).RestorePostSettingsTx), arg0, arg1)
+}
+
+// RestorePostTitleAndDescription mocks base method.
+func (m *MockStore) RestorePostTitleAndDescription(arg0 context.Context, arg1 db.RestorePostTitleAndDescriptionParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestorePostTitleAndDescription", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RestorePostTitleAndDescription indicates an expected call of RestorePostTitleAndDescription.
+func (mr *MockStoreMockRecorder) RestorePostTitleAndDescription(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestorePostTitleAndDescription", reflect.TypeOf((*MockStore)(nil).RestorePostTitleAndDescription), arg0, arg1)
 }
 
 // RevokeOpenUserInvitationsByEmail mocks base method.

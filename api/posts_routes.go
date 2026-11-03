@@ -62,9 +62,14 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.POST("/:id/publish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.publishPost)
 		posts.POST("/:id/unpublish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.unpublishPost)
 
-		// Revisions (#136): published snapshots; restoring happens in the editor
+		// Revisions (#136): published snapshots; restoring the blocks happens in the
+		// editor, the settings (#358) come back through restore-settings
 		posts.GET("/:id/versions", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.listPostVersions)
 		posts.GET("/:id/versions/:version_no", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.getPostVersion)
+		posts.POST("/:id/versions/:version_no/restore-settings", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.restorePostVersionSettings)
+
+		// Working vs published settings (#358): whether a settings change waits for Update
+		posts.GET("/:id/settings", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getPostSettingsState)
 
 	}
 }

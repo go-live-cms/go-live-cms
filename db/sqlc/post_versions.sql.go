@@ -11,8 +11,28 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/sqlc-dev/pqtype"
 )
+
+const addExistingTermsToPost = `-- name: AddExistingTermsToPost :exec
+INSERT INTO post_taxonomy_relationships (post_id, taxonomy_term_id)
+SELECT $1::bigint, tt.id
+FROM taxonomy_terms tt
+WHERE tt.id = ANY($2::bigint[])
+`
+
+type AddExistingTermsToPostParams struct {
+	PostID  int64   `json:"post_id"`
+	TermIds []int64 `json:"term_ids"`
+}
+
+// Restoring a version's settings (#358), after RemoveAllPostTaxonomies: link the
+// given terms that still exist. Deleted terms are skipped, not an error.
+func (q *Queries) AddExistingTermsToPost(ctx context.Context, arg AddExistingTermsToPostParams) error {
+	_, err := q.db.ExecContext(ctx, addExistingTermsToPost, arg.PostID, pq.Array(arg.TermIds))
+	return err
+}
 
 const getLatestPublishedVersion = `-- name: GetLatestPublishedVersion :one
 SELECT id, version_no, status, label, message, block_doc, created_at, created_by
@@ -63,8 +83,40 @@ func (q *Queries) GetNextVersionNoForPost(ctx context.Context, postID int64) (in
 	return next_no, err
 }
 
+const getPostSettingsState = `-- name: GetPostSettingsState :one
+SELECT w.settings::jsonb AS working,
+       p.published_settings,
+       (p.published_settings IS NOT NULL
+        AND jsonb_set(p.published_settings, '{term_ids}', coalesce((
+              SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
+              FROM post_published_terms ppt
+              WHERE ppt.post_id = p.id
+            ), '[]'::jsonb)) IS DISTINCT FROM w.settings)::boolean AS changed
+FROM posts p
+CROSS JOIN LATERAL (SELECT golive_post_settings(p.id) AS settings) w
+WHERE p.id = $1
+`
+
+type GetPostSettingsStateRow struct {
+	Working           json.RawMessage       `json:"working"`
+	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
+	Changed           bool                  `json:"changed"`
+}
+
+// The editor's view of a post's settings (#358): the working ones, the published
+// ones (NULL when nothing is published) and whether they differ, i.e. whether a
+// settings change is waiting for Update. The published term ids are compared as
+// post_published_terms has them: a term deleted since the publish is gone from
+// both sides (it can't be shown or published), not a pending change.
+func (q *Queries) GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error) {
+	row := q.db.QueryRowContext(ctx, getPostSettingsState, id)
+	var i GetPostSettingsStateRow
+	err := row.Scan(&i.Working, &i.PublishedSettings, &i.Changed)
+	return i, err
+}
+
 const getPostVersion = `-- name: GetPostVersion :one
-SELECT v.id, v.version_no, v.status, v.label, v.message, v.block_doc, v.created_at, v.created_by,
+SELECT v.id, v.version_no, v.status, v.label, v.message, v.block_doc, v.settings, v.created_at, v.created_by,
        u.username AS created_by_username
 FROM post_versions v
 LEFT JOIN users u ON u.id = v.created_by
@@ -78,15 +130,16 @@ type GetPostVersionParams struct {
 }
 
 type GetPostVersionRow struct {
-	ID                int64           `json:"id"`
-	VersionNo         int32           `json:"version_no"`
-	Status            string          `json:"status"`
-	Label             sql.NullString  `json:"label"`
-	Message           sql.NullString  `json:"message"`
-	BlockDoc          json.RawMessage `json:"block_doc"`
-	CreatedAt         time.Time       `json:"created_at"`
-	CreatedBy         sql.NullInt64   `json:"created_by"`
-	CreatedByUsername sql.NullString  `json:"created_by_username"`
+	ID                int64                 `json:"id"`
+	VersionNo         int32                 `json:"version_no"`
+	Status            string                `json:"status"`
+	Label             sql.NullString        `json:"label"`
+	Message           sql.NullString        `json:"message"`
+	BlockDoc          json.RawMessage       `json:"block_doc"`
+	Settings          pqtype.NullRawMessage `json:"settings"`
+	CreatedAt         time.Time             `json:"created_at"`
+	CreatedBy         sql.NullInt64         `json:"created_by"`
+	CreatedByUsername sql.NullString        `json:"created_by_username"`
 }
 
 func (q *Queries) GetPostVersion(ctx context.Context, arg GetPostVersionParams) (GetPostVersionRow, error) {
@@ -99,6 +152,7 @@ func (q *Queries) GetPostVersion(ctx context.Context, arg GetPostVersionParams) 
 		&i.Label,
 		&i.Message,
 		&i.BlockDoc,
+		&i.Settings,
 		&i.CreatedAt,
 		&i.CreatedBy,
 		&i.CreatedByUsername,
@@ -167,6 +221,66 @@ func (q *Queries) GetPostVersions(ctx context.Context, id int64) ([]GetPostVersi
 	return items, nil
 }
 
+const getPublishedPostTaxonomyTerms = `-- name: GetPublishedPostTaxonomyTerms :many
+SELECT tt.id, tt.name, tt.slug, tt.description, tt.parent_id, tt.taxonomy_type_id, tt.sort_order, tt.meta, tt.created_at, ttype.name as taxonomy_type_name, ttype.hierarchical
+FROM taxonomy_terms tt
+JOIN taxonomy_types ttype ON tt.taxonomy_type_id = ttype.id
+JOIN post_published_terms ppt ON tt.id = ppt.taxonomy_term_id
+WHERE ppt.post_id = $1
+ORDER BY ttype.name, tt.name
+`
+
+type GetPublishedPostTaxonomyTermsRow struct {
+	ID               int64                 `json:"id"`
+	Name             string                `json:"name"`
+	Slug             string                `json:"slug"`
+	Description      sql.NullString        `json:"description"`
+	ParentID         sql.NullInt64         `json:"parent_id"`
+	TaxonomyTypeID   int64                 `json:"taxonomy_type_id"`
+	SortOrder        sql.NullInt32         `json:"sort_order"`
+	Meta             pqtype.NullRawMessage `json:"meta"`
+	CreatedAt        time.Time             `json:"created_at"`
+	TaxonomyTypeName string                `json:"taxonomy_type_name"`
+	Hierarchical     bool                  `json:"hierarchical"`
+}
+
+// The terms a published post shows on the site (#358): its published set, in the
+// shape of GetPostTaxonomyTerms.
+func (q *Queries) GetPublishedPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPublishedPostTaxonomyTermsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPublishedPostTaxonomyTerms, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetPublishedPostTaxonomyTermsRow{}
+	for rows.Next() {
+		var i GetPublishedPostTaxonomyTermsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.ParentID,
+			&i.TaxonomyTypeID,
+			&i.SortOrder,
+			&i.Meta,
+			&i.CreatedAt,
+			&i.TaxonomyTypeName,
+			&i.Hierarchical,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertPostVersion = `-- name: InsertPostVersion :one
 INSERT INTO post_versions (post_id, version_no, status, label, message, block_doc, created_by)
 VALUES ($1, $2, 'published', $3, $4, $5, $6)
@@ -201,24 +315,138 @@ func (q *Queries) InsertPostVersion(ctx context.Context, arg InsertPostVersionPa
 	return i, err
 }
 
+const insertPublishedVersionFromPost = `-- name: InsertPublishedVersionFromPost :one
+INSERT INTO post_versions (post_id, version_no, status, label, message, block_doc, settings, created_by)
+SELECT p.id, $1::int, 'published', $2::text, $3::text, p.block_doc,
+       golive_post_settings(p.id), $4::bigint
+FROM posts p
+WHERE p.id = $5::bigint
+RETURNING id, version_no, block_doc
+`
+
+type InsertPublishedVersionFromPostParams struct {
+	VersionNo int32          `json:"version_no"`
+	Label     sql.NullString `json:"label"`
+	Message   sql.NullString `json:"message"`
+	CreatedBy sql.NullInt64  `json:"created_by"`
+	PostID    int64          `json:"post_id"`
+}
+
+type InsertPublishedVersionFromPostRow struct {
+	ID        int64           `json:"id"`
+	VersionNo int32           `json:"version_no"`
+	BlockDoc  json.RawMessage `json:"block_doc"`
+}
+
+// The new version is the post's working copy as stored now: block_doc and its
+// settings (title, excerpt, featured image, terms; golive_post_settings, #358),
+// read in the same statement so they belong together.
+func (q *Queries) InsertPublishedVersionFromPost(ctx context.Context, arg InsertPublishedVersionFromPostParams) (InsertPublishedVersionFromPostRow, error) {
+	row := q.db.QueryRowContext(ctx, insertPublishedVersionFromPost,
+		arg.VersionNo,
+		arg.Label,
+		arg.Message,
+		arg.CreatedBy,
+		arg.PostID,
+	)
+	var i InsertPublishedVersionFromPostRow
+	err := row.Scan(&i.ID, &i.VersionNo, &i.BlockDoc)
+	return i, err
+}
+
+const lockPostForPublish = `-- name: LockPostForPublish :one
+SELECT id FROM posts WHERE id = $1 FOR UPDATE
+`
+
+// Publish runs in one transaction from here (PublishPostTx): two publishes of
+// one post queue on this lock instead of racing for the same version_no.
+func (q *Queries) LockPostForPublish(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, lockPostForPublish, id)
+	err := row.Scan(&id)
+	return id, err
+}
+
+const refreshPublishedSettings = `-- name: RefreshPublishedSettings :exec
+UPDATE posts
+SET published_settings = golive_post_settings(id)
+WHERE id = ANY($1::bigint[])
+  AND published_settings IS NOT NULL
+`
+
+// The dev seed (#358): published posts whose terms and featured images were linked
+// after they were published get them in their published settings.
+func (q *Queries) RefreshPublishedSettings(ctx context.Context, ids []int64) error {
+	_, err := q.db.ExecContext(ctx, refreshPublishedSettings, pq.Array(ids))
+	return err
+}
+
+const restorePostTitleAndDescription = `-- name: RestorePostTitleAndDescription :one
+UPDATE posts
+SET title = $2,
+    description = $3,
+    changed_at = now()
+WHERE id = $1
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+`
+
+type RestorePostTitleAndDescriptionParams struct {
+	ID          int64  `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+// Restoring a version's settings (#358): the working title and excerpt. Only the
+// working copy changes; the published settings stay until Update.
+func (q *Queries) RestorePostTitleAndDescription(ctx context.Context, arg RestorePostTitleAndDescriptionParams) (Post, error) {
+	row := q.db.QueryRowContext(ctx, restorePostTitleAndDescription, arg.ID, arg.Title, arg.Description)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
+		&i.Slug,
+		&i.PublishedSettings,
+	)
+	return i, err
+}
+
 const setPublishedVersionOnPost = `-- name: SetPublishedVersionOnPost :exec
 UPDATE posts
-SET published_version_id = $2,
-    published_block_doc = $3,
+SET published_version_id = $1::bigint,
+    published_block_doc = $2::jsonb,
+    published_settings = COALESCE(
+        (SELECT v.settings FROM post_versions v WHERE v.id = $1::bigint),
+        golive_post_settings(posts.id)
+    ),
     post_status = 'published'
-WHERE id = $1
+WHERE id = $3::bigint
 `
 
 type SetPublishedVersionOnPostParams struct {
-	ID                 int64                 `json:"id"`
 	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
+	ID                 int64                 `json:"id"`
 }
 
 // Publishing also makes the post public: post_status follows the snapshot, so a
-// post published from the editor is not left as 'draft' in the database.
+// post published from the editor is not left as 'draft' in the database. The
+// published settings are the version's (#358); without a version (a post created
+// as published, the dev seed) they are the post's current ones.
 func (q *Queries) SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error {
-	_, err := q.db.ExecContext(ctx, setPublishedVersionOnPost, arg.ID, arg.PublishedVersionID, arg.PublishedBlockDoc)
+	_, err := q.db.ExecContext(ctx, setPublishedVersionOnPost, arg.PublishedVersionID, arg.PublishedBlockDoc, arg.ID)
 	return err
 }
 
@@ -226,13 +454,14 @@ const unpublishPost = `-- name: UnpublishPost :one
 UPDATE posts
 SET post_status = 'draft',
     published_version_id = NULL,
-    published_block_doc = NULL
+    published_block_doc = NULL,
+    published_settings = NULL
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
 `
 
-// Back to draft and drop the public snapshot (#136). The snapshot stays in
-// post_versions, so it can still be viewed and restored.
+// Back to draft and drop the public snapshot (#136), settings included (#358).
+// The snapshot stays in post_versions, so it can still be viewed and restored.
 func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
 	row := q.db.QueryRowContext(ctx, unpublishPost, id)
 	var i Post
@@ -254,6 +483,7 @@ func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishedVersionID,
 		&i.PublishedBlockDoc,
 		&i.Slug,
+		&i.PublishedSettings,
 	)
 	return i, err
 }

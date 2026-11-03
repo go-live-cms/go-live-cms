@@ -3,11 +3,14 @@
 // Revisions are the Block Spec v1 snapshots publishPost stores in post_versions,
 // not Yjs snapshots, so they don't depend on the collaboration server's storage.
 //
-// There is deliberately no "restore" endpoint. Restoring loads a version into the
-// working copy, and while collaborators are connected the live Yjs doc owns the
-// working copy: overwriting posts.block_doc behind its back would be reverted (or
-// fought) by the collab server's next store. The editor fetches the version here and
-// applies it through the editor/Yjs path; the collab server stores it like any edit.
+// There is deliberately no endpoint that restores a version's blocks. Restoring loads
+// a version into the working copy, and while collaborators are connected the live Yjs
+// doc owns the working copy: overwriting posts.block_doc behind its back would be
+// reverted (or fought) by the collab server's next store. The editor fetches the
+// version here and applies it through the editor/Yjs path; the collab server stores
+// it like any edit. The version's settings (#358) aren't in the Yjs doc, so they go
+// back through POST /posts/:id/versions/:version_no/restore-settings
+// (post_versions_handlers_write.go).
 package api
 
 import (
@@ -45,6 +48,9 @@ type PostVersionsResponse struct {
 type PostVersionResponse struct {
 	PostVersionSummary
 	Doc BlockDocV1 `json:"doc"`
+	// Settings are the title, excerpt, featured image and terms published with
+	// the version (#358); null for a version published before they were saved.
+	Settings *PostSettings `json:"settings"`
 }
 
 func nullStringPtr(s sql.NullString) *string {
@@ -137,6 +143,7 @@ func (server *Server) getPostVersion(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse version document"})
 		return
 	}
+	settings, _ := decodePostSettings(row.Settings)
 
 	c.JSON(http.StatusOK, PostVersionResponse{
 		PostVersionSummary: PostVersionSummary{
@@ -149,6 +156,44 @@ func (server *Server) getPostVersion(c *gin.Context) {
 			CreatedBy:         nullInt64Ptr(row.CreatedBy),
 			CreatedByUsername: nullStringPtr(row.CreatedByUsername),
 		},
-		Doc: doc,
+		Doc:      doc,
+		Settings: settings,
 	})
+}
+
+// PostSettingsStateResponse is the response of GET /posts/:id/settings (#358).
+type PostSettingsStateResponse struct {
+	// Working is what the editor edits; Published what the site shows (null when
+	// nothing is published).
+	Working   PostSettings  `json:"working"`
+	Published *PostSettings `json:"published"`
+	// Changed: the post is published and its settings differ from the published
+	// ones, so a settings change waits for Update.
+	Changed bool `json:"changed"`
+}
+
+// getPostSettingsState handles GET /posts/:id/settings: the editor's "settings
+// changes wait for Update" state. Any content role (like the editor itself).
+func (server *Server) getPostSettingsState(c *gin.Context) {
+	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+	row, err := server.store.GetPostSettingsState(c, postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post settings"})
+		return
+	}
+	working, ok := decodePostSettingsJSON(row.Working)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read post settings"})
+		return
+	}
+	published, _ := decodePostSettings(row.PublishedSettings)
+	c.JSON(http.StatusOK, PostSettingsStateResponse{Working: *working, Published: published, Changed: row.Changed})
 }

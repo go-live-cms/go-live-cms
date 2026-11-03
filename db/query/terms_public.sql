@@ -3,7 +3,9 @@
 -- public, active post types tagged with the term or, for a hierarchical taxonomy,
 -- any term below it (a parent category's page includes its children's posts). The
 -- subtree is a recursive CTE over parent_id; UNION (not UNION ALL) drops repeats,
--- so even a parent cycle ends.
+-- so even a parent cycle ends. "Tagged" means the published terms
+-- (post_published_terms, #358), so a term change on a published post shows here
+-- only after Update.
 
 -- name: GetPublicTerm :one
 -- The term of a public taxonomy by type name and slug, with the type's label.
@@ -28,7 +30,7 @@ JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'
     AND pt.public AND pt.is_active
     AND EXISTS (
-        SELECT 1 FROM post_taxonomy_relationships ptr
+        SELECT 1 FROM post_published_terms ptr
         JOIN subtree s ON s.id = ptr.taxonomy_term_id
         WHERE ptr.post_id = p.id
     );
@@ -43,7 +45,7 @@ WITH RECURSIVE subtree AS (
 )
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -63,7 +65,7 @@ JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'
     AND pt.public AND pt.is_active
     AND EXISTS (
-        SELECT 1 FROM post_taxonomy_relationships ptr
+        SELECT 1 FROM post_published_terms ptr
         JOIN subtree s ON s.id = ptr.taxonomy_term_id
         WHERE ptr.post_id = p.id
     )
@@ -87,7 +89,7 @@ SELECT
 FROM closure c
 JOIN taxonomy_terms a ON a.id = c.ancestor_id
 JOIN taxonomy_types ttype ON ttype.id = a.taxonomy_type_id
-JOIN post_taxonomy_relationships ptr ON ptr.taxonomy_term_id = c.term_id
+JOIN post_published_terms ptr ON ptr.taxonomy_term_id = c.term_id
 JOIN posts p ON p.id = ptr.post_id
 JOIN post_types pt ON pt.name = p.post_type
 WHERE ttype.public

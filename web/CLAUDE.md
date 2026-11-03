@@ -114,6 +114,15 @@ are the most fragile part of the codebase. **Before editing anything under
   rebuilding the web, collab and api images.** Every installed block works whichever
   theme is active; only the slash menu follows the active theme. Contract:
   `themes/README.md` ("Custom Blocks"); collab rules: `gl-admin/lib/collaboration/CLAUDE.md`.
+- **Published settings (#358):** the public site never reads `/api/v1/posts*` for a post's
+  title, excerpt, featured image or terms: those are the working copy (the admin's). The post
+  route reads `getPublicPost` (`/public/posts/:id` or `/slug/:slug`: the published post,
+  featured image and terms in one call); RSS, the sitemap and the "latest posts" lists read
+  `getPublishedPosts(type, …)` (`/public/posts`); the other `/public` lists already answer with
+  published settings. On a published post a settings edit reaches the site on Update; the
+  slug changes at once. The editor shows "settings go live on Update" from
+  `GET /posts/:id/settings` (the full "Changes not published" status is #326), and restoring a
+  version restores its settings too (`blockAPI.restoreVersionSettings`).
 - **SEO (#137):** `src/lib/seo.ts` holds the pure helpers (tested in `seo.test.ts`).
   The site URL is `SITE_URL`, read from `process.env` at runtime (`resolveSiteUrl`;
   unset → request origin, wrong behind a proxy, so prod must set it). `/robots.txt`

@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 vi.mock("./siteSettings", () => ({
   getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 10, urlStructure: "slug" }),
 }))
-const getPostsByType = vi.fn()
-vi.mock("./api", () => ({ getPostsByType: (...args: unknown[]) => getPostsByType(...args) }))
+const getPublishedPosts = vi.fn()
+vi.mock("./api", () => ({ getPublishedPosts: (...args: unknown[]) => getPublishedPosts(...args) }))
 
 const {
   highlightText,
@@ -25,7 +25,7 @@ const json = (status: number, body: unknown) =>
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  getPostsByType.mockReset()
+  getPublishedPosts.mockReset()
 })
 
 describe("safeHighlight", () => {
@@ -133,7 +133,7 @@ describe("loadSearchPage", () => {
     expect(data?.results[1].titleHtml).toBe("&lt;script&gt;x&lt;/script&gt;")
     expect(data).toMatchObject({ total: 12, page: 2, totalPages: 2, pageQuery: "?q=post&type=post", siteTitle: "Field Notes", topics: [], recent: [] })
     expect(data?.chips.find((c) => c.current)?.type).toBe("post")
-    expect(getPostsByType).not.toHaveBeenCalled()
+    expect(getPublishedPosts).not.toHaveBeenCalled()
   })
 
   it("fills the empty state's topics and recent posts when nothing matched", async () => {
@@ -143,7 +143,7 @@ describe("loadSearchPage", () => {
         : json(200, { query: "zzz", type: "all", results: [], counts: { all: 0, post: 0, page: 0 }, pagination: { page: 1, per_page: 10, total: 0, total_pages: 0 } })
     )
     vi.stubGlobal("fetch", fetchMock)
-    getPostsByType.mockResolvedValue({ data: [{ id: 5, title: "Recent", slug: "recent", post_type: "post" }] })
+    getPublishedPosts.mockResolvedValue({ data: [{ id: 5, title: "Recent", slug: "recent", post_type: "post" }] })
     const data = await loadSearchPage("zzz", "all", 1)
     expect(data?.results).toEqual([])
     expect(data?.topics).toEqual([{ label: "Guides", href: "/category/guides" }])

@@ -92,6 +92,7 @@ type Post struct {
 	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
+	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
 }
 
 type PostMedium struct {
@@ -106,6 +107,11 @@ type PostMetum struct {
 	MetaKey   string         `json:"meta_key"`
 	MetaValue sql.NullString `json:"meta_value"`
 	CreatedAt time.Time      `json:"created_at"`
+}
+
+type PostPublishedTerm struct {
+	PostID         int64 `json:"post_id"`
+	TaxonomyTermID int64 `json:"taxonomy_term_id"`
 }
 
 type PostSearch struct {
@@ -136,15 +142,16 @@ type PostType struct {
 }
 
 type PostVersion struct {
-	ID        int64           `json:"id"`
-	PostID    int64           `json:"post_id"`
-	VersionNo int32           `json:"version_no"`
-	Status    string          `json:"status"`
-	Label     sql.NullString  `json:"label"`
-	Message   sql.NullString  `json:"message"`
-	BlockDoc  json.RawMessage `json:"block_doc"`
-	CreatedBy sql.NullInt64   `json:"created_by"`
-	CreatedAt time.Time       `json:"created_at"`
+	ID        int64                 `json:"id"`
+	PostID    int64                 `json:"post_id"`
+	VersionNo int32                 `json:"version_no"`
+	Status    string                `json:"status"`
+	Label     sql.NullString        `json:"label"`
+	Message   sql.NullString        `json:"message"`
+	BlockDoc  json.RawMessage       `json:"block_doc"`
+	CreatedBy sql.NullInt64         `json:"created_by"`
+	CreatedAt time.Time             `json:"created_at"`
+	Settings  pqtype.NullRawMessage `json:"settings"`
 }
 
 type PostYdocState struct {

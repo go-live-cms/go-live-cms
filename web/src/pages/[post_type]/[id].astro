@@ -1,5 +1,5 @@
 ---
-import { getPostsByType, getPostById, findPostById, getPostBySlug, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames, getFeaturedImageUrl, getPostTaxonomyTerms } from '../../lib/api'
+import { getPostsByType, findPostById, getPublicPost, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
 import { getPostLayoutVariant } from '../../lib/theme-loader'
 import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
 import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
@@ -88,12 +88,9 @@ const typeIsPublic = !publicTypes || publicTypes.includes(postType)
 // src/pages/index.astro, with the page number in Astro.locals). Before the type check,
 // so the front page pages even with the page type switched off. Only a 404 means "no
 // such page": an API error must not turn a real page's URL into a list (it throws, 500).
-let pagePost: Post | undefined
 if (postType === 'page' && parsePageSegment(id) !== null) {
   const existing = typeIsPublic ? await findPostById(id) : null
-  if (existing?.post_status === 'published' && existing.post_type === 'page') {
-    pagePost = existing
-  } else {
+  if (!(existing?.post_status === 'published' && existing.post_type === 'page')) {
     const request = resolveListRequest(Astro.url, '/', id)
     // Temporary: whether /page/N is a page can change when one is published.
     if (request.kind === 'redirect') return Astro.redirect(request.location, 302)
@@ -117,8 +114,13 @@ if (!typeIsPublic) {
   return new Response(null, { status: 404 })
 }
 
-// A page found above is already fresh: don't fetch it again.
-let fullPost: Post | undefined = post ?? pagePost
+// The post as the site shows it (#358): its published title, excerpt, featured image and
+// terms, never the working ones an editor is changing. The API answers only for a
+// published post with a published body; anything else is a 404 here. (The page check
+// above reads /posts/:id only for the status and type.)
+let fullPost: Post | undefined = post
+let publishedImage: string | null = null
+let publishedTerms: TaxonomyTerm[] = []
 
 // Determine if ID is numeric (ID-based) or not (slug-based)
 const isNumeric = /^\d+$/.test(id)
@@ -126,8 +128,10 @@ const isNumeric = /^\d+$/.test(id)
 // The page is server-rendered, so there are no props: this fetch is the normal path.
 if (!fullPost) {
   try {
-    const postResponse = isNumeric ? await getPostById(id) : await getPostBySlug(id)
-    fullPost = postResponse?.post
+    const published = await getPublicPost(id)
+    fullPost = published?.post
+    publishedImage = published?.featured_image?.url ?? null
+    publishedTerms = published?.taxonomy_terms ?? []
   } catch (error) {
     // An unknown id or slug (crawlers, old links) is an ordinary 404, not an error.
     // No id: it is the raw URL segment (api/CLAUDE.md, never log raw paths).
@@ -151,10 +155,9 @@ if (!fullPost || !fullPost.title) {
   })
 }
 
-// The API returns drafts (including unpublished posts, #136) and archived posts
-// by id/slug to anyone, so only published posts are public here. A post
-// requested under another type's URL (/page/12 for a post) is a 404 too. A
-// null-body 404 renders src/pages/404.astro.
+// Only published posts are public (the public endpoint already refuses the rest; this
+// also covers props from getStaticPaths). A post requested under another type's URL
+// (/page/12 for a post) is a 404 too. A null-body 404 renders src/pages/404.astro.
 if (fullPost.post_status !== 'published' || (fullPost.post_type && fullPost.post_type !== postType)) {
   return new Response(null, { status: 404 })
 }
@@ -176,15 +179,12 @@ if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
   }
 }
 
-// Categories/tags (#167). Layouts that don't take `terms` ignore them; a failed
-// lookup just renders the post without them. Terms of public taxonomies carry their
-// archive's `href` (#348); without the taxonomy list they render unlinked. The byline and "Written by" cards (#350) come with them: credited authors with their
-// bios. A failed lookup renders the post with its owner in the byline and no cards.
-const [postTerms, taxonomyTypes, authors] = await Promise.all([
-  getPostTaxonomyTerms(fullPost.id).catch((error): TaxonomyTerm[] => {
-    log.warn('post_terms_fetch_failed', { post_id: fullPost.id, error })
-    return []
-  }),
+// Categories/tags (#167): the published ones, from the post fetch above (#358). Layouts
+// that don't take `terms` ignore them. Terms of public taxonomies carry their archive's
+// `href` (#348); without the taxonomy list they render unlinked. The byline and "Written
+// by" cards (#350) come with them: credited authors with their bios. A failed lookup
+// renders the post with its owner in the byline and no cards.
+const [taxonomyTypes, authors] = await Promise.all([
   getCachedTaxonomyTypes().catch((error): TaxonomyType[] => {
     log.warn('taxonomy_types_fetch_failed', { error })
     return []
@@ -194,7 +194,7 @@ const [postTerms, taxonomyTypes, authors] = await Promise.all([
     return []
   }),
 ])
-const terms = linkTerms(postTerms, taxonomyTypes)
+const terms = linkTerms(publishedTerms, taxonomyTypes)
 
 // Get layout variant for this post
 const layoutVariant = await getPostLayoutVariant(fullPost, postType)
@@ -223,12 +223,9 @@ if (!LayoutComponent) {
 // same post reached by id and by slug points crawlers at one URL.
 // The same per-request lookup the layout, SeoHead and bylines use (#330); it never
 // rejects (defaults when the API is down).
-const [site, featuredImage] = await Promise.all([
-  getSiteSettings(Astro.locals),
-  fullPost.featured_image
-    ? Promise.resolve(fullPost.featured_image)
-    : getFeaturedImageUrl(fullPost.id).catch(() => null),
-])
+const site = await getSiteSettings(Astro.locals)
+// The published featured image (#358); a getStaticPaths prop may carry its own.
+const featuredImage = fullPost.featured_image || publishedImage
 const urlStructure = normalizeUrlStructure(site.urlStructure)
 
 const displayType = postType.charAt(0).toUpperCase() + postType.slice(1)

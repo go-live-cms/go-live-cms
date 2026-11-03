@@ -221,7 +221,7 @@ INSERT INTO posts (
     block_doc
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug
+) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
 `
 
 type CreatePostsParams struct {
@@ -271,6 +271,7 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		&i.PublishedVersionID,
 		&i.PublishedBlockDoc,
 		&i.Slug,
+		&i.PublishedSettings,
 	)
 	return i, err
 }
@@ -319,7 +320,7 @@ func (q *Queries) DeleteUserPost(ctx context.Context, postID int64) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts 
 WHERE id = $1 LIMIT 1
 `
 
@@ -344,12 +345,13 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishedVersionID,
 		&i.PublishedBlockDoc,
 		&i.Slug,
+		&i.PublishedSettings,
 	)
 	return i, err
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts 
 WHERE slug = $1 LIMIT 1
 `
 
@@ -374,12 +376,13 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.PublishedVersionID,
 		&i.PublishedBlockDoc,
 		&i.Slug,
+		&i.PublishedSettings,
 	)
 	return i, err
 }
 
 const getPostChildren = `-- name: GetPostChildren :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts
 WHERE post_parent = $1
 ORDER BY menu_order ASC, title ASC
 `
@@ -411,6 +414,7 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 			&i.PublishedVersionID,
 			&i.PublishedBlockDoc,
 			&i.Slug,
+			&i.PublishedSettings,
 		); err != nil {
 			return nil, err
 		}
@@ -427,7 +431,7 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 
 const getPostWithMeta = `-- name: GetPostWithMeta :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -459,6 +463,7 @@ type GetPostWithMetaRow struct {
 	PublishedVersionID sql.NullInt64         `json:"published_version_id"`
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
+	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
 	Meta               interface{}           `json:"meta"`
 }
 
@@ -483,13 +488,14 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 		&i.PublishedVersionID,
 		&i.PublishedBlockDoc,
 		&i.Slug,
+		&i.PublishedSettings,
 		&i.Meta,
 	)
 	return i, err
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug, published_settings FROM posts
 WHERE 
     ($1::text = '' OR post_type = $1)
     AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
@@ -535,6 +541,7 @@ type ListPostsRow struct {
 	ChangedAt         time.Time             `json:"changed_at"`
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug              string                `json:"slug"`
+	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
 }
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
@@ -573,6 +580,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
 			&i.Slug,
+			&i.PublishedSettings,
 		); err != nil {
 			return nil, err
 		}
@@ -726,7 +734,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 const listPostsWithMeta = `-- name: ListPostsWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
-    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
+    p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -791,6 +799,7 @@ type ListPostsWithMetaRow struct {
 	ChangedAt         time.Time             `json:"changed_at"`
 	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug              string                `json:"slug"`
+	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
 	Meta              interface{}           `json:"meta"`
 	Authors           json.RawMessage       `json:"authors"`
 }
@@ -831,6 +840,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
 			&i.Slug,
+			&i.PublishedSettings,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {
@@ -860,7 +870,7 @@ SET title = COALESCE($1, title),
     menu_order = COALESCE($9, menu_order),
     changed_at = now()
 WHERE id = $10
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
 `
 
 type UpdatePostParams struct {
@@ -908,6 +918,7 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.PublishedVersionID,
 		&i.PublishedBlockDoc,
 		&i.Slug,
+		&i.PublishedSettings,
 	)
 	return i, err
 }
@@ -917,7 +928,7 @@ UPDATE posts
 SET slug = $2,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
 `
 
 type UpdatePostSlugParams struct {
@@ -946,6 +957,7 @@ func (q *Queries) UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) 
 		&i.PublishedVersionID,
 		&i.PublishedBlockDoc,
 		&i.Slug,
+		&i.PublishedSettings,
 	)
 	return i, err
 }

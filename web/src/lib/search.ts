@@ -11,7 +11,7 @@
 import type { Post } from "@gl-admin/lib/api/types"
 import { SERVER_API_URL } from "@gl-admin/lib/server-api-url"
 import { log, requestIdHeaders } from "./log"
-import { getPostsByType } from "./api"
+import { getPublishedPosts } from "./api"
 import { pagePath, type Pagination } from "./pagination"
 import { getPublic } from "./publicApi"
 import { normalizeUrlStructure, postPath, termPath, type UrlStructure } from "./seo"
@@ -232,7 +232,7 @@ export async function getTopics(limit = 6): Promise<SearchLink[]> {
 // The empty state's recent posts. Fails soft.
 export async function getRecentPosts(structure: UrlStructure, limit = 3): Promise<SearchLink[]> {
   try {
-    const posts: Post[] = (await getPostsByType("post", { status: "published", sort: "date_desc", limit })).data
+    const posts: Post[] = (await getPublishedPosts("post", { sort: "date_desc", limit })).data
     return posts.map((post) => ({ label: post.title, href: postPath({ ...post, post_type: post.post_type || "post" }, structure) }))
   } catch (error) {
     log.warn("search_recent_posts_fetch_failed", { error })
