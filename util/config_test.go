@@ -1,6 +1,9 @@
 package util
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -217,17 +220,21 @@ func TestLinkTTLDefaults(t *testing.T) {
 	require.Equal(t, time.Minute, Config{PasswordResetTTL: time.Minute}.PasswordResetLinkTTL())
 }
 
-// Previous PASETO keys (key rotation, #139) are env-only like the current ones,
-// and need an end of grace window.
+// Previous PASETO keys (key rotation, #139, #158) are env-only like the current
+// ones: kid=hex lists that need an end of grace window.
 func TestLoadConfigReadsPreviousPasetoKeysFromEnv(t *testing.T) {
-	t.Setenv("PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX", "old-pub")
-	t.Setenv("PASETO_V4_PREVIOUS_LOCAL_KEY_HEX", "old-local")
+	t.Setenv("PASETO_V4_PREVIOUS_PUBLIC_KEYS", "k4.pub.2026-01=old-pub, k4.pub.2026-06 = older-pub")
+	t.Setenv("PASETO_V4_PREVIOUS_LOCAL_KEYS", "k4.loc.2026-01=old-local")
 	t.Setenv("PASETO_PREVIOUS_KEYS_VALID_UNTIL", "2026-11-01T00:00:00Z")
 
 	config, err := LoadConfig(t.TempDir())
 	require.NoError(t, err)
-	require.Equal(t, "old-pub", config.PasetoV4PreviousPublicKeyHex)
-	require.Equal(t, "old-local", config.PasetoV4PreviousLocalKeyHex)
+	public, err := config.PasetoPreviousPublicKeys()
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"k4.pub.2026-01": "old-pub", "k4.pub.2026-06": "older-pub"}, public)
+	local, err := config.PasetoPreviousLocalKeys()
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{"k4.loc.2026-01": "old-local"}, local)
 	until, err := config.PasetoPreviousKeysUntil()
 	require.NoError(t, err)
 	require.Equal(t, time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), until.UTC())
@@ -239,13 +246,124 @@ func TestPasetoPreviousKeysUntil(t *testing.T) {
 	require.True(t, until.IsZero(), "no previous key, no window")
 
 	for _, value := range []string{"", "tomorrow", "2026-11-01"} {
-		_, err := Config{PasetoV4PreviousPublicKeyHex: "k", PasetoPreviousKeysValidUntil: value}.PasetoPreviousKeysUntil()
+		_, err := Config{PasetoV4PreviousPublicKeys: "k=v", PasetoPreviousKeysValidUntil: value}.PasetoPreviousKeysUntil()
 		require.ErrorContains(t, err, "PASETO_PREVIOUS_KEYS_VALID_UNTIL", value)
 	}
 }
 
+func TestParsePreviousPasetoKeys(t *testing.T) {
+	for _, value := range []string{"", " , "} {
+		keys, err := Config{PasetoV4PreviousLocalKeys: value}.PasetoPreviousLocalKeys()
+		require.NoError(t, err)
+		require.Nil(t, keys, value)
+	}
+
+	for value, wantErr := range map[string]string{
+		"deadbeef":              "entry 1 is not <kid>=<hex key>",
+		"a=1,=2":                "entry 2 is not",
+		"a=":                    "entry 1 is not",
+		"a=1, a=2":              `KID "a" is listed twice`,
+		"k4.loc.2026=secret,x=": "entry 2",
+	} {
+		_, err := Config{PasetoV4PreviousLocalKeys: value}.PasetoPreviousLocalKeys()
+		require.ErrorContains(t, err, "PASETO_V4_PREVIOUS_LOCAL_KEYS", value)
+		require.ErrorContains(t, err, wantErr, value)
+		require.NotContains(t, err.Error(), "secret", "key material in the error")
+	}
+}
+
 func TestLoadConfigRejectsPreviousKeyWithoutWindow(t *testing.T) {
-	t.Setenv("PASETO_V4_PREVIOUS_LOCAL_KEY_HEX", "old-local")
+	t.Setenv("PASETO_V4_PREVIOUS_LOCAL_KEYS", "k4.loc.2026-01=old-local")
 	_, err := LoadConfig(t.TempDir())
 	require.ErrorContains(t, err, "PASETO_PREVIOUS_KEYS_VALID_UNTIL")
+
+	t.Setenv("PASETO_PREVIOUS_KEYS_VALID_UNTIL", "2026-11-01T00:00:00Z")
+	t.Setenv("PASETO_V4_PREVIOUS_LOCAL_KEYS", "no-kid")
+	_, err = LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "PASETO_V4_PREVIOUS_LOCAL_KEYS")
+}
+
+// The pre-#158 single-key settings are refused, not silently ignored.
+func TestLoadConfigRefusesRenamedPreviousKeySettings(t *testing.T) {
+	for old, replacement := range map[string]string{
+		"PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX": "PASETO_V4_PREVIOUS_PUBLIC_KEYS",
+		"PASETO_V4_PREVIOUS_LOCAL_KEY_HEX":  "PASETO_V4_PREVIOUS_LOCAL_KEYS",
+	} {
+		t.Run(old, func(t *testing.T) {
+			t.Setenv(old, "abc")
+			_, err := LoadConfig(t.TempDir())
+			require.ErrorContains(t, err, old)
+			require.ErrorContains(t, err, replacement)
+		})
+	}
+}
+
+// writeSecret writes value to a file in a temp dir and returns its path.
+func writeSecret(t *testing.T, value string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "secret")
+	require.NoError(t, os.WriteFile(path, []byte(value), 0o600))
+	return path
+}
+
+// <KEY>_FILE (#158): every secret can come from a file (compose secrets), with
+// the trailing newline trimmed, and the plain variables keep working.
+func TestLoadConfigReadsSecretFiles(t *testing.T) {
+	for _, secret := range secretFileSettings {
+		t.Run(secret.key, func(t *testing.T) {
+			t.Setenv(secret.key, "")
+			t.Setenv(secret.key+"_FILE", writeSecret(t, "  from-file-"+secret.key+"\n"))
+			if strings.HasPrefix(secret.key, "PASETO_V4_PREVIOUS_") {
+				t.Setenv(secret.key+"_FILE", writeSecret(t, "kid=from-file\n"))
+				t.Setenv("PASETO_PREVIOUS_KEYS_VALID_UNTIL", "2026-11-01T00:00:00Z")
+			}
+
+			config, err := LoadConfig(t.TempDir())
+			require.NoError(t, err)
+			got := *secret.field(&config)
+			if strings.HasPrefix(secret.key, "PASETO_V4_PREVIOUS_") {
+				require.Equal(t, "kid=from-file", got)
+				return
+			}
+			require.Equal(t, "from-file-"+secret.key, got)
+		})
+	}
+
+	// Without _FILE the variable is read as before.
+	t.Setenv("ROLE_LOOKUP_SECRET", "from-env")
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, "from-env", config.RoleLookupSecret)
+}
+
+func TestLoadConfigSecretFileErrors(t *testing.T) {
+	t.Run("both set", func(t *testing.T) {
+		t.Setenv("ROLE_LOOKUP_SECRET", "from-env")
+		t.Setenv("ROLE_LOOKUP_SECRET_FILE", writeSecret(t, "from-file"))
+		_, err := LoadConfig(t.TempDir())
+		require.ErrorContains(t, err, "both ROLE_LOOKUP_SECRET and ROLE_LOOKUP_SECRET_FILE")
+	})
+	t.Run("missing file", func(t *testing.T) {
+		t.Setenv("COLLAB_INTERNAL_SECRET_FILE", filepath.Join(t.TempDir(), "nope"))
+		_, err := LoadConfig(t.TempDir())
+		require.ErrorContains(t, err, "COLLAB_INTERNAL_SECRET_FILE")
+	})
+	t.Run("empty file", func(t *testing.T) {
+		t.Setenv("PASETO_V4_LOCAL_KEY_HEX", "")
+		t.Setenv("PASETO_V4_LOCAL_KEY_HEX_FILE", writeSecret(t, " \n"))
+		_, err := LoadConfig(t.TempDir())
+		require.ErrorContains(t, err, "is empty")
+	})
+	t.Run("too large", func(t *testing.T) {
+		t.Setenv("SMTP_PASS_FILE", writeSecret(t, strings.Repeat("x", maxSecretFileBytes+1)))
+		_, err := LoadConfig(t.TempDir())
+		require.ErrorContains(t, err, "larger than")
+	})
+	t.Run("never the contents", func(t *testing.T) {
+		t.Setenv("PASETO_PREVIOUS_KEYS_VALID_UNTIL", "2026-11-01T00:00:00Z")
+		t.Setenv("PASETO_V4_PREVIOUS_LOCAL_KEYS_FILE", writeSecret(t, "topsecretkeymaterial"))
+		_, err := LoadConfig(t.TempDir())
+		require.ErrorContains(t, err, "PASETO_V4_PREVIOUS_LOCAL_KEYS")
+		require.NotContains(t, err.Error(), "topsecret")
+	})
 }

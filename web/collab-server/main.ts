@@ -13,6 +13,8 @@
 //   PASETO_V4_PUBLIC_KEY_HEX  the API's public key (raw Ed25519 hex), or
 //   PASETO_V4_PUBLIC_PEM_FILE a PEM file with it
 //   PASETO_ISSUER             default golive.auth (the API's default)
+//   ROLE_LOOKUP_SECRET, COLLAB_INTERNAL_SECRET and PASETO_V4_PUBLIC_KEY_HEX may instead
+//   be read from the file NAME_FILE names (compose secrets, #158; env.ts)
 //   COLLAB_STORE_DEBOUNCE_MS / COLLAB_STORE_MAX_DEBOUNCE_MS  default 2000 / 10000
 //   COLLAB_ACCESS_RECHECK_MS  re-check of open connections' access, per (user, doc),
 //                             ±20% jitter (default 60000; 0 turns it off)
@@ -22,6 +24,7 @@ import { readFileSync } from "node:fs"
 import { createPublicKey, type KeyObject } from "node:crypto"
 import { publicKeyFromHex, verifyTicket } from "./access"
 import { createInternalApi } from "./api"
+import { readEnv, readSecretEnv } from "./env"
 import { createInternalServer } from "./internal"
 import { errorMessage, logEvent } from "./logsafe"
 import { yjsInstanceIsShared } from "./probe"
@@ -33,7 +36,14 @@ function fatal(message: string): never {
   process.exit(1)
 }
 
-const env = (name: string) => (process.env[name] ?? "").trim()
+const env = (name: string) => readEnv(process.env, name)
+const secretEnv = (name: string) => {
+  try {
+    return readSecretEnv(process.env, name)
+  } catch (error) {
+    fatal(errorMessage(error))
+  }
+}
 const intEnv = (name: string, fallback: number) => {
   const raw = env(name)
   if (!raw) return fallback
@@ -47,14 +57,14 @@ if (!yjsInstanceIsShared()) {
 }
 
 const apiUrl = env("INTERNAL_API_URL")
-const roleLookupSecret = env("ROLE_LOOKUP_SECRET")
-const internalSecret = env("COLLAB_INTERNAL_SECRET")
+const roleLookupSecret = secretEnv("ROLE_LOOKUP_SECRET")
+const internalSecret = secretEnv("COLLAB_INTERNAL_SECRET")
 if (!apiUrl) fatal("INTERNAL_API_URL is required")
 if (!roleLookupSecret) fatal("ROLE_LOOKUP_SECRET is required")
 if (!internalSecret) fatal("COLLAB_INTERNAL_SECRET is required")
 
 function loadPublicKey(): KeyObject {
-  const hex = env("PASETO_V4_PUBLIC_KEY_HEX")
+  const hex = secretEnv("PASETO_V4_PUBLIC_KEY_HEX")
   const pemFile = env("PASETO_V4_PUBLIC_PEM_FILE")
   try {
     if (hex) return publicKeyFromHex(hex)

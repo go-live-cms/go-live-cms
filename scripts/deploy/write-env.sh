@@ -14,7 +14,8 @@
 # kept as they are. A value can't contain a single quote or a newline.
 set -eu
 
-# The stack doesn't start without these (compose.yaml has no default for them).
+# The stack doesn't start without these (compose.yaml has no default for them, and the
+# secrets it creates from them, e.g. PASETO_V4_PRIVATE_KEY_HEX, can't have one).
 # PUBLIC_BASE_URL defaults to the site's origin below.
 REQUIRED_VARS="SITE_ADDRESS POSTGRES_PASSWORD
   PASETO_V4_PUBLIC_KEY_HEX PASETO_V4_PRIVATE_KEY_HEX PASETO_V4_LOCAL_KEY_HEX
@@ -26,7 +27,7 @@ REQUIRED_VARS="SITE_ADDRESS POSTGRES_PASSWORD
 OPTIONAL_VARS="SITE_URL SMTP_PORT SMTP_TLS SMTP_USER SMTP_PASS
   CORS_ALLOWED_ORIGINS PUBLIC_API_URL
   PASETO_ACCESS_KID PASETO_REFRESH_KID
-  PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX PASETO_V4_PREVIOUS_LOCAL_KEY_HEX PASETO_PREVIOUS_KEYS_VALID_UNTIL"
+  PASETO_V4_PREVIOUS_PUBLIC_KEYS PASETO_V4_PREVIOUS_LOCAL_KEYS PASETO_PREVIOUS_KEYS_VALID_UNTIL"
 
 case "${1:-}" in
   --list)

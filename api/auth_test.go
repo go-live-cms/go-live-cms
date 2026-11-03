@@ -41,6 +41,10 @@ func accessTokenIssuedAt(t *testing.T, server *Server, user db.User, issuedAt ti
 	require.NoError(t, tok.Set("user_id", strconv.FormatInt(user.ID, 10)))
 	require.NoError(t, tok.Set("username", user.Username))
 	require.NoError(t, tok.Set("token_type", "access"))
+	// The footer KID selects the verification key (#158).
+	footer, err := json.Marshal(map[string]string{"kid": server.config.PasetoAccessKID, "ver": "v4.public"})
+	require.NoError(t, err)
+	tok.SetFooter(footer)
 
 	return tok.V4Sign(key, nil)
 }

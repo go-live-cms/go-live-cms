@@ -131,7 +131,7 @@ Any Linux VM with Docker Engine + the Compose plugin (v2.20+, for `up --wait`), 
    | variable | `CORS_ALLOWED_ORIGINS` | none. Only if another origin calls the API with credentials. |
    | variable | `PUBLIC_API_URL` | none. Only if media is served from another origin (see "API URLs" above). |
    | variable | `PASETO_ACCESS_KID`, `PASETO_REFRESH_KID`, `PASETO_PREVIOUS_KEYS_VALID_UNTIL` | during a [key rotation](key-rotation.md) only |
-   | secret | `PASETO_V4_PREVIOUS_PUBLIC_KEY_HEX`, `PASETO_V4_PREVIOUS_LOCAL_KEY_HEX` | during a [key rotation](key-rotation.md) only |
+   | secret | `PASETO_V4_PREVIOUS_PUBLIC_KEYS`, `PASETO_V4_PREVIOUS_LOCAL_KEYS` | during a [key rotation](key-rotation.md) only (`<kid>=<hex>` lists) |
 
    Values can hold spaces, `<>`, `#` and `$` but not a single quote or a newline (the
    `.env` holds them single-quoted). Rate limits, `TRUSTED_PROXIES` and the other API
@@ -170,6 +170,47 @@ Any Linux VM with Docker Engine + the Compose plugin (v2.20+, for `up --wait`), 
 6. **Backups.** Schedule `scripts/backup/backup.sh` (already copied to
    `/opt/golive/scripts/backup`) as described in [backups.md](backups.md). The deploy
    script also takes a backup before every deploy.
+
+## Secrets
+
+The private and local PASETO keys, `ROLE_LOOKUP_SECRET` and `COLLAB_INTERNAL_SECRET`
+reach the containers as **files**, not environment variables (#158). `compose.yaml`
+creates a compose secret from each of those `.env` values (`secrets:` at its end) and
+mounts it read-only at `/run/secrets/<name>` in the services that need it; the API and
+the collab server read `<NAME>_FILE`. So they don't show up in `docker inspect`,
+`/proc/<pid>/environ` or a crash dump of the environment. Nothing changes for CD: the
+`.env` it writes still holds them (mode 600), and `check-env.sh` checks each secret's
+source variable is in the required list.
+
+Every secret the API reads accepts `<NAME>_FILE`: the PASETO keys, the
+`PASETO_V4_PREVIOUS_*_KEYS` lists, `ROLE_LOOKUP_SECRET`, `COLLAB_INTERNAL_SECRET`,
+`SMTP_PASS` and `DB_SOURCE` (`util/config.go`, `secretFileSettings`). The file's
+surrounding whitespace is trimmed, and setting both `<NAME>` and `<NAME>_FILE` is a
+startup error. The plain variables keep working (dev compose and `app.env` use them).
+The collab server accepts `ROLE_LOOKUP_SECRET_FILE`, `COLLAB_INTERNAL_SECRET_FILE` and
+`PASETO_V4_PUBLIC_KEY_HEX_FILE`.
+
+Still plain variables in `compose.yaml`: `PASETO_V4_PREVIOUS_LOCAL_KEYS` and
+`SMTP_PASS`, because they are optional and a compose secret can't be (an unset source
+variable fails `up`; an empty one is silently not mounted, which the API would then
+refuse as a missing file), and `DB_SOURCE`, which compose builds from
+`POSTGRES_PASSWORD`. The public keys aren't secret.
+
+**A secrets manager** (Vault, AWS Secrets Manager, 1Password, sops, ...) plugs in through
+the same files; there is no API integration. Have its agent or sync job write each value
+to a file on the VM (root-owned, mode 0400/0440) and point the secret at it instead of
+the `.env`:
+
+```yaml
+secrets:
+  paseto_v4_private_key:
+    file: /run/golive-secrets/paseto_v4_private_key   # was: environment: PASETO_V4_PRIVATE_KEY_HEX
+```
+
+Then drop those values from GitHub and `write-env.sh`'s required list (and from
+`check-env.sh`'s expectations): a secret that isn't sourced from the `.env` doesn't
+need to be in it. Rotating a value is then: update it in the manager, let the agent
+rewrite the file, `docker compose up -d --force-recreate api collab`.
 
 ## What a deploy does
 
