@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import type { Post, TaxonomyTerm } from "@gl-admin/lib/api/types"
 import { loadPostEnd, primaryCategory, RELATED_POSTS_LIMIT, type PostEndSource } from "./relatedPosts"
 import type { ListedPost } from "./postList"
+import { log } from "./log"
 
 const row = (id: number, extra: Partial<Post> = {}) => ({ id, title: `Post ${id}`, slug: `post-${id}`, post_type: "post", ...extra }) as Post
 const term = (id: number, type: string, name = `T${id}`) => ({ id, name, slug: `t-${id}`, taxonomy_type_name: type }) as TaxonomyTerm
@@ -70,7 +71,7 @@ describe("loadPostEnd", () => {
   })
 
   it("fails soft: a failed lookup leaves only that part out", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const warn = vi.spyOn(log, "warn").mockImplementation(() => {})
     const end = await loadPostEnd(
       post,
       [term(9, "category")],

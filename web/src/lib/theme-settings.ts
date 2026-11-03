@@ -11,6 +11,7 @@
 
 import type { ThemeSettings } from "./theme-api"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
+import { log } from "./log"
 
 // API origin (no /api/v1), from the runtime SERVER_API_URL. The paths below add /api/v1.
 const API_BASE_URL = SERVER_MEDIA_URL
@@ -58,7 +59,7 @@ export class ThemeSettingsImpl implements ThemeSettings {
       const data = await response.json()
       return data.value
     } catch (error) {
-      console.error(`[ThemeSettings] Error getting ${key}:`, error)
+      log.error("theme_setting_request_failed", { op: "get", theme: this.themeSlug, setting: key, error })
       return null
     }
   }
@@ -84,7 +85,7 @@ export class ThemeSettingsImpl implements ThemeSettings {
         throw new Error(`Failed to set setting: ${response.statusText}`)
       }
     } catch (error) {
-      console.error(`[ThemeSettings] Error setting ${key}:`, error)
+      log.error("theme_setting_request_failed", { op: "set", theme: this.themeSlug, setting: key, error })
       throw error
     }
   }
@@ -104,7 +105,7 @@ export class ThemeSettingsImpl implements ThemeSettings {
         throw new Error(`Failed to delete setting: ${response.statusText}`)
       }
     } catch (error) {
-      console.error(`[ThemeSettings] Error deleting ${key}:`, error)
+      log.error("theme_setting_request_failed", { op: "delete", theme: this.themeSlug, setting: key, error })
       throw error
     }
   }
@@ -136,7 +137,7 @@ export class ThemeSettingsImpl implements ThemeSettings {
 
       return result
     } catch (error) {
-      console.error("[ThemeSettings] Error getting all settings:", error)
+      log.error("theme_setting_request_failed", { op: "getAll", theme: this.themeSlug, error })
       return {}
     }
   }

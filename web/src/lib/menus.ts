@@ -6,6 +6,7 @@
  * follow.
  */
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
+import { log } from "./log"
 
 export interface MenuLink {
   id: number
@@ -46,7 +47,7 @@ export async function getMenu(location: string, fetcher: typeof fetch = fetch, t
   try {
     return await Promise.race([load(), timeout])
   } catch (error) {
-    console.warn(`[theme] Could not fetch the ${location} menu:`, error)
+    log.warn("menu_fetch_failed", { location, error })
     return null
   } finally {
     clearTimeout(timer)

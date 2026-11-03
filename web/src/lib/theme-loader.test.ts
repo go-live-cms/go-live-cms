@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { log } from "./log"
 
 const getActiveTheme = vi.fn()
 vi.mock("./api", () => ({ getActiveTheme: () => getActiveTheme() }))
@@ -32,7 +33,7 @@ describe("getPostLayoutVariant", () => {
     getActiveTheme.mockImplementation(async () => {
       throw new Error("down")
     })
-    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.spyOn(log, "error").mockImplementation(() => {})
     expect(await getPostLayoutVariant({}, "post")).toBe("default")
   })
 })

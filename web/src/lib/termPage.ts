@@ -11,6 +11,7 @@
  */
 import type { Post, TaxonomyTerm, TaxonomyType } from "@gl-admin/lib/api/types"
 import { getTaxonomyTypes } from "./api"
+import { log } from "./log"
 import { pageLinks, type Pagination } from "./pagination"
 import { toListedPosts, type PostListData } from "./postList"
 import { getPublic } from "./publicApi"
@@ -87,7 +88,7 @@ export async function isTermRoute(
   try {
     return (await getNames()).has(segment)
   } catch (error) {
-    console.warn("Could not fetch taxonomy types:", error)
+    log.warn("taxonomy_types_fetch_failed", { error })
     return false
   }
 }

@@ -57,6 +57,7 @@ export default defineConfig({
   },
   output: "server",
   // SSR needs an adapter for `astro build`; the production image runs the
-  // standalone Node server it emits (dist/server/entry.mjs, see web/Dockerfile).
+  // standalone Node server it emits (dist/server/entry.mjs, started by
+  // server/start.mjs, see web/Dockerfile).
   adapter: node({ mode: "standalone" }),
 })

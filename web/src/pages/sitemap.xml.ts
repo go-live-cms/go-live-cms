@@ -2,6 +2,7 @@ import type { APIRoute } from "astro"
 import { getPostsByType, getPublicPostTypeNames, getSettings } from "../lib/api"
 import { getPublicAuthors } from "../lib/authorPage"
 import { getPublicTerms } from "../lib/termPage"
+import { log } from "../lib/log"
 import { buildSitemapXml, cacheControl, collectSitemapEntries, normalizeUrlStructure, resolveSiteUrl } from "../lib/seo"
 
 // Built from the API: post pages are server-rendered, so @astrojs/sitemap
@@ -24,7 +25,7 @@ function buildSitemap(siteUrl: string): Promise<string> {
       try {
         return normalizeUrlStructure((await getSettings())?.post_url_structure)
       } catch (error) {
-        console.warn("[sitemap] Could not fetch settings, using id URLs:", error)
+        log.warn("sitemap_settings_fetch_failed", { fallback: "id urls", error })
         return "id"
       }
     },
@@ -34,12 +35,12 @@ function buildSitemap(siteUrl: string): Promise<string> {
     // worth listing.
     getTerms: () =>
       getPublicTerms().catch((error) => {
-        console.warn("[sitemap] Could not fetch terms, leaving term pages out:", error)
+        log.warn("sitemap_terms_fetch_failed", { error })
         return []
       }),
     getAuthors: () =>
       getPublicAuthors().catch((error) => {
-        console.warn("[sitemap] Could not fetch authors, leaving author pages out:", error)
+        log.warn("sitemap_authors_fetch_failed", { error })
         return []
       }),
   }).then(buildSitemapXml)
@@ -68,7 +69,7 @@ export const GET: APIRoute = async ({ url }) => {
     // Don't cache the failure; the next request retries.
     if (cache.get(siteUrl) === cached) cache.delete(siteUrl)
     // An empty sitemap would tell crawlers every post is gone; ask them to retry.
-    console.error("[sitemap] Failed to build sitemap:", error)
+    log.error("sitemap_build_failed", { error })
     return new Response("Sitemap temporarily unavailable", {
       status: 503,
       headers: { "Content-Type": "text/plain; charset=utf-8", "Retry-After": "300" },

@@ -4,6 +4,8 @@ import { blockRegistry } from "./blocks/registry"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
+// Browser-safe: the admin's revision preview renders this component too.
+import { log } from "../lib/log"
 
 interface BlockRendererProps {
   doc: BlockDocV1
@@ -36,7 +38,7 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
     const Component = blockRegistry.getComponent(block.type)
 
     if (!Component) {
-      console.warn(`Unknown block type: ${block.type}`)
+      log.warn("unknown_block_type", { type: block.type })
       return null
     }
 

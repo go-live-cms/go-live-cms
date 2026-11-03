@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { log } from "./log"
 
 vi.mock("./siteSettings", () => ({
   getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 2, urlStructure: "slug" }),
@@ -69,7 +70,7 @@ describe("route resolution", () => {
   })
 
   it("is not a term route when the taxonomy lookup fails", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const warn = vi.spyOn(log, "warn").mockImplementation(() => {})
     await expect(isTermRoute("category", ["post"], async () => Promise.reject(new Error("down")))).resolves.toBe(false)
     warn.mockRestore()
   })

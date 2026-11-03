@@ -75,6 +75,21 @@ are the most fragile part of the codebase. **Before editing anything under
   storing the original `src`; the public `ImageBlock` reads the API-attached
   `doc.media[mediaId]` (`blocks/utils/responsiveImage.ts`) for `srcset`/`sizes`/
   `width`/`height`/`object-position`, all URLs through `safeImageSrc`.
+- **Server-side logging is `src/lib/log.ts`** (#378), never `console.*` in SSR code (`src/pages`,
+  `src/lib`, `src/middleware`, theme layouts and `functions.ts`): `log.warn("menu_fetch_failed",
+  { location, error })` writes one JSON line `{time, level, msg, request_id, route, …}`, the error
+  flattened into `error`/`error_type`/`status`/`cause`/`stack`. `msg` is a fixed snake_case name;
+  the API's no-secrets rules apply (no headers, cookies, tokens, raw paths or query strings: use
+  `safeUrl`; queries in any URL text and credential-named fields are scrubbed as a backstop).
+  `debug` is dev only. The middleware runs each request in `runWithLogContext`
+  (`src/middleware/requestContext.ts`, AsyncLocalStorage), so every line carries Caddy's
+  `X-Request-ID` (also `Astro.locals.requestId`) and `context.routePattern` without passing them.
+  `log.ts` has no Node imports and logs to the console in a browser, so shared code (block
+  registry, `BlockRenderer`) may use it. Browser-only admin code and the collab server
+  (`logEvent`) don't. Tests spy on it: `vi.spyOn(log, "warn")`. The production image starts
+  with `server/start.mjs`, which wraps any other console output (Astro's banner and uncaught
+  page errors, dependencies) as `{msg: "console", text}` lines; the scrub rules and the
+  context hook both use are in `server/logFormat.mjs` (plain JS, no Node imports).
 - **Server-side API calls use `SERVER_API_URL`, read at runtime** (#272): import
   `SERVER_API_URL` (with `/api/v1`) or `SERVER_MEDIA_URL` (the API origin, e.g. for
   `/public/*` and `/uploads`) from `gl-admin/lib/server-api-url.ts`. Never

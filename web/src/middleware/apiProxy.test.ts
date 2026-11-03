@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
+import { log } from "../lib/log"
 
 describe("isApiProxyPath", () => {
   it("matches the Go API and uploads", () => {
@@ -76,7 +77,7 @@ describe("proxyToApi", () => {
     const fetchImpl = vi.fn(async () => {
       throw new TypeError("fetch failed")
     })
-    vi.spyOn(console, "error").mockImplementation(() => {})
+    vi.spyOn(log, "error").mockImplementation(() => {})
 
     const res = await proxyToApi(new Request("http://localhost:4321/api/v1/posts"), "10.0.0.1", "http://api:8080", fetchImpl)
 

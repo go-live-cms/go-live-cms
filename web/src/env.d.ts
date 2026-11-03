@@ -6,6 +6,10 @@
 
 declare namespace App {
   interface Locals {
+    // This request's X-Request-ID (Caddy's), or a fresh UUID without one (#378). Log
+    // lines get it from src/middleware/requestContext.ts; this copy is for anything else.
+    requestId?: string
+
     // Phase 1: Theme assets
     activeTheme?: string
     themeAssets?: {

@@ -6,6 +6,7 @@ import FormattedDate from "@/components/FormattedDate.astro"
 import BlockRenderer from "@/components/BlockRenderer"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { SERVER_MEDIA_URL } from "@gl-admin/lib/server-api-url"
+import { log } from "@/lib/log"
 
 type Props = CollectionEntry<'blog'>['data'] & {
   postId?: number;
@@ -25,7 +26,7 @@ if (postId) {
       blockDoc = data.doc;
     }
   } catch (e) {
-    console.error('Failed to fetch blocks:', e);
+    log.error('post_blocks_fetch_failed', { post_id: postId, error: e });
   }
 }
 ---
