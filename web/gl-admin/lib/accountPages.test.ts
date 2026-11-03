@@ -376,6 +376,18 @@ describe("accept invitation page", () => {
     expect(navigate).toHaveBeenCalledWith("/login?reason=invite-accepted")
   })
 
+  it("refuses the invited email as the password before sending it", async () => {
+    setUrl(`/accept-invite#token=${TOKEN}`)
+    const form = renderPage("acceptForm", fields)
+    fetchMock.mockResolvedValueOnce(json(200, { email: "new.person@example.com", role: "editor", expires_at: "2030-01-01T00:00:00Z" }))
+    await mountAcceptInvitePage(document, vi.fn())
+
+    fill({ ...valid, password: "New.Person@example.com", confirm_password: "New.Person@example.com" })
+    await submit(form)
+    expect(document.getElementById("errorMessage")!.textContent).toMatch(/can't be your email, username or name/)
+    expect(fetchMock).toHaveBeenCalledTimes(1) // the preview only
+  })
+
   it("names the inviter, with their avatar", async () => {
     setUrl(`/accept-invite#token=${TOKEN}`)
     renderPage("acceptForm", fields)

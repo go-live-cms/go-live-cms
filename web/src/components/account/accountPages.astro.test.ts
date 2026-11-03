@@ -65,7 +65,8 @@ describe("password hints", () => {
     expect(html).toContain("At least 12 characters")
     // Both the password and its confirmation.
     expect(html.match(/minlength="12"/g)?.length).toBe(2)
-    expect(html).toMatch(/id="password"[^>]*aria-describedby="password-rule"/)
+    expect(html).toMatch(/id="password"[^>]*aria-describedby="password-rule password-details"/)
+    expect(html).toMatch(/id="password-details"[^>]*>Not your email or name</)
     expect(html).toMatch(/id="password-rule"[^>]*data-password-rule="password"/)
   })
 

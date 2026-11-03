@@ -394,6 +394,9 @@ export async function mountAcceptInvitePage(
     return
   }
 
+  // The invitation's email, once the preview loads: a password can't be it.
+  let invitedEmail: string | undefined
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault()
     ui.hideError()
@@ -403,8 +406,7 @@ export async function mountAcceptInvitePage(
       password: field(form, "password"),
       confirm_password: field(form, "confirm_password"),
     }
-    const inviteEmail = (doc.getElementById("inviteEmail") as HTMLInputElement | null)?.value
-    const invalid = validateAcceptInvitation(fields, inviteEmail)
+    const invalid = validateAcceptInvitation(fields, invitedEmail)
     if (invalid) {
       ui.showError(invalid)
       return
@@ -428,7 +430,9 @@ export async function mountAcceptInvitePage(
   // Show who the invitation is from and for; a dead link gets the invalid
   // panel now rather than after the form is filled in.
   try {
-    showInvitation(doc, await previewInvitation(token))
+    const invite = await previewInvitation(token)
+    invitedEmail = invite.email
+    showInvitation(doc, invite)
   } catch (err) {
     if (isInvalidLinkError(err)) {
       showInvalidLink(doc, form)

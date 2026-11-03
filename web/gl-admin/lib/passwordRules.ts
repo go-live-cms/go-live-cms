@@ -20,9 +20,17 @@ export function passwordRule(password: string): { met: boolean; text: string } {
 // The design's name for the other rule.
 export const PASSWORD_DETAILS_RULE = "Not your email or name"
 
+// Both rules as one line of hint text, for a form without a checklist (the
+// admin user form).
+export function passwordHint(password: string): string {
+  return `${passwordRule(password).text}. ${PASSWORD_DETAILS_RULE}.`
+}
+
 // Whether password is one of the account's details (email, username, full
-// name), ignoring case and surrounding space, as passwordMatchesDetails in
-// api/password_utils.go does. Empty details are skipped.
+// name), ignoring case and surrounding space, like passwordMatchesDetails in
+// api/password_utils.go. Empty details are skipped. Close, not identical: Go's
+// EqualFold and TrimSpace treat a few rare characters (U+017F, U+0085, U+FEFF)
+// differently, and the API's answer is the one that counts.
 export function passwordMatchesDetails(password: string, details: readonly (string | null | undefined)[]): boolean {
   const typed = password.trim().toLowerCase()
   return details.some((detail) => {

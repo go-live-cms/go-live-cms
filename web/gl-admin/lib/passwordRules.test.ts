@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
-import { PASSWORD_DETAILS_RULE, PASSWORD_MIN, passwordMatchesDetails, passwordRule } from "./passwordRules"
+import { PASSWORD_DETAILS_RULE, PASSWORD_MIN, passwordHint, passwordMatchesDetails, passwordRule } from "./passwordRules"
 
 // The API's password rules, next to web/ in the repo. The web container only
 // mounts web/, so there the check is skipped; CI runs it from a full checkout.
@@ -65,5 +65,12 @@ describe("passwordMatchesDetails", () => {
 
   it("names the rule as the design does", () => {
     expect(PASSWORD_DETAILS_RULE).toBe("Not your email or name")
+  })
+})
+
+describe("passwordHint (the admin user form's hint)", () => {
+  it("states both rules, with the count while short", () => {
+    expect(passwordHint("")).toBe("At least 12 characters. Not your email or name.")
+    expect(passwordHint("abc")).toBe("At least 12 characters (3 so far). Not your email or name.")
   })
 })

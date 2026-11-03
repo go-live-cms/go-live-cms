@@ -184,6 +184,13 @@ func (server *Server) updateUser(c *gin.Context) {
 	// access token alone cannot take over the account. Admins resetting
 	// someone else's password skip this.
 	passwordChanged := req.Password != ""
+	// Not the details the account has, nor the ones this request sets. Before
+	// the self-change limit, so a refused password doesn't use up the allowance.
+	if passwordChanged && !checkPasswordDetails(c, req.Password,
+		existingUser.Email, existingUser.Username, existingUser.FullName,
+		req.Email, req.Username, req.FullName) {
+		return
+	}
 	if passwordChanged && isSelf {
 		// Limited per user and client: guesses at current_password from one
 		// address are capped, but a token thief's guesses can't use up the
@@ -237,12 +244,6 @@ func (server *Server) updateUser(c *gin.Context) {
 		return
 	}
 	if passwordChanged {
-		// Neither the details the account has nor the ones this request sets.
-		if !checkPasswordDetails(c, req.Password,
-			existingUser.Email, existingUser.Username, existingUser.FullName,
-			updateParams.Email, updateParams.Username, updateParams.FullName) {
-			return
-		}
 		// password_changed_at is stamped inside UpdateUserTx, under the user
 		// row lock, not here: hashing takes long enough for a concurrent
 		// refresh to mint a token that would otherwise postdate it.

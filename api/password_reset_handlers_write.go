@@ -136,20 +136,16 @@ func (server *Server) resetPassword(c *gin.Context) {
 	// token is read without claiming it: ResetPasswordTx re-checks it, so a
 	// refused password leaves the link usable.
 	resetToken, err := server.store.GetValidPasswordResetTokenByHash(c.Request.Context(), hash)
-	if err == nil {
-		var user db.User
-		user, err = server.store.GetUser(c.Request.Context(), resetToken.UserID)
-		if err == nil && !checkPasswordDetails(c, req.Password, user.Email, user.Username, user.FullName) {
-			return
-		}
-	}
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			respondInvalidAccountToken(c)
-			return
-		}
-		server.requestLog(c).Error("loading password reset token failed", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password"})
+		server.respondResetLookupError(c, err)
+		return
+	}
+	owner, err := server.store.GetUser(c.Request.Context(), resetToken.UserID)
+	if err != nil {
+		server.respondResetLookupError(c, err)
+		return
+	}
+	if !checkPasswordDetails(c, req.Password, owner.Email, owner.Username, owner.FullName) {
 		return
 	}
 
@@ -177,4 +173,15 @@ func (server *Server) resetPassword(c *gin.Context) {
 	server.clearRefreshCookie(c)
 	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, gin.H{"message": "password reset, sign in with your new password"})
+}
+
+// respondResetLookupError answers a failed read of the reset token or its
+// user: gone is the same invalid_token as any other bad link.
+func (server *Server) respondResetLookupError(c *gin.Context, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		respondInvalidAccountToken(c)
+		return
+	}
+	server.requestLog(c).Error("loading password reset token failed", "error", err)
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reset password"})
 }

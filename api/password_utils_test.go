@@ -227,6 +227,30 @@ func TestNewPasswordRulesOnEveryEndpoint(t *testing.T) {
 		require.Equal(t, map[string]string{"password": errPasswordMatchesDetails}, decodeErrorBody(t, recorder).Fields)
 	})
 
+	// The details check runs before the self-change limit: a refused
+	// password doesn't use up the allowance a real change needs.
+	t.Run("self change: a refused password doesn't count against the limit", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		store := mockdb.NewMockStore(ctrl)
+		stubRoleLookup(store, user)
+		server := newRateLimitedTestServer(t, store, func(c *util.Config) { c.RateLimitPasswordChangePerMinute = 1 })
+		server.runInBackground = func(_, _ string, f func()) { f() }
+
+		for range 3 {
+			recorder := doJSON(t, server, http.MethodPut, userURL,
+				gin.H{"password": user.Email, "current_password": currentPassword}, asUser(t, server, user))
+			require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+		}
+		expectUpdate(t, store, "a-new-password")
+		store.EXPECT().CreateSession(gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ any, arg db.CreateSessionParams) (db.Session, error) {
+				return db.Session{ID: arg.ID, UserID: arg.UserID}, nil
+			})
+		recorder := doJSON(t, server, http.MethodPut, userURL,
+			gin.H{"password": "a-new-password", "current_password": currentPassword}, asUser(t, server, user))
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	})
+
 	// The minimum applies when a password is set, so one set before it went
 	// up still signs in.
 	t.Run("an existing short password still logs in", func(t *testing.T) {
