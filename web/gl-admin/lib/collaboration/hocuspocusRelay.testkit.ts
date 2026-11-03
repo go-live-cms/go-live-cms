@@ -24,8 +24,11 @@ export interface Relay {
   clock: FakeClock
   server: CollabServer
   url: string
-  /** A client as `userId` (1 admin, 2 editor, 3 contributor who doesn't own the post). */
-  client(userId: string, options?: { epoch?: string }): HocuspocusCollaboration
+  /**
+   * A client as `userId` (1 admin, 2 editor, 3 contributor who doesn't own the post), on
+   * `POST_ID` unless `postId` names another post (add it to `api` first).
+   */
+  client(userId: string, options?: { epoch?: string; postId?: number }): HocuspocusCollaboration
   /**
    * Stops the server (storing every doc) and starts a new one on the same port.
    * `whileDown` runs in between (e.g. write block_doc around the server).
@@ -68,8 +71,8 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
       return server
     },
     url,
-    client(userId, { epoch } = {}) {
-      const client = new HocuspocusCollaboration(POST_ID, {
+    client(userId, { epoch, postId = POST_ID } = {}) {
+      const client = new HocuspocusCollaboration(postId, {
         url,
         getTicket: async (docName) => sign({ user_id: userId, doc: docName, iat: new Date().toISOString() }),
         user: { name: `user-${userId}`, color: "#000000", id: Number(userId) },

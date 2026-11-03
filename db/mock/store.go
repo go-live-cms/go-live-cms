@@ -184,6 +184,48 @@ func (mr *MockStoreMockRecorder) ClearMenuLocation(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearMenuLocation", reflect.TypeOf((*MockStore)(nil).ClearMenuLocation), arg0, arg1)
 }
 
+// CopyPostFeaturedImage mocks base method.
+func (m *MockStore) CopyPostFeaturedImage(arg0 context.Context, arg1 db.CopyPostFeaturedImageParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CopyPostFeaturedImage", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CopyPostFeaturedImage indicates an expected call of CopyPostFeaturedImage.
+func (mr *MockStoreMockRecorder) CopyPostFeaturedImage(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyPostFeaturedImage", reflect.TypeOf((*MockStore)(nil).CopyPostFeaturedImage), arg0, arg1)
+}
+
+// CopyPostFeaturedImageMeta mocks base method.
+func (m *MockStore) CopyPostFeaturedImageMeta(arg0 context.Context, arg1 db.CopyPostFeaturedImageMetaParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CopyPostFeaturedImageMeta", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CopyPostFeaturedImageMeta indicates an expected call of CopyPostFeaturedImageMeta.
+func (mr *MockStoreMockRecorder) CopyPostFeaturedImageMeta(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyPostFeaturedImageMeta", reflect.TypeOf((*MockStore)(nil).CopyPostFeaturedImageMeta), arg0, arg1)
+}
+
+// CopyPostTaxonomyTerms mocks base method.
+func (m *MockStore) CopyPostTaxonomyTerms(arg0 context.Context, arg1 db.CopyPostTaxonomyTermsParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CopyPostTaxonomyTerms", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CopyPostTaxonomyTerms indicates an expected call of CopyPostTaxonomyTerms.
+func (mr *MockStoreMockRecorder) CopyPostTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyPostTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).CopyPostTaxonomyTerms), arg0, arg1)
+}
+
 // CountFilteredPosts mocks base method.
 func (m *MockStore) CountFilteredPosts(arg0 context.Context, arg1 db.CountFilteredPostsParams) (int64, error) {
 	m.ctrl.T.Helper()
@@ -1143,6 +1185,21 @@ func (m *MockStore) DeleteUserWithTransferTx(arg0 context.Context, arg1 db.Delet
 func (mr *MockStoreMockRecorder) DeleteUserWithTransferTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserWithTransferTx", reflect.TypeOf((*MockStore)(nil).DeleteUserWithTransferTx), arg0, arg1)
+}
+
+// DuplicatePostTx mocks base method.
+func (m *MockStore) DuplicatePostTx(arg0 context.Context, arg1 db.DuplicatePostTxParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DuplicatePostTx", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DuplicatePostTx indicates an expected call of DuplicatePostTx.
+func (mr *MockStoreMockRecorder) DuplicatePostTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DuplicatePostTx", reflect.TypeOf((*MockStore)(nil).DuplicatePostTx), arg0, arg1)
 }
 
 // ExecTx mocks base method.

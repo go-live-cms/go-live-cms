@@ -29,6 +29,14 @@ type Querier interface {
 	ClaimUserInvitation(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	// Frees a location for another menu (assigning a location moves it).
 	ClearMenuLocation(ctx context.Context, arg ClearMenuLocationParams) error
+	// The featured image is the order-0 post_media link plus its _thumbnail_*
+	// meta (setFeaturedImage). The content image links (order > 0) are synced
+	// from the copy's block_doc instead (SyncPostContentMedia).
+	CopyPostFeaturedImage(ctx context.Context, arg CopyPostFeaturedImageParams) error
+	CopyPostFeaturedImageMeta(ctx context.Context, arg CopyPostFeaturedImageMetaParams) error
+	// Duplicating a post (#354, DuplicatePostTx): the copy's relationship rows,
+	// read from the source inside the same transaction as the insert.
+	CopyPostTaxonomyTerms(ctx context.Context, arg CopyPostTaxonomyTermsParams) error
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	// The total for GET /media: the rows ListMedia pages through, same filters.
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)

@@ -1,6 +1,6 @@
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { MemoryRouter, Route, Routes, useParams } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 // The Posts and Pages lists (#340): loading and empty states, tab counts, the
@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   getPosts: vi.fn(),
   getPostCounts: vi.fn(),
   searchPosts: vi.fn(),
+  duplicatePost: vi.fn(),
 }))
 
 vi.mock("@gl-admin/lib/auth", () => ({
@@ -24,6 +25,7 @@ vi.mock("@gl-admin/lib/api/posts", () => ({
   getPosts: api.getPosts,
   getPostCounts: api.getPostCounts,
   searchPosts: api.searchPosts,
+  duplicatePost: api.duplicatePost,
   updatePost: vi.fn(),
   deletePost: vi.fn(),
 }))
@@ -41,6 +43,13 @@ vi.mock("@gl-admin/lib/api/settings", () => ({
 }))
 
 import Content from "./Content"
+import { toast } from "@gl-admin/components/ui/Toast"
+import { DUPLICATED_MESSAGE } from "@gl-admin/lib/contentList"
+
+function EditorStub() {
+  const { id } = useParams()
+  return <p data-testid="editor">Editing post {id}</p>
+}
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -75,6 +84,7 @@ async function render(path: string) {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/content/:typeName" element={<Content />} />
+          <Route path="/content/edit/:id" element={<EditorStub />} />
         </Routes>
       </MemoryRouter>
     )
@@ -96,6 +106,7 @@ beforeEach(() => {
   api.getPosts.mockReset()
   api.getPostCounts.mockReset()
   api.searchPosts.mockReset()
+  api.duplicatePost.mockReset()
 })
 
 afterEach(() => {
@@ -169,6 +180,76 @@ describe("Posts list", () => {
     const buttons = Array.from(container.querySelectorAll("td button")).map((b) => b.textContent)
     expect(buttons).toContain("Edit")
     expect(buttons).toContain("Open")
+  })
+})
+
+describe("Duplicate in the row menu (#354)", () => {
+  const settle = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+  const menuItems = () => Array.from(container.querySelectorAll("[role='menuitem']")).map((m) => m.textContent)
+  const openMenu = async (title: string) => {
+    const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label='Actions for ${title}']`)
+    expect(trigger).not.toBeNull()
+    await act(async () => trigger!.click())
+  }
+  const choose = async (label: string) => {
+    const item = Array.from(container.querySelectorAll<HTMLElement>("[role='menuitem']")).find((m) => m.textContent?.startsWith(label))
+    expect(item).toBeDefined()
+    await act(async () => item!.click())
+    await settle()
+  }
+
+  afterEach(() => vi.restoreAllMocks())
+
+  it("duplicates the post and opens the copy in the editor with a toast", async () => {
+    const success = vi.spyOn(toast, "success")
+    api.getPosts.mockImplementation(() => list([post(1, { post_status: "published" })]))
+    api.getPostCounts.mockResolvedValue({ counts: { published: 1 }, total: 1 })
+    api.duplicatePost.mockResolvedValue({ post: post(500, { title: "Post 1 (copy)" }) })
+    await render("/content/post")
+
+    await openMenu("Post 1")
+    expect(menuItems()[0]).toBe("Edit")
+    expect(menuItems()[1]).toContain("Duplicate")
+    await choose("Duplicate")
+
+    expect(api.duplicatePost).toHaveBeenCalledWith(1)
+    expect(success).toHaveBeenCalledWith(DUPLICATED_MESSAGE)
+    expect(DUPLICATED_MESSAGE).toBe("Duplicated. You’re editing the copy.")
+    expect(container.querySelector("[data-testid='editor']")?.textContent).toBe("Editing post 500")
+  })
+
+  it("gives a contributor Duplicate on someone else's post, and nothing else to change", async () => {
+    api.user.role = "contributor"
+    api.getPosts.mockImplementation(() =>
+      list([post(2, { user_id: 3, username: "kenji", authors: [{ id: 3, username: "kenji", full_name: "Kenji T." }] })])
+    )
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 1 }, total: 1 })
+    api.duplicatePost.mockResolvedValue({ post: post(501, { title: "Post 2 (copy)" }) })
+    await render("/content/post")
+
+    await openMenu("Post 2")
+    expect(menuItems().map((m) => m?.replace(/A new draft.*/, ""))).toEqual(["Open", "Duplicate"])
+    await choose("Duplicate")
+    expect(api.duplicatePost).toHaveBeenCalledWith(2)
+    expect(container.querySelector("[data-testid='editor']")?.textContent).toBe("Editing post 501")
+  })
+
+  it("stays on the list and says why when it fails", async () => {
+    const error = vi.spyOn(toast, "error")
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 1 }, total: 1 })
+    api.duplicatePost.mockRejectedValue(new Error("forbidden"))
+    await render("/content/post")
+
+    await openMenu("Post 1")
+    await choose("Duplicate")
+
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(container.querySelector("[data-testid='editor']")).toBeNull()
+    expect(text()).toContain("Post 1")
   })
 })
 

@@ -120,6 +120,25 @@ func (server *Server) authorizeLoadPost(c *gin.Context, postID int64, allowed fu
 	return post, true, server.checkPost(c, user, post, allowed)
 }
 
+// mayNestUnder reports whether the caller may file a post under parentID:
+// createPost's parent rule (canEditPost on the parent), moderators without a
+// lookup. A parent that no longer exists is not allowed. ok=false means the
+// lookup failed and a 500 was written.
+func (server *Server) mayNestUnder(c *gin.Context, caller db.User, parentID int64) (allowed bool, ok bool) {
+	if canModeratePosts(caller) {
+		return true, true
+	}
+	parent, err := server.store.GetPost(c.Request.Context(), parentID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, true
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get parent post"})
+		return false, false
+	}
+	return canEditPost(caller, parent), true
+}
+
 // checkPost is authorizePost for a handler that already loaded the post.
 func (server *Server) checkPost(c *gin.Context, user db.User, post db.Post, allowed func(db.User, db.Post) bool) bool {
 	if !allowed(user, post) {

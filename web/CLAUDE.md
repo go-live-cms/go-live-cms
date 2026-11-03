@@ -142,6 +142,8 @@ are the most fragile part of the codebase. **Before editing anything under
   (archived posts are left out). List rows fetched with `with_meta=true` carry `authors`
   (user_posts). Hierarchical types render `pages/Pages.tsx`, which loads every page for
   the tree. Features without a backend yet stay hidden (comments at the top of each page).
+  The row menu's **Duplicate** (#354, any content role) calls `POST /posts/:id/duplicate`
+  and opens the copy in the editor with the toast `DUPLICATED_MESSAGE`.
 - **Editor chrome (#341):** `components/editor/ui/EditorTopBar.tsx` (breadcrumb, status,
   save/connection state, presence, publish menu), `PostSidebar` (Post · History), History
   preview in the canvas (`RevisionsPanel`'s `VersionPreview`; the bound editor stays mounted,

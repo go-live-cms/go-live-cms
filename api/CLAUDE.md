@@ -183,6 +183,16 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   the same `prepareForStore` checks and the 4 MiB body limit. The collab server seeds the
   doc from it on first open. Nothing is live yet, so this isn't a write around the collab
   server.
+- **`POST /posts/:id/duplicate`** (#354, `posts_duplicate.go`) is the other new-post writer:
+  a draft owned by the caller (any content role: read access + `canCreatePost`), title
+  "<title> (copy)", slug `<slug>-copy` made unique, same type/description/terms/featured
+  image, parent kept only if the caller may nest under it (`mayNestUnder`, else top-level),
+  and the source's working copy, read after a collab flush like publish (503 if it fails),
+  with **every block id regenerated** (`regenerateBlockIDs`: keys, `id`,
+  `blocks_order`, `children`, every `data-block-id` in `pm`). Never versions, comments,
+  other meta or `post_ydoc_state`: the collab server seeds the copy from `block_doc`.
+  The writes are one transaction (`DuplicatePostTx`); `copyPost` is the reusable part
+  (templates, #322). `duplicatePost.vectors.json` (web) is shared with the collab test.
 - **Tickets:** `POST /collab/tickets` uses `canReadPostBlocks` (any content role, any
   existing post): contributors get a read-only live view of others' posts. The ticket
   carries no role; the server asks `/internal/users/:id/access` and makes `can_edit:

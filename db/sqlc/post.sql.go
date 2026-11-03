@@ -42,6 +42,64 @@ func (q *Queries) CheckURLExists(ctx context.Context, url string) (bool, error) 
 	return exists, err
 }
 
+const copyPostFeaturedImage = `-- name: CopyPostFeaturedImage :exec
+INSERT INTO post_media (post_id, media_id, "order")
+SELECT $1::bigint, pm.media_id, 0
+FROM post_media pm
+WHERE pm.post_id = $2::bigint AND pm."order" = 0
+`
+
+type CopyPostFeaturedImageParams struct {
+	NewPostID    int64 `json:"new_post_id"`
+	SourcePostID int64 `json:"source_post_id"`
+}
+
+// The featured image is the order-0 post_media link plus its _thumbnail_*
+// meta (setFeaturedImage). The content image links (order > 0) are synced
+// from the copy's block_doc instead (SyncPostContentMedia).
+func (q *Queries) CopyPostFeaturedImage(ctx context.Context, arg CopyPostFeaturedImageParams) error {
+	_, err := q.db.ExecContext(ctx, copyPostFeaturedImage, arg.NewPostID, arg.SourcePostID)
+	return err
+}
+
+const copyPostFeaturedImageMeta = `-- name: CopyPostFeaturedImageMeta :exec
+INSERT INTO post_meta (post_id, meta_key, meta_value)
+SELECT $1::bigint, m.meta_key, m.meta_value
+FROM post_meta m
+WHERE m.post_id = $2::bigint
+  AND m.meta_key IN ('_thumbnail_id', '_thumbnail_url')
+`
+
+type CopyPostFeaturedImageMetaParams struct {
+	NewPostID    int64 `json:"new_post_id"`
+	SourcePostID int64 `json:"source_post_id"`
+}
+
+func (q *Queries) CopyPostFeaturedImageMeta(ctx context.Context, arg CopyPostFeaturedImageMetaParams) error {
+	_, err := q.db.ExecContext(ctx, copyPostFeaturedImageMeta, arg.NewPostID, arg.SourcePostID)
+	return err
+}
+
+const copyPostTaxonomyTerms = `-- name: CopyPostTaxonomyTerms :exec
+
+INSERT INTO post_taxonomy_relationships (post_id, taxonomy_term_id)
+SELECT $1::bigint, ptr.taxonomy_term_id
+FROM post_taxonomy_relationships ptr
+WHERE ptr.post_id = $2::bigint
+`
+
+type CopyPostTaxonomyTermsParams struct {
+	NewPostID    int64 `json:"new_post_id"`
+	SourcePostID int64 `json:"source_post_id"`
+}
+
+// Duplicating a post (#354, DuplicatePostTx): the copy's relationship rows,
+// read from the source inside the same transaction as the insert.
+func (q *Queries) CopyPostTaxonomyTerms(ctx context.Context, arg CopyPostTaxonomyTermsParams) error {
+	_, err := q.db.ExecContext(ctx, copyPostTaxonomyTerms, arg.NewPostID, arg.SourcePostID)
+	return err
+}
+
 const countFilteredPosts = `-- name: CountFilteredPosts :one
 SELECT COUNT(*) AS total FROM posts
 WHERE 
