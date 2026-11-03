@@ -1,5 +1,6 @@
 import type {
   Post,
+  PostSEOSettings,
   PostSortOption,
   PostStatusCounts,
   SortOrder,
@@ -15,6 +16,7 @@ import type { BlockDocV1 } from "../blocks-spec"
 export interface CreatePostRequest {
   title: string
   content: string
+  // The excerpt: optional (#357), up to 500 characters.
   description: string
   url: string
   // Omitted → the API derives it from the title. Either way a clash gets -2, -3, ...
@@ -118,6 +120,20 @@ export async function createPost(data: CreatePostRequest): Promise<any> {
     throw await apiErrorFromResponse(response, { fallback: "Create post failed" })
   }
 
+  return response.json()
+}
+
+// PUT /posts/:id/seo (#357): replaces the post's SEO settings. Editors and admins;
+// on a published post they reach the site on Update.
+export async function updatePostSEO(id: string | number, seo: PostSEOSettings): Promise<{ post: Post }> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/seo`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(seo),
+  })
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Saving the SEO settings failed" })
+  }
   return response.json()
 }
 

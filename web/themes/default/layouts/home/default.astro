@@ -8,7 +8,7 @@ import BaseLayout from '../base.astro'
 import PostByline from '../../components/PostByline.astro'
 import PostListItem from '../../components/PostListItem.astro'
 import Pagination from '@/components/Pagination.astro'
-import { metaDescription } from '@/lib/seo'
+import { postExcerpt } from '@/lib/seo'
 import { listSeo, type PostListData } from '@/lib/postList'
 
 interface Props {
@@ -19,7 +19,7 @@ interface Props {
 
 const { title, description, list } = Astro.props
 const [feature, ...rest] = list.page === 1 ? list.posts : [undefined, ...list.posts]
-const featureExcerpt = feature ? metaDescription(feature.post.description, 260) : ''
+const featureExcerpt = feature ? postExcerpt(feature.post, 260) : ''
 ---
 
 <BaseLayout title={title} description={description} seo={listSeo(list)} siteTitle={list.siteTitle}>

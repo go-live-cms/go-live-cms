@@ -217,6 +217,14 @@ export function getMediaVariantPreviewURL(
   return getMediaPreviewURL(media)
 }
 
+// The social crop (#357, 1200 x 630 around the focal point) for previews of a shared
+// link, else the original. Versioned like the others: a focal-point change rewrites
+// the crop at the same path.
+export function getMediaSocialPreviewURL(media: Pick<Media, "media_path" | "changed_at" | "variants">): string {
+  const social = media.variants?.social
+  return social?.path ? withVersion(getMediaURL(social.path), media.changed_at) : getMediaPreviewURL(media)
+}
+
 function withVersion(url: string, changedAt: string): string {
   const version = Date.parse(changedAt)
   // changed_at defaults to 0001-01-01 until a row is first updated.

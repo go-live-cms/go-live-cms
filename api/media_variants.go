@@ -1,6 +1,8 @@
 // media_variants.go generates the resized copies ("variants") of uploaded
 // images (#255): thumb, medium and large, by long edge, keeping the aspect
-// ratio and never upscaling.
+// ratio and never upscaling, plus "social" (#357): a 1200 x 630 crop around the
+// focal point for shared links (og:image), regenerated when the focal point
+// changes. The public site's srcset uses the resized ones only (blockMediaVariants).
 //
 // # Storage
 //
@@ -91,9 +93,33 @@ type MediaVariant struct {
 	FileSize int64  `json:"file_size"`
 }
 
-// MediaVariants maps a variant name (thumb, medium, large) to its file. An
-// image smaller than a size has no variant of that size.
+// MediaVariants maps a variant name (thumb, medium, large, social) to its file.
+// An image smaller than a size has no variant of that size; any image with
+// variants has a social crop.
 type MediaVariants map[string]MediaVariant
+
+// socialVariantWidth x socialVariantHeight is the social crop's size (1.91:1,
+// what Open Graph and X recommend). A smaller image gives a smaller crop of the
+// same shape: never upscaled.
+const (
+	socialVariantWidth  = 1200
+	socialVariantHeight = 630
+)
+
+// resizedOnly drops the social crop: it isn't the whole image, so it must
+// never be a srcset candidate.
+func resizedOnly(variants MediaVariants) MediaVariants {
+	if _, ok := variants[socialVariantName]; !ok {
+		return variants
+	}
+	out := make(MediaVariants, len(variants))
+	for name, v := range variants {
+		if name != socialVariantName {
+			out[name] = v
+		}
+	}
+	return out
+}
 
 // publicVariants returns variants with each path mapped to its public URL
 // path (publicMediaPath): variant paths are stored in media_path's
@@ -221,12 +247,12 @@ func variantMediaPath(mediaPath, file string) string {
 }
 
 // stageImageVariants generates the variants of the image stored at
-// mediaPath. It returns nil for a path outside uploadPath (seeded or legacy
-// rows, whose files the API doesn't manage). Otherwise the result is never
-// nil: when no variants can be made (not an image, too large, animated,
-// undecodable) it holds none, so committing it still clears stale ones, and
-// the reason is returned alongside it.
-func stageImageVariants(uploadPath, mediaPath string) (*stagedVariants, error) {
+// mediaPath; focal (nil: the center) places the social crop. It returns nil
+// for a path outside uploadPath (seeded or legacy rows, whose files the API
+// doesn't manage). Otherwise the result is never nil: when no variants can be
+// made (not an image, too large, animated, undecodable) it holds none, so
+// committing it still clears stale ones, and the reason is returned alongside it.
+func stageImageVariants(uploadPath, mediaPath string, focal *FocalPoint) (*stagedVariants, error) {
 	target, err := resolveInUploadDir(uploadPath, mediaPath)
 	if err != nil {
 		return nil, nil
@@ -259,7 +285,7 @@ func stageImageVariants(uploadPath, mediaPath string) (*stagedVariants, error) {
 		return staged, err
 	}
 
-	variants, err := writeImageVariants(src, staging, mediaPath)
+	variants, err := writeImageVariants(src, staging, mediaPath, focal)
 	if err != nil {
 		os.RemoveAll(staging)
 		return staged, err
@@ -323,9 +349,9 @@ func decodeForVariants(path string) (orientedImage, error) {
 	return orientedImage{img: img, orientation: orientation}, nil
 }
 
-// writeImageVariants scales src to every size smaller than it and writes the
-// files to dir, returning them keyed by name.
-func writeImageVariants(src orientedImage, dir, mediaPath string) (MediaVariants, error) {
+// writeImageVariants scales src to every size smaller than it, cuts the social
+// crop around focal, and writes the files to dir, returning them keyed by name.
+func writeImageVariants(src orientedImage, dir, mediaPath string, focal *FocalPoint) (MediaVariants, error) {
 	bounds := src.img.Bounds()
 	// Orientations 5-8 swap the axes: scale in the stored orientation, to the
 	// swapped size, then rotate the (small) result.
@@ -371,7 +397,92 @@ func writeImageVariants(src orientedImage, dir, mediaPath string) (MediaVariants
 			FileSize: size,
 		}
 	}
+
+	// The social crop, from the original (not a resized copy), so a large image
+	// keeps its detail. Scaled in the stored orientation, like the others.
+	crop, sw, sh := socialCrop(bounds, src.orientation, focal)
+	scaled := image.NewRGBA(image.Rect(0, 0, sw, sh))
+	draw.CatmullRom.Scale(scaled, scaled.Bounds(), src.img, crop, draw.Src, nil)
+	out := applyOrientation(scaled, src.orientation)
+	file := socialVariantName + ext
+	size, err := encodeVariant(filepath.Join(dir, file), out, opaque)
+	if err != nil {
+		return nil, err
+	}
+	variants[socialVariantName] = MediaVariant{
+		Path:     variantMediaPath(mediaPath, file),
+		Width:    int32(out.Bounds().Dx()),
+		Height:   int32(out.Bounds().Dy()),
+		MimeType: mimeType,
+		FileSize: size,
+	}
 	return variants, nil
+}
+
+// socialCrop picks the social crop of an image whose stored pixels are bounds
+// (before its EXIF orientation is applied): the largest 1.91:1 rectangle, as
+// displayed, centered on the focal point (the image's center without one) and
+// kept inside the image. It returns that rectangle in stored coordinates and the
+// size to scale it to, also in stored orientation: 1200 x 630 as displayed, or
+// the rectangle's own size when it is smaller.
+func socialCrop(bounds image.Rectangle, orientation int, focal *FocalPoint) (image.Rectangle, int, int) {
+	w, h := bounds.Dx(), bounds.Dy()
+	swap := orientation >= 5 && orientation <= 8
+	dw, dh := w, h
+	if swap {
+		dw, dh = h, w
+	}
+
+	// As displayed: the widest 1.91:1 rectangle that fits.
+	cw, ch := dw, max(1, (dw*socialVariantHeight+socialVariantWidth/2)/socialVariantWidth)
+	if ch > dh {
+		cw, ch = max(1, min(dw, (dh*socialVariantWidth+socialVariantHeight/2)/socialVariantHeight)), dh
+	}
+	ow, oh := cw, ch
+	if cw > socialVariantWidth {
+		ow, oh = socialVariantWidth, socialVariantHeight
+	}
+
+	fx, fy := 0.5, 0.5
+	if focal != nil {
+		fx, fy = focal.X, focal.Y
+	}
+	sx, sy := storedFocal(orientation, fx, fy)
+	scw, sch, sow, soh := cw, ch, ow, oh
+	if swap {
+		scw, sch, sow, soh = ch, cw, oh, ow
+	}
+	x0 := clampInt(int(sx*float64(w)+0.5)-scw/2, 0, w-scw)
+	y0 := clampInt(int(sy*float64(h)+0.5)-sch/2, 0, h-sch)
+	crop := image.Rect(x0, y0, x0+scw, y0+sch).Add(bounds.Min)
+	return crop, sow, soh
+}
+
+// storedFocal maps a focal point given on the displayed image (fractions of its
+// width and height) onto the stored pixels, for an EXIF orientation 1-8: the
+// inverse of applyOrientation.
+func storedFocal(orientation int, fx, fy float64) (float64, float64) {
+	switch orientation {
+	case 2:
+		return 1 - fx, fy
+	case 3:
+		return 1 - fx, 1 - fy
+	case 4:
+		return fx, 1 - fy
+	case 5:
+		return fy, fx
+	case 6:
+		return fy, 1 - fx
+	case 7:
+		return 1 - fy, 1 - fx
+	case 8:
+		return 1 - fy, fx
+	}
+	return fx, fy
+}
+
+func clampInt(v, lo, hi int) int {
+	return max(lo, min(v, hi))
 }
 
 // scaledSize fits w x h to longEdge on its longer side, keeping the aspect
@@ -482,8 +593,9 @@ func noVariantsReason(err error) bool {
 // UploadPath: strips the original's metadata (EXIF, GPS, XMP, text chunks)
 // and stages its variants. Both are best effort, so a failure is logged and
 // the upload goes on. It returns the stored file's size afterwards
-// (fallbackSize if it can't be read) and the staged variants (nil-safe).
-func prepareStoredImage(log *slog.Logger, uploadPath, storedPath, mimeType string, fallbackSize int64) (int64, *stagedVariants) {
+// (fallbackSize if it can't be read) and the staged variants (nil-safe). focal
+// places the social crop (nil: a new upload, centered).
+func prepareStoredImage(log *slog.Logger, uploadPath, storedPath, mimeType string, fallbackSize int64, focal *FocalPoint) (int64, *stagedVariants) {
 	size := fallbackSize
 	if _, err := resolveInUploadDir(uploadPath, storedPath); err != nil {
 		return size, nil
@@ -491,7 +603,7 @@ func prepareStoredImage(log *slog.Logger, uploadPath, storedPath, mimeType strin
 	if !strings.HasPrefix(mimeType, "image/") {
 		// Still staged, so a replace that changes nothing image-wise clears
 		// stale variants on commit.
-		staged, _ := stageImageVariants(uploadPath, storedPath)
+		staged, _ := stageImageVariants(uploadPath, storedPath, focal)
 		return size, staged
 	}
 	defer acquireImagePipeline()()
@@ -502,7 +614,7 @@ func prepareStoredImage(log *slog.Logger, uploadPath, storedPath, mimeType strin
 	if info, err := os.Stat(storedPath); err == nil {
 		size = info.Size()
 	}
-	staged, err := stageImageVariants(uploadPath, storedPath)
+	staged, err := stageImageVariants(uploadPath, storedPath, focal)
 	switch {
 	case err == nil:
 	case noVariantsReason(err):
@@ -567,7 +679,7 @@ func BackfillMediaVariants(ctx context.Context, store db.Store, uploadPath strin
 // update stats directly.
 func backfillOne(ctx context.Context, store db.Store, uploadPath string, media db.Medium, stats *VariantBackfillStats) error {
 	release := acquireImagePipeline()
-	staged, err := stageImageVariants(uploadPath, media.MediaPath)
+	staged, err := stageImageVariants(uploadPath, media.MediaPath, focalPointFrom(media.FocalX, media.FocalY))
 	release()
 	if staged == nil {
 		stats.Skipped++

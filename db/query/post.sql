@@ -111,6 +111,19 @@ SET title = COALESCE($1, title),
 WHERE id = $10
 RETURNING *;
 
+-- name: UpdatePostSEO :one
+-- PUT /posts/:id/seo (#357): the post's working SEO settings, replaced as a whole.
+-- On a published post they reach the site on Update (golive_post_settings, 000031).
+UPDATE posts
+SET seo_title = sqlc.arg(seo_title),
+    seo_description = sqlc.arg(seo_description),
+    social_image_id = sqlc.narg(social_image_id),
+    noindex = sqlc.arg(noindex),
+    canonical_url = sqlc.arg(canonical_url),
+    changed_at = now()
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
 -- name: DeletePost :exec
 DELETE FROM posts
 WHERE id = $1;

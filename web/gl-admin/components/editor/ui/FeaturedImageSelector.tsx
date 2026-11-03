@@ -10,6 +10,9 @@ interface FeaturedImageSelectorProps {
   onClose: () => void
   onSelect: (media: Media) => void
   currentFeaturedImage?: Media | null
+  // The SEO tab's social image picker (#357) reuses it with its own wording.
+  title?: string
+  removeLabel?: string
 }
 
 const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
@@ -17,6 +20,8 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
   onClose,
   onSelect,
   currentFeaturedImage,
+  title = "Select Featured Image",
+  removeLabel = "Remove Featured Image",
 }) => {
   const [mediaItems, setMediaItems] = useState<Media[]>([])
   const [loading, setLoading] = useState(false)
@@ -103,7 +108,7 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Select Featured Image" size="large">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="large">
       <div className="gl-featured-image-selector">
         {}
         <div className="gl-featured-image-selector__controls">
@@ -119,7 +124,7 @@ const FeaturedImageSelector: React.FC<FeaturedImageSelectorProps> = ({
 
           {currentFeaturedImage && (
             <button onClick={handleRemove} className="gl-featured-image-selector__remove-btn">
-              Remove Featured Image
+              {removeLabel}
             </button>
           )}
         </div>

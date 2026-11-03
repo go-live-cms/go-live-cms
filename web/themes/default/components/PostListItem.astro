@@ -5,7 +5,7 @@
  * carry yet (README).
  */
 import type { ListedPost } from '@/lib/postList'
-import { metaDescription } from '@/lib/seo'
+import { postExcerpt } from '@/lib/seo'
 import PostByline from './PostByline.astro'
 
 interface Props {
@@ -15,7 +15,8 @@ interface Props {
 
 const { item, headingLevel = 3 } = Astro.props
 const { post, href, image } = item
-const excerpt = metaDescription(post.description, 220)
+// No excerpt (#357): the first paragraph.
+const excerpt = postExcerpt(post, 220)
 const Heading = `h${headingLevel}` as 'h2' | 'h3'
 ---
 

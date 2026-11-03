@@ -82,8 +82,13 @@ the collab server.
   Replace strip the original's EXIF/GPS/XMP/text metadata losslessly (a JPEG keeps
   only its orientation) and generate `thumb`/`medium`/`large` variants (320/800/1600
   long edge, never upscaled, pure Go via `golang.org/x/image`, JPEG or PNG if
-  transparent) in `<dir>/_variants/<file>/`. They're **staged** and only moved into
-  place once the DB agrees (`stagedVariants.commit`), so a failed Replace keeps the
+  transparent) in `<dir>/_variants/<file>/`, plus **`social`** (#357): a 1200 x 630 crop
+  around the focal point (`socialCrop`, from the original; a smaller image gives a
+  smaller 1.91:1 crop), regenerated when PUT sets the focal point
+  (`restageMediaVariants`, through `SetMediaVariantsTx`). It's not the whole image, so
+  block media (`resizedOnly`) and srcsets leave it out. The backfill's "missing" includes
+  rows without a `social` key, so run `main backfill-variants` once after deploying #357.
+  They're **staged** and only moved into place once the DB agrees (`stagedVariants.commit`), so a failed Replace keeps the
   old set; Delete removes the directory (`removeMediaVariants`). The `variants`
   column (jsonb, `{}` = none) and `focal_x`/`focal_y` (0..1, both or neither; CHECK
   constraint) are returned as `variants` / `focal_point`. `variants` is
@@ -538,9 +543,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   next version_no, `InsertPublishedVersionFromPost`, `SetPublishedVersionOnPost`, then the
   content image links with `SyncPostContentMedia`, which never moves the featured image's
   order-0 row (#389), in one transaction) stores `golive_post_settings(id)` in `post_versions.settings` and
-  `posts.published_settings`: title, description, featured image (`_thumbnail_id`/`_url` meta)
-  and sorted `term_ids`. The SQL function is the one definition of the shape; the SEO fields
-  (#357) and authors (#319) join it by redefining it. Unpublish NULLs it; a version from before
+  `posts.published_settings`: title, description, featured image (`_thumbnail_id`/`_url` meta),
+  sorted `term_ids` and the SEO fields (#357, below). The SQL function is the one definition
+  of the shape; authors (#319) join it by redefining it. Unpublish NULLs it; a version from before
   #358 has NULL (the migration backfilled only current versions). `post_published_terms` is the
   published term set as rows, kept equal to `published_settings.term_ids` by a trigger (never
   write it by hand); term archives, related posts and `/public/terms` join it. **Every public
@@ -565,4 +570,23 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `unpublished_changes=true` filters `GET /posts`, `/posts/type/:type` and `/posts/search`.
   The JSON field is omitted when false, and the public
   presenters clear it (the authors/terms queries select `false` to keep the shared row type).
+
+## Post SEO (#357, `000031`, `posts_seo.go`)
+
+- Typed columns on `posts`: `seo_title`, `seo_description` (`''` = the post's title /
+  excerpt), `social_image_id` (FK media, `ON DELETE SET NULL`; NULL = the featured image),
+  `noindex`, `canonical_url` (`''` = its own URL). `golive_post_settings()` snapshots them,
+  so an SEO edit on a published post waits for Update; 000031 gave older snapshots the
+  defaults. `golive_post_settings_changed` (#326) ignores a published social image deleted since.
+- `PUT /posts/:id/seo` replaces them all (`requireContentEditor`: contributors see them
+  read-only, decision 7). Title ≤255 single line, description ≤500 (the admin's 60/160 are
+  soft guides), `validCanonicalURL` (absolute http(s), host, no spaces/userinfo), the social
+  image must exist and be an image (400 otherwise).
+- The working values are `seo` on `PostResponse` (admin). `/public/posts/:id|slug` answer the
+  **published** ones as `seo` (`resp.Post.SEO` is cleared there) with `image` resolved:
+  social image, else featured image, as its `social` variant when it has one.
+  `/public/posts` rows carry the published `noindex` for the sitemap (nothing else hides the
+  post). Restore-settings restores them (`RestorePostSEO`).
+- **The excerpt is optional** (`description`: `max=500`, no minimum; on PUT absent keeps,
+  `""` clears).
 </content>

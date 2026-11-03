@@ -103,8 +103,9 @@ export interface Media {
   duration?: number
   original_filename: string
   // Resized copies of an image (#255), keyed thumb/medium/large. An image
-  // smaller than a size has no variant of it; {} for non-images.
-  variants?: Partial<Record<MediaVariantName, MediaVariant>>
+  // smaller than a size has no variant of it; {} for non-images. "social" is the
+  // 1200 x 630 crop around the focal point for shared links (#357).
+  variants?: Partial<Record<MediaVariantName | "social", MediaVariant>>
   // Point of interest (0..1 from the top-left), null when unset.
   focal_point?: FocalPoint | null
   // The image needs no alt text (a background, a divider) and is rendered alt="" (#325).
@@ -135,6 +136,21 @@ export interface Post {
   // "Changes not published" (#326): published, and the working copy (body or settings)
   // differs from what the site shows. Lists and GET /posts/:id set it; absent = false.
   has_unpublished_changes?: boolean
+  // The working SEO settings (#357): admin responses for one post (GET /posts/:id).
+  seo?: PostSEOSettings
+  // /public/posts rows only: the published "Hide from search engines" (#357), which
+  // keeps the post out of the sitemap.
+  noindex?: boolean
+}
+
+// A post's SEO settings as the admin edits them (PUT /posts/:id/seo replaces them).
+// "" / null = use the post's own (title; excerpt, then first paragraph; featured image).
+export interface PostSEOSettings {
+  seo_title: string
+  seo_description: string
+  social_image_id: number | null
+  noindex: boolean
+  canonical_url: string
 }
 
 export interface PostAuthor {
