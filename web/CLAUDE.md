@@ -121,8 +121,17 @@ are the most fragile part of the codebase. **Before editing anything under
   `getPublishedPosts(type, …)` (`/public/posts`); the other `/public` lists already answer with
   published settings. On a published post a settings edit reaches the site on Update; the
   slug changes at once. The editor shows "settings go live on Update" from
-  `GET /posts/:id/settings` (the full "Changes not published" status is #326), and restoring a
-  version restores its settings too (`blockAPI.restoreVersionSettings`).
+  `GET /posts/:id/settings`, and restoring a version restores its settings too
+  (`blockAPI.restoreVersionSettings`).
+- **Changes not published (#326):** a published post whose body or settings differ from the
+  live ones (the API's `has_unpublished_changes`; `api/CLAUDE.md`). `PostStatusPill` takes
+  `unpublishedChanges` (accent pill, `UNPUBLISHED_CHANGES_LABEL`); the posts list and Pages
+  tree show it, editors get a "Changes not published" tab (`status=published` +
+  `unpublished_changes=true`, count from `/posts/counts`' `unpublished_changes`), Home counts
+  them. In the editor `PostForm` reads `blocks_changed`/`changed` from `GET /posts/:id/settings`
+  on open, after settings saves, publish and restore, and on `Editor`'s `onStored` (the collab
+  server's `stored` with `block_doc: "written"`, anyone's edits; debounced), so the top bar's
+  pill and "Saved · changes go live on Update" follow collaborators live.
 - **SEO (#137):** `src/lib/seo.ts` holds the pure helpers (tested in `seo.test.ts`).
   The site URL is `SITE_URL`, read from `process.env` at runtime (`resolveSiteUrl`;
   unset → request origin, wrong behind a proxy, so prod must set it). `/robots.txt`

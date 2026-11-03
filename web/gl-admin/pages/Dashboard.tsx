@@ -16,9 +16,10 @@ import { ACTIVE_STATUSES } from "@gl-admin/lib/contentList"
 import type { Post } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/pages/home.scss"
 
-// Home (#9, #340): quick actions, the posts you were working on, drafts and counts.
-// The design's "Needs attention" and "Activity" sections, presence on the recent cards
-// and "from a template" wait for #324, #326, #325, #323 and #322.
+// Home (#9, #340): quick actions, the posts you were working on, drafts and counts, with
+// the posts whose changes aren't published yet (#326). The design's "Needs attention" and
+// "Activity" sections, presence on the recent cards and "from a template" wait for #324,
+// #325, #323 and #322.
 
 export function greeting(date: Date = new Date()): string {
   const h = date.getHours()
@@ -29,7 +30,7 @@ type HomeData = {
   recent: Post[]
   drafts: Post[]
   // null: that count failed to load.
-  counts: { published: number | null; drafts: number | null; pages: number | null; media: number | null }
+  counts: { published: number | null; changes: number | null; drafts: number | null; pages: number | null; media: number | null }
 }
 
 export default function Dashboard() {
@@ -66,6 +67,7 @@ export default function Dashboard() {
           drafts: drafts.data,
           counts: {
             published: posts ? (posts.counts.published ?? 0) : null,
+            changes: posts ? (posts.unpublished_changes ?? 0) : null,
             drafts: posts ? (posts.counts.draft ?? 0) : null,
             pages: pages ? (pages.counts.published ?? 0) + (pages.counts.draft ?? 0) : null,
             media: media ? (media.meta.total ?? 0) : null,
@@ -160,6 +162,11 @@ export default function Dashboard() {
               <h2 id="home-counts">At a glance</h2>
               <dl className="gl-home__counts">
                 <Count label={own ? "Your published posts" : "Published posts"} value={data?.counts.published} to={own ? "/content/post?view=mine" : "/content/post?view=published"} />
+                <Count
+                  label={own ? "Your changes not published" : "Changes not published"}
+                  value={data?.counts.changes}
+                  to={own ? "/content/post?view=mine" : "/content/post?view=changes"}
+                />
                 <Count label={own ? "Your drafts" : "Drafts"} value={data?.counts.drafts} to={own ? "/content/post?view=mine" : "/content/post?view=draft"} />
                 <Count label={own ? "Your pages" : "Pages"} value={data?.counts.pages} to="/content/page" />
                 <Count label="Media files" value={data?.counts.media} to="/media" />
@@ -198,7 +205,7 @@ function RecentCard({ post }: { post: Post | null }) {
   }
   return (
     <Link to={`/content/edit/${post.id}`} className="gl-home__card">
-      <PostStatus status={post.post_status} iconPath={post.post_status} />
+      <PostStatus status={post.post_status} iconPath={post.post_status} unpublishedChanges={post.has_unpublished_changes} />
       <span className="gl-home__card-title">{post.title || "Untitled"}</span>
       <span className="gl-home__card-meta">
         <Byline post={post} size={20} />

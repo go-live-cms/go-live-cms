@@ -63,10 +63,10 @@ beforeEach(() => {
   root = createRoot(container)
   api.user.role = "editor"
   api.getPosts.mockImplementation(({ status }: { status: string }) =>
-    Promise.resolve({ data: status === "draft" ? [post(2)] : [post(1, "published")], meta: { total: 1 } })
+    Promise.resolve({ data: status === "draft" ? [post(2)] : [{ ...post(1, "published"), has_unpublished_changes: true }], meta: { total: 1 } })
   )
   api.getPostCounts.mockImplementation(({ type }: { type: string }) =>
-    Promise.resolve(type === "page" ? { counts: { published: 3, draft: 1, archived: 2 }, total: 6 } : { counts: { published: 31, draft: 12 }, total: 43 })
+    Promise.resolve(type === "page" ? { counts: { published: 3, draft: 1, archived: 2 }, total: 6 } : { counts: { published: 31, draft: 12 }, total: 43, unpublished_changes: 2 })
   )
   api.getMedia.mockResolvedValue({ data: [], meta: { total: 9 } })
 })
@@ -89,7 +89,11 @@ describe("Home", () => {
     expect(container.textContent).toContain("GoLive Blog")
     expect(container.querySelector(".gl-home__recent")?.textContent).toContain("Post 1")
     expect(container.querySelector(".gl-home__list")?.textContent).toContain("Post 2")
-    expect(counts()).toEqual(["Published posts=31", "Drafts=12", "Pages=4", "Media files=9"])
+    expect(counts()).toEqual(["Published posts=31", "Changes not published=2", "Drafts=12", "Pages=4", "Media files=9"])
+    // #326: the recent card says so, and the count opens the list's tab.
+    expect(container.querySelector(".gl-home__card .gl-pill")?.textContent).toBe("Changes not published")
+    const changes = Array.from(container.querySelectorAll<HTMLAnchorElement>(".gl-home__count a")).find((a) => a.textContent === "Changes not published")
+    expect(changes?.getAttribute("href")).toBe("/content/post?view=changes")
   })
 
   it("keeps the page when one count fails", async () => {
@@ -97,7 +101,7 @@ describe("Home", () => {
     await render()
     expect(container.querySelector("[role='alert']")).toBeNull()
     expect(container.textContent).toContain("Post 1")
-    expect(counts()).toEqual(["Published posts=31", "Drafts=12", "Pages=4", "Media files=–Unavailable"])
+    expect(counts()).toEqual(["Published posts=31", "Changes not published=2", "Drafts=12", "Pages=4", "Media files=–Unavailable"])
   })
 
   it("scopes everything to a contributor's own posts", async () => {
@@ -106,5 +110,6 @@ describe("Home", () => {
     expect(api.getPostCounts).toHaveBeenCalledWith({ type: "post", user_id: 7 })
     expect(api.getPosts).toHaveBeenCalledWith(expect.objectContaining({ user_id: 7, status: "draft" }))
     expect(counts()[0]).toBe("Your published posts=31")
+    expect(counts()[1]).toBe("Your changes not published=2")
   })
 })
