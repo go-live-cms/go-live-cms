@@ -24,10 +24,6 @@ export interface ThemeConfig {
     styles: Array<{ src: string; media?: string }>
     scripts?: Array<{ src: string; defer?: boolean; async?: boolean; type?: string }>
   }
-  blocks?: Array<{
-    type: string
-    modulePath: string // Path to the block module
-  }>
   postTypes?: Array<{
     name: string
     label: string
@@ -61,12 +57,8 @@ export const themeConfig: ThemeConfig = {
     styles: [{ src: "/themes/example/styles/theme.css", media: "all" }],
     scripts: [{ src: "/themes/example/scripts/theme.js", defer: true }],
   },
-  blocks: [
-    {
-      type: "alert",
-      modulePath: "/themes/example/blocks/Alert/index.ts",
-    },
-  ],
+  // Custom blocks aren't listed here: every blocks/<Name>/ directory is one, resolved when
+  // the images are built (themes/README.md, "Custom Blocks"; #376).
   postTypes: [
     {
       name: "product",

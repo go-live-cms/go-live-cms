@@ -12,6 +12,7 @@ import * as esbuild from "esbuild"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { singleYjsInstance } from "./singleYjsInstance.mjs"
+import { importMetaGlob } from "./importMetaGlob.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const webRoot = path.resolve(here, "..")
@@ -37,7 +38,9 @@ const result = await esbuild.build({
   banner: {
     js: 'import { createRequire as __glCreateRequire } from "node:module"; const require = __glCreateRequire(import.meta.url);',
   },
-  plugins: [singleYjsInstance],
+  // importMetaGlob: the installed theme blocks' headless index.ts files (#376), the same
+  // glob Vite resolves for the admin and the SSR server.
+  plugins: [singleYjsInstance, importMetaGlob],
   logLevel: "warning",
 })
 
@@ -46,4 +49,13 @@ if (yjsFiles.length !== 1) {
   console.error(`collab-server bundle must contain exactly one yjs build, found ${yjsFiles.length}: ${yjsFiles.join(", ")}`)
   process.exit(1)
 }
-console.log(`collab-server bundle: ${path.relative(webRoot, outfile)} (yjs: ${yjsFiles[0]})`)
+// Theme blocks (#376): only their headless definitions belong here. A theme's editor.ts
+// (React node view) or render.tsx, or React itself, means a client-only module leaked in.
+const inputs = Object.keys(result.metafile.inputs).map((input) => input.replaceAll("\\", "/"))
+const clientOnly = inputs.filter((input) => /node_modules\/(react|react-dom|@tiptap\/react)\//.test(input) || /themes\/[^/]+\/blocks\/.+\/(editor|render)\.[jt]sx?$/.test(input))
+if (clientOnly.length > 0) {
+  console.error(`collab-server bundle must not contain client-only modules, found: ${clientOnly.join(", ")}`)
+  process.exit(1)
+}
+const themeBlocks = inputs.filter((input) => /themes\/[^/]+\/blocks\/[^/]+\/index\.ts$/.test(input))
+console.log(`collab-server bundle: ${path.relative(webRoot, outfile)} (yjs: ${yjsFiles[0]}; theme blocks: ${themeBlocks.length})`)

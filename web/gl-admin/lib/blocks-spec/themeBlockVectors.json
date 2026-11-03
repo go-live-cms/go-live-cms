@@ -1,0 +1,45 @@
+{
+  "_comment": "Theme block validation cases (#376) that the collab server (themeBlocks.test.ts) and the API sanitizer (api/theme_blocks_test.go) must both get right. `valid`: whether the block is accepted. `attrs_after`: the attrs the API stores (undeclared ones stripped, null ones removed, pm's attrs dropped).",
+  "spec": {
+    "type": "theme:vectors/card",
+    "version": 2,
+    "attrs": {
+      "tone": { "type": "string", "enum": ["calm", "loud"], "default": "calm" },
+      "label": { "type": "string", "maxLength": 5, "default": "" },
+      "size": { "type": "number", "integer": true, "minimum": 1, "maximum": 3, "default": 1 },
+      "ratio": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5 },
+      "open": { "type": "boolean", "default": false }
+    }
+  },
+  "cases": [
+    {
+      "name": "every attr valid",
+      "block": { "version": 2, "attrs": { "tone": "loud", "label": "héllo", "size": 3, "ratio": 0.25, "open": true, "text": "x", "pm": { "type": "theme:vectors/card", "content": [{ "type": "text", "text": "x" }] } } },
+      "valid": true,
+      "attrs_after": { "tone": "loud", "label": "héllo", "size": 3, "ratio": 0.25, "open": true, "text": "x", "pm": { "type": "theme:vectors/card", "content": [{ "type": "text", "text": "x" }] } }
+    },
+    {
+      "name": "no declared attrs (defaults apply), older version",
+      "block": { "version": 1, "attrs": {} },
+      "valid": true,
+      "attrs_after": {}
+    },
+    {
+      "name": "undeclared attrs and pm attrs are stripped, null is unset",
+      "block": { "version": 1, "attrs": { "tone": null, "color": "red", "onclick": "x", "pm": { "type": "theme:vectors/card", "attrs": { "tone": "loud", "data-block-id": "blk-0000000001" } } } },
+      "valid": true,
+      "attrs_after": { "pm": { "type": "theme:vectors/card" } }
+    },
+    { "name": "enum value not listed", "block": { "version": 1, "attrs": { "tone": "shouty" } }, "valid": false },
+    { "name": "string attr given a number", "block": { "version": 1, "attrs": { "tone": 1 } }, "valid": false },
+    { "name": "string longer than maxLength (code points)", "block": { "version": 1, "attrs": { "label": "toolong" } }, "valid": false },
+    { "name": "integer attr given a fraction", "block": { "version": 1, "attrs": { "size": 1.5 } }, "valid": false },
+    { "name": "number below minimum", "block": { "version": 1, "attrs": { "size": 0 } }, "valid": false },
+    { "name": "number above maximum", "block": { "version": 1, "attrs": { "ratio": 2 } }, "valid": false },
+    { "name": "number attr given a string", "block": { "version": 1, "attrs": { "ratio": "0.5" } }, "valid": false },
+    { "name": "boolean attr given a string", "block": { "version": 1, "attrs": { "open": "true" } }, "valid": false },
+    { "name": "version newer than the spec", "block": { "version": 3, "attrs": {} }, "valid": false },
+    { "name": "version zero", "block": { "version": 0, "attrs": {} }, "valid": false },
+    { "name": "version not an integer", "block": { "version": 1.5, "attrs": {} }, "valid": false }
+  ]
+}

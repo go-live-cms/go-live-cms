@@ -3,6 +3,8 @@ import { getSchema } from "@tiptap/core"
 import type { Schema } from "prosemirror-model"
 import { getExtensions } from "@gl-admin/components/editor/utils/extensions"
 import { getCoreSchema, schemaExtensions, schemaWithStandIns } from "./schema"
+import { getInstalledCollabSchema } from "../theme-blocks/collabSchema"
+import { installedThemeBlocks } from "../theme-blocks/installed"
 
 /** Everything about a schema that decides which docs it accepts, as plain data. */
 function describeSchema(schema: Schema) {
@@ -28,12 +30,19 @@ function describeSchema(schema: Schema) {
 }
 
 describe("collab schema parity (#206)", () => {
-  // The collab server converts with getCoreSchema(); the editor with its full
-  // extension list. If they differ, the server seeds or stores docs the editor reads
-  // differently. Theme extensions are added to both at runtime, so they're not here.
-  it("the editor's schema is exactly the core schema", () => {
+  // The collab server converts with getInstalledCollabSchema() (the core schema plus every
+  // installed theme block, #376); the editor with its full extension list. If they differ,
+  // the server seeds or stores docs the editor reads differently.
+  it("the editor's schema is exactly the collab server's", () => {
     const editorSchema = getSchema(getExtensions({ collabProvider: null })())
-    expect(describeSchema(editorSchema)).toEqual(describeSchema(getCoreSchema()))
+    expect(describeSchema(editorSchema)).toEqual(describeSchema(getInstalledCollabSchema()))
+  })
+
+  it("the collab server's schema is the core schema plus the installed theme blocks, and nothing else", () => {
+    const core = Object.keys(getCoreSchema().nodes)
+    const installed = Object.keys(getInstalledCollabSchema().nodes)
+    expect(installed.filter((name) => !core.includes(name))).toEqual(installedThemeBlocks.map((block) => block.type))
+    expect(installed).toContain("theme:example/alert")
   })
 
   it("collaborating or not, the schema is the same", () => {

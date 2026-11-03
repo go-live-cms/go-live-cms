@@ -1,41 +1,14 @@
 import React from "react"
-import { NodeViewWrapper, NodeViewContent } from "@tiptap/react"
+import { NodeViewWrapper, NodeViewContent, type ReactNodeViewProps } from "@tiptap/react"
+import { ALERT_VARIANTS } from "./index"
+import { ALERT_STYLES, type AlertVariant } from "./styles"
 
-export const AlertNodeView = ({ node }: any) => {
-  const variant = node.attrs.variant || "info"
-  const message = node.attrs.message || "This is an alert message"
-
-  const variantStyles = {
-    info: {
-      bg: "#dbeafe",
-      border: "#3b82f6",
-      text: "#1e40af",
-      icon: "ℹ️",
-    },
-    success: {
-      bg: "#d1fae5",
-      border: "#10b981",
-      text: "#065f46",
-      icon: "✓",
-    },
-    warning: {
-      bg: "#fef3c7",
-      border: "#f59e0b",
-      text: "#92400e",
-      icon: "⚠️",
-    },
-    error: {
-      bg: "#fee2e2",
-      border: "#ef4444",
-      text: "#991b1b",
-      icon: "✕",
-    },
-  }
-
-  const style = variantStyles[variant as keyof typeof variantStyles] || variantStyles.info
+export const AlertNodeView = ({ node, updateAttributes, editor }: ReactNodeViewProps) => {
+  const variant: AlertVariant = (ALERT_VARIANTS as readonly string[]).includes(node.attrs.variant) ? node.attrs.variant : "info"
+  const style = ALERT_STYLES[variant]
 
   return (
-    <NodeViewWrapper>
+    <NodeViewWrapper data-block-type={node.type.name} data-variant={variant}>
       <div
         style={{
           padding: "1rem 1.25rem",
@@ -49,10 +22,28 @@ export const AlertNodeView = ({ node }: any) => {
           gap: "0.75rem",
         }}
       >
-        <span style={{ fontSize: "1.25rem", flexShrink: 0 }}>{style.icon}</span>
+        <span contentEditable={false} style={{ fontSize: "1.25rem", flexShrink: 0 }} aria-hidden="true">
+          {style.icon}
+        </span>
         <div style={{ flex: 1 }}>
-          <strong style={{ display: "block", marginBottom: "0.25rem", textTransform: "capitalize" }}>{variant}</strong>
-          <NodeViewContent as="div" />
+          <div contentEditable={false} style={{ marginBottom: "0.25rem" }}>
+            <select
+              aria-label="Alert type"
+              value={variant}
+              disabled={!editor.isEditable}
+              onChange={(event) => updateAttributes({ variant: event.target.value })}
+              style={{ font: "inherit", fontWeight: 600, color: style.text, background: "transparent", border: "none" }}
+            >
+              {ALERT_VARIANTS.map((option) => (
+                <option key={option} value={option}>
+                  {option[0].toUpperCase() + option.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* The editor's stylesheet colours its text for the admin's theme; the alert's
+              colours are set here so its text stays readable on its own background. */}
+          <NodeViewContent as="div" style={{ color: style.text }} />
         </div>
       </div>
     </NodeViewWrapper>

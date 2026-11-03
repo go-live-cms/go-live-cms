@@ -70,7 +70,7 @@ every server boot — **read process logs from the very top**.
   Pure conversion (notes below).
 - `fragmentBridge.ts`: `seedFragment` / `fragmentToBlockDoc`: Block Spec v1 ⇄ the
   `"default"` XmlFragment with no editor, for the server. Same bridge, same schema, plus
-  stand-ins so theme blocks survive. Seeding returns `DroppedBlocks` (entries **and**
+  stand-ins so unknown nodes survive. Seeding returns `DroppedBlocks` (entries **and**
   their block trees); the server keeps that record in `meta.dropped` and passes it to
   every store, or the blocks the editor can't show (#213) are deleted. The store converts
   each top-level node on its own: one it can't build is reported (`onUnconvertible`) and
@@ -84,10 +84,11 @@ every server boot — **read process logs from the very top**.
   builds its list from them, so **change editor schema config there, not in
   extensions.ts**. `getCoreSchema()` builds the schema in plain Node
   (`schema.node.test.ts`), and `schema.test.ts` fails if the editor's schema and the core
-  schema ever differ. `getCollabSchema(themeExtensions)` adds a theme's **headless** node
-  definitions: a theme block should keep its schema in a file without React (see
-  `themes/example/blocks/Alert/AlertSchema.ts`) so the server can check it like a core
-  block. `schemaWithStandIns(base, pmJson[])` adds a permissive, cached stand-in for every
+  schema ever differ. `getCollabSchema(themeExtensions)` adds theme blocks' **headless**
+  nodes; `getInstalledCollabSchema()` (`lib/theme-blocks/collabSchema.ts`) is the core
+  schema plus every installed theme block, what the collab server converts with and what
+  the editor's schema must equal (`schema.test.ts`; see "Theme blocks" below).
+  `schemaWithStandIns(base, pmJson[])` adds a permissive, cached stand-in for every
   node or mark type in the JSON that `base` doesn't know, keeping its attrs. A stand-in
   checks nothing.
 - `schemaGuard.ts`: `findUnbuildableTypes` for rule 10.
@@ -149,8 +150,8 @@ kept so references in code stay valid.
 10. **Never bind Collaboration to a doc the editor's schema can't build (#206/#274).**
    `@tiptap/y-tiptap` 3.0.0's `createNodeFromYElement` / `createTextNodesFromYText`
    catch a failing `schema.node()` / `schema.text()` and **delete that element (or text
-   run) from the shared Y doc**: an unknown node type (a theme block whose extension
-   didn't load, a block of a theme that's no longer active) or an unknown mark vanishes
+   run) from the shared Y doc**: an unknown node type (a node from a newer collab bundle,
+   a pre-#376 custom type kept by a stand-in) or an unknown mark vanishes
    for every peer, and the next store persists the loss. `Editor.tsx`'s gate waits for
    the first sync, runs `findUnbuildableTypes` (`schemaGuard.ts`) on the `"default"`
    fragment against `getSchema(getExtensions(...))`, and only then binds. If anything
@@ -282,6 +283,58 @@ kept so references in code stay valid.
   never Zod's parse output (which strips keys the schemas don't list, e.g. list
   `children`). An image's `mediaId` must be a number (the API's media sync skips anything
   else).
+
+## Theme blocks (#376)
+
+A theme's custom block (`themes/<slug>/blocks/<Name>/`, contract in `themes/README.md`)
+is a real block type for the editor, the collab server, the API and the public page.
+
+- **Build-time only.** `lib/theme-blocks/installed.ts` globs every block's headless
+  `index.ts` (`defineThemeBlock`: Block Spec + TipTap node, no React or DOM);
+  `editorBlocks.ts` globs `editor.ts` (node view + slash entry) for the admin;
+  `src/components/blocks/registry.ts` globs `render.tsx` for SSR. Vite resolves the globs
+  for the admin, SSR and vitest; the collab bundle and the manifest generator use
+  `collab-server/importMetaGlob.mjs`. Nothing imports a theme module by URL (the
+  production web server can't serve TypeScript, #271). `themeBlocks.loadable.test.ts`
+  fails on a block the production build can't load.
+- **"Installed" = in this build, whichever theme is active.** The editor schema, the
+  collab schema, the API manifest and the public renderer know every installed theme
+  block, so a post keeps its blocks (and stays editable) when the site switches themes.
+  Only the slash menu offers just the active theme's blocks (`ThemeContext`).
+- **Namespacing (decision):** a theme block's type, which is also its ProseMirror node
+  name and Yjs element name, is **`theme:<slug>/<block>`** (`THEME_BLOCK_TYPE`, e.g.
+  `theme:example/alert`). No core type contains `:`, so a theme block can't collide with
+  or shadow a core block, and two themes can't collide; `collectThemeBlocks` refuses a
+  type outside its directory's theme or declared twice. A theme block is exactly one node
+  whose content expression uses core types/groups only (`:` and `/` would break a
+  ProseMirror content expression that named it).
+- **Block Spec:** declared attrs (`string`/`number`/`boolean` scalars with `enum`,
+  `maxLength`, `integer`, `minimum`, `maximum`; names may not be `pm`, `text`,
+  `data-block-id` or `on*`) are **canonical on the block's `attrs`, never in its `pm`**
+  (like a quote's `cite`): `pm` is `{type, content}`, plus `text`. `defineThemeBlock`
+  builds the node's attrs from the spec and puts the spec on its NodeSpec
+  (`glThemeBlock`), so the bridge (`themeNodeToBlock` / `themeBlockToPM`) and the store's
+  `validateBlockDoc(doc, { themeBlocks: themeBlockLookup(schema) })` read it from the
+  schema. The block's `version` is its spec's; a stored version newer than the build reads
+  is dropped (hidden, kept). Same rules in the API (`api/theme_blocks.go`, from the
+  manifest); `blocks-spec/themeBlockVectors.json` is shared by both test suites.
+- **Uninstalled theme (decision):** a `theme:` block whose theme isn't in the build (it
+  was removed) is **never lost**: seeding drops it like any unbuildable block (#213), so
+  it stays out of the Yjs doc, is kept byte for byte in `meta.dropped`, put back at its
+  place by every store, and shown as a hidden block in the editor, whose other blocks stay
+  editable. The API stores it unvalidated (generic sanitizer only); the public page
+  renders nothing for it (`BlockRenderer`, logged once per type). Reinstalling the theme
+  brings it back. An unknown type that isn't `theme:` (pre-#376 data such as `alert`)
+  still gets a stand-in, as before.
+- Mixed deploys: the editor, collab and api images must come from the same commit. A
+  collab bundle with a block the editor lacks trips rule 10 (static read-only view); an
+  editor with a block the collab bundle lacks has it stored through a stand-in, as a
+  generic custom block.
+- Tests: `blockBridge.themeBlocks.test.ts`, `schema.node.test.ts`,
+  `lib/theme-blocks/themeBlocks.collab.test.ts` (two users on the relay, stored
+  `block_doc`, restart), `themeBlocks.loadable.test.ts`, `blocks-spec/themeBlocks.test.ts`,
+  `src/components/BlockRenderer.themeBlocks.test.tsx`, the bundle in
+  `collab-server/process.test.ts`, Go `TestThemeBlock*`.
 
 ## How to test headlessly
 

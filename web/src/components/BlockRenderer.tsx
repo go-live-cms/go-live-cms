@@ -5,6 +5,8 @@ import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
 
+const unknownTypesLogged = new Set<string>()
+
 interface BlockRendererProps {
   doc: BlockDocV1
   // The `sizes` attribute for image blocks: how wide this layout renders
@@ -36,7 +38,14 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
     const Component = blockRegistry.getComponent(block.type)
 
     if (!Component) {
-      console.warn(`Unknown block type: ${block.type}`)
+      // A block nothing in this build renders: a theme block whose theme was removed
+      // (#376), or a type from an older build. It stays in the stored doc (the editor
+      // keeps it hidden, not deleted); here it renders nothing. Logged once per type, not
+      // on every request.
+      if (!unknownTypesLogged.has(block.type)) {
+        unknownTypesLogged.add(block.type)
+        console.warn(`[BlockRenderer] No renderer for block type "${block.type}" in this build; not rendered`)
+      }
       return null
     }
 

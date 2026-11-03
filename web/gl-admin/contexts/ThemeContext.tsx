@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
-import { registerThemeBlocks } from "../../src/components/blocks/registry"
-import { registerThemeExtensions } from "../components/editor/utils/extensionRegistry"
+import { editorBlockRegistry } from "../components/editor/blocks"
+import { themeSlashBlocks } from "../lib/theme-blocks/editorBlocks"
 
 interface ThemeContextValue {
   isThemeLoaded: boolean
@@ -47,15 +47,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const config = await loadThemeConfig(slug)
         if (!config) console.warn(`[ThemeProvider] Theme "${slug}" is not in this build`)
 
-        if (config?.blocks && !cancelled) {
-          console.log(`[ThemeProvider] Loading ${config.blocks.length} custom blocks from theme: ${slug}`)
-
-          // Register extensions FIRST (before any editor is created)
-          await registerThemeExtensions(slug, config.blocks)
-
-          // Then register blocks
-          await registerThemeBlocks(slug, config.blocks)
-        }
+        // The editor already has every installed theme block in its schema (built in,
+        // #376); the active theme only decides which ones the slash menu offers.
+        if (!cancelled) themeSlashBlocks(slug).forEach((block) => editorBlockRegistry.register(block))
 
         if (!cancelled) {
           console.log(`[ThemeProvider] Theme loaded: ${slug}`)

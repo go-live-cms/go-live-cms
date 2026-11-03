@@ -1,0 +1,20 @@
+{
+  "manifest_version": 1,
+  "blocks": {
+    "theme:example/alert": {
+      "version": 1,
+      "attrs": {
+        "variant": {
+          "default": "info",
+          "enum": [
+            "info",
+            "success",
+            "warning",
+            "error"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  }
+}

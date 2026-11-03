@@ -12,6 +12,7 @@
 import * as Y from "yjs"
 import type { Schema } from "prosemirror-model"
 import { validateBlockDoc, type BlockDocV1 } from "../gl-admin/lib/blocks-spec"
+import { themeBlockLookup } from "../gl-admin/lib/blocks-spec/themeBlocks"
 import {
   EDITOR_FRAGMENT,
   fragmentToBlockDoc,
@@ -83,7 +84,9 @@ export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): Pre
 
   let decision: BlockDocDecision
   try {
-    validateBlockDoc(derived)
+    // Installed theme blocks are checked against their spec too (#376), with the same
+    // rules the API applies, so the API never has to refuse a block_doc we send.
+    validateBlockDoc(derived, { themeBlocks: themeBlockLookup(schema) })
     if (derived.blocks_order.length === 0 && !input.clientEdited && !isEmpty(input.previous)) {
       decision = { write: false, reason: "empty-without-edit" }
     } else if (sameDoc(input.previous, derived) || (isEmpty(input.previous) && !hasContent(derived))) {

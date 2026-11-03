@@ -26,6 +26,7 @@ import { createInternalServer } from "./internal"
 import { errorMessage, logEvent } from "./logsafe"
 import { yjsInstanceIsShared } from "./probe"
 import { createCollabServer } from "./server"
+import { installedThemeBlocks } from "../gl-admin/lib/theme-blocks/installed"
 
 function fatal(message: string): never {
   logEvent("error", "collab_startup_failed", { error: message })
@@ -96,6 +97,8 @@ logEvent("info", "collab_listening", {
   issuer,
   access_recheck_ms: intEnv("COLLAB_ACCESS_RECHECK_MS", 60_000),
   yjs_single_instance: true,
+  // The theme blocks this bundle was built with (#376); process.test.ts checks the list.
+  theme_blocks: installedThemeBlocks.map((block) => block.type),
 })
 
 let stopping = false
