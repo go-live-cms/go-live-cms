@@ -38,6 +38,9 @@ type PostResponse struct {
 	// settings) differs from what the site shows. Lists and GET /posts/:id set it;
 	// omitted when false.
 	HasUnpublishedChanges bool `json:"has_unpublished_changes,omitempty"`
+	// SEO is the working SEO settings (#357), the admin's; the public site gets
+	// the published ones (publicPostView.SEO), never these.
+	SEO *PostSEOResponse `json:"seo,omitempty"`
 	// PublishAt is when a scheduled post publishes (#147), in UTC; null unless
 	// post_status is "scheduled".
 	PublishAt *time.Time `json:"publish_at"`
@@ -153,6 +156,7 @@ func toPostResponse(post db.Post) PostResponse {
 		CreatedAt:       post.CreatedAt,
 		ChangedAt:       post.ChangedAt,
 		PublishedBlocks: publishedBlocks,
+		SEO:             toPostSEOResponse(post),
 		PublishAt:       nullTimePtr(post.PublishAt),
 		ScheduleFailure: scheduleFailure(post),
 	}

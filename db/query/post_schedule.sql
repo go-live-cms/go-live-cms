@@ -1,4 +1,4 @@
--- Scheduled publishing (#147, 000031). The scheduler is api/scheduled_publish.go;
+-- Scheduled publishing (#147, 000032). The scheduler is api/scheduled_publish.go;
 -- the publish itself is PublishScheduledPostTx (db/sqlc/post_publish_tx.go).
 
 -- name: SchedulePost :one

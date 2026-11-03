@@ -231,6 +231,17 @@ describe("collectSitemapEntries", () => {
     ])
   })
 
+  it("leaves out posts hidden from search engines (#357), by their published noindex", async () => {
+    const entries = await collectSitemapEntries(
+      "https://example.org",
+      source({ post: [post({ id: 1 }), post({ id: 2, noindex: true }), post({ id: 3, noindex: false })] }),
+    )
+    expect(entries.map((e) => e.loc)).toEqual(["https://example.org/", "https://example.org/post", "https://example.org/post/1", "https://example.org/post/3"])
+    // A type whose only post is hidden has no archive entry either.
+    const hiddenOnly = await collectSitemapEntries("https://example.org", source({ post: [post({ id: 2, noindex: true })] }))
+    expect(hiddenOnly.map((e) => e.loc)).toEqual(["https://example.org/"])
+  })
+
   it("lists author pages last, with their newest post's time (#350)", async () => {
     const entries = await collectSitemapEntries("https://example.org", {
       ...source({ post: [post({ id: 1 })] }),

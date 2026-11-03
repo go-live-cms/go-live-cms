@@ -29,7 +29,7 @@ func variantsFixture(t *testing.T, server *Server, ownerID int64) db.Medium {
 	t.Helper()
 	path := filepath.Join(server.config.UploadPath, "hero.jpg")
 	require.NoError(t, os.WriteFile(path, testJPEG(t, 2000, 1000), 0644))
-	staged, err := stageImageVariants(server.config.UploadPath, path)
+	staged, err := stageImageVariants(server.config.UploadPath, path, nil)
 	require.NoError(t, err)
 	require.NoError(t, staged.commit())
 	return db.Medium{
@@ -86,7 +86,7 @@ func TestReplaceMediaRegeneratesVariants(t *testing.T) {
 			DoAndReturn(func(ctx any, arg db.ReplaceMediaFileParams) (db.Medium, error) {
 				// 600×300: only a thumb; medium and large must go.
 				v := parseMediaVariants(arg.Variants.RawMessage)
-				require.Len(t, v, 1)
+				require.Len(t, v, 2) // thumb + social
 				require.Equal(t, int32(320), v["thumb"].Width)
 				require.Equal(t, int32(160), v["thumb"].Height)
 				return echoReplaceWithVariants(media)(ctx, arg)
@@ -100,7 +100,7 @@ func TestReplaceMediaRegeneratesVariants(t *testing.T) {
 
 		var rsp struct{ Media MediaResponse }
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
-		require.Len(t, rsp.Media.Variants, 1)
+		require.Len(t, rsp.Media.Variants, 2)
 		require.Equal(t, publicMediaPath(server.config.UploadPath, filepath.Dir(media.MediaPath)+"/_variants/hero.jpg/thumb.jpg"), rsp.Media.Variants["thumb"].Path,
 			"variant URLs stay stable across a replace")
 		require.True(t, strings.HasPrefix(rsp.Media.Variants["thumb"].Path, "/uploads/"), "responses carry the public URL path, not the stored filesystem path")
@@ -178,7 +178,7 @@ func TestCreateMediaGeneratesVariants(t *testing.T) {
 	store.EXPECT().CreateMedia(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, arg db.CreateMediaParams) (db.Medium, error) {
 			v := parseMediaVariants(arg.Variants.RawMessage)
-			require.Len(t, v, 2)
+			require.Len(t, v, 3) // medium, thumb, social
 			require.Equal(t, int32(800), v["medium"].Width)
 			require.Equal(t, int32(640), v["medium"].Height)
 			stored, err := os.ReadFile(arg.MediaPath)

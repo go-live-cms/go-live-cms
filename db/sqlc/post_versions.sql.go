@@ -107,7 +107,8 @@ type GetPostSettingsStateRow struct {
 
 // The editor's view of a post's settings (#358): the working ones, the published
 // ones (NULL when nothing is published) and whether they differ, i.e. whether a
-// settings change is waiting for Update (golive_post_settings_changed, 000030).
+// settings change is waiting for Update (golive_post_settings_changed, 000030; 000031
+// ignores a social image deleted since, #357).
 // blocks_changed: the post is published and its working body differs from the
 // published one; has_unpublished_changes: the list's flag, either of the two on
 // a published post (#326).
@@ -391,13 +392,46 @@ func (q *Queries) RefreshPublishedSettings(ctx context.Context, ids []int64) err
 	return err
 }
 
+const restorePostSEO = `-- name: RestorePostSEO :exec
+UPDATE posts
+SET seo_title = $1,
+    seo_description = $2,
+    social_image_id = (SELECT m.id FROM media m WHERE m.id = $3::bigint),
+    noindex = $4,
+    canonical_url = $5
+WHERE posts.id = $6::bigint
+`
+
+type RestorePostSEOParams struct {
+	SeoTitle       string        `json:"seo_title"`
+	SeoDescription string        `json:"seo_description"`
+	SocialImageID  sql.NullInt64 `json:"social_image_id"`
+	Noindex        bool          `json:"noindex"`
+	CanonicalUrl   string        `json:"canonical_url"`
+	PostID         int64         `json:"post_id"`
+}
+
+// Restoring a version's settings (#358, #357): the working SEO fields. A social
+// image deleted since is left out (NULL), like a deleted featured image.
+func (q *Queries) RestorePostSEO(ctx context.Context, arg RestorePostSEOParams) error {
+	_, err := q.db.ExecContext(ctx, restorePostSEO,
+		arg.SeoTitle,
+		arg.SeoDescription,
+		arg.SocialImageID,
+		arg.Noindex,
+		arg.CanonicalUrl,
+		arg.PostID,
+	)
+	return err
+}
+
 const restorePostTitleAndDescription = `-- name: RestorePostTitleAndDescription :one
 UPDATE posts
 SET title = $2,
     description = $3,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type RestorePostTitleAndDescriptionParams struct {
@@ -432,6 +466,11 @@ func (q *Queries) RestorePostTitleAndDescription(ctx context.Context, arg Restor
 		&i.PublishedSettings,
 		&i.BlockDocHash,
 		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,
@@ -484,7 +523,7 @@ SET post_status = 'draft',
     published_block_doc = NULL,
     published_settings = NULL
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 // Back to draft and drop the public snapshot (#136), settings included (#358).
@@ -513,6 +552,11 @@ func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishedSettings,
 		&i.BlockDocHash,
 		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,

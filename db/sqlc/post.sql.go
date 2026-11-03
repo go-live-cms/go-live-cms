@@ -237,7 +237,7 @@ INSERT INTO posts (
     block_doc
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type CreatePostsParams struct {
@@ -290,6 +290,11 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		&i.PublishedSettings,
 		&i.BlockDocHash,
 		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,
@@ -344,7 +349,7 @@ func (q *Queries) DeleteUserPost(ctx context.Context, postID int64) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts 
 WHERE id = $1 LIMIT 1
 `
 
@@ -372,6 +377,11 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishedSettings,
 		&i.BlockDocHash,
 		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,
@@ -383,7 +393,7 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts 
 WHERE slug = $1 LIMIT 1
 `
 
@@ -411,6 +421,11 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.PublishedSettings,
 		&i.BlockDocHash,
 		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,
@@ -422,7 +437,7 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 }
 
 const getPostChildren = `-- name: GetPostChildren :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error FROM posts
 WHERE post_parent = $1
 ORDER BY menu_order ASC, title ASC
 `
@@ -457,6 +472,11 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 			&i.PublishedSettings,
 			&i.BlockDocHash,
 			&i.PublishedBlockHash,
+			&i.SeoTitle,
+			&i.SeoDescription,
+			&i.SocialImageID,
+			&i.Noindex,
+			&i.CanonicalUrl,
 			&i.PublishAt,
 			&i.PublishScheduledBy,
 			&i.PublishAttempts,
@@ -494,7 +514,7 @@ func (q *Queries) GetPostHasUnpublishedChanges(ctx context.Context, id int64) (b
 
 const getPostWithMeta = `-- name: GetPostWithMeta :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -529,6 +549,11 @@ type GetPostWithMetaRow struct {
 	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
 	BlockDocHash         sql.NullString        `json:"block_doc_hash"`
 	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
+	SeoTitle             string                `json:"seo_title"`
+	SeoDescription       string                `json:"seo_description"`
+	SocialImageID        sql.NullInt64         `json:"social_image_id"`
+	Noindex              bool                  `json:"noindex"`
+	CanonicalUrl         string                `json:"canonical_url"`
 	PublishAt            sql.NullTime          `json:"publish_at"`
 	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
 	PublishAttempts      int32                 `json:"publish_attempts"`
@@ -562,6 +587,11 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 		&i.PublishedSettings,
 		&i.BlockDocHash,
 		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,
@@ -991,7 +1021,7 @@ SET title = COALESCE($1, title),
     publish_error = CASE WHEN COALESCE($7, post_status) = 'scheduled' THEN publish_error END,
     changed_at = now()
 WHERE id = $10
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type UpdatePostParams struct {
@@ -1042,6 +1072,80 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.PublishedSettings,
 		&i.BlockDocHash,
 		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
+	)
+	return i, err
+}
+
+const updatePostSEO = `-- name: UpdatePostSEO :one
+UPDATE posts
+SET seo_title = $1,
+    seo_description = $2,
+    social_image_id = $3,
+    noindex = $4,
+    canonical_url = $5,
+    changed_at = now()
+WHERE id = $6
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+`
+
+type UpdatePostSEOParams struct {
+	SeoTitle       string        `json:"seo_title"`
+	SeoDescription string        `json:"seo_description"`
+	SocialImageID  sql.NullInt64 `json:"social_image_id"`
+	Noindex        bool          `json:"noindex"`
+	CanonicalUrl   string        `json:"canonical_url"`
+	ID             int64         `json:"id"`
+}
+
+// PUT /posts/:id/seo (#357): the post's working SEO settings, replaced as a whole.
+// On a published post they reach the site on Update (golive_post_settings, 000031).
+func (q *Queries) UpdatePostSEO(ctx context.Context, arg UpdatePostSEOParams) (Post, error) {
+	row := q.db.QueryRowContext(ctx, updatePostSEO,
+		arg.SeoTitle,
+		arg.SeoDescription,
+		arg.SocialImageID,
+		arg.Noindex,
+		arg.CanonicalUrl,
+		arg.ID,
+	)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
+		&i.Slug,
+		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,
@@ -1057,7 +1161,7 @@ UPDATE posts
 SET slug = $2,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
 `
 
 type UpdatePostSlugParams struct {
@@ -1089,6 +1193,11 @@ func (q *Queries) UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) 
 		&i.PublishedSettings,
 		&i.BlockDocHash,
 		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
 		&i.PublishAt,
 		&i.PublishScheduledBy,
 		&i.PublishAttempts,

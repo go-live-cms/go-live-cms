@@ -71,6 +71,9 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/:id/versions/:version_no", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.getPostVersion)
 		posts.POST("/:id/versions/:version_no/restore-settings", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.restorePostVersionSettings)
 
+		// SEO settings (#357): editors and admins; contributors see them read-only
+		posts.PUT("/:id/seo", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updatePostSEO)
+
 		// Working vs published settings (#358): whether a settings change waits for Update
 		posts.GET("/:id/settings", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getPostSettingsState)
 

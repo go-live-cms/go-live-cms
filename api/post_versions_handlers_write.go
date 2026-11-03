@@ -38,8 +38,8 @@ func (server *Server) unpublishPost(c *gin.Context) {
 }
 
 // restorePostVersionSettings handles POST /posts/:id/versions/:version_no/restore-settings:
-// the version's title, excerpt, featured image and terms become the post's working
-// settings (#358). Like the blocks (restoreVersionLive), they reach the site only on
+// the version's title, excerpt, featured image, terms and SEO fields (#357) become the
+// post's working settings (#358). Like the blocks (restoreVersionLive), they reach the site only on
 // Update: the published settings don't change here. The editor calls it after it has
 // restored the blocks. A version from before #358 has no settings: 200 with
 // "restored": false and nothing changed.
@@ -77,6 +77,11 @@ func (server *Server) restorePostVersionSettings(c *gin.Context) {
 		ThumbnailURL: func(media db.Medium) string {
 			return publicMediaPath(server.config.UploadPath, media.MediaPath)
 		},
+		SEOTitle:       settings.SEOTitle,
+		SEODescription: settings.SEODescription,
+		SocialImageID:  settings.SocialImageID,
+		Noindex:        settings.Noindex,
+		CanonicalURL:   settings.CanonicalURL,
 	}
 	if settings.FeaturedImage != nil {
 		restored.FeaturedImageID = settings.FeaturedImage.ID

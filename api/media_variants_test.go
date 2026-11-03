@@ -73,12 +73,12 @@ func TestScaledSize(t *testing.T) {
 func TestStageImageVariantsDimensions(t *testing.T) {
 	uploadPath, mediaPath := writeUpload(t, "hero.jpg", testJPEG(t, 2000, 1000))
 
-	staged, err := stageImageVariants(uploadPath, mediaPath)
+	staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 	require.NoError(t, err)
 	require.NotNil(t, staged)
 
-	want := map[string][2]int32{"large": {1600, 800}, "medium": {800, 400}, "thumb": {320, 160}}
-	require.Len(t, staged.variants, 3)
+	want := map[string][2]int32{"large": {1600, 800}, "medium": {800, 400}, "thumb": {320, 160}, "social": {1200, 630}}
+	require.Len(t, staged.variants, 4)
 	for name, size := range want {
 		v := staged.variants[name]
 		require.Equal(t, size[0], v.Width, name)
@@ -111,18 +111,22 @@ func TestStageImageVariantsDimensions(t *testing.T) {
 func TestStageImageVariantsNeverUpscales(t *testing.T) {
 	t.Run("OnlySmallerSizes", func(t *testing.T) {
 		uploadPath, mediaPath := writeUpload(t, "mid.png", testPNG(t, 500, 300))
-		staged, err := stageImageVariants(uploadPath, mediaPath)
+		staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 		require.NoError(t, err)
-		require.Len(t, staged.variants, 1)
+		require.Len(t, staged.variants, 2)
 		thumb := staged.variants["thumb"]
 		require.Equal(t, int32(320), thumb.Width)
 		require.Equal(t, int32(192), thumb.Height)
+		// The social crop of a 500px image: 1.91:1 at its own width, not 1200.
+		social := staged.variants["social"]
+		require.Equal(t, int32(500), social.Width)
+		require.Equal(t, int32(263), social.Height)
 		require.NoError(t, staged.commit())
 	})
 
 	t.Run("SmallerThanThumbGetsNone", func(t *testing.T) {
 		uploadPath, mediaPath := writeUpload(t, "tiny.png", testPNG(t, 320, 100))
-		staged, err := stageImageVariants(uploadPath, mediaPath)
+		staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 		require.NoError(t, err)
 		require.NotNil(t, staged)
 		require.Empty(t, staged.variants)
@@ -140,7 +144,7 @@ func TestStageImageVariantsTransparencyKeepsPNG(t *testing.T) {
 	require.NoError(t, png.Encode(&buf, img))
 	uploadPath, mediaPath := writeUpload(t, "logo.png", buf.Bytes())
 
-	staged, err := stageImageVariants(uploadPath, mediaPath)
+	staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 	require.NoError(t, err)
 	require.NoError(t, staged.commit())
 	thumb := staged.variants["thumb"]
@@ -158,7 +162,7 @@ func TestStageImageVariantsSkips(t *testing.T) {
 		require.NoError(t, gif.EncodeAll(&buf, &gif.GIF{Image: []*image.Paletted{frame(), frame()}, Delay: []int{10, 10}}))
 		uploadPath, mediaPath := writeUpload(t, "anim.gif", buf.Bytes())
 
-		staged, err := stageImageVariants(uploadPath, mediaPath)
+		staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 		require.ErrorIs(t, err, errAnimatedImage)
 		require.True(t, noVariantsReason(err))
 		require.NotNil(t, staged)
@@ -168,14 +172,14 @@ func TestStageImageVariantsSkips(t *testing.T) {
 	t.Run("TooManyPixels", func(t *testing.T) {
 		// Only the header is read before refusing, so a header is enough.
 		uploadPath, mediaPath := writeUpload(t, "huge.png", pngHeaderOnly(10000, 10000))
-		staged, err := stageImageVariants(uploadPath, mediaPath)
+		staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 		require.ErrorIs(t, err, errImageTooLargeToResize)
 		require.NotNil(t, staged)
 	})
 
 	t.Run("NotAnImage", func(t *testing.T) {
 		uploadPath, mediaPath := writeUpload(t, "notes.txt", []byte("hello"))
-		staged, err := stageImageVariants(uploadPath, mediaPath)
+		staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 		require.NoError(t, err)
 		require.Empty(t, staged.variants)
 	})
@@ -184,7 +188,7 @@ func TestStageImageVariantsSkips(t *testing.T) {
 		uploadPath := t.TempDir()
 		outside := filepath.Join(t.TempDir(), "elsewhere.jpg")
 		require.NoError(t, os.WriteFile(outside, testJPEG(t, 1000, 1000), 0644))
-		staged, err := stageImageVariants(uploadPath, outside)
+		staged, err := stageImageVariants(uploadPath, outside, nil)
 		require.NoError(t, err)
 		require.Nil(t, staged, "files the API doesn't manage get no variants")
 		require.NoError(t, staged.commit(), "nil is a no-op")
@@ -235,7 +239,7 @@ func TestVariantsHaveNoMetadataAndAreUpright(t *testing.T) {
 	require.Equal(t, 6, jpegOrientation(jpg))
 	uploadPath, mediaPath := writeUpload(t, "phone.jpg", jpg)
 
-	staged, err := stageImageVariants(uploadPath, mediaPath)
+	staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 	require.NoError(t, err)
 	require.NoError(t, staged.commit())
 
@@ -380,31 +384,31 @@ func TestPrepareStoredImageStripsOriginal(t *testing.T) {
 	jpg := jpegWithEXIF(t, testJPEG(t, 1000, 500), 1)
 	uploadPath, mediaPath := writeUpload(t, "trip.jpg", jpg)
 
-	size, staged := prepareStoredImage(discardLog, uploadPath, mediaPath, "image/jpeg", int64(len(jpg)))
+	size, staged := prepareStoredImage(discardLog, uploadPath, mediaPath, "image/jpeg", int64(len(jpg)), nil)
 	stored, err := os.ReadFile(mediaPath)
 	require.NoError(t, err)
 	require.NotContains(t, string(stored), "GPS", "the original is stripped too")
 	require.Equal(t, int64(len(stored)), size, "size is the stored file's, after stripping")
 	require.Less(t, size, int64(len(jpg)))
-	require.Len(t, staged.variants, 2) // medium + thumb
+	require.Len(t, staged.variants, 3) // medium + thumb + social
 }
 
 func TestStagedVariantsCommitReplacesAndDiscardKeeps(t *testing.T) {
 	uploadPath, mediaPath := writeUpload(t, "hero.jpg", testJPEG(t, 2000, 1000))
-	first, err := stageImageVariants(uploadPath, mediaPath)
+	first, err := stageImageVariants(uploadPath, mediaPath, nil)
 	require.NoError(t, err)
 	require.NoError(t, first.commit())
 
 	// A smaller replacement: discarding it keeps the old set...
 	require.NoError(t, os.WriteFile(mediaPath, testJPEG(t, 600, 300), 0644))
-	second, err := stageImageVariants(uploadPath, mediaPath)
+	second, err := stageImageVariants(uploadPath, mediaPath, nil)
 	require.NoError(t, err)
 	second.discard()
 	_, err = os.Stat(variantFile(mediaPath, "large.jpg"))
 	require.NoError(t, err)
 
 	// ...committing it removes the sizes the new file doesn't have.
-	third, err := stageImageVariants(uploadPath, mediaPath)
+	third, err := stageImageVariants(uploadPath, mediaPath, nil)
 	require.NoError(t, err)
 	require.NoError(t, third.commit())
 	_, err = os.Stat(variantFile(mediaPath, "large.jpg"))
@@ -419,7 +423,7 @@ func TestStagedVariantsCommitReplacesAndDiscardKeeps(t *testing.T) {
 
 func TestRemoveMediaVariants(t *testing.T) {
 	uploadPath, mediaPath := writeUpload(t, "hero.jpg", testJPEG(t, 1000, 500))
-	staged, err := stageImageVariants(uploadPath, mediaPath)
+	staged, err := stageImageVariants(uploadPath, mediaPath, nil)
 	require.NoError(t, err)
 	require.NoError(t, staged.commit())
 
@@ -471,7 +475,7 @@ func TestBackfillMediaVariants(t *testing.T) {
 			switch arg.ID {
 			case 1:
 				v := parseMediaVariants(arg.Variants)
-				require.Len(t, v, 2)
+				require.Len(t, v, 3)
 				require.Equal(t, int32(800), v["medium"].Width)
 				require.NoError(t, arg.CommitFiles(), "files move while the row is locked")
 				return db.Medium{ID: 1}, nil
@@ -514,7 +518,7 @@ func TestPipelineKeepsUploadPermissions(t *testing.T) {
 	uploadPath, mediaPath := writeUpload(t, "perm.jpg", jpg)
 	require.NoError(t, os.Chmod(mediaPath, 0644))
 
-	_, staged := prepareStoredImage(discardLog, uploadPath, mediaPath, "image/jpeg", int64(len(jpg)))
+	_, staged := prepareStoredImage(discardLog, uploadPath, mediaPath, "image/jpeg", int64(len(jpg)), nil)
 	require.NoError(t, staged.commit())
 
 	info, err := os.Stat(mediaPath)

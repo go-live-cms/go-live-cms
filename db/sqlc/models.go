@@ -95,6 +95,11 @@ type Post struct {
 	PublishedSettings    pqtype.NullRawMessage `json:"published_settings"`
 	BlockDocHash         sql.NullString        `json:"block_doc_hash"`
 	PublishedBlockHash   sql.NullString        `json:"published_block_hash"`
+	SeoTitle             string                `json:"seo_title"`
+	SeoDescription       string                `json:"seo_description"`
+	SocialImageID        sql.NullInt64         `json:"social_image_id"`
+	Noindex              bool                  `json:"noindex"`
+	CanonicalUrl         string                `json:"canonical_url"`
 	PublishAt            sql.NullTime          `json:"publish_at"`
 	PublishScheduledBy   sql.NullInt64         `json:"publish_scheduled_by"`
 	PublishAttempts      int32                 `json:"publish_attempts"`

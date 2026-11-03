@@ -68,11 +68,12 @@ func (server *Server) getPublicPostsByType(c *gin.Context) {
 
 // publicPostView is a published post as the public site shows it (#358): the
 // published title and excerpt over the post row, the published body with its
-// image media, and the published featured image and terms.
+// image media, and the published featured image, terms and SEO (#357).
 type publicPostView struct {
 	Post          PostResponse           `json:"post"`
 	FeaturedImage *publicFeaturedImage   `json:"featured_image"`
 	TaxonomyTerms []TaxonomyTermResponse `json:"taxonomy_terms"`
+	SEO           publicPostSEO          `json:"seo"`
 }
 
 type publicFeaturedImage struct {
@@ -133,11 +134,18 @@ func (server *Server) respondPublicPost(c *gin.Context, post db.Post, err error)
 func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicPostView, error) {
 	resp := toPostResponse(post)
 	resp.Title, resp.Description = publicTitleAndDescription(post.Title, post.Description, post.PublishedSettings)
+	// The working SEO settings wait for Update: only the published ones (below) go out.
+	resp.SEO = nil
 	server.attachBlockMedia(ctx, resp.PublishedBlocks)
 	view := publicPostView{Post: resp, TaxonomyTerms: []TaxonomyTermResponse{}}
 
 	settings, published := decodePostSettings(post.PublishedSettings)
 	if published {
+		seo, err := server.publicSEO(ctx, settings)
+		if err != nil {
+			return view, err
+		}
+		view.SEO = seo
 		if image := settings.FeaturedImage; image != nil && image.URL != "" {
 			// Rows set before #201 may hold the filesystem path.
 			view.FeaturedImage = &publicFeaturedImage{ID: image.ID, URL: publicMediaPath(server.config.UploadPath, image.URL)}
@@ -224,12 +232,14 @@ func (server *Server) listPublicPosts(c *gin.Context) {
 		return
 	}
 
-	posts := make([]PostResponse, len(rows))
+	posts := make([]publicListPost, len(rows))
 	for i, row := range rows {
-		posts[i] = toPostResponseFromListRow(row)
+		posts[i].PostResponse = toPostResponseFromListRow(row)
 		// The feeds don't render bodies; leave the snapshot out of the response.
 		posts[i].PublishedBlocks = nil
 		posts[i].Title, posts[i].Description = publicTitleAndDescription(row.Title, row.Description, row.PublishedSettings)
+		settings, _ := decodePostSettings(row.PublishedSettings)
+		posts[i].Noindex = publishedNoindex(settings)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"posts": posts,
@@ -243,6 +253,13 @@ func (server *Server) listPublicPosts(c *gin.Context) {
 			"type":   postType,
 		},
 	})
+}
+
+// publicListPost is a /public/posts row: the post plus its published "Hide from
+// search engines" (#357), which leaves it out of the sitemap (and only that).
+type publicListPost struct {
+	PostResponse
+	Noindex bool `json:"noindex"`
 }
 
 // requirePublicPostType answers 404 (or 500) itself unless the type is

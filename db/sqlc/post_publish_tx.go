@@ -146,18 +146,40 @@ type RestoredPostSettings struct {
 	// ThumbnailURL gives the _thumbnail_url stored with the featured image, from
 	// the media row as it is now (the api maps its path to the /uploads URL).
 	ThumbnailURL func(Medium) string
+
+	// The SEO fields (#357). SocialImageID is nil for none; a deleted one is dropped.
+	SEOTitle       string
+	SEODescription string
+	SocialImageID  *int64
+	Noindex        bool
+	CanonicalURL   string
 }
 
 // RestorePostSettingsTx puts a version's settings back into the post's working
 // copy (#358): title, excerpt, featured image (post_media order 0 and the
-// _thumbnail_* meta, as POST /posts/:id/featured-image writes them) and term
-// links. The published settings stay as they are until Update. A featured image
-// whose media was deleted since is dropped, and so are deleted terms.
+// _thumbnail_* meta, as POST /posts/:id/featured-image writes them), term
+// links and the SEO fields (#357). The published settings stay as they are until
+// Update. A featured or social image whose media was deleted since is dropped,
+// and so are deleted terms.
 func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error) {
 	var post Post
 	err := store.execTx(ctx, func(q *Queries) error {
 		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
 			return err
+		}
+		// SEO first: the title's UPDATE returns the row, with these in it.
+		seo := RestorePostSEOParams{
+			PostID:         arg.PostID,
+			SeoTitle:       arg.Settings.SEOTitle,
+			SeoDescription: arg.Settings.SEODescription,
+			Noindex:        arg.Settings.Noindex,
+			CanonicalUrl:   arg.Settings.CanonicalURL,
+		}
+		if id := arg.Settings.SocialImageID; id != nil {
+			seo.SocialImageID = sql.NullInt64{Int64: *id, Valid: true}
+		}
+		if err := q.RestorePostSEO(ctx, seo); err != nil {
+			return fmt.Errorf("restore SEO: %w", err)
 		}
 		var err error
 		post, err = q.RestorePostTitleAndDescription(ctx, RestorePostTitleAndDescriptionParams{

@@ -162,7 +162,8 @@ type Querier interface {
 	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
 	// The editor's view of a post's settings (#358): the working ones, the published
 	// ones (NULL when nothing is published) and whether they differ, i.e. whether a
-	// settings change is waiting for Update (golive_post_settings_changed, 000030).
+	// settings change is waiting for Update (golive_post_settings_changed, 000030; 000031
+	// ignores a social image deleted since, #357).
 	// blocks_changed: the post is published and its working body differs from the
 	// published one; has_unpublished_changes: the list's flag, either of the two on
 	// a published post (#326).
@@ -245,7 +246,8 @@ type Querier interface {
 	// Pages through image media by id for the variant backfill. With
 	// only_missing, rows that already have variants are skipped, and so are
 	// images whose known long edge is at most min_long_edge (they never get any;
-	// {} is their final state, not "not processed yet").
+	// {} is their final state, not "not processed yet"). Rows with variants but no
+	// social crop (made before #357) count as missing.
 	ListImageMediaAfter(ctx context.Context, arg ListImageMediaAfterParams) ([]Medium, error)
 	// published_post_count is how many of the posts using it (post_media) are
 	// published. $7 keeps only images missing their alt text (#325): not
@@ -353,13 +355,16 @@ type Querier interface {
 	// name, description, alt and the focal point alone, so a concurrent metadata
 	// edit is never overwritten by a stale read.
 	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
+	// Restoring a version's settings (#358, #357): the working SEO fields. A social
+	// image deleted since is left out (NULL), like a deleted featured image.
+	RestorePostSEO(ctx context.Context, arg RestorePostSEOParams) error
 	// Restoring a version's settings (#358): the working title and excerpt. Only the
 	// working copy changes; the published settings stay until Update.
 	RestorePostTitleAndDescription(ctx context.Context, arg RestorePostTitleAndDescriptionParams) (Post, error)
 	RevokeOpenUserInvitationsByEmail(ctx context.Context, email string) error
 	RevokeUserInvitation(ctx context.Context, id int64) (int64, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
-	// Scheduled publishing (#147, 000031). The scheduler is api/scheduled_publish.go;
+	// Scheduled publishing (#147, 000032). The scheduler is api/scheduled_publish.go;
 	// the publish itself is PublishScheduledPostTx (db/sqlc/post_publish_tx.go).
 	// Schedules a draft, or moves a scheduled post to a new time. No row: the post is
 	// missing or neither a draft nor scheduled (a published post's update is #335). A
@@ -444,6 +449,9 @@ type Querier interface {
 	// stores (the seed, unchanged or invalid docs) leave it alone (#307).
 	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
+	// PUT /posts/:id/seo (#357): the post's working SEO settings, replaced as a whole.
+	// On a published post they reach the site on Update (golive_post_settings, 000031).
+	UpdatePostSEO(ctx context.Context, arg UpdatePostSEOParams) (Post, error)
 	UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) (Post, error)
 	UpdatePostType(ctx context.Context, arg UpdatePostTypeParams) (PostType, error)
 	UpdatePostsUsername(ctx context.Context, arg UpdatePostsUsernameParams) error
