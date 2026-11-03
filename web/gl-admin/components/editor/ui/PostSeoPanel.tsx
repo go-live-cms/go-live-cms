@@ -1,7 +1,6 @@
 import React, { useEffect, useId, useState } from "react"
 import FeaturedImageSelector from "./FeaturedImageSelector"
-import { getMediaById, getMediaPreviewURL } from "@gl-admin/lib/api/media"
-import { getMediaURL } from "@gl-admin/lib/api"
+import { getMediaById, getMediaSocialPreviewURL } from "@gl-admin/lib/api/media"
 import type { Media, PostSEOSettings } from "@gl-admin/lib/api/types"
 import {
   SEO_DESCRIPTION_GUIDE,
@@ -96,6 +95,13 @@ export default function PostSeoPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seo.social_image_id])
 
+  // A canonical URL set elsewhere (a restored version, a reload) shouldn't hide behind a
+  // closed Advanced.
+  const hasCanonical = !!seo.canonical_url.trim()
+  useEffect(() => {
+    if (hasCanonical) setAdvanced(true)
+  }, [hasCanonical])
+
   const set = (patch: Partial<PostSEOSettings>) => {
     if (!readOnly) onChange({ ...seo, ...patch })
   }
@@ -110,11 +116,7 @@ export default function PostSeoPanel({
   const image = seo.social_image_id ? socialImage : featuredImage
   const imageKind: "custom" | "featured" | "none" = seo.social_image_id ? "custom" : featuredImage ? "featured" : "none"
   // The social crop (1200 x 630 around the focal point) when the image has one.
-  const imageUrl = image
-    ? image.variants?.social?.path
-      ? getMediaURL(image.variants.social.path)
-      : getMediaPreviewURL(image)
-    : null
+  const imageUrl = image ? getMediaSocialPreviewURL(image) : null
   const imageSize = image?.variants?.social ?? (image?.width && image?.height ? { width: image.width, height: image.height } : null)
 
   const address = previewAddress(siteAddress, path)

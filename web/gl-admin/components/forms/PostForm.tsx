@@ -218,15 +218,18 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
   // SEO (#357): editors and admins only (contributors see the tab read-only). Saved on
   // its own like the title, debounced, through PUT /posts/:id/seo; on a published post
-  // the site shows it after Update. A canonical URL the API would refuse waits.
+  // the site shows it after Update. A canonical URL the API would refuse isn't sent (the
+  // last saved one is), so it never holds the other fields back; Update waits for it.
   const [seo, setSeo] = useState<PostSEOSettings>(() => seoFromPost(initialData))
   const savedSeoRef = useRef<PostSEOSettings>(seoFromPost(initialData))
+  const seoLoadedForRef = useRef<number | undefined>(initialData?.id)
   const [seoError, setSeoError] = useState<string | null>(null)
   const seoSaveableNow = mode === "edit" && roleVerified && canPublish && !!initialData?.id
   const saveSeo = async (): Promise<void> => {
     if (!seoSaveableNow || !initialData?.id) return
-    if (sameSeo(seo, savedSeoRef.current) || !seoSaveable(seo)) return
-    const body = seoPayload(seo)
+    const next = seoSaveable(seo) ? seo : { ...seo, canonical_url: savedSeoRef.current.canonical_url }
+    if (sameSeo(next, savedSeoRef.current)) return
+    const body = seoPayload(next)
     try {
       await updatePostSEO(initialData.id, body)
       savedSeoRef.current = body
@@ -286,8 +289,13 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       const slug = initialData.slug || urlParts[urlParts.length - 1] || ""
       savedTitleRef.current = initialData.title
       savedExcerptRef.current = initialData.description
-      savedSeoRef.current = seoFromPost(initialData)
-      setSeo(seoFromPost(initialData))
+      // Only for another post: a refetch of this one mustn't drop an SEO edit that is
+      // still waiting for its debounced save.
+      if (seoLoadedForRef.current !== initialData.id) {
+        seoLoadedForRef.current = initialData.id
+        savedSeoRef.current = seoFromPost(initialData)
+        setSeo(seoFromPost(initialData))
+      }
 
       setFormData({
         title: initialData.title,
@@ -400,6 +408,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     // Use Block Spec v1 publishing for edit mode, fallback to traditional publish for create mode
     if (mode === "edit" && editorRef.current && initialData?.id) {
       const wasPublished = formData.post_status === "published"
+      if (seoSaveableNow && !seoSaveable(seo)) {
+        // Publishing would go out with the last valid canonical URL, not the one shown.
+        showError("Fix the canonical URL in the SEO tab first.")
+        return
+      }
       try {
         // The settings go out with the content: save any pending edit first.
         await Promise.all([saveTitle(), saveSeo()])
