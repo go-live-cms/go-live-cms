@@ -141,15 +141,15 @@ func (server *Server) createMedia(c *gin.Context) {
 	if description == "" {
 		description = fmt.Sprintf("Uploaded file: %s", actualFilename)
 	}
-	alt := req.Alt
-	if alt == "" {
-		alt = strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename))
-	}
+	// No alt text stays empty (#325): the file name is no description of the
+	// image, and an empty alt is what the admin's "No alt text" flags.
+	alt := strings.TrimSpace(req.Alt)
 
 	mediaParams := db.CreateMediaParams{
 		Name:             name,
 		Description:      description,
 		Alt:              alt,
+		Decorative:       req.Decorative,
 		MediaPath:        mediaPath,
 		FileSize:         fileSize,
 		MimeType:         mimeType,
@@ -182,6 +182,7 @@ func (server *Server) createMedia(c *gin.Context) {
 			PostID:           *req.PostID,
 			Order:            order,
 			Variants:         mediaParams.Variants,
+			Decorative:       mediaParams.Decorative,
 		})
 		if txErr != nil {
 			removeStored()
@@ -305,9 +306,11 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, fileHeader.Size)
 
 	media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
-		Name:             strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename)),
-		Description:      fmt.Sprintf("Uploaded file: %s", fileHeader.Filename),
-		Alt:              strings.TrimSuffix(fileHeader.Filename, filepath.Ext(fileHeader.Filename)),
+		Name:        strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename)),
+		Description: fmt.Sprintf("Uploaded file: %s", fileHeader.Filename),
+		// No alt text: a bulk upload has none to give, and the file name isn't
+		// one (#325). The admin flags these until someone writes it.
+		Alt:              "",
 		MediaPath:        mediaPath,
 		FileSize:         fileSize,
 		MimeType:         mimeType,
@@ -538,16 +541,22 @@ func (server *Server) updateMedia(c *gin.Context) {
 		}
 	}
 
-	// One statement that only touches name/description/alt: the file columns
-	// can't be written through this path, and concurrent partial updates
-	// don't overwrite each other's fields with a stale read. Empty strings
-	// are passed as NULL, which keeps the current value.
+	// One statement that only touches the metadata: the file columns can't be
+	// written through this path, and concurrent partial updates don't
+	// overwrite each other's fields with a stale read. An empty name or
+	// description is passed as NULL, which keeps the current value; alt and
+	// decorative are kept only when absent, so alt can be cleared (#325).
 	params := db.UpdateMediaMetadataParams{
 		ID:            id,
 		Name:          sql.NullString{String: req.Name, Valid: req.Name != ""},
 		Description:   sql.NullString{String: req.Description, Valid: req.Description != ""},
-		Alt:           sql.NullString{String: req.Alt, Valid: req.Alt != ""},
 		SetFocalPoint: setFocal,
+	}
+	if req.Alt != nil {
+		params.Alt = sql.NullString{String: strings.TrimSpace(*req.Alt), Valid: true}
+	}
+	if req.Decorative != nil {
+		params.Decorative = sql.NullBool{Bool: *req.Decorative, Valid: true}
 	}
 	if focal != nil {
 		params.FocalX = sql.NullFloat64{Float64: focal.X, Valid: true}

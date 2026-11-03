@@ -80,8 +80,11 @@ func (server *Server) getMediaByID(c *gin.Context) {
 
 // getMedia handles GET /media - paginated media listing with filters and search.
 // Query params: limit (max 100), offset, type (image|video|audio|document),
-// user_id, search, sort (date_desc|date_asc|name_asc|name_desc|size_asc|size_desc).
-// Returns: {media: [], meta: {limit, offset, count, total, filters}}.
+// user_id, search, missing_alt (true: only images missing their alt text,
+// #325), sort (date_desc|date_asc|name_asc|name_desc|size_asc|size_desc).
+// Each item carries post_count and published_post_count (post_media).
+// Returns: {media: [], meta: {limit, offset, count, total, filters}}, where
+// total counts the rows matching the filters.
 func (server *Server) getMedia(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "10")
 	offsetStr := c.DefaultQuery("offset", "0")
@@ -95,6 +98,16 @@ func (server *Server) getMedia(c *gin.Context) {
 	if !isValidSortOption(sortBy) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid sort parameter"})
 		return
+	}
+
+	missingAlt := false
+	if raw := c.Query("missing_alt"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid missing_alt parameter"})
+			return
+		}
+		missingAlt = value
 	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
@@ -137,6 +150,7 @@ func (server *Server) getMedia(c *gin.Context) {
 		Column4: sortBy,
 		Limit:   int32(limit),
 		Offset:  int32(offset),
+		Column7: missingAlt,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list media"})
@@ -148,7 +162,13 @@ func (server *Server) getMedia(c *gin.Context) {
 		mediaResponses[i] = server.withPublicMediaPath(toMediaFromListRow(m))
 	}
 
-	total, err := server.store.CountTotalMedia(c.Request.Context())
+	// The filtered total, so "Load more" stops at the end of a filtered list.
+	total, err := server.store.CountMedia(c.Request.Context(), db.CountMediaParams{
+		MimePrefix: mimeTypeFilter,
+		UserID:     userID,
+		Search:     searchTerm,
+		MissingAlt: missingAlt,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total media"})
 		return
@@ -163,12 +183,32 @@ func (server *Server) getMedia(c *gin.Context) {
 			"total":       total,
 			"with_counts": withCounts == "true",
 			"filters": gin.H{
-				"type":    fileType,
-				"user_id": userID,
-				"search":  search,
-				"sort":    sortBy,
+				"type":        fileType,
+				"user_id":     userID,
+				"search":      search,
+				"missing_alt": missingAlt,
+				"sort":        sortBy,
 			},
 		},
+	})
+}
+
+// getMissingAltSummary handles GET /media/missing-alt - the count behind the
+// home screen's "N images have no alt text · used in M published posts"
+// (#325, #324). Missing is the same rule as GET /media?missing_alt=true:
+// images, not decorative, with no alt text (empty or only whitespace).
+// Returns: {media_count, published_post_count}, where published_post_count is
+// the published posts using at least one of them through post_media.
+// Auth: any content role.
+func (server *Server) getMissingAltSummary(c *gin.Context) {
+	summary, err := server.store.CountMissingAltMedia(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count media missing alt text"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"media_count":          summary.MediaCount,
+		"published_post_count": summary.PublishedPostCount,
 	})
 }
 

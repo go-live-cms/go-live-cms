@@ -38,10 +38,13 @@ import (
 // # Required Fields
 //   - name: Display name (2-255 characters)
 //   - description: Content description (5-500 characters)
-//   - alt: Accessibility text (2-255 characters)
 //   - file: The uploaded file (handled separately via c.Request.FormFile)
 //
 // # Optional Fields
+//   - alt: Accessibility text (at most 255 characters, trimmed). Optional since
+//     #325: an image stored without one shows as "No alt text" in the admin
+//     until someone writes it, rather than getting the file name.
+//   - decorative: "true" for an image that needs no alt text (rendered alt="")
 //   - post_id: Link media to existing post
 //   - order: Display order when linked to post (default: 0)
 //
@@ -57,7 +60,8 @@ import (
 type CreateMediaRequest struct {
 	Name        string `form:"name" binding:"required,min=2,max=255"`
 	Description string `form:"description" binding:"required,min=5,max=500"`
-	Alt         string `form:"alt" binding:"required,min=2,max=255"`
+	Alt         string `form:"alt" binding:"omitempty,max=255"`
+	Decorative  bool   `form:"decorative"`
 	PostID      *int64 `form:"post_id" binding:"omitempty"`
 	Order       *int32 `form:"order" binding:"omitempty,min=0"`
 }
@@ -67,6 +71,8 @@ type CreateMediaRequest struct {
 //
 // # Supported Updates
 //   - Metadata: name, description, alt text
+//   - alt: absent keeps it, "" (or only whitespace) clears it (#325)
+//   - decorative: true/false; absent keeps it
 //   - focal_point: {"x", "y"} in 0..1, or null to clear it
 //
 // # Server-Owned Fields
@@ -81,7 +87,7 @@ type CreateMediaRequest struct {
 //
 // # Validation Rules
 //   - String fields have min/max length constraints when provided
-//   - Empty/null values are ignored (no update performed)
+//   - Empty/null name and description are ignored (no update performed)
 //
 // # Example Usage
 //
@@ -91,7 +97,10 @@ type CreateMediaRequest struct {
 type UpdateMediaRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=2,max=255"`
 	Description string `json:"description" binding:"omitempty,min=5,max=500"`
-	Alt         string `json:"alt" binding:"omitempty,min=2,max=255"`
+	// Alt is trimmed; "" clears it. Unlike name and description it may be
+	// empty, because an image without alt text is a state the admin shows.
+	Alt        *string `json:"alt" binding:"omitempty,max=255"`
+	Decorative *bool   `json:"decorative"`
 
 	// FocalPoint is {"x": 0..1, "y": 0..1} to set it, null to clear it, or
 	// absent to keep it (see focalPointUpdate).

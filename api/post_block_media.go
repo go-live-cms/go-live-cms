@@ -1,7 +1,8 @@
 // post_block_media.go attaches what the public renderer needs about the
 // images in a published block doc (#255): each image block stores only its
-// mediaId and src, so the variants (for srcset), the intrinsic size and the
-// focal point (for object-position) are looked up when the doc is served and
+// mediaId and src, so the variants (for srcset), the intrinsic size, the
+// focal point (for object-position) and decorative (alt="", #325) are looked
+// up when the doc is served and
 // added under the doc's "media" key, keyed by media id:
 //
 //	"published_blocks": {
@@ -29,6 +30,9 @@ type BlockMedia struct {
 	Height     int32         `json:"height"`
 	Variants   MediaVariants `json:"variants"`
 	FocalPoint *FocalPoint   `json:"focal_point"`
+	// Decorative (#325): the renderer outputs alt="" whatever the block's alt
+	// says, so marking an image decorative applies without republishing.
+	Decorative bool `json:"decorative,omitempty"`
 }
 
 // isBlockDocShape reports whether a decoded doc would also decode into
@@ -153,6 +157,7 @@ func (server *Server) attachBlockMedia(ctx context.Context, docs ...map[string]i
 				Height:     row.Height,
 				Variants:   publicVariants(server.config.UploadPath, variantsResponse(row.Variants)),
 				FocalPoint: focalPointFrom(row.FocalX, row.FocalY),
+				Decorative: row.Decorative,
 			}
 		}
 		if len(media) > 0 {

@@ -12,7 +12,8 @@ INSERT INTO media (
     height,
     duration,
     original_filename,
-    variants
+    variants,
+    decorative
 ) VALUES (
     sqlc.arg('name'),
     sqlc.arg('description'),
@@ -25,7 +26,8 @@ INSERT INTO media (
     sqlc.arg('height'),
     sqlc.arg('duration'),
     sqlc.arg('original_filename'),
-    COALESCE(sqlc.narg('variants')::jsonb, '{}'::jsonb)
+    COALESCE(sqlc.narg('variants')::jsonb, '{}'::jsonb),
+    sqlc.arg('decorative')
 ) RETURNING *;
 
 -- name: GetMedia :one
@@ -42,7 +44,7 @@ WHERE
     m.user_id = $1
     AND ($2 = '' OR m.mime_type LIKE $2 || '%')
     AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -59,16 +61,23 @@ LIMIT $5
 OFFSET $6;
 
 -- name: ListMedia :many
-SELECT 
+-- published_post_count is how many of the posts using it (post_media) are
+-- published. $7 keeps only images missing their alt text (#325): not
+-- decorative, and alt empty or only whitespace. CountMedia and
+-- CountMissingAltMedia use the same rule; keep the three in step.
+SELECT
     m.*,
-    COUNT(pm.post_id) as post_count
+    COUNT(pm.post_id) as post_count,
+    COUNT(DISTINCT pm.post_id) FILTER (WHERE p.post_status = 'published') as published_post_count
 FROM media m
 LEFT JOIN post_media pm ON m.id = pm.media_id
-WHERE 
+LEFT JOIN posts p ON p.id = pm.post_id
+WHERE
     ($1 = '' OR m.mime_type LIKE $1 || '%')
     AND ($2 = 0 OR m.user_id = $2)
     AND ($3 = '' OR (m.name ILIKE '%' || $3 || '%' OR m.description ILIKE '%' || $3 || '%'))
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
+    AND (NOT $7::boolean OR (m.mime_type LIKE 'image/%' AND NOT m.decorative AND m.alt !~ '\S'))
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -104,12 +113,14 @@ RETURNING *;
 -- name: UpdateMediaMetadata :one
 -- Metadata-only update used by PUT /media/:id. The file columns (media_path,
 -- file_size, mime_type, dimensions, original_filename) are set on upload and
--- deliberately not writable here. NULL args keep the current value.
+-- deliberately not writable here. NULL args keep the current value; an alt of
+-- '' clears it (#325).
 UPDATE media
 SET
     name = COALESCE(sqlc.narg('name'), name),
     description = COALESCE(sqlc.narg('description'), description),
     alt = COALESCE(sqlc.narg('alt'), alt),
+    decorative = COALESCE(sqlc.narg('decorative')::boolean, decorative),
     -- set_focal_point false keeps the focal point; true writes focal_x and
     -- focal_y, where NULL clears it.
     focal_x = CASE WHEN sqlc.arg('set_focal_point')::boolean THEN sqlc.narg('focal_x')::double precision ELSE focal_x END,
@@ -196,7 +207,7 @@ WHERE
     (m.name ILIKE '%' || $1 || '%' OR m.description ILIKE '%' || $1 || '%')
     AND ($2 = '' OR m.mime_type LIKE $2 || '%')
     AND ($3 = 0 OR m.user_id = $3)
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative
 ORDER BY 
     CASE WHEN $4 = 'date_asc' THEN m.created_at END ASC,
     CASE WHEN $4 = 'date_desc' THEN m.created_at END DESC,
@@ -312,7 +323,7 @@ SELECT
     COUNT(pm.post_id) as post_count
 FROM media m
 JOIN post_media pm ON m.id = pm.media_id
-GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y
+GROUP BY m.id, m.name, m.description, m.alt, m.media_path, m.user_id, m.created_at, m.changed_at, m.file_size, m.mime_type, m.width, m.height, m.duration, m.original_filename, m.metadata, m.variants, m.focal_x, m.focal_y, m.decorative
 HAVING COUNT(pm.post_id) > 0
 ORDER BY COUNT(pm.post_id) DESC
 LIMIT $1;
@@ -431,3 +442,28 @@ ORDER BY
 
 -- name: CountTotalMedia :one
 SELECT COUNT(*) AS total FROM media;
+
+-- name: CountMedia :one
+-- The total for GET /media: the rows ListMedia pages through, same filters.
+SELECT COUNT(*) AS total FROM media m
+WHERE
+    (sqlc.arg('mime_prefix')::text = '' OR m.mime_type LIKE sqlc.arg('mime_prefix')::text || '%')
+    AND (sqlc.arg('user_id')::bigint = 0 OR m.user_id = sqlc.arg('user_id')::bigint)
+    AND (sqlc.arg('search')::text = '' OR (m.name ILIKE '%' || sqlc.arg('search')::text || '%' OR m.description ILIKE '%' || sqlc.arg('search')::text || '%'))
+    AND (NOT sqlc.arg('missing_alt')::boolean OR (m.mime_type LIKE 'image/%' AND NOT m.decorative AND m.alt !~ '\S'));
+
+-- name: CountMissingAltMedia :one
+-- Home's "N images have no alt text · used in M published posts" (#325, #324):
+-- images missing their alt text (the rule in ListMedia), and how many
+-- published posts use at least one of them through post_media.
+WITH missing AS (
+    SELECT m.id FROM media m
+    WHERE m.mime_type LIKE 'image/%' AND NOT m.decorative AND m.alt !~ '\S'
+)
+SELECT
+    (SELECT COUNT(*) FROM missing)::bigint AS media_count,
+    (SELECT COUNT(DISTINCT pm.post_id)
+       FROM post_media pm
+       JOIN missing ON missing.id = pm.media_id
+       JOIN posts p ON p.id = pm.post_id
+      WHERE p.post_status = 'published')::bigint AS published_post_count;

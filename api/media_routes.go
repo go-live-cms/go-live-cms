@@ -13,6 +13,7 @@
 //	POST   /media/bulk    → Auth Required (batch upload - alias for compatibility)
 //	GET    /media         → Public (listing/search)
 //	GET    /media/popular → Public (popular media)
+//	GET    /media/missing-alt → Auth Required (images missing alt text, count for Home)
 //	GET    /media/search  → Public (search by query)
 //	GET    /media/:id     → Public (fetch by ID)
 //	PUT    /media/:id     → Auth Required (update metadata; admin/editor: any media)
@@ -57,6 +58,9 @@ func (server *Server) registerMediaRoutes(v1 *gin.RouterGroup) {
 	media.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updateMedia)           // Update metadata
 	media.POST("/:id/replace", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.replaceMedia) // Swap the file, keep id/metadata
 	media.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deleteMedia)        // Delete (admin/editor: any media)
+
+	// The admin home's "N images have no alt text" count (#325), for content roles.
+	media.GET("/missing-alt", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getMissingAltSummary)
 
 	// Read operations - public access for content consumption
 	media.GET("", server.getMedia)                // List/paginate/filter

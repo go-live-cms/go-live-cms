@@ -422,7 +422,7 @@ func TestListMediaAPI(t *testing.T) {
 					Times(1).
 					Return(mediaWithCount, nil)
 				store.EXPECT().
-					CountTotalMedia(gomock.Any()).
+					CountMedia(gomock.Any(), db.CountMediaParams{}).
 					Times(1).
 					Return(int64(100), nil)
 			},
@@ -452,7 +452,7 @@ func TestListMediaAPI(t *testing.T) {
 					Times(1).
 					Return(mediaWithCount, nil)
 				store.EXPECT().
-					CountTotalMedia(gomock.Any()).
+					CountMedia(gomock.Any(), db.CountMediaParams{}).
 					Times(1).
 					Return(int64(150), nil)
 			},
