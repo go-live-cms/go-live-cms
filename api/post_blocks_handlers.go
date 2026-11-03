@@ -140,59 +140,15 @@ func (doc *BlockDocV1) extractMediaIDsFromBlocks() []int64 {
 	return mediaIDs
 }
 
-// syncPostMediaAssociations creates/updates post_media associations for all images in the block document
-// Images are assigned order values starting from 1 (order=0 is reserved for featured images)
-func (server *Server) syncPostMediaAssociations(ctx *gin.Context, postID int64, doc *BlockDocV1) error {
-	mediaIDs := doc.extractMediaIDsFromBlocks()
-
-	// Delete existing content image associations (order > 0)
-	// Keep featured image association (order = 0)
-	existingMedia, err := server.store.GetMediaByPostWithOrder(ctx, postID)
-	if err != nil {
-		return fmt.Errorf("failed to get existing media: %w", err)
+// publishedContentMediaIDs gives PublishPostTx the image media ids of the
+// published body, in document order. A body that doesn't parse as a block doc
+// has no content images.
+func publishedContentMediaIDs(blockDoc json.RawMessage) []int64 {
+	var doc BlockDocV1
+	if err := json.Unmarshal(blockDoc, &doc); err != nil {
+		return nil
 	}
-
-	// Delete content associations that are no longer in the document
-	for _, media := range existingMedia {
-		if media.MediaOrder == 0 {
-			// Skip featured image
-			continue
-		}
-
-		// Check if this media ID is still in the document
-		found := false
-		for _, mediaID := range mediaIDs {
-			if mediaID == media.ID {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			// Delete the association
-			err := server.store.DeletePostMedia(ctx, db.DeletePostMediaParams{
-				PostID:  postID,
-				MediaID: media.ID,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to delete post_media: %w", err)
-			}
-		}
-	}
-
-	// Create/update associations for current media (order > 0 for content images)
-	for i, mediaID := range mediaIDs {
-		_, err := server.store.CreatePostMedia(ctx, db.CreatePostMediaParams{
-			PostID:  postID,
-			MediaID: mediaID,
-			Order:   int32(i + 1), // Start from 1 (0 is reserved for featured image)
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create post_media: %w", err)
-		}
-	}
-
-	return nil
+	return doc.extractMediaIDsFromBlocks()
 }
 
 // BlockDocResponse wraps the block document for API responses
@@ -287,13 +243,15 @@ func (server *Server) publishPost(c *gin.Context) {
 	}
 
 	// One transaction: the version gets the working copy's blocks and settings
-	// (title, excerpt, featured image, terms; #358), and the post's published
-	// snapshot points at it.
+	// (title, excerpt, featured image, terms; #358), the post's published
+	// snapshot points at it, and the content image links follow the published
+	// body without moving the featured image's (#389).
 	version, err := server.store.PublishPostTx(c, db.PublishPostTxParams{
-		PostID:    postID,
-		Label:     stringToNullString(req.Label),
-		Message:   stringToNullString(req.Message),
-		CreatedBy: sql.NullInt64{Int64: userID, Valid: true},
+		PostID:          postID,
+		Label:           stringToNullString(req.Label),
+		Message:         stringToNullString(req.Message),
+		CreatedBy:       sql.NullInt64{Int64: userID, Valid: true},
+		ContentMediaIDs: publishedContentMediaIDs,
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -302,15 +260,6 @@ func (server *Server) publishPost(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish post"})
 		return
-	}
-
-	// Sync post_media associations for images in published content
-	var publishedDoc BlockDocV1
-	if err := json.Unmarshal(version.BlockDoc, &publishedDoc); err == nil {
-		if err := server.syncPostMediaAssociations(c, postID, &publishedDoc); err != nil {
-			// Log error but don't fail the request - version was already published
-			server.requestLog(c).Warn("failed to sync media associations on publish", "post_id", postID, "error", err)
-		}
 	}
 
 	c.JSON(http.StatusOK, PublishResponse{

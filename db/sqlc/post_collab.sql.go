@@ -96,11 +96,12 @@ type SyncPostContentMediaParams struct {
 }
 
 // Makes the post's content image links (order > 0) match media_ids, in
-// document order, like syncPostMediaAssociations does for PUT /blocks. Ids
-// without a media row are skipped (a stale mediaId must not fail the store),
-// and the featured image link (order 0) is never moved or removed. A repeated
-// id keeps its first position (one row per media, or the upsert would touch
-// the same row twice and fail).
+// document order (the collab store, publish and duplicate). Ids without a
+// media row are skipped (a stale mediaId must not fail the store), and the
+// featured image link (order 0) is never moved or removed, even when the
+// featured image is also in the content (#389). A repeated id keeps its first
+// position (one row per media, or the upsert would touch the same row twice
+// and fail).
 func (q *Queries) SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error {
 	_, err := q.db.ExecContext(ctx, syncPostContentMedia, arg.PostID, pq.Array(arg.MediaIds))
 	return err

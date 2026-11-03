@@ -258,6 +258,22 @@ func TestCreatePostWithMediaTx(t *testing.T) {
 	postMedia, err := testQueries.GetMediaByPost(context.Background(), result.Post.ID)
 	require.NoError(t, err)
 	require.Len(t, postMedia, 2)
+
+	// A repeated id keeps its first position, so the first media stays at
+	// order 0 (#389).
+	arg.Slug += "-repeated"
+	arg.Url += "-repeated"
+	arg.MediaIDs = []int64{media1.ID, media2.ID, media1.ID}
+	result, err = testStore.CreatePostWithMediaTx(context.Background(), arg)
+	require.NoError(t, err)
+	require.Len(t, result.PostMedia, 2)
+	rows, err := testQueries.GetMediaByPostWithOrder(context.Background(), result.Post.ID)
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	require.Equal(t, media1.ID, rows[0].ID)
+	require.Equal(t, int32(0), rows[0].MediaOrder)
+	require.Equal(t, media2.ID, rows[1].ID)
+	require.Equal(t, int32(1), rows[1].MediaOrder)
 }
 
 func TestMediaAnalyticsQueries(t *testing.T) {

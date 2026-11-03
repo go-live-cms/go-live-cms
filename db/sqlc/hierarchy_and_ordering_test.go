@@ -106,6 +106,12 @@ func TestUpdatePostMediaTxOrdering(t *testing.T) {
 	require.NoError(t, testStore.UpdatePostMediaTx(ctx, UpdatePostMediaTxParams{PostID: post.ID, MediaIDs: []int64{m2.ID}}))
 	require.Equal(t, []int64{m2.ID}, orderOf())
 
+	// A repeated id keeps its first position: the upsert used to move the
+	// featured image (order 0) to its last one (#389).
+	require.NoError(t, testStore.UpdatePostMediaTx(ctx, UpdatePostMediaTxParams{PostID: post.ID, MediaIDs: []int64{m1.ID, m2.ID, m1.ID, m3.ID}}))
+	require.Equal(t, []int64{m1.ID, m2.ID, m3.ID}, orderOf())
+	require.NoError(t, testStore.UpdatePostMediaTx(ctx, UpdatePostMediaTxParams{PostID: post.ID, MediaIDs: []int64{m2.ID}}))
+
 	count, err := testQueries.GetPostMediaCount(ctx, post.ID)
 	require.NoError(t, err)
 	require.Equal(t, int64(1), count)

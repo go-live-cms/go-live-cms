@@ -164,16 +164,25 @@ func TestPublishPostAPI(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					PublishPostTx(gomock.Any(), db.PublishPostTxParams{
-						PostID:    1,
-						CreatedBy: sql.NullInt64{Int64: 1, Valid: true},
-					}).
+					PublishPostTx(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.PublishPostTxResult{VersionID: 1, VersionNo: 1, BlockDoc: validBlockDoc()}, nil)
-				store.EXPECT().
-					GetMediaByPostWithOrder(gomock.Any(), int64(1)).
-					Times(1).
-					Return([]db.GetMediaByPostWithOrderRow{}, nil)
+					DoAndReturn(func(_ any, arg db.PublishPostTxParams) (db.PublishPostTxResult, error) {
+						require.Equal(t, int64(1), arg.PostID)
+						require.Equal(t, sql.NullInt64{Int64: 1, Valid: true}, arg.CreatedBy)
+						require.False(t, arg.Label.Valid)
+						require.False(t, arg.Message.Valid)
+						// The content image links are synced in the transaction
+						// (#389), from the image blocks in document order.
+						require.NotNil(t, arg.ContentMediaIDs)
+						require.Equal(t, []int64{7, 3}, arg.ContentMediaIDs(json.RawMessage(
+							`{"doc_version":1,"blocks_order":["b","a","c","d"],"blocks":{`+
+								`"a":{"type":"image","attrs":{"mediaId":3}},`+
+								`"b":{"type":"image","attrs":{"mediaId":7}},`+
+								`"c":{"type":"image","attrs":{"mediaId":7}},`+
+								`"d":{"type":"paragraph"}}}`)))
+						require.Empty(t, arg.ContentMediaIDs(json.RawMessage(`{"blocks":[]}`)))
+						return db.PublishPostTxResult{VersionID: 1, VersionNo: 1, BlockDoc: validBlockDoc()}, nil
+					})
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
