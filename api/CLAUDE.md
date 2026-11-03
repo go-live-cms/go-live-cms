@@ -371,7 +371,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - `GET /internal/users/:id/access?doc=post-<id>&issued_at=<unix>` (`internal_routes.go`,
   `internal_handlers_read.go`) is the collab server's per-connection check. It answers
   `{role, can_edit}`, where `can_edit` is `canEditPost` for that post (moderators skip
-  the post lookup). 404 if the user, or for a contributor the post, is gone. It replaced
+  the post lookup). 404 if the user, or for a contributor the post, is gone; 403 when a
+  contributor may not read it (`canReadPost`, #393: e.g. unpublished since the ticket; the
+  collab server's timed recheck then closes the connection). It replaced
   the role-only `/internal/users/:id/role`; Hocuspocus's `onAuthenticate` (#206) calls it.
 - **It is on a separate listener, not under `/api/v1`.** `newInternalRouter` builds its
   own Gin engine and `main.go` serves it with `StartInternal(INTERNAL_SERVER_ADDRESS)`

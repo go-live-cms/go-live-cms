@@ -86,10 +86,12 @@ const typeIsPublic = !publicTypes || publicTypes.includes(postType)
 // src/pages/index.astro, with the page number in Astro.locals). Before the type check,
 // so the front page pages even with the page type switched off. Only a 404 means "no
 // such page": an API error must not turn a real page's URL into a list (it throws, 500).
+// The page check's answer, reused below so a real page isn't fetched twice.
+let pageCheck: Awaited<ReturnType<typeof getPublicPost>> | undefined
 if (postType === 'page' && parsePageSegment(id) !== null) {
   // /public answers only for a published post (#393: never the admin's /api/v1/posts).
-  const existing = typeIsPublic ? (await getPublicPost(id))?.post : null
-  if (existing?.post_type !== 'page') {
+  pageCheck = typeIsPublic ? await getPublicPost(id) : null
+  if (pageCheck?.post.post_type !== 'page') {
     const request = resolveListRequest(Astro.url, '/', id)
     // Temporary: whether /page/N is a page can change when one is published.
     if (request.kind === 'redirect') return Astro.redirect(request.location, 302)
@@ -126,7 +128,7 @@ const isNumeric = /^\d+$/.test(id)
 // The page is server-rendered, so there are no props: this fetch is the normal path.
 if (!fullPost) {
   try {
-    const published = await getPublicPost(id)
+    const published = pageCheck !== undefined ? pageCheck : await getPublicPost(id)
     fullPost = published?.post
     publishedImage = published?.featured_image?.url ?? null
     publishedTerms = published?.taxonomy_terms ?? []

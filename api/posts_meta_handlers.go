@@ -37,8 +37,7 @@ func (server *Server) getPostMeta(c *gin.Context) {
 		return
 	}
 	// Working meta, which may not be live yet (#393).
-	caller, ok := server.callerUser(c)
-	if !ok || !server.checkPost(c, caller, post, canReadPost) {
+	if !server.checkLoadedPost(c, post, canReadPost) {
 		return
 	}
 

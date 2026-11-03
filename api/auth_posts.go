@@ -170,6 +170,13 @@ func (server *Server) mayNestUnder(c *gin.Context, caller db.User, parentID int6
 	return canEditPost(caller, parent), true
 }
 
+// checkLoadedPost is checkPost for the authenticated caller (callerUser), for a
+// handler that already loaded the post. false means the response was written.
+func (server *Server) checkLoadedPost(c *gin.Context, post db.Post, allowed func(db.User, db.Post) bool) bool {
+	caller, ok := server.callerUser(c)
+	return ok && server.checkPost(c, caller, post, allowed)
+}
+
 // checkPost is authorizePost for a handler that already loaded the post.
 func (server *Server) checkPost(c *gin.Context, user db.User, post db.Post, allowed func(db.User, db.Post) bool) bool {
 	if !allowed(user, post) {

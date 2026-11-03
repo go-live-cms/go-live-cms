@@ -251,7 +251,10 @@ func TestInternalDocAccessPerPost(t *testing.T) {
 	}{
 		{name: "OwnPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID, PostStatus: "draft"}, wantStatus: http.StatusOK, wantCanEdit: true},
 		{name: "OwnPublishedPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID, PostStatus: "published"}, wantStatus: http.StatusOK, wantCanEdit: true},
-		{name: "SomeoneElsesPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1}, wantStatus: http.StatusOK, wantCanEdit: false},
+		{name: "SomeoneElsesPublishedPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "published"}, wantStatus: http.StatusOK, wantCanEdit: false},
+		// Not theirs to read (#393), e.g. unpublished since the ticket: the collab
+		// server closes the connection on 403.
+		{name: "SomeoneElsesDraft", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "draft"}, wantStatus: http.StatusForbidden},
 		{name: "MissingPost", doc: "post-7", postErr: sql.ErrNoRows, wantStatus: http.StatusNotFound},
 		{name: "PostLookupFails", doc: "post-7", postErr: errors.New("db down"), wantStatus: http.StatusInternalServerError},
 		{name: "InvalidDoc", doc: "settings", wantStatus: http.StatusBadRequest},

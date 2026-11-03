@@ -363,11 +363,16 @@ func TestRestorePostVersionSettings(t *testing.T) {
 
 func TestGetPostSettingsState(t *testing.T) {
 	contributor := db.User{ID: 2, Username: "contrib", Role: RoleContributor}
+	// Post 7 is the contributor's own draft, which canReadPost lets them read (#393).
+	ownPost := func(store *mockdb.MockStore) {
+		store.EXPECT().GetPost(gomock.Any(), int64(7)).Return(db.Post{ID: 7, UserID: contributor.ID, PostStatus: "draft"}, nil).AnyTimes()
+	}
 	working := `{"title": "Working title", "description": "Working excerpt", "featured_image": null, "term_ids": [3]}`
 
 	t.Run("Changed", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		stubRoleLookup(store, contributor)
+		ownPost(store)
 		store.EXPECT().GetPostSettingsState(gomock.Any(), int64(7)).Times(1).Return(db.GetPostSettingsStateRow{
 			Working: json.RawMessage(working), PublishedSettings: publishedSettings(publishedSettingsJSON), Changed: true,
 		}, nil)
@@ -383,6 +388,7 @@ func TestGetPostSettingsState(t *testing.T) {
 	t.Run("Draft", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		stubRoleLookup(store, contributor)
+		ownPost(store)
 		store.EXPECT().GetPostSettingsState(gomock.Any(), int64(7)).Times(1).Return(db.GetPostSettingsStateRow{Working: json.RawMessage(working)}, nil)
 		recorder := settingsRequest(t, newTestServer(t, store), http.MethodGet, "/api/v1/posts/7/settings", contributor)
 		require.Equal(t, http.StatusOK, recorder.Code)
@@ -402,10 +408,22 @@ func TestGetPostSettingsState(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := mockdb.NewMockStore(gomock.NewController(t))
 			stubRoleLookup(store, contributor)
+			ownPost(store)
 			store.EXPECT().GetPostSettingsState(gomock.Any(), int64(7)).Return(tc.row, tc.err)
 			require.Equal(t, tc.want, settingsRequest(t, newTestServer(t, store), http.MethodGet, "/api/v1/posts/7/settings", contributor).Code)
 		})
 	}
+
+	// Someone else's draft: its working title and excerpt are not theirs to read (#393).
+	t.Run("OthersDraft", func(t *testing.T) {
+		store := mockdb.NewMockStore(gomock.NewController(t))
+		stubRoleLookup(store, contributor)
+		store.EXPECT().GetPost(gomock.Any(), int64(7)).Return(db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "draft"}, nil)
+		store.EXPECT().GetPostSettingsState(gomock.Any(), gomock.Any()).Times(0)
+		recorder := settingsRequest(t, newTestServer(t, store), http.MethodGet, "/api/v1/posts/7/settings", contributor)
+		require.Equal(t, http.StatusForbidden, recorder.Code)
+		require.NotContains(t, recorder.Body.String(), "Working title")
+	})
 }
 
 // A version's response carries its settings; one from before #358 has none.

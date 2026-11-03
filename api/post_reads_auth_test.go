@@ -119,20 +119,64 @@ func (f postReadFixture) get(t *testing.T, caller *db.User, path string) *httpte
 	return recorder
 }
 
-// postReadRoutes are the routes that answered anyone before #393, for post id.
+// postReadRouteTemplates are the GET routes that serve one post's working copy
+// to content roles, each checking canReadPost. TestPerPostGETRoutesAreListed
+// fails when a new per-post GET route isn't here (or in moderatorPostRoutes),
+// so every one gets the per-role checks below.
+var postReadRouteTemplates = []string{
+	// Answered anyone before #393.
+	"/api/v1/posts/:id",
+	"/api/v1/posts/slug/:slug",
+	"/api/v1/posts/:id/meta",
+	"/api/v1/posts/:id/featured-image",
+	"/api/v1/posts/:id/featured-image/full",
+	"/api/v1/posts/:id/media",
+	"/api/v1/posts/:id/taxonomies",
+	"/api/v1/posts/:id/taxonomy-terms",
+	"/api/v1/media/post/:id",
+	// Signed in before #393, but any content role read any post's.
+	"/api/v1/posts/:id/blocks",
+	"/api/v1/posts/:id/settings",
+}
+
+// moderatorPostRoutes are per-post GET routes for editors and admins only
+// (requireContentEditor), so they need no per-post rule.
+var moderatorPostRoutes = []string{
+	"/api/v1/posts/:id/versions",
+	"/api/v1/posts/:id/versions/:version_no",
+}
+
+// postReadRoutes are postReadRouteTemplates for post.
 func (f postReadFixture) postReadRoutes(post db.Post) []string {
-	return []string{
-		fmt.Sprintf("/api/v1/posts/%d", post.ID),
-		"/api/v1/posts/slug/" + post.Slug,
-		fmt.Sprintf("/api/v1/posts/%d/meta", post.ID),
-		fmt.Sprintf("/api/v1/posts/%d/featured-image", post.ID),
-		fmt.Sprintf("/api/v1/posts/%d/featured-image/full", post.ID),
-		fmt.Sprintf("/api/v1/posts/%d/media", post.ID),
-		fmt.Sprintf("/api/v1/posts/%d/taxonomies", post.ID),
-		fmt.Sprintf("/api/v1/posts/%d/taxonomy-terms", post.ID),
-		fmt.Sprintf("/api/v1/media/post/%d", post.ID),
-		// Signed in before #393, but any user read any working copy.
-		fmt.Sprintf("/api/v1/posts/%d/blocks", post.ID),
+	paths := make([]string, len(postReadRouteTemplates))
+	for i, template := range postReadRouteTemplates {
+		path := strings.Replace(template, ":id", fmt.Sprint(post.ID), 1)
+		paths[i] = strings.Replace(path, ":slug", post.Slug, 1)
+	}
+	return paths
+}
+
+func TestPerPostGETRoutesAreListed(t *testing.T) {
+	server := newTestServer(t, nil)
+	listed := map[string]bool{}
+	for _, path := range append(append([]string{}, postReadRouteTemplates...), moderatorPostRoutes...) {
+		listed[path] = true
+	}
+
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		if route.Method != http.MethodGet {
+			continue
+		}
+		registered[route.Path] = true
+		perPost := strings.HasPrefix(route.Path, "/api/v1/posts/:id") ||
+			strings.HasPrefix(route.Path, "/api/v1/posts/slug/") ||
+			strings.HasPrefix(route.Path, "/api/v1/media/post/")
+		require.False(t, perPost && !listed[route.Path],
+			"GET %s serves one post: check canReadPost in its handler and add it to postReadRouteTemplates (or moderatorPostRoutes)", route.Path)
+	}
+	for path := range listed {
+		require.True(t, registered[path], "%s is listed but is no longer a GET route", path)
 	}
 }
 
@@ -298,8 +342,8 @@ func TestPublicNeverServesDrafts(t *testing.T) {
 		require.NotContains(t, recorder.Body.String(), f.marker, path)
 	}
 
-	// The draft is the newest post, so a list that leaked drafts would show it
-	// on its first page.
+	// The lists sort newest first and the fixture's posts were just created, so
+	// a list that leaked drafts would show this one on its first page.
 	// The search answer echoes the query, so check its results.
 	for _, query := range []string{f.marker, "Unreleased " + f.marker} {
 		recorder := f.get(t, nil, "/public/search?q="+strings.ReplaceAll(query, " ", "+"))

@@ -251,8 +251,7 @@ func (server *Server) getPostByID(c *gin.Context) {
 		return
 	}
 	// The working copy (#393): a contributor reads only their own and published posts.
-	caller, ok := server.callerUser(c)
-	if !ok || !server.checkPost(c, caller, post, canReadPost) {
+	if !server.checkLoadedPost(c, post, canReadPost) {
 		return
 	}
 
@@ -280,8 +279,7 @@ func (server *Server) getPostBySlug(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
 		return
 	}
-	caller, ok := server.callerUser(c)
-	if !ok || !server.checkPost(c, caller, post, canReadPost) {
+	if !server.checkLoadedPost(c, post, canReadPost) {
 		return
 	}
 

@@ -446,8 +446,7 @@ func (server *Server) getMediaByPost(c *gin.Context) {
 		return
 	}
 	// The response carries the post's working copy (#393).
-	caller, ok := server.callerUser(c)
-	if !ok || !server.checkPost(c, caller, post, canReadPost) {
+	if !server.checkLoadedPost(c, post, canReadPost) {
 		return
 	}
 

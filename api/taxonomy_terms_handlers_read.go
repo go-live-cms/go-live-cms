@@ -695,8 +695,7 @@ func (server *Server) getPostTaxonomyTerms(c *gin.Context) {
 		return
 	}
 	// The working terms (#393): a contributor reads only their own and published posts.
-	caller, ok := server.callerUser(c)
-	if !ok || !server.checkPost(c, caller, post, canReadPost) {
+	if !server.checkLoadedPost(c, post, canReadPost) {
 		return
 	}
 
