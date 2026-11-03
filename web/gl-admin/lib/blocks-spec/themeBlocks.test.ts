@@ -38,8 +38,11 @@ describe("theme block validation (shared vectors with the API)", () => {
 
 describe("theme block specs", () => {
   it("types are namespaced theme:<theme>/<block> and can't be a core type", () => {
-    expect(THEME_BLOCK_TYPE.test("theme:example/alert")).toBe(true)
-    for (const bad of ["alert", "paragraph", "theme:/alert", "theme:Example/alert", "theme:example/Alert", "theme:example/a/b", "theme:example"]) {
+    // The theme part is the directory name, whatever its case.
+    for (const good of ["theme:example/alert", "theme:my_theme/card", "theme:Magazine2/pull-quote"]) {
+      expect(THEME_BLOCK_TYPE.test(good), good).toBe(true)
+    }
+    for (const bad of ["alert", "paragraph", "theme:/alert", "theme:-x/alert", "theme:example/Alert", "theme:example/a/b", "theme:example", "theme:ex ample/a"]) {
       expect(THEME_BLOCK_TYPE.test(bad), bad).toBe(false)
     }
   })

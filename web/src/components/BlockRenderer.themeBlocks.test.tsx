@@ -48,6 +48,17 @@ describe("theme blocks in BlockRenderer (#376)", () => {
     expect(html).not.toContain("<script>")
   })
 
+  it("a theme block newer than its installed renderer reads renders nothing", () => {
+    const html = renderToStaticMarkup(
+      <BlockRenderer
+        doc={doc({
+          "blk-alert-0000003": { id: "blk-alert-0000003", type: "theme:example/alert", version: 2, attrs: { variant: "warning", text: "v2" } },
+        })}
+      />,
+    )
+    expect(html).not.toContain("gl-alert")
+  })
+
   it("a block of a theme that isn't installed renders nothing, and is logged once", () => {
     const warn = vi.spyOn(log, "warn").mockImplementation(() => {})
     const gone = doc({

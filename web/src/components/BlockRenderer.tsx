@@ -1,6 +1,7 @@
 import React from "react"
 import type { BlockDocV1, Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
+import { isThemeBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
 import { ImageSizesContext, BLOCK_IMAGE_SIZES } from "./blocks/utils/responsiveImage"
 import { HeadingIdsContext, headingAnchors, type HeadingAnchor } from "./blocks/utils/headingAnchors"
@@ -50,6 +51,11 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
       }
       return null
     }
+
+    // A theme block written by a newer build of its theme than this one (e.g. after a
+    // rollback, #376): its attrs may mean something this renderer doesn't know, so it
+    // renders nothing, like a block of a removed theme. It stays in the stored doc.
+    if (isThemeBlockType(block.type) && block.version > (blockRegistry.get(block.type)?.version ?? 1)) return null
 
     // WordPress-style shared props - every component gets the same interface
     return (

@@ -230,22 +230,16 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
 /**
  * An installed theme block (#376). Its declared attrs are canonical in the block's
  * `attrs`, like a quote's `cite`, and never in its `pm`, which keeps only the content: the
- * API validates `attrs` against the manifest, and nothing can disagree with them. Unset
- * (null) attrs are left out; the renderer and the editor use the default.
+ * API validates `attrs` against the manifest, and nothing can disagree with them.
  */
 function themeNodeToBlock(node: PMNode, id: BlockID, spec: ThemeBlockSpec): Block {
   const json = node.toJSON() as { type: string; content?: unknown[] }
-  const declared = Object.fromEntries(
-    Object.keys(spec.attrs)
-      .filter((name) => node.attrs[name] !== null && node.attrs[name] !== undefined)
-      .map((name) => [name, node.attrs[name]]),
-  )
   return {
     id,
     type: spec.type,
     version: spec.version,
     attrs: {
-      ...declared,
+      ...declaredAttrs(spec, node.attrs),
       pm: json.content ? { type: json.type, content: json.content } : { type: json.type },
       text: node.textContent || undefined,
     },
@@ -265,20 +259,27 @@ function themeBlockToPM(block: Block, schema: Schema, baseAttrs: Record<string, 
     throw new Error(`${block.type} version ${block.version} is newer than this build reads (${spec.version})`)
   }
   const attrs = block.attrs as Record<string, unknown>
-  // A value the spec doesn't allow (the theme narrowed an attr without a new version)
-  // loads as the default, or every later store of the post would be refused as invalid.
-  const declared = Object.fromEntries(
-    Object.entries(spec.attrs)
-      .filter(([name, attr]) => attrs[name] !== null && attrs[name] !== undefined && attrProblem(attr, attrs[name]) === null)
-      .map(([name]) => [name, attrs[name]]),
-  )
   const pm = attrs.pm as { content?: unknown[] } | undefined
   const content = Array.isArray(pm?.content)
     ? pm.content
     : typeof attrs.text === "string" && attrs.text !== ""
       ? [{ type: "text", text: attrs.text }]
       : undefined
-  return { type: block.type, attrs: { ...declared, ...baseAttrs }, ...(content ? { content } : {}) }
+  return { type: block.type, attrs: { ...declaredAttrs(spec, attrs), ...baseAttrs }, ...(content ? { content } : {}) }
+}
+
+/**
+ * The declared attrs of `source` (a node's or a stored block's attrs) that are set and
+ * valid. Anything else is left out, so the default applies: a value the spec doesn't
+ * allow (a peer's bad update, a theme that narrowed an attr without a new version) costs
+ * that attr, never the store of the whole post.
+ */
+function declaredAttrs(spec: ThemeBlockSpec, source: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(spec.attrs)
+      .filter(([name, attr]) => source[name] !== null && source[name] !== undefined && attrProblem(attr, source[name]) === null)
+      .map(([name]) => [name, source[name]]),
+  )
 }
 
 /**

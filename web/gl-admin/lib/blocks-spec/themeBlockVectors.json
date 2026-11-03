@@ -38,7 +38,12 @@
     { "name": "number above maximum", "block": { "version": 1, "attrs": { "ratio": 2 } }, "valid": false },
     { "name": "number attr given a string", "block": { "version": 1, "attrs": { "ratio": "0.5" } }, "valid": false },
     { "name": "boolean attr given a string", "block": { "version": 1, "attrs": { "open": "true" } }, "valid": false },
-    { "name": "version newer than the spec", "block": { "version": 3, "attrs": {} }, "valid": false },
+    {
+      "name": "version newer than the spec is kept as is (a newer build wrote it)",
+      "block": { "version": 3, "attrs": { "tone": "shouty", "extra": 1 } },
+      "valid": true,
+      "attrs_after": { "tone": "shouty", "extra": 1 }
+    },
     { "name": "version zero", "block": { "version": 0, "attrs": {} }, "valid": false },
     { "name": "version not an integer", "block": { "version": 1.5, "attrs": {} }, "valid": false }
   ]

@@ -829,7 +829,7 @@ Every **installed** block (every block in the build) works whichever theme is ac
 
 ### Block types are namespaced
 
-A block's type is `theme:<slug>/<block>`, e.g. `theme:example/alert`. It is also the ProseMirror node name. `<slug>` must be the theme's directory name, `<block>` lowercase letters, digits and `-`. Core types never contain `:`, so a theme block can't shadow a core block or another theme's. A build refuses a type outside the theme's namespace or declared twice.
+A block's type is `theme:<slug>/<block>`, e.g. `theme:example/alert`. It is also the ProseMirror node name. `<slug>` must be the theme's directory name (letters, digits, `-` and `_`), `<block>` lowercase letters, digits and `-`. Core types never contain `:`, so a theme block can't shadow a core block or another theme's. A build refuses a type outside the theme's namespace or declared twice.
 
 ### 1. Definition (`index.ts`)
 

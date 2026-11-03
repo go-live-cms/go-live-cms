@@ -122,8 +122,14 @@ func (doc *BlockDocV1) applyThemeBlocks(manifest ThemeBlockManifest) error {
 
 func applyThemeBlock(block map[string]interface{}, spec ThemeBlockSpec) error {
 	version, ok := block["version"].(float64)
-	if !ok || version != math.Trunc(version) || version < 1 || version > float64(spec.Version) {
-		return fmt.Errorf("version must be an integer from 1 to %d", spec.Version)
+	if !ok || version != math.Trunc(version) || version < 1 {
+		return errors.New("version must be an integer >= 1")
+	}
+	if version > float64(spec.Version) {
+		// Written by a newer build of the theme (e.g. before a rollback): this build can't
+		// know its attrs, so it is kept as is, like a block of an uninstalled theme. The
+		// collab server keeps it hidden and the public page skips it.
+		return nil
 	}
 
 	attrs, ok := block["attrs"].(map[string]interface{})

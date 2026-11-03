@@ -90,6 +90,12 @@ describe("theme block ⇄ Block Spec", () => {
     expect(empty.blocks[ALERT].attrs).toEqual({ variant: "info", pm: { type: alert.type }, text: undefined })
   })
 
+  it("a value a peer set that the spec doesn't allow is stored as unset (the default), not refused", () => {
+    const doc = pmToBlockDoc(schema.topNodeType.create(null, [alertNode("purple", "x")]))
+    expect(doc.blocks[ALERT].attrs).not.toHaveProperty("variant")
+    expect(() => validateBlockDoc(doc, { themeBlocks: themeBlockLookup(schema) })).not.toThrow()
+  })
+
   it("a version newer than this build reads is dropped (hidden and kept), not misread", () => {
     const newer: BlockDocV1 = {
       doc_version: 1,
@@ -97,6 +103,27 @@ describe("theme block ⇄ Block Spec", () => {
       blocks: { [ALERT]: { id: ALERT, type: alert.type, version: 2, attrs: { text: "x" } } },
     }
     expect(blockDocToPMWithReport(newer, schema).dropped.map((d) => d.id)).toEqual([ALERT])
+  })
+
+  it("after a rollback, a newer block is kept by every store and the doc stays storable", () => {
+    // Written by a newer build (version 2, an attr value v1 doesn't know), then the
+    // collab server was rolled back to this build.
+    const stored: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: [PARA, ALERT],
+      blocks: {
+        [PARA]: { id: PARA, type: "paragraph", version: 1, attrs: { text: "Intro" } },
+        [ALERT]: { id: ALERT, type: alert.type, version: 2, attrs: { variant: "v2-only", text: "x" } },
+      },
+    }
+    const ydoc = new Y.Doc()
+    const fragment = ydoc.getXmlFragment(EDITOR_FRAGMENT)
+    const dropped = seedFragment(stored, fragment, schema)
+    expect(dropped.entries.map((entry) => entry.id)).toEqual([ALERT])
+    stampFragmentBlockIds(fragment)
+    const derived = fragmentToBlockDoc(fragment, schema, { dropped })
+    expect(derived.blocks[ALERT]).toEqual(stored.blocks[ALERT])
+    expect(() => validateBlockDoc(derived, { themeBlocks: themeBlockLookup(schema) })).not.toThrow()
   })
 })
 

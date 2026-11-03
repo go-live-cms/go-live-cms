@@ -11,18 +11,14 @@ import { getInstalledCollabSchema } from "./collabSchema"
 import { installedThemeBlocks } from "./installed"
 import { installedThemeBlockEditors } from "./editorBlocks"
 import alert from "../../../themes/example/blocks/Alert/index"
+import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 
 // The example theme's alert block (#376) with two collaborators on the real collab server
 // (in process): inserted by one user from the slash menu, edited by both, in the other
 // user's editor, in the stored block_doc, and back after a server restart.
 
-// jsdom has no layout: ProseMirror's scrollIntoView (the slash command focuses) needs
-// these (same stubs as Editor.test.tsx).
-const emptyRect = () => ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) })
-Range.prototype.getClientRects ??= function () {
-  return Object.assign([], { item: () => null }) as unknown as DOMRectList
-}
-Range.prototype.getBoundingClientRect ??= emptyRect as unknown as () => DOMRect
+// The slash command focuses the editor, which scrolls the selection into view.
+stubJsdomRangeLayout()
 
 const editors: Editor[] = []
 

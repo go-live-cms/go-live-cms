@@ -8,9 +8,10 @@
 /**
  * A theme block's type, which is also its ProseMirror node name: `theme:<theme>/<block>`,
  * e.g. `theme:example/alert`. No core block type has a `:`, so a theme block can never
- * collide with or shadow one, and two themes can't collide with each other.
+ * collide with or shadow one, and two themes can't collide with each other. `<theme>` is
+ * the theme's directory name (letters, digits, `-`, `_`), `<block>` lowercase.
  */
-export const THEME_BLOCK_TYPE = /^theme:([a-z0-9][a-z0-9-]*)\/([a-z][a-z0-9-]*)$/
+export const THEME_BLOCK_TYPE = /^theme:([A-Za-z0-9][A-Za-z0-9_-]*)\/([a-z][a-z0-9-]*)$/
 
 export function isThemeBlockType(type: unknown): type is string {
   return typeof type === "string" && type.startsWith("theme:")
@@ -44,7 +45,9 @@ const ATTR_NAME = /^[a-zA-Z][a-zA-Z0-9]*$/
 
 /** Why `spec` is not a usable theme block spec, or null. Checked when a theme is loaded. */
 export function themeBlockSpecProblem(spec: ThemeBlockSpec): string | null {
-  if (!THEME_BLOCK_TYPE.test(spec.type)) return `type "${spec.type}" must look like theme:<theme>/<block> (lowercase, digits, -)`
+  if (!THEME_BLOCK_TYPE.test(spec.type)) {
+    return `type "${spec.type}" must look like theme:<theme directory>/<block> (block: lowercase letters, digits, -)`
+  }
   if (!Number.isInteger(spec.version) || spec.version < 1) return `${spec.type}: version must be an integer >= 1`
   for (const [name, attr] of Object.entries(spec.attrs)) {
     if (!ATTR_NAME.test(name) || RESERVED_ATTR.test(name)) return `${spec.type}: attr name "${name}" is not allowed`
@@ -103,16 +106,27 @@ export interface ThemeBlockIssue {
 }
 
 /**
- * The problems of a stored theme block against its spec: a version this build can't read,
- * or a declared attr with an invalid value. Undeclared attrs are not a problem here (the
- * API strips them, the bridge never writes them). Same rules as the Go sanitizer.
+ * A version newer than this build's spec: written by a newer build of the theme (e.g.
+ * before a rollback). Such a block is kept as it is, like a block of an uninstalled theme:
+ * this build can't know its attrs, the editor hides it and the public page skips it.
+ */
+export const isNewerThemeBlock = (spec: ThemeBlockSpec, version: unknown): boolean =>
+  typeof version === "number" && Number.isInteger(version) && version > spec.version
+
+/**
+ * The problems of a stored theme block against its spec: a version that isn't a positive
+ * integer, or a declared attr with an invalid value. A newer version than the spec is not
+ * checked (isNewerThemeBlock). Undeclared attrs are not a problem here (the API strips
+ * them, the bridge never writes them). Same rules as the Go sanitizer.
  */
 export function themeBlockIssues(spec: ThemeBlockSpec, block: { version?: unknown; attrs?: unknown }): ThemeBlockIssue[] {
   const issues: ThemeBlockIssue[] = []
   const version = block.version
-  if (typeof version !== "number" || !Number.isInteger(version) || version < 1 || version > spec.version) {
-    issues.push({ path: ["version"], message: `${spec.type} reads versions 1 to ${spec.version}` })
+  if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+    issues.push({ path: ["version"], message: `${spec.type}: version must be an integer >= 1` })
+    return issues
   }
+  if (isNewerThemeBlock(spec, version)) return issues
   const attrs = block.attrs && typeof block.attrs === "object" ? (block.attrs as Record<string, unknown>) : {}
   for (const [name, attr] of Object.entries(spec.attrs)) {
     const problem = attrProblem(attr, attrs[name])

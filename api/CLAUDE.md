@@ -449,8 +449,10 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - `prepareForStore(server.themeBlocks)` (`applyThemeBlocks`, `theme_blocks.go`), after the
   generic sanitizer: for a type in the manifest, undeclared attrs are stripped (null =
   unset), `pm.attrs` is removed (declared attrs are canonical on the block), and an
-  invalid value or a version outside 1..spec → **400**. A `theme:` type not in the manifest
-  (removed theme) is kept as is: refusing it would lose content.
+  invalid value or a version that isn't a positive integer → **400**. A `theme:` type not
+  in the manifest (removed theme), or a version newer than the manifest's (written by a
+  newer build, e.g. before a rollback), is kept as is: refusing it would lose content or
+  block every store of the post.
 - The collab server applies the same rules first, so a valid edit is never refused here.
   `web/gl-admin/lib/blocks-spec/themeBlockVectors.json` holds the shared cases
   (`TestThemeBlockVectors` and the web's `themeBlocks.test.ts`). Handler tests get an

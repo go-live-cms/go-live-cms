@@ -113,9 +113,17 @@ func TestThemeBlocks_ExampleAlert(t *testing.T) {
 		require.ErrorContains(t, doc.prepareForStore(manifest), "attr variant")
 	})
 
-	t.Run("a version newer than the build reads refuses the document", func(t *testing.T) {
-		block := alert(map[string]interface{}{})
+	t.Run("a version newer than the build reads is kept as is (a newer build wrote it)", func(t *testing.T) {
+		block := alert(map[string]interface{}{"variant": "v2-only", "extra": "x"})
 		block["version"] = float64(2)
+		doc := themeBlockDoc(map[string]interface{}{"blk-alert-00001": block})
+		require.NoError(t, doc.prepareForStore(manifest))
+		require.Equal(t, map[string]interface{}{"variant": "v2-only", "extra": "x"}, doc.Blocks["blk-alert-00001"].(map[string]interface{})["attrs"])
+	})
+
+	t.Run("a version that isn't a positive integer refuses the document", func(t *testing.T) {
+		block := alert(map[string]interface{}{})
+		block["version"] = float64(0)
 		doc := themeBlockDoc(map[string]interface{}{"blk-alert-00001": block})
 		require.ErrorContains(t, doc.prepareForStore(manifest), "version")
 	})

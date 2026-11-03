@@ -315,9 +315,14 @@ is a real block type for the editor, the collab server, the API and the public p
   builds the node's attrs from the spec and puts the spec on its NodeSpec
   (`glThemeBlock`), so the bridge (`themeNodeToBlock` / `themeBlockToPM`) and the store's
   `validateBlockDoc(doc, { themeBlocks: themeBlockLookup(schema) })` read it from the
-  schema. The block's `version` is its spec's; a stored version newer than the build reads
-  is dropped (hidden, kept). Same rules in the API (`api/theme_blocks.go`, from the
-  manifest); `blocks-spec/themeBlockVectors.json` is shared by both test suites.
+  schema. The block's `version` is its spec's. A stored version **newer** than the build
+  reads (written before a rollback) is treated like an uninstalled theme's block: dropped
+  at seed (hidden, kept), not attr-checked by the store or the API (validating it against
+  the older spec would refuse every store of the post), not rendered publicly. A set value
+  the spec doesn't allow is left out in both directions (`declaredAttrs`), so it costs that
+  attr (the default applies), never the post's store. Same rules in the API
+  (`api/theme_blocks.go`, from the manifest); `blocks-spec/themeBlockVectors.json` is
+  shared by both test suites.
 - **Uninstalled theme (decision):** a `theme:` block whose theme isn't in the build (it
   was removed) is **never lost**: seeding drops it like any unbuildable block (#213), so
   it stays out of the Yjs doc, is kept byte for byte in `meta.dropped`, put back at its
