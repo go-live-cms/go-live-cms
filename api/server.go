@@ -442,6 +442,9 @@ func (server *Server) setupRoutes() error {
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)
 
+	// Public on purpose: published pages embed these files. Stored names
+	// carry 128 random bits (saveUploadedFile, #399), so a file only a draft
+	// uses can't be found by guessing its name; no directory listing.
 	// no-cache: browsers may keep uploads but must revalidate (a cheap 304),
 	// because POST /media/:id/replace swaps a file in place at the same URL
 	// that posts already embed.
