@@ -67,6 +67,27 @@ type PrivateUserResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// MemberResponse is a row of the admin's Users screen (GET /users, #333): the
+// private profile plus when they were last active (null: not since #333) and
+// how many posts they own (posts.user_id).
+type MemberResponse struct {
+	PrivateUserResponse
+	LastActiveAt *time.Time `json:"last_active_at"`
+	PostsOwned   int64      `json:"posts_owned"`
+}
+
+func toMemberResponse(row db.ListMembersRow) MemberResponse {
+	member := MemberResponse{
+		PrivateUserResponse: toPrivateUser(row.User),
+		PostsOwned:          row.PostsOwned,
+	}
+	if row.User.LastActiveAt.Valid {
+		t := row.User.LastActiveAt.Time
+		member.LastActiveAt = &t
+	}
+	return member
+}
+
 // toPublicUser converts database user record to public response format.
 //
 // Strips sensitive information for safe public consumption.

@@ -126,9 +126,9 @@ func TestConcurrentPostOperations_Deadlock(t *testing.T) {
 	operations := []func(){
 
 		func() {
-			err := testStore.DeleteUserWithTransferTx(context.Background(), DeleteUserWithTransferTxParams{
-				UserID:       user1.ID,
-				TransferToID: user2.ID,
+			_, err := testStore.RemoveUserTx(context.Background(), RemoveUserTxParams{
+				UserID:     user1.ID,
+				ReassignTo: user2.ID,
 			})
 			if err != nil {
 				errChan <- fmt.Errorf("transfer user1 posts: %w", err)

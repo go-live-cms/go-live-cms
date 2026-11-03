@@ -5,7 +5,8 @@
 // Environment:
 //   PORT                      WebSocket listener (default 1235)
 //   HOST                      bind address (default 0.0.0.0)
-//   INTERNAL_PORT             internal listener: /healthz, flush (default 1236; never publish it)
+//   INTERNAL_PORT             internal listener: /healthz, flush, user re-check (default 1236;
+//                             never publish it)
 //   INTERNAL_API_URL          the API's internal listener, e.g. http://api:8081 (required)
 //   ROLE_LOOKUP_SECRET        bearer secret for INTERNAL_API_URL (required; same as the API's)
 //   COLLAB_INTERNAL_SECRET    bearer secret the API sends to flush (required; the API's
@@ -92,7 +93,11 @@ const collab = createCollabServer({
   },
 })
 
-const internal = createInternalServer({ secret: internalSecret, flush: (docName) => collab.flush(docName) })
+const internal = createInternalServer({
+  secret: internalSecret,
+  flush: (docName) => collab.flush(docName),
+  recheckUser: (userId) => collab.recheckUser(userId),
+})
 
 const port = await collab.listen()
 const internalPort = intEnv("INTERNAL_PORT", 1236)

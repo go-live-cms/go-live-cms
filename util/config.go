@@ -233,6 +233,12 @@ type Config struct {
 	// server-side callers that funnel many users through one address, such as
 	// the web container's SSR requests.
 	RateLimitExemptCIDRs string `mapstructure:"RATE_LIMIT_EXEMPT_CIDRS"`
+
+	// LastActiveInterval is how stale a member's last_active_at (#333) must be
+	// before an authenticated request, login or refresh stamps it again, so the
+	// API writes it at most once per interval per user, never on every request.
+	// LoadConfig defaults it to 5m; 0 turns tracking off (a zero Config: tests).
+	LastActiveInterval time.Duration `mapstructure:"LAST_ACTIVE_INTERVAL"`
 }
 
 // LoadConfig reads app.env (optional) and environment variables into Config.
@@ -316,6 +322,9 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE", 5)
 	viper.SetDefault("RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE", 10)
 	viper.SetDefault("RATE_LIMIT_EXEMPT_CIDRS", "")
+
+	// Members' "last active" (#333): written at most once per interval per user.
+	viper.SetDefault("LAST_ACTIVE_INTERVAL", "5m")
 
 	// Email (#148). No SMTP defaults: release mode must be configured.
 	viper.SetDefault("MAIL_DRIVER", "")

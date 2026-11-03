@@ -178,6 +178,9 @@ export interface User {
   // Author profile (#350); "" when not set.
   bio?: string
   website?: string
+  // Users screen rows only (GET /users, #333): null = no activity recorded.
+  last_active_at?: string | null
+  posts_owned?: number
 }
 
 // An author as the public site sees them (GET /public/authors/:username, #350): no

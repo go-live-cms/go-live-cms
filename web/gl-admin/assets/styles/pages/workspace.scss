@@ -442,6 +442,80 @@
   }
 }
 
+// The Members search box (#333), as on the board: 240px, in the section head.
+.gl-users__search {
+  align-items: center;
+  background: var(--background);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  color: var(--text-secondary);
+  display: flex;
+  flex: 0 1 240px;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 10px;
+
+  svg {
+    flex: none;
+  }
+
+  input {
+    background: transparent;
+    border: 0;
+    color: var(--text-primary);
+    flex: 1;
+    font: inherit;
+    min-width: 0;
+    outline: none;
+
+    &::placeholder {
+      color: var(--text-placeholder);
+    }
+  }
+
+  &:focus-within {
+    border-color: var(--focus-ring);
+    box-shadow: 0 0 0 1px var(--focus-ring);
+  }
+
+  @media (width <= 768px) {
+    flex-basis: 100%;
+  }
+}
+
+// The Users table's role cell: opens Change role (#333). Text with a chevron, not a
+// boxed button.
+.gl-member__role {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 4px;
+  height: 28px;
+  margin-left: -8px;
+  padding: 0 8px;
+
+  &:hover {
+    background: var(--background-hover);
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 2px var(--focus-ring);
+    outline: none;
+  }
+
+  svg {
+    flex: none;
+    height: 12px;
+    width: 12px;
+  }
+}
+
 // A member in the Users table: avatar, name (a link to their page) and email.
 .gl-member {
   align-items: center;

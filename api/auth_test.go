@@ -144,7 +144,7 @@ func TestAuthMiddlewarePasswordChange(t *testing.T) {
 			server := newTestServer(t, store)
 			server.router.GET(
 				"/auth-test",
-				authMiddleware(server.tokenMaker, server.store),
+				server.requireAuth(),
 				func(c *gin.Context) { c.Status(http.StatusOK) },
 			)
 
@@ -201,11 +201,11 @@ func TestPasswordChangeRevokesAccessTokens(t *testing.T) {
 			return db.Session{ID: arg.ID, UserID: arg.UserID}, nil
 		})
 	store.EXPECT().
-		ListUsers(gomock.Any(), gomock.Any()).
+		ListMembers(gomock.Any(), gomock.Any()).
 		AnyTimes().
-		Return([]db.User{}, nil)
+		Return([]db.ListMembersRow{}, nil)
 	store.EXPECT().
-		CountTotalUsers(gomock.Any()).
+		CountMembers(gomock.Any(), gomock.Any()).
 		AnyTimes().
 		Return(int64(0), nil)
 

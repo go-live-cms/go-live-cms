@@ -281,6 +281,11 @@ func (server *Server) updateUser(c *gin.Context) {
 		"user": toPrivateUser(result.User),
 	}
 
+	// Their open documents follow the new role now, not at the next re-check (#333).
+	if roleChanged(existingUser, result.User) {
+		server.recheckCollabUser(requestIDFromContext(c), id)
+	}
+
 	if passwordChanged {
 		logSecurityEvent(c, LogPasswordChanged, "all", id, fmt.Sprintf("Changed by user %d", caller.ID))
 
@@ -329,26 +334,84 @@ func (server *Server) issueSelfSessionAfterPasswordChange(c *gin.Context, user d
 	return nil
 }
 
-// deleteUser removes user account with optional content transfer.
-//
-// Administrative endpoint for user account deletion supporting data preservation.
-// Can transfer user-generated content to another account before deletion.
+// changeUserRole sets a member's role from the Users screen (#333).
 //
 // Path parameters:
 //   - id: User's database primary key
 //
-// Request body (optional):
-//   - transfer_to_id: Target user ID for content transfer
+// Request body: {"role": "admin" | "editor" | "contributor"}
+//
+// The last admin can't be moved off admin, themselves included: ChangeUserRoleTx
+// locks every admin row and counts inside the transaction, so two concurrent
+// demotions of the last two admins can't both succeed. The API reads the role
+// from the DB on every request, so the member's access tokens carry the new
+// role's rights at once (the token's role claim is informational); their open
+// collab connections are re-checked right after the commit (recheckCollabUser).
 //
 // Authentication: Required (Bearer token + admin role)
 //
 // Returns:
-//   - 200 OK: User successfully deleted
-//   - 400 Bad Request: Invalid user ID parameter
-//   - 401 Unauthorized: Invalid authentication token
+//   - 200 OK: {"user": ...}
+//   - 400 Bad Request: Invalid user ID or role
 //   - 403 Forbidden: Insufficient permissions (non-admin)
 //   - 404 Not Found: User does not exist
-//   - 409 Conflict: Target is the last remaining admin
+//   - 409 Conflict: {"code": "last_admin"} the user is the only admin
+//   - 500 Internal Server Error: Database transaction failure
+func (server *Server) changeUserRole(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
+		return
+	}
+
+	var req ChangeUserRoleRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+
+	user, err := server.store.ChangeUserRoleTx(c.Request.Context(), db.SetUserRoleParams{ID: id, Role: req.Role})
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		case errors.Is(err, db.ErrLastAdmin):
+			c.JSON(http.StatusConflict, gin.H{"error": "cannot demote the last admin", "code": "last_admin"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to change role"})
+		}
+		return
+	}
+
+	server.recheckCollabUser(requestIDFromContext(c), id)
+	c.JSON(http.StatusOK, gin.H{"user": toPrivateUser(user)})
+}
+
+// deleteUser removes a member (#333) and hands what they own to another user.
+//
+// The removal is a hard delete in one transaction (db.RemoveUserTx): their posts
+// (posts.user_id), their byline on those posts and the media they uploaded go to
+// transfer_to_id; their sessions are deleted, which revokes every refresh token;
+// and the user row goes, so any access token they still hold gets 403 at once
+// (authMiddleware loads the row). Bylines on other people's posts, reset tokens
+// and invitation links go with the row; revisions they published and invitations
+// they sent stay, with no author. Their open collab connections are re-checked
+// right after the commit and close.
+//
+// Path parameters:
+//   - id: User's database primary key
+//
+// Request body: {"transfer_to_id": <user id>} (required)
+//
+// Authentication: Required (Bearer token + admin role)
+//
+// Returns:
+//   - 200 OK: {"message", "posts_reassigned"}
+//   - 400 Bad Request: Invalid user ID, missing transfer_to_id, transfer_to_id
+//     is the member or doesn't exist ({"code": "invalid_transfer_target"})
+//   - 403 Forbidden: Insufficient permissions (non-admin)
+//   - 404 Not Found: User does not exist
+//   - 409 Conflict: {"code": "last_admin"} the only admin, or
+//     {"code": "cannot_remove_self"} the caller's own account
 //   - 500 Internal Server Error: Database transaction failure
 func (server *Server) deleteUser(c *gin.Context) {
 	idParam := c.Param("id")
@@ -358,48 +421,45 @@ func (server *Server) deleteUser(c *gin.Context) {
 		return
 	}
 
-	// The body is optional (simple deletion); one that is sent must be valid.
 	var req DeleteUserRequest
-	if !bindOptionalJSON(c, &req) {
+	if !bindJSON(c, &req) {
 		return
 	}
 
-	// Verify user exists before attempting deletion
-	_, err = server.store.GetUser(c.Request.Context(), id)
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
+	// Signing yourself out mid-request with no way back in; another admin can.
+	if caller.ID == id {
+		c.JSON(http.StatusConflict, gin.H{"error": "you can't remove your own account", "code": "cannot_remove_self"})
+		return
+	}
+
+	// RemoveUserTx refuses to remove the last admin (db.ErrLastAdmin), which
+	// would leave no account able to manage users, themes, settings, or post types.
+	result, err := server.store.RemoveUserTx(c.Request.Context(), db.RemoveUserTxParams{
+		UserID:     id,
+		ReassignTo: *req.TransferToID,
+	})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
+		case errors.Is(err, db.ErrLastAdmin):
+			c.JSON(http.StatusConflict, gin.H{"error": "cannot delete the last admin", "code": "last_admin"})
+		case errors.Is(err, db.ErrReassignToRemovedUser), errors.Is(err, db.ErrReassignTargetNotFound):
+			c.JSON(http.StatusBadRequest, gin.H{"error": "choose another member to receive their posts", "code": "invalid_transfer_target"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete user"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user"})
 		return
 	}
 
-	// Both delete transactions refuse to remove the last admin
-	// (db.ErrLastAdmin), which would leave no account able to manage users,
-	// themes, settings, or post types.
-	failMsg := "failed to delete user"
-	if req.TransferToID != nil {
-		// Delete with content transfer to preserve data
-		failMsg = "failed to delete user with transfer"
-		err = server.store.DeleteUserWithTransferTx(c.Request.Context(), db.DeleteUserWithTransferTxParams{
-			UserID:       id,
-			TransferToID: *req.TransferToID,
-		})
-	} else {
-		// Simple deletion without content transfer
-		err = server.store.DeleteUserTx(c.Request.Context(), id)
-	}
-	if err != nil {
-		if errors.Is(err, db.ErrLastAdmin) {
-			c.JSON(http.StatusConflict, gin.H{"error": "cannot delete the last admin"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": failMsg})
-		return
-	}
-
+	logSecurityEvent(c, LogUserRemoved, "all", id, fmt.Sprintf("Removed by user %d; posts to user %d", caller.ID, *req.TransferToID))
+	server.recheckCollabUser(requestIDFromContext(c), id)
 	c.JSON(http.StatusOK, gin.H{
-		"message": "user deleted successfully",
+		"message":          "user deleted successfully",
+		"posts_reassigned": result.PostsReassigned,
 	})
 }

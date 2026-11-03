@@ -153,4 +153,23 @@ describe("access re-check of open connections (#313)", () => {
     expect(collab.recheckedConnections).toBe(2)
     expect(editor.closes).toEqual([])
   })
+
+  // #333: the API calls the internal re-check right after the change commits, so
+  // nobody waits for the interval.
+  it("recheckUser applies a demotion right away, not at the next interval", async () => {
+    const editor = open("2")
+    await synced(editor)
+    await waitFor(() => collab.recheckedConnections === 1, { what: "the connection tracked" })
+
+    api.users.set("2", { role: "contributor" })
+    expect(collab.recheckUser("2")).toBe(1)
+    await clock.advance(1)
+    await waitFor(() => editor.stateless.some((m) => (m as { type: string }).type === "access"), { what: "the access message" })
+    expect(editor.stateless).toContainEqual({ type: "access", mode: "read", reason: "demoted" })
+
+    api.users.delete("2")
+    collab.recheckUser("2")
+    await clock.advance(1)
+    await waitFor(() => editor.closes.includes(ACCESS_REVOKED), { what: "the close" })
+  })
 })
