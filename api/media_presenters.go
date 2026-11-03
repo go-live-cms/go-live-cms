@@ -115,6 +115,49 @@ type PostWithMediaOrderResponse struct {
 	Post             PostResponse `json:"post"`
 	MediaOrder       int32        `json:"media_order"`
 	RelationshipType string       `json:"relationship_type"`
+	// Usages says how the post uses the media (#176), featured image first,
+	// then its blocks in document order. Never empty.
+	Usages []MediaUsage `json:"usages"`
+}
+
+// Media usage types (#176): the post's featured image, a content block that
+// shows it (BlockID and BlockType say which), or a link made some other way
+// (POST /posts media_ids, an upload into a post).
+const (
+	MediaUsageFeatured = "featured"
+	MediaUsageBlock    = "block"
+	MediaUsageAttached = "attached"
+)
+
+// MediaUsage is one way a post uses a media.
+type MediaUsage struct {
+	Type      string `json:"type"`
+	BlockID   string `json:"block_id,omitempty"`
+	BlockType string `json:"block_type,omitempty"`
+}
+
+// mediaUsages builds a "Used in" row's usages from its post_media link: the
+// featured image (order 0, or only the _thumbnail_id meta), the blocks stored
+// by the content sync, and "attached" for a content link no block shows.
+func mediaUsages(relationshipType string, blocks json.RawMessage) []MediaUsage {
+	usages := make([]MediaUsage, 0, 1)
+	featured := relationshipType == MediaUsageFeatured
+	if featured {
+		usages = append(usages, MediaUsage{Type: MediaUsageFeatured})
+	}
+	var stored []struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	}
+	// The column is NOT NULL and always an array; anything else reads as no blocks.
+	_ = json.Unmarshal(blocks, &stored)
+	for _, block := range stored {
+		usages = append(usages, MediaUsage{Type: MediaUsageBlock, BlockID: block.ID, BlockType: block.Type})
+	}
+	if len(usages) == 0 {
+		usages = append(usages, MediaUsage{Type: MediaUsageAttached})
+	}
+	return usages
 }
 
 // toMediaResponse converts a database Medium record to the public MediaResponse format.
@@ -322,6 +365,7 @@ func toPostResponseFromMediaRow(row db.GetPostsByMediaRow) PostWithMediaOrderRes
 		},
 		MediaOrder:       row.MediaOrder,
 		RelationshipType: row.RelationshipType,
+		Usages:           mediaUsages(row.RelationshipType, row.Blocks),
 	}
 }
 

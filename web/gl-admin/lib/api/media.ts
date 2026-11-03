@@ -99,9 +99,9 @@ export async function deleteMedia(id: number, token?: string): Promise<any> {
   return response.json()
 }
 
-// getMediaPosts lists the posts linking media `mediaId` through post_media: its
-// featured image (media_order 0) and the image blocks the collab store syncs (> 0).
-// A post using it both ways has a row for each; see usedInRows in lib/mediaLibrary.ts.
+// getMediaPosts lists the posts linking media `mediaId` through post_media, one row
+// per post: featured image (media_order 0) or content link (> 0), and `usages` saying
+// how (#176); see usedInRows in lib/mediaLibrary.ts.
 export async function getMediaPosts(mediaId: number): Promise<MediaPostLink[]> {
   const response = await apiCall(`/media/${mediaId}/posts`)
   return response.posts || []

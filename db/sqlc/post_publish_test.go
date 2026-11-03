@@ -193,9 +193,9 @@ func TestPublishPostTxSyncsContentMedia(t *testing.T) {
 	var parsed json.RawMessage
 	_, err = testStore.PublishPostTx(ctx, PublishPostTxParams{
 		PostID: f.post.ID,
-		ContentMediaIDs: func(blockDoc json.RawMessage) []int64 {
+		ContentMedia: func(blockDoc json.RawMessage) []ContentMediaUse {
 			parsed = blockDoc
-			return []int64{inline.ID, f.media.ID}
+			return imageUses(inline.ID, f.media.ID)
 		},
 	})
 	require.NoError(t, err)
@@ -213,15 +213,15 @@ func TestPublishPostTxSyncsContentMedia(t *testing.T) {
 	// it featured and drops the other link.
 	writeBlockDocAround(t, f.post.ID, collabDocWithImages(f.media.ID))
 	_, err = testStore.PublishPostTx(ctx, PublishPostTxParams{
-		PostID:          f.post.ID,
-		ContentMediaIDs: func(json.RawMessage) []int64 { return []int64{f.media.ID} },
+		PostID:       f.post.ID,
+		ContentMedia: func(json.RawMessage) []ContentMediaUse { return imageUses(f.media.ID) },
 	})
 	require.NoError(t, err)
 	require.Equal(t, map[int64]int32{f.media.ID: 0}, contentMediaOrder(t, f.post.ID))
 }
 
 // Without an extractor publish leaves the links alone.
-func TestPublishPostTxWithoutContentMediaIDs(t *testing.T) {
+func TestPublishPostTxWithoutContentMedia(t *testing.T) {
 	ctx := context.Background()
 	f := createSettingsFixture(t)
 	_, linked := createTestMedia(t)

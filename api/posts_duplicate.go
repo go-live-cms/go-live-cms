@@ -102,7 +102,7 @@ func (server *Server) copyPost(ctx context.Context, source db.Post, opts postCop
 			Slug:        slug,
 			BlockDoc:    blockDoc,
 		},
-		ContentMediaIDs: parsed.extractMediaIDsFromBlocks(),
+		ContentMedia: parsed.contentMediaUses(),
 	})
 }
 

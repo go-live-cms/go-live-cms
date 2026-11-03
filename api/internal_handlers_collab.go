@@ -171,7 +171,7 @@ func (server *Server) putInternalPostCollab(c *gin.Context) {
 			return
 		}
 		arg.BlockDoc = blockDoc
-		arg.MediaIDs = req.BlockDoc.extractMediaIDsFromBlocks()
+		arg.ContentMedia = req.BlockDoc.contentMediaUses()
 	}
 
 	result, err := server.store.StorePostCollabTx(c.Request.Context(), arg)

@@ -90,7 +90,7 @@ func TestDuplicatePostTx(t *testing.T) {
 			BlockDoc:    copyDoc,
 		},
 		// An id without a media row is skipped, like the collab store's sync.
-		ContentMediaIDs: []int64{copyContent.ID, -1},
+		ContentMedia: []ContentMediaUse{{MediaID: copyContent.ID, BlockID: "blk-copy-00001", BlockType: "image"}, {MediaID: -1, BlockID: "blk-gone", BlockType: "image"}},
 	})
 	require.NoError(t, err)
 
