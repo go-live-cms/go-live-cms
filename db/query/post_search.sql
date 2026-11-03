@@ -83,7 +83,9 @@ GROUP BY p.post_type;
 -- The admin posts list's search: the list's filters (type, status, owner) plus
 -- the search, ranked. Same columns as ListPostsWithMeta, so the handler shapes
 -- rows the same way. Drafts match on title, description and terms; their
--- working copy is never indexed.
+-- working copy is never indexed. The index has a published post's published
+-- title and excerpt (#358), and the list shows its working ones, so those match
+-- too: a post renamed but not yet updated is found by its new name.
 SELECT
     p.id, p.title, p.description, p.user_id, p.username, p.url,
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
@@ -104,7 +106,10 @@ SELECT
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
 WHERE
-    ps.document @@ websearch_to_tsquery(golive_search_config(), @query::text)
+    (ps.document @@ websearch_to_tsquery(golive_search_config(), @query::text)
+     OR (p.published_settings IS NOT NULL
+         AND to_tsvector(golive_search_config(), p.title || ' ' || p.description)
+             @@ websearch_to_tsquery(golive_search_config(), @query::text)))
     AND (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)
@@ -118,7 +123,10 @@ SELECT COUNT(*) AS total
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
 WHERE
-    ps.document @@ websearch_to_tsquery(golive_search_config(), @query::text)
+    (ps.document @@ websearch_to_tsquery(golive_search_config(), @query::text)
+     OR (p.published_settings IS NOT NULL
+         AND to_tsvector(golive_search_config(), p.title || ' ' || p.description)
+             @@ websearch_to_tsquery(golive_search_config(), @query::text)))
     AND (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id);

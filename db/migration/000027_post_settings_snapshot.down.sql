@@ -4,7 +4,8 @@
 -- from the live values.
 BEGIN;
 
-DROP TRIGGER post_published_terms_search_delete ON post_published_terms;
+DROP TRIGGER taxonomy_terms_published_search_delete ON taxonomy_terms;
+DROP FUNCTION golive_deleted_terms_search_trigger();
 
 CREATE OR REPLACE FUNCTION golive_term_search_trigger() RETURNS trigger
 LANGUAGE plpgsql AS $$

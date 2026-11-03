@@ -61,6 +61,13 @@ describe("rss.xml", () => {
     expect(calledUrls(fetchMock).some((url) => url.startsWith(`${SERVER_API_URL}/posts`))).toBe(false)
   })
 
+  it("is an empty feed when the post type isn't public (the API's 404)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ error: "post type not found" }, 404)))
+    const response = await rss({ url: new URL("http://web:4321/rss.xml") } as never)
+    expect(response.status).toBe(200)
+    expect(await response.text()).not.toContain("<item>")
+  })
+
   it("answers 503 when the list fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ error: "down" }, 500)))
     const response = await rss({ url: new URL("http://web:4321/rss.xml") } as never)

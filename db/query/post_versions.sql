@@ -74,13 +74,28 @@ WHERE v.post_id = $1
 -- name: GetPostSettingsState :one
 -- The editor's view of a post's settings (#358): the working ones, the published
 -- ones (NULL when nothing is published) and whether they differ, i.e. whether a
--- settings change is waiting for Update.
-SELECT golive_post_settings(p.id)::jsonb AS working,
+-- settings change is waiting for Update. The published term ids are compared as
+-- post_published_terms has them: a term deleted since the publish is gone from
+-- both sides (it can't be shown or published), not a pending change.
+SELECT w.settings::jsonb AS working,
        p.published_settings,
        (p.published_settings IS NOT NULL
-        AND p.published_settings IS DISTINCT FROM golive_post_settings(p.id))::boolean AS changed
+        AND jsonb_set(p.published_settings, '{term_ids}', coalesce((
+              SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
+              FROM post_published_terms ppt
+              WHERE ppt.post_id = p.id
+            ), '[]'::jsonb)) IS DISTINCT FROM w.settings)::boolean AS changed
 FROM posts p
+CROSS JOIN LATERAL (SELECT golive_post_settings(p.id) AS settings) w
 WHERE p.id = $1;
+
+-- name: RefreshPublishedSettings :exec
+-- The dev seed (#358): published posts whose terms and featured images were linked
+-- after they were published get them in their published settings.
+UPDATE posts
+SET published_settings = golive_post_settings(id)
+WHERE id = ANY(sqlc.arg(ids)::bigint[])
+  AND published_settings IS NOT NULL;
 
 -- name: GetPublishedPostTaxonomyTerms :many
 -- The terms a published post shows on the site (#358): its published set, in the

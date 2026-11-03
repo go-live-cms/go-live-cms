@@ -27,17 +27,7 @@ func (server *Server) getPublicPostsByType(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	pt, err := server.store.GetPostType(ctx, postType)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post type"})
-		return
-	}
-	if !pt.IsActive || !pt.Public {
-		c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
+	if !server.requirePublicPostType(c, postType) {
 		return
 	}
 
@@ -91,8 +81,7 @@ type publicFeaturedImage struct {
 }
 
 // getPublicPost handles GET /public/posts/:id: the post page's data in one call.
-// Only a published post with a published body is a page; anything else is the
-// same 404 as a missing post.
+// Only a published post is a page; anything else is the same 404 as a missing post.
 func (server *Server) getPublicPost(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -124,9 +113,10 @@ func (server *Server) respondPublicPost(c *gin.Context, post db.Post, err error)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
 		return
 	}
-	// Same rule as /public/posts/:id/blocks: drafts, archived posts and a post
-	// marked published without a snapshot have no page.
-	if post.PostStatus != publishedStatus || !post.PublishedBlockDoc.Valid {
+	// Drafts and archived posts have no page. A post marked published without a
+	// body snapshot (its status set through PUT /posts/:id) still has one, as the
+	// lists, RSS and the sitemap include it: with no published_blocks, as before.
+	if post.PostStatus != publishedStatus {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
 	}
@@ -209,17 +199,7 @@ func (server *Server) listPublicPosts(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	pt, err := server.store.GetPostType(ctx, postType)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post type"})
-		return
-	}
-	if !pt.IsActive || !pt.Public {
-		c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
+	if !server.requirePublicPostType(c, postType) {
 		return
 	}
 
@@ -263,4 +243,23 @@ func (server *Server) listPublicPosts(c *gin.Context) {
 			"type":   postType,
 		},
 	})
+}
+
+// requirePublicPostType answers 404 (or 500) itself unless the type is
+// registered, active and public; ok is false when it did.
+func (server *Server) requirePublicPostType(c *gin.Context, name string) bool {
+	pt, err := server.store.GetPostType(c.Request.Context(), name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
+			return false
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post type"})
+		return false
+	}
+	if !pt.IsActive || !pt.Public {
+		c.JSON(http.StatusNotFound, gin.H{"error": "post type not found"})
+		return false
+	}
+	return true
 }

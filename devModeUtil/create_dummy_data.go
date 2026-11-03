@@ -181,8 +181,19 @@ func CreateDummyData(store db.Store, config util.Config) {
 	pages := createDummyPages(store, users, imageURLs)
 	log.Printf("✅ Created %d dummy pages", len(pages))
 
-	linkMediaToPosts(store, append(posts, pages...), media)
+	seeded := append(posts, pages...)
+	linkMediaToPosts(store, seeded, media)
 	log.Println("✅ Linked media to posts and pages")
+
+	// The posts were published (createSeedPost) before their terms and media were
+	// linked: snapshot their settings again, or the site shows them without (#358).
+	ids := make([]int64, len(seeded))
+	for i, post := range seeded {
+		ids[i] = post.ID
+	}
+	if err := store.RefreshPublishedSettings(context.TODO(), ids); err != nil {
+		log.Printf("❌ Failed to refresh the published settings: %v", err)
+	}
 
 	log.Println("🎉 Dummy data creation completed!")
 }

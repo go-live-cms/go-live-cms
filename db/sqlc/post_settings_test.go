@@ -52,7 +52,6 @@ func createSettingsFixture(t *testing.T) settingsFixture {
 	return settingsFixture{post: post, media: media, terms: terms}
 }
 
-
 func setFeaturedImageMeta(t *testing.T, postID int64, media Medium) {
 	ctx := context.Background()
 	require.NoError(t, testQueries.DeletePostMediaByOrder(ctx, DeletePostMediaByOrderParams{PostID: postID, Order: 0}))
@@ -364,4 +363,68 @@ func TestPostSettingsBackfillMigration(t *testing.T) {
 	var draftSettings sql.NullString
 	require.NoError(t, tx.QueryRowContext(ctx, `SELECT published_settings FROM posts WHERE id = $1`, draft.post.ID).Scan(&draftSettings))
 	require.False(t, draftSettings.Valid)
+}
+
+// A term deleted after the publish is gone from what the site shows and from what
+// can be published, so it isn't a pending settings change.
+func TestSettingsStateIgnoresDeletedTerms(t *testing.T) {
+	ctx := context.Background()
+	f := createSettingsFixture(t)
+	_, err := testStore.PublishPostTx(ctx, PublishPostTxParams{PostID: f.post.ID})
+	require.NoError(t, err)
+
+	require.NoError(t, testQueries.DeleteTaxonomyTerm(ctx, f.terms[0].ID))
+	state, err := testQueries.GetPostSettingsState(ctx, f.post.ID)
+	require.NoError(t, err)
+	require.False(t, state.Changed)
+	require.Equal(t, []int64{f.terms[1].ID}, publishedTermIDs(t, f.post.ID))
+
+	// A real change still counts.
+	require.NoError(t, testQueries.RemoveAllPostTaxonomies(ctx, f.post.ID))
+	state, err = testQueries.GetPostSettingsState(ctx, f.post.ID)
+	require.NoError(t, err)
+	require.True(t, state.Changed)
+}
+
+// The admin search finds a published post by its working title too: the list
+// shows it, while the index (and the public search) has the published one.
+func TestAdminSearchMatchesWorkingTitle(t *testing.T) {
+	ctx := context.Background()
+	owner := createRandomUser(t)
+	oldWord, newWord := searchWord(t), searchWord(t)
+	post := createSearchPost(t, owner, searchPostSpec{title: "Title " + oldWord, description: "plain excerpt"})
+	publishSearchPost(t, post, searchDoc("plain body"))
+	_, err := testQueries.db.ExecContext(ctx, `UPDATE posts SET title = $2 WHERE id = $1`, post.ID, "Title "+newWord)
+	require.NoError(t, err)
+
+	for _, word := range []string{oldWord, newWord} {
+		rows, err := testQueries.SearchPostsWithMeta(ctx, SearchPostsWithMetaParams{Query: word, LimitCount: 10})
+		require.NoError(t, err)
+		require.Len(t, rows, 1, word)
+		require.Equal(t, post.ID, rows[0].ID)
+		total, err := testQueries.CountSearchPosts(ctx, CountSearchPostsParams{Query: word})
+		require.NoError(t, err)
+		require.Equal(t, int64(1), total, word)
+	}
+	require.Empty(t, publicSearchIDs(t, newWord, ""))
+}
+
+// The dev seed publishes posts before linking their terms and images, then
+// refreshes their published settings; drafts are left alone.
+func TestRefreshPublishedSettings(t *testing.T) {
+	ctx := context.Background()
+	published := createSettingsFixture(t)
+	require.NoError(t, testQueries.RemoveAllPostTaxonomies(ctx, published.post.ID))
+	require.NoError(t, testQueries.SetPublishedVersionOnPost(ctx, SetPublishedVersionOnPostParams{
+		ID: published.post.ID, PublishedBlockDoc: pqtype.NullRawMessage{RawMessage: searchDoc("seed"), Valid: true},
+	}))
+	require.Empty(t, publishedTermIDs(t, published.post.ID))
+	linkTerms(t, published.post, published.terms...)
+	draft := createSettingsFixture(t)
+
+	require.NoError(t, testQueries.RefreshPublishedSettings(ctx, []int64{published.post.ID, draft.post.ID}))
+	require.ElementsMatch(t, termIDs(published.terms...), publishedTermIDs(t, published.post.ID))
+	post, err := testQueries.GetPost(ctx, draft.post.ID)
+	require.NoError(t, err)
+	require.False(t, post.PublishedSettings.Valid)
 }

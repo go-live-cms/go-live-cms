@@ -61,7 +61,10 @@ SELECT COUNT(*) AS total
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
 WHERE
-    ps.document @@ websearch_to_tsquery(golive_search_config(), $1::text)
+    (ps.document @@ websearch_to_tsquery(golive_search_config(), $1::text)
+     OR (p.published_settings IS NOT NULL
+         AND to_tsvector(golive_search_config(), p.title || ' ' || p.description)
+             @@ websearch_to_tsquery(golive_search_config(), $1::text)))
     AND ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)
@@ -108,7 +111,10 @@ SELECT
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
 WHERE
-    ps.document @@ websearch_to_tsquery(golive_search_config(), $1::text)
+    (ps.document @@ websearch_to_tsquery(golive_search_config(), $1::text)
+     OR (p.published_settings IS NOT NULL
+         AND to_tsvector(golive_search_config(), p.title || ' ' || p.description)
+             @@ websearch_to_tsquery(golive_search_config(), $1::text)))
     AND ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)
@@ -149,7 +155,9 @@ type SearchPostsWithMetaRow struct {
 // The admin posts list's search: the list's filters (type, status, owner) plus
 // the search, ranked. Same columns as ListPostsWithMeta, so the handler shapes
 // rows the same way. Drafts match on title, description and terms; their
-// working copy is never indexed.
+// working copy is never indexed. The index has a published post's published
+// title and excerpt (#358), and the list shows its working ones, so those match
+// too: a post renamed but not yet updated is found by its new name.
 func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMetaParams) ([]SearchPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchPostsWithMeta,
 		arg.Query,

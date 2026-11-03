@@ -2714,6 +2714,20 @@ func (mr *MockStoreMockRecorder) PublishPostTx(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishPostTx", reflect.TypeOf((*MockStore)(nil).PublishPostTx), arg0, arg1)
 }
 
+// RefreshPublishedSettings mocks base method.
+func (m *MockStore) RefreshPublishedSettings(arg0 context.Context, arg1 []int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RefreshPublishedSettings", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RefreshPublishedSettings indicates an expected call of RefreshPublishedSettings.
+func (mr *MockStoreMockRecorder) RefreshPublishedSettings(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshPublishedSettings", reflect.TypeOf((*MockStore)(nil).RefreshPublishedSettings), arg0, arg1)
+}
+
 // RemoveAllPostTaxonomies mocks base method.
 func (m *MockStore) RemoveAllPostTaxonomies(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()

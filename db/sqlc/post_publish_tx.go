@@ -112,11 +112,8 @@ func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePos
 		}
 		if id := arg.Settings.FeaturedImageID; id != nil {
 			if media, err := q.GetMedia(ctx, *id); err == nil {
-				// The image may also be linked as a content image (order > 0);
-				// unique_post_media allows one link per media, so it moves to 0.
-				if err := q.DeletePostMedia(ctx, DeletePostMediaParams{PostID: arg.PostID, MediaID: *id}); err != nil {
-					return fmt.Errorf("unlink media: %w", err)
-				}
+				// CreatePostMedia upserts: an image also linked as a content image
+				// moves to order 0, as POST /posts/:id/featured-image does.
 				if _, err := q.CreatePostMedia(ctx, CreatePostMediaParams{PostID: arg.PostID, MediaID: *id, Order: 0}); err != nil {
 					return fmt.Errorf("link featured image: %w", err)
 				}

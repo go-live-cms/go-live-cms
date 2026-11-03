@@ -191,12 +191,32 @@ BEGIN
 END
 $$;
 
--- A deleted term leaves the published term sets (ON DELETE CASCADE): reindex
--- those posts, now that the term is gone.
-CREATE TRIGGER post_published_terms_search_delete
-  AFTER DELETE ON post_published_terms
-  REFERENCING OLD TABLE AS changed_links
-  FOR EACH STATEMENT EXECUTE FUNCTION golive_post_terms_search_trigger();
+-- A deleted term leaves the published term sets (post_published_terms cascades;
+-- the ids stay in published_settings, where nothing reads a deleted term).
+-- Reindex the posts that published it, now that it's gone. On taxonomy_terms
+-- rather than post_published_terms: the sync trigger above deletes those rows on
+-- every publish, and posts_search_update already reindexes then.
+CREATE FUNCTION golive_deleted_terms_search_trigger() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM golive_refresh_post_search(ARRAY(
+    SELECT p.id
+    FROM posts p
+    WHERE jsonb_typeof(p.published_settings->'term_ids') = 'array'
+      AND EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(p.published_settings->'term_ids') AS t(value)
+        JOIN deleted_terms d ON d.id::text = t.value
+      )
+  ));
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER taxonomy_terms_published_search_delete
+  AFTER DELETE ON taxonomy_terms
+  REFERENCING OLD TABLE AS deleted_terms
+  FOR EACH STATEMENT EXECUTE FUNCTION golive_deleted_terms_search_trigger();
 
 -- Backfill: what is public now becomes the published snapshot, so nothing on
 -- the site changes on deploy. The current version (the one publish points at)

@@ -141,7 +141,9 @@ type Querier interface {
 	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
 	// The editor's view of a post's settings (#358): the working ones, the published
 	// ones (NULL when nothing is published) and whether they differ, i.e. whether a
-	// settings change is waiting for Update.
+	// settings change is waiting for Update. The published term ids are compared as
+	// post_published_terms has them: a term deleted since the publish is gone from
+	// both sides (it can't be shown or published), not a pending change.
 	GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error)
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
@@ -307,6 +309,9 @@ type Querier interface {
 	// Serializes a password change against concurrent refresh-token rotation
 	// (see UpdateUserTx and LockUserForShare).
 	LockUserForUpdate(ctx context.Context, id int64) error
+	// The dev seed (#358): published posts whose terms and featured images were linked
+	// after they were published get them in their published settings.
+	RefreshPublishedSettings(ctx context.Context, ids []int64) error
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
@@ -327,7 +332,9 @@ type Querier interface {
 	// The admin posts list's search: the list's filters (type, status, owner) plus
 	// the search, ranked. Same columns as ListPostsWithMeta, so the handler shapes
 	// rows the same way. Drafts match on title, description and terms; their
-	// working copy is never indexed.
+	// working copy is never indexed. The index has a published post's published
+	// title and excerpt (#358), and the list shows its working ones, so those match
+	// too: a post renamed but not yet updated is found by its new name.
 	SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMetaParams) ([]SearchPostsWithMetaRow, error)
 	// Full-text search (#145) over post_search (000024_post_search). The query text
 	// goes through websearch_to_tsquery, which accepts any input: quotes, OR and -

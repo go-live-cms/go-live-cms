@@ -142,13 +142,14 @@ func TestGetPublicPost(t *testing.T) {
 		require.NotNil(t, resp.TaxonomyTerms)
 	})
 
-	// Published some other way (no snapshot of its settings): the live ones, as
-	// before #358.
+	// Marked published through PUT /posts/:id (no snapshot of its body or settings):
+	// it still has a page, with its live settings and no body, as before #358.
 	t.Run("NoPublishedSettings", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
 		post := editedPublishedPost()
 		post.PublishedSettings = pqtype.NullRawMessage{}
+		post.PublishedBlockDoc = pqtype.NullRawMessage{}
 		store.EXPECT().GetPost(gomock.Any(), int64(7)).Times(1).Return(post, nil)
 		server := newTestServer(t, store)
 		stored := filepath.Join(server.config.UploadPath, "live.jpg")
@@ -163,6 +164,7 @@ func TestGetPublicPost(t *testing.T) {
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
 		require.Equal(t, "Working title", resp.Post.Title)
 		require.Equal(t, "/uploads/media/live.jpg", resp.FeaturedImage.URL)
+		require.Empty(t, resp.Post.PublishedBlocks)
 		require.Len(t, resp.TaxonomyTerms, 1)
 	})
 
@@ -172,11 +174,6 @@ func TestGetPublicPost(t *testing.T) {
 		want int
 	}{
 		{"Draft", func() (db.Post, error) { p := editedPublishedPost(); p.PostStatus = "draft"; return p, nil }, http.StatusNotFound},
-		{"NoSnapshot", func() (db.Post, error) {
-			p := editedPublishedPost()
-			p.PublishedBlockDoc = pqtype.NullRawMessage{}
-			return p, nil
-		}, http.StatusNotFound},
 		{"Missing", func() (db.Post, error) { return db.Post{}, sql.ErrNoRows }, http.StatusNotFound},
 		{"DBError", func() (db.Post, error) { return db.Post{}, fmt.Errorf("db down") }, http.StatusInternalServerError},
 	} {

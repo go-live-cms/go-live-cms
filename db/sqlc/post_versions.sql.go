@@ -84,11 +84,16 @@ func (q *Queries) GetNextVersionNoForPost(ctx context.Context, postID int64) (in
 }
 
 const getPostSettingsState = `-- name: GetPostSettingsState :one
-SELECT golive_post_settings(p.id)::jsonb AS working,
+SELECT w.settings::jsonb AS working,
        p.published_settings,
        (p.published_settings IS NOT NULL
-        AND p.published_settings IS DISTINCT FROM golive_post_settings(p.id))::boolean AS changed
+        AND jsonb_set(p.published_settings, '{term_ids}', coalesce((
+              SELECT jsonb_agg(ppt.taxonomy_term_id ORDER BY ppt.taxonomy_term_id)
+              FROM post_published_terms ppt
+              WHERE ppt.post_id = p.id
+            ), '[]'::jsonb)) IS DISTINCT FROM w.settings)::boolean AS changed
 FROM posts p
+CROSS JOIN LATERAL (SELECT golive_post_settings(p.id) AS settings) w
 WHERE p.id = $1
 `
 
@@ -100,7 +105,9 @@ type GetPostSettingsStateRow struct {
 
 // The editor's view of a post's settings (#358): the working ones, the published
 // ones (NULL when nothing is published) and whether they differ, i.e. whether a
-// settings change is waiting for Update.
+// settings change is waiting for Update. The published term ids are compared as
+// post_published_terms has them: a term deleted since the publish is gone from
+// both sides (it can't be shown or published), not a pending change.
 func (q *Queries) GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error) {
 	row := q.db.QueryRowContext(ctx, getPostSettingsState, id)
 	var i GetPostSettingsStateRow
@@ -357,6 +364,20 @@ func (q *Queries) LockPostForPublish(ctx context.Context, id int64) (int64, erro
 	row := q.db.QueryRowContext(ctx, lockPostForPublish, id)
 	err := row.Scan(&id)
 	return id, err
+}
+
+const refreshPublishedSettings = `-- name: RefreshPublishedSettings :exec
+UPDATE posts
+SET published_settings = golive_post_settings(id)
+WHERE id = ANY($1::bigint[])
+  AND published_settings IS NOT NULL
+`
+
+// The dev seed (#358): published posts whose terms and featured images were linked
+// after they were published get them in their published settings.
+func (q *Queries) RefreshPublishedSettings(ctx context.Context, ids []int64) error {
+	_, err := q.db.ExecContext(ctx, refreshPublishedSettings, pq.Array(ids))
+	return err
 }
 
 const restorePostTitleAndDescription = `-- name: RestorePostTitleAndDescription :one
