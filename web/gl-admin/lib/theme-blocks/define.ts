@@ -38,18 +38,6 @@ function parseAttr(attr: ThemeAttrSpec, raw: string | null): unknown {
   return attrProblem(attr, value) === null ? value : null
 }
 
-/**
- * The declared attrs of a theme block's HTML element (the editor's HTML, `data-<attr>`),
- * parsed by the spec. An attr that is missing or invalid is left out (the default applies).
- */
-export function themeBlockAttrsFromElement(spec: ThemeBlockSpec, element: Element): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(spec.attrs)
-      .map(([name, attr]) => [name, parseAttr(attr, element.getAttribute(dataAttr(name)))] as const)
-      .filter(([, value]) => value !== null),
-  )
-}
-
 export function defineThemeBlock(input: ThemeBlockInput): ThemeBlockDefinition {
   const { title, content = "inline*", marks, ...specInput } = input
   const spec: ThemeBlockSpec = { type: specInput.type, version: specInput.version, attrs: specInput.attrs }

@@ -5,7 +5,6 @@ import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
 import { blockAPIClient, type PostVersion } from "@gl-admin/lib/api/blockAPI"
-import { htmlToBlockDoc } from "@gl-admin/lib/utils/htmlToBlocks"
 import { getSettings } from "@gl-admin/lib/api/settings"
 import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
 import { CollabStoreError } from "@gl-admin/lib/collaboration/CollabSaveStatus"
@@ -439,8 +438,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       const fullUrl = `${baseUrl}/${postType}/${formData.slug}`
 
       if (mode === "create") {
-        // The body as Block Spec v1, sent with the create.
-        const initialBlockDoc = formData.content ? htmlToBlockDoc(formData.content) : null
+        // The body as Block Spec v1, sent with the create: built from the editor's document
+        // by the collab server's bridge, never from its HTML, which loses marks and attrs.
+        const initialBlockDoc = editorRef.current?.getBlockDoc() ?? null
         // With a body, publishing is a separate step (publishPost snapshots the body and
         // sets the status itself), so the post is created as a draft and only goes public
         // once that succeeds. An empty post is published by the create.
