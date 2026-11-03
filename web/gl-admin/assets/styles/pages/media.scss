@@ -48,6 +48,17 @@
     flex: 1;
   }
 
+  // "Paste or drop images to upload" beside Upload (#28). Phones rarely paste or drop
+  // files, and the header is tight there.
+  &__paste-hint {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+
+    @media (width <= 768px) {
+      display: none;
+    }
+  }
+
   &__toolbar {
     align-items: center;
     display: flex;

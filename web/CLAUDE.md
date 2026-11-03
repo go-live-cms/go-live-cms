@@ -175,8 +175,13 @@ are the most fragile part of the codebase. **Before editing anything under
   ≤768px a Drawer) and `/media/:id` (focal point with crop previews, Replace, fields,
   "Used in"). The rules (kinds, tags, filters, "Used in" rows, object-position) live in
   `lib/mediaLibrary.ts` (tested). "Used in" is `GET /media/:id/posts`, i.e. `post_media`:
-  the featured image (order 0) and the image blocks the collab store syncs (> 0), merged
-  per post. Write access is `canWriteMedia` (`lib/roles.ts`).
+  one row per post with `usages` (#176: `featured`, `block` with `block_id`/`block_type`,
+  or `attached`), labelled by `usageLabels` ("Featured image and 2 image blocks"). Write
+  access is `canWriteMedia` (`lib/roles.ts`). **Paste to upload (#28):** Ctrl/Cmd+V on the
+  library uploads the clipboard's images through the same `upload` as the button and drop
+  (`lib/mediaPaste.ts`, tested): ignored in text fields and dialogs, other clipboard
+  content ignored, an unnamed (or Chrome/Firefox's generic `image.png`) image becomes
+  `pasted-YYYYMMDD-HHMMSS[-N].<ext>`.
 - **Missing alt text (#325):** alt is optional on upload (the admin no longer sends the
   file's stem) and an image may be marked **decorative** (`media.decorative`). Missing =
   an image (SVG too), not decorative, alt empty or only whitespace: `missingAlt` in
