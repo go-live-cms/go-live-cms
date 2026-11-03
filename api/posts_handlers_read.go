@@ -35,6 +35,11 @@ func (server *Server) getPosts(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": sortErr.Error()})
 		return
 	}
+	unpublishedChanges, err := parseUnpublishedChangesFilter(c.Query("unpublished_changes"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -63,9 +68,10 @@ func (server *Server) getPosts(c *gin.Context) {
 
 	// Count with the same filters as the list, user_id included.
 	total, err := server.store.CountFilteredPosts(c.Request.Context(), db.CountFilteredPostsParams{
-		PostType:   postType,
-		PostStatus: status,
-		UserID:     userID,
+		PostType:           postType,
+		PostStatus:         status,
+		UserID:             userID,
+		UnpublishedChanges: unpublishedChanges,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count filtered posts"})
@@ -76,13 +82,14 @@ func (server *Server) getPosts(c *gin.Context) {
 		switch metaLevel {
 		case "full", "all":
 			posts, err := server.store.ListPostsWithAllMeta(c.Request.Context(), db.ListPostsWithAllMetaParams{
-				PostType:      postType,
-				PostStatus:    status,
-				UserID:        userID,
-				SortColumn:    sorting.Column,
-				SortDirection: sorting.Direction,
-				OffsetCount:   int32(offset),
-				LimitCount:    int32(limit),
+				PostType:           postType,
+				PostStatus:         status,
+				UserID:             userID,
+				UnpublishedChanges: unpublishedChanges,
+				SortColumn:         sorting.Column,
+				SortDirection:      sorting.Direction,
+				OffsetCount:        int32(offset),
+				LimitCount:         int32(limit),
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts with all meta"})
@@ -113,13 +120,14 @@ func (server *Server) getPosts(c *gin.Context) {
 
 		default:
 			posts, err := server.store.ListPostsWithMeta(c.Request.Context(), db.ListPostsWithMetaParams{
-				PostType:      postType,
-				PostStatus:    status,
-				UserID:        userID,
-				SortColumn:    sorting.Column,
-				SortDirection: sorting.Direction,
-				OffsetCount:   int32(offset),
-				LimitCount:    int32(limit),
+				PostType:           postType,
+				PostStatus:         status,
+				UserID:             userID,
+				UnpublishedChanges: unpublishedChanges,
+				SortColumn:         sorting.Column,
+				SortDirection:      sorting.Direction,
+				OffsetCount:        int32(offset),
+				LimitCount:         int32(limit),
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts with meta"})
@@ -150,13 +158,14 @@ func (server *Server) getPosts(c *gin.Context) {
 		}
 	} else {
 		posts, err := server.store.ListPosts(c.Request.Context(), db.ListPostsParams{
-			PostType:      postType,
-			PostStatus:    status,
-			UserID:        userID,
-			SortColumn:    sorting.Column,
-			SortDirection: sorting.Direction,
-			OffsetCount:   int32(offset),
-			LimitCount:    int32(limit),
+			PostType:           postType,
+			PostStatus:         status,
+			UserID:             userID,
+			UnpublishedChanges: unpublishedChanges,
+			SortColumn:         sorting.Column,
+			SortDirection:      sorting.Direction,
+			OffsetCount:        int32(offset),
+			LimitCount:         int32(limit),
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts"})
@@ -210,12 +219,31 @@ func (server *Server) getPostCounts(c *gin.Context) {
 	}
 
 	counts := make(map[string]int64, len(rows))
-	var total int64
+	var total, unpublishedChanges int64
 	for _, row := range rows {
 		counts[row.PostStatus] = row.Total
 		total += row.Total
+		unpublishedChanges += row.UnpublishedChanges
 	}
-	c.JSON(http.StatusOK, gin.H{"counts": counts, "total": total})
+	// unpublished_changes: the "Changes not published" tab (#326), published posts
+	// whose working copy differs from the site's. They're in counts.published too.
+	c.JSON(http.StatusOK, gin.H{"counts": counts, "total": total, "unpublished_changes": unpublishedChanges})
+}
+
+// postDetailResponse is GET /posts/:id and /posts/slug/:slug's post: the row, its
+// published blocks' media, and whether it has changes not published (#326). A
+// failed flag lookup leaves the flag out rather than failing the read.
+func (server *Server) postDetailResponse(c *gin.Context, post db.Post) PostResponse {
+	resp := toPostResponse(post)
+	server.attachBlockMedia(c.Request.Context(), resp.PublishedBlocks)
+	if post.PostStatus == "published" {
+		changed, err := server.store.GetPostHasUnpublishedChanges(c.Request.Context(), post.ID)
+		if err != nil {
+			server.requestLog(c).Warn("failed to read unpublished changes", "post_id", post.ID, "error", err)
+		}
+		resp.HasUnpublishedChanges = changed
+	}
+	return resp
 }
 
 // getPostByID handles GET /posts/:id
@@ -237,10 +265,8 @@ func (server *Server) getPostByID(c *gin.Context) {
 		return
 	}
 
-	resp := toPostResponse(post)
-	server.attachBlockMedia(c.Request.Context(), resp.PublishedBlocks)
 	c.JSON(http.StatusOK, gin.H{
-		"post": resp,
+		"post": server.postDetailResponse(c, post),
 	})
 }
 
@@ -262,10 +288,8 @@ func (server *Server) getPostBySlug(c *gin.Context) {
 		return
 	}
 
-	resp := toPostResponse(post)
-	server.attachBlockMedia(c.Request.Context(), resp.PublishedBlocks)
 	c.JSON(http.StatusOK, gin.H{
-		"post": resp,
+		"post": server.postDetailResponse(c, post),
 	})
 }
 

@@ -101,33 +101,45 @@ func (q *Queries) CopyPostTaxonomyTerms(ctx context.Context, arg CopyPostTaxonom
 }
 
 const countFilteredPosts = `-- name: CountFilteredPosts :one
-SELECT COUNT(*) AS total FROM posts
-WHERE 
-    ($1::text = '' OR post_type = $1)
-    AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
-    AND ($3::bigint = 0 OR user_id = $3)
+SELECT COUNT(*) AS total FROM posts p
+WHERE
+    ($1::text = '' OR p.post_type = $1)
+    AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
+    AND ($3::bigint = 0 OR p.user_id = $3)
+    AND (NOT $4::boolean
+         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 `
 
 type CountFilteredPostsParams struct {
-	PostType   string `json:"post_type"`
-	PostStatus string `json:"post_status"`
-	UserID     int64  `json:"user_id"`
+	PostType           string `json:"post_type"`
+	PostStatus         string `json:"post_status"`
+	UserID             int64  `json:"user_id"`
+	UnpublishedChanges bool   `json:"unpublished_changes"`
 }
 
 func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countFilteredPosts, arg.PostType, arg.PostStatus, arg.UserID)
+	row := q.db.QueryRowContext(ctx, countFilteredPosts,
+		arg.PostType,
+		arg.PostStatus,
+		arg.UserID,
+		arg.UnpublishedChanges,
+	)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
 }
 
 const countPostsByStatus = `-- name: CountPostsByStatus :many
-SELECT post_status, COUNT(*) AS total FROM posts
+SELECT p.post_status, COUNT(*) AS total,
+       COUNT(*) FILTER (
+           WHERE golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)
+       ) AS unpublished_changes
+FROM posts p
 WHERE
-    ($1::text = '' OR post_type = $1)
-    AND ($2::bigint = 0 OR user_id = $2)
-GROUP BY post_status
-ORDER BY post_status
+    ($1::text = '' OR p.post_type = $1)
+    AND ($2::bigint = 0 OR p.user_id = $2)
+GROUP BY p.post_status
+ORDER BY p.post_status
 `
 
 type CountPostsByStatusParams struct {
@@ -136,12 +148,14 @@ type CountPostsByStatusParams struct {
 }
 
 type CountPostsByStatusRow struct {
-	PostStatus string `json:"post_status"`
-	Total      int64  `json:"total"`
+	PostStatus         string `json:"post_status"`
+	Total              int64  `json:"total"`
+	UnpublishedChanges int64  `json:"unpublished_changes"`
 }
 
 // The admin list's status tabs (#340): one count per status, with the list's
-// type and owner filters.
+// type and owner filters. unpublished_changes: how many of them have changes
+// not published (#326; only published posts can).
 func (q *Queries) CountPostsByStatus(ctx context.Context, arg CountPostsByStatusParams) ([]CountPostsByStatusRow, error) {
 	rows, err := q.db.QueryContext(ctx, countPostsByStatus, arg.PostType, arg.UserID)
 	if err != nil {
@@ -151,7 +165,7 @@ func (q *Queries) CountPostsByStatus(ctx context.Context, arg CountPostsByStatus
 	items := []CountPostsByStatusRow{}
 	for rows.Next() {
 		var i CountPostsByStatusRow
-		if err := rows.Scan(&i.PostStatus, &i.Total); err != nil {
+		if err := rows.Scan(&i.PostStatus, &i.Total, &i.UnpublishedChanges); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -221,7 +235,7 @@ INSERT INTO posts (
     block_doc
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash
 `
 
 type CreatePostsParams struct {
@@ -272,6 +286,8 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 	)
 	return i, err
 }
@@ -320,7 +336,7 @@ func (q *Queries) DeleteUserPost(ctx context.Context, postID int64) error {
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash FROM posts 
 WHERE id = $1 LIMIT 1
 `
 
@@ -346,12 +362,14 @@ func (q *Queries) GetPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 	)
 	return i, err
 }
 
 const getPostBySlug = `-- name: GetPostBySlug :one
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts 
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash FROM posts 
 WHERE slug = $1 LIMIT 1
 `
 
@@ -377,12 +395,14 @@ func (q *Queries) GetPostBySlug(ctx context.Context, slug string) (Post, error) 
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 	)
 	return i, err
 }
 
 const getPostChildren = `-- name: GetPostChildren :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings FROM posts
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash FROM posts
 WHERE post_parent = $1
 ORDER BY menu_order ASC, title ASC
 `
@@ -415,6 +435,8 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.BlockDocHash,
+			&i.PublishedBlockHash,
 		); err != nil {
 			return nil, err
 		}
@@ -429,9 +451,24 @@ func (q *Queries) GetPostChildren(ctx context.Context, postParent sql.NullInt64)
 	return items, nil
 }
 
+const getPostHasUnpublishedChanges = `-- name: GetPostHasUnpublishedChanges :one
+SELECT golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes
+FROM posts p
+WHERE p.id = $1
+`
+
+// GET /posts/:id and /posts/slug/:slug (#326): ListPosts' has_unpublished_changes
+// for one post.
+func (q *Queries) GetPostHasUnpublishedChanges(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRowContext(ctx, getPostHasUnpublishedChanges, id)
+	var has_unpublished_changes bool
+	err := row.Scan(&has_unpublished_changes)
+	return has_unpublished_changes, err
+}
+
 const getPostWithMeta = `-- name: GetPostWithMeta :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash,
     COALESCE(
         jsonb_object_agg(
             pm.meta_key, 
@@ -464,6 +501,8 @@ type GetPostWithMetaRow struct {
 	PublishedBlockDoc  pqtype.NullRawMessage `json:"published_block_doc"`
 	Slug               string                `json:"slug"`
 	PublishedSettings  pqtype.NullRawMessage `json:"published_settings"`
+	BlockDocHash       sql.NullString        `json:"block_doc_hash"`
+	PublishedBlockHash sql.NullString        `json:"published_block_hash"`
 	Meta               interface{}           `json:"meta"`
 }
 
@@ -489,59 +528,68 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 		&i.Meta,
 	)
 	return i, err
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, published_block_doc, slug, published_settings FROM posts
+SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    -- Changes not published (#326): a published post whose working copy (body or
+    -- settings) differs from what the site shows. Migration 000030.
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes
+FROM posts p
 WHERE 
-    ($1::text = '' OR post_type = $1)
-    AND ($2::text = '' OR post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
-    AND ($3::bigint = 0 OR user_id = $3)  -- Add user filter
+    ($1::text = '' OR p.post_type = $1)
+    AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
+    AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
+    AND (NOT $4::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN menu_order END DESC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN created_at END ASC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN created_at END DESC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN title END ASC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN title END DESC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN menu_order END ASC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $5::text = 'asc' THEN id END ASC,
+    CASE WHEN $6::text = 'asc' THEN id END ASC,
     id DESC
-LIMIT $7
-OFFSET $6
+LIMIT $8
+OFFSET $7
 `
 
 type ListPostsParams struct {
-	PostType      string `json:"post_type"`
-	PostStatus    string `json:"post_status"`
-	UserID        int64  `json:"user_id"`
-	SortColumn    string `json:"sort_column"`
-	SortDirection string `json:"sort_direction"`
-	OffsetCount   int32  `json:"offset_count"`
-	LimitCount    int32  `json:"limit_count"`
+	PostType           string `json:"post_type"`
+	PostStatus         string `json:"post_status"`
+	UserID             int64  `json:"user_id"`
+	UnpublishedChanges bool   `json:"unpublished_changes"`
+	SortColumn         string `json:"sort_column"`
+	SortDirection      string `json:"sort_direction"`
+	OffsetCount        int32  `json:"offset_count"`
+	LimitCount         int32  `json:"limit_count"`
 }
 
 type ListPostsRow struct {
-	ID                int64                 `json:"id"`
-	Title             string                `json:"title"`
-	Description       string                `json:"description"`
-	UserID            int64                 `json:"user_id"`
-	Username          string                `json:"username"`
-	Url               string                `json:"url"`
-	PostType          string                `json:"post_type"`
-	PostStatus        string                `json:"post_status"`
-	PostParent        sql.NullInt64         `json:"post_parent"`
-	MenuOrder         int32                 `json:"menu_order"`
-	CreatedAt         time.Time             `json:"created_at"`
-	ChangedAt         time.Time             `json:"changed_at"`
-	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug              string                `json:"slug"`
-	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
+	ID                    int64                 `json:"id"`
+	Title                 string                `json:"title"`
+	Description           string                `json:"description"`
+	UserID                int64                 `json:"user_id"`
+	Username              string                `json:"username"`
+	Url                   string                `json:"url"`
+	PostType              string                `json:"post_type"`
+	PostStatus            string                `json:"post_status"`
+	PostParent            sql.NullInt64         `json:"post_parent"`
+	MenuOrder             int32                 `json:"menu_order"`
+	CreatedAt             time.Time             `json:"created_at"`
+	ChangedAt             time.Time             `json:"changed_at"`
+	PublishedBlockDoc     pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                  string                `json:"slug"`
+	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
+	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
 }
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
@@ -553,6 +601,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.UnpublishedChanges,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,
@@ -581,6 +630,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.HasUnpublishedChanges,
 		); err != nil {
 			return nil, err
 		}
@@ -599,6 +649,7 @@ const listPostsWithAllMeta = `-- name: ListPostsWithAllMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug,
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     -- Post custom meta
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
@@ -632,50 +683,53 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
+    AND (NOT $4::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $6::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $7
-OFFSET $6
+LIMIT $8
+OFFSET $7
 `
 
 type ListPostsWithAllMetaParams struct {
-	PostType      string `json:"post_type"`
-	PostStatus    string `json:"post_status"`
-	UserID        int64  `json:"user_id"`
-	SortColumn    string `json:"sort_column"`
-	SortDirection string `json:"sort_direction"`
-	OffsetCount   int32  `json:"offset_count"`
-	LimitCount    int32  `json:"limit_count"`
+	PostType           string `json:"post_type"`
+	PostStatus         string `json:"post_status"`
+	UserID             int64  `json:"user_id"`
+	UnpublishedChanges bool   `json:"unpublished_changes"`
+	SortColumn         string `json:"sort_column"`
+	SortDirection      string `json:"sort_direction"`
+	OffsetCount        int32  `json:"offset_count"`
+	LimitCount         int32  `json:"limit_count"`
 }
 
 type ListPostsWithAllMetaRow struct {
-	ID                int64                 `json:"id"`
-	Title             string                `json:"title"`
-	Description       string                `json:"description"`
-	UserID            int64                 `json:"user_id"`
-	Username          string                `json:"username"`
-	Url               string                `json:"url"`
-	PostType          string                `json:"post_type"`
-	PostStatus        string                `json:"post_status"`
-	PostParent        sql.NullInt64         `json:"post_parent"`
-	MenuOrder         int32                 `json:"menu_order"`
-	CreatedAt         time.Time             `json:"created_at"`
-	ChangedAt         time.Time             `json:"changed_at"`
-	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug              string                `json:"slug"`
-	PostMeta          interface{}           `json:"post_meta"`
-	AuthorMeta        json.RawMessage       `json:"author_meta"`
-	PostTypeMeta      json.RawMessage       `json:"post_type_meta"`
+	ID                    int64                 `json:"id"`
+	Title                 string                `json:"title"`
+	Description           string                `json:"description"`
+	UserID                int64                 `json:"user_id"`
+	Username              string                `json:"username"`
+	Url                   string                `json:"url"`
+	PostType              string                `json:"post_type"`
+	PostStatus            string                `json:"post_status"`
+	PostParent            sql.NullInt64         `json:"post_parent"`
+	MenuOrder             int32                 `json:"menu_order"`
+	CreatedAt             time.Time             `json:"created_at"`
+	ChangedAt             time.Time             `json:"changed_at"`
+	PublishedBlockDoc     pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                  string                `json:"slug"`
+	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
+	PostMeta              interface{}           `json:"post_meta"`
+	AuthorMeta            json.RawMessage       `json:"author_meta"`
+	PostTypeMeta          json.RawMessage       `json:"post_type_meta"`
 }
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
@@ -687,6 +741,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.UnpublishedChanges,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,
@@ -714,6 +769,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 			&i.ChangedAt,
 			&i.PublishedBlockDoc,
 			&i.Slug,
+			&i.HasUnpublishedChanges,
 			&i.PostMeta,
 			&i.AuthorMeta,
 			&i.PostTypeMeta,
@@ -735,6 +791,7 @@ const listPostsWithMeta = `-- name: ListPostsWithMeta :many
 SELECT 
     p.id, p.title, p.description, p.user_id, p.username, p.url, 
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
+    golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -758,50 +815,53 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
+    AND (NOT $4::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $4::text = 'created_at' AND $5::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $4::text = 'changed_at' AND $5::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $4::text = 'title' AND $5::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $4::text = 'menu_order' AND $5::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $5::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $6::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $7
-OFFSET $6
+LIMIT $8
+OFFSET $7
 `
 
 type ListPostsWithMetaParams struct {
-	PostType      string `json:"post_type"`
-	PostStatus    string `json:"post_status"`
-	UserID        int64  `json:"user_id"`
-	SortColumn    string `json:"sort_column"`
-	SortDirection string `json:"sort_direction"`
-	OffsetCount   int32  `json:"offset_count"`
-	LimitCount    int32  `json:"limit_count"`
+	PostType           string `json:"post_type"`
+	PostStatus         string `json:"post_status"`
+	UserID             int64  `json:"user_id"`
+	UnpublishedChanges bool   `json:"unpublished_changes"`
+	SortColumn         string `json:"sort_column"`
+	SortDirection      string `json:"sort_direction"`
+	OffsetCount        int32  `json:"offset_count"`
+	LimitCount         int32  `json:"limit_count"`
 }
 
 type ListPostsWithMetaRow struct {
-	ID                int64                 `json:"id"`
-	Title             string                `json:"title"`
-	Description       string                `json:"description"`
-	UserID            int64                 `json:"user_id"`
-	Username          string                `json:"username"`
-	Url               string                `json:"url"`
-	PostType          string                `json:"post_type"`
-	PostStatus        string                `json:"post_status"`
-	PostParent        sql.NullInt64         `json:"post_parent"`
-	MenuOrder         int32                 `json:"menu_order"`
-	CreatedAt         time.Time             `json:"created_at"`
-	ChangedAt         time.Time             `json:"changed_at"`
-	PublishedBlockDoc pqtype.NullRawMessage `json:"published_block_doc"`
-	Slug              string                `json:"slug"`
-	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
-	Meta              interface{}           `json:"meta"`
-	Authors           json.RawMessage       `json:"authors"`
+	ID                    int64                 `json:"id"`
+	Title                 string                `json:"title"`
+	Description           string                `json:"description"`
+	UserID                int64                 `json:"user_id"`
+	Username              string                `json:"username"`
+	Url                   string                `json:"url"`
+	PostType              string                `json:"post_type"`
+	PostStatus            string                `json:"post_status"`
+	PostParent            sql.NullInt64         `json:"post_parent"`
+	MenuOrder             int32                 `json:"menu_order"`
+	CreatedAt             time.Time             `json:"created_at"`
+	ChangedAt             time.Time             `json:"changed_at"`
+	PublishedBlockDoc     pqtype.NullRawMessage `json:"published_block_doc"`
+	Slug                  string                `json:"slug"`
+	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
+	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
+	Meta                  interface{}           `json:"meta"`
+	Authors               json.RawMessage       `json:"authors"`
 }
 
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
@@ -813,6 +873,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.UnpublishedChanges,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,
@@ -841,6 +902,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.PublishedBlockDoc,
 			&i.Slug,
 			&i.PublishedSettings,
+			&i.HasUnpublishedChanges,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {
@@ -870,7 +932,7 @@ SET title = COALESCE($1, title),
     menu_order = COALESCE($9, menu_order),
     changed_at = now()
 WHERE id = $10
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash
 `
 
 type UpdatePostParams struct {
@@ -919,6 +981,8 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 	)
 	return i, err
 }
@@ -928,7 +992,7 @@ UPDATE posts
 SET slug = $2,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash
 `
 
 type UpdatePostSlugParams struct {
@@ -958,6 +1022,8 @@ func (q *Queries) UpdatePostSlug(ctx context.Context, arg UpdatePostSlugParams) 
 		&i.PublishedBlockDoc,
 		&i.Slug,
 		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
 	)
 	return i, err
 }
