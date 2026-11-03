@@ -245,3 +245,27 @@ ORDER BY
     p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
+-- Duplicating a post (#354, DuplicatePostTx): the copy's relationship rows,
+-- read from the source inside the same transaction as the insert.
+
+-- name: CopyPostTaxonomyTerms :exec
+INSERT INTO post_taxonomy_relationships (post_id, taxonomy_term_id)
+SELECT @new_post_id::bigint, ptr.taxonomy_term_id
+FROM post_taxonomy_relationships ptr
+WHERE ptr.post_id = @source_post_id::bigint;
+
+-- name: CopyPostFeaturedImage :exec
+-- The featured image is the order-0 post_media link plus its _thumbnail_*
+-- meta (setFeaturedImage). The content image links (order > 0) are synced
+-- from the copy's block_doc instead (SyncPostContentMedia).
+INSERT INTO post_media (post_id, media_id, "order")
+SELECT @new_post_id::bigint, pm.media_id, 0
+FROM post_media pm
+WHERE pm.post_id = @source_post_id::bigint AND pm."order" = 0;
+
+-- name: CopyPostFeaturedImageMeta :exec
+INSERT INTO post_meta (post_id, meta_key, meta_value)
+SELECT @new_post_id::bigint, m.meta_key, m.meta_value
+FROM post_meta m
+WHERE m.post_id = @source_post_id::bigint
+  AND m.meta_key IN ('_thumbnail_id', '_thumbnail_url');

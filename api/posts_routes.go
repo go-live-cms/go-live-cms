@@ -36,6 +36,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.POST("", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createPost)
 		posts.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updatePost)
 		posts.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePost)
+		// A draft copy owned by the caller (#354); the handler checks read access.
+		posts.POST("/:id/duplicate", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.duplicatePost)
 
 		// Post meta operations
 		posts.GET("/:id/meta", server.getPostMeta)

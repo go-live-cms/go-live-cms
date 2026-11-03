@@ -1,0 +1,219 @@
+{
+  "_comment": "Duplicating a post (#354): `source` is a working copy, `duplicate` the same doc with every block id regenerated, as the API's regenerateBlockIDs writes it (fixed ids here). The Go test (TestDuplicatePostVectors) checks `duplicate` is a valid regeneration of `source` by the same rules as its own output; duplicatePost.collab.test.ts seeds a new post from `duplicate` on the real collab server.",
+  "source": {
+    "doc_version": 1,
+    "blocks_order": ["blk-intro-000001", "blk-heading-01", "blk-image-00001", "blk-bullets-0001", "blk-outro-000001"],
+    "blocks": {
+      "blk-intro-000001": {
+        "id": "blk-intro-000001",
+        "type": "paragraph",
+        "version": 1,
+        "attrs": {
+          "pm": {
+            "type": "paragraph",
+            "attrs": { "textAlign": null, "data-block-id": "blk-intro-000001" },
+            "content": [
+              { "type": "text", "text": "Plain and " },
+              { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] }
+            ]
+          },
+          "text": "Plain and bold"
+        }
+      },
+      "blk-heading-01": {
+        "id": "blk-heading-01",
+        "type": "heading",
+        "version": 1,
+        "attrs": {
+          "level": 2,
+          "pm": {
+            "type": "heading",
+            "attrs": { "textAlign": null, "level": 2, "data-block-id": "blk-heading-01" },
+            "content": [{ "type": "text", "text": "A heading" }]
+          },
+          "text": "A heading"
+        }
+      },
+      "blk-image-00001": {
+        "id": "blk-image-00001",
+        "type": "image",
+        "version": 2,
+        "attrs": {
+          "src": "/uploads/media/sample.jpg",
+          "alt": "A sample",
+          "mediaId": 42,
+          "caption": [{ "type": "text", "text": "The caption" }]
+        }
+      },
+      "blk-bullets-0001": {
+        "id": "blk-bullets-0001",
+        "type": "bullet_list",
+        "version": 1,
+        "attrs": {},
+        "children": ["blk-item-000001", "blk-item-000002"]
+      },
+      "blk-item-000001": {
+        "id": "blk-item-000001",
+        "type": "list_item",
+        "version": 1,
+        "attrs": {
+          "pm": {
+            "type": "listItem",
+            "attrs": { "data-block-id": "blk-item-000001" },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "textAlign": null, "data-block-id": "blk-inner-00001" },
+                "content": [{ "type": "text", "text": "First item" }]
+              }
+            ]
+          },
+          "text": "First item"
+        }
+      },
+      "blk-item-000002": {
+        "id": "blk-item-000002",
+        "type": "list_item",
+        "version": 1,
+        "attrs": {
+          "pm": {
+            "type": "listItem",
+            "attrs": { "data-block-id": "blk-item-000002" },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "textAlign": null, "data-block-id": null },
+                "content": [{ "type": "text", "text": "Second item" }]
+              }
+            ]
+          },
+          "text": "Second item"
+        }
+      },
+      "blk-outro-000001": {
+        "id": "blk-outro-000001",
+        "type": "paragraph",
+        "version": 1,
+        "attrs": {
+          "pm": {
+            "type": "paragraph",
+            "attrs": { "textAlign": null, "data-block-id": "blk-outro-000001" },
+            "content": [{ "type": "text", "text": "The end" }]
+          },
+          "text": "The end"
+        }
+      }
+    }
+  },
+  "duplicate": {
+    "doc_version": 1,
+    "blocks_order": [
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0001",
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0002",
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0003",
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0004",
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0008"
+    ],
+    "blocks": {
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0001": {
+        "id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0001",
+        "type": "paragraph",
+        "version": 1,
+        "attrs": {
+          "pm": {
+            "type": "paragraph",
+            "attrs": { "textAlign": null, "data-block-id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0001" },
+            "content": [
+              { "type": "text", "text": "Plain and " },
+              { "type": "text", "text": "bold", "marks": [{ "type": "bold" }] }
+            ]
+          },
+          "text": "Plain and bold"
+        }
+      },
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0002": {
+        "id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0002",
+        "type": "heading",
+        "version": 1,
+        "attrs": {
+          "level": 2,
+          "pm": {
+            "type": "heading",
+            "attrs": { "textAlign": null, "level": 2, "data-block-id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0002" },
+            "content": [{ "type": "text", "text": "A heading" }]
+          },
+          "text": "A heading"
+        }
+      },
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0003": {
+        "id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0003",
+        "type": "image",
+        "version": 2,
+        "attrs": {
+          "src": "/uploads/media/sample.jpg",
+          "alt": "A sample",
+          "mediaId": 42,
+          "caption": [{ "type": "text", "text": "The caption" }]
+        }
+      },
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0004": {
+        "id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0004",
+        "type": "bullet_list",
+        "version": 1,
+        "attrs": {},
+        "children": ["6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0005", "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0006"]
+      },
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0005": {
+        "id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0005",
+        "type": "list_item",
+        "version": 1,
+        "attrs": {
+          "pm": {
+            "type": "listItem",
+            "attrs": { "data-block-id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0005" },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "textAlign": null, "data-block-id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0007" },
+                "content": [{ "type": "text", "text": "First item" }]
+              }
+            ]
+          },
+          "text": "First item"
+        }
+      },
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0006": {
+        "id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0006",
+        "type": "list_item",
+        "version": 1,
+        "attrs": {
+          "pm": {
+            "type": "listItem",
+            "attrs": { "data-block-id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0006" },
+            "content": [
+              {
+                "type": "paragraph",
+                "attrs": { "textAlign": null, "data-block-id": null },
+                "content": [{ "type": "text", "text": "Second item" }]
+              }
+            ]
+          },
+          "text": "Second item"
+        }
+      },
+      "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0008": {
+        "id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0008",
+        "type": "paragraph",
+        "version": 1,
+        "attrs": {
+          "pm": {
+            "type": "paragraph",
+            "attrs": { "textAlign": null, "data-block-id": "6f1c0a52-0d0e-4c43-9f0a-1b6c2c1e0008" },
+            "content": [{ "type": "text", "text": "The end" }]
+          },
+          "text": "The end"
+        }
+      }
+    }
+  }
+}

@@ -39,6 +39,7 @@ func guardLastAdmin(ctx context.Context, q *Queries, userID int64) error {
 type Store interface {
 	Querier
 	CreatePostTx(ctx context.Context, arg CreatePostTxParams) (CreatePostTxResult, error)
+	DuplicatePostTx(ctx context.Context, arg DuplicatePostTxParams) (Post, error)
 	DeletePostTx(ctx context.Context, id int64) error
 
 	DeleteUserTx(ctx context.Context, id int64) error
