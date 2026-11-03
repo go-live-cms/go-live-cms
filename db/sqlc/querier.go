@@ -52,6 +52,8 @@ type Querier interface {
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	// The total for GET /media: the rows ListMedia pages through, same filters.
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
+	// ListMembers' filters, for its total.
+	CountMembers(ctx context.Context, arg CountMembersParams) (int64, error)
 	// Home's "N images have no alt text · used in M published posts" (#325, #324):
 	// images missing their alt text (the rule in ListMedia), and how many
 	// published posts use at least one of them through post_media.
@@ -114,14 +116,12 @@ type Querier interface {
 	DeletePostMedias(ctx context.Context, postID int64) error
 	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
 	DeletePostType(ctx context.Context, name string) error
-	DeletePostsByUserID(ctx context.Context, userID int64) error
 	DeleteTaxonomyTerm(ctx context.Context, id int64) error
 	DeleteTaxonomyType(ctx context.Context, name string) error
 	DeleteTheme(ctx context.Context, id int64) error
 	DeleteThemeSetting(ctx context.Context, arg DeleteThemeSettingParams) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserPost(ctx context.Context, postID int64) error
-	DeleteUserPostsByUserID(ctx context.Context, userID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
 	GetActiveTheme(ctx context.Context) (Theme, error)
 	// Get active theme with its settings
@@ -257,6 +257,11 @@ type Querier interface {
 	// Which of the given media_path values some media row uses (the dev seed
 	// restores only sample files a row still references).
 	ListMediaPathsIn(ctx context.Context, paths []string) ([]string, error)
+	// The Users screen (#333): ListUsers' sorts, plus a search (pattern: an ILIKE pattern
+	// the API escapes, '' = all) over name, username and email, a role filter ('' = all),
+	// and each member's posts owned (posts.user_id, every type and status), counted in the
+	// same query.
+	ListMembers(ctx context.Context, arg ListMembersParams) ([]ListMembersRow, error)
 	// A menu's items with what their URL and visibility are resolved from: the
 	// post (and its type), the term (and its taxonomy) or the archive's post type.
 	// A target that no longer exists comes back as NULLs. A post's published
@@ -339,6 +344,14 @@ type Querier interface {
 	// Serializes a password change against concurrent refresh-token rotation
 	// (see UpdateUserTx and LockUserForShare).
 	LockUserForUpdate(ctx context.Context, id int64) error
+	// Row-locks the given users in id order (RemoveUserTx: the member and the one who
+	// receives their posts), so two removals that name each other can't deadlock.
+	LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error)
+	// The removed member's byline (user_posts, #319) on the posts that just moved goes to
+	// the new owner, unless they are already credited there. Credits on anyone else's
+	// posts are deleted with the account (ON DELETE CASCADE).
+	ReassignPostBylines(ctx context.Context, arg ReassignPostBylinesParams) error
+	ReassignPostsOwner(ctx context.Context, arg ReassignPostsOwnerParams) ([]int64, error)
 	// A failed attempt under this claim: the reason the editor shows, and the next try
 	// after the backoff. 0 rows: the schedule changed meanwhile, nothing to record.
 	RecordScheduledPublishFailure(ctx context.Context, arg RecordScheduledPublishFailureParams) (int64, error)
@@ -364,7 +377,7 @@ type Querier interface {
 	RevokeOpenUserInvitationsByEmail(ctx context.Context, email string) error
 	RevokeUserInvitation(ctx context.Context, id int64) (int64, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)
-	// Scheduled publishing (#147, 000032). The scheduler is api/scheduled_publish.go;
+	// Scheduled publishing (#147, 000033). The scheduler is api/scheduled_publish.go;
 	// the publish itself is PublishScheduledPostTx (db/sqlc/post_publish_tx.go).
 	// Schedules a draft, or moves a scheduled post to a new time. No row: the post is
 	// missing or neither a draft nor scheduled (a published post's update is #335). A
@@ -412,6 +425,7 @@ type Querier interface {
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
+	SetUserRole(ctx context.Context, arg SetUserRoleParams) (User, error)
 	// Makes the post's content image links (order > 0) match the doc's media
 	// blocks, in document order (the collab store, publish and duplicate). The
 	// three arrays are parallel, one entry per block: media_ids[i] is shown by
@@ -425,8 +439,13 @@ type Querier interface {
 	// Unchanged rows are left alone: the collab store runs this every few seconds.
 	SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error
 	TouchMenu(ctx context.Context, id int64) error
+	// Stamps last_active_at unless it is newer than min_age_seconds, so concurrent
+	// requests and the API's own check (authMiddleware) write at most once per interval.
+	// A row another transaction holds (a role change locks every admin, a password change
+	// its user) is skipped rather than waited for: the request carries on, and a later one
+	// stamps it.
+	TouchUserLastActive(ctx context.Context, arg TouchUserLastActiveParams) (int64, error)
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
-	TransferPostsToAdmin(ctx context.Context, arg TransferPostsToAdminParams) error
 	// Removes the post's featured image link (order 0). An image that is also in
 	// the content (blocks, #176) keeps its row as a content link, placed after
 	// the others until the next sync puts it at its document position; deleting
@@ -464,7 +483,6 @@ type Querier interface {
 	UpdateTaxonomyType(ctx context.Context, arg UpdateTaxonomyTypeParams) (TaxonomyType, error)
 	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
-	UpdateUserPostsOwnership(ctx context.Context, arg UpdateUserPostsOwnershipParams) error
 	UpsertExtensionSetting(ctx context.Context, arg UpsertExtensionSettingParams) (ExtensionSetting, error)
 	UpsertPostMeta(ctx context.Context, arg UpsertPostMetaParams) (PostMetum, error)
 	UpsertPostType(ctx context.Context, arg UpsertPostTypeParams) (PostType, error)

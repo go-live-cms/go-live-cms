@@ -182,7 +182,7 @@ func TestRequireRoleMiddleware(t *testing.T) {
 			server := newTestServer(t, store)
 			server.router.GET(
 				"/rbac-test",
-				authMiddleware(server.tokenMaker, server.store),
+				server.requireAuth(),
 				requireRole(server, tc.allowedRoles...),
 				func(c *gin.Context) { c.Status(http.StatusOK) },
 			)

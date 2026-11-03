@@ -75,16 +75,23 @@ type UpdateUserRequest struct {
 	Website *string `json:"website" binding:"omitempty,max=2048"`
 }
 
-// DeleteUserRequest defines options for user account deletion.
+// DeleteUserRequest is the body of DELETE /users/:id (#333): who receives the
+// posts and media the member owns. Required, even when they own nothing, so a
+// removal always says where their content goes; it must be another existing user.
 //
-// Provides content ownership transfer capabilities to handle user-generated content
-// when accounts are deleted. Ensures data integrity and content preservation.
-//
-// Options:
-//   - TransferToID: Optional user ID to receive ownership of deleted user's content
-//   - If nil, content handling depends on system configuration
-//
-// Security: Only administrators can delete user accounts.
+// Security: Only administrators can remove members.
 type DeleteUserRequest struct {
-	TransferToID *int64 `json:"transfer_to_id"`
+	TransferToID *int64 `json:"transfer_to_id" binding:"required,min=1"`
+}
+
+// ChangeUserRoleRequest is the body of PUT /users/:id/role (#333).
+type ChangeUserRoleRequest struct {
+	Role string `json:"role" binding:"required,oneof=admin editor contributor"`
+}
+
+// ListMembersQuery is the Users screen's query string (GET /users, #333). q
+// matches name, username or email (case-insensitive substring); role filters.
+type ListMembersQuery struct {
+	Q    string `form:"q" binding:"max=100"`
+	Role string `form:"role" binding:"omitempty,oneof=admin editor contributor"`
 }

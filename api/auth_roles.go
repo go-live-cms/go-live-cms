@@ -66,6 +66,12 @@ func canWriteMedia(user db.User, media db.Medium) bool {
 	return canModerateMedia(user) || media.UserID == user.ID
 }
 
+// roleChanged reports whether an update changed the user's role (compared as
+// roles, i.e. case-insensitively).
+func roleChanged(before, after db.User) bool {
+	return !strings.EqualFold(before.Role, after.Role)
+}
+
 // hasRole reports whether the user's role matches any of the given roles,
 // case-insensitively.
 func hasRole(user db.User, roles ...string) bool {

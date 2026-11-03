@@ -57,6 +57,20 @@ func normUsername(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// likeEscaper escapes LIKE's wildcards and its escape character (backslash,
+// Postgres's default), so a search matches the text as typed.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// memberSearchPattern turns the Users screen's search box (#333) into the
+// ILIKE pattern ListMembers takes: a substring match, "" for no search.
+func memberSearchPattern(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	return "%" + likeEscaper.Replace(q) + "%"
+}
+
 // isValidUserSortOption validates sorting parameters for user listing endpoints.
 //
 // Prevents SQL injection through sort parameters by allowing only predefined

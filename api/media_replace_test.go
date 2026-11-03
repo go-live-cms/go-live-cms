@@ -242,7 +242,7 @@ func TestCreateMediaBulkRejectsSpoofedFile(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
 	require.Equal(t, 1, rsp.Meta.Successful)
 	require.Equal(t, []string{"file content of fake.jpg does not match its extension"}, rsp.Errors)
-	require.Equal(t, []string{"real.png"}, uploadedFiles(t, server))
+	require.Equal(t, []string{"real.png"}, uploadedOriginalNames(t, server))
 }
 
 // replaceFixture is a stored PNG media row owned by ownerID, with its file
@@ -471,7 +471,9 @@ func TestReplaceMediaAPI(t *testing.T) {
 				store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(fx.media.ID)).Times(1).Return(legacy, nil)
 				store.EXPECT().ReplaceMediaFile(gomock.Any(), gomock.Any()).Times(1).
 					DoAndReturn(func(ctx any, arg db.ReplaceMediaFileParams) (db.Medium, error) {
-						require.Equal(t, server.config.UploadPath+"/fresh.png", arg.MediaPath)
+						require.Equal(t, server.config.UploadPath, filepath.Dir(arg.MediaPath))
+						requireStoredName(t, "fresh.png", filepath.Base(arg.MediaPath))
+						require.Equal(t, "fresh.png", arg.OriginalFilename, "original_filename keeps the readable name")
 						require.Equal(t, int32(6), arg.Width)
 						t.Cleanup(func() {
 							stored, err := os.ReadFile(outside)
@@ -483,7 +485,7 @@ func TestReplaceMediaAPI(t *testing.T) {
 			},
 			check: func(t *testing.T, server *Server, recorder *httptest.ResponseRecorder, fx fixture) {
 				require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-				require.ElementsMatch(t, []string{"hero.png", "fresh.png"}, uploadedFiles(t, server))
+				require.ElementsMatch(t, []string{"hero.png", "fresh.png"}, uploadedOriginalNames(t, server))
 			},
 		},
 		{
@@ -567,7 +569,7 @@ func TestReplaceMediaOwnerScopedRole(t *testing.T) {
 			defer ctrl.Finish()
 			store := mockdb.NewMockStore(ctrl)
 			server := newTestServer(t, store)
-			server.router.POST("/owner-scoped/media/:id/replace", authMiddleware(server.tokenMaker, server.store), server.replaceMedia)
+			server.router.POST("/owner-scoped/media/:id/replace", server.requireAuth(), server.replaceMedia)
 
 			media, original := replaceFixture(t, server, tc.ownerID)
 			store.EXPECT().GetMedia(gomock.Any(), gomock.Eq(media.ID)).Times(1).Return(media, nil)

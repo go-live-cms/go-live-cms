@@ -23,7 +23,7 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 | `load.ts` | `onLoadDocument`: restore stored state, or seed from `block_doc`. |
 | `store.ts` | `onStoreDocument` pipeline (`prepareStore`). |
 | `server.ts` | `createCollabServer`: the hooks wired into a Hocuspocus `Server`, plus `flush`. |
-| `internal.ts` | Internal HTTP listener: `/healthz`, flush. |
+| `internal.ts` | Internal HTTP listener: `/healthz`, flush, user re-check (#333). |
 | `logsafe.ts` | `logEvent`, `requestIdFrom`, `docNameForLog`, `clientContextForLog`. |
 | `env.ts` | `readEnv`, `readSecretEnv` (`<NAME>_FILE`, #158) for `main.ts`. |
 | `probe.ts`, `build.mjs`, `singleYjsInstance.mjs`, `main.ts` | Single-instance probe, esbuild bundle and its yjs plugin, entry point. |
@@ -99,7 +99,14 @@ differs, and the API compares it with the password change alone).
   anything it sent while read-only (see `gl-admin/lib/collaboration/CLAUDE.md`).
 - The `connected` hook only tracks a connection its document still has (one closed before
   the hook ran would never fire `onClose`).
-- Not re-checked on events (e.g. a store); the interval bounds how long a change takes.
+- **On demand (#333):** `POST /internal/users/:id/recheck` on the internal listener
+  (`COLLAB_INTERNAL_SECRET`, like flush) runs `checkUser(id)`: every (user, doc) group of
+  that user is looked up now (a lookup already in flight is followed by another, since it may
+  have read the API before the change committed), then goes back on the interval. The API
+  calls it after a role change or a removal, so a demotion is read-only at once. Answers
+  `{docs: n}` once queued; 400 for anything but a positive integer id.
+- Not re-checked on other events (e.g. a store); the interval bounds how long a change
+  takes when the API's call doesn't arrive.
 - Tests: `recheck.test.ts` (fake connections, `FakeClock`) and
   `server.recheck.test.ts` (real server and clients: demote → later edits dropped,
   delete / password change → closed, outage → nobody disconnected).

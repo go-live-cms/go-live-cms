@@ -121,7 +121,7 @@ func TestCreateMediaBulkAPI(t *testing.T) {
 				require.Equal(t, 1, rsp.Meta.Failed)
 				require.Len(t, rsp.Success, 2)
 				require.Equal(t, []string{"invalid file type for payload.exe"}, rsp.Errors)
-				require.ElementsMatch(t, []string{"photo.png", "notes.txt"}, uploadedFiles(t, server))
+				require.ElementsMatch(t, []string{"photo.png", "notes.txt"}, uploadedOriginalNames(t, server))
 			},
 		},
 		{
@@ -135,7 +135,7 @@ func TestCreateMediaBulkAPI(t *testing.T) {
 			},
 			checkResponse: func(t *testing.T, server *Server, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
-				require.Equal(t, []string{"escape.png"}, uploadedFiles(t, server))
+				require.Equal(t, []string{"escape.png"}, uploadedOriginalNames(t, server))
 				_, err := os.Stat(filepath.Join(server.config.UploadPath, "..", "..", "escape.png"))
 				require.True(t, os.IsNotExist(err))
 			},
@@ -510,7 +510,7 @@ func TestUpdateMediaRequestErrors(t *testing.T) {
 			// TestMediaWriteOwnerScopedRole, so the contributor reaches the
 			// owner-scoped branch.
 			server := newTestServer(t, store)
-			server.router.PUT("/owner-scoped/media/:id", authMiddleware(server.tokenMaker, server.store), server.updateMedia)
+			server.router.PUT("/owner-scoped/media/:id", server.requireAuth(), server.updateMedia)
 
 			request, err := http.NewRequest(http.MethodPut, "/owner-scoped/media/"+tc.mediaID, strings.NewReader(tc.body))
 			require.NoError(t, err)

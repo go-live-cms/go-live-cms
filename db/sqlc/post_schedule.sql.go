@@ -213,7 +213,7 @@ type SchedulePostParams struct {
 	ID          int64         `json:"id"`
 }
 
-// Scheduled publishing (#147, 000032). The scheduler is api/scheduled_publish.go;
+// Scheduled publishing (#147, 000033). The scheduler is api/scheduled_publish.go;
 // the publish itself is PublishScheduledPostTx (db/sqlc/post_publish_tx.go).
 // Schedules a draft, or moves a scheduled post to a new time. No row: the post is
 // missing or neither a draft nor scheduled (a published post's update is #335). A

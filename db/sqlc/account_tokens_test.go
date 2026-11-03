@@ -289,8 +289,9 @@ func TestResetPasswordTx(t *testing.T) {
 	t.Run("deleting the user deletes their tokens", func(t *testing.T) {
 		user := createTestUser(t)
 		token := createTestResetToken(t, user, time.Now().Add(time.Hour))
-		require.NoError(t, testStore.DeleteUserTx(ctx, user.ID))
-		_, err := testQueries.GetValidPasswordResetTokenByHash(ctx, token.TokenHash)
+		_, err := testStore.RemoveUserTx(ctx, RemoveUserTxParams{UserID: user.ID, ReassignTo: createTestUser(t).ID})
+		require.NoError(t, err)
+		_, err = testQueries.GetValidPasswordResetTokenByHash(ctx, token.TokenHash)
 		require.ErrorIs(t, err, sql.ErrNoRows)
 	})
 }

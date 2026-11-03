@@ -18,5 +18,5 @@ import (
 func (server *Server) registerCollabRoutes(v1 *gin.RouterGroup) {
 	collab := v1.Group("/collab")
 
-	collab.POST("/tickets", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createCollabTicket)
+	collab.POST("/tickets", server.requireAuth(), requireContentAuthor(server), server.createCollabTicket)
 }

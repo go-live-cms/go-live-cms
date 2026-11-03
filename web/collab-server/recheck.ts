@@ -23,6 +23,10 @@
 //     made read-only (`unverified`, never closed: the client keeps its state and goes
 //     back to read-write on the next successful check).
 //
+// `checkUser` runs a user's checks now instead (#333): the API asks for it after a role
+// change or a removal (POST /internal/users/:id/recheck), so a demotion takes effect at
+// once; the timer stays the fallback if that call never arrives.
+//
 // Pure + dependency-injected (lookup, clock, random); unit tested in recheck.test.ts.
 // Must NOT import yjs.
 import { accessMode, type DocAccess, type TicketIdentity } from "./access"
@@ -89,6 +93,10 @@ interface Group {
   failing: boolean
   /** Made read-only because lookups kept failing (not because the API said so). */
   unverified: Set<CheckedConnection>
+  /** A lookup is in flight. */
+  checking: boolean
+  /** `checkUser` asked during that lookup: check again as soon as it ends. */
+  again: boolean
 }
 
 const CLOSE_CODE = 4403
@@ -167,6 +175,22 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
   async function check(group: Group) {
     group.timer = null
     if (!live(group)) return
+    group.checking = true
+    try {
+      await lookUpAndApply(group)
+    } finally {
+      group.checking = false
+    }
+    // Asked again while the lookup ran (it may have read the API before the change
+    // committed): look again now instead of at the next interval.
+    if (group.again && live(group) && group.connections.size > 0) {
+      group.again = false
+      if (group.timer) clock.clearTimeout(group.timer)
+      schedule(group, 0)
+    }
+  }
+
+  async function lookUpAndApply(group: Group) {
     const requestId = requestIdFrom(undefined)
     let results: Map<number, DocAccess | null>
     try {
@@ -238,7 +262,17 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
       const key = keyOf(userId, docName)
       let group = groups.get(key)
       if (!group) {
-        group = { userId, docName, connections: new Map(), timer: null, confirmedAt: clock.now(), failing: false, unverified: new Set() }
+        group = {
+          userId,
+          docName,
+          connections: new Map(),
+          timer: null,
+          confirmedAt: clock.now(),
+          failing: false,
+          unverified: new Set(),
+          checking: false,
+          again: false,
+        }
         groups.set(key, group)
         schedule(group, intervalMs)
       }
@@ -246,6 +280,26 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
       groupOf.set(connection, group)
     },
     remove,
+    /**
+     * Re-checks every open connection of this user now instead of at the next interval
+     * (#333: the API calls it after a role change or a removal). A lookup already in
+     * flight is followed by another one. Returns how many (user, doc) groups it checks.
+     */
+    checkUser(userId: string): number {
+      if (stopped) return 0
+      let count = 0
+      for (const group of groups.values()) {
+        if (group.userId !== userId) continue
+        count++
+        if (group.checking) {
+          group.again = true
+          continue
+        }
+        if (group.timer) clock.clearTimeout(group.timer)
+        schedule(group, 0)
+      }
+      return count
+    },
     /** Open connections being re-checked (tests). */
     get size(): number {
       return groupOf.size

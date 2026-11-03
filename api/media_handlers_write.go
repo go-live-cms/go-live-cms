@@ -107,14 +107,15 @@ func (server *Server) createMedia(c *gin.Context) {
 		return
 	}
 
-	mediaPath, actualFilename, err := saveUploadedFileWithOriginalName(file, header, server.config.UploadPath)
+	originalFilename := cleanUploadFilename(header.Filename)
+	mediaPath, err := saveUploadedFile(file, originalFilename, server.config.UploadPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
 		return
 	}
 
 	var width, height int32
-	if isImageFile(actualFilename) {
+	if isImageFile(mediaPath) {
 		w, h, imgErr := getImageDimensions(mediaPath)
 		if imgErr == nil {
 			width, height = w, h
@@ -136,11 +137,11 @@ func (server *Server) createMedia(c *gin.Context) {
 
 	name := req.Name
 	if name == "" {
-		name = strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename))
+		name = strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename))
 	}
 	description := req.Description
 	if description == "" {
-		description = fmt.Sprintf("Uploaded file: %s", actualFilename)
+		description = fmt.Sprintf("Uploaded file: %s", originalFilename)
 	}
 	// No alt text stays empty (#325): the file name is no description of the
 	// image, and an empty alt is what the admin's "No alt text" flags.
@@ -158,7 +159,7 @@ func (server *Server) createMedia(c *gin.Context) {
 		Height:           height,
 		Duration:         0,
 		UserID:           userID,
-		OriginalFilename: actualFilename,
+		OriginalFilename: originalFilename,
 		Variants:         variants,
 	}
 
@@ -291,13 +292,14 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 		return db.Medium{}, fmt.Sprintf("failed to read %s", fileHeader.Filename)
 	}
 
-	mediaPath, actualFilename, err := saveUploadedFileWithOriginalName(file, fileHeader, server.config.UploadPath)
+	originalFilename := cleanUploadFilename(fileHeader.Filename)
+	mediaPath, err := saveUploadedFile(file, originalFilename, server.config.UploadPath)
 	if err != nil {
 		return db.Medium{}, fmt.Sprintf("failed to save %s: %v", fileHeader.Filename, err)
 	}
 
 	var width, height int32
-	if isImageFile(actualFilename) {
+	if isImageFile(mediaPath) {
 		w, h, err := getImageDimensions(mediaPath)
 		if err == nil {
 			width, height = w, h
@@ -307,8 +309,8 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 	fileSize, staged := prepareStoredImage(server.requestLog(c), server.config.UploadPath, mediaPath, mimeType, fileHeader.Size, nil)
 
 	media, err := server.store.CreateMedia(c.Request.Context(), db.CreateMediaParams{
-		Name:        strings.TrimSuffix(actualFilename, filepath.Ext(actualFilename)),
-		Description: fmt.Sprintf("Uploaded file: %s", fileHeader.Filename),
+		Name:        strings.TrimSuffix(originalFilename, filepath.Ext(originalFilename)),
+		Description: fmt.Sprintf("Uploaded file: %s", originalFilename),
 		// No alt text: a bulk upload has none to give, and the file name isn't
 		// one (#325). The admin flags these until someone writes it.
 		Alt:              "",
@@ -319,7 +321,7 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 		Height:           height,
 		Duration:         0, // Set to 0 for non-video files
 		UserID:           userID,
-		OriginalFilename: actualFilename,
+		OriginalFilename: originalFilename,
 		Variants:         staged.commitForNewRow(server.requestLog(c)),
 	})
 	if err != nil {
@@ -408,14 +410,13 @@ func (server *Server) replaceMedia(c *gin.Context) {
 		return
 	}
 
-	ext := filepath.Ext(header.Filename)
 	params := db.ReplaceMediaFileParams{
 		ID:               id,
 		MediaPath:        media.MediaPath,
 		FileSize:         header.Size,
 		MimeType:         mimeType,
 		Duration:         media.Duration,
-		OriginalFilename: cleanFilename(strings.TrimSuffix(header.Filename, ext)) + ext,
+		OriginalFilename: cleanUploadFilename(header.Filename),
 	}
 
 	// In place when the current file is ours, else as a new upload.
@@ -429,13 +430,12 @@ func (server *Server) replaceMedia(c *gin.Context) {
 			return
 		}
 	} else {
-		newPath, actualFilename, err := saveUploadedFileWithOriginalName(file, header, server.config.UploadPath)
+		newPath, err := saveUploadedFile(file, params.OriginalFilename, server.config.UploadPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save file"})
 			return
 		}
 		params.MediaPath = newPath
-		params.OriginalFilename = actualFilename
 		storedPath = newPath
 	}
 

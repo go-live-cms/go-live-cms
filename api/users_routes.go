@@ -40,8 +40,9 @@ import (
 //   - GET /:username (public profile - registered last to avoid conflicts)
 //   - POST / (admin create)
 //   - PUT /:id (self or admin update)
-//   - DELETE /:id (admin delete)
-//   - GET / (admin list)
+//   - DELETE /:id (admin remove, posts reassigned)
+//   - PUT /:id/role (admin role change)
+//   - GET / (admin list: ?q= search, ?role=, last active, posts owned)
 //
 // Route Precedence: Static routes (/me, /id/:id, /email/:email) take precedence
 // over parameter routes (/:username) due to Gin's routing behavior.
@@ -50,7 +51,7 @@ func (server *Server) RegisterUserRoutes(v1 *gin.RouterGroup) {
 
 	// Authenticated user routes (require valid Bearer token)
 	usersAuth := users.Group("")
-	usersAuth.Use(authMiddleware(server.tokenMaker, server.store))
+	usersAuth.Use(server.requireAuth())
 	usersAuth.GET("/me", server.getMe) // GET /api/v1/users/me
 
 	// Admin-only routes (require Bearer token + admin role)
@@ -60,7 +61,8 @@ func (server *Server) RegisterUserRoutes(v1 *gin.RouterGroup) {
 	admin.GET("", server.getUsers)                    // GET /api/v1/users?limit=10&sort=date_desc
 	admin.GET("/id/:id", server.getUserByID)          // GET /api/v1/users/id/123
 	admin.GET("/email/:email", server.getUserByEmail) // GET /api/v1/users/email/john@example.com
-	admin.DELETE("/:id", server.deleteUser)           // DELETE /api/v1/users/123 (admin only)
+	admin.DELETE("/:id", server.deleteUser)           // DELETE /api/v1/users/123 {transfer_to_id} (admin only)
+	admin.PUT("/:id/role", server.changeUserRole)     // PUT /api/v1/users/123/role {role} (admin only, #333)
 
 	// Self-or-admin update: ownership and the role-change restriction are
 	// field-level rules enforced inside the handler, not by middleware.

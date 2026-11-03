@@ -25,7 +25,7 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("", server.getPosts)
 		posts.GET("/counts", server.getPostCounts)
 		// The admin list's search box (#145): signed-in content roles only
-		posts.GET("/search", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.searchPosts)
+		posts.GET("/search", server.requireAuth(), requireContentAuthor(server), server.searchPosts)
 		posts.GET("/type/:type", server.getPostsByType)
 		posts.GET("/user/:id", server.getPostsByUser)
 		posts.GET("/slug/:slug", server.getPostBySlug)
@@ -33,49 +33,49 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 
 		// Protected writes. Any content role reaches them; the handler decides per
 		// post (auth_posts.go: contributors only their own, #135)
-		posts.POST("", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createPost)
-		posts.PUT("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.updatePost)
-		posts.DELETE("/:id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePost)
+		posts.POST("", server.requireAuth(), requireContentAuthor(server), server.createPost)
+		posts.PUT("/:id", server.requireAuth(), requireContentAuthor(server), server.updatePost)
+		posts.DELETE("/:id", server.requireAuth(), requireContentAuthor(server), server.deletePost)
 		// A draft copy owned by the caller (#354); the handler checks read access.
-		posts.POST("/:id/duplicate", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.duplicatePost)
+		posts.POST("/:id/duplicate", server.requireAuth(), requireContentAuthor(server), server.duplicatePost)
 
 		// Post meta operations
 		posts.GET("/:id/meta", server.getPostMeta)
-		posts.POST("/:id/meta", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createOrUpdatePostMeta)
-		posts.DELETE("/:id/meta/:key", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePostMetaByKey)
+		posts.POST("/:id/meta", server.requireAuth(), requireContentAuthor(server), server.createOrUpdatePostMeta)
+		posts.DELETE("/:id/meta/:key", server.requireAuth(), requireContentAuthor(server), server.deletePostMetaByKey)
 
 		// Featured image operations
 		posts.GET("/:id/featured-image/full", server.getFeaturedImageFull)
 		posts.GET("/:id/featured-image", server.getFeaturedImageQuick)
-		posts.POST("/:id/featured-image", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.setFeaturedImage)
-		posts.DELETE("/:id/featured-image", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.removeFeaturedImage)
+		posts.POST("/:id/featured-image", server.requireAuth(), requireContentAuthor(server), server.setFeaturedImage)
+		posts.DELETE("/:id/featured-image", server.requireAuth(), requireContentAuthor(server), server.removeFeaturedImage)
 
 		// Post-Media link operations
 		posts.GET("/:id/media", server.getPostMedia)
-		posts.POST("/:id/media", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.createPostMedia)
-		posts.DELETE("/:id/media/:media_id", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.deletePostMedia)
+		posts.POST("/:id/media", server.requireAuth(), requireContentAuthor(server), server.createPostMedia)
+		posts.DELETE("/:id/media/:media_id", server.requireAuth(), requireContentAuthor(server), server.deletePostMedia)
 
 		// Block Spec v1 operations. The working-copy GET stays role-free (any
 		// authenticated user may load the editor doc); only the collab server
 		// writes it (PUT /internal/posts/:id/collab, #206).
-		posts.GET("/:id/blocks", authMiddleware(server.tokenMaker, server.store), server.getPostBlocks)
-		posts.POST("/:id/publish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.publishPost)
-		posts.POST("/:id/unpublish", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.unpublishPost)
+		posts.GET("/:id/blocks", server.requireAuth(), server.getPostBlocks)
+		posts.POST("/:id/publish", server.requireAuth(), requireContentEditor(server), server.publishPost)
+		posts.POST("/:id/unpublish", server.requireAuth(), requireContentEditor(server), server.unpublishPost)
 		// Scheduled publishing (#147, posts_schedule.go): same rule as publishing
-		posts.PUT("/:id/schedule", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.schedulePost)
-		posts.DELETE("/:id/schedule", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.cancelPostSchedule)
+		posts.PUT("/:id/schedule", server.requireAuth(), requireContentEditor(server), server.schedulePost)
+		posts.DELETE("/:id/schedule", server.requireAuth(), requireContentEditor(server), server.cancelPostSchedule)
 
 		// Revisions (#136): published snapshots; restoring the blocks happens in the
 		// editor, the settings (#358) come back through restore-settings
-		posts.GET("/:id/versions", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.listPostVersions)
-		posts.GET("/:id/versions/:version_no", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.getPostVersion)
-		posts.POST("/:id/versions/:version_no/restore-settings", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.restorePostVersionSettings)
+		posts.GET("/:id/versions", server.requireAuth(), requireContentEditor(server), server.listPostVersions)
+		posts.GET("/:id/versions/:version_no", server.requireAuth(), requireContentEditor(server), server.getPostVersion)
+		posts.POST("/:id/versions/:version_no/restore-settings", server.requireAuth(), requireContentEditor(server), server.restorePostVersionSettings)
 
 		// SEO settings (#357): editors and admins; contributors see them read-only
-		posts.PUT("/:id/seo", authMiddleware(server.tokenMaker, server.store), requireContentEditor(server), server.updatePostSEO)
+		posts.PUT("/:id/seo", server.requireAuth(), requireContentEditor(server), server.updatePostSEO)
 
 		// Working vs published settings (#358): whether a settings change waits for Update
-		posts.GET("/:id/settings", authMiddleware(server.tokenMaker, server.store), requireContentAuthor(server), server.getPostSettingsState)
+		posts.GET("/:id/settings", server.requireAuth(), requireContentAuthor(server), server.getPostSettingsState)
 
 	}
 }

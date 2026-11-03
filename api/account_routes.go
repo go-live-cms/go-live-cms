@@ -32,7 +32,7 @@ func (server *Server) registerAccountRoutes(v1 *gin.RouterGroup) {
 	auth.POST("/invitations/accept", server.rateLimits.accountToken.perIP(), server.acceptInvite)   // POST /api/v1/auth/invitations/accept
 
 	invitations := v1.Group("/invitations")
-	invitations.Use(authMiddleware(server.tokenMaker, server.store), requireSiteAdmin(server))
+	invitations.Use(server.requireAuth(), requireSiteAdmin(server))
 	invitations.GET("", server.listInvitations)              // GET /api/v1/invitations
 	invitations.POST("", server.createInvitation)            // POST /api/v1/invitations
 	invitations.POST("/:id/resend", server.resendInvitation) // POST /api/v1/invitations/:id/resend

@@ -176,6 +176,11 @@ func (server *Server) getUserByEmail(c *gin.Context) {
 //   - limit: Number of users per page (default: 10, max: 100)
 //   - offset: Page offset for pagination (default: 0)
 //   - sort: Sort option (default: date_desc)
+//   - q: search name, username and email (case-insensitive substring, ≤100)
+//   - role: admin | editor | contributor
+//
+// Each user carries last_active_at and posts_owned (#333); meta.total is the
+// filtered count.
 //
 // Sort options:
 //   - date_asc, date_desc: Account creation chronology
@@ -221,11 +226,20 @@ func (server *Server) getUsers(c *gin.Context) {
 		return
 	}
 
-	// Query users with pagination
-	users, err := server.store.ListUsers(c.Request.Context(), db.ListUsersParams{
+	var filters ListMembersQuery
+	if err := c.ShouldBindQuery(&filters); err != nil {
+		respondBindError(c, err)
+		return
+	}
+	pattern := memberSearchPattern(filters.Q)
+
+	// One query for the page, posts owned included (#333).
+	members, err := server.store.ListMembers(c.Request.Context(), db.ListMembersParams{
+		Pattern:     pattern,
+		Role:        filters.Role,
+		SortBy:      sortBy,
 		LimitCount:  int32(limit),
 		OffsetCount: int32(offset),
-		SortBy:      sortBy,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
@@ -233,13 +247,16 @@ func (server *Server) getUsers(c *gin.Context) {
 	}
 
 	// Convert to response format (admin sees full details)
-	userResponses := make([]PrivateUserResponse, len(users))
-	for i, user := range users {
-		userResponses[i] = toPrivateUser(user)
+	userResponses := make([]MemberResponse, len(members))
+	for i, member := range members {
+		userResponses[i] = toMemberResponse(member)
 	}
 
-	// Get total count for pagination metadata
-	totalCount, err := server.store.CountTotalUsers(c.Request.Context())
+	// The filtered total, for pagination.
+	totalCount, err := server.store.CountMembers(c.Request.Context(), db.CountMembersParams{
+		Pattern: pattern,
+		Role:    filters.Role,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count total users"})
 		return

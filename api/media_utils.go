@@ -4,7 +4,7 @@
 //
 // This file provides core utilities for media file management including:
 //   - File type validation and MIME type detection
-//   - Safe filename sanitization and conflict resolution
+//   - Safe filename sanitization and unguessable stored names
 //   - Image dimension extraction and metadata processing
 //   - Upload size limits and in-place file replacement
 //   - Upload path management and directory creation
@@ -18,8 +18,10 @@
 //
 // # File Naming Strategy
 //
-//   - Original filenames are cleaned (alphanumeric + _-.)
-//   - Automatic incrementing for duplicates (file_1.jpg, file_2.jpg)
+//   - Original filenames are cleaned (alphanumeric + _-.) and kept in
+//     original_filename
+//   - Stored names add 128 random bits (file-<32 hex>.jpg, #399), so
+//     /uploads URLs can't be guessed
 //   - Maximum filename length enforcement (100 chars)
 //   - Extension preservation for proper MIME handling
 //
@@ -32,6 +34,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"image"
@@ -209,58 +213,72 @@ func (server *Server) respondUploadTooLarge(c *gin.Context) {
 	c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": fmt.Sprintf("file too large. Maximum size is %s", limit)})
 }
 
-// saveUploadedFileWithOriginalName saves uploaded file to UploadPath with conflict resolution.
-// Cleans filename (alphanumeric + _-.), adds counter suffix for duplicates.
-// Returns: (relative_path, actual_filename, error).
-//
-// # File Naming Process
-//  1. Extract name and extension from original filename
-//  2. Clean name using cleanFilename() (removes unsafe characters)
-//  3. Check for existing file, increment counter if needed
-//  4. Create directory structure if missing
-//  5. Stream file contents to destination
-//
-// # Security Notes
-//   - Creates directories with 0755 permissions
-//   - Overwrites existing files with same cleaned name
-//   - Returns relative paths for database storage
-//   - Streams file contents (memory efficient for large files)
-func saveUploadedFileWithOriginalName(file multipart.File, header *multipart.FileHeader, uploadPath string) (string, string, error) {
-	// Create upload directory if it doesn't exist
+// storedNameTokenBytes is how much randomness a stored file's name carries
+// (#399). /uploads is a public static route, so the name is the only thing
+// keeping a draft-only image private: it must not be guessable.
+const storedNameTokenBytes = 16
+
+// storedNameAttempts bounds the retries when a generated name already exists,
+// which with 128 random bits only a broken random source would cause.
+const storedNameAttempts = 5
+
+// cleanUploadFilename is the uploader's file name as stored in
+// original_filename: the base name cleaned (cleanFilename) plus its extension
+// (validateMediaUpload has already checked it against the allowlist).
+func cleanUploadFilename(filename string) string {
+	ext := filepath.Ext(filename)
+	return cleanFilename(strings.TrimSuffix(filename, ext)) + ext
+}
+
+// storedFileName is the name an upload is stored under:
+// "<cleaned name>-<32 hex chars><ext>", e.g. "launch-announcement-3f9a…c1.jpg".
+// The readable part keeps download names and image SEO; the random part makes
+// the /uploads URL unguessable, so an image only a draft uses isn't public
+// (#399). Variants live under _variants/<stored name>/, so they inherit it.
+func storedFileName(originalFilename string) (string, error) {
+	token := make([]byte, storedNameTokenBytes)
+	if _, err := rand.Read(token); err != nil {
+		return "", err
+	}
+	ext := filepath.Ext(originalFilename)
+	return fmt.Sprintf("%s-%s%s", strings.TrimSuffix(originalFilename, ext), hex.EncodeToString(token), ext), nil
+}
+
+// saveUploadedFile writes an upload into uploadPath under a new
+// storedFileName and returns its media_path ("<uploadPath>/<stored name>",
+// the form every media row uses). originalFilename should already be cleaned
+// (cleanUploadFilename). The file is created exclusively, so an upload never
+// overwrites another one, and a failed write leaves no partial file.
+func saveUploadedFile(file io.Reader, originalFilename, uploadPath string) (string, error) {
 	// Use uploadPath directly so absolute paths (e.g. in tests) work on all platforms.
-	uploadsDir := uploadPath
-	if err := os.MkdirAll(uploadsDir, 0755); err != nil {
-		return "", "", err
+	if err := os.MkdirAll(uploadPath, 0755); err != nil {
+		return "", err
 	}
 
-	// Extract and clean filename components
-	originalName := strings.TrimSuffix(header.Filename, filepath.Ext(header.Filename))
-	ext := filepath.Ext(header.Filename)
-	cleanedName := cleanFilename(originalName)
-
-	// Handle filename conflicts with counter suffix
-	filename := fmt.Sprintf("%s%s", cleanedName, ext)
-	filePath := filepath.Join(uploadsDir, filename)
-
-	counter := 1
-	for fileExists(filePath) {
-		filename = fmt.Sprintf("%s_%d%s", cleanedName, counter, ext)
-		filePath = filepath.Join(uploadsDir, filename)
-		counter++
+	for attempt := 0; attempt < storedNameAttempts; attempt++ {
+		filename, err := storedFileName(originalFilename)
+		if err != nil {
+			return "", err
+		}
+		filePath := filepath.Join(uploadPath, filename)
+		dst, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		_, err = io.Copy(dst, file)
+		if closeErr := dst.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			os.Remove(filePath)
+			return "", err
+		}
+		return fmt.Sprintf("%s/%s", uploadPath, filename), nil
 	}
-
-	// Create and write file
-	dst, err := os.Create(filePath)
-	if err != nil {
-		return "", "", err
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		return "", "", err
-	}
-
-	return fmt.Sprintf("%s/%s", uploadPath, filename), filename, nil
+	return "", errors.New("could not find a free name for the upload")
 }
 
 // errOutsideUploadDir is returned by removeMediaFile for a media_path that
@@ -409,13 +427,6 @@ func (s *fileSwap) restore() error {
 		return nil
 	}
 	return os.Rename(s.backup, s.target)
-}
-
-// fileExists checks if a file exists at the given path.
-// Returns true if file exists (including directories), false if not found.
-func fileExists(filepath string) bool {
-	_, err := os.Stat(filepath)
-	return !os.IsNotExist(err)
 }
 
 // cleanFilename sanitizes filenames for safe filesystem storage.

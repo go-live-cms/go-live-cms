@@ -139,6 +139,21 @@ func (mr *MockStoreMockRecorder) CancelPostSchedule(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelPostSchedule", reflect.TypeOf((*MockStore)(nil).CancelPostSchedule), arg0, arg1)
 }
 
+// ChangeUserRoleTx mocks base method.
+func (m *MockStore) ChangeUserRoleTx(arg0 context.Context, arg1 db.SetUserRoleParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ChangeUserRoleTx", arg0, arg1)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ChangeUserRoleTx indicates an expected call of ChangeUserRoleTx.
+func (mr *MockStoreMockRecorder) ChangeUserRoleTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ChangeUserRoleTx", reflect.TypeOf((*MockStore)(nil).ChangeUserRoleTx), arg0, arg1)
+}
+
 // CheckSlugExists mocks base method.
 func (m *MockStore) CheckSlugExists(arg0 context.Context, arg1 db.CheckSlugExistsParams) (bool, error) {
 	m.ctrl.T.Helper()
@@ -298,6 +313,21 @@ func (m *MockStore) CountMedia(arg0 context.Context, arg1 db.CountMediaParams) (
 func (mr *MockStoreMockRecorder) CountMedia(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountMedia", reflect.TypeOf((*MockStore)(nil).CountMedia), arg0, arg1)
+}
+
+// CountMembers mocks base method.
+func (m *MockStore) CountMembers(arg0 context.Context, arg1 db.CountMembersParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountMembers", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountMembers indicates an expected call of CountMembers.
+func (mr *MockStoreMockRecorder) CountMembers(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountMembers", reflect.TypeOf((*MockStore)(nil).CountMembers), arg0, arg1)
 }
 
 // CountMissingAltMedia mocks base method.
@@ -1063,20 +1093,6 @@ func (mr *MockStoreMockRecorder) DeletePostType(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostType", reflect.TypeOf((*MockStore)(nil).DeletePostType), arg0, arg1)
 }
 
-// DeletePostsByUserID mocks base method.
-func (m *MockStore) DeletePostsByUserID(arg0 context.Context, arg1 int64) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeletePostsByUserID", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeletePostsByUserID indicates an expected call of DeletePostsByUserID.
-func (mr *MockStoreMockRecorder) DeletePostsByUserID(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostsByUserID", reflect.TypeOf((*MockStore)(nil).DeletePostsByUserID), arg0, arg1)
-}
-
 // DeleteTaxonomyTerm mocks base method.
 func (m *MockStore) DeleteTaxonomyTerm(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -1175,20 +1191,6 @@ func (mr *MockStoreMockRecorder) DeleteUserPost(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserPost", reflect.TypeOf((*MockStore)(nil).DeleteUserPost), arg0, arg1)
 }
 
-// DeleteUserPostsByUserID mocks base method.
-func (m *MockStore) DeleteUserPostsByUserID(arg0 context.Context, arg1 int64) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUserPostsByUserID", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteUserPostsByUserID indicates an expected call of DeleteUserPostsByUserID.
-func (mr *MockStoreMockRecorder) DeleteUserPostsByUserID(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserPostsByUserID", reflect.TypeOf((*MockStore)(nil).DeleteUserPostsByUserID), arg0, arg1)
-}
-
 // DeleteUserSessions mocks base method.
 func (m *MockStore) DeleteUserSessions(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -1201,34 +1203,6 @@ func (m *MockStore) DeleteUserSessions(arg0 context.Context, arg1 int64) error {
 func (mr *MockStoreMockRecorder) DeleteUserSessions(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserSessions", reflect.TypeOf((*MockStore)(nil).DeleteUserSessions), arg0, arg1)
-}
-
-// DeleteUserTx mocks base method.
-func (m *MockStore) DeleteUserTx(arg0 context.Context, arg1 int64) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUserTx", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteUserTx indicates an expected call of DeleteUserTx.
-func (mr *MockStoreMockRecorder) DeleteUserTx(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserTx", reflect.TypeOf((*MockStore)(nil).DeleteUserTx), arg0, arg1)
-}
-
-// DeleteUserWithTransferTx mocks base method.
-func (m *MockStore) DeleteUserWithTransferTx(arg0 context.Context, arg1 db.DeleteUserWithTransferTxParams) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteUserWithTransferTx", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteUserWithTransferTx indicates an expected call of DeleteUserWithTransferTx.
-func (mr *MockStoreMockRecorder) DeleteUserWithTransferTx(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUserWithTransferTx", reflect.TypeOf((*MockStore)(nil).DeleteUserWithTransferTx), arg0, arg1)
 }
 
 // DuplicatePostTx mocks base method.
@@ -2399,6 +2373,21 @@ func (mr *MockStoreMockRecorder) ListMediaPathsIn(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMediaPathsIn", reflect.TypeOf((*MockStore)(nil).ListMediaPathsIn), arg0, arg1)
 }
 
+// ListMembers mocks base method.
+func (m *MockStore) ListMembers(arg0 context.Context, arg1 db.ListMembersParams) ([]db.ListMembersRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListMembers", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListMembersRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListMembers indicates an expected call of ListMembers.
+func (mr *MockStoreMockRecorder) ListMembers(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMembers", reflect.TypeOf((*MockStore)(nil).ListMembers), arg0, arg1)
+}
+
 // ListMenuItemsWithTargets mocks base method.
 func (m *MockStore) ListMenuItemsWithTargets(arg0 context.Context, arg1 int64) ([]db.ListMenuItemsWithTargetsRow, error) {
 	m.ctrl.T.Helper()
@@ -2802,6 +2791,21 @@ func (mr *MockStoreMockRecorder) LockUserForUpdate(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockUserForUpdate", reflect.TypeOf((*MockStore)(nil).LockUserForUpdate), arg0, arg1)
 }
 
+// LockUsersForUpdate mocks base method.
+func (m *MockStore) LockUsersForUpdate(arg0 context.Context, arg1 []int64) ([]db.LockUsersForUpdateRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockUsersForUpdate", arg0, arg1)
+	ret0, _ := ret[0].([]db.LockUsersForUpdateRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockUsersForUpdate indicates an expected call of LockUsersForUpdate.
+func (mr *MockStoreMockRecorder) LockUsersForUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockUsersForUpdate", reflect.TypeOf((*MockStore)(nil).LockUsersForUpdate), arg0, arg1)
+}
+
 // Ping mocks base method.
 func (m *MockStore) Ping(arg0 context.Context) error {
 	m.ctrl.T.Helper()
@@ -2844,6 +2848,35 @@ func (m *MockStore) PublishScheduledPostTx(arg0 context.Context, arg1 db.Publish
 func (mr *MockStoreMockRecorder) PublishScheduledPostTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishScheduledPostTx", reflect.TypeOf((*MockStore)(nil).PublishScheduledPostTx), arg0, arg1)
+}
+
+// ReassignPostBylines mocks base method.
+func (m *MockStore) ReassignPostBylines(arg0 context.Context, arg1 db.ReassignPostBylinesParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReassignPostBylines", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReassignPostBylines indicates an expected call of ReassignPostBylines.
+func (mr *MockStoreMockRecorder) ReassignPostBylines(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignPostBylines", reflect.TypeOf((*MockStore)(nil).ReassignPostBylines), arg0, arg1)
+}
+
+// ReassignPostsOwner mocks base method.
+func (m *MockStore) ReassignPostsOwner(arg0 context.Context, arg1 db.ReassignPostsOwnerParams) ([]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReassignPostsOwner", arg0, arg1)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReassignPostsOwner indicates an expected call of ReassignPostsOwner.
+func (mr *MockStoreMockRecorder) ReassignPostsOwner(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignPostsOwner", reflect.TypeOf((*MockStore)(nil).ReassignPostsOwner), arg0, arg1)
 }
 
 // RecordScheduledPublishFailure mocks base method.
@@ -2915,6 +2948,21 @@ func (m *MockStore) RemovePostFromTaxonomyTerm(arg0 context.Context, arg1 db.Rem
 func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostFromTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).RemovePostFromTaxonomyTerm), arg0, arg1)
+}
+
+// RemoveUserTx mocks base method.
+func (m *MockStore) RemoveUserTx(arg0 context.Context, arg1 db.RemoveUserTxParams) (db.RemoveUserTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveUserTx", arg0, arg1)
+	ret0, _ := ret[0].(db.RemoveUserTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveUserTx indicates an expected call of RemoveUserTx.
+func (mr *MockStoreMockRecorder) RemoveUserTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUserTx", reflect.TypeOf((*MockStore)(nil).RemoveUserTx), arg0, arg1)
 }
 
 // RenewUserInvitation mocks base method.
@@ -3256,6 +3304,21 @@ func (mr *MockStoreMockRecorder) SetUserPassword(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserPassword", reflect.TypeOf((*MockStore)(nil).SetUserPassword), arg0, arg1)
 }
 
+// SetUserRole mocks base method.
+func (m *MockStore) SetUserRole(arg0 context.Context, arg1 db.SetUserRoleParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetUserRole", arg0, arg1)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetUserRole indicates an expected call of SetUserRole.
+func (mr *MockStoreMockRecorder) SetUserRole(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserRole", reflect.TypeOf((*MockStore)(nil).SetUserRole), arg0, arg1)
+}
+
 // StorePostCollabTx mocks base method.
 func (m *MockStore) StorePostCollabTx(arg0 context.Context, arg1 db.StorePostCollabTxParams) (db.StorePostCollabTxResult, error) {
 	m.ctrl.T.Helper()
@@ -3299,6 +3362,21 @@ func (mr *MockStoreMockRecorder) TouchMenu(arg0, arg1 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TouchMenu", reflect.TypeOf((*MockStore)(nil).TouchMenu), arg0, arg1)
 }
 
+// TouchUserLastActive mocks base method.
+func (m *MockStore) TouchUserLastActive(arg0 context.Context, arg1 db.TouchUserLastActiveParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TouchUserLastActive", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TouchUserLastActive indicates an expected call of TouchUserLastActive.
+func (mr *MockStoreMockRecorder) TouchUserLastActive(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TouchUserLastActive", reflect.TypeOf((*MockStore)(nil).TouchUserLastActive), arg0, arg1)
+}
+
 // TransferMediaToUser mocks base method.
 func (m *MockStore) TransferMediaToUser(arg0 context.Context, arg1 db.TransferMediaToUserParams) error {
 	m.ctrl.T.Helper()
@@ -3311,20 +3389,6 @@ func (m *MockStore) TransferMediaToUser(arg0 context.Context, arg1 db.TransferMe
 func (mr *MockStoreMockRecorder) TransferMediaToUser(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferMediaToUser", reflect.TypeOf((*MockStore)(nil).TransferMediaToUser), arg0, arg1)
-}
-
-// TransferPostsToAdmin mocks base method.
-func (m *MockStore) TransferPostsToAdmin(arg0 context.Context, arg1 db.TransferPostsToAdminParams) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "TransferPostsToAdmin", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// TransferPostsToAdmin indicates an expected call of TransferPostsToAdmin.
-func (mr *MockStoreMockRecorder) TransferPostsToAdmin(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferPostsToAdmin", reflect.TypeOf((*MockStore)(nil).TransferPostsToAdmin), arg0, arg1)
 }
 
 // UnlinkPostFeaturedMedia mocks base method.
@@ -3651,20 +3715,6 @@ func (m *MockStore) UpdateUser(arg0 context.Context, arg1 db.UpdateUserParams) (
 func (mr *MockStoreMockRecorder) UpdateUser(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUser", reflect.TypeOf((*MockStore)(nil).UpdateUser), arg0, arg1)
-}
-
-// UpdateUserPostsOwnership mocks base method.
-func (m *MockStore) UpdateUserPostsOwnership(arg0 context.Context, arg1 db.UpdateUserPostsOwnershipParams) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateUserPostsOwnership", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateUserPostsOwnership indicates an expected call of UpdateUserPostsOwnership.
-func (mr *MockStoreMockRecorder) UpdateUserPostsOwnership(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUserPostsOwnership", reflect.TypeOf((*MockStore)(nil).UpdateUserPostsOwnership), arg0, arg1)
 }
 
 // UpdateUserTx mocks base method.
