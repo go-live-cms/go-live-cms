@@ -53,6 +53,8 @@ func (server *Server) getPublicPostsByType(c *gin.Context) {
 		SortDirection: sortDesc,
 		OffsetCount:   req.offset(),
 		LimitCount:    req.PerPage,
+		// The site credits the published byline (#319).
+		PublishedByline: true,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts"})

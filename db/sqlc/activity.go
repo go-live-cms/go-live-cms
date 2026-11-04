@@ -1,6 +1,6 @@
 package db
 
-// The activity log's vocabulary (#324, 000034). Verbs and object types are plain
+// The activity log's vocabulary (#324, 000035). Verbs and object types are plain
 // text in the table (checked only for their format), so a new reader or writer
 // (#323 review requests, #321 access requests, #328) adds its own here; the API's
 // feed passes unknown verbs through, and the admin shows a generic line for them.

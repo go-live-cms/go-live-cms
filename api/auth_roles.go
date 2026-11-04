@@ -32,6 +32,10 @@ const (
 	RoleContributor = "contributor"
 )
 
+// contentRoles are the roles that write content (requireContentAuthor): who a
+// post's byline may credit (#319, ListAuthorCandidates).
+var contentRoles = []string{RoleAdmin, RoleEditor, RoleContributor}
+
 // requireSiteAdmin gates site-administration routes: user management,
 // theme activation/settings, site settings, and post-type registration.
 func requireSiteAdmin(server *Server) gin.HandlerFunc {

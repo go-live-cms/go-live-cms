@@ -30,7 +30,7 @@ type CreateActivityParams struct {
 	Payload    json.RawMessage `json:"payload"`
 }
 
-// Activity log (#324, 000034). Written by the API's write paths (api/activity.go)
+// Activity log (#324, 000035). Written by the API's write paths (api/activity.go)
 // and the collab store (StorePostCollabTx); read by GET /activity and Home.
 // An actor that no longer exists is stored as NULL rather than failing on the
 // foreign key (a member removed while their request was in flight).

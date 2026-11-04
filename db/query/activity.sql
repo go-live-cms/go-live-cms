@@ -1,4 +1,4 @@
--- Activity log (#324, 000034). Written by the API's write paths (api/activity.go)
+-- Activity log (#324, 000035). Written by the API's write paths (api/activity.go)
 -- and the collab store (StorePostCollabTx); read by GET /activity and Home.
 
 -- name: CreateActivity :one

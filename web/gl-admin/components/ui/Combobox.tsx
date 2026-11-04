@@ -21,6 +21,9 @@ type ComboboxProps = {
   disabled?: boolean
   id?: string
   className?: string
+  // Called with the typed text, for options searched on the server (pass a `filter`
+  // that keeps everything then).
+  onQueryChange?: (query: string) => void
 }
 
 const contains = (option: SelectOption, query: string) => option.label.toLowerCase().includes(query.trim().toLowerCase())
@@ -41,6 +44,7 @@ export default function Combobox({
   disabled = false,
   id,
   className = "",
+  onQueryChange,
 }: ComboboxProps) {
   const fieldId = useStableId("combobox", id)
   const listId = `${fieldId}-list`
@@ -129,6 +133,7 @@ export default function Combobox({
             setQuery(e.target.value)
             setOpen(true)
             setActive(e.target.value ? 0 : -1)
+            onQueryChange?.(e.target.value)
           }}
           onKeyDown={onKeyDown}
           onBlur={(e) => {

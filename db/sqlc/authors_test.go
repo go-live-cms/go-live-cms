@@ -27,7 +27,8 @@ func createAuthorPostType(t *testing.T, public, active bool) string {
 }
 
 // createCreditedPost creates a post of postType owned by owner and credits
-// authors on it, in order.
+// authors on it, in order. A published one is published with that byline (its
+// settings snapshot, #319), as Update does.
 func createCreditedPost(t *testing.T, postType, status string, owner User, authors ...User) Post {
 	slug := fmt.Sprintf("author-%d", time.Now().UnixNano())
 	post, err := testQueries.CreatePosts(context.Background(), CreatePostsParams{
@@ -45,6 +46,9 @@ func createCreditedPost(t *testing.T, postType, status string, owner User, autho
 	for i, a := range authors {
 		_, err := testQueries.CreateUserPost(context.Background(), CreateUserPostParams{PostID: post.ID, UserID: a.ID, Order: int32(i)})
 		require.NoError(t, err)
+	}
+	if status == "published" {
+		republishSettings(t, post.ID)
 	}
 	return post
 }
