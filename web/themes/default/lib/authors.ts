@@ -3,6 +3,7 @@
  * Tested in authors.test.ts.
  */
 import { authorPath } from "@/lib/seo"
+import { avatarSrc } from "./avatar"
 
 export interface BylinePerson {
   name: string
@@ -10,9 +11,11 @@ export interface BylinePerson {
   key: string
   // The author page, for credited authors only (they're the ones with a page).
   href?: string
+  // Their uploaded picture (#334), checked by avatarSrc; null shows the initial.
+  avatar?: string | null
 }
 
-type Credited = { username: string; full_name?: string }
+type Credited = { username: string; full_name?: string; avatar?: string | null }
 
 export function displayName(author: Credited): string {
   return author.full_name?.trim() || author.username
@@ -25,7 +28,10 @@ export function bylinePeople(
   owner: { user_id?: number; username?: string },
 ): BylinePerson[] {
   if (credited && credited.length > 0) {
-    return credited.map((a) => ({ name: displayName(a), key: a.username, href: authorPath(a.username) }))
+    return credited.map((a) => {
+      const avatar = avatarSrc(a.avatar)
+      return { name: displayName(a), key: a.username, href: authorPath(a.username), ...(avatar ? { avatar } : {}) }
+    })
   }
   return owner.username ? [{ name: owner.username, key: owner.username }] : []
 }

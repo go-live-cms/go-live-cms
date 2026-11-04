@@ -5,7 +5,7 @@
  */
 import type { AuthorProfile } from '@gl-admin/lib/api/types'
 import { authorPath } from '@/lib/seo'
-import { avatarColor, initial } from '../lib/avatar'
+import { avatarColor, avatarSrc, initial } from '../lib/avatar'
 import { displayName } from '../lib/authors'
 
 interface Props {
@@ -20,7 +20,7 @@ const { authors = [] } = Astro.props
     <h2 id="written-by" class="section-title">Written by</h2>
     {authors.map((author) => (
       <div class="author-card">
-        <span class="avatar" aria-hidden="true" style={`width:56px;height:56px;font-size:20px;background:${avatarColor(author.username)}`}>{initial(displayName(author))}</span>
+        <span class="avatar" aria-hidden="true" style={`width:56px;height:56px;font-size:20px;background:${avatarColor(author.username)}`}>{avatarSrc(author.avatar) ? <img src={avatarSrc(author.avatar)} alt="" width="56" height="56" loading="lazy" decoding="async" /> : initial(displayName(author))}</span>
         <div>
           <h3><a href={authorPath(author.username)}>{displayName(author)}</a></h3>
           {author.bio && <p class="author-bio">{author.bio}</p>}

@@ -7,7 +7,7 @@
 import BaseLayout from '../base.astro'
 import PostListItem from '../../components/PostListItem.astro'
 import Pagination from '@/components/Pagination.astro'
-import { avatarColor, initial } from '../../lib/avatar'
+import { avatarColor, avatarSrc, initial } from '../../lib/avatar'
 import { displayName, postCountLabel, safeWebsite, websiteLabel } from '../../lib/authors'
 import type { AuthorPageData } from '@/lib/authorPage'
 import type { SeoMeta } from '@/lib/seo'
@@ -26,7 +26,7 @@ const website = safeWebsite(author.website)
 <BaseLayout title={title} description={description} seo={seo} siteTitle={list.siteTitle}>
   <div class="container">
     <header class="archive-header author-header">
-      <span class="avatar author-header__avatar" aria-hidden="true" style={`background:${avatarColor(author.username)}`}>{initial(name)}</span>
+      <span class="avatar author-header__avatar" aria-hidden="true" style={`background:${avatarColor(author.username)}`}>{avatarSrc(author.avatar) ? <img src={avatarSrc(author.avatar)} alt="" width="96" height="96" decoding="async" /> : initial(name)}</span>
       <div class="author-header__text">
         <span class="eyebrow">Author</span>
         <h1 class="title">{name}</h1>

@@ -64,3 +64,18 @@ describe("labels", () => {
     expect(new Set(["ana", "luan", "priya", "kenji", "sofia", "elena"].map(avatarColor)).size).toBeGreaterThan(1)
   })
 })
+
+describe("byline avatars (#334)", () => {
+  const avatar = "/uploads/media/_avatars/avatar-0123456789abcdef0123456789abcdef.jpg"
+
+  it("carries a credited author's picture", () => {
+    expect(bylinePeople([{ username: "ana", full_name: "Ana", avatar }], {})).toEqual([
+      { name: "Ana", key: "ana", href: "/author/ana", avatar },
+    ])
+  })
+
+  it("drops a picture that isn't an API avatar path", () => {
+    const [person] = bylinePeople([{ username: "ana", avatar: "https://elsewhere.example/a.jpg" }], {})
+    expect(person.avatar).toBeUndefined()
+  })
+})

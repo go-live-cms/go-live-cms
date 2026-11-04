@@ -32,7 +32,7 @@ const site = await getSiteSettings(Astro.locals)
 <div class={`byline meta byline--${variant}`}>
   <span class="avatars" aria-hidden="true">
     {people.slice(0, 3).map((p) => (
-      <span class="avatar" style={`width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px;background:${avatarColor(p.key)}`}>{initial(p.name)}</span>
+      <span class="avatar" style={`width:${size}px;height:${size}px;font-size:${Math.round(size * 0.4)}px;background:${avatarColor(p.key)}`}>{p.avatar ? <img src={p.avatar} alt="" width={size} height={size} loading="lazy" decoding="async" /> : initial(p.name)}</span>
     ))}
   </span>
   {variant === 'post' ? (

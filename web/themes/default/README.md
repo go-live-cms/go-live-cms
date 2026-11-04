@@ -95,6 +95,12 @@ stored under `darkMode.storageKey`. `scripts/theme-init.js` loads from `<head>` 
 `<script src>`, so the theme is set before the first paint and it works under a CSP of
 `script-src 'self'`. Without JavaScript the page follows the system setting.
 
+## Author photos
+
+Bylines, "Written by" cards and author pages show an author's uploaded photo (#334)
+in the same circle, over their colour; without one, the initial. Only an API avatar path
+(`/uploads/…/_avatars/avatar-<hex>.jpg|png`, `lib/avatar.ts` `avatarSrc`) is rendered.
+
 ## Hidden until their issues land
 
 The design shows these; the theme leaves them out rather than faking them:
@@ -103,7 +109,6 @@ The design shows these; the theme leaves them out rather than faking them:
 |------|-------|
 | Image captions, wide / full images, quote citations (styles are ready) | #346 |
 | Category eyebrows on list rows and "More to read" cards (list rows don't carry their terms yet) | follow-up to #348 |
-| Author photos (initials until then; author pages and cards are #350) | #334 |
 | Site logo (no setting for it yet) | — |
 
 GoLive's own mark appears only in the footer's "Published with GoLive" credit.
