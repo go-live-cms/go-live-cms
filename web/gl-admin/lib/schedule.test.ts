@@ -8,7 +8,12 @@ import {
   scheduleError,
   scheduleFailureMessage,
   scheduledPillLabel,
+  scheduledUpdateEndedMessage,
+  scheduledUpdateErrorMessage,
+  scheduledUpdateFailureMessage,
+  scheduledUpdateTitle,
   timeZoneLine,
+  updateScheduledPillLabel,
   weekdayLabels,
   zoneCity,
   zonedParts,
@@ -153,5 +158,37 @@ describe("scheduleFailureMessage", () => {
     expect(scheduleFailureMessage({ reason: "publish_failed", next_attempt_at: "2026-11-03T11:59:00Z" }, saoPaulo, now)).toBe(
       "The post couldn't be published at its time. Trying again now."
     )
+  })
+})
+
+// Scheduled updates (#335): the pill, the notice's title, a failed attempt and the
+// API's refusals.
+describe("scheduled update text", () => {
+  const now = new Date("2026-11-03T12:00:00Z")
+  it("names the update's time in site time", () => {
+    expect(updateScheduledPillLabel("2026-11-04T01:30:00Z", saoPaulo, { now })).toBe("Update scheduled · Nov 3")
+    expect(updateScheduledPillLabel("2026-11-04T01:30:00Z", saoPaulo, { now, withTime: true })).toBe("Update scheduled · Nov 3, 22:30")
+    expect(updateScheduledPillLabel(null, saoPaulo)).toBe("Update scheduled")
+    expect(scheduledUpdateTitle("2026-11-03T12:00:00Z", saoPaulo, now)).toBe("Update scheduled for Nov 3, 09:00")
+  })
+
+  it("says a failed update is retried, and when", () => {
+    expect(scheduledUpdateFailureMessage({ next_attempt_at: "2026-11-03T12:05:00Z" }, saoPaulo, now)).toBe(
+      "The update couldn't be published at its time; the live post is unchanged. It's tried again automatically, next at 09:05."
+    )
+    expect(scheduledUpdateFailureMessage({ next_attempt_at: null }, saoPaulo, now)).toContain("Trying again now.")
+  })
+
+  it("tells an applied update from one that was cancelled or replaced", () => {
+    const at = "2026-11-03T12:00:00Z"
+    expect(scheduledUpdateEndedMessage("2026-11-03T12:00:05Z", at)).toBe("The scheduled update is live")
+    expect(scheduledUpdateEndedMessage("2026-11-03T11:30:00Z", at)).toBe("The scheduled update was cancelled or replaced by an update")
+    expect(scheduledUpdateEndedMessage(null, at)).toBe("The scheduled update is no longer pending")
+  })
+
+  it("explains the API's codes, else keeps its message", () => {
+    expect(scheduledUpdateErrorMessage("no_unpublished_changes", "x")).toContain("nothing to update")
+    expect(scheduledUpdateErrorMessage("not_scheduled", "x")).toContain("No update is scheduled")
+    expect(scheduledUpdateErrorMessage(undefined, "The time has passed")).toBe("The time has passed")
   })
 })

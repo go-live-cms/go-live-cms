@@ -146,6 +146,20 @@ export interface Post {
   publish_at?: string | null
   // The last failed attempt to publish it on schedule (GET /posts/:id only).
   schedule_failure?: ScheduleFailure | null
+  // When a published post's scheduled update goes live (#335), UTC ISO; absent when
+  // none. Lists and GET /posts/:id.
+  update_at?: string | null
+  // That update in full (GET /posts/:id only).
+  scheduled_update?: ScheduledUpdate | null
+}
+
+// A published post's pending update (#335): its content was frozen at scheduled_at.
+export interface ScheduledUpdate {
+  update_at: string
+  scheduled_at: string
+  scheduled_by: number | null
+  // The last failed attempt to apply it ("update_failed"), retried at next_attempt_at.
+  failure?: ScheduleFailure | null
 }
 
 // Why a scheduled post isn't live yet: the scheduler retries at next_attempt_at.

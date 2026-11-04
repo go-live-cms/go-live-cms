@@ -212,6 +212,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
           iconPath={row?.post_status || null}
           unpublishedChanges={row?.has_unpublished_changes}
           publishAt={row?.publish_at}
+          updateAt={row?.update_at}
         />
       ),
     },
@@ -387,6 +388,7 @@ function PostCards({ posts, structure, user }: { posts: Post[] | null; structure
                 iconPath={post.post_status}
                 unpublishedChanges={post.has_unpublished_changes}
                 publishAt={post.publish_at}
+                updateAt={post.update_at}
               />
               <Byline post={post} size={20} />
               <LastEdited post={post} />

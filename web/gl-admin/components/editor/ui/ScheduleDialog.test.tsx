@@ -25,12 +25,22 @@ const newYork = { language: "en-US", timeZone: "America/New_York" } as const
 // Noon UTC on 2026-03-01: 07:00 in New York, a week before the clocks spring forward.
 const now = () => new Date("2026-03-01T12:00:00Z")
 
-function render(props: { publishAt?: string | null; onSchedule?: (local: string) => Promise<void> } = {}) {
+function render(
+  props: { publishAt?: string | null; onSchedule?: (local: string) => Promise<void>; mode?: "publish" | "update" } = {}
+) {
   const onSchedule = props.onSchedule ?? vi.fn(async () => {})
   const onClose = vi.fn()
   act(() =>
     root.render(
-      <ScheduleDialog isOpen onClose={onClose} publishAt={props.publishAt ?? null} settings={newYork} onSchedule={onSchedule} now={now} />
+      <ScheduleDialog
+        isOpen
+        onClose={onClose}
+        publishAt={props.publishAt ?? null}
+        settings={newYork}
+        onSchedule={onSchedule}
+        mode={props.mode}
+        now={now}
+      />
     )
   )
   return { onSchedule, onClose }
@@ -132,5 +142,44 @@ describe("ScheduleDialog", () => {
     await click(q<HTMLButtonElement>('[aria-label="Next month"]')!)
     expect(document.body.textContent).toContain("April 2026")
     expect(q('[data-date="2026-04-30"]')).not.toBeNull()
+  })
+})
+
+// Scheduling a published post's update (#335) uses the same dialog: its words say the
+// live post stays as it is and that later changes aren't included.
+describe("ScheduleDialog for an update", () => {
+  it("says what the update is and sends the wall-clock time", async () => {
+    const { onSchedule, onClose } = render({ mode: "update" })
+    expect(document.body.textContent).toContain("Schedule update")
+    expect(document.body.textContent).toContain("The live post stays as it is until then.")
+    expect(document.body.textContent).toContain("Changes made after you schedule aren’t included; schedule again to include them.")
+    await click(q<HTMLButtonElement>('[data-date="2026-03-09"]')!)
+    setTime("10:30")
+    await click(byText("Schedule update"))
+    expect(onSchedule).toHaveBeenCalledWith("2026-03-09T10:30")
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it("reschedules from the pending update's time", async () => {
+    const { onSchedule } = render({ mode: "update", publishAt: "2026-03-10T14:00:00Z" })
+    expect(document.body.textContent).toContain("Reschedule update")
+    expect(timeInput().value).toBe("10:00")
+    await click(byText("Reschedule"))
+    expect(onSchedule).toHaveBeenCalledWith("2026-03-10T10:00")
+  })
+
+  it("shows the API's refusal and stays open", async () => {
+    const onSchedule = vi.fn(async () => {
+      throw new Error("There's nothing to update: the live post already matches this version.")
+    })
+    const { onClose } = render({ mode: "update", onSchedule })
+    await click(byText("Schedule update"))
+    expect(document.body.textContent).toContain("nothing to update")
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it("has no note when scheduling a draft's publish", () => {
+    render()
+    expect(document.body.textContent).not.toContain("aren’t included")
   })
 })

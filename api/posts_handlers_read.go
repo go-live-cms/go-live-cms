@@ -258,6 +258,12 @@ func (server *Server) postDetailResponse(c *gin.Context, post db.Post) PostRespo
 			server.requestLog(c).Warn("failed to read unpublished changes", "post_id", post.ID, "error", err)
 		}
 		resp.HasUnpublishedChanges = changed
+		// A pending scheduled update (#335): the editor's notice and pill.
+		resp.ScheduledUpdate = server.scheduledUpdate(c, post.ID)
+		if resp.ScheduledUpdate != nil {
+			at := resp.ScheduledUpdate.UpdateAt
+			resp.UpdateAt = &at
+		}
 	}
 	return resp
 }

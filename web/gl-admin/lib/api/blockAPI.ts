@@ -1,6 +1,6 @@
 import type { BlockDocV1 } from "../blocks-spec"
 import { ApiError } from "./errors"
-import type { PostSEOSettings } from "./types"
+import type { PostSEOSettings, ScheduledUpdate } from "./types"
 
 // A published snapshot from post_versions (#136)
 export interface PostVersionSummary {
@@ -52,6 +52,9 @@ export interface PostSettingsState {
   blocks_changed: boolean
   // Published, with either of the two: "Changes not published" (#326).
   has_unpublished_changes: boolean
+  // A published post's pending update (#335), null when none. Every open editor
+  // re-reads this state on collaborators' stores, so it follows schedules made elsewhere.
+  scheduled_update?: ScheduledUpdate | null
 }
 
 // API client for Block Spec v1 operations
@@ -113,7 +116,7 @@ export class BlockAPIClient {
     postId: number,
     label?: string,
     message?: string
-  ): Promise<{ versionId: number; versionNo: number }> {
+  ): Promise<{ versionId: number; versionNo: number; cancelledScheduledUpdate: boolean }> {
     const response = await this.request(`/posts/${postId}/publish`, "publish post", {
       method: "POST",
       body: JSON.stringify({ label, message }),
@@ -123,6 +126,8 @@ export class BlockAPIClient {
     return {
       versionId: data.version_id,
       versionNo: data.version_no,
+      // This Update superseded a pending scheduled update (#335).
+      cancelledScheduledUpdate: data.cancelled_scheduled_update === true,
     }
   }
 

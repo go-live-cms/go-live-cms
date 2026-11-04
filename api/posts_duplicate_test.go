@@ -536,7 +536,9 @@ func TestDuplicatePostAPI(t *testing.T) {
 				store.EXPECT().GetPost(gomock.Any(), int64(77)).Times(2).Return(source, nil)
 				store.EXPECT().CheckSlugExists(gomock.Any(), gomock.Any()).AnyTimes().
 					DoAndReturn(func(_ context.Context, arg db.CheckSlugExistsParams) (bool, error) {
-						return regexp.MustCompile(`^my-post-copy(-\d+)?$`).MatchString(arg.Slug), nil
+						// x-copy-2 … x-copy-99 only: an all-digit random suffix (2% of
+						// them, e.g. "55693623") must not count as taken.
+						return regexp.MustCompile(`^my-post-copy(-\d{1,2})?$`).MatchString(arg.Slug), nil
 					})
 				store.EXPECT().CheckURLExists(gomock.Any(), gomock.Any()).Return(false, nil)
 				capture(store)

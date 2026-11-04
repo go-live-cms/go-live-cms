@@ -154,6 +154,21 @@ func (mr *MockStoreMockRecorder) CancelPostSchedule(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelPostSchedule", reflect.TypeOf((*MockStore)(nil).CancelPostSchedule), arg0, arg1)
 }
 
+// CancelPostScheduledUpdate mocks base method.
+func (m *MockStore) CancelPostScheduledUpdate(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelPostScheduledUpdate", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CancelPostScheduledUpdate indicates an expected call of CancelPostScheduledUpdate.
+func (mr *MockStoreMockRecorder) CancelPostScheduledUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelPostScheduledUpdate", reflect.TypeOf((*MockStore)(nil).CancelPostScheduledUpdate), arg0, arg1)
+}
+
 // ChangeUserRoleTx mocks base method.
 func (m *MockStore) ChangeUserRoleTx(arg0 context.Context, arg1 db.SetUserRoleParams) (db.User, error) {
 	m.ctrl.T.Helper()
@@ -212,6 +227,21 @@ func (m *MockStore) ClaimDueScheduledPosts(arg0 context.Context, arg1 db.ClaimDu
 func (mr *MockStoreMockRecorder) ClaimDueScheduledPosts(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimDueScheduledPosts", reflect.TypeOf((*MockStore)(nil).ClaimDueScheduledPosts), arg0, arg1)
+}
+
+// ClaimDueScheduledUpdates mocks base method.
+func (m *MockStore) ClaimDueScheduledUpdates(arg0 context.Context, arg1 db.ClaimDueScheduledUpdatesParams) ([]db.ClaimDueScheduledUpdatesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimDueScheduledUpdates", arg0, arg1)
+	ret0, _ := ret[0].([]db.ClaimDueScheduledUpdatesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimDueScheduledUpdates indicates an expected call of ClaimDueScheduledUpdates.
+func (mr *MockStoreMockRecorder) ClaimDueScheduledUpdates(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimDueScheduledUpdates", reflect.TypeOf((*MockStore)(nil).ClaimDueScheduledUpdates), arg0, arg1)
 }
 
 // ClaimEmailChangeToken mocks base method.
@@ -1773,6 +1803,21 @@ func (mr *MockStoreMockRecorder) GetPostMetaByKey(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostMetaByKey", reflect.TypeOf((*MockStore)(nil).GetPostMetaByKey), arg0, arg1)
 }
 
+// GetPostScheduledUpdate mocks base method.
+func (m *MockStore) GetPostScheduledUpdate(arg0 context.Context, arg1 int64) (db.GetPostScheduledUpdateRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostScheduledUpdate", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPostScheduledUpdateRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostScheduledUpdate indicates an expected call of GetPostScheduledUpdate.
+func (mr *MockStoreMockRecorder) GetPostScheduledUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostScheduledUpdate", reflect.TypeOf((*MockStore)(nil).GetPostScheduledUpdate), arg0, arg1)
+}
+
 // GetPostSettingsState mocks base method.
 func (m *MockStore) GetPostSettingsState(arg0 context.Context, arg1 int64) (db.GetPostSettingsStateRow, error) {
 	m.ctrl.T.Helper()
@@ -1786,6 +1831,21 @@ func (m *MockStore) GetPostSettingsState(arg0 context.Context, arg1 int64) (db.G
 func (mr *MockStoreMockRecorder) GetPostSettingsState(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostSettingsState", reflect.TypeOf((*MockStore)(nil).GetPostSettingsState), arg0, arg1)
+}
+
+// GetPostStatus mocks base method.
+func (m *MockStore) GetPostStatus(arg0 context.Context, arg1 int64) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostStatus", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostStatus indicates an expected call of GetPostStatus.
+func (mr *MockStoreMockRecorder) GetPostStatus(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostStatus", reflect.TypeOf((*MockStore)(nil).GetPostStatus), arg0, arg1)
 }
 
 // GetPostTaxonomyTerms mocks base method.
@@ -2387,6 +2447,21 @@ func (mr *MockStoreMockRecorder) InsertPublishedVersionFromPost(arg0, arg1 inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPublishedVersionFromPost", reflect.TypeOf((*MockStore)(nil).InsertPublishedVersionFromPost), arg0, arg1)
 }
 
+// InsertPublishedVersionFromScheduledUpdate mocks base method.
+func (m *MockStore) InsertPublishedVersionFromScheduledUpdate(arg0 context.Context, arg1 db.InsertPublishedVersionFromScheduledUpdateParams) (db.InsertPublishedVersionFromScheduledUpdateRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertPublishedVersionFromScheduledUpdate", arg0, arg1)
+	ret0, _ := ret[0].(db.InsertPublishedVersionFromScheduledUpdateRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InsertPublishedVersionFromScheduledUpdate indicates an expected call of InsertPublishedVersionFromScheduledUpdate.
+func (mr *MockStoreMockRecorder) InsertPublishedVersionFromScheduledUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPublishedVersionFromScheduledUpdate", reflect.TypeOf((*MockStore)(nil).InsertPublishedVersionFromScheduledUpdate), arg0, arg1)
+}
+
 // InvalidateEmailChangeTokensForUser mocks base method.
 func (m *MockStore) InvalidateEmailChangeTokensForUser(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -2940,6 +3015,21 @@ func (mr *MockStoreMockRecorder) LockPostForPublish(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForPublish", reflect.TypeOf((*MockStore)(nil).LockPostForPublish), arg0, arg1)
 }
 
+// LockPostStatusForUpdate mocks base method.
+func (m *MockStore) LockPostStatusForUpdate(arg0 context.Context, arg1 int64) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostStatusForUpdate", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostStatusForUpdate indicates an expected call of LockPostStatusForUpdate.
+func (mr *MockStoreMockRecorder) LockPostStatusForUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostStatusForUpdate", reflect.TypeOf((*MockStore)(nil).LockPostStatusForUpdate), arg0, arg1)
+}
+
 // LockScheduledPostClaim mocks base method.
 func (m *MockStore) LockScheduledPostClaim(arg0 context.Context, arg1 db.LockScheduledPostClaimParams) (db.LockScheduledPostClaimRow, error) {
 	m.ctrl.T.Helper()
@@ -2953,6 +3043,21 @@ func (m *MockStore) LockScheduledPostClaim(arg0 context.Context, arg1 db.LockSch
 func (mr *MockStoreMockRecorder) LockScheduledPostClaim(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockScheduledPostClaim", reflect.TypeOf((*MockStore)(nil).LockScheduledPostClaim), arg0, arg1)
+}
+
+// LockScheduledUpdateClaim mocks base method.
+func (m *MockStore) LockScheduledUpdateClaim(arg0 context.Context, arg1 db.LockScheduledUpdateClaimParams) (db.LockScheduledUpdateClaimRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockScheduledUpdateClaim", arg0, arg1)
+	ret0, _ := ret[0].(db.LockScheduledUpdateClaimRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockScheduledUpdateClaim indicates an expected call of LockScheduledUpdateClaim.
+func (mr *MockStoreMockRecorder) LockScheduledUpdateClaim(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockScheduledUpdateClaim", reflect.TypeOf((*MockStore)(nil).LockScheduledUpdateClaim), arg0, arg1)
 }
 
 // LockUserForShare mocks base method.
@@ -3057,6 +3162,21 @@ func (mr *MockStoreMockRecorder) PublishScheduledPostTx(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishScheduledPostTx", reflect.TypeOf((*MockStore)(nil).PublishScheduledPostTx), arg0, arg1)
 }
 
+// PublishScheduledUpdateTx mocks base method.
+func (m *MockStore) PublishScheduledUpdateTx(arg0 context.Context, arg1 db.PublishScheduledUpdateTxParams) (db.PublishPostTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishScheduledUpdateTx", arg0, arg1)
+	ret0, _ := ret[0].(db.PublishPostTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// PublishScheduledUpdateTx indicates an expected call of PublishScheduledUpdateTx.
+func (mr *MockStoreMockRecorder) PublishScheduledUpdateTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishScheduledUpdateTx", reflect.TypeOf((*MockStore)(nil).PublishScheduledUpdateTx), arg0, arg1)
+}
+
 // ReassignPostBylines mocks base method.
 func (m *MockStore) ReassignPostBylines(arg0 context.Context, arg1 db.ReassignPostBylinesParams) error {
 	m.ctrl.T.Helper()
@@ -3113,6 +3233,21 @@ func (m *MockStore) RecordScheduledPublishFailure(arg0 context.Context, arg1 db.
 func (mr *MockStoreMockRecorder) RecordScheduledPublishFailure(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordScheduledPublishFailure", reflect.TypeOf((*MockStore)(nil).RecordScheduledPublishFailure), arg0, arg1)
+}
+
+// RecordScheduledUpdateFailure mocks base method.
+func (m *MockStore) RecordScheduledUpdateFailure(arg0 context.Context, arg1 db.RecordScheduledUpdateFailureParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordScheduledUpdateFailure", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RecordScheduledUpdateFailure indicates an expected call of RecordScheduledUpdateFailure.
+func (mr *MockStoreMockRecorder) RecordScheduledUpdateFailure(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordScheduledUpdateFailure", reflect.TypeOf((*MockStore)(nil).RecordScheduledUpdateFailure), arg0, arg1)
 }
 
 // RefreshPublishedSettings mocks base method.
@@ -3377,6 +3512,21 @@ func (m *MockStore) SchedulePost(arg0 context.Context, arg1 db.SchedulePostParam
 func (mr *MockStoreMockRecorder) SchedulePost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SchedulePost", reflect.TypeOf((*MockStore)(nil).SchedulePost), arg0, arg1)
+}
+
+// ScheduleUpdateTx mocks base method.
+func (m *MockStore) ScheduleUpdateTx(arg0 context.Context, arg1 db.ScheduleUpdateTxParams) (db.GetPostScheduledUpdateRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ScheduleUpdateTx", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPostScheduledUpdateRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ScheduleUpdateTx indicates an expected call of ScheduleUpdateTx.
+func (mr *MockStoreMockRecorder) ScheduleUpdateTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ScheduleUpdateTx", reflect.TypeOf((*MockStore)(nil).ScheduleUpdateTx), arg0, arg1)
 }
 
 // SearchMediaByName mocks base method.
@@ -4100,6 +4250,21 @@ func (m *MockStore) UpsertPostYdocState(arg0 context.Context, arg1 db.UpsertPost
 func (mr *MockStoreMockRecorder) UpsertPostYdocState(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPostYdocState", reflect.TypeOf((*MockStore)(nil).UpsertPostYdocState), arg0, arg1)
+}
+
+// UpsertScheduledUpdateFromPost mocks base method.
+func (m *MockStore) UpsertScheduledUpdateFromPost(arg0 context.Context, arg1 db.UpsertScheduledUpdateFromPostParams) (db.UpsertScheduledUpdateFromPostRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertScheduledUpdateFromPost", arg0, arg1)
+	ret0, _ := ret[0].(db.UpsertScheduledUpdateFromPostRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertScheduledUpdateFromPost indicates an expected call of UpsertScheduledUpdateFromPost.
+func (mr *MockStoreMockRecorder) UpsertScheduledUpdateFromPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertScheduledUpdateFromPost", reflect.TypeOf((*MockStore)(nil).UpsertScheduledUpdateFromPost), arg0, arg1)
 }
 
 // UpsertThemeSetting mocks base method.
