@@ -105,6 +105,22 @@ func TestLoadConfigRateLimitDefaults(t *testing.T) {
 	require.Empty(t, config.TrustedProxyList(), "no proxy is trusted by default")
 }
 
+// The activity log (#324) keeps 90 days by default; 0 keeps everything.
+func TestLoadConfigActivityRetention(t *testing.T) {
+	config, err := LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Equal(t, 90*24*time.Hour, config.ActivityRetention)
+
+	t.Setenv("ACTIVITY_RETENTION", "0")
+	config, err = LoadConfig(t.TempDir())
+	require.NoError(t, err)
+	require.Zero(t, config.ActivityRetention)
+
+	t.Setenv("ACTIVITY_RETENTION", "-1h")
+	_, err = LoadConfig(t.TempDir())
+	require.ErrorContains(t, err, "ACTIVITY_RETENTION")
+}
+
 func TestLoadConfigRejectsNegativeRateLimit(t *testing.T) {
 	t.Setenv("RATE_LIMIT_LOGIN_PER_MINUTE", "-1")
 	_, err := LoadConfig(t.TempDir())
