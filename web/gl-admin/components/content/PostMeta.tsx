@@ -11,7 +11,7 @@ import type { Post } from "@gl-admin/lib/api/types"
 export function Byline({ post, size = 24 }: { post: Post | null; size?: 20 | 24 }) {
   if (!post) return <Skeleton shape="circle" width={size} height={size} />
   const authors = post.authors?.length
-    ? post.authors.map((a) => ({ id: a.id, name: a.full_name || a.username }))
+    ? post.authors.map((a) => ({ id: a.id, name: a.full_name || a.username, src: a.avatar }))
     : [{ id: post.user_id, name: post.username }]
   return <AvatarStack users={authors} size={size} label={`Authors: ${authors.map((a) => a.name).join(", ")}`} />
 }

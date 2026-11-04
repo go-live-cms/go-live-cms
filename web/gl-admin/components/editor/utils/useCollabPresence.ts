@@ -5,7 +5,9 @@ import { acquirePostCollab, releasePostCollab } from "@gl-admin/lib/collaboratio
 // "ended": the server refused or revoked the session; it never reconnects (the editor
 // says "session ended"), so it isn't offline either.
 export type CollabStatus = "connecting" | "connected" | "disconnected" | "ended"
-export type CollabUser = { clientId: number; id?: number; name?: string; color?: string }
+// avatar comes from the other client's awareness: render it only through Avatar,
+// which accepts nothing but an /uploads avatar path (safeAvatarSrc, #334).
+export type CollabUser = { clientId: number; id?: number; name?: string; color?: string; avatar?: string | null }
 
 // The same connection the editor uses (shared, ref-counted), re-acquired when it goes
 // stale (the server reseeded the doc and the editor remounted).

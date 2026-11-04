@@ -172,6 +172,8 @@ export interface PostAuthor {
   id: number
   username: string
   full_name: string
+  // Their avatar's /uploads URL (#334), or null.
+  avatar?: string | null
 }
 
 // GET /posts/counts: posts per status (draft, published, archived, ...).
@@ -196,10 +198,12 @@ export interface User {
   // Users screen rows only (GET /users, #333): null = no activity recorded.
   last_active_at?: string | null
   posts_owned?: number
+  // Their avatar's /uploads URL (#334); null shows the initial.
+  avatar?: string | null
 }
 
 // An author as the public site sees them (GET /public/authors/:username, #350): no
-// email, role or id. avatar stays null until #334.
+// email, role or id. avatar is the /uploads URL of their picture (#334), or null.
 export interface AuthorProfile {
   username: string
   full_name: string
@@ -232,6 +236,17 @@ export interface TaxonomyTerm {
   meta?: Record<string, any>
   post_count?: number
   created_at: string
+}
+
+// One signed-in browser or device (GET /auth/sessions, #334). last_used_at: the last
+// sign-in or token refresh. client_ip only in debug mode.
+export interface DeviceSession {
+  id: string
+  user_agent: string
+  client_ip?: string
+  last_used_at: string
+  expires_at: string
+  current: boolean
 }
 
 export interface Session {

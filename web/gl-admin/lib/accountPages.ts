@@ -1,5 +1,5 @@
-// The signed-out account pages (#148): /forgot-password, /reset-password and
-// /accept-invite (web/src/pages). Like /login they live outside the admin SPA
+// The signed-out account pages (#148): /forgot-password, /reset-password,
+// /accept-invite and /confirm-email (#334) (web/src/pages). Like /login they live outside the admin SPA
 // and are plain forms; each page's <script> only calls its mount function, so
 // the logic is bundled (no inline script, CSP #161) and tested here.
 //
@@ -41,6 +41,11 @@ export function requestPasswordReset(email: string): Promise<{ message: string }
 
 export function resetPassword(token: string, password: string): Promise<{ message: string }> {
   return postJSON("/auth/password/reset", { token, password })
+}
+
+// Redeems an email change link (#334). Codes: invalid_token (400), email_taken (409).
+export function confirmEmailChange(token: string): Promise<{ message: string; email: string }> {
+  return postJSON("/auth/email-change/confirm", { token })
 }
 
 export interface InvitationPreview {
@@ -156,6 +161,7 @@ export function describeAccountError(err: unknown): string {
     if (err.code === "invalid_token") return "This link is invalid or has expired."
     if (err.code === "username_taken") return "That username is taken. Choose another one."
     if (err.code === "email_registered") return "An account with this email already exists. Sign in, or reset its password."
+    if (err.code === "email_taken") return "Another account uses this address now, so your email wasn't changed."
     if (err.status >= 500) return "Something went wrong on the server. Please try again in a moment."
     return err.message
   }
@@ -375,6 +381,47 @@ export function mountResetPasswordPage(doc: Document = document, navigate: Navig
     }
     dropLinkToken(win)
     navigate("/login?reason=password-reset")
+  })
+}
+
+// /confirm-email (#334): the link from an email change. Nothing is sent until the
+// button is pressed, so a mail scanner that opens links (and runs scripts) can't
+// use the token up; the token is in the fragment, so it never reaches a server log.
+export function mountConfirmEmailPage(doc: Document = document): void {
+  const win = doc.defaultView!
+  const form = doc.getElementById("confirmEmailForm") as HTMLFormElement
+  const ui = formUi(doc, form, "Confirm new email", "Confirming…")
+  const token = takeLinkToken(win)
+  if (!token) {
+    showInvalidLink(doc, form)
+    return
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault()
+    ui.hideError()
+    ui.setLoading(true)
+    let email: string
+    try {
+      ;({ email } = await confirmEmailChange(token))
+    } catch (err) {
+      ui.setLoading(false)
+      if (isInvalidLinkError(err)) {
+        showInvalidLink(doc, form)
+        return
+      }
+      ui.showError(describeAccountError(err), { fields: false })
+      return
+    }
+    dropLinkToken(win)
+    form.hidden = true
+    const newEmail = doc.getElementById("newEmail")
+    if (newEmail) newEmail.textContent = email
+    const done = doc.getElementById("emailChanged")
+    if (done) {
+      done.hidden = false
+      done.querySelector<HTMLElement>("h1")?.focus()
+    }
   })
 }
 

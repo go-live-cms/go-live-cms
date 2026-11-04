@@ -109,7 +109,7 @@ const Users: React.FC = () => {
             render: (_, row) =>
                 row ? (
                     <span className="gl-member">
-                        <Avatar user={{ id: row.id, name: row.full_name || row.username }} size={28} decorative />
+                        <Avatar user={{ id: row.id, name: row.full_name || row.username, src: row.avatar }} size={28} decorative />
                         <span className="gl-member__text">
                             <Link className="gl-member__name" to={`/users/edit/${row.id}`}>
                                 {row.full_name || row.username}

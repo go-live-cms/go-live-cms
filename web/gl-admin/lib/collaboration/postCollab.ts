@@ -23,6 +23,8 @@ export function acquirePostCollab(postId: number): HocuspocusCollaboration {
         name: user?.full_name || user?.username || "Anonymous",
         color: PRESENCE_COLORS[(user?.id || 0) % PRESENCE_COLORS.length],
         id: user?.id || 0,
+        // Presence avatars (#334). The colour stays the account's.
+        avatar: user?.avatar ?? null,
       },
     })
   })

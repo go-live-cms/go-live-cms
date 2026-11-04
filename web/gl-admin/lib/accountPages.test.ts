@@ -4,6 +4,7 @@ import {
   describeAccountError,
   forgetLinkToken,
   mountAcceptInvitePage,
+  mountConfirmEmailPage,
   mountForgotPasswordPage,
   mountResetPasswordPage,
   readLinkToken,
@@ -455,5 +456,68 @@ describe("accept invitation page", () => {
     await mountAcceptInvitePage(document, vi.fn())
     expect(fetchMock).not.toHaveBeenCalled()
     expect(visible("linkInvalid")).toBe(true)
+  })
+})
+
+describe("confirm email page (#334)", () => {
+  const extra = `<section id="emailChanged" hidden><h1 tabindex="-1">Email changed</h1><strong id="newEmail"></strong></section>`
+
+  it("shows the invalid-link panel when the link has no token", () => {
+    setUrl("/confirm-email")
+    const form = renderPage("confirmEmailForm", [], extra)
+    mountConfirmEmailPage(document)
+    expect(form.hidden).toBe(true)
+    expect(visible("linkInvalid")).toBe(true)
+  })
+
+  it("sends nothing until asked, then confirms and shows the new address", async () => {
+    setUrl(`/confirm-email#token=${TOKEN}`)
+    const form = renderPage("confirmEmailForm", [], extra)
+    mountConfirmEmailPage(document)
+    expect(window.location.hash).toBe("")
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    fetchMock.mockResolvedValue(json(200, { message: "email address changed", email: "new@example.com" }))
+    await submit(form)
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/email-change/confirm")
+    expect(sentBody()).toEqual({ token: TOKEN })
+    expect(form.hidden).toBe(true)
+    expect(visible("emailChanged")).toBe(true)
+    expect(document.getElementById("newEmail")!.textContent).toBe("new@example.com")
+    // Used up: a reload has nothing to send.
+    expect(sessionStorage.length).toBe(0)
+  })
+
+  it("swaps to the invalid-link panel for a used, expired or replaced link", async () => {
+    setUrl(`/confirm-email#token=${TOKEN}`)
+    const form = renderPage("confirmEmailForm", [], extra)
+    mountConfirmEmailPage(document)
+    fetchMock.mockResolvedValue(json(400, { error: "this link is invalid or has expired", code: "invalid_token" }))
+    await submit(form)
+    expect(form.hidden).toBe(true)
+    expect(visible("linkInvalid")).toBe(true)
+    expect(visible("emailChanged")).toBe(false)
+  })
+
+  it("says so when another account took the address meanwhile, and keeps the form", async () => {
+    setUrl(`/confirm-email#token=${TOKEN}`)
+    const form = renderPage("confirmEmailForm", [], extra)
+    mountConfirmEmailPage(document)
+    fetchMock.mockResolvedValue(json(409, { error: "another account uses this address now", code: "email_taken" }))
+    await submit(form)
+    expect(form.hidden).toBe(false)
+    expect(errorText()).toMatch(/Another account uses this address/)
+    expect(visible("emailChanged")).toBe(false)
+  })
+
+  it("explains a network failure and lets you try again", async () => {
+    setUrl(`/confirm-email#token=${TOKEN}`)
+    const form = renderPage("confirmEmailForm", [], extra)
+    mountConfirmEmailPage(document)
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"))
+    await submit(form)
+    expect(errorText()).toMatch(/Can't reach the server/)
+    expect(form.querySelector("button")!.disabled).toBe(false)
   })
 })

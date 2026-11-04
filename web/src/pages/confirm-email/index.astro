@@ -1,0 +1,66 @@
+---
+import AccountPage from "@/layouts/AccountPage.astro"
+import AccountError from "@/components/account/AccountError.astro"
+
+// The link from an email change (#334, api/email_change_handlers_write.go). It
+// changes nothing until the button is pressed; then the account's email becomes
+// the address this link was sent to, and the old address gets a notice.
+---
+
+<AccountPage title="Confirm email" description="Confirm your new email address">
+  <form class="gl-admin-login__view" id="confirmEmailForm" novalidate>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title">Confirm your new email</h1>
+      <p class="gl-admin-login__subtitle">
+        Your account will use the address this link was sent to. We'll let your old address know.
+      </p>
+    </header>
+
+    <AccountError />
+
+    <button type="submit" class="gl-button gl-button--primary gl-admin-login__submit">
+      <span class="gl-button__spinner" data-spinner aria-hidden="true" hidden></span>
+      <span data-label>Confirm new email</span>
+    </button>
+  </form>
+
+  <section class="gl-admin-login__view" id="emailChanged" role="status" hidden>
+    <span class="gl-admin-login__badge gl-admin-login__badge--success" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+        ><path d="M20 6 9 17l-5-5"></path></svg
+      >
+    </span>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title" tabindex="-1">Email changed</h1>
+      <p class="gl-admin-login__subtitle">
+        Your account now uses <strong id="newEmail"></strong>. Use it next time you reset your password.
+      </p>
+    </header>
+    <a class="gl-button gl-button--primary gl-admin-login__submit" href="/gl-admin/profile">Go to your profile</a>
+  </section>
+
+  <!-- Expired, already used, replaced by a newer request or malformed: the API
+       answers all of them the same (400 invalid_token). -->
+  <section class="gl-admin-login__view" id="linkInvalid" role="status" hidden>
+    <span class="gl-admin-login__badge gl-admin-login__badge--warning" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+        ><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg
+      >
+    </span>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title">This link has expired</h1>
+      <p class="gl-admin-login__subtitle">
+        Confirmation links work once, and only the latest one you asked for. Change your email again from your profile to get a new link.
+      </p>
+    </header>
+    <a class="gl-button gl-button--primary gl-admin-login__submit" href="/gl-admin/profile">Go to your profile</a>
+  </section>
+
+  <a class="gl-admin-login__link gl-admin-login__link--small" href="/login" slot="after">Back to sign in</a>
+</AccountPage>
+
+<script>
+  import { mountConfirmEmailPage } from "@gl-admin/lib/accountPages"
+
+  mountConfirmEmailPage()
+</script>

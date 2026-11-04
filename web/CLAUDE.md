@@ -334,6 +334,18 @@ are the most fragile part of the codebase. **Before editing anything under
   `useSiteDateSettings` (one cached `/settings` load; Settings resets it on save). The list's
   Scheduled tab and "All" (`draft,published,scheduled`) are in `lib/contentList.ts`; a
   contributor's own scheduled post is view-only (`canEditPost`, as the API).
+- **Profile account (#334):** the photo (`components/profile/AvatarPhotoModal.tsx`: pick, then the
+  media `FocalPointPicker` sets where the API's square crop is centered, a round preview, "Save
+  photo"; Remove), the email (`ChangeEmailModal.tsx`: new address + current password, a link to the
+  new address; the page then says a link was sent and nothing else, since the API answers the same
+  for a taken address) and "Other devices" (`GET /auth/sessions`' `other_count`, "Sign out of other
+  devices"; no session list, the design has none). Rules and messages: `lib/profile.ts` (tested).
+  Saving or removing the photo updates `authManager`'s user (sidebar, presence). **Avatars render
+  only through `Avatar` / the theme's `avatarSrc`, which accept nothing but an API avatar path
+  (`safeAvatarSrc` in `lib/presence.ts`)**: presence avatars come from other clients' awareness
+  (`postCollab.ts` sends `avatar` with name/colour/id), which any collaborator can set. Presence
+  colours stay the account's. `/confirm-email` is an account page (#344 patterns, CSP and noindex
+  lists): it confirms only on the button (a mail scanner running scripts can't spend the token).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

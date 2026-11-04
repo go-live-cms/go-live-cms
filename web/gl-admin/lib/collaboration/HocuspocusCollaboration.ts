@@ -64,6 +64,9 @@ export interface CollabUserInfo {
   name: string
   color: string
   id: number
+  // The avatar's /uploads URL (#334), or null. Others render it only if it is one
+  // (safeAvatarSrc): awareness is whatever a client says.
+  avatar?: string | null
 }
 
 export interface HocuspocusCollaborationOptions {

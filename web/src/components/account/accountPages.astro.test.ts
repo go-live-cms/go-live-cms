@@ -7,6 +7,7 @@ import Login from "../../pages/login/index.astro"
 import ForgotPassword from "../../pages/forgot-password/index.astro"
 import ResetPassword from "../../pages/reset-password/index.astro"
 import AcceptInvite from "../../pages/accept-invite/index.astro"
+import ConfirmEmail from "../../pages/confirm-email/index.astro"
 
 let container: AstroContainer
 beforeAll(async () => {
@@ -29,6 +30,7 @@ describe.each([
   ["/forgot-password", ForgotPassword, "forgotForm"],
   ["/reset-password", ResetPassword, "resetForm"],
   ["/accept-invite", AcceptInvite, "acceptForm"],
+  ["/confirm-email", ConfirmEmail, "confirmEmailForm"],
 ] as const)("%s", (_path, page, formId) => {
   it("renders the form, the error notice and its announcer", async () => {
     const html = await render(page)
@@ -79,6 +81,7 @@ describe("expired or used links", () => {
   it.each([
     ["/reset-password", ResetPassword, "This link has expired", 'href="/forgot-password"'],
     ["/accept-invite", AcceptInvite, "This invitation has expired", 'href="/login"'],
+    ["/confirm-email", ConfirmEmail, "This link has expired", 'href="/gl-admin/profile"'],
   ] as const)("%s has its panel, hidden until needed", async (_path, page, heading, action) => {
     const html = await render(page)
     const panel = html.match(/<section[^>]*id="linkInvalid"[\s\S]*?<\/section>/)?.[0] ?? ""
@@ -105,5 +108,16 @@ describe("/accept-invite", () => {
       expect(html).toContain(`id="${id}"`)
     }
     expect(html).toMatch(/id="inviteEmail"[^>]*readonly/)
+  })
+})
+
+describe("/confirm-email", () => {
+  it("asks before confirming, and has the done panel hidden", async () => {
+    const html = await render(ConfirmEmail)
+    // A button, not a confirmation on load: link scanners must not use the token up.
+    expect(html).toMatch(/<form[^>]*id="confirmEmailForm"[\s\S]*?<button type="submit"/)
+    const done = html.match(/<section[^>]*id="emailChanged"[\s\S]*?<\/section>/)?.[0] ?? ""
+    expect(done).toMatch(/^<section[^>]*hidden/)
+    expect(done).toContain('id="newEmail"')
   })
 })

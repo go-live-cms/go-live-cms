@@ -223,7 +223,7 @@ export default function EditorTopBar({
   for (const u of collabUsers) {
     const id = u.id ?? -u.clientId
     if (people.some((p) => p.id === id) || (me && id === me.id)) continue
-    people.push({ id, name: u.name ?? "Guest" })
+    people.push({ id, name: u.name ?? "Guest", src: u.avatar })
   }
   if (me && mode === "edit") people.push({ ...me, name: `${me.name} (you)` })
 
