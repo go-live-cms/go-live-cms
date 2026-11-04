@@ -178,7 +178,7 @@ are the most fragile part of the codebase. **Before editing anything under
   `lib/contentList.ts`, the Pages tree in `lib/pageTree.ts` (both tested). Counts come from
   `GET /posts/counts`; `status` takes a comma list, and "All" is `draft,published`
   (archived posts are left out). List rows fetched with `with_meta=true` carry `authors`
-  (user_posts). Hierarchical types render `pages/Pages.tsx`, which loads every page for
+  (the working byline, `user_posts`; the `/public` lists carry the published one, #319). Hierarchical types render `pages/Pages.tsx`, which loads every page for
   the tree. Features without a backend yet stay hidden (comments at the top of each page).
   The row menu's **Duplicate** (#354, any content role) calls `POST /posts/:id/duplicate`
   and opens the copy in the editor with the toast `DUPLICATED_MESSAGE`.
@@ -288,7 +288,7 @@ are the most fragile part of the codebase. **Before editing anything under
 - **Author pages (#350):** `/author/{username}` (`src/pages/author/[username].astro`, the
   theme's `layouts/author`, data from `src/lib/authorPage.ts`). The API's `/public/authors`
   routes return only `AuthorProfile` (name, username, avatar, bio, website) and 404 anyone
-  not credited (`user_posts`) on a published post of a public type, the same 404 as an
+  not credited in the **published** byline (#319) of a published post of a public type, the same 404 as an
   unknown username. The post route fetches `/public/posts/:id/authors` for the byline and
   the "Written by" cards; credited names link to their pages, an owner shown as a fallback
   doesn't. Avatar colours are keyed by username. The sitemap lists author pages last. Bio
@@ -334,6 +334,15 @@ are the most fragile part of the codebase. **Before editing anything under
   `useSiteDateSettings` (one cached `/settings` load; Settings resets it on save). The list's
   Scheduled tab and "All" (`draft,published,scheduled`) are in `lib/contentList.ts`; a
   contributor's own scheduled post is view-only (`canEditPost`, as the API).
+- **Byline authors (#319):** the post settings' Authors field is
+  `components/editor/ui/PostAuthors.tsx` (rules in `lib/postAuthors.ts`, tested): chips in credit
+  order, each with a menu (Move earlier / later, Remove; the last author stays), and **+** opens a
+  `Combobox` searching `GET /posts/author-candidates` (`onQueryChange`, server-side search).
+  Every change saves the whole byline (`setPostAuthors`, `PUT /posts/:id/authors`) and calls
+  `onSettingsSaved`, so a published post shows "Settings changed" until Update. It's read-only
+  with the other details (`canEditPostDetails`). The byline is not the owner: crediting someone
+  gives no access. The public site gets the published byline from every `/public` read, so the
+  theme's `PostByline`/`AuthorCards` need nothing else.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

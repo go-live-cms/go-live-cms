@@ -323,6 +323,19 @@ describe("post layouts", () => {
     }
   })
 
+  // #319: the byline is who the post credits (the API sends the published one), in
+  // its order; the owner isn't named unless credited (a ghost-written post).
+  it("the byline credits its authors in order, not the owner", async () => {
+    const credited = [
+      { id: 4, username: "luan", full_name: "" },
+      { id: 5, username: "priya", full_name: "Priya Nair" },
+    ]
+    const html = await render(PostDefault, { post: { ...post, authors: credited }, title: "t", description: "d", siteTitle: "Field Notes" })
+    expect(html).toContain('<span>By <a href="/author/luan">luan</a> and <a href="/author/priya">Priya Nair</a></span>')
+    expect(html).not.toContain("Ana Costa")
+    expect(html).not.toContain("/author/admin")
+  })
+
   it("a post without a byline shows its owner, unlinked", async () => {
     const html = await render(PostDefault, { post: { ...post, authors: [] }, title: "t", description: "d", siteTitle: "Field Notes" })
     expect(html).toContain("<span>By admin</span>")
