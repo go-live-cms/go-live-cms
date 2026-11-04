@@ -99,6 +99,9 @@ type Querier interface {
 	// "valid" ones are open and unexpired.
 	CreateUserInvitation(ctx context.Context, arg CreateUserInvitationParams) (UserInvitation, error)
 	CreateUserPost(ctx context.Context, arg CreateUserPostParams) (UserPost, error)
+	// A byline is never empty (#319): a post whose only credit was the removed member
+	// credits its owner.
+	CreditOwnersOnEmptyBylines(ctx context.Context, postIds []int64) error
 	// First deactivate all themes
 	DeactivateAllThemes(ctx context.Context) error
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
@@ -121,6 +124,9 @@ type Querier interface {
 	DeleteTheme(ctx context.Context, id int64) error
 	DeleteThemeSetting(ctx context.Context, arg DeleteThemeSettingParams) error
 	DeleteUser(ctx context.Context, id int64) error
+	// Removal (#333, #319), after ReassignPostBylines: the member's remaining credits,
+	// returning the posts they were on (CreditOwnersOnEmptyBylines).
+	DeleteUserBylines(ctx context.Context, userID int64) ([]int64, error)
 	DeleteUserPost(ctx context.Context, postID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
 	GetActiveTheme(ctx context.Context) (Theme, error)
@@ -184,10 +190,11 @@ type Querier interface {
 	GetPostsByMultipleTaxonomyTerms(ctx context.Context, arg GetPostsByMultipleTaxonomyTermsParams) ([]Post, error)
 	GetPostsByTaxonomyTerm(ctx context.Context, arg GetPostsByTaxonomyTermParams) ([]Post, error)
 	GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error)
-	// Public author pages (#350). An author is a user credited (user_posts, the
-	// byline) on at least one published post of a public, active post type: the
-	// posts the public site serves. Nobody else has a page, so these queries are
-	// the only place that rule lives.
+	// Public author pages (#350). An author is a user credited in the published
+	// byline (post_published_authors, the snapshot's author_ids, #319) of at least one
+	// published post of a public, active post type: the posts the public site serves.
+	// A byline edit not yet published credits nobody. Nobody else has a page, so
+	// these queries are the only place that rule lives.
 	// The author's public fields and how many of those posts credit them. A user
 	// with none gets post_count 0, which the API answers like an unknown username.
 	GetPublicAuthor(ctx context.Context, username string) (GetPublicAuthorRow, error)
@@ -228,6 +235,8 @@ type Querier interface {
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
 	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
+	// The new byline (#319): author_ids in credit order, "order" = position from 0.
+	InsertPostByline(ctx context.Context, arg InsertPostBylineParams) error
 	InsertPostVersion(ctx context.Context, arg InsertPostVersionParams) (InsertPostVersionRow, error)
 	// The new version is the post's working copy as stored now: block_doc and its
 	// settings (title, excerpt, featured image, terms; golive_post_settings, #358),
@@ -241,6 +250,10 @@ type Querier interface {
 	// so two posts published in the same instant still have one order. Zero, one or two
 	// rows. Each branch is one step along idx_posts_published_type_created_id (000023).
 	ListAdjacentPosts(ctx context.Context, arg ListAdjacentPostsParams) ([]ListAdjacentPostsRow, error)
+	// Who can be credited (#319): members with one of @roles (the content roles,
+	// from auth_roles.go), matching @pattern by name or username (ILIKE, '' =
+	// everyone), for the Authors field's picker. Public fields only: contributors see it too.
+	ListAuthorCandidates(ctx context.Context, arg ListAuthorCandidatesParams) ([]ListAuthorCandidatesRow, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
 	// Pages through image media by id for the variant backfill. With
@@ -271,10 +284,13 @@ type Querier interface {
 	// What the admin Users page shows. Invitations that expired over 30 days ago
 	// are dropped (nobody is waiting on them any more), and the list is capped.
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
-	// The "Written by" cards: every author credited on a post, in byline order.
-	// Empty unless the post is one the public site serves, so it never shows who
-	// wrote a draft, and every author it returns has a page.
+	// The "Written by" cards: every author in the post's published byline, in
+	// order. Empty unless the post is one the public site serves, so it never shows
+	// who wrote a draft, and every author it returns has a page.
 	ListPostAuthorProfiles(ctx context.Context, postID int64) ([]ListPostAuthorProfilesRow, error)
+	// A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
+	// the Authors field. Public fields only.
+	ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
@@ -344,14 +360,26 @@ type Querier interface {
 	// Serializes a password change against concurrent refresh-token rotation
 	// (see UpdateUserTx and LockUserForShare).
 	LockUserForUpdate(ctx context.Context, id int64) error
+	// SetPostAuthorsTx (#319): the users about to be credited, so a concurrent removal
+	// (#333, which deletes the row) waits for the byline to be written, or wins and
+	// the byline is refused. KEY SHARE: nothing here changes the users.
+	LockUsersForShare(ctx context.Context, ids []int64) ([]int64, error)
 	// Row-locks the given users in id order (RemoveUserTx: the member and the one who
 	// receives their posts), so two removals that name each other can't deadlock.
 	LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error)
 	// The removed member's byline (user_posts, #319) on the posts that just moved goes to
 	// the new owner, unless they are already credited there. Credits on anyone else's
-	// posts are deleted with the account (ON DELETE CASCADE).
+	// posts are dropped (DeleteUserBylines).
 	ReassignPostBylines(ctx context.Context, arg ReassignPostBylinesParams) error
 	ReassignPostsOwner(ctx context.Context, arg ReassignPostsOwnerParams) ([]int64, error)
+	// Removal (#333, #319): the same rewrite for the published bylines
+	// (published_settings.author_ids), at once rather than on the next Update, since
+	// the member's credit can't be shown without the account. On the posts that moved
+	// (@moved_post_ids, now owned by @to_id) the member's place goes to @to_id unless
+	// they are already credited; elsewhere it is dropped; an empty byline becomes the
+	// owner. Working and published bylines get the same rule, so a post that had no
+	// pending change has none after. post_published_authors follows by trigger.
+	ReassignPublishedBylines(ctx context.Context, arg ReassignPublishedBylinesParams) error
 	// A failed attempt under this claim: the reason the editor shows, and the next try
 	// after the backoff. 0 rows: the schedule changed meanwhile, nothing to record.
 	RecordScheduledPublishFailure(ctx context.Context, arg RecordScheduledPublishFailureParams) (int64, error)
@@ -439,6 +467,8 @@ type Querier interface {
 	// Unchanged rows are left alone: the collab store runs this every few seconds.
 	SyncPostContentMedia(ctx context.Context, arg SyncPostContentMediaParams) error
 	TouchMenu(ctx context.Context, id int64) error
+	// A post setting changed outside UPDATE posts (the byline, #319): "last edited".
+	TouchPost(ctx context.Context, id int64) (Post, error)
 	// Stamps last_active_at unless it is newer than min_age_seconds, so concurrent
 	// requests and the API's own check (authMiddleware) write at most once per interval.
 	// A row another transaction holds (a role change locks every admin, a password change

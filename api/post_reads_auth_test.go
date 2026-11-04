@@ -137,6 +137,8 @@ var postReadRouteTemplates = []string{
 	// Signed in before #393, but any content role read any post's.
 	"/api/v1/posts/:id/blocks",
 	"/api/v1/posts/:id/settings",
+	// The working byline (#319).
+	"/api/v1/posts/:id/authors",
 }
 
 // moderatorPostRoutes are per-post GET routes for editors and admins only
