@@ -559,10 +559,10 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `bodyLimitOverrides`), ≤40 MP; a GIF's first frame. The API crops the largest square around
   the focal point (EXIF orientation applied), scales it to 256 px (never up) and re-encodes it
   (JPEG, PNG with transparency), so no metadata survives. Stored in `<UPLOAD_PATH>/_avatars/`
-  through `saveUploadedFile` (#399 names, backups include it). `users.avatar_url` (`000037`)
+  through `saveUploadedFile` (#399 names, backups include it). `users.avatar_url` (`000038`)
   holds the **`/uploads` URL path** (`''` = none), so bylines built in SQL return it as is:
   every user shape has `avatar` (URL or null): private/public user, `PostAuthorResponse`
-  (`golive_post_byline`/`golive_post_published_byline`, redefined by 000037, and the Authors
+  (`golive_post_byline`/`golive_post_published_byline`, redefined by 000038, and the Authors
   field's queries), `AuthorProfileResponse`. `SetUserAvatar` returns the
   previous URL under a row lock; its file is removed after the update (`removeAvatarFile`, only
   a name that parses as ours, `avatarFilePath`), and on member removal (`RemoveUserTxResult.AvatarURL`).
@@ -672,6 +672,53 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   (real DB: due-only, two replicas, fencing, flush failure, shutdown, routes, not public) and
   `posts_schedule_test.go`.
 
+## Trash, list filters and bulk actions (#327, `000037`, `posts_trash.go`)
+
+- **Trash is a status, `post_status = 'trash'`,** plus `deleted_at` and `trashed_from_status`
+  (CHECK: all three together). A status on purpose: every public read already wants
+  `published` and the scheduler `scheduled`, so a trashed post is off the site, the sitemap,
+  feeds, search, term/author archives, related/adjacent posts and menus with no query change.
+  Its published snapshot stays, so restoring a published post puts the same content back. A
+  trashed scheduled post keeps `publish_at` (000037 relaxes 000033's CHECK for that). Admin
+  lists: no `status` = every status **but** trash (`ListPosts*`, the counts' `CountFiltered*`,
+  `SearchPostsWithMeta`, `/posts/user/:id`); `status=trash` is the Trash tab; `/posts/counts`
+  has a `trash` count.
+- `DELETE /posts/:id` **moves to the trash** (`TrashPost`, the old delete's rule
+  `canTrashPost` = `canEditPostDetails`; 409 `post_trashed` if already there). `POST
+  /posts/:id/restore` (`canRestorePost`: moderators, or a contributor's own post that wasn't
+  published or scheduled) → `RestorePostFromTrash`: the old status, except a scheduled post
+  whose time passed comes back a **draft** (never published at once). `DELETE
+  /posts/:id/permanent` (`requireContentEditor`, trashed only, else 409 `not_in_trash`) →
+  `DeleteTrashedPostTx` (status checked under the row lock), the old hard delete. No auto-empty. A pending scheduled update (#335) ends with the trash (its `posts_cancel_scheduled_update` trigger), so a restored post has none.
+- **Nobody edits a trashed post:** `canEditPost` and `canEditPostDetails` are false for it,
+  moderators included; `checkPost` answers 409 `post_trashed` (not 403) to a caller who may
+  read it, and the write routes that don't load the post (media links, SEO, restore-settings)
+  use `authorizeWritePost`, which reads it for moderators too. Duplicate answers 409, `PublishPostTx` returns `db.ErrPostTrashed` (409, checked under
+  the lock), `UnpublishPost` skips it (404), `SchedulePost` already wanted draft/scheduled.
+  The collab store still accepts a trashed post's last store (the edits before the trash).
+- **Collab:** `/internal/users/:id/access` reads the post for **everyone** now and answers
+  **410 `{code: "post_trashed"}`** for a trashed one (the collab server refuses or closes with
+  `post-trashed`, not as a revoked session). After a trash the API calls the collab server's
+  `POST /internal/documents/post-<id>/recheck` (`recheckCollabDoc`, background, best effort; the
+  periodic re-check is the fallback).
+- **Filters** on `GET /posts`, `/posts/type/:type` and `/posts/search`: `author_id` (credited in
+  `user_posts`, not just the owner) and `terms=1,2` (linked to every one, working terms, ≤10),
+  with status, sort and `viewer_id`. `GET /posts/authors?type=` lists who is credited on posts
+  the caller may read (the Author filter's options; editors can't list `/users`).
+  The filter reads the working byline (`user_posts`, #319).
+- **Search** (`/posts/search`) also matches part of the title or slug (`title_pattern`, ILIKE,
+  wildcards escaped with `memberSearchPattern`), ranked after every index match. The #145 index
+  stays the main search; there is no second search endpoint.
+- **`POST /posts/bulk {action: publish|trash|restore|delete, ids: [≤100]}`** (any content role):
+  each post is checked exactly as its single route checks it (publish needs a moderator,
+  per item) and runs the same code (`publishPostByID` = flush + `PublishPostTx`, shared with
+  `publishPost`; `trashPostByID`, `restorePostByID`, `deletePostPermanentlyByID`). 200 with
+  `{action, results: [{id, ok, post_status} | {id, ok: false, status, code, error}], succeeded,
+  failed}`, duplicates once, in order. Codes: `forbidden`, `not_found`, `post_trashed`,
+  `not_in_trash`, `collab_unavailable`, `failed`. "Change byline author" is not a bulk action yet (#319's `PUT /posts/:id/authors` is per post).
+- Tests: `posts_trash_db_test.go` (real DB: hidden from every `/public` route and menus,
+  scheduler and its fence, restore, permanent delete, the filters combined, counts, bulk with
+  mixed permissions, the authors list) and `posts_trash_test.go`.
 ## Scheduled updates (#335, `000035`, `posts_scheduled_update.go`)
 
 - A published post with changes not published (#326) schedules its **Update**: `PUT
@@ -735,7 +782,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `invitation_revoked`, joined (actor = the new member), user created (POST `/users`),
   `role_changed` (both routes, `previous_role`; none when the role is unchanged:
   `ChangeUserRoleTx` returns `PreviousRole`), removed;
-  `settings_updated` (`fields`). Trash/restore (#327) and extension settings aren't recorded yet.
+  `settings_updated` (`fields`). The trash (#327): `trashed` (`from_status`), `restored` (`post_status`) and permanent delete as `deleted`, recorded by the per-post helpers in `posts_trash.go` so the bulk actions log each post too (bulk publish logs `published`: `publishPostByID` records it for both routes). Extension settings aren't recorded yet.
 - **Throttle:** high-volume events ("updated", and "edited" from the collab store) are at most
   one per member, verb and object per `activityEditWindow` (10 min, `CreateActivityThrottled`).
   The collab one is written **inside** `StorePostCollabTx` (`EditActivityWindow`, only stores
@@ -745,7 +792,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   post and media event; contributors events on posts they own or that are published (as the
   post is now, `canReadPost`) and on their own media. Member, invitation and settings events are
   admin-only. `GET /home/continue-editing` (the caller's created/edited/updated/
-  `version_restored`/`status_changed` events, readable posts only; being
+  `version_restored`/`status_changed` events, readable posts only, never archived or trashed; being
   `post_ydoc_state.last_editor_id` only sharpens the time to `changed_at`, never adds a post:
   state-only stores, a post merely opened, record their sender too). `GET /home/needs-attention`: `failed_schedules` (contributors their own),
   `unpublished_changes` + `missing_alt` (editors and admins; `null` otherwise),

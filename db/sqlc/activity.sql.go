@@ -259,7 +259,7 @@ FROM worked w
 JOIN posts p ON p.id = w.post_id
 LEFT JOIN post_ydoc_state s ON s.post_id = p.id AND s.last_editor_id = $1::bigint
 LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
-WHERE p.post_status <> 'archived'
+WHERE p.post_status NOT IN ('archived', 'trash')
   AND ($2::bigint = 0 OR p.user_id = $2::bigint OR p.post_status = 'published')
 ORDER BY edited_at DESC, p.id DESC
 LIMIT $3::int
@@ -290,7 +290,7 @@ type ListContinueEditingRow struct {
 // changed_at is the exact time. That alone never counts: a state-only store (a
 // post merely opened) records its sender too. viewer_id 0 = may read any post,
 // else only their own and published ones (canReadPost), as the post is now.
-// Archived posts are left out.
+// Archived posts and posts in the trash (#327) are left out.
 // A pending scheduled Update (#335), for the card's pill.
 func (q *Queries) ListContinueEditing(ctx context.Context, arg ListContinueEditingParams) ([]ListContinueEditingRow, error) {
 	rows, err := q.db.QueryContext(ctx, listContinueEditing, arg.UserID, arg.ViewerID, arg.RowLimit)

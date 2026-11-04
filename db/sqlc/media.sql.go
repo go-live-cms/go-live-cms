@@ -865,7 +865,7 @@ func (q *Queries) GetPostMediaCount(ctx context.Context, postID int64) (int64, e
 
 const getPostWithMedia = `-- name: GetPostWithMedia :one
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error, p.deleted_at, p.trashed_from_status,
     COALESCE(
         json_agg(
             json_build_object(
@@ -921,6 +921,8 @@ type GetPostWithMediaRow struct {
 	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
 	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
 	PublishError         sql.NullString        `json:"publish_error"`
+	DeletedAt            sql.NullTime          `json:"deleted_at"`
+	TrashedFromStatus    sql.NullString        `json:"trashed_from_status"`
 	Media                interface{}           `json:"media"`
 }
 
@@ -959,6 +961,8 @@ func (q *Queries) GetPostWithMedia(ctx context.Context, id int64) (GetPostWithMe
 		&i.PublishNextAttemptAt,
 		&i.PublishFailedAt,
 		&i.PublishError,
+		&i.DeletedAt,
+		&i.TrashedFromStatus,
 		&i.Media,
 	)
 	return i, err
@@ -1049,7 +1053,7 @@ func (q *Queries) GetPostsByMedia(ctx context.Context, mediaID int64) ([]GetPost
 
 const getPostsByUserWithMedia = `-- name: GetPostsByUserWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error, p.deleted_at, p.trashed_from_status,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1070,6 +1074,8 @@ FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
 WHERE p.user_id = $1
+    -- Trashed posts only appear in the Trash tab (#327).
+    AND p.post_status <> 'trash'
     -- What the caller may read (#393, as in ListPosts): 0 = everything.
     AND ($2::bigint = 0 OR p.user_id = $2 OR p.post_status = 'published')
 GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at
@@ -1117,6 +1123,8 @@ type GetPostsByUserWithMediaRow struct {
 	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
 	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
 	PublishError         sql.NullString        `json:"publish_error"`
+	DeletedAt            sql.NullTime          `json:"deleted_at"`
+	TrashedFromStatus    sql.NullString        `json:"trashed_from_status"`
 	Media                interface{}           `json:"media"`
 }
 
@@ -1166,6 +1174,8 @@ func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUse
 			&i.PublishNextAttemptAt,
 			&i.PublishFailedAt,
 			&i.PublishError,
+			&i.DeletedAt,
+			&i.TrashedFromStatus,
 			&i.Media,
 		); err != nil {
 			return nil, err
@@ -1420,7 +1430,7 @@ func (q *Queries) ListMediaPathsIn(ctx context.Context, paths []string) ([]strin
 
 const listPostsWithMedia = `-- name: ListPostsWithMedia :many
 SELECT 
-    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error,
+    p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.block_doc, p.block_revision, p.published_version_id, p.published_block_doc, p.slug, p.published_settings, p.block_doc_hash, p.published_block_hash, p.seo_title, p.seo_description, p.social_image_id, p.noindex, p.canonical_url, p.publish_at, p.publish_scheduled_by, p.publish_attempts, p.publish_next_attempt_at, p.publish_failed_at, p.publish_error, p.deleted_at, p.trashed_from_status,
     COALESCE(
         json_agg(
             json_build_object(
@@ -1483,6 +1493,8 @@ type ListPostsWithMediaRow struct {
 	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
 	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
 	PublishError         sql.NullString        `json:"publish_error"`
+	DeletedAt            sql.NullTime          `json:"deleted_at"`
+	TrashedFromStatus    sql.NullString        `json:"trashed_from_status"`
 	Media                interface{}           `json:"media"`
 }
 
@@ -1527,6 +1539,8 @@ func (q *Queries) ListPostsWithMedia(ctx context.Context, arg ListPostsWithMedia
 			&i.PublishNextAttemptAt,
 			&i.PublishFailedAt,
 			&i.PublishError,
+			&i.DeletedAt,
+			&i.TrashedFromStatus,
 			&i.Media,
 		); err != nil {
 			return nil, err

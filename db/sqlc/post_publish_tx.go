@@ -47,15 +47,19 @@ type PublishPostTxResult struct {
 func (store *SQLStore) PublishPostTx(ctx context.Context, arg PublishPostTxParams) (PublishPostTxResult, error) {
 	var result PublishPostTxResult
 	err := store.execTx(ctx, func(q *Queries) error {
-		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
+		locked, err := q.LockPostForPublish(ctx, arg.PostID)
+		if err != nil {
 			return err
+		}
+		// Publishing would bring a trashed post back on the site around restore.
+		if locked.PostStatus == PostStatusTrash {
+			return ErrPostTrashed
 		}
 		// Under the post's lock, so no schedule or cancel slips in between.
 		_, pendingErr := q.GetPostScheduledUpdate(ctx, arg.PostID)
 		if pendingErr != nil && !errors.Is(pendingErr, sql.ErrNoRows) {
 			return fmt.Errorf("scheduled update: %w", pendingErr)
 		}
-		var err error
 		result, err = publishLockedPost(ctx, q, arg)
 		result.CancelledScheduledUpdate = pendingErr == nil
 		return err

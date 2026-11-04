@@ -41,6 +41,7 @@ type Store interface {
 	CreatePostTx(ctx context.Context, arg CreatePostTxParams) (CreatePostTxResult, error)
 	DuplicatePostTx(ctx context.Context, arg DuplicatePostTxParams) (Post, error)
 	DeletePostTx(ctx context.Context, id int64) error
+	DeleteTrashedPostTx(ctx context.Context, id int64) error
 
 	RemoveUserTx(ctx context.Context, arg RemoveUserTxParams) (RemoveUserTxResult, error)
 	ChangeUserRoleTx(ctx context.Context, arg SetUserRoleParams) (ChangeUserRoleTxResult, error)

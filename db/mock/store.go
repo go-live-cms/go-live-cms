@@ -1327,6 +1327,20 @@ func (mr *MockStoreMockRecorder) DeleteThemeSetting(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteThemeSetting", reflect.TypeOf((*MockStore)(nil).DeleteThemeSetting), arg0, arg1)
 }
 
+// DeleteTrashedPostTx mocks base method.
+func (m *MockStore) DeleteTrashedPostTx(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteTrashedPostTx", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteTrashedPostTx indicates an expected call of DeleteTrashedPostTx.
+func (mr *MockStoreMockRecorder) DeleteTrashedPostTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteTrashedPostTx", reflect.TypeOf((*MockStore)(nil).DeleteTrashedPostTx), arg0, arg1)
+}
+
 // DeleteUser mocks base method.
 func (m *MockStore) DeleteUser(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -2625,6 +2639,21 @@ func (mr *MockStoreMockRecorder) ListContinueEditing(arg0, arg1 interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListContinueEditing", reflect.TypeOf((*MockStore)(nil).ListContinueEditing), arg0, arg1)
 }
 
+// ListCreditedAuthors mocks base method.
+func (m *MockStore) ListCreditedAuthors(arg0 context.Context, arg1 db.ListCreditedAuthorsParams) ([]db.ListCreditedAuthorsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCreditedAuthors", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListCreditedAuthorsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCreditedAuthors indicates an expected call of ListCreditedAuthors.
+func (mr *MockStoreMockRecorder) ListCreditedAuthors(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCreditedAuthors", reflect.TypeOf((*MockStore)(nil).ListCreditedAuthors), arg0, arg1)
+}
+
 // ListExtensionSettings mocks base method.
 func (m *MockStore) ListExtensionSettings(arg0 context.Context) ([]db.ExtensionSetting, error) {
 	m.ctrl.T.Helper()
@@ -3106,10 +3135,10 @@ func (mr *MockStoreMockRecorder) LockPostForCollabStore(arg0, arg1 interface{}) 
 }
 
 // LockPostForPublish mocks base method.
-func (m *MockStore) LockPostForPublish(arg0 context.Context, arg1 int64) (int64, error) {
+func (m *MockStore) LockPostForPublish(arg0 context.Context, arg1 int64) (db.LockPostForPublishRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LockPostForPublish", arg0, arg1)
-	ret0, _ := ret[0].(int64)
+	ret0, _ := ret[0].(db.LockPostForPublishRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -3118,6 +3147,21 @@ func (m *MockStore) LockPostForPublish(arg0 context.Context, arg1 int64) (int64,
 func (mr *MockStoreMockRecorder) LockPostForPublish(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForPublish", reflect.TypeOf((*MockStore)(nil).LockPostForPublish), arg0, arg1)
+}
+
+// LockPostStatus mocks base method.
+func (m *MockStore) LockPostStatus(arg0 context.Context, arg1 int64) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostStatus", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostStatus indicates an expected call of LockPostStatus.
+func (mr *MockStoreMockRecorder) LockPostStatus(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostStatus", reflect.TypeOf((*MockStore)(nil).LockPostStatus), arg0, arg1)
 }
 
 // LockPostStatusForUpdate mocks base method.
@@ -3499,6 +3543,21 @@ func (m *MockStore) ResetPasswordTx(arg0 context.Context, arg1 db.ResetPasswordT
 func (mr *MockStoreMockRecorder) ResetPasswordTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPasswordTx", reflect.TypeOf((*MockStore)(nil).ResetPasswordTx), arg0, arg1)
+}
+
+// RestorePostFromTrash mocks base method.
+func (m *MockStore) RestorePostFromTrash(arg0 context.Context, arg1 int64) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestorePostFromTrash", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RestorePostFromTrash indicates an expected call of RestorePostFromTrash.
+func (mr *MockStoreMockRecorder) RestorePostFromTrash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestorePostFromTrash", reflect.TypeOf((*MockStore)(nil).RestorePostFromTrash), arg0, arg1)
 }
 
 // RestorePostSEO mocks base method.
@@ -3955,6 +4014,21 @@ func (m *MockStore) TransferMediaToUser(arg0 context.Context, arg1 db.TransferMe
 func (mr *MockStoreMockRecorder) TransferMediaToUser(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferMediaToUser", reflect.TypeOf((*MockStore)(nil).TransferMediaToUser), arg0, arg1)
+}
+
+// TrashPost mocks base method.
+func (m *MockStore) TrashPost(arg0 context.Context, arg1 int64) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TrashPost", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TrashPost indicates an expected call of TrashPost.
+func (mr *MockStoreMockRecorder) TrashPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrashPost", reflect.TypeOf((*MockStore)(nil).TrashPost), arg0, arg1)
 }
 
 // UnlinkPostFeaturedMedia mocks base method.

@@ -957,6 +957,10 @@ func TestUpdatePostAPI(t *testing.T) {
 func TestDeletePostAPI(t *testing.T) {
 	user := randomUserForPosts()
 	post := randomPost(user)
+	post.PostStatus = "draft"
+	// DELETE moves the post to the trash (#327).
+	trashed := post
+	trashed.PostStatus = "trash"
 
 	testCases := []struct {
 		name          string
@@ -978,9 +982,9 @@ func TestDeletePostAPI(t *testing.T) {
 					Return(post, nil)
 
 				store.EXPECT().
-					DeletePostTx(gomock.Any(), gomock.Eq(post.ID)).
+					TrashPost(gomock.Any(), gomock.Eq(post.ID)).
 					Times(1).
-					Return(nil)
+					Return(trashed, nil)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -1032,9 +1036,9 @@ func TestDeletePostAPI(t *testing.T) {
 					Return(post, nil)
 
 				store.EXPECT().
-					DeletePostTx(gomock.Any(), gomock.Eq(post.ID)).
+					TrashPost(gomock.Any(), gomock.Eq(post.ID)).
 					Times(1).
-					Return(sql.ErrConnDone)
+					Return(db.Post{}, sql.ErrConnDone)
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)

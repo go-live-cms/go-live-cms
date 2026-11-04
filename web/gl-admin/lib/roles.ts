@@ -71,6 +71,8 @@ export interface PermissionPost {
 // contributor's later edits would go live without an editor seeing them.
 export function canEditPost(user: PermissionUser | null | undefined, post: PermissionPost): boolean {
     if (!user) return false
+    // Nobody edits a post in the trash (#327): restore it first.
+    if (isTrashed(post)) return false
     if (isContentModerator(user.role)) return true
     return user.role?.toLowerCase() === "contributor" && post.user_id === user.id && post.post_status?.toLowerCase() !== "scheduled"
 }
@@ -86,8 +88,35 @@ export function canWriteMedia(user: PermissionUser | null | undefined, media: { 
 // a contributor may change them only while their post isn't published.
 export function canEditPostDetails(user: PermissionUser | null | undefined, post: PermissionPost): boolean {
     if (!user) return false
+    if (isTrashed(post)) return false
     if (isContentModerator(user.role)) return true
     return canEditPost(user, post) && post.post_status?.toLowerCase() !== "published"
+}
+
+// The trash (#327). Mirrors api/auth_posts.go: moving to the trash is the old delete
+// (canEditPostDetails); restoring gives the post its old status back, so a published or
+// scheduled one needs a moderator, a contributor restores their own draft (or archived
+// post); permanent delete is moderators' only.
+export function isTrashed(post: Pick<PermissionPost, "post_status">): boolean {
+    return post.post_status?.toLowerCase() === "trash"
+}
+
+export function canTrashPost(user: PermissionUser | null | undefined, post: PermissionPost): boolean {
+    return !isTrashed(post) && canEditPostDetails(user, post)
+}
+
+export function canRestorePost(
+    user: PermissionUser | null | undefined,
+    post: PermissionPost & { trashed_from_status?: string }
+): boolean {
+    if (!user || !isTrashed(post)) return false
+    if (isContentModerator(user.role)) return true
+    const from = post.trashed_from_status?.toLowerCase()
+    return user.role?.toLowerCase() === "contributor" && post.user_id === user.id && from !== "published" && from !== "scheduled"
+}
+
+export function canDeletePostPermanently(user: PermissionUser | null | undefined, post: PermissionPost): boolean {
+    return isTrashed(post) && isContentModerator(user?.role)
 }
 
 export interface PostEditorAccess {
@@ -115,6 +144,6 @@ export function postEditorAccess(
     return {
         content: canEditPost(user, post),
         details: canEditPostDetails(user, post),
-        publish,
+        publish: publish && !isTrashed(post),
     }
 }

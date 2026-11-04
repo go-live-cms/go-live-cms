@@ -16,6 +16,13 @@
 //        200 {"docs": n}  how many of their (user, doc) groups are being re-checked
 //        400  not a user id
 //        401  missing or wrong secret
+//   POST /internal/documents/:doc/recheck  → the same for every open connection to one
+//                                            document (`checkDoc`; the API calls it after
+//                                            the post moves to the trash, #327, so they
+//                                            close with post-trashed now)
+//        200 {"docs": n}  how many (user, doc) groups are being re-checked
+//        400  not a collab doc name
+//        401  missing or wrong secret
 //
 // Must NOT import yjs.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http"
@@ -35,6 +42,8 @@ export interface InternalServerOptions {
   flush(docName: string): Promise<FlushResult>
   /** Re-checks the user's open connections now; returns how many docs. */
   recheckUser(userId: string): number
+  /** Re-checks every open connection to the doc now (#327); returns how many groups. */
+  recheckDoc(docName: string): number
 }
 
 /** Constant-time "Authorization: Bearer <secret>" check. An empty secret rejects everything. */
@@ -47,13 +56,14 @@ export function bearerMatches(header: string | string[] | undefined, secret: str
 
 const FLUSH_PATH = /^\/internal\/documents\/([^/]+)\/flush$/
 const RECHECK_PATH = /^\/internal\/users\/([^/]+)\/recheck$/
+const DOC_RECHECK_PATH = /^\/internal\/documents\/([^/]+)\/recheck$/
 
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" })
   res.end(JSON.stringify(body))
 }
 
-export function createInternalHandler({ secret, flush, recheckUser }: InternalServerOptions) {
+export function createInternalHandler({ secret, flush, recheckUser, recheckDoc }: InternalServerOptions) {
   return async (req: IncomingMessage, res: ServerResponse) => {
     const requestId = requestIdFrom(req.headers["x-request-id"])
     res.setHeader("X-Request-ID", requestId)
@@ -75,6 +85,25 @@ export function createInternalHandler({ secret, flush, recheckUser }: InternalSe
       if (!/^[1-9][0-9]{0,18}$/.test(userId)) return send(res, 400, { error: "invalid user id" })
       const docs = recheckUser(userId)
       logEvent("info", "collab_recheck", { request_id: requestId, user_id: userId, docs })
+      return send(res, 200, { docs })
+    }
+
+    const docRecheck = DOC_RECHECK_PATH.exec(path)
+    if (docRecheck) {
+      if (req.method !== "POST") return send(res, 405, { error: "method not allowed" })
+      if (!bearerMatches(req.headers.authorization, secret)) {
+        logEvent("warn", "collab_recheck_denied", { request_id: requestId })
+        return send(res, 401, { error: "unauthorized" })
+      }
+      let docName: string
+      try {
+        docName = decodeURIComponent(docRecheck[1])
+      } catch {
+        return send(res, 400, { error: "invalid document name" })
+      }
+      if (!isCollabDocName(docName)) return send(res, 400, { error: "invalid document name" })
+      const docs = recheckDoc(docName)
+      logEvent("info", "collab_recheck", { request_id: requestId, doc: docNameForLog(docName), docs })
       return send(res, 200, { docs })
     }
 

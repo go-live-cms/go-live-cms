@@ -139,6 +139,11 @@ func (server *Server) duplicatePost(c *gin.Context) {
 	if !ok || !server.checkPost(c, caller, source, canReadPost) {
 		return
 	}
+	// The trash is on its way out, not a template (#327): restore it first.
+	if isTrashed(source) {
+		postTrashedError().write(c)
+		return
+	}
 	if !canCreatePost(caller, []int64{caller.ID}, "draft") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return

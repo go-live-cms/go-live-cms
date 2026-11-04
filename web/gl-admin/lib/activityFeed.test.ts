@@ -37,6 +37,8 @@ describe("describeActivity", () => {
     expect(line({ verb: "update_unscheduled" })).toBe("Ana Costa cancelled the scheduled update of October changelog")
     expect(line({ verb: "status_changed", payload: { post_status: "draft" } })).toBe("Ana Costa set October changelog to draft")
     expect(line({ payload: { scheduled: true } })).toBe("Ana Costa published (scheduled) October changelog")
+    expect(line({ verb: "trashed" })).toBe("Ana Costa moved October changelog to the trash")
+    expect(line({ verb: "restored" })).toBe("Ana Costa restored October changelog from the trash")
   })
 
   it("says You for the viewer and Someone without an actor", () => {

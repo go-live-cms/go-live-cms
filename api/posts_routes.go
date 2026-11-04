@@ -30,6 +30,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		// Reads (put static routes before the greedy :id route)
 		posts.GET("", auth, author, server.getPosts)
 		posts.GET("/counts", auth, author, server.getPostCounts)
+		// The list's Author filter (#327, posts_trash.go)
+		posts.GET("/authors", auth, author, server.listCreditedAuthors)
 		// The admin list's search box (#145)
 		posts.GET("/search", auth, author, server.searchPosts)
 		posts.GET("/type/:type", auth, author, server.getPostsByType)
@@ -42,8 +44,15 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		// Writes. Any content role reaches them; the handler decides per
 		// post (auth_posts.go: contributors only their own, #135)
 		posts.POST("", auth, author, server.createPost)
+		// Bulk actions from the posts list (#327, posts_trash.go): each post is
+		// checked on its own, so any content role reaches it.
+		posts.POST("/bulk", auth, author, server.bulkPosts)
 		posts.PUT("/:id", auth, author, server.updatePost)
+		// DELETE moves the post to the trash (#327); restore and permanent delete
+		// take it out again. Permanent delete is admins' and editors' only.
 		posts.DELETE("/:id", auth, author, server.deletePost)
+		posts.POST("/:id/restore", auth, author, server.restorePost)
+		posts.DELETE("/:id/permanent", auth, requireContentEditor(server), server.deletePostPermanently)
 		// A draft copy owned by the caller (#354); the handler checks read access.
 		posts.POST("/:id/duplicate", auth, author, server.duplicatePost)
 

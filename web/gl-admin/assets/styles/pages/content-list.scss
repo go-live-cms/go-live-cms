@@ -92,6 +92,40 @@
     padding: 0 var(--space-2);
   }
 
+  // Author / Category / Tag (#327), between the search box and the sort.
+  &__filters {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  &__filter svg {
+    color: var(--text-secondary);
+    flex: none;
+  }
+
+  // The Trash tab's explanation (#327).
+  &__note {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    margin: 0;
+  }
+
+  &__muted {
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+
+  // A trashed post's title: not a link (#327).
+  &__link--trashed {
+    color: var(--text-secondary);
+
+    &:hover {
+      text-decoration: none;
+    }
+  }
+
   &__title {
     display: flex;
     flex-direction: column;
@@ -344,4 +378,39 @@
     display: block;
     margin: 0 calc(-1 * var(--space-4));
   }
+}
+
+// The bar over the table while rows are selected (#327): "2 selected", the actions,
+// Clear selection. At phone width the actions wrap under the count.
+.gl-bulk-bar {
+  align-items: center;
+  background: var(--accent-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+
+  &__count {
+    color: var(--text-selected);
+    font-weight: 600;
+    margin-right: auto;
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
+
+// After a bulk action (#327): what changed and, one per line, what didn't and why.
+.gl-bulk-report__failures {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-5);
+}
+
+.gl-bulk-report__title {
+  font-weight: 500;
 }

@@ -26,7 +26,7 @@ func (server *Server) createPostMedia(c *gin.Context) {
 		return
 	}
 
-	if !server.authorizePost(c, postID, canEditPostDetails) {
+	if !server.authorizeWritePost(c, postID) {
 		return
 	}
 
@@ -102,7 +102,7 @@ func (server *Server) deletePostMedia(c *gin.Context) {
 		return
 	}
 
-	if !server.authorizePost(c, postID, canEditPostDetails) {
+	if !server.authorizeWritePost(c, postID) {
 		return
 	}
 

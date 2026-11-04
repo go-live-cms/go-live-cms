@@ -44,6 +44,7 @@ func TestInternalDocAccessAPI(t *testing.T) {
 			authorization: "Bearer " + testRoleLookupSecret,
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				store.EXPECT().GetPost(gomock.Any(), int64(5)).Times(1).Return(db.Post{ID: 5, PostStatus: "draft"}, nil)
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code)
@@ -217,6 +218,7 @@ func TestInternalSecretIsTrimmed(t *testing.T) {
 
 	store := mockdb.NewMockStore(ctrl)
 	store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+	store.EXPECT().GetPost(gomock.Any(), int64(5)).Times(1).Return(db.Post{ID: 5, PostStatus: "draft"}, nil)
 
 	config := newTestServer(t, nil).config
 	config.RoleLookupSecret = "  " + testRoleLookupSecret + " \n"
@@ -255,6 +257,9 @@ func TestInternalDocAccessPerPost(t *testing.T) {
 		// Not theirs to read (#393), e.g. unpublished since the ticket: the collab
 		// server closes the connection on 403.
 		{name: "SomeoneElsesDraft", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "draft"}, wantStatus: http.StatusForbidden},
+		// In the trash (#327): nobody opens it, so the collab server refuses or
+		// closes with post-trashed.
+		{name: "OwnTrashedPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID, PostStatus: "trash"}, wantStatus: http.StatusGone},
 		{name: "MissingPost", doc: "post-7", postErr: sql.ErrNoRows, wantStatus: http.StatusNotFound},
 		{name: "PostLookupFails", doc: "post-7", postErr: errors.New("db down"), wantStatus: http.StatusInternalServerError},
 		{name: "InvalidDoc", doc: "settings", wantStatus: http.StatusBadRequest},
@@ -292,8 +297,9 @@ func TestInternalDocAccessPerPost(t *testing.T) {
 	}
 }
 
-// Moderators may edit any post, so their check never loads one.
-func TestInternalDocAccessModeratorSkipsPostLookup(t *testing.T) {
+// Moderators may edit any post. Their check loads it only to refuse a trashed
+// one (#327): someone else's draft is still theirs to edit.
+func TestInternalDocAccessModeratorEditsAnyPost(t *testing.T) {
 	for _, role := range []string{RoleAdmin, RoleEditor} {
 		t.Run(role, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -306,7 +312,7 @@ func TestInternalDocAccessModeratorSkipsPostLookup(t *testing.T) {
 
 			store := mockdb.NewMockStore(ctrl)
 			store.EXPECT().GetUser(gomock.Any(), user.ID).Return(user, nil).Times(1)
-			store.EXPECT().GetPost(gomock.Any(), gomock.Any()).Times(0)
+			store.EXPECT().GetPost(gomock.Any(), int64(7)).Return(db.Post{ID: 7, UserID: 999, PostStatus: "draft"}, nil).Times(1)
 
 			server := newTestServer(t, store)
 			request, err := http.NewRequest(http.MethodGet,

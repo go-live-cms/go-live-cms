@@ -169,6 +169,7 @@ func TestRejectedWriteInput(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			store := mockdb.NewMockStore(ctrl)
+			stubLivePost(store)
 
 			var user *db.User
 			if tc.role != "" {

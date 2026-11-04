@@ -60,6 +60,8 @@ export class FakeCollabApi implements InternalApi {
   users = new Map<string, { role: string; owns?: string[]; published?: string[] }>()
   /** user id → Unix seconds of the latest password change or reset. */
   passwordChangedAt = new Map<string, number>()
+  /** Post ids in the trash (#327): the access lookup answers 410 post_trashed. */
+  trashed = new Set<string>()
   puts: { postId: string; body: CollabStoreBody }[] = []
   accessCalls = 0
   failAccess = false
@@ -86,6 +88,8 @@ export class FakeCollabApi implements InternalApi {
     const changedAt = this.passwordChangedAt.get(identity.userId)
     if (changedAt !== undefined && identity.issuedAt < changedAt) return null
     const postId = docName.slice("post-".length)
+    // In the trash (#327): nobody, moderators included (api/internal_handlers_read.go).
+    if (this.trashed.has(postId)) return { role: null, canEdit: false, trashed: true }
     const moderator = user.role === "admin" || user.role === "editor"
     // canEditPost (#135): a contributor edits only their own post, and only until it is published.
     const ownsDraft = !!user.owns?.includes(postId) && !user.published?.includes(postId)
@@ -156,6 +160,7 @@ export async function serveFakeApi(api: FakeCollabApi, secret: string): Promise<
           { userId: m[1], issuedAt: Number(url.searchParams.get("issued_at")) },
           url.searchParams.get("doc") ?? "",
         )
+        if (access?.trashed) return json(410, { error: "the post is in the trash", code: "post_trashed" })
         return access ? json(200, { role: access.role, can_edit: access.canEdit }) : json(404, { error: "not found" })
       }
       m = /^\/internal\/posts\/(\d+)\/collab$/.exec(url.pathname)
