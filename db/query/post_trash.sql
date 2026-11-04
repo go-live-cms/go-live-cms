@@ -47,7 +47,7 @@ RETURNING *;
 -- DeleteTrashedPostTx: the post's status under a row lock.
 SELECT post_status FROM posts WHERE id = $1 FOR UPDATE;
 
--- name: ListPostBylineAuthors :many
+-- name: ListCreditedAuthors :many
 -- The posts list's Author filter (#327): everyone credited (user_posts) on a post of
 -- this type that the caller may read (viewer_id as in ListPosts, #393), trash aside.
 -- Public fields only. Kept short: a filter menu, not a member directory.

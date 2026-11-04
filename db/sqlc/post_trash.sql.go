@@ -9,7 +9,7 @@ import (
 	"context"
 )
 
-const listPostBylineAuthors = `-- name: ListPostBylineAuthors :many
+const listCreditedAuthors = `-- name: ListCreditedAuthors :many
 SELECT DISTINCT u.id, u.username, u.full_name
 FROM users u
 JOIN user_posts up ON up.user_id = u.id
@@ -21,12 +21,12 @@ ORDER BY u.full_name, u.username, u.id
 LIMIT 200
 `
 
-type ListPostBylineAuthorsParams struct {
+type ListCreditedAuthorsParams struct {
 	PostType string `json:"post_type"`
 	ViewerID int64  `json:"viewer_id"`
 }
 
-type ListPostBylineAuthorsRow struct {
+type ListCreditedAuthorsRow struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
 	FullName string `json:"full_name"`
@@ -35,15 +35,15 @@ type ListPostBylineAuthorsRow struct {
 // The posts list's Author filter (#327): everyone credited (user_posts) on a post of
 // this type that the caller may read (viewer_id as in ListPosts, #393), trash aside.
 // Public fields only. Kept short: a filter menu, not a member directory.
-func (q *Queries) ListPostBylineAuthors(ctx context.Context, arg ListPostBylineAuthorsParams) ([]ListPostBylineAuthorsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPostBylineAuthors, arg.PostType, arg.ViewerID)
+func (q *Queries) ListCreditedAuthors(ctx context.Context, arg ListCreditedAuthorsParams) ([]ListCreditedAuthorsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCreditedAuthors, arg.PostType, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListPostBylineAuthorsRow{}
+	items := []ListCreditedAuthorsRow{}
 	for rows.Next() {
-		var i ListPostBylineAuthorsRow
+		var i ListCreditedAuthorsRow
 		if err := rows.Scan(&i.ID, &i.Username, &i.FullName); err != nil {
 			return nil, err
 		}

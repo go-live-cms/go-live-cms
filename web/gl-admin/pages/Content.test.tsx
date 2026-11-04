@@ -13,7 +13,7 @@ const api = vi.hoisted(() => ({
   searchPosts: vi.fn(),
   duplicatePost: vi.fn(),
   bulkPosts: vi.fn(),
-  getPostAuthors: vi.fn(),
+  getCreditedAuthors: vi.fn(),
   trashPost: vi.fn(),
   restorePost: vi.fn(),
   deletePostPermanently: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock("@gl-admin/lib/api/posts", () => ({
   duplicatePost: api.duplicatePost,
   updatePost: vi.fn(),
   bulkPosts: api.bulkPosts,
-  getPostAuthors: api.getPostAuthors,
+  getCreditedAuthors: api.getCreditedAuthors,
   trashPost: api.trashPost,
   restorePost: api.restorePost,
   deletePostPermanently: api.deletePostPermanently,
@@ -124,8 +124,8 @@ beforeEach(() => {
   api.trashPost.mockReset()
   api.restorePost.mockReset()
   api.deletePostPermanently.mockReset()
-  api.getPostAuthors.mockReset()
-  api.getPostAuthors.mockResolvedValue([])
+  api.getCreditedAuthors.mockReset()
+  api.getCreditedAuthors.mockResolvedValue([])
   api.getAllTaxonomyTerms.mockReset()
   api.getAllTaxonomyTerms.mockResolvedValue([])
 })
@@ -453,7 +453,7 @@ describe("Posts list filters, bulk actions and trash (#327)", () => {
   const barLabels = () => Array.from(bar()!.querySelectorAll("button")).map((b) => b.textContent || b.getAttribute("aria-label"))
 
   beforeEach(() => {
-    api.getPostAuthors.mockResolvedValue([
+    api.getCreditedAuthors.mockResolvedValue([
       { id: 12, username: "ana", full_name: "Ana Costa" },
       { id: 13, username: "marco", full_name: "" },
     ])
@@ -475,7 +475,7 @@ describe("Posts list filters, bulk actions and trash (#327)", () => {
     expect(button("Author: Ana Costa")).toBeDefined()
     expect(button("Category: Guides")).toBeDefined()
     expect(button("Tag: Release")).toBeDefined()
-    expect(api.getPostAuthors).toHaveBeenCalledWith({ type: "post" })
+    expect(api.getCreditedAuthors).toHaveBeenCalledWith({ type: "post" })
   })
 
   it("filters from the menus and clears them", async () => {

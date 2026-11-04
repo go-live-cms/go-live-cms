@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import { bulkPosts, getPostAuthors, getPostCounts, getPosts, searchPosts } from "@gl-admin/lib/api/posts"
+import { bulkPosts, getCreditedAuthors, getPostCounts, getPosts, searchPosts } from "@gl-admin/lib/api/posts"
 import { getAllTaxonomyTerms } from "@gl-admin/lib/api/taxonomies"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
@@ -169,7 +169,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
   const [tagOptions, setTagOptions] = useState<FilterOption[]>([])
   useEffect(() => {
     let live = true
-    getPostAuthors({ type: typeName })
+    getCreditedAuthors({ type: typeName })
       .then((authors) => live && setAuthorOptions(authors.map((a) => ({ id: String(a.id), label: a.full_name || a.username }))))
       .catch(() => {})
     const terms = (type: string, set: (o: FilterOption[]) => void) =>

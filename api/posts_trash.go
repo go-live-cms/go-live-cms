@@ -261,16 +261,16 @@ func (server *Server) deletePostPermanently(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "post deleted permanently"})
 }
 
-// getPostAuthors handles GET /posts/authors?type=: the posts list's Author
+// listCreditedAuthors handles GET /posts/authors?type=: the posts list's Author
 // filter. Everyone credited on a post the caller may read (contributors: their
 // own and published ones), as {id, username, full_name}; editors can't list
 // users (GET /users is admins'), so the filter can't come from there.
-func (server *Server) getPostAuthors(c *gin.Context) {
+func (server *Server) listCreditedAuthors(c *gin.Context) {
 	viewerID, ok := server.callerViewerID(c)
 	if !ok {
 		return
 	}
-	rows, err := server.store.ListPostBylineAuthors(c.Request.Context(), db.ListPostBylineAuthorsParams{
+	rows, err := server.store.ListCreditedAuthors(c.Request.Context(), db.ListCreditedAuthorsParams{
 		PostType: c.Query("type"),
 		ViewerID: viewerID,
 	})

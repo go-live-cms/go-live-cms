@@ -325,11 +325,15 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
     they own moves to the recipient (`user_id` and the denormalized `username`), with
     their byline (`user_posts`, #319) on those posts unless the recipient is already
     credited; their media move too (`media.user_id` has no ON DELETE);
+  - **bylines (#319):** the credit can't be kept (the row is deleted), so on posts they
+    owned the recipient takes their place, on other people's posts it is dropped, and a
+    byline left empty credits the post's owner. The **published** bylines
+    (`published_settings.author_ids`, `ReassignPublishedBylines`) get the same rule at
+    once, not on the next Update, so no post gains a pending change;
   - their sessions are deleted, which revokes every refresh token; a still-valid access
     token gets 403 at once (no user row); their open collab connections close on the
     re-check above;
-  - what goes with the row: their bylines on **other people's** posts (CASCADE), reset
-    tokens (CASCADE). What stays without them: revisions they published
+  - what goes with the row: reset tokens (CASCADE). What stays without them: revisions they published
     (`post_versions.created_by` → NULL, `000032`; it had no ON DELETE, so removing anyone
     who had published used to fail), invitations they sent (`invited_by` → NULL; still
     valid, revocable from the list), `post_ydoc_state.last_editor_id` (NULL).
@@ -513,9 +517,38 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - `/public/authors[/:username[/posts]]` and `/public/posts/:id/authors`
   (`authors_handlers_read.go`) answer with `AuthorProfileResponse` only, never
   `PublicUserResponse` (it has the role and id) or a `db.User`. Who has a page is decided
-  in `db/query/authors.sql` alone: credited in `user_posts` on a `published` post of a
-  public, active type. Anyone else gets the same 404 body as an unknown username (tested),
+  in `db/query/authors.sql` alone: credited in the **published** byline
+  (`post_published_authors`, #319) of a `published` post of a public, active type, so a byline
+  edit gives or takes a page on Update. Anyone else gets the same 404 body as an unknown username (tested),
   so the routes can't enumerate accounts.
+
+## Byline authors (#319, `000034`, `posts_authors.go`)
+
+- **The owner (`posts.user_id`) decides access; the byline only credits.** `user_posts`
+  (post_id, user_id, `order`) is the working byline: one or more users in order, never
+  empty (000034 credited the owner where a post had none; removal keeps it so). Being
+  credited gives no access (`canReadPost`/`canEditPost` read the owner only), and no
+  byline edit changes the owner. A new post's byline is its `author_ids` (a contributor:
+  only themselves), a duplicate's the caller.
+- `GET /posts/:id/authors` (`canReadPost`), `PUT /posts/:id/authors {author_ids}` (1-20
+  distinct existing users, in order; `canEditPostByline` = `canEditPostDetails`: moderators
+  any post, a contributor their own unpublished one, crediting anyone) →
+  `SetPostAuthorsTx` (users `FOR KEY SHARE` **before** the post lock, RemoveUserTx's order, so the
+  two can't deadlock; unknown user 400). Optional `base_author_ids` = the byline the client
+  edited: if it changed meanwhile, 409 `byline_changed` with the current `authors` and nothing
+  written (the admin always sends it, so two editors can't drop each other's credit). `GET
+  /posts/author-candidates?q=` lists `contentRoles` members (`auth_roles.go`) for the picker (id,
+  username, full name; GET /users is admin-only, so contributors can list members' names here).
+- **It's a post setting:** `golive_post_settings()` has `author_ids`, so a byline edit on a
+  published post waits for Update (#326's flag sees it), versions record it, and
+  restore-settings brings it back (users removed since skipped; none left or a version
+  without `author_ids` keeps the working byline). `post_published_authors` mirrors
+  `published_settings.author_ids` (trigger, like `post_published_terms`; never write it).
+- **Public reads use the published byline only:** `golive_post_published_byline()` in the
+  `/public` lists (`ListPostsWithMeta` with `published_byline`, adjacent/related, term and
+  author lists), `/public/posts/:id/authors` and who has an author page. The admin lists use
+  `golive_post_byline()` (`user_posts`). A post published without a snapshot credits nobody
+  publicly (the theme shows its owner, unlinked).
 
 ## Public term archives (#348)
 
@@ -693,8 +726,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   content image links with `SyncPostContentMedia`, which never moves the featured image's
   order-0 row (#389), in one transaction) stores `golive_post_settings(id)` in `post_versions.settings` and
   `posts.published_settings`: title, description, featured image (`_thumbnail_id`/`_url` meta),
-  sorted `term_ids` and the SEO fields (#357, below). The SQL function is the one definition
-  of the shape; authors (#319) join it by redefining it. Unpublish NULLs it; a version from before
+  sorted `term_ids`, the SEO fields (#357, below) and `author_ids` (the byline, #319). The SQL
+  function is the one definition of the shape. Unpublish NULLs it; a version from before
   #358 has NULL (the migration backfilled only current versions). `post_published_terms` is the
   published term set as rows, kept equal to `published_settings.term_ids` by a trigger (never
   write it by hand); term archives, related posts and `/public/terms` join it. **Every public

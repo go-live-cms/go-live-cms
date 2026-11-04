@@ -5,6 +5,7 @@ import type { Media, Post } from "@gl-admin/lib/api/types"
 import type { PostVersion } from "@gl-admin/lib/api/blockAPI"
 import RevisionsPanel from "./RevisionsPanel"
 import PostTaxonomies from "./PostTaxonomies"
+import PostAuthors from "./PostAuthors"
 import PostSeoPanel from "./PostSeoPanel"
 import Tabs from "@gl-admin/components/ui/Tabs"
 import type { PostSEOSettings } from "@gl-admin/lib/api/types"
@@ -19,8 +20,8 @@ import "@gl-admin/assets/styles/components/editor/post-settings.scss"
 // The post settings panel (#341, "Post editor" on the redesign canvas): Post, SEO (#357)
 // and History. Status changes go through the top bar's publish menu (Publish / Unpublish /
 // Archive); Publish date (#147) opens the Schedule dialog for a draft or a scheduled post.
-// Not built yet, so not shown: owner and transfer (#353), authors (#319), move to trash
-// (#327).
+// Authors (#319) is the byline, separate from the owner. Not built yet, so not shown:
+// owner and transfer (#353), move to trash (#327).
 
 type SettingsTab = "post" | "seo" | "history"
 
@@ -135,8 +136,8 @@ export default function PostSidebar({
         {status === "published" && (
           <small className="post-settings__hint" role="status">
             {settingsPending
-              ? "Settings changed: the site shows the old title, excerpt, image, terms and SEO until you update."
-              : "The title, excerpt, image, terms and SEO go live when you update. The URL changes at once."}
+              ? "Settings changed: the site shows the old title, excerpt, image, terms, authors and SEO until you update."
+              : "The title, excerpt, image, terms, authors and SEO go live when you update. The URL changes at once."}
           </small>
         )}
       </div>
@@ -193,6 +194,15 @@ export default function PostSidebar({
             ? `The site uses ID addresses: /${type}/${post.id || "123"}. Change that in Settings.`
             : `Its address on the site.`}
         </small>
+      </div>
+
+      <div className="post-settings__field">
+        <span className="post-settings__label">Authors</span>
+        {mode === "edit" && post.id ? (
+          <PostAuthors key={settingsKey} postId={post.id} readOnly={readOnly} onChange={onSettingsSaved} />
+        ) : (
+          <small className="post-settings__hint">You’re the author. Save the post first, then credit others here.</small>
+        )}
       </div>
 
       <div className="post-settings__field">
