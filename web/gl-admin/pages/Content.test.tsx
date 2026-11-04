@@ -12,6 +12,12 @@ const api = vi.hoisted(() => ({
   getPostCounts: vi.fn(),
   searchPosts: vi.fn(),
   duplicatePost: vi.fn(),
+  bulkPosts: vi.fn(),
+  getPostAuthors: vi.fn(),
+  trashPost: vi.fn(),
+  restorePost: vi.fn(),
+  deletePostPermanently: vi.fn(),
+  getAllTaxonomyTerms: vi.fn(),
 }))
 
 vi.mock("@gl-admin/lib/auth", () => ({
@@ -27,7 +33,14 @@ vi.mock("@gl-admin/lib/api/posts", () => ({
   searchPosts: api.searchPosts,
   duplicatePost: api.duplicatePost,
   updatePost: vi.fn(),
-  deletePost: vi.fn(),
+  bulkPosts: api.bulkPosts,
+  getPostAuthors: api.getPostAuthors,
+  trashPost: api.trashPost,
+  restorePost: api.restorePost,
+  deletePostPermanently: api.deletePostPermanently,
+}))
+vi.mock("@gl-admin/lib/api/taxonomies", () => ({
+  getAllTaxonomyTerms: api.getAllTaxonomyTerms,
 }))
 vi.mock("@gl-admin/lib/api/postTypes", () => ({
   getPostTypes: () =>
@@ -107,6 +120,14 @@ beforeEach(() => {
   api.getPostCounts.mockReset()
   api.searchPosts.mockReset()
   api.duplicatePost.mockReset()
+  api.bulkPosts.mockReset()
+  api.trashPost.mockReset()
+  api.restorePost.mockReset()
+  api.deletePostPermanently.mockReset()
+  api.getPostAuthors.mockReset()
+  api.getPostAuthors.mockResolvedValue([])
+  api.getAllTaxonomyTerms.mockReset()
+  api.getAllTaxonomyTerms.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -120,8 +141,8 @@ describe("Posts list", () => {
     api.getPostCounts.mockImplementation(never)
     await render("/content/post")
 
-    expect(tabs()).toEqual(["All", "Published", "Changes not published", "Drafts", "Scheduled", "Archived"])
-    expect(container.querySelectorAll("[role='tab'] .gl-skeleton")).toHaveLength(6)
+    expect(tabs()).toEqual(["All", "Published", "Changes not published", "Drafts", "Scheduled", "Archived", "Trash"])
+    expect(container.querySelectorAll("[role='tab'] .gl-skeleton")).toHaveLength(7)
     expect(container.querySelector(".gl-table-scroll")?.getAttribute("aria-busy")).toBe("true")
     expect(container.querySelector("[role='status']")?.textContent).toBe("Loading posts…")
     expect(text()).not.toContain("No posts yet")
@@ -142,7 +163,7 @@ describe("Posts list", () => {
     api.getPostCounts.mockResolvedValue({ counts: { draft: 12, published: 31, archived: 4 }, total: 47, unpublished_changes: 2 })
     await render("/content/post")
 
-    expect(tabs()).toEqual(["All43", "Published31", "Changes not published2", "Drafts12", "Scheduled0", "Archived4"])
+    expect(tabs()).toEqual(["All43", "Published31", "Changes not published2", "Drafts12", "Scheduled0", "Archived4", "Trash0"])
     expect(api.getPosts).toHaveBeenCalledWith(expect.objectContaining({ type: "post", status: "draft,published,scheduled", sort: "changed_at", order: "desc" }))
     expect(text()).toContain("Post 1")
     expect(text()).toContain("/post/post-1")
@@ -193,7 +214,7 @@ describe("Posts list", () => {
     )
     await render("/content/post")
 
-    expect(tabs()).toEqual(["All43", "My posts3", "Published31"])
+    expect(tabs()).toEqual(["All43", "My posts3", "Published31", "Trash0"])
     expect(api.getPostCounts).toHaveBeenCalledWith({ type: "post", user_id: 7 })
     expect(text()).toContain("As a contributor you can edit the posts you own")
     expect(text()).toContain("Your access")
@@ -377,7 +398,7 @@ describe("Pages list", () => {
     )
     await render("/content/page")
 
-    expect(tabs()).toEqual(["All3", "Published2", "Changes not published0", "Drafts1", "Scheduled0", "Archived0"])
+    expect(tabs()).toEqual(["All3", "Published2", "Changes not published0", "Drafts1", "Scheduled0", "Archived0", "Trash0"])
     const titles = Array.from(container.querySelectorAll("tbody .gl-content-list__link")).map((a) => a.textContent)
     expect(titles).toEqual(["Home", "About", "Team"])
     expect(text()).toContain(", level 2")
@@ -403,5 +424,178 @@ describe("Pages list", () => {
     api.getPosts.mockImplementation(() => list([]))
     await render("/content/page")
     expect(text()).toContain("No pages yet")
+  })
+})
+
+// #327: the Author / Category / Tag filters, bulk selection with its report, and the Trash tab.
+describe("Posts list filters, bulk actions and trash (#327)", () => {
+  const settle = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+  const click = async (el: Element | null | undefined) => {
+    expect(el).toBeTruthy()
+    await act(async () => (el as HTMLElement).click())
+    await settle()
+  }
+  const button = (label: string) =>
+    Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.textContent === label || b.getAttribute("aria-label") === label
+    )
+  const menuItem = (label: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>("[role='menuitem']")).find((m) => m.textContent?.startsWith(label))
+  const check = async (title: string) => {
+    const box = container.querySelector<HTMLInputElement>(`input[aria-label='Select ${title}']`)
+    expect(box).not.toBeNull()
+    await act(async () => box!.click())
+  }
+  const bar = () => container.querySelector("[aria-label='Bulk actions']")
+  const barLabels = () => Array.from(bar()!.querySelectorAll("button")).map((b) => b.textContent || b.getAttribute("aria-label"))
+
+  beforeEach(() => {
+    api.getPostAuthors.mockResolvedValue([
+      { id: 12, username: "ana", full_name: "Ana Costa" },
+      { id: 13, username: "marco", full_name: "" },
+    ])
+    api.getAllTaxonomyTerms.mockImplementation((type: string) =>
+      Promise.resolve(type === "category" ? [{ id: 3, name: "Guides", slug: "guides" }] : [{ id: 40, name: "Release", slug: "release" }])
+    )
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 2, published: 1, trash: 1 }, total: 4 })
+  })
+
+  afterEach(() => vi.restoreAllMocks())
+
+  it("passes the filters from the URL on, with the tab and sort, and names them on their buttons", async () => {
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    await render("/content/post?view=draft&author=12&category=3&tag=40&sort=title")
+
+    expect(api.getPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "draft", author_id: "12", terms: "3,40", sort: "title", order: "asc" })
+    )
+    expect(button("Author: Ana Costa")).toBeDefined()
+    expect(button("Category: Guides")).toBeDefined()
+    expect(button("Tag: Release")).toBeDefined()
+    expect(api.getPostAuthors).toHaveBeenCalledWith({ type: "post" })
+  })
+
+  it("filters from the menus and clears them", async () => {
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    await render("/content/post")
+
+    await click(button("Filter by author"))
+    expect(menuItem("Any author")).toBeDefined()
+    await click(menuItem("marco"))
+    expect(api.getPosts).toHaveBeenLastCalledWith(expect.objectContaining({ author_id: "13" }))
+    await click(button("Filter by tag"))
+    await click(menuItem("Release"))
+    expect(api.getPosts).toHaveBeenLastCalledWith(expect.objectContaining({ author_id: "13", terms: "40" }))
+
+    await click(button("Clear filters"))
+    expect(api.getPosts.mock.calls.at(-1)![0]).not.toHaveProperty("author_id")
+    expect(api.getPosts.mock.calls.at(-1)![0]).not.toHaveProperty("terms")
+  })
+
+  it("says nothing matches the filters, and searches with them", async () => {
+    api.getPosts.mockImplementation(() => list([]))
+    await render("/content/post?category=3")
+    expect(text()).toContain("No posts match these filters")
+    expect(button("Clear filters")).toBeDefined()
+  })
+
+  it("searches with the filters", async () => {
+    api.searchPosts.mockImplementation(() => list([]))
+    await render("/content/post?category=3&q=launch")
+    expect(api.searchPosts).toHaveBeenCalledWith(expect.objectContaining({ q: "launch", terms: "3" }))
+  })
+
+  it("selects rows, runs a bulk action, and reports each post that failed (partial failure)", async () => {
+    api.getPosts.mockImplementation(() => list([post(1, { title: "Spring launch" }), post(2, { title: "Pricing" }), post(3)]))
+    api.bulkPosts.mockResolvedValue({
+      action: "publish",
+      results: [
+        { id: 1, ok: true, post_status: "published" },
+        { id: 2, ok: false, status: 503, code: "collab_unavailable", error: "flush failed" },
+      ],
+      succeeded: 1,
+      failed: 1,
+    })
+    await render("/content/post")
+
+    expect(bar()).toBeNull()
+    await check("Spring launch")
+    await check("Pricing")
+    expect(bar()!.textContent).toContain("2 selected")
+    expect(barLabels()).toEqual(["Publish", "Move to trash", "Clear selection"])
+    const countsBefore = api.getPostCounts.mock.calls.length
+
+    await click(button("Publish"))
+    expect(api.bulkPosts).toHaveBeenCalledWith("publish", [1, 2])
+    const report = container.querySelector(".gl-bulk-report")!
+    expect(report.textContent).toContain("1 post published. 1 post wasn’t published")
+    expect(report.textContent).toContain("Pricing: The latest edits couldn’t be saved; try again")
+    // The failed post stays selected; the counts reload.
+    expect(bar()!.textContent).toContain("1 selected")
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Select Pricing']")!.checked).toBe(true)
+    expect(api.getPostCounts.mock.calls.length).toBeGreaterThan(countsBefore)
+
+    await click(button("Clear selection"))
+    expect(bar()).toBeNull()
+  })
+
+  it("gives a contributor only Move to trash in bulk", async () => {
+    api.user.role = "contributor"
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    await render("/content/post?view=mine")
+    await check("Post 1")
+    expect(barLabels()).toEqual(["Move to trash", "Clear selection"])
+  })
+
+  it("moves one post to the trash from its menu", async () => {
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    api.trashPost.mockResolvedValue({ post: post(1, { post_status: "trash" }) })
+    await render("/content/post")
+
+    await click(container.querySelector("button[aria-label='Actions for Post 1']"))
+    await click(menuItem("Move to trash"))
+    expect(api.trashPost).toHaveBeenCalledWith(1)
+  })
+
+  it("shows the Trash tab: its posts aren't links, and they restore or delete permanently", async () => {
+    api.getPosts.mockImplementation(() =>
+      list([post(5, { title: "Old news", post_status: "trash", trashed_from_status: "published", deleted_at: "2026-10-30T10:00:00Z" })])
+    )
+    api.restorePost.mockResolvedValue({ post: post(5, { post_status: "published" }) })
+    await render("/content/post?view=trash")
+
+    expect(tabs()).toContain("Trash1")
+    expect(api.getPosts).toHaveBeenCalledWith(expect.objectContaining({ status: "trash" }))
+    expect(text()).toContain("Posts in the trash are off the site")
+    expect(text()).toContain("Trashed")
+    expect(container.querySelector("tbody a.gl-content-list__link")).toBeNull()
+    expect(container.querySelector("tbody .gl-content-list__link--trashed")?.textContent).toBe("Old news")
+
+    await click(container.querySelector("button[aria-label='Actions for Old news']"))
+    const items = Array.from(document.querySelectorAll("[role='menuitem']")).map((m) => m.textContent?.replace(/Back with.*/, ""))
+    expect(items).toEqual(["Restore", "Delete permanently"])
+    await click(menuItem("Restore"))
+    expect(api.restorePost).toHaveBeenCalledWith(5)
+
+    // Bulk: Restore and Delete permanently, which asks first.
+    api.bulkPosts.mockResolvedValue({ action: "delete", results: [{ id: 5, ok: true }], succeeded: 1, failed: 0 })
+    await check("Old news")
+    expect(barLabels()).toEqual(["Restore", "Delete permanently", "Clear selection"])
+    await click(Array.from(bar()!.querySelectorAll("button")).find((b) => b.textContent === "Delete permanently"))
+    expect(api.bulkPosts).not.toHaveBeenCalled()
+    const dialog = document.querySelector("[role='alertdialog']")!
+    expect(dialog.textContent).toContain("Delete 1 post permanently?")
+    await click(Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Delete permanently"))
+    expect(api.bulkPosts).toHaveBeenCalledWith("delete", [5])
+    expect(container.querySelector(".gl-bulk-report")!.textContent).toContain("1 post deleted")
+  })
+
+  it("says the trash is empty", async () => {
+    api.getPosts.mockImplementation(() => list([]))
+    await render("/content/post?view=trash")
+    expect(text()).toContain("The trash is empty")
   })
 })

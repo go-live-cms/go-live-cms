@@ -16,7 +16,7 @@ import { canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { useListParams } from "@gl-admin/lib/hooks/useListParams"
-import { MODERATOR_TABS, findTab, lastEdited, tabCount } from "@gl-admin/lib/contentList"
+import { MODERATOR_TABS, findTab, lastEdited, tabCount, ALL_STATUSES } from "@gl-admin/lib/contentList"
 import { buildPageTree, type PageRow } from "@gl-admin/lib/pageTree"
 import { postPath } from "@/lib/seo"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
@@ -43,6 +43,8 @@ async function loadAllPages(type: string, withAuthors: boolean): Promise<Post[]>
   for (let i = 0; i < MAX_REQUESTS; i++) {
     const { data, meta } = await getPosts({
       type,
+      // Every status, the trash (#327) included: the tabs filter here.
+      status: ALL_STATUSES,
       limit: PAGE_SIZE,
       offset: all.length,
       sort: "id",

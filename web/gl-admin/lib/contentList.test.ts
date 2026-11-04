@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
+  bulkActions,
+  bulkReport,
+  filterQuery,
+  hasFilters,
+  readListFilters,
+  selectionAfterBulk,
+  trashedPhrase,
   editedPhrase,
   findSort,
   findTab,
@@ -27,23 +34,26 @@ const post = (over: Record<string, unknown> = {}) => ({
 })
 
 describe("status tabs", () => {
-  it("gives moderators All, Published, Changes not published, Drafts, Scheduled and Archived", () => {
-    expect(listTabs("editor").map((t) => t.id)).toEqual(["all", "published", "changes", "draft", "scheduled", "archived"])
-    expect(listTabs("admin").map((t) => t.id)).toEqual(["all", "published", "changes", "draft", "scheduled", "archived"])
+  it("gives moderators All, Published, Changes not published, Drafts, Scheduled, Archived and Trash", () => {
+    const ids = ["all", "published", "changes", "draft", "scheduled", "archived", "trash"]
+    expect(listTabs("editor").map((t) => t.id)).toEqual(ids)
+    expect(listTabs("admin").map((t) => t.id)).toEqual(ids)
+    expect(findTab(listTabs("editor"), "trash")).toMatchObject({ label: "Trash", status: "trash" })
     // #326: published posts, filtered to those with changes not published.
     expect(findTab(listTabs("editor"), "changes")).toMatchObject({ status: "published", unpublishedChanges: true })
     expect(findTab(listTabs("editor"), "scheduled")).toMatchObject({ label: "Scheduled", status: "scheduled" })
   })
 
-  it("gives contributors All, My posts and Published", () => {
-    expect(listTabs("contributor").map((t) => t.id)).toEqual(["all", "mine", "published"])
+  it("gives contributors All, My posts, Published and their own Trash", () => {
+    expect(listTabs("contributor").map((t) => t.id)).toEqual(["all", "mine", "published", "trash"])
     expect(listTabs("contributor")[1]).toMatchObject({ mine: true, status: "" })
+    expect(listTabs("contributor")[3]).toMatchObject({ mine: true, status: "trash" })
   })
 
   it("falls back to the first tab for an unknown ?view", () => {
     const tabs = listTabs("editor")
     expect(findTab(tabs, "draft").id).toBe("draft")
-    expect(findTab(tabs, "trash").id).toBe("all")
+    expect(findTab(tabs, "bin").id).toBe("all")
     expect(findTab(tabs, null).id).toBe("all")
   })
 })
@@ -144,19 +154,19 @@ describe("postAccess (Your access)", () => {
 
 describe("rowActions", () => {
   it("offers moderators duplicate, publish, archive and delete on a draft", () => {
-    expect(rowActions(editor, post())).toEqual(["duplicate", "publish", "archive", "delete"])
+    expect(rowActions(editor, post())).toEqual(["duplicate", "publish", "archive", "trash"])
   })
 
   it("offers unpublish on a published post", () => {
-    expect(rowActions(editor, post({ post_status: "published" }))).toEqual(["duplicate", "unpublish", "archive", "delete"])
+    expect(rowActions(editor, post({ post_status: "published" }))).toEqual(["duplicate", "unpublish", "archive", "trash"])
   })
 
   it("doesn't archive an archived post again", () => {
-    expect(rowActions(editor, post({ post_status: "archived" }))).toEqual(["duplicate", "publish", "delete"])
+    expect(rowActions(editor, post({ post_status: "archived" }))).toEqual(["duplicate", "publish", "trash"])
   })
 
   it("lets a contributor only delete their own unpublished post", () => {
-    expect(rowActions(contributor, post())).toEqual(["duplicate", "delete"])
+    expect(rowActions(contributor, post())).toEqual(["duplicate", "trash"])
     expect(rowActions(contributor, post({ post_status: "published" }))).toEqual(["duplicate"])
   })
 
@@ -227,7 +237,110 @@ describe("scheduled posts", () => {
   })
 
   it("offers Publish (now) on a scheduled row, and no delete to its contributor", () => {
-    expect(rowActions(editor, post({ post_status: "scheduled" }))).toEqual(["duplicate", "publish", "archive", "delete"])
+    expect(rowActions(editor, post({ post_status: "scheduled" }))).toEqual(["duplicate", "publish", "archive", "trash"])
     expect(rowActions(contributor, post({ post_status: "scheduled" }))).toEqual(["duplicate"])
+  })
+})
+
+// #327: the trash, bulk actions and the list filters.
+describe("trash", () => {
+  const trashed = (from: string, over: Record<string, unknown> = {}) => post({ post_status: "trash", trashed_from_status: from, ...over })
+
+  it("leaves the trash out of All and My posts, and counts it in its tab", () => {
+    const counts = { draft: 2, published: 3, trash: 4 }
+    expect(tabCount(findTab(listTabs("editor"), "all"), counts)).toBe(5)
+    expect(tabCount(findTab(listTabs("editor"), "trash"), counts)).toBe(4)
+    expect(tabCount(findTab(listTabs("contributor"), "mine"), null, counts)).toBe(5)
+    expect(tabCount(findTab(listTabs("contributor"), "trash"), null, counts)).toBe(4)
+    // A site whose only posts are in the trash isn't empty.
+    expect(totalCount({ trash: 1 })).toBe(1)
+  })
+
+  it("offers restore and permanent delete on a trashed post, nothing else", () => {
+    expect(rowActions(editor, trashed("published"))).toEqual(["restore", "delete"])
+    // A contributor restores their own draft, never one that was published or scheduled
+    // (restoring would publish it), and never deletes permanently.
+    expect(rowActions(contributor, trashed("draft"))).toEqual(["restore"])
+    expect(rowActions(contributor, trashed("published"))).toEqual([])
+    expect(rowActions(contributor, trashed("scheduled"))).toEqual([])
+    expect(rowActions(contributor, trashed("draft", { user_id: 3 }))).toEqual([])
+  })
+
+  it("never lets anyone edit a trashed post", () => {
+    expect(postAccess(editor, trashed("draft")).canEdit).toBe(false)
+    expect(postAccess(contributor, trashed("draft")).canEdit).toBe(false)
+  })
+
+  it("says when a post went to the trash", () => {
+    const now = new Date("2026-11-04T12:00:00Z")
+    expect(trashedPhrase("2026-11-04T11:59:30Z", now)).toBe("Trashed just now")
+    expect(trashedPhrase(null, now)).toBe("In the trash")
+  })
+})
+
+describe("bulk actions", () => {
+  it("offers each role the tab's actions; the byline action waits for #319", () => {
+    const tabs = listTabs("editor")
+    expect(bulkActions(editor, findTab(tabs, "all"))).toEqual(["publish", "trash"])
+    expect(bulkActions(editor, findTab(tabs, "trash"))).toEqual(["restore", "delete"])
+    expect(bulkActions(contributor, findTab(listTabs("contributor"), "mine"))).toEqual(["trash"])
+    expect(bulkActions(contributor, findTab(listTabs("contributor"), "trash"))).toEqual(["restore"])
+    expect(bulkActions({ id: 9, role: "user" }, findTab(tabs, "all"))).toEqual([])
+  })
+
+  it("reports what worked and, per post, what didn't and why (partial failures)", () => {
+    const titles = new Map([
+      [1, "Spring launch"],
+      [2, "Pricing"],
+      [3, "Roadmap"],
+    ])
+    const report = bulkReport(
+      "publish",
+      [
+        { id: 1, ok: true },
+        { id: 2, ok: false, code: "forbidden" },
+        { id: 3, ok: false, code: "collab_unavailable" },
+        { id: 4, ok: false, code: "not_found" },
+      ],
+      titles
+    )
+    expect(report.done).toBe("1 post published")
+    expect(report.failed).toBe("3 posts weren’t published")
+    expect(report.failures).toEqual([
+      { id: 2, title: "Pricing", reason: "You don’t have permission" },
+      { id: 3, title: "Roadmap", reason: "The latest edits couldn’t be saved; try again" },
+      { id: 4, title: "Post 4", reason: "It no longer exists" },
+    ])
+    expect(bulkReport("trash", [{ id: 1, ok: true }, { id: 2, ok: true }], titles)).toEqual({
+      done: "2 posts moved to the trash",
+      failed: null,
+      failures: [],
+    })
+    expect(bulkReport("delete", [{ id: 1, ok: false, code: "not_in_trash" }], titles, "page")).toMatchObject({
+      done: null,
+      failed: "1 page wasn’t deleted",
+      failures: [{ reason: "It isn’t in the trash" }],
+    })
+    expect(bulkReport("restore", [{ id: 9, ok: false, error: "boom" }], titles).failures[0]).toEqual({ id: 9, title: "Post 9", reason: "boom" })
+  })
+
+  it("keeps the failed posts selected", () => {
+    expect(selectionAfterBulk([{ id: 1, ok: true }, { id: 2, ok: false }, { id: 3, ok: false }])).toEqual([2, 3])
+  })
+})
+
+describe("list filters", () => {
+  it("reads ids from the URL and builds the API's author_id and terms", () => {
+    const filters = readListFilters(new URLSearchParams("author=12&category=3&tag=40&q=x"))
+    expect(filters).toEqual({ author: "12", category: "3", tag: "40" })
+    expect(filterQuery(filters)).toEqual({ author_id: "12", terms: "3,40" })
+    expect(hasFilters(filters)).toBe(true)
+    expect(filterQuery(readListFilters(new URLSearchParams("tag=40")))).toEqual({ author_id: "", terms: "40" })
+  })
+
+  it("ignores anything that isn't an id", () => {
+    const filters = readListFilters(new URLSearchParams("author=me&category=0&tag=1,2"))
+    expect(filters).toEqual({ author: "", category: "", tag: "" })
+    expect(hasFilters(filters)).toBe(false)
   })
 })
