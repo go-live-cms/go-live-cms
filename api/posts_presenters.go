@@ -85,7 +85,7 @@ type PostWithMetaResponse struct {
 	// PublishAt as in PostResponse: the list's "Scheduled · Nov 3" pill (#147).
 	PublishAt *time.Time `json:"publish_at"`
 	// UpdateAt as in PostResponse: "Update scheduled · Nov 3" (#335).
-	UpdateAt *time.Time            `json:"update_at,omitempty"`
+	UpdateAt *time.Time             `json:"update_at,omitempty"`
 	Meta     map[string]interface{} `json:"meta,omitempty"`
 	// Every credited author (user_posts), in byline order (#340).
 	Authors []PostAuthorResponse `json:"authors"`
