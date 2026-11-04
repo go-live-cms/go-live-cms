@@ -3336,10 +3336,10 @@ func (mr *MockStoreMockRecorder) SetMediaVariantsTx(arg0, arg1 interface{}) *gom
 }
 
 // SetPostAuthorsTx mocks base method.
-func (m *MockStore) SetPostAuthorsTx(arg0 context.Context, arg1 db.SetPostAuthorsTxParams) (db.Post, error) {
+func (m *MockStore) SetPostAuthorsTx(arg0 context.Context, arg1 db.SetPostAuthorsTxParams) (db.SetPostAuthorsTxResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetPostAuthorsTx", arg0, arg1)
-	ret0, _ := ret[0].(db.Post)
+	ret0, _ := ret[0].(db.SetPostAuthorsTxResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

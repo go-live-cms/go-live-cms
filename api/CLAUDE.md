@@ -533,9 +533,12 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - `GET /posts/:id/authors` (`canReadPost`), `PUT /posts/:id/authors {author_ids}` (1-20
   distinct existing users, in order; `canEditPostByline` = `canEditPostDetails`: moderators
   any post, a contributor their own unpublished one, crediting anyone) →
-  `SetPostAuthorsTx` (post locked, users `FOR KEY SHARE`, unknown user 400). `GET
-  /posts/author-candidates?q=` lists content-role members for the picker (id, username,
-  full name; GET /users is admin-only).
+  `SetPostAuthorsTx` (users `FOR KEY SHARE` **before** the post lock, RemoveUserTx's order, so the
+  two can't deadlock; unknown user 400). Optional `base_author_ids` = the byline the client
+  edited: if it changed meanwhile, 409 `byline_changed` with the current `authors` and nothing
+  written (the admin always sends it, so two editors can't drop each other's credit). `GET
+  /posts/author-candidates?q=` lists `contentRoles` members (`auth_roles.go`) for the picker (id,
+  username, full name; GET /users is admin-only, so contributors can list members' names here).
 - **It's a post setting:** `golive_post_settings()` has `author_ids`, so a byline edit on a
   published post waits for Update (#326's flag sees it), versions record it, and
   restore-settings brings it back (users removed since skipped; none left or a version

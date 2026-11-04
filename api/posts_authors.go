@@ -8,9 +8,11 @@
 // a duplicate's is the caller (#354).
 //
 //   - GET /posts/:id/authors: the working byline (canReadPost).
-//   - PUT /posts/:id/authors {"author_ids": [..]}: replaces it, in that order
-//     (1-20 distinct existing users; canEditPostDetails: moderators on any post,
-//     a contributor on their own unpublished post, and they may credit others).
+//   - PUT /posts/:id/authors {"author_ids": [..], "base_author_ids": [..]}: replaces
+//     it, in that order (1-20 distinct existing users; canEditPostDetails:
+//     moderators on any post, a contributor on their own unpublished post, and they
+//     may credit others). base_author_ids, the byline the client edited, turns a
+//     save that would overwrite someone else's change into a 409 byline_changed.
 //   - GET /posts/author-candidates?q=: who can be credited (content roles), for the
 //     Authors field's picker. Any content role: GET /users is admin-only.
 //
@@ -47,6 +49,10 @@ const authorCandidatesLimit = 20
 // in credit order.
 type SetPostAuthorsRequest struct {
 	AuthorIDs []int64 `json:"author_ids" binding:"required,min=1,max=20,dive,min=1"`
+	// BaseAuthorIDs is the byline the client edited (optional). When it isn't the
+	// current one, someone else saved theirs meanwhile: 409 byline_changed with the
+	// current authors, and nothing written.
+	BaseAuthorIDs []int64 `json:"base_author_ids" binding:"omitempty,max=20"`
 }
 
 // canEditPostByline reports whether the user may change the post's byline. It is
@@ -76,18 +82,12 @@ func parsePostIDParam(c *gin.Context) (int64, bool) {
 	return id, true
 }
 
-// postBylineResponse lists the post's working byline.
-func (server *Server) postBylineResponse(c *gin.Context, postID int64) ([]PostAuthorResponse, bool) {
-	rows, err := server.store.ListPostBylineAuthors(c.Request.Context(), postID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list post authors"})
-		return nil, false
-	}
+func toPostBylineResponse(rows []db.ListPostBylineAuthorsRow) []PostAuthorResponse {
 	authors := make([]PostAuthorResponse, len(rows))
 	for i, row := range rows {
 		authors[i] = PostAuthorResponse{ID: row.ID, Username: row.Username, FullName: row.FullName}
 	}
-	return authors, true
+	return authors
 }
 
 // getPostAuthors handles GET /posts/:id/authors.
@@ -108,11 +108,12 @@ func (server *Server) getPostAuthors(c *gin.Context) {
 	if !server.checkLoadedPost(c, post, canReadPost) {
 		return
 	}
-	authors, ok := server.postBylineResponse(c, id)
-	if !ok {
+	rows, err := server.store.ListPostBylineAuthors(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list post authors"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"authors": authors})
+	c.JSON(http.StatusOK, gin.H{"authors": toPostBylineResponse(rows)})
 }
 
 // setPostAuthors handles PUT /posts/:id/authors.
@@ -133,9 +134,17 @@ func (server *Server) setPostAuthors(c *gin.Context) {
 		return
 	}
 
-	post, err := server.store.SetPostAuthorsTx(c.Request.Context(), db.SetPostAuthorsTxParams{PostID: id, AuthorIDs: req.AuthorIDs})
+	result, err := server.store.SetPostAuthorsTx(c.Request.Context(), db.SetPostAuthorsTxParams{
+		PostID: id, AuthorIDs: req.AuthorIDs, BaseAuthorIDs: req.BaseAuthorIDs,
+	})
 	if err != nil {
 		switch {
+		case errors.Is(err, db.ErrBylineChanged):
+			c.JSON(http.StatusConflict, gin.H{
+				"error":   "someone else changed the authors",
+				"code":    "byline_changed",
+				"authors": toPostBylineResponse(result.Current),
+			})
 		case errors.Is(err, sql.ErrNoRows):
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		case errors.Is(err, db.ErrUnknownAuthor):
@@ -146,11 +155,7 @@ func (server *Server) setPostAuthors(c *gin.Context) {
 		}
 		return
 	}
-	authors, ok := server.postBylineResponse(c, id)
-	if !ok {
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(post), "authors": authors})
+	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(result.Post), "authors": toPostBylineResponse(result.Authors)})
 }
 
 // listAuthorCandidates handles GET /posts/author-candidates?q=: up to 20 members
@@ -163,6 +168,7 @@ func (server *Server) listAuthorCandidates(c *gin.Context) {
 		return
 	}
 	rows, err := server.store.ListAuthorCandidates(c.Request.Context(), db.ListAuthorCandidatesParams{
+		Roles:      contentRoles,
 		Pattern:    memberSearchPattern(q),
 		LimitCount: authorCandidatesLimit,
 	})

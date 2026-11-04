@@ -176,12 +176,12 @@ UPDATE posts SET changed_at = now() WHERE id = $1
 RETURNING *;
 
 -- name: ListAuthorCandidates :many
--- Who can be credited (#319): members with a content role, matching @query by
--- name or username (ILIKE pattern, '' = everyone), for the Authors field's picker.
--- Public fields only: contributors see it too.
+-- Who can be credited (#319): members with one of @roles (the content roles,
+-- from auth_roles.go), matching @pattern by name or username (ILIKE, '' =
+-- everyone), for the Authors field's picker. Public fields only: contributors see it too.
 SELECT id, username, full_name
 FROM users
-WHERE role IN ('admin', 'editor', 'contributor')
+WHERE lower(role) = ANY(sqlc.arg(roles)::text[])
     AND (sqlc.arg(pattern)::text = '' OR full_name ILIKE sqlc.arg(pattern) OR username ILIKE sqlc.arg(pattern))
 ORDER BY lower(full_name), username, id
 LIMIT sqlc.arg(limit_count)::int;

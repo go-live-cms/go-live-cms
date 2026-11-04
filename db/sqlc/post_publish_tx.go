@@ -169,6 +169,14 @@ type RestoredPostSettings struct {
 func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error) {
 	var post Post
 	err := store.execTx(ctx, func(q *Queries) error {
+		// The byline's users before the post, like SetPostAuthorsTx (lock order).
+		var authors []int64
+		if len(arg.Settings.AuthorIDs) > 0 {
+			var err error
+			if authors, err = lockAuthors(ctx, q, arg.Settings.AuthorIDs, false); err != nil {
+				return fmt.Errorf("restore byline: %w", err)
+			}
+		}
 		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
 			return err
 		}
@@ -186,10 +194,8 @@ func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePos
 		if err := q.RestorePostSEO(ctx, seo); err != nil {
 			return fmt.Errorf("restore SEO: %w", err)
 		}
-		if len(arg.Settings.AuthorIDs) > 0 {
-			if err := writeByline(ctx, q, arg.PostID, arg.Settings.AuthorIDs, false); err != nil {
-				return fmt.Errorf("restore byline: %w", err)
-			}
+		if err := replaceByline(ctx, q, arg.PostID, authors); err != nil {
+			return fmt.Errorf("restore byline: %w", err)
 		}
 		var err error
 		post, err = q.RestorePostTitleAndDescription(ctx, RestorePostTitleAndDescriptionParams{

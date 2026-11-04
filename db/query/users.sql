@@ -154,8 +154,9 @@ WITH affected AS (
         (p.id = ANY(sqlc.arg(moved_post_ids)::bigint[])
             AND NOT ((p.published_settings->'author_ids') @> to_jsonb(sqlc.arg(to_id)::bigint))) AS take_place
     FROM posts p
-    WHERE jsonb_typeof(p.published_settings->'author_ids') = 'array'
-        AND (p.published_settings->'author_ids') @> to_jsonb(sqlc.arg(from_id)::bigint)
+    -- post_published_authors mirrors author_ids (by trigger) and is indexed by user.
+    WHERE p.id IN (SELECT ppa.post_id FROM post_published_authors ppa WHERE ppa.user_id = sqlc.arg(from_id)::bigint)
+        AND jsonb_typeof(p.published_settings->'author_ids') = 'array'
 )
 UPDATE posts p
 SET published_settings = jsonb_set(p.published_settings, '{author_ids}', coalesce((

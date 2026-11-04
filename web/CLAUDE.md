@@ -338,7 +338,9 @@ are the most fragile part of the codebase. **Before editing anything under
   `components/editor/ui/PostAuthors.tsx` (rules in `lib/postAuthors.ts`, tested): chips in credit
   order, each with a menu (Move earlier / later, Remove; the last author stays), and **+** opens a
   `Combobox` searching `GET /posts/author-candidates` (`onQueryChange`, server-side search).
-  Every change saves the whole byline (`setPostAuthors`, `PUT /posts/:id/authors`) and calls
+  Every change saves the whole byline with the byline it was made to (`setPostAuthors`, `PUT
+  /posts/:id/authors` + `base_author_ids`; a 409 = `BylineChangedError`: someone else's byline is
+  shown instead, nothing overwritten), returns focus to the add button, and calls
   `onSettingsSaved`, so a published post shows "Settings changed" until Update. It's read-only
   with the other details (`canEditPostDetails`). The byline is not the owner: crediting someone
   gives no access. The public site gets the published byline from every `/public` read, so the

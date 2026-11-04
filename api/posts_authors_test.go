@@ -72,8 +72,12 @@ func TestSetPostAuthors(t *testing.T) {
 				store.EXPECT().GetPost(gomock.Any(), gomock.Any()).Times(0)
 				store.EXPECT().SetPostAuthorsTx(gomock.Any(), db.SetPostAuthorsTxParams{
 					PostID: 7, AuthorIDs: []int64{bylineOther.ID, bylineContributor.ID},
-				}).Times(1).Return(db.Post{ID: 7, UserID: bylineContributor.ID, PostStatus: "published"}, nil)
-				store.EXPECT().ListPostBylineAuthors(gomock.Any(), int64(7)).Times(1).Return(bylineRows(bylineOther, bylineContributor), nil)
+				}).Times(1).Return(db.SetPostAuthorsTxResult{
+					Post:    db.Post{ID: 7, UserID: bylineContributor.ID, PostStatus: "published"},
+					Authors: bylineRows(bylineOther, bylineContributor),
+				}, nil)
+				// The byline comes back from the transaction, not a second read.
+				store.EXPECT().ListPostBylineAuthors(gomock.Any(), gomock.Any()).Times(0)
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
@@ -93,8 +97,8 @@ func TestSetPostAuthors(t *testing.T) {
 			body:   fmt.Sprintf(`{"author_ids": [%d, %d]}`, bylineContributor.ID, bylineOther.ID),
 			stubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetPost(gomock.Any(), int64(7)).Times(1).Return(ownDraft, nil)
-				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).Return(ownDraft, nil)
-				store.EXPECT().ListPostBylineAuthors(gomock.Any(), int64(7)).Times(1).Return(bylineRows(bylineContributor, bylineOther), nil)
+				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).
+					Return(db.SetPostAuthorsTxResult{Post: ownDraft, Authors: bylineRows(bylineContributor, bylineOther)}, nil)
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
@@ -141,7 +145,7 @@ func TestSetPostAuthors(t *testing.T) {
 			caller: bylineEditor,
 			body:   `{"author_ids": [1]}`,
 			stubs: func(store *mockdb.MockStore) {
-				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).Return(db.Post{}, sql.ErrNoRows)
+				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).Return(db.SetPostAuthorsTxResult{}, sql.ErrNoRows)
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusNotFound, recorder.Code)
@@ -152,7 +156,7 @@ func TestSetPostAuthors(t *testing.T) {
 			caller: bylineEditor,
 			body:   `{"author_ids": [1, 999999]}`,
 			stubs: func(store *mockdb.MockStore) {
-				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).Return(db.Post{}, db.ErrUnknownAuthor)
+				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).Return(db.SetPostAuthorsTxResult{}, db.ErrUnknownAuthor)
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusBadRequest, recorder.Code)
@@ -164,22 +168,31 @@ func TestSetPostAuthors(t *testing.T) {
 			caller: bylineEditor,
 			body:   `{"author_ids": [1]}`,
 			stubs: func(store *mockdb.MockStore) {
-				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).Return(db.Post{}, sql.ErrConnDone)
+				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).Return(db.SetPostAuthorsTxResult{}, sql.ErrConnDone)
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusInternalServerError, recorder.Code)
 			},
 		},
 		{
-			name:   "BylineReadError",
+			// Someone else saved meanwhile: 409 with their byline, nothing written.
+			name:   "BylineChanged",
 			caller: bylineEditor,
-			body:   `{"author_ids": [1]}`,
+			body:   fmt.Sprintf(`{"author_ids": [%d], "base_author_ids": [%d, %d]}`, bylineOther.ID, bylineOther.ID, bylineContributor.ID),
 			stubs: func(store *mockdb.MockStore) {
-				store.EXPECT().SetPostAuthorsTx(gomock.Any(), gomock.Any()).Times(1).Return(db.Post{ID: 7}, nil)
-				store.EXPECT().ListPostBylineAuthors(gomock.Any(), int64(7)).Times(1).Return(nil, sql.ErrConnDone)
+				store.EXPECT().SetPostAuthorsTx(gomock.Any(), db.SetPostAuthorsTxParams{
+					PostID: 7, AuthorIDs: []int64{bylineOther.ID}, BaseAuthorIDs: []int64{bylineOther.ID, bylineContributor.ID},
+				}).Times(1).Return(db.SetPostAuthorsTxResult{Current: bylineRows(bylineContributor)}, db.ErrBylineChanged)
 			},
 			check: func(t *testing.T, recorder *httptest.ResponseRecorder) {
-				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+				require.Equal(t, http.StatusConflict, recorder.Code)
+				var resp struct {
+					Code    string               `json:"code"`
+					Authors []PostAuthorResponse `json:"authors"`
+				}
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+				require.Equal(t, "byline_changed", resp.Code)
+				require.Equal(t, []PostAuthorResponse{{ID: bylineContributor.ID, Username: bylineContributor.Username}}, resp.Authors)
 			},
 		},
 	}
@@ -194,12 +207,13 @@ func TestSetPostAuthors(t *testing.T) {
 
 	// Bad bodies never reach the store.
 	for name, body := range map[string]string{
-		"Empty":    `{"author_ids": []}`,
-		"Missing":  `{}`,
-		"Repeated": `{"author_ids": [4, 5, 4]}`,
-		"Zero":     `{"author_ids": [0]}`,
-		"TooMany":  `{"author_ids": [` + strings.TrimSuffix(strings.Repeat("1,", maxPostAuthors+1), ",") + `]}`,
-		"Unknown":  `{"author_ids": [1], "owner": 2}`,
+		"Empty":       `{"author_ids": []}`,
+		"Missing":     `{}`,
+		"Repeated":    `{"author_ids": [4, 5, 4]}`,
+		"Zero":        `{"author_ids": [0]}`,
+		"TooMany":     `{"author_ids": [` + strings.TrimSuffix(strings.Repeat("1,", maxPostAuthors+1), ",") + `]}`,
+		"BaseTooLong": `{"author_ids": [1], "base_author_ids": [` + strings.TrimSuffix(strings.Repeat("1,", maxPostAuthors+1), ",") + `]}`,
+		"Unknown":     `{"author_ids": [1], "owner": 2}`,
 	} {
 		t.Run("Invalid"+name, func(t *testing.T) {
 			store := mockdb.NewMockStore(gomock.NewController(t))
@@ -254,7 +268,7 @@ func TestGetPostAuthors(t *testing.T) {
 func TestListAuthorCandidates(t *testing.T) {
 	t.Run("Search", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
-		store.EXPECT().ListAuthorCandidates(gomock.Any(), db.ListAuthorCandidatesParams{Pattern: `%an\_a%`, LimitCount: authorCandidatesLimit}).
+		store.EXPECT().ListAuthorCandidates(gomock.Any(), db.ListAuthorCandidatesParams{Roles: contentRoles, Pattern: `%an\_a%`, LimitCount: authorCandidatesLimit}).
 			Times(1).Return([]db.ListAuthorCandidatesRow{{ID: 3, Username: "ana", FullName: "Ana Costa"}}, nil)
 		stubRoleLookup(store, bylineContributor)
 		recorder := bylineRequest(t, newTestServer(t, store), bylineContributor, http.MethodGet, "/api/v1/posts/author-candidates?q=+an_a+", "")
@@ -263,7 +277,7 @@ func TestListAuthorCandidates(t *testing.T) {
 	})
 	t.Run("Everyone", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
-		store.EXPECT().ListAuthorCandidates(gomock.Any(), db.ListAuthorCandidatesParams{Pattern: "", LimitCount: authorCandidatesLimit}).
+		store.EXPECT().ListAuthorCandidates(gomock.Any(), db.ListAuthorCandidatesParams{Roles: contentRoles, Pattern: "", LimitCount: authorCandidatesLimit}).
 			Times(1).Return(nil, nil)
 		stubRoleLookup(store, bylineEditor)
 		recorder := bylineRequest(t, newTestServer(t, store), bylineEditor, http.MethodGet, "/api/v1/posts/author-candidates", "")

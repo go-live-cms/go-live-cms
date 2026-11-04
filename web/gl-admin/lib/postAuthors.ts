@@ -9,7 +9,6 @@ import type { SelectOption } from "@gl-admin/components/ui/Select"
 export const MAX_POST_AUTHORS = 20
 
 export const AUTHORS_HINT = "Byline shown on the published post. Adding an author doesn’t give them access."
-export const AUTHORS_PENDING_HINT = "The site shows the published byline until you update."
 
 export function authorName(author: Pick<PostAuthor, "username" | "full_name">): string {
   return author.full_name?.trim() || author.username
@@ -59,10 +58,3 @@ export function candidateOptions(candidates: PostAuthor[], list: PostAuthor[]): 
     .map((c) => ({ value: String(c.id), label: authorName(c), description: `@${c.username}` }))
 }
 
-// "Ana Costa and Luan" / "Ana, Bo and 2 others": the field's summary for screen readers.
-export function bylineSummary(list: PostAuthor[]): string {
-  const names = list.map(authorName)
-  if (names.length <= 1) return names[0] ?? ""
-  if (names.length <= 3) return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
-  return `${names.slice(0, 2).join(", ")} and ${names.length - 2} others`
-}

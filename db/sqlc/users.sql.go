@@ -532,8 +532,9 @@ WITH affected AS (
         (p.id = ANY($3::bigint[])
             AND NOT ((p.published_settings->'author_ids') @> to_jsonb($2::bigint))) AS take_place
     FROM posts p
-    WHERE jsonb_typeof(p.published_settings->'author_ids') = 'array'
-        AND (p.published_settings->'author_ids') @> to_jsonb($1::bigint)
+    -- post_published_authors mirrors author_ids (by trigger) and is indexed by user.
+    WHERE p.id IN (SELECT ppa.post_id FROM post_published_authors ppa WHERE ppa.user_id = $1::bigint)
+        AND jsonb_typeof(p.published_settings->'author_ids') = 'array'
 )
 UPDATE posts p
 SET published_settings = jsonb_set(p.published_settings, '{author_ids}', coalesce((

@@ -250,9 +250,9 @@ type Querier interface {
 	// so two posts published in the same instant still have one order. Zero, one or two
 	// rows. Each branch is one step along idx_posts_published_type_created_id (000023).
 	ListAdjacentPosts(ctx context.Context, arg ListAdjacentPostsParams) ([]ListAdjacentPostsRow, error)
-	// Who can be credited (#319): members with a content role, matching @query by
-	// name or username (ILIKE pattern, '' = everyone), for the Authors field's picker.
-	// Public fields only: contributors see it too.
+	// Who can be credited (#319): members with one of @roles (the content roles,
+	// from auth_roles.go), matching @pattern by name or username (ILIKE, '' =
+	// everyone), for the Authors field's picker. Public fields only: contributors see it too.
 	ListAuthorCandidates(ctx context.Context, arg ListAuthorCandidatesParams) ([]ListAuthorCandidatesRow, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)

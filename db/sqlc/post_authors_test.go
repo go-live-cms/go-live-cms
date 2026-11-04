@@ -88,11 +88,13 @@ func TestSetPostAuthorsTxSetsAndReorders(t *testing.T) {
 	post := createBylinePost(t, owner)
 	require.Equal(t, []int64{owner.ID}, bylineIDs(t, post.ID), "the default byline is the owner")
 
-	updated, err := testStore.SetPostAuthorsTx(ctx, SetPostAuthorsTxParams{PostID: post.ID, AuthorIDs: []int64{ana.ID, owner.ID, bo.ID}})
+	result, err := testStore.SetPostAuthorsTx(ctx, SetPostAuthorsTxParams{PostID: post.ID, AuthorIDs: []int64{ana.ID, owner.ID, bo.ID}})
 	require.NoError(t, err)
 	require.Equal(t, []int64{ana.ID, owner.ID, bo.ID}, bylineIDs(t, post.ID))
-	require.Equal(t, owner.ID, updated.UserID, "a byline edit never changes the owner")
-	require.True(t, updated.ChangedAt.After(post.ChangedAt))
+	require.Equal(t, owner.ID, result.Post.UserID, "a byline edit never changes the owner")
+	require.True(t, result.Post.ChangedAt.After(post.ChangedAt))
+	require.Len(t, result.Authors, 3)
+	require.Equal(t, ana.ID, result.Authors[0].ID, "the written byline comes back, in order")
 
 	// Reorder, and leave the owner out (a ghost-written post).
 	_, err = testStore.SetPostAuthorsTx(ctx, SetPostAuthorsTxParams{PostID: post.ID, AuthorIDs: []int64{bo.ID, ana.ID}})
@@ -106,6 +108,24 @@ func TestSetPostAuthorsTxSetsAndReorders(t *testing.T) {
 		_, err := testStore.SetPostAuthorsTx(ctx, SetPostAuthorsTxParams{PostID: post.ID, AuthorIDs: []int64{ana.ID, 1 << 60}})
 		require.ErrorIs(t, err, ErrUnknownAuthor)
 		require.Equal(t, []int64{bo.ID, ana.ID}, bylineIDs(t, post.ID), "nothing written")
+	})
+	t.Run("changed since it was loaded", func(t *testing.T) {
+		// The caller edited [ana, bo]; the byline is [bo, ana] now.
+		result, err := testStore.SetPostAuthorsTx(ctx, SetPostAuthorsTxParams{
+			PostID: post.ID, AuthorIDs: []int64{ana.ID}, BaseAuthorIDs: []int64{ana.ID, bo.ID},
+		})
+		require.ErrorIs(t, err, ErrBylineChanged)
+		require.Len(t, result.Current, 2)
+		require.Equal(t, []int64{bo.ID, ana.ID}, []int64{result.Current[0].ID, result.Current[1].ID})
+		require.Equal(t, []int64{bo.ID, ana.ID}, bylineIDs(t, post.ID), "nothing written")
+
+		_, err = testStore.SetPostAuthorsTx(ctx, SetPostAuthorsTxParams{
+			PostID: post.ID, AuthorIDs: []int64{ana.ID, bo.ID}, BaseAuthorIDs: []int64{bo.ID, ana.ID},
+		})
+		require.NoError(t, err, "the current byline as the base saves")
+		require.Equal(t, []int64{ana.ID, bo.ID}, bylineIDs(t, post.ID))
+		_, err = testStore.SetPostAuthorsTx(ctx, SetPostAuthorsTxParams{PostID: post.ID, AuthorIDs: []int64{bo.ID, ana.ID}})
+		require.NoError(t, err)
 	})
 	t.Run("missing post", func(t *testing.T) {
 		_, err := testStore.SetPostAuthorsTx(ctx, SetPostAuthorsTxParams{PostID: 1 << 60, AuthorIDs: []int64{ana.ID}})
@@ -294,7 +314,8 @@ func TestListAuthorCandidates(t *testing.T) {
 	contributor := named("contributor")
 	reader := named("user")
 
-	rows, err := testQueries.ListAuthorCandidates(ctx, ListAuthorCandidatesParams{Pattern: "%" + marker + "%", LimitCount: 20})
+	roles := []string{"admin", "editor", "contributor"}
+	rows, err := testQueries.ListAuthorCandidates(ctx, ListAuthorCandidatesParams{Roles: roles, Pattern: "%" + marker + "%", LimitCount: 20})
 	require.NoError(t, err)
 	ids := map[int64]bool{}
 	for _, r := range rows {
@@ -305,7 +326,7 @@ func TestListAuthorCandidates(t *testing.T) {
 	require.True(t, ids[contributor.ID])
 	require.False(t, ids[reader.ID], "only content roles can be credited")
 
-	rows, err = testQueries.ListAuthorCandidates(ctx, ListAuthorCandidatesParams{Pattern: "", LimitCount: 1})
+	rows, err = testQueries.ListAuthorCandidates(ctx, ListAuthorCandidatesParams{Roles: roles, Pattern: "", LimitCount: 1})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 }

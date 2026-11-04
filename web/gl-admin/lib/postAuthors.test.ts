@@ -4,7 +4,6 @@ import {
   addAuthor,
   authorIds,
   authorName,
-  bylineSummary,
   canMoveAuthor,
   canRemoveAuthor,
   candidateOptions,
@@ -56,12 +55,5 @@ describe("postAuthors", () => {
       { value: "1", label: "Ana Costa", description: "@ana" },
       { value: "3", label: "Priya Nair", description: "@priya" },
     ])
-  })
-
-  it("summarises the byline", () => {
-    expect(bylineSummary([])).toBe("")
-    expect(bylineSummary([ana])).toBe("Ana Costa")
-    expect(bylineSummary([ana, luan, priya])).toBe("Ana Costa, luan and Priya Nair")
-    expect(bylineSummary([ana, luan, priya, { id: 4, username: "bo", full_name: "" }])).toBe("Ana Costa, luan and 2 others")
   })
 })

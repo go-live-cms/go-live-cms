@@ -640,15 +640,16 @@ func (q *Queries) InsertPostByline(ctx context.Context, arg InsertPostBylinePara
 const listAuthorCandidates = `-- name: ListAuthorCandidates :many
 SELECT id, username, full_name
 FROM users
-WHERE role IN ('admin', 'editor', 'contributor')
-    AND ($1::text = '' OR full_name ILIKE $1 OR username ILIKE $1)
+WHERE lower(role) = ANY($1::text[])
+    AND ($2::text = '' OR full_name ILIKE $2 OR username ILIKE $2)
 ORDER BY lower(full_name), username, id
-LIMIT $2::int
+LIMIT $3::int
 `
 
 type ListAuthorCandidatesParams struct {
-	Pattern    string `json:"pattern"`
-	LimitCount int32  `json:"limit_count"`
+	Roles      []string `json:"roles"`
+	Pattern    string   `json:"pattern"`
+	LimitCount int32    `json:"limit_count"`
 }
 
 type ListAuthorCandidatesRow struct {
@@ -657,11 +658,11 @@ type ListAuthorCandidatesRow struct {
 	FullName string `json:"full_name"`
 }
 
-// Who can be credited (#319): members with a content role, matching @query by
-// name or username (ILIKE pattern, ” = everyone), for the Authors field's picker.
-// Public fields only: contributors see it too.
+// Who can be credited (#319): members with one of @roles (the content roles,
+// from auth_roles.go), matching @pattern by name or username (ILIKE, ” =
+// everyone), for the Authors field's picker. Public fields only: contributors see it too.
 func (q *Queries) ListAuthorCandidates(ctx context.Context, arg ListAuthorCandidatesParams) ([]ListAuthorCandidatesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listAuthorCandidates, arg.Pattern, arg.LimitCount)
+	rows, err := q.db.QueryContext(ctx, listAuthorCandidates, pq.Array(arg.Roles), arg.Pattern, arg.LimitCount)
 	if err != nil {
 		return nil, err
 	}

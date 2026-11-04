@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { PostAuthor } from "@gl-admin/lib/api/types"
-import { getPostAuthors, searchAuthorCandidates, setPostAuthors } from "@gl-admin/lib/api/posts"
+import { BylineChangedError, getPostAuthors, searchAuthorCandidates, setPostAuthors } from "@gl-admin/lib/api/posts"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import {
   AUTHORS_HINT,
@@ -43,6 +43,8 @@ export default function PostAuthors({ postId, readOnly, onChange }: PostAuthorsP
   const [candidates, setCandidates] = useState<PostAuthor[]>([])
   const latestQuery = useRef("")
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const restoreFocus = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -87,6 +89,8 @@ export default function PostAuthors({ postId, readOnly, onChange }: PostAuthorsP
   }
 
   // Optimistic: show the new byline at once, put the old one back if saving fails.
+  // The save names the byline it changed, so someone else's change made meanwhile
+  // isn't overwritten: then their byline is shown instead, to change again.
   const save = async (next: PostAuthor[]) => {
     if (next === authors) return
     const previous = authors
@@ -94,14 +98,36 @@ export default function PostAuthors({ postId, readOnly, onChange }: PostAuthorsP
     setSaving(true)
     setSaveError(null)
     try {
-      setAuthors(await setPostAuthors(postId, authorIds(next)))
+      setAuthors(await setPostAuthors(postId, authorIds(next), authorIds(previous)))
       onChange?.()
     } catch (error) {
-      setAuthors(previous)
-      setSaveError(errorMessage(error))
+      if (error instanceof BylineChangedError) {
+        setAuthors(error.current)
+        setSaveError(error.message)
+      } else {
+        setAuthors(previous)
+        setSaveError(errorMessage(error))
+      }
     } finally {
       setSaving(false)
     }
+  }
+
+  // Picking someone closes the picker, which had focus: give it to the add button
+  // (or, with a full byline, the last chip) instead of losing it to the page.
+  useEffect(() => {
+    // Controls are disabled while a save runs; focus once they're back.
+    if (adding || saving || !restoreFocus.current) return
+    restoreFocus.current = false
+    const target =
+      listRef.current?.querySelector<HTMLButtonElement>(".post-authors__add") ??
+      [...(listRef.current?.querySelectorAll<HTMLButtonElement>("button.post-authors__chip") ?? [])].pop()
+    target?.focus()
+  }, [adding, saving])
+
+  const closePicker = () => {
+    restoreFocus.current = true
+    setAdding(false)
   }
 
   if (loading) return <small className="post-settings__hint">Loading authors…</small>
@@ -111,7 +137,7 @@ export default function PostAuthors({ postId, readOnly, onChange }: PostAuthorsP
 
   return (
     <div className="post-authors">
-      <ul className="post-authors__list" aria-label="Authors" aria-busy={saving || undefined}>
+      <ul ref={listRef} className="post-authors__list" aria-label="Authors" aria-busy={saving || undefined}>
         {authors.map((author, i) => {
           const name = authorName(author)
           const chip = (
@@ -190,11 +216,11 @@ export default function PostAuthors({ postId, readOnly, onChange }: PostAuthorsP
             onChange={(value) => {
               const picked = candidates.find((c) => String(c.id) === value)
               if (!picked) return
-              setAdding(false)
+              closePicker()
               void save(addAuthor(authors, picked))
             }}
           />
-          <button type="button" className="post-authors__done" onClick={() => setAdding(false)}>
+          <button type="button" className="post-authors__done" onClick={closePicker}>
             Done
           </button>
         </div>

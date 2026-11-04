@@ -11,6 +11,11 @@ const api = vi.hoisted(() => ({
   getPostAuthors: vi.fn(),
   setPostAuthors: vi.fn(),
   searchAuthorCandidates: vi.fn(),
+  BylineChangedError: class BylineChangedError extends Error {
+    constructor(readonly current: unknown[]) {
+      super("Someone else changed the authors. Here are theirs: make your change again.")
+    }
+  },
 }))
 vi.mock("@gl-admin/lib/api/posts", () => api)
 const PostAuthors = (await import("./PostAuthors")).default
@@ -93,18 +98,21 @@ describe("PostAuthors", () => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
     })
     await flush()
-    expect(api.setPostAuthors).toHaveBeenCalledWith(7, [1, 2, 3])
+    // The base is the byline the change was made to (409 if someone saved meanwhile).
+    expect(api.setPostAuthors).toHaveBeenCalledWith(7, [1, 2, 3], [1, 2])
     expect(chips()).toEqual(["Ana Costa", "luan", "Priya Nair"])
     expect(onChange).toHaveBeenCalledTimes(1)
+    // The picker had focus: it goes back to the add button, not the page.
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Add author")
   })
 
   it("reorders and removes", async () => {
     await mount()
     await choose("luan", "Move earlier")
-    expect(api.setPostAuthors).toHaveBeenLastCalledWith(7, [2, 1])
+    expect(api.setPostAuthors).toHaveBeenLastCalledWith(7, [2, 1], [1, 2])
     expect(chips()).toEqual(["luan", "Ana Costa"])
     await choose("luan", "Remove")
-    expect(api.setPostAuthors).toHaveBeenLastCalledWith(7, [1])
+    expect(api.setPostAuthors).toHaveBeenLastCalledWith(7, [1], [2, 1])
     expect(chips()).toEqual(["Ana Costa"])
   })
 
@@ -123,6 +131,16 @@ describe("PostAuthors", () => {
     await choose("Ana Costa", "Move later")
     expect(chips()).toEqual(["Ana Costa", "luan"])
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("every author must be an existing user")
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it("shows someone else's byline instead of overwriting it", async () => {
+    api.setPostAuthors.mockRejectedValue(new api.BylineChangedError([priya, ana]))
+    const onChange = vi.fn()
+    await mount({ onChange })
+    await choose("Ana Costa", "Move later")
+    expect(chips()).toEqual(["Priya Nair", "Ana Costa"])
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Someone else changed the authors")
     expect(onChange).not.toHaveBeenCalled()
   })
 

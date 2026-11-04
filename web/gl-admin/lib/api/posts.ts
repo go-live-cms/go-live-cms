@@ -150,13 +150,28 @@ export async function getPostAuthors(id: string | number): Promise<PostAuthor[]>
   return body.authors ?? []
 }
 
+// Someone else saved the byline since `base` was loaded (409 byline_changed):
+// nothing was written; `current` is their byline.
+export class BylineChangedError extends Error {
+  constructor(readonly current: PostAuthor[]) {
+    super("Someone else changed the authors. Here are theirs: make your change again.")
+    this.name = "BylineChangedError"
+  }
+}
+
 // PUT /posts/:id/authors: replaces the byline (1–20 users, in credit order).
-export async function setPostAuthors(id: string | number, authorIds: number[]): Promise<PostAuthor[]> {
+// `baseIds` is the byline the change was made to; if it's no longer the current
+// one this throws BylineChangedError instead of overwriting someone's change.
+export async function setPostAuthors(id: string | number, authorIds: number[], baseIds?: number[]): Promise<PostAuthor[]> {
   const response = await authenticatedFetch(`/api/v1/posts/${id}/authors`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ author_ids: authorIds }),
+    body: JSON.stringify(baseIds ? { author_ids: authorIds, base_author_ids: baseIds } : { author_ids: authorIds }),
   })
+  if (response.status === 409) {
+    const body = (await response.clone().json().catch(() => null)) as { code?: string; authors?: PostAuthor[] } | null
+    if (body?.code === "byline_changed") throw new BylineChangedError(body.authors ?? [])
+  }
   if (!response.ok) {
     throw await apiErrorFromResponse(response, { fallback: "Saving the authors failed" })
   }
