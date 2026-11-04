@@ -1,4 +1,4 @@
--- Scheduled updates to published posts (#335, 000034). The handlers are
+-- Scheduled updates to published posts (#335, 000035). The handlers are
 -- api/posts_scheduled_update.go; the scheduler is api/scheduled_publish.go (#147's),
 -- and the apply itself is PublishScheduledUpdateTx (db/sqlc/post_publish_tx.go).
 
@@ -72,7 +72,7 @@ RETURNING s.post_id, s.update_at, s.attempts, s.next_attempt_at AS claim;
 -- Inside PublishScheduledUpdateTx, after the post's row lock: the pending update,
 -- locked, if it is still the one this claim took and the post is still published. No
 -- row: cancelled, rescheduled (a new snapshot), applied, superseded by an Update by
--- hand or an unpublish (the 000034 trigger deletes it), or claimed again after this
+-- hand or an unpublish (the 000035 trigger deletes it), or claimed again after this
 -- claim's lease ran out. Nothing is published then.
 SELECT s.post_id, s.scheduled_by
 FROM post_scheduled_updates s

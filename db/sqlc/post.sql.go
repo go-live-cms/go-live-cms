@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -619,13 +620,116 @@ func (q *Queries) GetPostWithMeta(ctx context.Context, id int64) (GetPostWithMet
 	return i, err
 }
 
+const insertPostByline = `-- name: InsertPostByline :exec
+INSERT INTO user_posts (post_id, user_id, "order")
+SELECT $1::bigint, a.user_id, (a.ord - 1)::int
+FROM unnest($2::bigint[]) WITH ORDINALITY AS a(user_id, ord)
+`
+
+type InsertPostBylineParams struct {
+	PostID    int64   `json:"post_id"`
+	AuthorIds []int64 `json:"author_ids"`
+}
+
+// The new byline (#319): author_ids in credit order, "order" = position from 0.
+func (q *Queries) InsertPostByline(ctx context.Context, arg InsertPostBylineParams) error {
+	_, err := q.db.ExecContext(ctx, insertPostByline, arg.PostID, pq.Array(arg.AuthorIds))
+	return err
+}
+
+const listAuthorCandidates = `-- name: ListAuthorCandidates :many
+SELECT id, username, full_name
+FROM users
+WHERE lower(role) = ANY($1::text[])
+    AND ($2::text = '' OR full_name ILIKE $2 OR username ILIKE $2)
+ORDER BY lower(full_name), username, id
+LIMIT $3::int
+`
+
+type ListAuthorCandidatesParams struct {
+	Roles      []string `json:"roles"`
+	Pattern    string   `json:"pattern"`
+	LimitCount int32    `json:"limit_count"`
+}
+
+type ListAuthorCandidatesRow struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	FullName string `json:"full_name"`
+}
+
+// Who can be credited (#319): members with one of @roles (the content roles,
+// from auth_roles.go), matching @pattern by name or username (ILIKE, ” =
+// everyone), for the Authors field's picker. Public fields only: contributors see it too.
+func (q *Queries) ListAuthorCandidates(ctx context.Context, arg ListAuthorCandidatesParams) ([]ListAuthorCandidatesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAuthorCandidates, pq.Array(arg.Roles), arg.Pattern, arg.LimitCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAuthorCandidatesRow{}
+	for rows.Next() {
+		var i ListAuthorCandidatesRow
+		if err := rows.Scan(&i.ID, &i.Username, &i.FullName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostBylineAuthors = `-- name: ListPostBylineAuthors :many
+SELECT u.id, u.username, u.full_name
+FROM user_posts up
+JOIN users u ON u.id = up.user_id
+WHERE up.post_id = $1
+ORDER BY up."order", u.id
+`
+
+type ListPostBylineAuthorsRow struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	FullName string `json:"full_name"`
+}
+
+// A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
+// the Authors field. Public fields only.
+func (q *Queries) ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostBylineAuthors, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPostBylineAuthorsRow{}
+	for rows.Next() {
+		var i ListPostBylineAuthorsRow
+		if err := rows.Scan(&i.ID, &i.Username, &i.FullName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPosts = `-- name: ListPosts :many
 SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     -- Changes not published (#326): a published post whose working copy (body or
     -- settings) differs from what the site shows. Migration 000030.
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     p.publish_at,
-    -- A published post's scheduled update (#335, 000034), for the list's pill.
+    -- A published post's scheduled update (#335, 000035), for the list's pill.
     su.update_at
 FROM posts p
 LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
@@ -900,7 +1004,7 @@ SELECT
     ($1::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
     -- A scheduled post's time, for the list's "Scheduled · Nov 3" pill (#147).
     p.publish_at,
-    -- A published post's scheduled update (#335, 000034): "Update scheduled · Nov 3".
+    -- A published post's scheduled update (#335, 000035): "Update scheduled · Nov 3".
     su.update_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
@@ -909,45 +1013,42 @@ SELECT
         FROM post_meta pm
         WHERE pm.post_id = p.id
     ) as meta,
-    -- The byline (#340): every user_posts author in credit order, for the
-    -- admin list's avatars. Public fields only (no email or role).
-    (
-        SELECT COALESCE(
-            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name) ORDER BY up."order", u.id),
-            '[]'::jsonb
-        )
-        FROM user_posts up
-        JOIN users u ON u.id = up.user_id
-        WHERE up.post_id = p.id
-    )::jsonb as authors
+    -- The byline (#340, #319) in credit order, public fields only (no email or
+    -- role): the working one for the admin list's avatars, the published one
+    -- (published_byline, the public lists) for the site.
+    (CASE WHEN $2::boolean
+        THEN golive_post_published_byline(p.id)
+        ELSE golive_post_byline(p.id)
+    END)::jsonb as authors
 FROM posts p
 LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
 WHERE
-    ($2::text = '' OR p.post_type = $2)
-    AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
-    AND ($4::bigint = 0 OR p.user_id = $4)  -- Add user filter
+    ($3::text = '' OR p.post_type = $3)
+    AND ($4::text = '' OR p.post_status = ANY(string_to_array(replace($4::text, ' ', ''), ',')))
+    AND ($5::bigint = 0 OR p.user_id = $5)  -- Add user filter
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).
-    AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')
-    AND (NOT $6::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND ($6::bigint = 0 OR p.user_id = $6 OR p.post_status = 'published')
+    AND (NOT $7::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $7::text = 'created_at' AND $8::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $7::text = 'created_at' AND $8::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $7::text = 'changed_at' AND $8::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $7::text = 'changed_at' AND $8::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $7::text = 'title' AND $8::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $7::text = 'title' AND $8::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $7::text = 'menu_order' AND $8::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $7::text = 'menu_order' AND $8::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $8::text = 'created_at' AND $9::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $8::text = 'created_at' AND $9::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $8::text = 'changed_at' AND $9::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $8::text = 'changed_at' AND $9::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $8::text = 'title' AND $9::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $8::text = 'title' AND $9::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $8::text = 'menu_order' AND $9::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $8::text = 'menu_order' AND $9::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $8::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $9::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $10
-OFFSET $9
+LIMIT $11
+OFFSET $10
 `
 
 type ListPostsWithMetaParams struct {
 	WithUnpublishedChanges bool   `json:"with_unpublished_changes"`
+	PublishedByline        bool   `json:"published_byline"`
 	PostType               string `json:"post_type"`
 	PostStatus             string `json:"post_status"`
 	UserID                 int64  `json:"user_id"`
@@ -990,6 +1091,7 @@ type ListPostsWithMetaRow struct {
 func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostsWithMeta,
 		arg.WithUnpublishedChanges,
+		arg.PublishedByline,
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
@@ -1040,6 +1142,84 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockUsersForShare = `-- name: LockUsersForShare :many
+SELECT id FROM users
+WHERE id = ANY($1::bigint[])
+ORDER BY id
+FOR KEY SHARE
+`
+
+// SetPostAuthorsTx (#319): the users about to be credited, so a concurrent removal
+// (#333, which deletes the row) waits for the byline to be written, or wins and
+// the byline is refused. KEY SHARE: nothing here changes the users.
+func (q *Queries) LockUsersForShare(ctx context.Context, ids []int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, lockUsersForShare, pq.Array(ids))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const touchPost = `-- name: TouchPost :one
+UPDATE posts SET changed_at = now() WHERE id = $1
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+`
+
+// A post setting changed outside UPDATE posts (the byline, #319): "last edited".
+func (q *Queries) TouchPost(ctx context.Context, id int64) (Post, error) {
+	row := q.db.QueryRowContext(ctx, touchPost, id)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
+		&i.Slug,
+		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
+	)
+	return i, err
 }
 
 const updatePost = `-- name: UpdatePost :one

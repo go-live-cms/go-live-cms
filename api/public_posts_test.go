@@ -38,6 +38,7 @@ func TestGetPublicPostsByType(t *testing.T) {
 			PostType: "post", PostStatus: "published",
 			SortColumn: "created_at", SortDirection: "desc",
 			OffsetCount: offset, LimitCount: limit,
+			PublishedByline: true,
 		}
 	}
 

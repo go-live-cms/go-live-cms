@@ -67,7 +67,7 @@ SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, 
     -- settings) differs from what the site shows. Migration 000030.
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     p.publish_at,
-    -- A published post's scheduled update (#335, 000034), for the list's pill.
+    -- A published post's scheduled update (#335, 000035), for the list's pill.
     su.update_at
 FROM posts p
 -- One row at most per post (the primary key). The ORDER BY below names every column
@@ -151,6 +151,46 @@ WHERE id = $1;
 DELETE FROM user_posts
 WHERE post_id = $1;
 
+-- name: ListPostBylineAuthors :many
+-- A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
+-- the Authors field. Public fields only.
+SELECT u.id, u.username, u.full_name
+FROM user_posts up
+JOIN users u ON u.id = up.user_id
+WHERE up.post_id = $1
+ORDER BY up."order", u.id;
+
+-- name: LockUsersForShare :many
+-- SetPostAuthorsTx (#319): the users about to be credited, so a concurrent removal
+-- (#333, which deletes the row) waits for the byline to be written, or wins and
+-- the byline is refused. KEY SHARE: nothing here changes the users.
+SELECT id FROM users
+WHERE id = ANY(sqlc.arg(ids)::bigint[])
+ORDER BY id
+FOR KEY SHARE;
+
+-- name: InsertPostByline :exec
+-- The new byline (#319): author_ids in credit order, "order" = position from 0.
+INSERT INTO user_posts (post_id, user_id, "order")
+SELECT sqlc.arg(post_id)::bigint, a.user_id, (a.ord - 1)::int
+FROM unnest(sqlc.arg(author_ids)::bigint[]) WITH ORDINALITY AS a(user_id, ord);
+
+-- name: TouchPost :one
+-- A post setting changed outside UPDATE posts (the byline, #319): "last edited".
+UPDATE posts SET changed_at = now() WHERE id = $1
+RETURNING *;
+
+-- name: ListAuthorCandidates :many
+-- Who can be credited (#319): members with one of @roles (the content roles,
+-- from auth_roles.go), matching @pattern by name or username (ILIKE, '' =
+-- everyone), for the Authors field's picker. Public fields only: contributors see it too.
+SELECT id, username, full_name
+FROM users
+WHERE lower(role) = ANY(sqlc.arg(roles)::text[])
+    AND (sqlc.arg(pattern)::text = '' OR full_name ILIKE sqlc.arg(pattern) OR username ILIKE sqlc.arg(pattern))
+ORDER BY lower(full_name), username, id
+LIMIT sqlc.arg(limit_count)::int;
+
 -- name: CountTotalPosts :one
 SELECT COUNT(*) AS total FROM posts;
 
@@ -167,7 +207,7 @@ SELECT
     (@with_unpublished_changes::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
     -- A scheduled post's time, for the list's "Scheduled · Nov 3" pill (#147).
     p.publish_at,
-    -- A published post's scheduled update (#335, 000034): "Update scheduled · Nov 3".
+    -- A published post's scheduled update (#335, 000035): "Update scheduled · Nov 3".
     su.update_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
@@ -176,17 +216,13 @@ SELECT
         FROM post_meta pm
         WHERE pm.post_id = p.id
     ) as meta,
-    -- The byline (#340): every user_posts author in credit order, for the
-    -- admin list's avatars. Public fields only (no email or role).
-    (
-        SELECT COALESCE(
-            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name) ORDER BY up."order", u.id),
-            '[]'::jsonb
-        )
-        FROM user_posts up
-        JOIN users u ON u.id = up.user_id
-        WHERE up.post_id = p.id
-    )::jsonb as authors
+    -- The byline (#340, #319) in credit order, public fields only (no email or
+    -- role): the working one for the admin list's avatars, the published one
+    -- (published_byline, the public lists) for the site.
+    (CASE WHEN @published_byline::boolean
+        THEN golive_post_published_byline(p.id)
+        ELSE golive_post_byline(p.id)
+    END)::jsonb as authors
 FROM posts p
 -- The scheduled update (#335): one row at most per post, as in ListPosts.
 LEFT JOIN post_scheduled_updates su ON su.post_id = p.id

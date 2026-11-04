@@ -10,7 +10,7 @@
 // scheduler (scheduled_publish.go, #147's) publishes exactly that snapshot as a new
 // version credited to whoever scheduled it.
 //
-// One pending update per post. It ends (000034's trigger) when the post gets a new
+// One pending update per post. It ends (000035's trigger) when the post gets a new
 // published version (an Update by hand supersedes it: applying the older snapshot
 // later would roll the site back) or leaves "published" (unpublish, archive, trash).
 // Restoring a version changes the working copy only (the editor, rule 9, and
