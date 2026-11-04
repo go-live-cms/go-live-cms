@@ -694,7 +694,9 @@ func TestSearchMediaAPI(t *testing.T) {
 func TestUpdateMediaAPI(t *testing.T) {
 	user := randomUserForPosts()
 	media := randomMedia()
-	newName := gofakeit.Word()
+	// A prefix: gofakeit.Word() is sometimes one letter ("a"), which the 2-character
+	// minimum refuses, and which word comes out depends on the package's other tests.
+	newName := "renamed " + gofakeit.Word()
 	newDescription := gofakeit.Sentence(10)
 
 	// Distinct callers for the ownership policy cases; none of them uploaded
