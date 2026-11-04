@@ -334,6 +334,17 @@ are the most fragile part of the codebase. **Before editing anything under
   `useSiteDateSettings` (one cached `/settings` load; Settings resets it on save). The list's
   Scheduled tab and "All" (`draft,published,scheduled`) are in `lib/contentList.ts`; a
   contributor's own scheduled post is view-only (`canEditPost`, as the API).
+- **Scheduled updates (#335):** a published post's Update menu has Schedule update… (enabled with
+  changes not published) / Reschedule update… and Cancel update; they open the same `ScheduleDialog`
+  with `mode="update"` (title "Schedule update", "The live post stays as it is until then", and the
+  note `SCHEDULED_UPDATE_NOTE`: the content is frozen now, later changes aren't included).
+  `PostForm` saves pending settings and waits for `EditorRef.whenAcknowledged()` (this tab's edits on
+  the collab server) before `scheduleUpdate`, shows the notice "Update scheduled for Nov 3, 09:00"
+  (Reschedule, Cancel update) or "Scheduled update failed" (`scheduled_update.failure`), and polls
+  `GET /posts/:id` after `update_at`. The top bar's button reads "Update now"; Update by hand and
+  Unpublish end it (the API's trigger). `PostStatus`/`PostStatusPill` take `updateAt` ("Update
+  scheduled · Nov 3", info tone, over "Changes not published"); the posts list, Pages and Home pass
+  the rows' `update_at`. Labels and the API's codes are in `lib/schedule.ts`.
 - **Byline authors (#319):** the post settings' Authors field is
   `components/editor/ui/PostAuthors.tsx` (rules in `lib/postAuthors.ts`, tested): chips in credit
   order, each with a menu (Move earlier / later, Remove; the last author stays), and **+** opens a

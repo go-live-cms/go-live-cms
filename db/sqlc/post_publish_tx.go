@@ -28,6 +28,10 @@ type PublishPostTxResult struct {
 	VersionNo int32
 	// BlockDoc is the published body (the working copy at publish time).
 	BlockDoc json.RawMessage
+	// CancelledScheduledUpdate: PublishPostTx (the Update button) superseded a
+	// pending scheduled update (#335), which 000035's trigger deleted. The editor
+	// says so, whichever tab scheduled it.
+	CancelledScheduledUpdate bool
 }
 
 // PublishPostTx publishes the post's working copy (#136, #358) in one
@@ -46,8 +50,14 @@ func (store *SQLStore) PublishPostTx(ctx context.Context, arg PublishPostTxParam
 		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
 			return err
 		}
+		// Under the post's lock, so no schedule or cancel slips in between.
+		_, pendingErr := q.GetPostScheduledUpdate(ctx, arg.PostID)
+		if pendingErr != nil && !errors.Is(pendingErr, sql.ErrNoRows) {
+			return fmt.Errorf("scheduled update: %w", pendingErr)
+		}
 		var err error
 		result, err = publishLockedPost(ctx, q, arg)
+		result.CancelledScheduledUpdate = pendingErr == nil
 		return err
 	})
 	return result, err
@@ -73,19 +83,31 @@ func publishLockedPost(ctx context.Context, q *Queries, arg PublishPostTxParams)
 	if err != nil {
 		return PublishPostTxResult{}, fmt.Errorf("insert version: %w", err)
 	}
+	return publishInsertedVersion(ctx, q, arg.PostID, PublishPostTxResult{
+		VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: version.BlockDoc,
+	}, arg.ContentMedia)
+}
+
+// publishInsertedVersion makes a version just inserted the post's published
+// snapshot and syncs the content image links from its body: the rest of a publish,
+// whichever way the version was written (the working copy, or a scheduled update's
+// frozen snapshot, #335). SetPublishedVersionOnPost changes published_version_id,
+// so 000035's trigger also ends any scheduled update: an Update by hand supersedes
+// it, and an applied one is done.
+func publishInsertedVersion(ctx context.Context, q *Queries, postID int64, version PublishPostTxResult, contentMedia func(json.RawMessage) []ContentMediaUse) (PublishPostTxResult, error) {
 	if err := q.SetPublishedVersionOnPost(ctx, SetPublishedVersionOnPostParams{
-		ID:                 arg.PostID,
-		PublishedVersionID: sql.NullInt64{Int64: version.ID, Valid: true},
+		ID:                 postID,
+		PublishedVersionID: sql.NullInt64{Int64: version.VersionID, Valid: true},
 		PublishedBlockDoc:  pqtype.NullRawMessage{RawMessage: version.BlockDoc, Valid: true},
 	}); err != nil {
 		return PublishPostTxResult{}, fmt.Errorf("set published version: %w", err)
 	}
-	if arg.ContentMedia != nil {
-		if err := syncContentMedia(ctx, q, arg.PostID, arg.ContentMedia(version.BlockDoc)); err != nil {
+	if contentMedia != nil {
+		if err := syncContentMedia(ctx, q, postID, contentMedia(version.BlockDoc)); err != nil {
 			return PublishPostTxResult{}, fmt.Errorf("sync content media: %w", err)
 		}
 	}
-	return PublishPostTxResult{VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: version.BlockDoc}, nil
+	return version, nil
 }
 
 type PublishScheduledPostTxParams struct {
@@ -125,6 +147,114 @@ func (store *SQLStore) PublishScheduledPostTx(ctx context.Context, arg PublishSc
 			CreatedBy:    claim.PublishScheduledBy,
 			ContentMedia: arg.ContentMedia,
 		})
+		return err
+	})
+	return result, err
+}
+
+// PostScheduledUpdateRow is a pending scheduled update without its snapshot
+// (#335): what ScheduleUpdateTx returns and GET /posts/:id shows.
+type PostScheduledUpdateRow = GetPostScheduledUpdateRow
+
+type ScheduleUpdateTxParams struct {
+	PostID      int64
+	UpdateAt    time.Time
+	ScheduledBy sql.NullInt64
+}
+
+var (
+	// ErrPostNotPublished: ScheduleUpdateTx found the post isn't published, so
+	// there is no live post to update (a draft is scheduled with SchedulePost).
+	ErrPostNotPublished = errors.New("the post isn't published")
+	// ErrNoUnpublishedChanges: ScheduleUpdateTx found the working copy equal to
+	// what the site shows (#326): there is nothing to update.
+	ErrNoUnpublishedChanges = errors.New("the post has no changes to publish")
+)
+
+// ScheduleUpdateTx schedules a published post's Update (#335): lock the post,
+// check it is published and its working copy differs from the live one, and
+// freeze that working copy (block_doc and settings, as stored now) with the time,
+// replacing any update scheduled before. The caller flushes the collab document
+// first, outside the transaction (the collab store locks this row too), as publish
+// does, so the snapshot has the last edits. sql.ErrNoRows: no such post.
+func (store *SQLStore) ScheduleUpdateTx(ctx context.Context, arg ScheduleUpdateTxParams) (PostScheduledUpdateRow, error) {
+	var result PostScheduledUpdateRow
+	err := store.execTx(ctx, func(q *Queries) error {
+		status, err := q.LockPostStatusForUpdate(ctx, arg.PostID)
+		if err != nil {
+			return err
+		}
+		if status != "published" {
+			return ErrPostNotPublished
+		}
+		changed, err := q.GetPostHasUnpublishedChanges(ctx, arg.PostID)
+		if err != nil {
+			return fmt.Errorf("unpublished changes: %w", err)
+		}
+		if !changed {
+			return ErrNoUnpublishedChanges
+		}
+		row, err := q.UpsertScheduledUpdateFromPost(ctx, UpsertScheduledUpdateFromPostParams{
+			UpdateAt:    arg.UpdateAt,
+			ScheduledBy: arg.ScheduledBy,
+			PostID:      arg.PostID,
+		})
+		if err != nil {
+			return fmt.Errorf("store scheduled update: %w", err)
+		}
+		result = PostScheduledUpdateRow(row)
+		return nil
+	})
+	return result, err
+}
+
+type PublishScheduledUpdateTxParams struct {
+	PostID int64
+	// Claim is the claim's fencing token, ClaimDueScheduledUpdates'
+	// next_attempt_at.
+	Claim time.Time
+	// ContentMedia as in PublishPostTxParams.
+	ContentMedia func(blockDoc json.RawMessage) []ContentMediaUse
+}
+
+// PublishScheduledUpdateTx applies a scheduled update the scheduler claimed
+// (#335): lock the post, then the pending update under this claim, write its
+// frozen snapshot as the next version (credited to whoever scheduled it) and
+// publish it as Update does. The working copy isn't read: edits made after
+// scheduling aren't included, and no collab flush is needed. The check under the
+// locks makes it happen once (ErrScheduleChanged otherwise, nothing written);
+// publishInsertedVersion's new published version then deletes the pending row.
+func (store *SQLStore) PublishScheduledUpdateTx(ctx context.Context, arg PublishScheduledUpdateTxParams) (PublishPostTxResult, error) {
+	var result PublishPostTxResult
+	err := store.execTx(ctx, func(q *Queries) error {
+		// Post first, then the update: the order every writer of both takes
+		// (an Update by hand locks the post, then its trigger deletes the update).
+		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrScheduleChanged
+			}
+			return fmt.Errorf("lock post: %w", err)
+		}
+		if _, err := q.LockScheduledUpdateClaim(ctx, LockScheduledUpdateClaimParams{PostID: arg.PostID, Claim: arg.Claim}); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrScheduleChanged
+			}
+			return fmt.Errorf("lock scheduled update: %w", err)
+		}
+		next, err := q.GetNextVersionNoForPost(ctx, arg.PostID)
+		if err != nil {
+			return fmt.Errorf("next version number: %w", err)
+		}
+		version, err := q.InsertPublishedVersionFromScheduledUpdate(ctx, InsertPublishedVersionFromScheduledUpdateParams{
+			VersionNo: next,
+			PostID:    arg.PostID,
+		})
+		if err != nil {
+			return fmt.Errorf("insert version: %w", err)
+		}
+		result, err = publishInsertedVersion(ctx, q, arg.PostID, PublishPostTxResult{
+			VersionID: version.ID, VersionNo: version.VersionNo, BlockDoc: version.BlockDoc,
+		}, arg.ContentMedia)
 		return err
 	})
 	return result, err

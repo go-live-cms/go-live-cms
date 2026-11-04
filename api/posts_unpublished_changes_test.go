@@ -1,11 +1,13 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
@@ -171,6 +173,8 @@ func TestGetPostUnpublishedChanges(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store := mockdb.NewMockStore(gomock.NewController(t))
 			tc.expect(store)
+			// A published post's scheduled update (#335): none here.
+			store.EXPECT().GetPostScheduledUpdate(gomock.Any(), int64(7)).Return(db.PostScheduledUpdateRow{}, sql.ErrNoRows).AnyTimes()
 			recorder := serveGet(t, store, tc.url)
 			require.Equal(t, http.StatusOK, recorder.Code)
 			var body struct {
@@ -185,13 +189,58 @@ func TestGetPostUnpublishedChanges(t *testing.T) {
 // The public lists share the admin list's row (#358's presenter); the working
 // copy's state never reaches the site.
 func TestPublicPostResponseHidesUnpublishedChanges(t *testing.T) {
-	row := db.ListPostsWithMetaRow{ID: 1, PostStatus: "published", HasUnpublishedChanges: true}
+	row := db.ListPostsWithMetaRow{ID: 1, PostStatus: "published", HasUnpublishedChanges: true, UpdateAt: sql.NullTime{Time: time.Now(), Valid: true}}
 	require.True(t, toPostWithMetaResponse(row).HasUnpublishedChanges)
+	require.NotNil(t, toPostWithMetaResponse(row).UpdateAt)
 	resp := toPublicPostWithMetaResponse(row)
 	require.False(t, resp.HasUnpublishedChanges)
 	raw, err := json.Marshal(resp)
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), "has_unpublished_changes")
+	require.NotContains(t, string(raw), "update_at", "a scheduled update (#335) is the admin's business")
+}
+
+// GET /posts/:id's scheduled_update (#335): shown with its failure, and left out
+// (the post still loads) when the lookup fails.
+func TestGetPostScheduledUpdate(t *testing.T) {
+	published := db.Post{ID: 7, Slug: "live", PostStatus: "published"}
+	at := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name string
+		row  db.PostScheduledUpdateRow
+		err  error
+		want bool
+	}{
+		{"Scheduled", db.PostScheduledUpdateRow{
+			PostID: 7, UpdateAt: at, CreatedAt: at.Add(-time.Hour), ScheduledBy: sql.NullInt64{Int64: 3, Valid: true}, Attempts: 2,
+			FailedAt: sql.NullTime{Time: at, Valid: true}, Error: sql.NullString{String: scheduledUpdateFailed, Valid: true},
+			NextAttemptAt: sql.NullTime{Time: at.Add(time.Minute), Valid: true},
+		}, nil, true},
+		{"None", db.PostScheduledUpdateRow{}, sql.ErrNoRows, false},
+		{"LookupFails", db.PostScheduledUpdateRow{}, errors.New("db down"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := mockdb.NewMockStore(gomock.NewController(t))
+			store.EXPECT().GetPost(gomock.Any(), int64(7)).Return(published, nil)
+			store.EXPECT().GetPostHasUnpublishedChanges(gomock.Any(), int64(7)).Return(true, nil)
+			store.EXPECT().GetPostScheduledUpdate(gomock.Any(), int64(7)).Return(tc.row, tc.err)
+			recorder := serveGet(t, store, "/api/v1/posts/7")
+			require.Equal(t, http.StatusOK, recorder.Code)
+			var body struct {
+				Post PostResponse `json:"post"`
+			}
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+			if !tc.want {
+				require.Nil(t, body.Post.ScheduledUpdate)
+				require.Nil(t, body.Post.UpdateAt)
+				return
+			}
+			require.True(t, at.Equal(*body.Post.UpdateAt))
+			require.Equal(t, int64(3), *body.Post.ScheduledUpdate.ScheduledBy)
+			require.Equal(t, scheduledUpdateFailed, body.Post.ScheduledUpdate.Failure.Reason)
+			require.Equal(t, int32(2), body.Post.ScheduledUpdate.Failure.Attempts)
+		})
+	}
 }
 
 func TestParseUnpublishedChangesFilter(t *testing.T) {
