@@ -91,6 +91,7 @@ SELECT
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     p.publish_at,
+    su.update_at,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -107,6 +108,8 @@ SELECT
     )::jsonb as authors
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
+-- The scheduled update (#335), as in ListPostsWithMeta.
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
 WHERE
     (ps.document @@ websearch_to_tsquery(golive_search_config(), @query::text)
      OR (p.published_settings IS NOT NULL

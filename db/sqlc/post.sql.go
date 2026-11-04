@@ -624,9 +624,12 @@ SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, 
     -- Changes not published (#326): a published post whose working copy (body or
     -- settings) differs from what the site shows. Migration 000030.
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
-    p.publish_at
+    p.publish_at,
+    -- A published post's scheduled update (#335, 000034), for the list's pill.
+    su.update_at
 FROM posts p
-WHERE 
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
+WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
@@ -635,10 +638,10 @@ WHERE
     AND ($4::bigint = 0 OR p.user_id = $4 OR p.post_status = 'published')
     AND (NOT $5::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $6::text = 'created_at' AND $7::text = 'asc' THEN created_at END ASC,
-    CASE WHEN $6::text = 'created_at' AND $7::text = 'desc' THEN created_at END DESC,
-    CASE WHEN $6::text = 'changed_at' AND $7::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
-    CASE WHEN $6::text = 'changed_at' AND $7::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
+    CASE WHEN $6::text = 'created_at' AND $7::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $6::text = 'created_at' AND $7::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'asc' THEN GREATEST(changed_at, p.created_at) END ASC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'desc' THEN GREATEST(changed_at, p.created_at) END DESC,
     CASE WHEN $6::text = 'title' AND $7::text = 'asc' THEN title END ASC,
     CASE WHEN $6::text = 'title' AND $7::text = 'desc' THEN title END DESC,
     CASE WHEN $6::text = 'menu_order' AND $7::text = 'asc' THEN menu_order END ASC,
@@ -680,8 +683,11 @@ type ListPostsRow struct {
 	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
 	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
 	PublishAt             sql.NullTime          `json:"publish_at"`
+	UpdateAt              sql.NullTime          `json:"update_at"`
 }
 
+// One row at most per post (the primary key). su has a created_at too, so the
+// ORDER BY below names p.created_at.
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 // of these pairs; anything else falls through to the id tiebreaker.
 // changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -723,6 +729,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.PublishedSettings,
 			&i.HasUnpublishedChanges,
 			&i.PublishAt,
+			&i.UpdateAt,
 		); err != nil {
 			return nil, err
 		}
@@ -893,6 +900,8 @@ SELECT
     ($1::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
     -- A scheduled post's time, for the list's "Scheduled · Nov 3" pill (#147).
     p.publish_at,
+    -- A published post's scheduled update (#335, 000034): "Update scheduled · Nov 3".
+    su.update_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -912,7 +921,8 @@ SELECT
         WHERE up.post_id = p.id
     )::jsonb as authors
 FROM posts p
-WHERE 
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
+WHERE
     ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)  -- Add user filter
@@ -967,10 +977,12 @@ type ListPostsWithMetaRow struct {
 	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
 	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
 	PublishAt             sql.NullTime          `json:"publish_at"`
+	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
 }
 
+// The scheduled update (#335): one row at most per post, as in ListPosts.
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 // of these pairs; anything else falls through to the id tiebreaker.
 // changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -1013,6 +1025,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.PublishedSettings,
 			&i.HasUnpublishedChanges,
 			&i.PublishAt,
+			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

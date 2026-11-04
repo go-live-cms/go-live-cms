@@ -23,6 +23,14 @@
 // backoff, 30s up to every 10 minutes, until it publishes or someone changes
 // the schedule. A replica that dies mid-attempt leaves its lease, so the post
 // is retried when the lease ends. A post is never left scheduled in silence.
+//
+// Scheduled updates (#335) run in the same rounds, with the same claim, lease,
+// fencing and backoff, on post_scheduled_updates rows: ClaimDueScheduledUpdates,
+// then PublishScheduledUpdateTx, which publishes the update's frozen snapshot as
+// the next version. Its content was flushed and frozen when it was scheduled, so
+// there is no flush here: what goes live is what the editor scheduled, never the
+// working copy as it is at the time. A failure (update_failed) is recorded on the
+// row and shown as scheduled_update.failure.
 package api
 
 import (
@@ -49,6 +57,8 @@ const (
 	// Reasons recorded in publish_error, shown by the editor.
 	scheduledPublishCollabFlushFailed = "collab_flush_failed"
 	scheduledPublishFailed            = "publish_failed"
+	// The reason recorded on a scheduled update (#335) whose apply failed.
+	scheduledUpdateFailed = "update_failed"
 )
 
 // scheduledPublishBackoff is the wait after the Nth failed attempt; the last
@@ -86,6 +96,7 @@ func (server *Server) RunScheduledPublishing(ctx context.Context, interval time.
 	defer ticker.Stop()
 	for {
 		server.publishDueScheduledPosts(ctx)
+		server.applyDueScheduledUpdates(ctx)
 		select {
 		case <-ctx.Done():
 			server.logger.Info("scheduled publishing stopped")
@@ -189,4 +200,76 @@ func (server *Server) recordScheduledPublishFailure(ctx context.Context, log *sl
 	if rows == 0 {
 		log.Info("failed scheduled publish not recorded: the post's schedule changed meanwhile")
 	}
+}
+
+// applyDueScheduledUpdates is publishDueScheduledPosts for scheduled updates
+// (#335): claim and apply due updates one at a time until none is due, ctx is
+// done or the round's cap is reached. Returns how many it applied.
+func (server *Server) applyDueScheduledUpdates(ctx context.Context) int {
+	applied := 0
+	for i := 0; i < scheduledPublishMaxPerRound && ctx.Err() == nil; i++ {
+		claims, err := server.store.ClaimDueScheduledUpdates(ctx, db.ClaimDueScheduledUpdatesParams{
+			LeaseSeconds: scheduledPublishLease.Seconds(),
+			MaxPosts:     1,
+		})
+		if err != nil {
+			if ctx.Err() == nil {
+				server.logger.Warn("claiming due scheduled updates failed", "error", err)
+			}
+			return applied
+		}
+		if len(claims) == 0 {
+			return applied
+		}
+		if server.applyScheduledUpdate(ctx, claims[0]) {
+			applied++
+		}
+	}
+	return applied
+}
+
+// applyScheduledUpdate makes one attempt at a claimed update and reports whether
+// it went live. Its own request id on every log line, as publishScheduledPost.
+func (server *Server) applyScheduledUpdate(ctx context.Context, claim db.ClaimDueScheduledUpdatesRow) bool {
+	requestID := uuid.NewString()
+	log := server.logger.With(requestIDKey, requestID, "post_id", claim.PostID, "attempt", claim.Attempts)
+	if !claim.Claim.Valid {
+		log.Error("scheduled update claim has no lease")
+		return false
+	}
+	attemptCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), scheduledPublishTimeout)
+	defer cancel()
+
+	version, err := server.store.PublishScheduledUpdateTx(attemptCtx, db.PublishScheduledUpdateTxParams{
+		PostID:       claim.PostID,
+		Claim:        claim.Claim.Time,
+		ContentMedia: publishedContentMedia,
+	})
+	if errors.Is(err, db.ErrScheduleChanged) {
+		log.Info("scheduled update skipped: it changed or ended meanwhile")
+		return false
+	}
+	if err != nil {
+		retry := scheduledPublishRetryAfter(claim.Attempts)
+		log.Warn("scheduled update failed", "reason", scheduledUpdateFailed, "error", err, "retry_in", retry.String())
+		rows, recErr := server.store.RecordScheduledUpdateFailure(attemptCtx, db.RecordScheduledUpdateFailureParams{
+			Reason:            scheduledUpdateFailed,
+			RetryAfterSeconds: retry.Seconds(),
+			PostID:            claim.PostID,
+			Claim:             claim.Claim.Time,
+		})
+		switch {
+		case recErr != nil:
+			log.Error("recording a failed scheduled update failed; retried when the claim expires",
+				"error", recErr, "lease", scheduledPublishLease.String())
+		case rows == 0:
+			log.Info("failed scheduled update not recorded: it changed meanwhile")
+		}
+		return false
+	}
+	log.Info("scheduled update published",
+		"version_no", version.VersionNo,
+		"update_at", claim.UpdateAt.UTC().Format(time.RFC3339),
+		"delay_ms", time.Since(claim.UpdateAt).Milliseconds())
+	return true
 }

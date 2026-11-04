@@ -105,6 +105,7 @@ SELECT
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     p.publish_at,
+    su.update_at,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -121,6 +122,7 @@ SELECT
     )::jsonb as authors
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
 WHERE
     (ps.document @@ websearch_to_tsquery(golive_search_config(), $1::text)
      OR (p.published_settings IS NOT NULL
@@ -168,6 +170,7 @@ type SearchPostsWithMetaRow struct {
 	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
 	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
 	PublishAt             sql.NullTime          `json:"publish_at"`
+	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
 }
@@ -178,6 +181,7 @@ type SearchPostsWithMetaRow struct {
 // working copy is never indexed. The index has a published post's published
 // title and excerpt (#358), and the list shows its working ones, so those match
 // too: a post renamed but not yet updated is found by its new name.
+// The scheduled update (#335), as in ListPostsWithMeta.
 func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMetaParams) ([]SearchPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchPostsWithMeta,
 		arg.Query,
@@ -214,6 +218,7 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 			&i.PublishedSettings,
 			&i.HasUnpublishedChanges,
 			&i.PublishAt,
+			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

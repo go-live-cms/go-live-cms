@@ -47,6 +47,11 @@ type PostResponse struct {
 	// ScheduleFailure is the last failed attempt to publish it on schedule,
 	// while it is still scheduled (the editor's "Scheduled publish failed").
 	ScheduleFailure *ScheduleFailureResponse `json:"schedule_failure,omitempty"`
+	// UpdateAt is when a published post's scheduled update goes live (#335), in
+	// UTC: the lists' "Update scheduled · Nov 3" pill. Omitted when none.
+	UpdateAt *time.Time `json:"update_at,omitempty"`
+	// ScheduledUpdate is that update in full, on GET /posts/:id and /slug/:slug.
+	ScheduledUpdate *ScheduledUpdateResponse `json:"scheduled_update,omitempty"`
 }
 
 // ScheduleFailureResponse says why a scheduled post isn't live yet (#147) and
@@ -78,8 +83,10 @@ type PostWithMetaResponse struct {
 	ChangedAt       time.Time              `json:"changed_at"`
 	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
 	// PublishAt as in PostResponse: the list's "Scheduled · Nov 3" pill (#147).
-	PublishAt *time.Time             `json:"publish_at"`
-	Meta      map[string]interface{} `json:"meta,omitempty"`
+	PublishAt *time.Time `json:"publish_at"`
+	// UpdateAt as in PostResponse: "Update scheduled · Nov 3" (#335).
+	UpdateAt *time.Time            `json:"update_at,omitempty"`
+	Meta     map[string]interface{} `json:"meta,omitempty"`
 	// Every credited author (user_posts), in byline order (#340).
 	Authors []PostAuthorResponse `json:"authors"`
 	// HasUnpublishedChanges (#326): published, and the working copy (body or
@@ -191,6 +198,7 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 		PublishedBlocks:       publishedBlocks,
 		HasUnpublishedChanges: post.HasUnpublishedChanges,
 		PublishAt:             nullTimePtr(post.PublishAt),
+		UpdateAt:              nullTimePtr(post.UpdateAt),
 	}
 }
 
@@ -229,6 +237,7 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 		ChangedAt:       post.ChangedAt,
 		PublishedBlocks: publishedBlocks,
 		PublishAt:       nullTimePtr(post.PublishAt),
+		UpdateAt:        nullTimePtr(post.UpdateAt),
 		Meta:            metaMap,
 		Authors:         decodePostAuthors(post.Authors),
 
@@ -242,6 +251,7 @@ func toPublicPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResp
 	resp := toPostWithMetaResponse(post)
 	// The working copy is the admin's business.
 	resp.HasUnpublishedChanges = false
+	resp.UpdateAt = nil
 	applyPublishedSettings(&resp, post.PublishedSettings)
 	return resp
 }

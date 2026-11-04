@@ -66,6 +66,8 @@ type Store interface {
 
 	PublishPostTx(ctx context.Context, arg PublishPostTxParams) (PublishPostTxResult, error)
 	PublishScheduledPostTx(ctx context.Context, arg PublishScheduledPostTxParams) (PublishPostTxResult, error)
+	ScheduleUpdateTx(ctx context.Context, arg ScheduleUpdateTxParams) (PostScheduledUpdateRow, error)
+	PublishScheduledUpdateTx(ctx context.Context, arg PublishScheduledUpdateTxParams) (PublishPostTxResult, error)
 	RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error)
 
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)

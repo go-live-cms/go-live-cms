@@ -69,6 +69,9 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		// Scheduled publishing (#147, posts_schedule.go): same rule as publishing
 		posts.PUT("/:id/schedule", auth, requireContentEditor(server), server.schedulePost)
 		posts.DELETE("/:id/schedule", auth, requireContentEditor(server), server.cancelPostSchedule)
+		// A published post's scheduled update (#335, posts_scheduled_update.go): same rule
+		posts.PUT("/:id/scheduled-update", auth, requireContentEditor(server), server.scheduleUpdate)
+		posts.DELETE("/:id/scheduled-update", auth, requireContentEditor(server), server.cancelScheduledUpdate)
 
 		// Revisions (#136): published snapshots; restoring the blocks happens in the
 		// editor, the settings (#358) come back through restore-settings

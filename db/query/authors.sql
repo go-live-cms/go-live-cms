@@ -30,6 +30,8 @@ SELECT
     -- ListPostsWithMeta's column (#326); the public site never shows it.
     false::boolean AS has_unpublished_changes,
     p.publish_at,
+    -- ListPostsWithMeta's scheduled update (#335): the admin's business.
+    NULL::timestamptz AS update_at,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
