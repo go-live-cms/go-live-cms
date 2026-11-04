@@ -135,3 +135,62 @@ describe("EditorTopBar scheduling", () => {
     expect(openMenu().some((i) => i.includes("chedule"))).toBe(false)
   })
 })
+
+// Scheduled updates (#335): a published post's Update menu offers Schedule update…,
+// then Reschedule update… and Cancel update; the pill shows the time.
+describe("EditorTopBar scheduled update", () => {
+  const menuItems = () => {
+    const toggle = container.querySelector<HTMLButtonElement>('[aria-label="More publish options"]')!
+    act(() => toggle.click())
+    return [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+  }
+  const item = (items: HTMLElement[], label: string) => items.find((i) => (i.textContent ?? "").startsWith(label))
+
+  it("offers Schedule update… on a published post with changes not published", async () => {
+    const onScheduleUpdate = vi.fn()
+    renderBar("published", false, true, { onScheduleUpdate })
+    const items = menuItems()
+    const schedule = item(items, "Schedule update…")
+    expect(schedule).toBeDefined()
+    expect(schedule!.getAttribute("aria-disabled")).toBeNull()
+    expect(item(items, "Cancel update")).toBeUndefined()
+    act(() => schedule!.click())
+    expect(onScheduleUpdate).toHaveBeenCalledOnce()
+  })
+
+  it("can't schedule an update when the live post already matches", () => {
+    renderBar("published", false, false, { onScheduleUpdate: noop })
+    const schedule = item(menuItems(), "Schedule update…")
+    expect(schedule?.getAttribute("aria-disabled")).toBe("true")
+    expect(schedule?.textContent).toContain("already matches")
+  })
+
+  it("shows the scheduled time and offers Reschedule update… and Cancel update", async () => {
+    const onCancelScheduledUpdate = vi.fn(async () => {})
+    renderBar("published", false, true, {
+      onScheduleUpdate: noop,
+      onCancelScheduledUpdate,
+      // This year's, so the pill leaves the year out.
+      updateAt: `${new Date().getUTCFullYear()}-11-03T09:00:00Z`,
+    })
+    // The settings load is async: let the pill read the zone.
+    await act(async () => {})
+    expect(statusPill()).toBe("Update scheduled · Nov 3, 09:00")
+    expect(container.querySelector(".editor-top-bar__split-main")?.textContent).toBe("Update now")
+    const items = menuItems()
+    expect(item(items, "Update now")?.textContent).toContain("cancel the scheduled update")
+    expect(item(items, "Reschedule update…")).toBeDefined()
+    const cancel = item(items, "Cancel update")
+    expect(cancel).toBeDefined()
+    await act(async () => cancel!.click())
+    expect(onCancelScheduledUpdate).toHaveBeenCalledOnce()
+  })
+
+  it("is only for published posts", () => {
+    renderBar("draft", false, false, { onScheduleUpdate: noop, onCancelScheduledUpdate: async () => {}, updateAt: "2026-11-03T09:00:00Z" })
+    const items = menuItems()
+    expect(item(items, "Schedule update…")).toBeUndefined()
+    expect(item(items, "Cancel update")).toBeUndefined()
+    expect(statusPill()).toBe("Draft")
+  })
+})

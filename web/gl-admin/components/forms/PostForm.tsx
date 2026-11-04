@@ -1,8 +1,17 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { cancelPostSchedule, createPost, getPostById, schedulePost, updatePost, updatePostSEO } from "@gl-admin/lib/api/posts"
+import {
+  cancelPostSchedule,
+  cancelScheduledUpdate,
+  createPost,
+  getPostById,
+  schedulePost,
+  scheduleUpdate,
+  updatePost,
+  updatePostSEO,
+} from "@gl-admin/lib/api/posts"
 import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
-import type { Post, PostSEOSettings } from "@gl-admin/lib/api/types"
+import type { Post, PostSEOSettings, ScheduledUpdate } from "@gl-admin/lib/api/types"
 import { firstParagraphFromHtml, sameSeo, seoFromPost, seoPayload, seoSaveable } from "@gl-admin/lib/postSeo"
 import { firstParagraphText, postPath } from "@/lib/seo"
 import { authManager } from "@gl-admin/lib/auth"
@@ -15,7 +24,15 @@ import EditorTopBar, { ArchiveIcon, OfflineIcon } from "@gl-admin/components/edi
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import ScheduleDialog from "@gl-admin/components/editor/ui/ScheduleDialog"
 import { useSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
-import { formatScheduleTime, scheduleFailureMessage, zoneCity } from "@gl-admin/lib/schedule"
+import {
+  formatScheduleTime,
+  SCHEDULED_UPDATE_EXCLUDES,
+  scheduledUpdateErrorMessage,
+  scheduledUpdateFailureMessage,
+  scheduledUpdateTitle,
+  scheduleFailureMessage,
+  zoneCity,
+} from "@gl-admin/lib/schedule"
 import { VersionPreview, versionTime } from "@gl-admin/components/editor/ui/RevisionsPanel"
 import Notice from "@gl-admin/components/ui/Notice"
 import Button from "@gl-admin/components/ui/Button"
@@ -144,6 +161,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [publishAt, setPublishAt] = useState<string | null>(initialData?.publish_at ?? null)
   const [scheduleFailure, setScheduleFailure] = useState(initialData?.schedule_failure ?? null)
   const [scheduleOpen, setScheduleOpen] = useState(false)
+  // A published post's scheduled update (#335): its content was frozen when scheduled.
+  const [scheduledUpdate, setScheduledUpdate] = useState<ScheduledUpdate | null>(initialData?.scheduled_update ?? null)
+  const [scheduleUpdateOpen, setScheduleUpdateOpen] = useState(false)
   const dateSettings = useSiteDateSettings()
 
   const { status: collabStatus, users: collabUsers, unsynced } = useCollabPresence(initialData?.id, collabEnabled)
@@ -452,11 +472,13 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         const result = await editorRef.current.publish()
         if (result) {
           setPublishFailure(null)
-          showSuccess(wasPublished ? "Post updated" : "Post published")
+          // An Update by hand supersedes a scheduled update (#335): the API ends it.
+          showSuccess(wasPublished ? (scheduledUpdate ? "Post updated · the scheduled update was cancelled" : "Post updated") : "Post published")
           // Update the post status in the form data. Publishing ends a schedule (#147).
           setFormData((prev) => ({ ...prev, post_status: "published" }))
           setPublishAt(null)
           setScheduleFailure(null)
+          setScheduledUpdate(null)
         }
       } catch (error) {
         console.error("Block publish failed:", error)
@@ -486,6 +508,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       setRevisionsKey((k) => k + 1)
       setSettingsPending(false)
       setContentPending(false)
+      // Unpublishing ends a scheduled update (#335).
+      setScheduledUpdate(null)
       showSuccess("Unpublished: the post is a draft again")
     } catch (error) {
       showError("Failed to unpublish")
@@ -500,6 +524,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     try {
       await updatePost(initialData.id, { post_status: status })
       setFormData((prev) => ({ ...prev, post_status: status }))
+      // Leaving "published" ends a scheduled update (#335).
+      setScheduledUpdate(null)
       toast.success(done)
     } catch (error) {
       toast.error(errorMessage(error, failed))
@@ -536,6 +562,88 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       toast.error(errorMessage(error, "Couldn't cancel the schedule"))
     }
   }
+
+  // Schedule or reschedule a published post's Update (#335). The content is frozen now:
+  // pending settings are saved and this tab's edits reach the collab server first (as
+  // for Update), then the API flushes it and copies the working copy. A rejection is
+  // shown in the dialog.
+  const handleScheduleUpdate = async (local: string) => {
+    if (!canPublish || !initialData?.id) return
+    if (seoSaveableNow && !seoSaveable(seo)) throw new Error("Fix the canonical URL in the SEO tab first.")
+    await Promise.all([saveTitle(), saveSeo()])
+    await editorRef.current?.whenAcknowledged()
+    const rescheduled = !!scheduledUpdate
+    try {
+      const { scheduled_update } = await scheduleUpdate(initialData.id, local)
+      setScheduledUpdate(scheduled_update)
+      const when = formatScheduleTime(scheduled_update.update_at, dateSettings, { withTime: true })
+      toast.success(`${rescheduled ? "Update rescheduled" : "Update scheduled"} for ${when}`)
+    } catch (error) {
+      if (error instanceof ApiError) throw new Error(scheduledUpdateErrorMessage(error.code ?? undefined, error.message))
+      throw error
+    }
+  }
+
+  const handleCancelScheduledUpdate = async () => {
+    if (!canPublish || !initialData?.id) return
+    try {
+      await cancelScheduledUpdate(initialData.id)
+      setScheduledUpdate(null)
+      toast.success("Scheduled update cancelled: the live post stays as it is")
+    } catch (error) {
+      // Already gone (applied, or ended elsewhere): follow the server.
+      if (error instanceof ApiError && error.code === "not_scheduled") setScheduledUpdate(null)
+      toast.error(errorMessage(error, "Couldn't cancel the scheduled update"))
+    }
+  }
+
+  // The scheduler applies the update in the API: once its time has come, re-read the
+  // post until the update is gone (applied, or ended elsewhere), so this tab follows.
+  const updateScheduledId = formData.post_status === "published" && scheduledUpdate ? initialData?.id : undefined
+  const updateAt = scheduledUpdate?.update_at ?? null
+  useEffect(() => {
+    if (!updateScheduledId || !updateAt) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const check = async () => {
+      try {
+        const { post } = await getPostById(updateScheduledId)
+        if (cancelled) return
+        const pending = post.scheduled_update ?? null
+        if (!pending) {
+          setScheduledUpdate(null)
+          if (post.post_status === "published") {
+            setRevisionsKey((k) => k + 1)
+            void refreshSettingsState()
+            toast.success("The scheduled update is live")
+          } else {
+            setFormData((prev) => ({ ...prev, post_status: post.post_status as PostFormData["post_status"] }))
+          }
+          return
+        }
+        if (pending.update_at !== updateAt) {
+          setScheduledUpdate(pending)
+          return
+        }
+        setScheduledUpdate((prev) => (prev && prev.failure?.failed_at === pending.failure?.failed_at ? prev : pending))
+        const next = pending.failure?.next_attempt_at ? Date.parse(pending.failure.next_attempt_at) : NaN
+        if (!Number.isNaN(next)) {
+          timer = setTimeout(check, Math.max(SCHEDULE_POLL_MS, next - Date.now() + SCHEDULE_POLL_DELAY_MS))
+          return
+        }
+      } catch {
+        // Try again on the next round.
+      }
+      if (!cancelled) timer = setTimeout(check, SCHEDULE_POLL_MS)
+    }
+    const wait = Math.max(0, new Date(updateAt).getTime() - Date.now()) + SCHEDULE_POLL_DELAY_MS
+    if (wait < 2 ** 31 - 1) timer = setTimeout(check, wait)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateScheduledId, updateAt])
 
   // The scheduler publishes in the API: once the time has come, re-read the post until it
   // isn't scheduled any more (or a failure shows), so this tab follows.
@@ -821,6 +929,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         publishAt={formData.post_status === "scheduled" ? publishAt : null}
         onSchedule={collabEnabled && canPublish && formData.post_status !== "published" ? () => setScheduleOpen(true) : undefined}
         onCancelSchedule={collabEnabled && canPublish ? handleCancelSchedule : undefined}
+        updateAt={formData.post_status === "published" ? (scheduledUpdate?.update_at ?? null) : null}
+        onScheduleUpdate={collabEnabled && canPublish && formData.post_status === "published" ? () => setScheduleUpdateOpen(true) : undefined}
+        onCancelScheduledUpdate={collabEnabled && canPublish ? handleCancelScheduledUpdate : undefined}
         viewing={
           viewingVersion
             ? {
@@ -839,6 +950,16 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           publishAt={scheduled ? publishAt : null}
           settings={dateSettings}
           onSchedule={handleSchedule}
+        />
+      )}
+      {mode === "edit" && canPublish && (
+        <ScheduleDialog
+          mode="update"
+          isOpen={scheduleUpdateOpen}
+          onClose={() => setScheduleUpdateOpen(false)}
+          publishAt={scheduledUpdate?.update_at ?? null}
+          settings={dateSettings}
+          onSchedule={handleScheduleUpdate}
         />
       )}
 
@@ -924,6 +1045,54 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           {canPublish
             ? `${zoneCity(dateSettings.timeZone)} time. It goes live with its content as it is then; edits until then are included.`
             : "An editor scheduled it. It's read-only until they cancel the schedule."}
+        </Notice>
+      )}
+      {updateScheduledId && scheduledUpdate?.failure && (
+        <Notice
+          tone="danger"
+          live="alert"
+          inline
+          className="post-editor__banner"
+          title="Scheduled update failed"
+          actions={
+            canPublish ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={handlePublish} loading={isSubmitting} disabled={collabStatus !== "connected"}>
+                  Update now
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => void handleCancelScheduledUpdate()}>
+                  Cancel update
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          {scheduledUpdateFailureMessage(scheduledUpdate.failure, dateSettings)}
+        </Notice>
+      )}
+      {updateScheduledId && scheduledUpdate && !scheduledUpdate.failure && (
+        <Notice
+          tone="info"
+          live="status"
+          inline
+          className="post-editor__banner"
+          title={scheduledUpdateTitle(scheduledUpdate.update_at, dateSettings)}
+          actions={
+            canPublish ? (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => setScheduleUpdateOpen(true)} disabled={!collabEnabled}>
+                  Reschedule
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => void handleCancelScheduledUpdate()}>
+                  Cancel update
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          {canPublish
+            ? `${zoneCity(dateSettings.timeZone)} time · ${SCHEDULED_UPDATE_EXCLUDES}; reschedule to include them.`
+            : `An editor scheduled the live post's update for this time; ${SCHEDULED_UPDATE_EXCLUDES}.`}
         </Notice>
       )}
       {archived && mode === "edit" && (
@@ -1034,6 +1203,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                 setFormData((prev) => ({ ...prev, post_status: "published" }))
                 setPublishAt(null)
                 setScheduleFailure(null)
+                setScheduledUpdate(null)
                 setRevisionsKey((k) => k + 1)
                 // The settings went out with it (#358), and the body (#326). Re-read: someone
                 // may have typed since the snapshot.

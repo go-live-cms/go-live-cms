@@ -186,6 +186,44 @@ export function scheduledPillLabel(
   return when ? `Scheduled · ${when}` : "Scheduled"
 }
 
+// A published post's scheduled update (#335): "Update scheduled · Nov 3" (lists),
+// "Update scheduled · Nov 3, 09:00" (the editor).
+export const UPDATE_SCHEDULED_LABEL = "Update scheduled"
+export function updateScheduledPillLabel(
+  updateAt: string | null | undefined,
+  settings: Pick<DateSettings, "language" | "timeZone">,
+  options: { withTime?: boolean; now?: Date } = {}
+): string {
+  const when = updateAt ? formatScheduleTime(updateAt, settings, options) : ""
+  return when ? `${UPDATE_SCHEDULED_LABEL} · ${when}` : UPDATE_SCHEDULED_LABEL
+}
+
+// The editor's notice for a scheduled update (#335): "Update scheduled for Nov 3, 09:00",
+// and the reminder that later edits aren't part of it.
+export const SCHEDULED_UPDATE_EXCLUDES = "later changes aren’t included"
+export function scheduledUpdateTitle(updateAt: string, settings: Pick<DateSettings, "language" | "timeZone">, now: Date = new Date()): string {
+  return `Update scheduled for ${formatScheduleTime(updateAt, settings, { withTime: true, now })}`
+}
+
+// The notice after a failed attempt to apply a scheduled update: when it's tried again.
+export function scheduledUpdateFailureMessage(
+  failure: { next_attempt_at: string | null },
+  settings: Pick<DateSettings, "language" | "timeZone">,
+  now: Date = new Date()
+): string {
+  const why = "The update couldn't be published at its time; the live post is unchanged."
+  const next = failure.next_attempt_at ? new Date(failure.next_attempt_at) : null
+  if (!next || Number.isNaN(next.getTime()) || next.getTime() <= now.getTime()) return `${why} Trying again now.`
+  return `${why} It's tried again automatically, next at ${zonedParts(next, settings.timeZone).time}.`
+}
+
+// The API's 409 codes for a scheduled update (api/posts_scheduled_update.go).
+export function scheduledUpdateErrorMessage(code: string | undefined, fallback: string): string {
+  if (code === "no_unpublished_changes") return "There's nothing to update: the live post already matches this version."
+  if (code === "not_scheduled") return "No update is scheduled for this post any more."
+  return fallback
+}
+
 // The editor's "Scheduled publish failed" notice: why, and when it's tried again.
 export function scheduleFailureMessage(
   failure: { reason: string; next_attempt_at: string | null },
