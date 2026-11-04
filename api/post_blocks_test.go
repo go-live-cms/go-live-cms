@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -133,6 +134,10 @@ func TestGetPostBlocksAPI(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			tc.buildStubs(store)
 			stubRoleLookup(store, db.User{ID: 1, Username: "testuser", Role: RoleContributor})
+			// The contributor owns every post here, so canReadPost lets them read it (#393).
+			store.EXPECT().GetPost(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, id int64) (db.Post, error) {
+				return db.Post{ID: id, UserID: 1, PostStatus: "draft"}, nil
+			}).AnyTimes()
 
 			server := newTestServer(t, store)
 			recorder := httptest.NewRecorder()

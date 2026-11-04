@@ -65,6 +65,11 @@ func (server *Server) getPosts(c *gin.Context) {
 		}
 		userID = uid
 	}
+	// Contributors list their own posts and published ones (#393).
+	viewerID, ok := server.callerViewerID(c)
+	if !ok {
+		return
+	}
 
 	// Count with the same filters as the list, user_id included.
 	total, err := server.store.CountFilteredPosts(c.Request.Context(), db.CountFilteredPostsParams{
@@ -72,6 +77,7 @@ func (server *Server) getPosts(c *gin.Context) {
 		PostStatus:         status,
 		UserID:             userID,
 		UnpublishedChanges: unpublishedChanges,
+		ViewerID:           viewerID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count filtered posts"})
@@ -86,6 +92,7 @@ func (server *Server) getPosts(c *gin.Context) {
 				PostStatus:         status,
 				UserID:             userID,
 				UnpublishedChanges: unpublishedChanges,
+				ViewerID:           viewerID,
 				SortColumn:         sorting.Column,
 				SortDirection:      sorting.Direction,
 				OffsetCount:        int32(offset),
@@ -124,6 +131,7 @@ func (server *Server) getPosts(c *gin.Context) {
 				PostStatus:         status,
 				UserID:             userID,
 				UnpublishedChanges: unpublishedChanges,
+				ViewerID:           viewerID,
 				// The admin list: has_unpublished_changes (#326).
 				WithUnpublishedChanges: true,
 				SortColumn:             sorting.Column,
@@ -164,6 +172,7 @@ func (server *Server) getPosts(c *gin.Context) {
 			PostStatus:         status,
 			UserID:             userID,
 			UnpublishedChanges: unpublishedChanges,
+			ViewerID:           viewerID,
 			SortColumn:         sorting.Column,
 			SortDirection:      sorting.Direction,
 			OffsetCount:        int32(offset),
@@ -199,7 +208,7 @@ func (server *Server) getPosts(c *gin.Context) {
 
 // getPostCounts handles GET /posts/counts: how many posts have each status,
 // for the admin list's tabs (#340). Takes the list's type and user_id filters.
-// Public like GET /posts, whose meta.total already gives the same numbers.
+// Like GET /posts, it counts only the posts the caller may read (#393).
 func (server *Server) getPostCounts(c *gin.Context) {
 	var userID int64
 	if s := c.Query("user_id"); s != "" {
@@ -210,10 +219,15 @@ func (server *Server) getPostCounts(c *gin.Context) {
 		}
 		userID = uid
 	}
+	viewerID, ok := server.callerViewerID(c)
+	if !ok {
+		return
+	}
 
 	rows, err := server.store.CountPostsByStatus(c.Request.Context(), db.CountPostsByStatusParams{
 		PostType: c.Query("type"),
 		UserID:   userID,
+		ViewerID: viewerID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts"})
@@ -266,6 +280,10 @@ func (server *Server) getPostByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
 		return
 	}
+	// The working copy (#393): a contributor reads only their own and published posts.
+	if !server.checkLoadedPost(c, post, canReadPost) {
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"post": server.postDetailResponse(c, post),
@@ -287,6 +305,9 @@ func (server *Server) getPostBySlug(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+	if !server.checkLoadedPost(c, post, canReadPost) {
 		return
 	}
 
@@ -332,10 +353,15 @@ func (server *Server) getPostsByUser(c *gin.Context) {
 		return
 	}
 
+	viewerID, ok := server.callerViewerID(c)
+	if !ok {
+		return
+	}
 	posts, err := server.store.GetPostsByUserWithMedia(c.Request.Context(), db.GetPostsByUserWithMediaParams{
-		UserID: userID,
-		Limit:  int32(limit),
-		Offset: int32(offset),
+		UserID:      userID,
+		ViewerID:    viewerID,
+		LimitCount:  int32(limit),
+		OffsetCount: int32(offset),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user posts"})
@@ -403,6 +429,10 @@ func (server *Server) getPostsByType(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post type"})
 		return
 	}
+	viewerID, ok := server.callerViewerID(c)
+	if !ok {
+		return
+	}
 
 	if withMeta == "true" {
 		switch metaLevel {
@@ -412,6 +442,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				PostStatus:         status,
 				UserID:             int64(0),
 				UnpublishedChanges: unpublishedChanges,
+				ViewerID:           viewerID,
 				SortColumn:         sorting.Column,
 				SortDirection:      sorting.Direction,
 				OffsetCount:        int32(offset),
@@ -431,6 +462,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				PostType:           postType,
 				PostStatus:         status,
 				UnpublishedChanges: unpublishedChanges,
+				ViewerID:           viewerID,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
@@ -459,6 +491,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				PostStatus:             status,
 				UserID:                 int64(0),
 				UnpublishedChanges:     unpublishedChanges,
+				ViewerID:               viewerID,
 				WithUnpublishedChanges: true,
 				SortColumn:             sorting.Column,
 				SortDirection:          sorting.Direction,
@@ -479,6 +512,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				PostType:           postType,
 				PostStatus:         status,
 				UnpublishedChanges: unpublishedChanges,
+				ViewerID:           viewerID,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
@@ -506,6 +540,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			PostStatus:         status,
 			UserID:             int64(0),
 			UnpublishedChanges: unpublishedChanges,
+			ViewerID:           viewerID,
 			SortColumn:         sorting.Column,
 			SortDirection:      sorting.Direction,
 			OffsetCount:        int32(offset),
@@ -525,6 +560,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			PostType:           postType,
 			PostStatus:         status,
 			UnpublishedChanges: unpublishedChanges,
+			ViewerID:           viewerID,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})

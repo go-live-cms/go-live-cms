@@ -6,7 +6,6 @@ vi.mock("./siteSettings", () => ({
 }))
 const getTaxonomyTypes = vi.fn()
 vi.mock("./api", () => ({
-  getFeaturedImageUrl: async () => null,
   getTaxonomyTypes: () => getTaxonomyTypes(),
 }))
 

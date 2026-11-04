@@ -694,6 +694,10 @@ func (server *Server) getPostTaxonomyTerms(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
 		return
 	}
+	// The working terms (#393): a contributor reads only their own and published posts.
+	if !server.checkLoadedPost(c, post, canReadPost) {
+		return
+	}
 
 	// Query all taxonomy terms associated with post
 	taxonomyTerms, err := server.store.GetPostTaxonomyTerms(c.Request.Context(), id)

@@ -315,6 +315,7 @@ func TestGetMediaAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -505,6 +506,7 @@ func TestListMediaAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -581,6 +583,7 @@ func TestGetPopularMediaAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -681,6 +684,7 @@ func TestSearchMediaAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -1550,6 +1554,7 @@ func TestGetMediaByUserAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -1619,6 +1624,7 @@ func TestGetMediaByPostAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})

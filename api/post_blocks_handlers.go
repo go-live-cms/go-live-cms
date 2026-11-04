@@ -182,11 +182,14 @@ func stringToNullString(s *string) sql.NullString {
 	return sql.NullString{String: *s, Valid: true}
 }
 
-// getPostBlocks handles GET /posts/:id/blocks - get working copy
+// getPostBlocks handles GET /posts/:id/blocks - get working copy (canReadPost)
 func (server *Server) getPostBlocks(c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+	if !server.authorizePost(c, postID, canReadPost) {
 		return
 	}
 

@@ -36,7 +36,7 @@ and no code. `post_types.go` is not one of them: it contains code.
 PASETO v4: asymmetric (`PASETO_V4_PUBLIC/PRIVATE_KEY_HEX`) for access tokens, local
 symmetric (`PASETO_V4_LOCAL_KEY_HEX`) for refresh. Issuer/audience/KIDs in `util/config.go`.
 The collab server never sees access tokens (#233). The editor exchanges its access
-token for a **collab ticket** at `POST /collab/tickets` (`canReadPostBlocks` on the doc's post): v4.public, signed
+token for a **collab ticket** at `POST /collab/tickets` (`canReadPost` on the doc's post): v4.public, signed
 with the access key, audience `golive.admin-ws`, `token_type: ws_ticket`, `doc` claim,
 30s TTL (`token/ws_ticket.go`, `collab_*.go`). `VerifyToken` rejects tickets, so they're
 not bearer tokens. The API never accepts a ticket back: the collab server verifies it
@@ -56,8 +56,8 @@ the collab server.
   - Admins/editors (`canModeratePosts`) may do anything to any post.
   - Contributors may create posts, but only drafts authored by themselves
     (`canCreatePost`). They may edit their own posts' **working copy** (a read-write
-    collab connection: `canEditPost`) at any status but scheduled (#147), and watch any post's live,
-    read-only (`canReadPostBlocks`).
+    collab connection: `canEditPost`) at any status but scheduled (#147), and watch live,
+    read-only, the posts they may read (`canReadPost`).
   - The **live** fields (PUT `/posts/:id`, meta, featured image, media links, DELETE)
     only while their post isn't published (`canEditPostDetails`). Otherwise they could
     change or remove published content without the publish permission. For the same
@@ -72,6 +72,19 @@ the collab server.
     already loaded the post, and `authorizeLoadPost` to reuse the row it loads.
   - Never compare `post.UserID` or roles in a handler. Block-level permissions and
     org/site scoping are out of scope.
+- **Reads are not public (#393).** Every `/api/v1/posts*` route serves the working copy
+  (any status, working title/excerpt/meta), so every one takes `server.requireAuth()` +
+  `requireContentAuthor`, as do `/media*`, `/users/:username`, `/posts/:id/taxonomy-terms`
+  and `/posts/:id/taxonomies` (`/taxonomy/terms/:id/posts`: `requireContentEditor`).
+  `canReadPost`: moderators any post, contributors their own (any status) and published
+  ones. Per-post reads check it (`authorizePost`/`checkPost`, 403); lists, counts, search
+  and `/posts/user/:id` pass `postsViewerID` as the queries' `viewer_id` (0 = all, else
+  `user_id = viewer OR published`); "Used in" drops posts the caller can't read.
+  Anonymous readers get `/public` only (published snapshots). `route_auth_test.go` walks
+  the router: a GET outside `/public` must answer 401 without a token unless it is in
+  `publicGETRoutes` with its reason (health, `/uploads`, settings, themes, post types,
+  taxonomy config). `post_reads_auth_test.go` checks the roles and that `/public` never
+  serves a draft, against the real database.
 - **Media ownership:** admins and editors may update/delete any media; any other
   role only its own (`canWriteMedia`, used by both PUT and DELETE `/media/:id`).
   Every content role may upload (`requireContentAuthor`, #135).
@@ -205,7 +218,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
     unknown media ids skipped, featured image's order untouched; **only while unpublished**,
     publish syncs them otherwise), upsert `post_ydoc_state` (`000020`) at the new revision with
     `last_editor_id` (NULL if the user is gone).
-- **`GET /posts/:id/blocks`** (any signed-in user) and `/versions[/:no]` stay: the static
+- **`GET /posts/:id/blocks`** (`canReadPost`) and `/versions[/:no]` stay: the static
   read-only view and revisions use them. A stored `{}` comes back as a well-formed empty
   doc (`parseStoredBlockDoc`, #304). There is no write route for the working copy.
 - **`POST /posts` takes an optional `block_doc`** (#283): the new post's initial body, with
@@ -222,8 +235,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   other meta or `post_ydoc_state`: the collab server seeds the copy from `block_doc`.
   The writes are one transaction (`DuplicatePostTx`); `copyPost` is the reusable part
   (templates, #322). `duplicatePost.vectors.json` (web) is shared with the collab test.
-- **Tickets:** `POST /collab/tickets` uses `canReadPostBlocks` (any content role, any
-  existing post): contributors get a read-only live view of others' posts. The ticket
+- **Tickets:** `POST /collab/tickets` uses `canReadPost` (moderators any post, contributors
+  their own and published ones, #393): contributors get a read-only live view of others'
+  published posts, never their drafts. The ticket
   carries no role; the server asks `/internal/users/:id/access` and makes `can_edit:
   false` connections read-only.
 
@@ -419,7 +433,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - `GET /internal/users/:id/access?doc=post-<id>&issued_at=<unix>` (`internal_routes.go`,
   `internal_handlers_read.go`) is the collab server's per-connection check. It answers
   `{role, can_edit}`, where `can_edit` is `canEditPost` for that post (moderators skip
-  the post lookup). 404 if the user, or for a contributor the post, is gone. It replaced
+  the post lookup). 404 if the user, or for a contributor the post, is gone; 403 when a
+  contributor may not read it (`canReadPost`, #393: e.g. unpublished since the ticket; the
+  collab server's timed recheck then closes the connection). It replaced
   the role-only `/internal/users/:id/role`; Hocuspocus's `onAuthenticate` (#206) calls it.
 - **It is on a separate listener, not under `/api/v1`.** `newInternalRouter` builds its
   own Gin engine and `main.go` serves it with `StartInternal(INTERNAL_SERVER_ADDRESS)`

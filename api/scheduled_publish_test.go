@@ -355,8 +355,9 @@ func TestScheduledPublishFlushFailureRetries(t *testing.T) {
 	require.Equal(t, scheduledPublishCollabFlushFailed, got.PublishError.String)
 	require.WithinDuration(t, time.Now().Add(scheduledPublishBackoff[0]), got.PublishNextAttemptAt.Time, 10*time.Second)
 
-	// The editor reads it from the post.
+	// The editor reads it from the post (signed in: post reads need a content role, #393).
 	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/posts/%d", post.ID), nil)
+	addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, editor.ID, editor.Username, time.Minute)
 	recorder := flowServe(server, request)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	var body struct {

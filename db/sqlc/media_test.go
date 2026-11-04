@@ -513,9 +513,8 @@ func TestGetPostsByUserWithMedia(t *testing.T) {
 	require.NoError(t, err)
 
 	userPosts, err := testQueries.GetPostsByUserWithMedia(context.Background(), GetPostsByUserWithMediaParams{
-		UserID: user.ID,
-		Limit:  10,
-		Offset: 0,
+		UserID:     user.ID,
+		LimitCount: 10,
 	})
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(userPosts), 1)

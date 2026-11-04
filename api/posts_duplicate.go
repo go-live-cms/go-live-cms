@@ -108,7 +108,7 @@ func (server *Server) copyPost(ctx context.Context, source db.Post, opts postCop
 
 // duplicatePost handles POST /posts/:id/duplicate.
 //
-// Anyone who can read the post (canReadPostBlocks) and create posts may
+// Anyone who can read the post (canReadPost) and create posts may
 // duplicate it: the copy is a draft they own, which canCreatePost allows a
 // contributor too. The source's parent is kept only if the caller may nest
 // under it (mayNestUnder, createPost's rule); otherwise the copy is top-level.
@@ -136,7 +136,7 @@ func (server *Server) duplicatePost(c *gin.Context) {
 	}
 
 	caller, ok := server.callerUser(c)
-	if !ok || !server.checkPost(c, caller, source, canReadPostBlocks) {
+	if !ok || !server.checkPost(c, caller, source, canReadPost) {
 		return
 	}
 	if !canCreatePost(caller, []int64{caller.ID}, "draft") {

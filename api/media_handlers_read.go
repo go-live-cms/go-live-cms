@@ -445,6 +445,10 @@ func (server *Server) getMediaByPost(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
 		return
 	}
+	// The response carries the post's working copy (#393).
+	if !server.checkLoadedPost(c, post, canReadPost) {
+		return
+	}
 
 	media, err := server.store.GetMediaByPost(c.Request.Context(), postID)
 	if err != nil {
@@ -495,9 +499,18 @@ func (server *Server) getMediaPosts(c *gin.Context) {
 		return
 	}
 
-	postResponses := make([]PostWithMediaOrderResponse, len(posts))
-	for i, post := range posts {
-		postResponses[i] = toPostResponseFromMediaRow(post)
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
+	// "Used in" lists only the posts the caller may read (#393): a contributor
+	// doesn't see the titles of someone else's drafts.
+	postResponses := make([]PostWithMediaOrderResponse, 0, len(posts))
+	for _, post := range posts {
+		if !canReadPost(caller, db.Post{UserID: post.UserID, PostStatus: post.PostStatus}) {
+			continue
+		}
+		postResponses = append(postResponses, toPostResponseFromMediaRow(post))
 	}
 
 	c.JSON(http.StatusOK, gin.H{

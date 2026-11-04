@@ -27,13 +27,17 @@ func (server *Server) getPostMeta(c *gin.Context) {
 		return
 	}
 
-	_, err = server.store.GetPost(c.Request.Context(), postID)
+	post, err := server.store.GetPost(c.Request.Context(), postID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to verify post"})
+		return
+	}
+	// Working meta, which may not be live yet (#393).
+	if !server.checkLoadedPost(c, post, canReadPost) {
 		return
 	}
 

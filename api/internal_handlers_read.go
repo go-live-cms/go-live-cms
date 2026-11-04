@@ -36,7 +36,8 @@ import (
 //   - 200 OK: { "role": "<role>", "can_edit": true|false }
 //   - 400 Bad Request: Invalid user ID, doc or issued_at
 //   - 401 Unauthorized: Missing or wrong shared secret
-//   - 403 Forbidden: The ticket predates the user's latest password change
+//   - 403 Forbidden: The ticket predates the user's latest password change, or
+//     the user may not read the post (canReadPost, #393; e.g. unpublished since)
 //   - 404 Not Found: User (or, for a non-moderator, the post) does not exist
 //   - 500 Internal Server Error: Database query failure
 func (server *Server) getInternalDocAccess(c *gin.Context) {
@@ -89,5 +90,12 @@ func (server *Server) getInternalDocAccess(c *gin.Context) {
 		return
 	}
 
+	// The ticket was minted with canReadPost, but the post may have changed since
+	// (unpublished, #393): the collab server rechecks on a timer and closes the
+	// connection on 403.
+	if !canReadPost(user, post) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": canEditPost(user, post)})
 }

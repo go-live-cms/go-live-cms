@@ -19,7 +19,6 @@ vi.mock("@/lib/api", () => ({
   getPublishedPosts: (...args: unknown[]) => getPublishedPosts(...args),
   getAdjacentPosts: (...args: unknown[]) => getAdjacentPosts(...args),
   getRelatedPosts: (...args: unknown[]) => getRelatedPosts(...args),
-  getFeaturedImageUrl: async () => null,
 }))
 
 // The menus assigned to the theme's locations (#347); none unless a test sets them.

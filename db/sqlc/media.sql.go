@@ -1070,16 +1070,19 @@ FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
 WHERE p.user_id = $1
+    -- What the caller may read (#393, as in ListPosts): 0 = everything.
+    AND ($2::bigint = 0 OR p.user_id = $2 OR p.post_status = 'published')
 GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at
 ORDER BY p.created_at DESC
-LIMIT $2
+LIMIT $4
 OFFSET $3
 `
 
 type GetPostsByUserWithMediaParams struct {
-	UserID int64 `json:"user_id"`
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	UserID      int64 `json:"user_id"`
+	ViewerID    int64 `json:"viewer_id"`
+	OffsetCount int32 `json:"offset_count"`
+	LimitCount  int32 `json:"limit_count"`
 }
 
 type GetPostsByUserWithMediaRow struct {
@@ -1118,7 +1121,12 @@ type GetPostsByUserWithMediaRow struct {
 }
 
 func (q *Queries) GetPostsByUserWithMedia(ctx context.Context, arg GetPostsByUserWithMediaParams) ([]GetPostsByUserWithMediaRow, error) {
-	rows, err := q.db.QueryContext(ctx, getPostsByUserWithMedia, arg.UserID, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, getPostsByUserWithMedia,
+		arg.UserID,
+		arg.ViewerID,
+		arg.OffsetCount,
+		arg.LimitCount,
+	)
 	if err != nil {
 		return nil, err
 	}

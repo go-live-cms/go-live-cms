@@ -68,7 +68,10 @@ WHERE
     AND ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)
-    AND (NOT $5::boolean
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')
+    AND (NOT $6::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 `
 
@@ -77,6 +80,7 @@ type CountSearchPostsParams struct {
 	PostType           string `json:"post_type"`
 	PostStatus         string `json:"post_status"`
 	UserID             int64  `json:"user_id"`
+	ViewerID           int64  `json:"viewer_id"`
 	UnpublishedChanges bool   `json:"unpublished_changes"`
 }
 
@@ -87,6 +91,7 @@ func (q *Queries) CountSearchPosts(ctx context.Context, arg CountSearchPostsPara
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.UnpublishedChanges,
 	)
 	var total int64
@@ -124,11 +129,14 @@ WHERE
     AND ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)
-    AND (NOT $5::boolean
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')
+    AND (NOT $6::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), $1::text)) DESC, p.created_at DESC, p.id DESC
-LIMIT $7
-OFFSET $6
+LIMIT $8
+OFFSET $7
 `
 
 type SearchPostsWithMetaParams struct {
@@ -136,6 +144,7 @@ type SearchPostsWithMetaParams struct {
 	PostType           string `json:"post_type"`
 	PostStatus         string `json:"post_status"`
 	UserID             int64  `json:"user_id"`
+	ViewerID           int64  `json:"viewer_id"`
 	UnpublishedChanges bool   `json:"unpublished_changes"`
 	OffsetCount        int32  `json:"offset_count"`
 	LimitCount         int32  `json:"limit_count"`
@@ -175,6 +184,7 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.UnpublishedChanges,
 		arg.OffsetCount,
 		arg.LimitCount,

@@ -179,12 +179,16 @@ type PostSettingsStateResponse struct {
 }
 
 // getPostSettingsState handles GET /posts/:id/settings: the editor's "changes
-// wait for Update" state, settings (#358) and body (#326). Any content role (like
-// the editor itself).
+// wait for Update" state, settings (#358) and body (#326). It carries the working
+// title, excerpt, image and terms, so the caller must be able to read the post
+// (canReadPost, #393).
 func (server *Server) getPostSettingsState(c *gin.Context) {
 	postID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
+		return
+	}
+	if !server.authorizePost(c, postID, canReadPost) {
 		return
 	}
 	row, err := server.store.GetPostSettingsState(c, postID)

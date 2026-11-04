@@ -56,6 +56,9 @@ func (server *Server) getPostMedia(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
 		return
 	}
+	if !server.authorizePost(c, postID, canReadPost) {
+		return
+	}
 
 	featured := c.Query("featured") == "true"
 

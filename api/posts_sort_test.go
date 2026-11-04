@@ -219,11 +219,13 @@ type listPostsBody struct {
 }
 
 // getJSON serves a GET through a test server backed by store.
+// getJSON GETs url as testReader (an editor: the list routes need a content role, #393).
 func getJSON(t *testing.T, store *mockdb.MockStore, url string) (listPostsBody, int) {
 	server := newTestServer(t, store)
 	recorder := httptest.NewRecorder()
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	require.NoError(t, err)
+	signInAs(t, server, store, request, testReader)
 	server.router.ServeHTTP(recorder, request)
 
 	var body listPostsBody

@@ -287,7 +287,9 @@ func TestScheduledPostIsReadOnlyToItsContributor(t *testing.T) {
 		post := db.Post{ID: 1, UserID: owner.ID, PostStatus: status}
 		require.Equal(t, status != postStatusScheduled, canEditPost(owner, post), status)
 		require.Equal(t, status == "draft", canEditPostDetails(owner, post), status)
-		require.True(t, canReadPostBlocks(owner, post), status)
+		require.True(t, canReadPost(owner, post), status)
+		// Someone else's scheduled post isn't public yet, so it isn't theirs to read (#393).
+		require.Equal(t, status == postStatusPublished, canReadPost(db.User{ID: 10, Role: RoleContributor}, post), status)
 		require.True(t, canEditPost(editor, post), status)
 		require.True(t, canEditPostDetails(editor, post), status)
 	}

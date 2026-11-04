@@ -31,8 +31,8 @@ import (
 
 // getUserByUsername retrieves public user profile by username.
 //
-// Public endpoint that returns sanitized user information safe for general consumption.
-// Does not require authentication and excludes sensitive data like email addresses.
+// Signed-in users only (#393): the response excludes the email address but has the
+// id and role, and an anonymous lookup would enumerate accounts.
 //
 // Path parameters:
 //   - username: User's unique username identifier

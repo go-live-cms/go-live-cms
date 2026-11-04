@@ -69,10 +69,11 @@ func liveFieldsAllowed(a postPermActor, post db.Post) bool {
 	return a.moderator || (a.owner && post.PostStatus != "published")
 }
 
-// readAllowed: every content role may watch a post's working copy (a
-// read-only collab connection unless canEditPost, #206).
-func readAllowed(postPermActor, db.Post) bool {
-	return true
+// readAllowed is canReadPost (#393): moderators read any post's working copy,
+// contributors their own and published ones (a read-only collab connection
+// unless canEditPost, #206), never someone else's draft.
+func readAllowed(a postPermActor, post db.Post) bool {
+	return a.moderator || a.owner || post.PostStatus == "published"
 }
 
 func moderatorOnly(a postPermActor, _ db.Post) bool {

@@ -604,6 +604,7 @@ func TestGetPostAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -711,6 +712,7 @@ func TestListPostsAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -1108,9 +1110,8 @@ func TestGetPostsByUserAPI(t *testing.T) {
 
 				store.EXPECT().
 					GetPostsByUserWithMedia(gomock.Any(), db.GetPostsByUserWithMediaParams{
-						UserID: user.ID,
-						Limit:  10,
-						Offset: 0,
+						UserID:     user.ID,
+						LimitCount: 10,
 					}).
 					Times(1).
 					Return(posts, nil)
@@ -1152,6 +1153,7 @@ func TestGetPostsByUserAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -1246,6 +1248,7 @@ func TestGetPostBySlugAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -1355,6 +1358,7 @@ func TestGetPostsByTypeAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})

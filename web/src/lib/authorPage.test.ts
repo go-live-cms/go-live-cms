@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 vi.mock("./siteSettings", () => ({
   getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 2, urlStructure: "slug" }),
 }))
-vi.mock("./api", () => ({ getFeaturedImageUrl: async () => null }))
+vi.mock("./api", () => ({}))
 
 const { authorPath, getPostAuthors, getPublicAuthors, loadAuthorPage } = await import("./authorPage")
 const { SERVER_MEDIA_URL } = await import("@gl-admin/lib/server-api-url")

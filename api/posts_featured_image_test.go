@@ -135,6 +135,7 @@ func TestGetFeaturedImageQuickAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})
@@ -251,6 +252,7 @@ func TestGetFeaturedImageFullAPI(t *testing.T) {
 			request, err := http.NewRequest(http.MethodGet, url, nil)
 			require.NoError(t, err)
 
+			signInAs(t, server, store, request, testReader)
 			server.router.ServeHTTP(recorder, request)
 			tc.checkResponse(recorder)
 		})

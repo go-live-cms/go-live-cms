@@ -106,7 +106,10 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR p.user_id = $3)
-    AND (NOT $4::boolean
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND ($4::bigint = 0 OR p.user_id = $4 OR p.post_status = 'published')
+    AND (NOT $5::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 `
 
@@ -114,6 +117,7 @@ type CountFilteredPostsParams struct {
 	PostType           string `json:"post_type"`
 	PostStatus         string `json:"post_status"`
 	UserID             int64  `json:"user_id"`
+	ViewerID           int64  `json:"viewer_id"`
 	UnpublishedChanges bool   `json:"unpublished_changes"`
 }
 
@@ -122,6 +126,7 @@ func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPosts
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.UnpublishedChanges,
 	)
 	var total int64
@@ -138,6 +143,9 @@ FROM posts p
 WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::bigint = 0 OR p.user_id = $2)
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND ($3::bigint = 0 OR p.user_id = $3 OR p.post_status = 'published')
 GROUP BY p.post_status
 ORDER BY p.post_status
 `
@@ -145,6 +153,7 @@ ORDER BY p.post_status
 type CountPostsByStatusParams struct {
 	PostType string `json:"post_type"`
 	UserID   int64  `json:"user_id"`
+	ViewerID int64  `json:"viewer_id"`
 }
 
 type CountPostsByStatusRow struct {
@@ -157,7 +166,7 @@ type CountPostsByStatusRow struct {
 // type and owner filters. unpublished_changes: how many of them have changes
 // not published (#326; only published posts can).
 func (q *Queries) CountPostsByStatus(ctx context.Context, arg CountPostsByStatusParams) ([]CountPostsByStatusRow, error) {
-	rows, err := q.db.QueryContext(ctx, countPostsByStatus, arg.PostType, arg.UserID)
+	rows, err := q.db.QueryContext(ctx, countPostsByStatus, arg.PostType, arg.UserID, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -195,17 +204,24 @@ const countPostsByTypeFiltered = `-- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts p
 WHERE p.post_type = $1
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
-    AND (NOT $3::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND ($3::bigint = 0 OR p.user_id = $3 OR p.post_status = 'published')  -- #393, as in ListPosts
+    AND (NOT $4::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 `
 
 type CountPostsByTypeFilteredParams struct {
 	PostType           string `json:"post_type"`
 	PostStatus         string `json:"post_status"`
+	ViewerID           int64  `json:"viewer_id"`
 	UnpublishedChanges bool   `json:"unpublished_changes"`
 }
 
 func (q *Queries) CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countPostsByTypeFiltered, arg.PostType, arg.PostStatus, arg.UnpublishedChanges)
+	row := q.db.QueryRowContext(ctx, countPostsByTypeFiltered,
+		arg.PostType,
+		arg.PostStatus,
+		arg.ViewerID,
+		arg.UnpublishedChanges,
+	)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -614,27 +630,31 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
-    AND (NOT $4::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND ($4::bigint = 0 OR p.user_id = $4 OR p.post_status = 'published')
+    AND (NOT $5::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN created_at END ASC,
-    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN created_at END DESC,
-    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
-    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
-    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN title END ASC,
-    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN title END DESC,
-    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN menu_order END ASC,
-    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN menu_order END DESC,
+    CASE WHEN $6::text = 'created_at' AND $7::text = 'asc' THEN created_at END ASC,
+    CASE WHEN $6::text = 'created_at' AND $7::text = 'desc' THEN created_at END DESC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
+    CASE WHEN $6::text = 'title' AND $7::text = 'asc' THEN title END ASC,
+    CASE WHEN $6::text = 'title' AND $7::text = 'desc' THEN title END DESC,
+    CASE WHEN $6::text = 'menu_order' AND $7::text = 'asc' THEN menu_order END ASC,
+    CASE WHEN $6::text = 'menu_order' AND $7::text = 'desc' THEN menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $6::text = 'asc' THEN id END ASC,
+    CASE WHEN $7::text = 'asc' THEN id END ASC,
     id DESC
-LIMIT $8
-OFFSET $7
+LIMIT $9
+OFFSET $8
 `
 
 type ListPostsParams struct {
 	PostType           string `json:"post_type"`
 	PostStatus         string `json:"post_status"`
 	UserID             int64  `json:"user_id"`
+	ViewerID           int64  `json:"viewer_id"`
 	UnpublishedChanges bool   `json:"unpublished_changes"`
 	SortColumn         string `json:"sort_column"`
 	SortDirection      string `json:"sort_direction"`
@@ -671,6 +691,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.UnpublishedChanges,
 		arg.SortColumn,
 		arg.SortDirection,
@@ -754,27 +775,31 @@ WHERE
     ($1::text = '' OR p.post_type = $1)
     AND ($2::text = '' OR p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')))
     AND ($3::bigint = 0 OR p.user_id = $3)  -- Add user filter
-    AND (NOT $4::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND ($4::bigint = 0 OR p.user_id = $4 OR p.post_status = 'published')
+    AND (NOT $5::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $5::text = 'created_at' AND $6::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $5::text = 'created_at' AND $6::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $5::text = 'changed_at' AND $6::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $5::text = 'changed_at' AND $6::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $5::text = 'title' AND $6::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $5::text = 'title' AND $6::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $5::text = 'menu_order' AND $6::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $5::text = 'menu_order' AND $6::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $6::text = 'created_at' AND $7::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $6::text = 'created_at' AND $7::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $6::text = 'title' AND $7::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $6::text = 'title' AND $7::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $6::text = 'menu_order' AND $7::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $6::text = 'menu_order' AND $7::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $6::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $7::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $8
-OFFSET $7
+LIMIT $9
+OFFSET $8
 `
 
 type ListPostsWithAllMetaParams struct {
 	PostType           string `json:"post_type"`
 	PostStatus         string `json:"post_status"`
 	UserID             int64  `json:"user_id"`
+	ViewerID           int64  `json:"viewer_id"`
 	UnpublishedChanges bool   `json:"unpublished_changes"`
 	SortColumn         string `json:"sort_column"`
 	SortDirection      string `json:"sort_direction"`
@@ -812,6 +837,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.UnpublishedChanges,
 		arg.SortColumn,
 		arg.SortDirection,
@@ -890,21 +916,24 @@ WHERE
     ($2::text = '' OR p.post_type = $2)
     AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
     AND ($4::bigint = 0 OR p.user_id = $4)  -- Add user filter
-    AND (NOT $5::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')
+    AND (NOT $6::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $6::text = 'created_at' AND $7::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $6::text = 'created_at' AND $7::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $6::text = 'changed_at' AND $7::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $6::text = 'changed_at' AND $7::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $6::text = 'title' AND $7::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $6::text = 'title' AND $7::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $6::text = 'menu_order' AND $7::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $6::text = 'menu_order' AND $7::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $7::text = 'created_at' AND $8::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $7::text = 'created_at' AND $8::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $7::text = 'changed_at' AND $8::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $7::text = 'changed_at' AND $8::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $7::text = 'title' AND $8::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $7::text = 'title' AND $8::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $7::text = 'menu_order' AND $8::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $7::text = 'menu_order' AND $8::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $7::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $8::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $9
-OFFSET $8
+LIMIT $10
+OFFSET $9
 `
 
 type ListPostsWithMetaParams struct {
@@ -912,6 +941,7 @@ type ListPostsWithMetaParams struct {
 	PostType               string `json:"post_type"`
 	PostStatus             string `json:"post_status"`
 	UserID                 int64  `json:"user_id"`
+	ViewerID               int64  `json:"viewer_id"`
 	UnpublishedChanges     bool   `json:"unpublished_changes"`
 	SortColumn             string `json:"sort_column"`
 	SortDirection          string `json:"sort_direction"`
@@ -951,6 +981,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 		arg.PostType,
 		arg.PostStatus,
 		arg.UserID,
+		arg.ViewerID,
 		arg.UnpublishedChanges,
 		arg.SortColumn,
 		arg.SortDirection,

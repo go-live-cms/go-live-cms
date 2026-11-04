@@ -206,7 +206,9 @@ func TestCreateCollabTicketReadAccess(t *testing.T) {
 		doc        string
 		wantStatus int
 	}{
-		{name: "ContributorOthersPost", caller: contributor, doc: "post-12", wantStatus: http.StatusOK},
+		// #393: someone else's draft is not theirs to read, a published post is.
+		{name: "ContributorOthersDraft", caller: contributor, doc: "post-12", wantStatus: http.StatusForbidden},
+		{name: "ContributorOthersPublishedPost", caller: contributor, doc: "post-15", wantStatus: http.StatusOK},
 		{name: "ContributorOwnPost", caller: contributor, doc: "post-13", wantStatus: http.StatusOK},
 		{name: "ContributorMissingPost", caller: contributor, doc: "post-14", wantStatus: http.StatusNotFound},
 		{name: "NonContentRole", caller: nonContentUser, doc: "post-12", wantStatus: http.StatusForbidden},
@@ -220,6 +222,7 @@ func TestCreateCollabTicketReadAccess(t *testing.T) {
 			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(db.Post{ID: 12, UserID: 999, PostStatus: "draft"}, nil).AnyTimes()
 			store.EXPECT().GetPost(gomock.Any(), int64(13)).Return(db.Post{ID: 13, UserID: contributor.ID}, nil).AnyTimes()
 			store.EXPECT().GetPost(gomock.Any(), int64(14)).Return(db.Post{}, sql.ErrNoRows).AnyTimes()
+			store.EXPECT().GetPost(gomock.Any(), int64(15)).Return(db.Post{ID: 15, UserID: 999, PostStatus: "published"}, nil).AnyTimes()
 
 			server := newCollabTestServer(t, store, "http://collab.invalid")
 			recorder := postCollabTicket(t, server, gin.H{"doc": tc.doc}, &tc.caller)

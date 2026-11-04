@@ -18,12 +18,14 @@ import (
 // list's filter and the tab's count. The SQL that computes the flag is tested
 // against the database in db/sqlc/post_unpublished_changes_test.go.
 
+// serveGet GETs url as testReader (an editor: post reads need a content role, #393).
 func serveGet(t *testing.T, store *mockdb.MockStore, url string) *httptest.ResponseRecorder {
 	t.Helper()
 	server := newTestServer(t, store)
 	recorder := httptest.NewRecorder()
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	require.NoError(t, err)
+	signInAs(t, server, store, request, testReader)
 	server.router.ServeHTTP(recorder, request)
 	return recorder
 }

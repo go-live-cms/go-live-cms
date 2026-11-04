@@ -32,18 +32,20 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
   }
 
   /**
-   * Fetch posts with optional filters
+   * Fetch a public post type's published posts (GET /public/posts), with their
+   * published titles and excerpts. Themes render for anonymous visitors, so they
+   * never read /api/v1/posts: that is the admin's working copy, drafts included,
+   * and needs a sign-in (#393). `status` is accepted for older themes and ignored:
+   * only published posts come back. `postType` defaults to "post".
    */
   async getPosts(params?: { postType?: string; status?: string; limit?: number; offset?: number }): Promise<any[]> {
     try {
-      const queryParams = new URLSearchParams()
+      const queryParams = new URLSearchParams({ type: params?.postType || "post" })
 
-      if (params?.postType) queryParams.append("post_type", params.postType)
-      if (params?.status) queryParams.append("status", params.status)
       if (params?.limit) queryParams.append("limit", params.limit.toString())
       if (params?.offset) queryParams.append("offset", params.offset.toString())
 
-      const url = `${API_BASE_URL}/api/v1/posts${queryParams.toString() ? "?" + queryParams.toString() : ""}`
+      const url = `${API_BASE_URL}/public/posts?${queryParams.toString()}`
       const response = await fetch(url, {
         method: "GET",
         headers: this.getHeaders(),
@@ -53,7 +55,8 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
         throw new Error(`Failed to fetch posts: ${response.statusText}`)
       }
 
-      return await response.json()
+      const body = await response.json()
+      return Array.isArray(body?.posts) ? body.posts : []
     } catch (error) {
       log.error("theme_api_request_failed", { call: "getPosts", error })
       return []
@@ -61,16 +64,18 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
   }
 
   /**
-   * Get a single post by ID
+   * Get a published post by ID (GET /public/posts/:id): `{ post, featured_image,
+   * taxonomy_terms }`, or null for a draft, an archived post or an unknown id.
    */
   async getPost(id: number): Promise<any> {
     try {
-      const url = `${API_BASE_URL}/api/v1/posts/${id}`
+      const url = `${API_BASE_URL}/public/posts/${encodeURIComponent(String(id))}`
       const response = await fetch(url, {
         method: "GET",
         headers: this.getHeaders(),
       })
 
+      if (response.status === 404) return null
       if (!response.ok) {
         throw new Error(`Failed to fetch post: ${response.statusText}`)
       }
@@ -132,7 +137,8 @@ export class ThemeAPIClientImpl implements ThemeAPIClient {
   }
 
   /**
-   * Get media items
+   * Get media items (GET /api/v1/media). The media library is the admin's (#393):
+   * this needs the client's auth token and returns [] without one.
    */
   async getMedia(params?: { limit?: number; offset?: number }): Promise<any[]> {
     try {

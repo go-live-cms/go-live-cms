@@ -72,6 +72,9 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
@@ -182,6 +185,9 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
@@ -208,6 +214,9 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
 
@@ -223,6 +232,9 @@ FROM posts p
 WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
 GROUP BY p.post_status
 ORDER BY p.post_status;
 
@@ -237,6 +249,7 @@ WHERE p.id = $1;
 SELECT COUNT(*) AS total FROM posts p
 WHERE p.post_type = @post_type
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')  -- #393, as in ListPosts
     AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
 
 
@@ -278,6 +291,9 @@ WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
+    -- What the caller may read (#393): 0 = everything (moderators, /public); a
+    -- contributor's id = their own posts plus published ones (canReadPost).
+    AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.

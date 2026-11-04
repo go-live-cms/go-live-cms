@@ -97,3 +97,16 @@ func stubRoleLookup(store *mockdb.MockStore, user db.User) {
 		Return(user, nil).
 		AnyTimes()
 }
+
+// testReader is the caller of tests whose route needs a content role since #393
+// but that aren't about who may read what: an editor reads every post (no
+// per-post lookup). Its id stays clear of the random ids test users get.
+var testReader = db.User{ID: 4_000_000_001, Username: "test_reader", FullName: "Test Reader", Email: "reader@example.test", Role: RoleEditor}
+
+// signInAs gives request user's Bearer token and stubs the caller lookup
+// (stubRoleLookup). Call it after the case's own buildStubs.
+func signInAs(t *testing.T, server *Server, store *mockdb.MockStore, request *http.Request, user db.User) {
+	t.Helper()
+	addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+	stubRoleLookup(store, user)
+}

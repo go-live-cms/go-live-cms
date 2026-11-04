@@ -16,7 +16,9 @@
 #   5. --force replaces existing data; a least-privilege user can restore; a
 #      --force restore that fails midway rolls back to the old data;
 #   6. the real API (release mode, so the seeded-account guard runs) starts on
-#      the restored data and serves the restored media file byte for byte.
+#      the restored data, serves the restored media file byte for byte, and
+#      lets the restored user sign in and read the restored rows (#393: post
+#      and media reads need a content role).
 
 set -eu
 # Git Bash would rewrite the container paths below into Windows paths.
@@ -84,9 +86,14 @@ compose run --rm -T migrate down -all
 compose run --rm -T migrate up
 
 step "fixture data: 1 user, 250 posts with block_doc, a stored Yjs state, 1 media row + file"
+# The API reads posts and media only for signed-in content roles (#393), so the
+# fixture user has a real bcrypt hash (cost 10) of this throwaway password; the
+# last step signs in with it. Precomputed: pgcrypto isn't a trusted extension in
+# Postgres 12, and the least-privilege restore below couldn't recreate it.
+TEST_PASSWORD=restore-test-password
 compose exec -T postgres psql -U root -d golive_cms -X -q -v ON_ERROR_STOP=1 <<'SQL'
 INSERT INTO users (username, full_name, email, hashed_password, role)
-VALUES ('restore-tester', 'Restore Tester', 'restore@example.test', '$2a$10$not.a.real.hash', 'admin');
+VALUES ('restoretester', 'Restore Tester', 'restore@example.test', '$2a$10$qmVwfCb5yaiZGAgYZLgYuuPyYOElCEf2VFUQ/PoaoNyyfvJw87jRm', 'admin');
 
 INSERT INTO posts (title, description, user_id, username, url, slug, post_status, block_doc)
 SELECT 'Post ' || g, 'fixture', u.id, u.username, '/posts/restore-' || g, 'restore-' || g, 'published',
@@ -97,12 +104,12 @@ SELECT 'Post ' || g, 'fixture', u.id, u.username, '/posts/restore-' || g, 'resto
            'id', 'b' || g, 'type', 'paragraph',
            'content', 'Body of post ' || g || ' ' || chr(252) || chr(10003))))
 FROM generate_series(1, 250) AS g, users u
-WHERE u.username = 'restore-tester';
+WHERE u.username = 'restoretester';
 
 INSERT INTO media (name, description, alt, media_path, user_id, mime_type, original_filename)
 SELECT 'restore-test', 'fixture', 'fixture', '/app/uploads/media/restore-test.bin', id,
        'application/octet-stream', 'restore-test.bin'
-FROM users WHERE username = 'restore-tester';
+FROM users WHERE username = 'restoretester';
 
 INSERT INTO post_media (post_id, media_id)
 SELECT (SELECT id FROM posts WHERE slug = 'restore-42'), (SELECT id FROM media WHERE name = 'restore-test');
@@ -199,10 +206,16 @@ step "API (release mode) starts on the restored data and serves the media"
 compose up -d --wait api
 served=$(compose exec -T api sh -c 'wget -qO- http://127.0.0.1:8080/uploads/media/restore-test.bin | sha256sum' | cut -d' ' -f1)
 [ "$served" = "$expected_sha" ] || fail "API served media sha256 $served, expected $expected_sha"
+# Signing in also proves the restored user row (and its password hash) works.
+token=$(compose exec -T api wget -qO- --header 'Content-Type: application/json' \
+	--post-data "{\"username\":\"restoretester\",\"password\":\"$TEST_PASSWORD\"}" \
+	http://127.0.0.1:8080/api/v1/auth/login | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+[ -n "$token" ] || fail "could not sign in as the restored user"
+api_get() { compose exec -T api wget -qO- --header "Authorization: Bearer $token" "http://127.0.0.1:8080$1"; }
 # The row stores the filesystem path; the API returns the URL it serves it at.
-compose exec -T api wget -qO- "http://127.0.0.1:8080/api/v1/media/$media_id" | grep -q '"media_path":"/uploads/media/restore-test.bin"' ||
+api_get "/api/v1/media/$media_id" | grep -q '"media_path":"/uploads/media/restore-test.bin"' ||
 	fail "GET /api/v1/media/$media_id does not return the restored row"
-compose exec -T api wget -qO- "http://127.0.0.1:8080/api/v1/posts/$post_id" | grep -q '"Post 42"' ||
+api_get "/api/v1/posts/$post_id" | grep -q '"Post 42"' ||
 	fail "GET /api/v1/posts/$post_id does not return the restored post"
 
 printf '\nPASS: backup -> wipe -> restore -> verify\n'
