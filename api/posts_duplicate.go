@@ -187,6 +187,8 @@ func (server *Server) duplicatePost(c *gin.Context) {
 		return
 	}
 
+	server.recordPostActivity(c, db.ActivityCreated, post.ID, map[string]any{"post_type": post.PostType, "source_id": id})
+
 	c.JSON(http.StatusCreated, gin.H{"post": toPostResponse(post)})
 }
 

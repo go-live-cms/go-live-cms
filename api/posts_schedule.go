@@ -149,6 +149,7 @@ func (server *Server) schedulePost(c *gin.Context) {
 		return
 	}
 	server.requestLog(c).Info("post scheduled", "post_id", postID, "user_id", caller.ID, "publish_at", publishAt.Format(time.RFC3339))
+	server.recordPostActivity(c, db.ActivityScheduled, postID, map[string]any{"publish_at": publishAt.Format(time.RFC3339)})
 	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(post)})
 }
 
@@ -172,6 +173,7 @@ func (server *Server) cancelPostSchedule(c *gin.Context) {
 		return
 	}
 	server.requestLog(c).Info("post schedule cancelled", "post_id", postID)
+	server.recordPostActivity(c, db.ActivityUnscheduled, postID, nil)
 	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(post)})
 }
 

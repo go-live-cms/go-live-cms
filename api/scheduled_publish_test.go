@@ -216,6 +216,13 @@ func TestScheduledPublishPublishesDuePostsOnly(t *testing.T) {
 	var createdBy sql.NullInt64
 	require.NoError(t, conn.QueryRow(`SELECT created_by FROM post_versions WHERE post_id = $1`, due.ID).Scan(&createdBy))
 	require.Equal(t, editor.ID, createdBy.Int64)
+	// #324: "published" by whoever scheduled it, marked as scheduled.
+	var actor sql.NullInt64
+	var payload string
+	require.NoError(t, conn.QueryRow(`SELECT actor_id, payload::text FROM activity
+		WHERE object_type = 'post' AND object_id = $1 AND verb = 'published'`, due.ID).Scan(&actor, &payload))
+	require.Equal(t, editor.ID, actor.Int64)
+	require.JSONEq(t, `{"version_no": 1, "scheduled": true}`, payload)
 
 	got = reloadPost(t, store, later.ID)
 	require.Equal(t, postStatusScheduled, got.PostStatus)
