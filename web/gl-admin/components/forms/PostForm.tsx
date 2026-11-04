@@ -24,15 +24,8 @@ import EditorTopBar, { ArchiveIcon, OfflineIcon } from "@gl-admin/components/edi
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import ScheduleDialog from "@gl-admin/components/editor/ui/ScheduleDialog"
 import { useSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
-import {
-  formatScheduleTime,
-  SCHEDULED_UPDATE_EXCLUDES,
-  scheduledUpdateErrorMessage,
-  scheduledUpdateFailureMessage,
-  scheduledUpdateTitle,
-  scheduleFailureMessage,
-  zoneCity,
-} from "@gl-admin/lib/schedule"
+import { formatScheduleTime, scheduledUpdateErrorMessage, scheduleFailureMessage, zoneCity } from "@gl-admin/lib/schedule"
+import ScheduledUpdateNotice from "@gl-admin/components/editor/ui/ScheduledUpdateNotice"
 import { VersionPreview, versionTime } from "@gl-admin/components/editor/ui/RevisionsPanel"
 import Notice from "@gl-admin/components/ui/Notice"
 import Button from "@gl-admin/components/ui/Button"
@@ -1047,53 +1040,17 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
             : "An editor scheduled it. It's read-only until they cancel the schedule."}
         </Notice>
       )}
-      {updateScheduledId && scheduledUpdate?.failure && (
-        <Notice
-          tone="danger"
-          live="alert"
-          inline
-          className="post-editor__banner"
-          title="Scheduled update failed"
-          actions={
-            canPublish ? (
-              <>
-                <Button variant="secondary" size="sm" onClick={handlePublish} loading={isSubmitting} disabled={collabStatus !== "connected"}>
-                  Update now
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => void handleCancelScheduledUpdate()}>
-                  Cancel update
-                </Button>
-              </>
-            ) : undefined
-          }
-        >
-          {scheduledUpdateFailureMessage(scheduledUpdate.failure, dateSettings)}
-        </Notice>
-      )}
-      {updateScheduledId && scheduledUpdate && !scheduledUpdate.failure && (
-        <Notice
-          tone="info"
-          live="status"
-          inline
-          className="post-editor__banner"
-          title={scheduledUpdateTitle(scheduledUpdate.update_at, dateSettings)}
-          actions={
-            canPublish ? (
-              <>
-                <Button variant="secondary" size="sm" onClick={() => setScheduleUpdateOpen(true)} disabled={!collabEnabled}>
-                  Reschedule
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => void handleCancelScheduledUpdate()}>
-                  Cancel update
-                </Button>
-              </>
-            ) : undefined
-          }
-        >
-          {canPublish
-            ? `${zoneCity(dateSettings.timeZone)} time · ${SCHEDULED_UPDATE_EXCLUDES}; reschedule to include them.`
-            : `An editor scheduled the live post's update for this time; ${SCHEDULED_UPDATE_EXCLUDES}.`}
-        </Notice>
+      {updateScheduledId && scheduledUpdate && (
+        <ScheduledUpdateNotice
+          update={scheduledUpdate}
+          settings={dateSettings}
+          canPublish={canPublish}
+          onReschedule={() => setScheduleUpdateOpen(true)}
+          onCancel={() => void handleCancelScheduledUpdate()}
+          onUpdateNow={handlePublish}
+          connected={collabStatus === "connected"}
+          isUpdating={isSubmitting}
+        />
       )}
       {archived && mode === "edit" && (
         <div className="post-editor__archived" role="note">
