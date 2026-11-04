@@ -246,6 +246,7 @@ func (server *Server) publishPost(c *gin.Context) {
 		return
 	}
 
+	// publishPostByID recorded the "published" event (#324), for the bulk publish too.
 	c.JSON(http.StatusOK, PublishResponse{
 		VersionID:                version.VersionID,
 		VersionNo:                version.VersionNo,

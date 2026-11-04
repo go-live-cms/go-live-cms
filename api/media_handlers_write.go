@@ -195,6 +195,7 @@ func (server *Server) createMedia(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create media record"})
 			return
 		}
+		server.recordMediaActivity(c, db.ActivityUploaded, result.Media)
 		c.JSON(http.StatusCreated, gin.H{"media": server.mediaResponse(result.Media)})
 		return
 	}
@@ -206,6 +207,7 @@ func (server *Server) createMedia(c *gin.Context) {
 		return
 	}
 
+	server.recordMediaActivity(c, db.ActivityUploaded, media)
 	c.JSON(http.StatusCreated, gin.H{"media": server.mediaResponse(media)})
 }
 
@@ -331,6 +333,7 @@ func (server *Server) createBulkMediaItem(c *gin.Context, fileHeader *multipart.
 		}
 		return db.Medium{}, fmt.Sprintf("failed to create media record for %s: %v", fileHeader.Filename, err)
 	}
+	server.recordMediaActivity(c, db.ActivityUploaded, media)
 	return media, ""
 }
 
@@ -483,6 +486,7 @@ func (server *Server) replaceMedia(c *gin.Context) {
 		server.requestLog(c).Warn("media replaced but variants not moved into place", "media_id", id, "media_path", storedPath, "error", err)
 	}
 
+	server.recordMediaActivity(c, db.ActivityReplaced, updated)
 	c.JSON(http.StatusOK, gin.H{"media": server.mediaResponse(updated)})
 }
 
@@ -687,6 +691,8 @@ func (server *Server) deleteMedia(c *gin.Context) {
 	} else if err := removeMediaVariants(server.config.UploadPath, media.MediaPath); err != nil {
 		server.requestLog(c).Warn("media deleted but variants not removed", "media_id", id, "media_path", media.MediaPath, "error", err)
 	}
+
+	server.recordMediaActivity(c, db.ActivityDeleted, media)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "media deleted successfully",

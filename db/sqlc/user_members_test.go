@@ -199,7 +199,11 @@ func TestChangeUserRoleTx(t *testing.T) {
 
 	promoted, err := testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: user.ID, Role: "editor"})
 	require.NoError(t, err)
-	require.Equal(t, "editor", promoted.Role)
+	require.Equal(t, "editor", promoted.User.Role)
+	require.Equal(t, user.Role, promoted.PreviousRole)
+	same, err := testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: user.ID, Role: "editor"})
+	require.NoError(t, err)
+	require.Equal(t, "editor", same.PreviousRole)
 
 	_, err = testStore.ChangeUserRoleTx(ctx, SetUserRoleParams{ID: -1, Role: "editor"})
 	require.ErrorIs(t, err, sql.ErrNoRows)

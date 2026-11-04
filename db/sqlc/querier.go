@@ -87,6 +87,16 @@ type Querier interface {
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
+	// Activity log (#324, 000036). Written by the API's write paths (api/activity.go)
+	// and the collab store (StorePostCollabTx); read by GET /activity and Home.
+	// An actor that no longer exists is stored as NULL rather than failing on the
+	// foreign key (a member removed while their request was in flight).
+	CreateActivity(ctx context.Context, arg CreateActivityParams) (Activity, error)
+	// High-volume events ("edited", "updated"): at most one per actor, verb and object
+	// per window. 0 rows = one was recorded within the window (or the actor is gone).
+	// The collab store runs it under the post's row lock, so concurrent stores of one
+	// post can't both insert; elsewhere a race costs at most a duplicate.
+	CreateActivityThrottled(ctx context.Context, arg CreateActivityThrottledParams) (int64, error)
 	// variants is NULL for media without generated variants, stored as {}.
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
@@ -113,6 +123,9 @@ type Querier interface {
 	CreditOwnersOnEmptyBylines(ctx context.Context, postIds []int64) error
 	// First deactivate all themes
 	DeactivateAllThemes(ctx context.Context) error
+	// The retention prune (api/activity_retention.go): the oldest events before the
+	// cutoff, a batch at a time so one run never holds a long lock.
+	DeleteActivityBefore(ctx context.Context, arg DeleteActivityBeforeParams) (int64, error)
 	DeleteAllPostMeta(ctx context.Context, postID int64) error
 	DeleteAllThemeSettings(ctx context.Context, themeID int64) error
 	DeleteExtensionSetting(ctx context.Context, key string) error
@@ -264,6 +277,16 @@ type Querier interface {
 	InsertPublishedVersionFromScheduledUpdate(ctx context.Context, arg InsertPublishedVersionFromScheduledUpdateParams) (InsertPublishedVersionFromScheduledUpdateRow, error)
 	InvalidatePasswordResetTokensForUser(ctx context.Context, userID int64) error
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
+	// Newest first, paged by id (before_id: the last id of the previous page). What a
+	// viewer sees (the API passes its role):
+	//   - admins: everything;
+	//   - moderators (editors): every post and media event;
+	//   - everyone else: events on posts they own or that are published (canReadPost,
+	//     judged on the post as it is now, so a deleted post's events are hidden), and
+	//     on media they uploaded.
+	// Member, invitation and settings events are admin-only. Names and titles are
+	// joined now, never stored. object_type/object_id narrow it to one object.
+	ListActivity(ctx context.Context, arg ListActivityParams) ([]ListActivityRow, error)
 	// Older/newer and related posts for the public post page (#351).
 	// The published posts of @post_type just before ('previous', older) and just after
 	// ('next', newer) the current one by publish date (created_at), ties broken on id
@@ -274,12 +297,26 @@ type Querier interface {
 	// from auth_roles.go), matching @pattern by name or username (ILIKE, '' =
 	// everyone), for the Authors field's picker. Public fields only: contributors see it too.
 	ListAuthorCandidates(ctx context.Context, arg ListAuthorCandidatesParams) ([]ListAuthorCandidatesRow, error)
+	// Home's "Continue where you left off": the posts the user last worked on, newest
+	// first. "Worked on" = their created/edited/updated/version_restored/status_changed
+	// events. Those are throttled, so up to one window behind; when the user is also
+	// the collab server's last editor (post_ydoc_state.last_editor_id), the post's
+	// changed_at is the exact time. That alone never counts: a state-only store (a
+	// post merely opened) records its sender too. viewer_id 0 = may read any post,
+	// else only their own and published ones (canReadPost), as the post is now.
+	// Archived posts and posts in the trash (#327) are left out.
+	// A pending scheduled Update (#335), for the card's pill.
+	ListContinueEditing(ctx context.Context, arg ListContinueEditingParams) ([]ListContinueEditingRow, error)
 	// The posts list's Author filter (#327): everyone credited (user_posts) on a post of
 	// this type that the caller may read (viewer_id as in ListPosts, #393), trash aside.
 	// Public fields only. Kept short: a filter menu, not a member directory.
 	ListCreditedAuthors(ctx context.Context, arg ListCreditedAuthorsParams) ([]ListCreditedAuthorsRow, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
+	// Home's "Needs attention" (#147): scheduled posts whose last attempt failed (the
+	// scheduler keeps retrying; a success or a schedule change clears it). viewer_id
+	// 0 = every post, else the viewer's own.
+	ListFailedScheduledPosts(ctx context.Context, arg ListFailedScheduledPostsParams) ([]ListFailedScheduledPostsRow, error)
 	// Pages through image media by id for the variant backfill. With
 	// only_missing, rows that already have variants are skipped, and so are
 	// images whose known long edge is at most min_long_edge (they never get any;
@@ -335,6 +372,10 @@ type Querier interface {
 	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
 	// keep the 0001-01-01 sentinel and rank by creation time instead.
 	ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaParams) ([]ListPostsWithMetaRow, error)
+	// Home's "Needs attention" (#326): published posts whose working copy differs from
+	// the site, most recently changed first, with the collab server's last editor.
+	// total is the count before the limit.
+	ListPostsWithUnpublishedChanges(ctx context.Context, rowLimit int32) ([]ListPostsWithUnpublishedChangesRow, error)
 	// Every author with a page, for the sitemap; lastmod is their newest post's.
 	ListPublicAuthors(ctx context.Context, arg ListPublicAuthorsParams) ([]ListPublicAuthorsRow, error)
 	// Every term page with at least one post (its own or a descendant's), for the
@@ -525,11 +566,11 @@ type Querier interface {
 	// stamps it.
 	TouchUserLastActive(ctx context.Context, arg TouchUserLastActiveParams) (int64, error)
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
-	// Trash (#327, 000036). DELETE /posts/:id moves a post here; restore brings back
+	// Trash (#327, 000037). DELETE /posts/:id moves a post here; restore brings back
 	// the status it had; permanent delete (DeleteTrashedPostTx) removes the row. The
 	// API decides who may do which (auth_posts.go); these only change the state.
 	// Moves a post to the trash. No row: missing or already there. A scheduled post
-	// keeps its time and who scheduled it (000036's CHECK allows that), but its claim
+	// keeps its time and who scheduled it (000037's CHECK allows that), but its claim
 	// and retry state are cleared: a scheduler attempt already in flight is fenced off
 	// (LockScheduledPostClaim wants post_status 'scheduled' anyway). changed_at stays:
 	// trashing isn't an edit.

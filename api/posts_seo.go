@@ -148,6 +148,7 @@ func (server *Server) updatePostSEO(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update SEO settings"})
 		return
 	}
+	server.recordPostUpdated(c, post.ID)
 	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(post)})
 }
 

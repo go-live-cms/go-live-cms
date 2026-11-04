@@ -1,6 +1,6 @@
 // Package api — Trash and bulk actions for the posts list (#327)
 //
-// DELETE /posts/:id moves a post to the trash (post_status 'trash', 000036);
+// DELETE /posts/:id moves a post to the trash (post_status 'trash', 000037);
 // it used to delete the row. From the trash, POST /posts/:id/restore gives it
 // back the status it had, and DELETE /posts/:id/permanent (admins and editors)
 // is the old hard delete. POST /posts/bulk runs publish, trash, restore or
@@ -106,6 +106,7 @@ func (server *Server) trashPostByID(c *gin.Context, caller db.User, id int64) (d
 	}
 	// Open editors of this post close now (the access lookup answers 410).
 	server.recheckCollabDoc(requestIDFromContext(c), id)
+	server.recordPostActivity(c, db.ActivityTrashed, id, map[string]any{"post_type": post.PostType, "from_status": post.PostStatus})
 	return trashed, nil
 }
 
@@ -129,6 +130,7 @@ func (server *Server) restorePostByID(c *gin.Context, caller db.User, id int64) 
 		}
 		return db.Post{}, postActionFailed("failed to restore the post")
 	}
+	server.recordPostActivity(c, db.ActivityRestored, id, map[string]any{"post_type": restored.PostType, "post_status": restored.PostStatus})
 	return restored, nil
 }
 
@@ -154,6 +156,8 @@ func (server *Server) deletePostPermanentlyByID(c *gin.Context, caller db.User, 
 		}
 		return postActionFailed("failed to delete post")
 	}
+	// The post is gone, so the feed names it by its type (#324).
+	server.recordPostActivity(c, db.ActivityDeleted, id, map[string]any{"post_type": post.PostType})
 	return nil
 }
 
@@ -191,6 +195,7 @@ func (server *Server) publishPostByID(c *gin.Context, postID, userID int64, labe
 		}
 		return db.PublishPostTxResult{}, postActionFailed("failed to publish post")
 	}
+	server.recordPostActivity(c, db.ActivityPublished, postID, map[string]any{"version_no": version.VersionNo})
 	return version, nil
 }
 

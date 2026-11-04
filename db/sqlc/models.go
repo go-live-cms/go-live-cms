@@ -13,6 +13,16 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+type Activity struct {
+	ID         int64           `json:"id"`
+	ActorID    sql.NullInt64   `json:"actor_id"`
+	Verb       string          `json:"verb"`
+	ObjectType string          `json:"object_type"`
+	ObjectID   int64           `json:"object_id"`
+	Payload    json.RawMessage `json:"payload"`
+	CreatedAt  time.Time       `json:"created_at"`
+}
+
 type ExtensionSetting struct {
 	Key           string          `json:"key"`
 	Value         json.RawMessage `json:"value"`

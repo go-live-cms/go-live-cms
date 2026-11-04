@@ -68,6 +68,14 @@ func (server *Server) updateSettings(c *gin.Context) {
 		return
 	}
 
+	// Which settings, not their values (a title or tagline is site content).
+	server.recordRequestActivity(c, activityEvent{
+		Verb:       db.ActivitySettingsUpdated,
+		ObjectType: db.ActivityObjectSettings,
+		ObjectID:   int64(settings.ID),
+		Payload:    map[string]any{"fields": req.setFields()},
+	})
+
 	c.JSON(http.StatusOK, toSettingsResponse(settings, server.siteAddress()))
 }
 

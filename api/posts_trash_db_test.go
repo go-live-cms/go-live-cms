@@ -472,6 +472,24 @@ func bulkOutcomes(answer bulkAnswer) map[int64]string {
 	return out
 }
 
+// postActivity lists a post's activity events (#324) as "verb by actor", oldest
+// first.
+func postActivity(t *testing.T, conn *sql.DB, postID int64) []string {
+	t.Helper()
+	rows, err := conn.Query(`SELECT verb, COALESCE(actor_id, 0) FROM activity WHERE object_type = 'post' AND object_id = $1 ORDER BY id`, postID)
+	require.NoError(t, err)
+	defer rows.Close()
+	var events []string
+	for rows.Next() {
+		var verb string
+		var actor int64
+		require.NoError(t, rows.Scan(&verb, &actor))
+		events = append(events, fmt.Sprintf("%s by %d", verb, actor))
+	}
+	require.NoError(t, rows.Err())
+	return events
+}
+
 // TestBulkActionsMixedPermissions: each post is checked on its own, and one
 // failure doesn't stop the others.
 func TestBulkActionsMixedPermissions(t *testing.T) {
@@ -541,6 +559,19 @@ func TestBulkActionsMixedPermissions(t *testing.T) {
 	require.Equal(t, map[int64]string{ownPublished.ID: "ok:", ownDraft.ID: "409:not_in_trash"}, bulkOutcomes(answer))
 	_, err := store.GetPost(context.Background(), ownPublished.ID)
 	require.ErrorIs(t, err, sql.ErrNoRows)
+
+	// The activity log (#324) has what each post went through, by whom; the
+	// refused actions left nothing.
+	require.Equal(t, []string{
+		fmt.Sprintf("trashed by %d", contributor.ID),
+		fmt.Sprintf("restored by %d", contributor.ID),
+		fmt.Sprintf("published by %d", editor.ID),
+	}, postActivity(t, conn, ownDraft.ID))
+	require.Equal(t, []string{
+		fmt.Sprintf("trashed by %d", editor.ID),
+		fmt.Sprintf("deleted by %d", editor.ID),
+	}, postActivity(t, conn, ownPublished.ID))
+	require.Equal(t, []string{fmt.Sprintf("published by %d", editor.ID)}, postActivity(t, conn, othersDraft.ID))
 
 	// The request itself is validated.
 	for _, body := range []map[string]any{

@@ -66,7 +66,7 @@ FROM (
     FOR UPDATE OF d SKIP LOCKED
 ) due
 WHERE s.post_id = due.post_id
-RETURNING s.post_id, s.update_at, s.attempts, s.next_attempt_at AS claim;
+RETURNING s.post_id, s.update_at, s.attempts, s.next_attempt_at AS claim, s.scheduled_by;
 
 -- name: LockScheduledUpdateClaim :one
 -- Inside PublishScheduledUpdateTx, after the post's row lock: the pending update,

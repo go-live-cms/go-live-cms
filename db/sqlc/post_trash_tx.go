@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-// PostStatusTrash is a post in the trash (#327, 000036).
+// PostStatusTrash is a post in the trash (#327, 000037).
 const PostStatusTrash = "trash"
 
 // ErrPostTrashed: the post is in the trash, so it can't be published (or

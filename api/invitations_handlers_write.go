@@ -94,6 +94,9 @@ func (server *Server) createInvitation(c *gin.Context) {
 		return
 	}
 
+	// The invitation's id and role only: the email is personal data.
+	server.recordRequestActivity(c, activityEvent{Verb: db.ActivityInvited, ObjectType: db.ActivityObjectInvitation, ObjectID: inv.ID, Payload: map[string]any{"role": inv.Role}})
+
 	sent := server.emailInvitation(c, inv, token)
 	c.JSON(http.StatusCreated, gin.H{"invitation": toInvitationResponse(inv, now), "email_sent": sent})
 }
@@ -165,6 +168,7 @@ func (server *Server) revokeInvitation(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "invitation not found"})
 		return
 	}
+	server.recordRequestActivity(c, activityEvent{Verb: db.ActivityInvitationRevoked, ObjectType: db.ActivityObjectInvitation, ObjectID: id})
 	c.JSON(http.StatusOK, gin.H{"message": "invitation revoked"})
 }
 
@@ -242,6 +246,14 @@ func (server *Server) acceptInvite(c *gin.Context) {
 	}
 
 	server.requestLog(c).Info("invitation accepted", "invitation_id", result.Invitation.ID, "user_id", result.User.ID)
+	// Unauthenticated route: the new member is the actor.
+	server.recordRequestActivity(c, activityEvent{
+		ActorID:    result.User.ID,
+		Verb:       db.ActivityJoined,
+		ObjectType: db.ActivityObjectUser,
+		ObjectID:   result.User.ID,
+		Payload:    map[string]any{"role": result.User.Role, "invitation_id": result.Invitation.ID},
+	})
 	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusCreated, gin.H{"user": toPrivateUser(result.User)})
 }

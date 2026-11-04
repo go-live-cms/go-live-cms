@@ -237,6 +237,8 @@ func TestPutInternalPostCollab(t *testing.T) {
 						require.Equal(t, []byte{1, 2, 3}, arg.State)
 						require.Equal(t, "6f1c5f4e-9a59-4d55-9a4d-2b8f0d9e1a01", arg.Epoch.String())
 						require.Equal(t, sql.NullInt64{Int64: 3, Valid: true}, arg.LastEditorID)
+						// #324: the store records a throttled "edited" for the editor.
+						require.Equal(t, activityEditWindow, arg.EditActivityWindow)
 						require.Equal(t, sql.NullInt64{Int64: 4, Valid: true}, arg.BaseRevision)
 						require.Equal(t, []db.ContentMediaUse{{MediaID: 12, BlockID: "img", BlockType: "image"}}, arg.ContentMedia)
 
@@ -265,6 +267,7 @@ func TestPutInternalPostCollab(t *testing.T) {
 						require.Nil(t, arg.ContentMedia)
 						require.Equal(t, sql.NullInt64{Int64: 4, Valid: true}, arg.BaseRevision)
 						require.False(t, arg.LastEditorID.Valid)
+						require.Zero(t, arg.EditActivityWindow)
 						return db.StorePostCollabTxResult{BlockRevision: 4}, nil
 					})
 			},

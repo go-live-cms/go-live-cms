@@ -34,6 +34,8 @@ func (server *Server) unpublishPost(c *gin.Context) {
 		return
 	}
 
+	server.recordPostActivity(c, db.ActivityUnpublished, postID, nil)
+
 	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(post)})
 }
 
@@ -101,6 +103,10 @@ func (server *Server) restorePostVersionSettings(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore the version's settings"})
 		return
 	}
+
+	// The editor restores the blocks through Yjs first (they show up as an
+	// "edited" event); this is the restore itself.
+	server.recordPostActivity(c, db.ActivityVersionRestored, postID, map[string]any{"version_no": versionNo})
 
 	c.JSON(http.StatusOK, gin.H{"restored": true, "post": toPostResponse(post)})
 }

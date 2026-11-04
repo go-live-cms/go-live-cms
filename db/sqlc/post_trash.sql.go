@@ -150,11 +150,11 @@ WHERE id = $1
 RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status
 `
 
-// Trash (#327, 000036). DELETE /posts/:id moves a post here; restore brings back
+// Trash (#327, 000037). DELETE /posts/:id moves a post here; restore brings back
 // the status it had; permanent delete (DeleteTrashedPostTx) removes the row. The
 // API decides who may do which (auth_posts.go); these only change the state.
 // Moves a post to the trash. No row: missing or already there. A scheduled post
-// keeps its time and who scheduled it (000036's CHECK allows that), but its claim
+// keeps its time and who scheduled it (000037's CHECK allows that), but its claim
 // and retry state are cleared: a scheduler attempt already in flight is fenced off
 // (LockScheduledPostClaim wants post_status 'scheduled' anyway). changed_at stays:
 // trashing isn't an edit.
