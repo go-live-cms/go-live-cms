@@ -42,7 +42,7 @@ FROM (
     FOR UPDATE OF d SKIP LOCKED
 ) due
 WHERE s.post_id = due.post_id
-RETURNING s.post_id, s.update_at, s.attempts, s.next_attempt_at AS claim
+RETURNING s.post_id, s.update_at, s.attempts, s.next_attempt_at AS claim, s.scheduled_by
 `
 
 type ClaimDueScheduledUpdatesParams struct {
@@ -51,10 +51,11 @@ type ClaimDueScheduledUpdatesParams struct {
 }
 
 type ClaimDueScheduledUpdatesRow struct {
-	PostID   int64        `json:"post_id"`
-	UpdateAt time.Time    `json:"update_at"`
-	Attempts int32        `json:"attempts"`
-	Claim    sql.NullTime `json:"claim"`
+	PostID      int64         `json:"post_id"`
+	UpdateAt    time.Time     `json:"update_at"`
+	Attempts    int32         `json:"attempts"`
+	Claim       sql.NullTime  `json:"claim"`
+	ScheduledBy sql.NullInt64 `json:"scheduled_by"`
 }
 
 // ClaimDueScheduledPosts (#147) for updates: up to max_posts due rows, FOR UPDATE
@@ -75,6 +76,7 @@ func (q *Queries) ClaimDueScheduledUpdates(ctx context.Context, arg ClaimDueSche
 			&i.UpdateAt,
 			&i.Attempts,
 			&i.Claim,
+			&i.ScheduledBy,
 		); err != nil {
 			return nil, err
 		}

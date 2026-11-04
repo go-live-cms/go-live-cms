@@ -149,6 +149,7 @@ func (server *Server) scheduleUpdate(c *gin.Context) {
 		return
 	}
 	server.requestLog(c).Info("post update scheduled", "post_id", postID, "user_id", caller.ID, "update_at", updateAt.Format(time.RFC3339))
+	server.recordPostActivity(c, db.ActivityUpdateScheduled, postID, map[string]any{"update_at": updateAt.Format(time.RFC3339)})
 	c.JSON(http.StatusOK, gin.H{"scheduled_update": toScheduledUpdateResponse(row)})
 }
 
@@ -179,6 +180,7 @@ func (server *Server) cancelScheduledUpdate(c *gin.Context) {
 		return
 	}
 	server.requestLog(c).Info("scheduled update cancelled", "post_id", postID)
+	server.recordPostActivity(c, db.ActivityUpdateUnscheduled, postID, nil)
 	c.JSON(http.StatusOK, gin.H{"scheduled_update": nil})
 }
 

@@ -678,6 +678,11 @@ func TestAcceptInvitationAPI(t *testing.T) {
 		require.Equal(t, "editor", rsp.User.Role)
 		require.Equal(t, "invited@example.com", rsp.User.Email)
 		require.NotContains(t, recorder.Body.String(), "hashed_password")
+		// #324: the new member is the actor of their own "joined".
+		rec := activityOf(t, server)
+		require.Equal(t, []string{"joined user:77"}, rec.verbs())
+		require.Equal(t, int64(77), rec.events[0].ActorID.Int64)
+		require.JSONEq(t, `{"role":"editor","invitation_id":5}`, string(rec.events[0].Payload))
 	})
 
 	t.Run("used, expired or revoked link", func(t *testing.T) {

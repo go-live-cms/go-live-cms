@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -91,6 +92,9 @@ func (server *Server) createUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 		return
 	}
+
+	// An admin adding a member directly (invitations record "joined" instead).
+	server.recordRequestActivity(c, activityEvent{Verb: db.ActivityCreated, ObjectType: db.ActivityObjectUser, ObjectID: user.ID, Payload: map[string]any{"role": user.Role}})
 
 	c.JSON(http.StatusCreated, gin.H{
 		"user": toPrivateUser(user),
@@ -294,6 +298,12 @@ func (server *Server) updateUser(c *gin.Context) {
 	// Their open documents follow the new role now, not at the next re-check (#333).
 	if roleChanged(existingUser, result.User) {
 		server.recheckCollabUser(requestIDFromContext(c), id)
+		server.recordRequestActivity(c, activityEvent{
+			Verb:       db.ActivityRoleChanged,
+			ObjectType: db.ActivityObjectUser,
+			ObjectID:   id,
+			Payload:    map[string]any{"role": result.User.Role, "previous_role": existingUser.Role},
+		})
 	}
 
 	if passwordChanged {
@@ -379,7 +389,8 @@ func (server *Server) changeUserRole(c *gin.Context) {
 		return
 	}
 
-	user, err := server.store.ChangeUserRoleTx(c.Request.Context(), db.SetUserRoleParams{ID: id, Role: req.Role})
+	changed, err := server.store.ChangeUserRoleTx(c.Request.Context(), db.SetUserRoleParams{ID: id, Role: req.Role})
+	user := changed.User
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -393,6 +404,15 @@ func (server *Server) changeUserRole(c *gin.Context) {
 	}
 
 	server.recheckCollabUser(requestIDFromContext(c), id)
+	// Setting the role it already had changes nothing: no event.
+	if !strings.EqualFold(changed.PreviousRole, user.Role) {
+		server.recordRequestActivity(c, activityEvent{
+			Verb:       db.ActivityRoleChanged,
+			ObjectType: db.ActivityObjectUser,
+			ObjectID:   id,
+			Payload:    map[string]any{"role": user.Role, "previous_role": changed.PreviousRole},
+		})
+	}
 	c.JSON(http.StatusOK, gin.H{"user": toPrivateUser(user)})
 }
 
@@ -469,6 +489,12 @@ func (server *Server) deleteUser(c *gin.Context) {
 	logSecurityEvent(c, LogUserRemoved, "all", id, fmt.Sprintf("Removed by user %d; posts to user %d", caller.ID, *req.TransferToID))
 	server.recheckCollabUser(requestIDFromContext(c), id)
 	server.removeOldAvatar(c, id, result.AvatarURL)
+	server.recordRequestActivity(c, activityEvent{
+		Verb:       db.ActivityRemoved,
+		ObjectType: db.ActivityObjectUser,
+		ObjectID:   id,
+		Payload:    map[string]any{"transfer_to_id": *req.TransferToID, "posts_reassigned": result.PostsReassigned},
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"message":          "user deleted successfully",
 		"posts_reassigned": result.PostsReassigned,

@@ -16,6 +16,27 @@ type UpdateSettingsRequest struct {
 	EditorAllowedEmbeds     *[]string `json:"editor_allowed_embeds" binding:"omitempty,max=20,dive,max=32,embed_provider"`
 }
 
+// setFields lists the JSON names of the settings the request sets, in field
+// order: the activity log's "settings_updated" payload (#324).
+func (req UpdateSettingsRequest) setFields() []string {
+	fields := []string{}
+	add := func(set bool, name string) {
+		if set {
+			fields = append(fields, name)
+		}
+	}
+	add(req.PostURLStructure != nil, "post_url_structure")
+	add(req.SiteTitle != nil, "site_title")
+	add(req.PostsPerPage != nil, "posts_per_page")
+	add(req.SiteTagline != nil, "site_tagline")
+	add(req.SiteLanguage != nil, "site_language")
+	add(req.SiteTimezone != nil, "site_timezone")
+	add(req.DateFormat != nil, "date_format")
+	add(req.EditorMarkdownShortcuts != nil, "editor_markdown_shortcuts")
+	add(req.EditorAllowedEmbeds != nil, "editor_allowed_embeds")
+	return fields
+}
+
 // SettingsResponse represents the settings response
 type SettingsResponse struct {
 	ID                      int32    `json:"id"`

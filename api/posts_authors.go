@@ -155,6 +155,8 @@ func (server *Server) setPostAuthors(c *gin.Context) {
 		}
 		return
 	}
+	// A settings save like the others (#324): throttled "updated".
+	server.recordPostUpdated(c, id)
 	c.JSON(http.StatusOK, gin.H{"post": toPostResponse(result.Post), "authors": toPostBylineResponse(result.Authors)})
 }
 

@@ -159,6 +159,14 @@ func TestScheduledUpdatePublishesFrozenSnapshot(t *testing.T) {
 	require.Contains(t, string(settings), "Title "+scheduled, "the settings are the frozen ones")
 	require.Contains(t, string(got.PublishedSettings.RawMessage), "Title "+scheduled)
 	require.False(t, hasScheduledUpdate(t, conn, post.ID), "an applied update is done")
+	// #324: scheduling it and applying it are in the activity log, both the editor's.
+	events := objectEvents(t, conn, db.ActivityObjectPost, post.ID)
+	require.Equal(t, []string{"update_scheduled", "published"}, eventVerbs(events))
+	for _, e := range events {
+		require.Equal(t, editor.ID, e.Actor.Int64, e.Verb)
+	}
+	require.JSONEq(t, fmt.Sprintf(`{"update_at":%q}`, at.Format(time.RFC3339)), events[0].Payload)
+	require.JSONEq(t, `{"version_no":2,"scheduled":true,"scheduled_update":true}`, events[1].Payload)
 
 	// The public page shows it; the working copy keeps the later edit, still unpublished.
 	require.Contains(t, public(), scheduled)

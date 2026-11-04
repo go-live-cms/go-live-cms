@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -40,6 +41,11 @@ type StorePostCollabTxParams struct {
 	// revision guard.
 	BaseRevision sql.NullInt64
 	LastEditorID sql.NullInt64
+	// EditActivityWindow, when positive, records an "edited" activity event
+	// (#324) for LastEditorID on a store that writes BlockDoc, at most one per
+	// editor and post per window. It runs under the post's row lock, so two
+	// stores of one post can't both record one. 0 records nothing.
+	EditActivityWindow time.Duration
 }
 
 type StorePostCollabTxResult struct {
@@ -85,6 +91,20 @@ func (store *SQLStore) StorePostCollabTx(ctx context.Context, arg StorePostColla
 			}
 			if !strings.EqualFold(post.PostStatus, "published") {
 				if err := syncContentMedia(ctx, q, arg.PostID, arg.ContentMedia); err != nil {
+					return err
+				}
+			}
+			// Only real edits (a block_doc store) count; the collab server sends
+			// one only when the derived doc changed (#307).
+			if arg.EditActivityWindow > 0 && arg.LastEditorID.Valid {
+				if _, err := q.CreateActivityThrottled(ctx, CreateActivityThrottledParams{
+					Verb:          ActivityEdited,
+					ObjectType:    ActivityObjectPost,
+					ObjectID:      arg.PostID,
+					Payload:       json.RawMessage(`{}`),
+					ActorID:       arg.LastEditorID.Int64,
+					WindowSeconds: arg.EditActivityWindow.Seconds(),
+				}); err != nil {
 					return err
 				}
 			}

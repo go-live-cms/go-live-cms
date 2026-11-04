@@ -109,6 +109,8 @@ func (server *Server) setFeaturedImage(c *gin.Context) {
 		return
 	}
 
+	server.recordPostUpdated(c, postID)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "featured image set successfully",
 		"media":   server.mediaResponse(media),
@@ -254,6 +256,8 @@ func (server *Server) removeFeaturedImage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update featured image"})
 		return
 	}
+
+	server.recordPostUpdated(c, postID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "featured image removed successfully",
