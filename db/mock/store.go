@@ -155,10 +155,10 @@ func (mr *MockStoreMockRecorder) CancelPostScheduledUpdate(arg0, arg1 interface{
 }
 
 // ChangeUserRoleTx mocks base method.
-func (m *MockStore) ChangeUserRoleTx(arg0 context.Context, arg1 db.SetUserRoleParams) (db.User, error) {
+func (m *MockStore) ChangeUserRoleTx(arg0 context.Context, arg1 db.SetUserRoleParams) (db.ChangeUserRoleTxResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ChangeUserRoleTx", arg0, arg1)
-	ret0, _ := ret[0].(db.User)
+	ret0, _ := ret[0].(db.ChangeUserRoleTxResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -555,6 +555,36 @@ func (mr *MockStoreMockRecorder) CountTotalUsers(arg0 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTotalUsers", reflect.TypeOf((*MockStore)(nil).CountTotalUsers), arg0)
 }
 
+// CreateActivity mocks base method.
+func (m *MockStore) CreateActivity(arg0 context.Context, arg1 db.CreateActivityParams) (db.Activity, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateActivity", arg0, arg1)
+	ret0, _ := ret[0].(db.Activity)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateActivity indicates an expected call of CreateActivity.
+func (mr *MockStoreMockRecorder) CreateActivity(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateActivity", reflect.TypeOf((*MockStore)(nil).CreateActivity), arg0, arg1)
+}
+
+// CreateActivityThrottled mocks base method.
+func (m *MockStore) CreateActivityThrottled(arg0 context.Context, arg1 db.CreateActivityThrottledParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateActivityThrottled", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateActivityThrottled indicates an expected call of CreateActivityThrottled.
+func (mr *MockStoreMockRecorder) CreateActivityThrottled(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateActivityThrottled", reflect.TypeOf((*MockStore)(nil).CreateActivityThrottled), arg0, arg1)
+}
+
 // CreateMedia mocks base method.
 func (m *MockStore) CreateMedia(arg0 context.Context, arg1 db.CreateMediaParams) (db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -896,6 +926,21 @@ func (m *MockStore) DeactivateAllThemes(arg0 context.Context) error {
 func (mr *MockStoreMockRecorder) DeactivateAllThemes(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeactivateAllThemes", reflect.TypeOf((*MockStore)(nil).DeactivateAllThemes), arg0)
+}
+
+// DeleteActivityBefore mocks base method.
+func (m *MockStore) DeleteActivityBefore(arg0 context.Context, arg1 db.DeleteActivityBeforeParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteActivityBefore", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteActivityBefore indicates an expected call of DeleteActivityBefore.
+func (mr *MockStoreMockRecorder) DeleteActivityBefore(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteActivityBefore", reflect.TypeOf((*MockStore)(nil).DeleteActivityBefore), arg0, arg1)
 }
 
 // DeleteAllPostMeta mocks base method.
@@ -2401,6 +2446,21 @@ func (mr *MockStoreMockRecorder) ListActivePostTypes(arg0 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActivePostTypes", reflect.TypeOf((*MockStore)(nil).ListActivePostTypes), arg0)
 }
 
+// ListActivity mocks base method.
+func (m *MockStore) ListActivity(arg0 context.Context, arg1 db.ListActivityParams) ([]db.ListActivityRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListActivity", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListActivityRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListActivity indicates an expected call of ListActivity.
+func (mr *MockStoreMockRecorder) ListActivity(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActivity", reflect.TypeOf((*MockStore)(nil).ListActivity), arg0, arg1)
+}
+
 // ListAdjacentPosts mocks base method.
 func (m *MockStore) ListAdjacentPosts(arg0 context.Context, arg1 db.ListAdjacentPostsParams) ([]db.ListAdjacentPostsRow, error) {
 	m.ctrl.T.Helper()
@@ -2431,6 +2491,21 @@ func (mr *MockStoreMockRecorder) ListAuthorCandidates(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAuthorCandidates", reflect.TypeOf((*MockStore)(nil).ListAuthorCandidates), arg0, arg1)
 }
 
+// ListContinueEditing mocks base method.
+func (m *MockStore) ListContinueEditing(arg0 context.Context, arg1 db.ListContinueEditingParams) ([]db.ListContinueEditingRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListContinueEditing", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListContinueEditingRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListContinueEditing indicates an expected call of ListContinueEditing.
+func (mr *MockStoreMockRecorder) ListContinueEditing(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListContinueEditing", reflect.TypeOf((*MockStore)(nil).ListContinueEditing), arg0, arg1)
+}
+
 // ListExtensionSettings mocks base method.
 func (m *MockStore) ListExtensionSettings(arg0 context.Context) ([]db.ExtensionSetting, error) {
 	m.ctrl.T.Helper()
@@ -2459,6 +2534,21 @@ func (m *MockStore) ListExtensionSettingsByExtension(arg0 context.Context, arg1 
 func (mr *MockStoreMockRecorder) ListExtensionSettingsByExtension(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListExtensionSettingsByExtension", reflect.TypeOf((*MockStore)(nil).ListExtensionSettingsByExtension), arg0, arg1)
+}
+
+// ListFailedScheduledPosts mocks base method.
+func (m *MockStore) ListFailedScheduledPosts(arg0 context.Context, arg1 db.ListFailedScheduledPostsParams) ([]db.ListFailedScheduledPostsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListFailedScheduledPosts", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListFailedScheduledPostsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListFailedScheduledPosts indicates an expected call of ListFailedScheduledPosts.
+func (mr *MockStoreMockRecorder) ListFailedScheduledPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListFailedScheduledPosts", reflect.TypeOf((*MockStore)(nil).ListFailedScheduledPosts), arg0, arg1)
 }
 
 // ListImageMediaAfter mocks base method.
@@ -2669,6 +2759,21 @@ func (m *MockStore) ListPostsWithMeta(arg0 context.Context, arg1 db.ListPostsWit
 func (mr *MockStoreMockRecorder) ListPostsWithMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsWithMeta", reflect.TypeOf((*MockStore)(nil).ListPostsWithMeta), arg0, arg1)
+}
+
+// ListPostsWithUnpublishedChanges mocks base method.
+func (m *MockStore) ListPostsWithUnpublishedChanges(arg0 context.Context, arg1 int32) ([]db.ListPostsWithUnpublishedChangesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostsWithUnpublishedChanges", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostsWithUnpublishedChangesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostsWithUnpublishedChanges indicates an expected call of ListPostsWithUnpublishedChanges.
+func (mr *MockStoreMockRecorder) ListPostsWithUnpublishedChanges(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsWithUnpublishedChanges", reflect.TypeOf((*MockStore)(nil).ListPostsWithUnpublishedChanges), arg0, arg1)
 }
 
 // ListPublicAuthors mocks base method.

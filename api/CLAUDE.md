@@ -672,6 +672,52 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   before the time, two replicas, fencing, failure + retry, the loop, routes and roles) and
   `posts_unpublished_changes_test.go` (the detail field, public presenters).
 
+## Activity log and Home's feeds (#324, `000036`, `activity*.go`)
+
+- `activity` is **append-only**: actor (`actor_id`, NULL = the system or a member removed
+  since: the FK is `ON DELETE SET NULL`, the only UPDATE its trigger allows), `verb`,
+  `object_type` (post | media | user | invitation | settings) + `object_id` (no FK: a deleted
+  object's events stay), `payload` (a JSON object ≤ 1 KiB, CHECK) and `created_at`. The
+  vocabulary is `db/sqlc/activity.go`; a new feature adds its verb there.
+- **Privacy:** ids plus non-personal details only (a role, `version_no`, setting *names*,
+  `publish_at`, `mime_type`, counts). Never names, emails, titles, content, IPs or user agents:
+  `ListActivity` joins the current names and titles at read time.
+- **Writing:** `server.recordActivity` / `recordRequestActivity` / `recordPostActivity` /
+  `recordMediaActivity`, called by the handler **after** the change succeeded (the writes are
+  often several statements and most aren't one transaction, so an event never describes a
+  rolled-back change). A failed insert logs `activity_record_failed` (verb + ids) and never
+  fails the request. Recorded today: post created (also duplicate, `source_id`), `updated`
+  (PUT `/posts/:id`, `/seo`, `/authors`, the featured image), `status_changed` (PUT `/posts/:id` setting
+  another status: unthrottled), published (also by the scheduler, actor =
+  `publish_scheduled_by`, `scheduled: true`), unpublished, scheduled, unscheduled,
+  `update_scheduled`/`update_unscheduled` (#335; applying the update is "published" with
+  `scheduled_update: true`, credited to its `scheduled_by`), deleted,
+  `version_restored`; media uploaded (single, linked, bulk), replaced, deleted; invited,
+  `invitation_revoked`, joined (actor = the new member), user created (POST `/users`),
+  `role_changed` (both routes, `previous_role`; none when the role is unchanged:
+  `ChangeUserRoleTx` returns `PreviousRole`), removed;
+  `settings_updated` (`fields`). Trash/restore (#327) and extension settings aren't recorded yet.
+- **Throttle:** high-volume events ("updated", and "edited" from the collab store) are at most
+  one per member, verb and object per `activityEditWindow` (10 min, `CreateActivityThrottled`).
+  The collab one is written **inside** `StorePostCollabTx` (`EditActivityWindow`, only stores
+  that write `block_doc`, only with `last_editor_id`), under the post's row lock, so it's exact.
+- **Reads** (content roles): `GET /activity?limit=&before=&post_id=` (newest first, paged by
+  id, `next_before`). Visibility is in `ListActivity` alone: admins everything; editors every
+  post and media event; contributors events on posts they own or that are published (as the
+  post is now, `canReadPost`) and on their own media. Member, invitation and settings events are
+  admin-only. `GET /home/continue-editing` (the caller's created/edited/updated/
+  `version_restored`/`status_changed` events, readable posts only; being
+  `post_ydoc_state.last_editor_id` only sharpens the time to `changed_at`, never adds a post:
+  state-only stores, a post merely opened, record their sender too). `GET /home/needs-attention`: `failed_schedules` (contributors their own),
+  `unpublished_changes` + `missing_alt` (editors and admins; `null` otherwise),
+  `review_requests` (`[]`, the slot for #323).
+- **Retention:** `ACTIVITY_RETENTION` (default 2160h = 90 days, 0 = keep everything);
+  `RunActivityRetention` (main.go, every replica) prunes hourly in batches of 5000.
+- Handler tests on a mock store get an in-memory recorder (`newActivityWriter` is swapped in
+  `test_utils_test.go`; read it with `activityOf(t, server).verbs()`), so they don't expect the
+  inserts. `activity_test.go` covers the write paths, visibility, feeds and retention against
+  the real database.
+
 ## Theme blocks (#376)
 
 - Themes' custom blocks (`theme:<slug>/<block>`) are declared in TypeScript, so the web

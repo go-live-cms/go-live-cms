@@ -43,7 +43,7 @@ type Store interface {
 	DeletePostTx(ctx context.Context, id int64) error
 
 	RemoveUserTx(ctx context.Context, arg RemoveUserTxParams) (RemoveUserTxResult, error)
-	ChangeUserRoleTx(ctx context.Context, arg SetUserRoleParams) (User, error)
+	ChangeUserRoleTx(ctx context.Context, arg SetUserRoleParams) (ChangeUserRoleTxResult, error)
 	UpdateUserTx(ctx context.Context, arg UpdateUserTxParams) (UpdateUserTxResult, error)
 
 	CreateUserInvitationTx(ctx context.Context, arg CreateUserInvitationParams) (UserInvitation, error)
@@ -203,23 +203,40 @@ func (store *SQLStore) DeletePostTx(ctx context.Context, id int64) error {
 	return err
 }
 
+type ChangeUserRoleTxResult struct {
+	User User
+	// PreviousRole is the role before the change (equal to User.Role when the
+	// request set the role it already had).
+	PreviousRole string
+}
+
 // ChangeUserRoleTx sets a user's role (#333). Moving the role off admin first runs
 // guardLastAdmin, which locks every admin row until commit, so two demotions racing
 // for the last two admins can't both pass: the second re-reads the first's demotion
-// and gets ErrLastAdmin. sql.ErrNoRows if the user doesn't exist.
-func (store *SQLStore) ChangeUserRoleTx(ctx context.Context, arg SetUserRoleParams) (User, error) {
-	var user User
+// and gets ErrLastAdmin. The user's row is then locked and read, so PreviousRole is
+// the role this change replaced (the activity log, #324). sql.ErrNoRows if the
+// user doesn't exist.
+func (store *SQLStore) ChangeUserRoleTx(ctx context.Context, arg SetUserRoleParams) (ChangeUserRoleTxResult, error) {
+	var result ChangeUserRoleTxResult
 	err := store.execTx(ctx, func(q *Queries) error {
 		if !strings.EqualFold(arg.Role, "admin") {
 			if err := guardLastAdmin(ctx, q, arg.ID); err != nil {
 				return err
 			}
 		}
-		var err error
-		user, err = q.SetUserRole(ctx, arg)
+		// After guardLastAdmin, as in UpdateUserTx: admin rows first.
+		if err := q.LockUserForUpdate(ctx, arg.ID); err != nil {
+			return err
+		}
+		previous, err := q.GetUser(ctx, arg.ID)
+		if err != nil {
+			return err
+		}
+		result.PreviousRole = previous.Role
+		result.User, err = q.SetUserRole(ctx, arg)
 		return err
 	})
-	return user, err
+	return result, err
 }
 
 // ErrReassignToRemovedUser is returned by RemoveUserTx when the posts would go to

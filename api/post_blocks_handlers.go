@@ -268,6 +268,8 @@ func (server *Server) publishPost(c *gin.Context) {
 		return
 	}
 
+	server.recordPostActivity(c, db.ActivityPublished, postID, map[string]any{"version_no": version.VersionNo})
+
 	c.JSON(http.StatusOK, PublishResponse{
 		VersionID:                version.VersionID,
 		VersionNo:                version.VersionNo,

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,6 +28,62 @@ func newTestServer(t *testing.T, store db.Store) *Server {
 	require.NoError(t, err)
 
 	return server
+}
+
+// Servers on a mock store record activity in memory (activityOf), so handler
+// tests needn't expect the inserts; real-database tests write it.
+func init() {
+	storeWriter := newActivityWriter
+	newActivityWriter = func(store db.Store) activityWriter {
+		if _, ok := store.(*mockdb.MockStore); ok {
+			return &recordedActivity{}
+		}
+		return storeWriter(store)
+	}
+}
+
+// recordedActivity is the activity log of a server on a mock store.
+type recordedActivity struct {
+	mu        sync.Mutex
+	events    []db.CreateActivityParams
+	throttled []db.CreateActivityThrottledParams
+}
+
+func (r *recordedActivity) CreateActivity(_ context.Context, arg db.CreateActivityParams) (db.Activity, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, arg)
+	return db.Activity{ID: int64(len(r.events)), ActorID: arg.ActorID, Verb: arg.Verb, ObjectType: arg.ObjectType, ObjectID: arg.ObjectID, Payload: arg.Payload}, nil
+}
+
+func (r *recordedActivity) CreateActivityThrottled(_ context.Context, arg db.CreateActivityThrottledParams) (int64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.throttled = append(r.throttled, arg)
+	return 1, nil
+}
+
+// activityOf returns what a newTestServer on a mock store recorded.
+func activityOf(t *testing.T, server *Server) *recordedActivity {
+	t.Helper()
+	rec, ok := server.activity.(*recordedActivity)
+	require.True(t, ok, "server.activity is not a test recorder (newTestServer on a mock store)")
+	return rec
+}
+
+// verbs lists the recorded events as "verb object_type:object_id", throttled
+// ones marked with a trailing "~".
+func (r *recordedActivity) verbs() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := []string{}
+	for _, e := range r.events {
+		out = append(out, fmt.Sprintf("%s %s:%d", e.Verb, e.ObjectType, e.ObjectID))
+	}
+	for _, e := range r.throttled {
+		out = append(out, fmt.Sprintf("%s %s:%d~", e.Verb, e.ObjectType, e.ObjectID))
+	}
+	return out
 }
 
 // newTestConfig returns a test-mode config with fresh PASETO v4 keys and a

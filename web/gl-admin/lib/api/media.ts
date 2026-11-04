@@ -114,7 +114,8 @@ export interface MissingAltSummary {
   published_post_count: number
 }
 
-// For Home's "N images have no alt text · used in M published posts" (#324, #325).
+// GET /media/missing-alt (#325). Home reads the same count through
+// getNeedsAttention (lib/api/activity.ts, #324).
 export async function getMissingAltSummary(): Promise<MissingAltSummary> {
   const response = await apiCall("/media/missing-alt")
   return {

@@ -151,6 +151,9 @@ func (server *Server) putInternalPostCollab(c *gin.Context) {
 	}
 	if req.LastEditorID != nil {
 		arg.LastEditorID = sql.NullInt64{Int64: *req.LastEditorID, Valid: true}
+		// "Ana edited X" and Continue editing (#324): throttled, in the store's
+		// transaction.
+		arg.EditActivityWindow = server.activityEditWindow
 	}
 	if req.BaseRevision != nil {
 		arg.BaseRevision = sql.NullInt64{Int64: *req.BaseRevision, Valid: true}

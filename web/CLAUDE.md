@@ -228,7 +228,16 @@ are the most fragile part of the codebase. **Before editing anything under
   library's filter is `?alt=missing`. `AltTextField` (panel and detail page) holds the alt
   text and "Decorative image"; an empty alt saves as empty (name and description still
   can't be cleared). The public `ImageBlock` renders `alt=""` when `doc.media[id].decorative`.
-  Home's count is `getMissingAltSummary()` (`GET /media/missing-alt`), for #324.
+  Home reads the count through `GET /home/needs-attention` (#324).
+- **Home's feeds (#324):** "Continue where you left off" is `getContinueEditing` (the posts
+  you last worked on, from the API's activity log: "Edited 2 hours ago" is when *you* did),
+  "Needs attention" is `getNeedsAttention` (failed scheduled publishes; for editors, images
+  without alt text and posts with unpublished changes; review requests #323 later) and
+  "Activity" is `getActivity` (8 a page, "Show more"), all in `lib/api/activity.ts`. How an
+  event or item reads is `lib/activityFeed.ts` (`describeActivity`, `attentionItems`, tested):
+  current names and titles from the API, "You" for yourself, "Someone" without an actor, an
+  unknown verb shown as is. Needs attention and Activity load and fail on their own. Presence
+  on the recent cards (who's editing now) is still hidden.
 - **Account pages (#344):** `/login`, `/forgot-password`, `/reset-password` and
   `/accept-invite` are Astro pages (no React) on `src/layouts/AccountPage.astro`, styled by
   `pages/login.scss` with the #338 class names (`gl-input`, `gl-button`, `gl-notice`,

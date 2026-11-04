@@ -165,6 +165,7 @@ func TestDeleteMediaRemovesVariants(t *testing.T) {
 	require.True(t, os.IsNotExist(err))
 	_, err = os.Stat(variantDirFor(media.MediaPath))
 	require.True(t, os.IsNotExist(err), "variants are deleted with the original")
+	require.Equal(t, []string{fmt.Sprintf("deleted media:%d", media.ID)}, activityOf(t, server).verbs())
 }
 
 func TestCreateMediaGeneratesVariants(t *testing.T) {
@@ -198,6 +199,11 @@ func TestCreateMediaGeneratesVariants(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
 	require.Contains(t, rsp.Media.Variants, "thumb")
 	require.Nil(t, rsp.Media.FocalPoint)
+	// #324: the upload is in the activity log, with its kind and not its name.
+	rec := activityOf(t, server)
+	require.Equal(t, []string{"uploaded media:9"}, rec.verbs())
+	require.Equal(t, editor.ID, rec.events[0].ActorID.Int64)
+	require.JSONEq(t, `{"mime_type":"image/jpeg"}`, string(rec.events[0].Payload))
 }
 
 func TestFocalPointUpdate(t *testing.T) {

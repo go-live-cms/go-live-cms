@@ -72,6 +72,11 @@ type Server struct {
 	// mediaReplaceMu serializes POST /media/:id/replace, so two replaces of
 	// one row can't interleave their file swaps and database writes.
 	mediaReplaceMu sync.Mutex
+
+	// Activity log (activity.go, #324): where events are written (the store;
+	// handler tests on a mock store get a recorder) and the edit throttle.
+	activity           activityWriter
+	activityEditWindow time.Duration
 }
 
 // NewServer constructs the Server, initializes a PASETO v4 maker from config,
@@ -176,6 +181,9 @@ func NewServer(config util.Config, store db.Store) (*Server, error) {
 		pingDB: func(ctx context.Context) error { return store.Ping(ctx) },
 
 		maxUploadBytes: maxUploadBytes,
+
+		activity:           newActivityWriter(store),
+		activityEditWindow: activityEditWindow,
 	}
 	server.runInBackground = server.runDetached
 
@@ -441,6 +449,9 @@ func (server *Server) setupRoutes() error {
 
 	// Collaboration (WebSocket) ticket routes (see collab_routes.go)
 	server.registerCollabRoutes(v1)
+
+	// Activity feed and Home's lists (see activity_routes.go, #324)
+	server.registerActivityRoutes(v1)
 
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)

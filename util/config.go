@@ -245,6 +245,11 @@ type Config struct {
 	// API writes it at most once per interval per user, never on every request.
 	// LoadConfig defaults it to 5m; 0 turns tracking off (a zero Config: tests).
 	LastActiveInterval time.Duration `mapstructure:"LAST_ACTIVE_INTERVAL"`
+
+	// ActivityRetention is how long the activity log (#324, api/activity.go)
+	// keeps an event; older ones are pruned hourly. LoadConfig defaults it to
+	// 2160h (90 days); 0 keeps every event (a zero Config: tests).
+	ActivityRetention time.Duration `mapstructure:"ACTIVITY_RETENTION"`
 }
 
 // LoadConfig reads app.env (optional) and environment variables into Config.
@@ -331,6 +336,9 @@ func LoadConfig(path string) (config Config, err error) {
 
 	// Members' "last active" (#333): written at most once per interval per user.
 	viper.SetDefault("LAST_ACTIVE_INTERVAL", "5m")
+
+	// Activity log (#324): Home reads the last few weeks; keep 90 days of history.
+	viper.SetDefault("ACTIVITY_RETENTION", "2160h")
 
 	// Email (#148). No SMTP defaults: release mode must be configured.
 	viper.SetDefault("MAIL_DRIVER", "")
@@ -420,6 +428,10 @@ func LoadConfig(path string) (config Config, err error) {
 
 	if config.ScheduledPublishInterval < 0 {
 		return config, fmt.Errorf("SCHEDULED_PUBLISH_INTERVAL must be 0 (off) or a positive duration")
+	}
+
+	if config.ActivityRetention < 0 {
+		return config, fmt.Errorf("ACTIVITY_RETENTION must be 0 (keep everything) or a positive duration")
 	}
 
 	if _, err = config.PasetoPreviousPublicKeys(); err != nil {

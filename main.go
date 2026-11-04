@@ -68,6 +68,9 @@ func main() {
 		server.RunScheduledPublishing(ctx, config.ScheduledPublishInterval)
 	}()
 
+	// Activity log retention (#324): every replica prunes; deleting is idempotent.
+	go server.RunActivityRetention(ctx, config.ActivityRetention)
+
 	// Server-to-server routes (collab WS role lookup, metrics) run on their own
 	// listener, which must not be published to the internet.
 	go func() {
