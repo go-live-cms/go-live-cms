@@ -87,7 +87,7 @@ func (server *Server) uploadAvatar(c *gin.Context) {
 	}
 	previous, err := server.store.SetUserAvatar(c.Request.Context(), db.SetUserAvatarParams{UserID: caller.ID, AvatarUrl: url})
 	if err != nil {
-		removeFileQuietly(stored)
+		_ = os.Remove(stored) // nothing points at it
 		server.respondAvatarStoreError(c, caller.ID, err)
 		return
 	}
@@ -157,9 +157,4 @@ func (server *Server) removeOldAvatar(c *gin.Context, userID int64, previous str
 	if err := removeAvatarFile(server.config.UploadPath, previous); err != nil {
 		server.requestLog(c).Warn("old avatar file not removed", "user_id", userID, "error", err)
 	}
-}
-
-// removeFileQuietly deletes a file this request wrote and no longer needs.
-func removeFileQuietly(file string) {
-	_ = os.Remove(file)
 }

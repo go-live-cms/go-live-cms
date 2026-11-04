@@ -489,7 +489,7 @@ export default function Profile() {
           </Notice>
         )}
         <div>
-          <Button variant="secondary" size="lg" onClick={handleSignOutOthers} loading={signingOut} disabled={otherDevices === 0}>
+          <Button variant="secondary" size="lg" onClick={handleSignOutOthers} loading={signingOut}>
             Sign out of other devices
           </Button>
         </div>

@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"strings"
 	"sync"
 	"testing"
@@ -77,9 +78,9 @@ func TestConfirmEmailChangeTx(t *testing.T) {
 	require.NoError(t, err)
 
 	older := randomTokenHash(t)
-	_, err = testStore.RequestEmailChangeTx(ctx, CreateEmailChangeTokenParams{UserID: user.ID, NewEmail: uniqueTestEmail("older"), TokenHash: older, ExpiresAt: time.Now().Add(time.Hour)})
+	_, err = testStore.RequestEmailChangeTx(ctx, RequestEmailChangeTxParams{CreateEmailChangeTokenParams: CreateEmailChangeTokenParams{UserID: user.ID, NewEmail: uniqueTestEmail("older"), TokenHash: older, ExpiresAt: time.Now().Add(time.Hour)}, PasswordChangedAt: user.PasswordChangedAt})
 	require.NoError(t, err)
-	_, err = testStore.RequestEmailChangeTx(ctx, CreateEmailChangeTokenParams{UserID: user.ID, NewEmail: newEmail, TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour)})
+	_, err = testStore.RequestEmailChangeTx(ctx, RequestEmailChangeTxParams{CreateEmailChangeTokenParams: CreateEmailChangeTokenParams{UserID: user.ID, NewEmail: newEmail, TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour)}, PasswordChangedAt: user.PasswordChangedAt})
 	require.NoError(t, err)
 
 	_, err = testStore.ConfirmEmailChangeTx(ctx, older)
@@ -102,7 +103,7 @@ func TestConfirmEmailChangeTx(t *testing.T) {
 	// Taken meanwhile: nothing changes, and the link isn't spent.
 	other := createRandomUser(t)
 	taken := randomTokenHash(t)
-	_, err = testStore.RequestEmailChangeTx(ctx, CreateEmailChangeTokenParams{UserID: user.ID, NewEmail: other.Email, TokenHash: taken, ExpiresAt: time.Now().Add(time.Hour)})
+	_, err = testStore.RequestEmailChangeTx(ctx, RequestEmailChangeTxParams{CreateEmailChangeTokenParams: CreateEmailChangeTokenParams{UserID: user.ID, NewEmail: other.Email, TokenHash: taken, ExpiresAt: time.Now().Add(time.Hour)}, PasswordChangedAt: user.PasswordChangedAt})
 	require.NoError(t, err)
 	_, err = testStore.ConfirmEmailChangeTx(ctx, taken)
 	require.ErrorIs(t, err, ErrEmailTaken)
@@ -143,4 +144,46 @@ func TestSignOutOtherSessionsTx(t *testing.T) {
 	require.NoError(t, testQueries.BlockSession(ctx, keep.ID))
 	_, err = testStore.SignOutOtherSessionsTx(ctx, SignOutOtherSessionsTxParams{UserID: user.ID, RefreshTokenHash: keep.RefreshTokenHash})
 	require.ErrorIs(t, err, ErrSessionNotActive, "a blocked session")
+}
+
+func TestRequestEmailChangeTxRefusesAfterAPasswordChange(t *testing.T) {
+	ctx := context.Background()
+	user := createRandomUser(t)
+	checked := user.PasswordChangedAt // what the request's password check saw
+
+	_, err := testQueries.SetUserPassword(ctx, SetUserPasswordParams{ID: user.ID, HashedPassword: "new-hash", PasswordChangedAt: time.Now()})
+	require.NoError(t, err)
+
+	hash := randomTokenHash(t)
+	_, err = testStore.RequestEmailChangeTx(ctx, RequestEmailChangeTxParams{
+		CreateEmailChangeTokenParams: CreateEmailChangeTokenParams{UserID: user.ID, NewEmail: uniqueTestEmail("late"), TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour)},
+		PasswordChangedAt:            checked,
+	})
+	require.ErrorIs(t, err, ErrPasswordChangedSince)
+	_, err = testQueries.GetValidEmailChangeTokenByHash(ctx, hash)
+	require.ErrorIs(t, err, sql.ErrNoRows, "no link was stored")
+}
+
+func TestSignOutOtherSessionsTxFollowsThisBrowsersRotation(t *testing.T) {
+	ctx := context.Background()
+	user := createRandomUser(t)
+	old := createRandomSession(t, user)
+	other := createRandomSession(t, user)
+	// This browser refreshed after sending its (old) cookie: old is rotated into next.
+	next := createRandomSession(t, user)
+	_, err := testQueries.RotateToNewSession(ctx, RotateToNewSessionParams{ID: old.ID, ReplacedBy: uuid.NullUUID{UUID: next.ID, Valid: true}})
+	require.NoError(t, err)
+
+	result, err := testStore.SignOutOtherSessionsTx(ctx, SignOutOtherSessionsTxParams{UserID: user.ID, RefreshTokenHash: old.RefreshTokenHash})
+	require.NoError(t, err)
+	require.Equal(t, next.ID, result.KeptSessionID, "the successor stays signed in")
+	require.Equal(t, int64(1), result.Blocked)
+	got, err := testQueries.GetSession(ctx, other.ID)
+	require.NoError(t, err)
+	require.True(t, got.IsBlocked)
+
+	// A cookie whose session was logged out (blocked, never rotated) isn't followed.
+	require.NoError(t, testQueries.BlockSession(ctx, next.ID))
+	_, err = testStore.SignOutOtherSessionsTx(ctx, SignOutOtherSessionsTxParams{UserID: user.ID, RefreshTokenHash: next.RefreshTokenHash})
+	require.ErrorIs(t, err, ErrSessionNotActive)
 }

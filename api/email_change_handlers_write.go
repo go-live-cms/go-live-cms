@@ -107,12 +107,20 @@ func (server *Server) sendEmailChangeLink(logger *slog.Logger, user db.User, new
 		logger.Error("email change: token generation failed", "error", err)
 		return
 	}
-	if _, err := server.store.RequestEmailChangeTx(ctx, db.CreateEmailChangeTokenParams{
-		UserID:    user.ID,
-		NewEmail:  newEmail,
-		TokenHash: hash,
-		ExpiresAt: time.Now().Add(emailChangeLinkTTL),
+	if _, err := server.store.RequestEmailChangeTx(ctx, db.RequestEmailChangeTxParams{
+		CreateEmailChangeTokenParams: db.CreateEmailChangeTokenParams{
+			UserID:    user.ID,
+			NewEmail:  newEmail,
+			TokenHash: hash,
+			ExpiresAt: time.Now().Add(emailChangeLinkTTL),
+		},
+		// The password this request proved: if it changed meanwhile, no link.
+		PasswordChangedAt: user.PasswordChangedAt,
 	}); err != nil {
+		if errors.Is(err, db.ErrPasswordChangedSince) {
+			logger.Info("email change link not sent: the password changed after the request", "user_id", user.ID)
+			return
+		}
 		logger.Error("email change: storing the token failed", "user_id", user.ID, "error", err)
 		return
 	}

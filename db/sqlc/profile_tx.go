@@ -82,17 +82,43 @@ func (store *SQLStore) ConfirmEmailChangeTx(ctx context.Context, tokenHash []byt
 	return result, err
 }
 
+// ErrPasswordChangedSince is returned by RequestEmailChangeTx when the user's
+// password changed after the request's password check.
+var ErrPasswordChangedSince = errors.New("password changed since the request was checked")
+
+type RequestEmailChangeTxParams struct {
+	CreateEmailChangeTokenParams
+	// The password_changed_at the request's current-password check saw. A
+	// different one now means the password it proved is no longer the account's.
+	PasswordChangedAt time.Time
+}
+
 // RequestEmailChangeTx stores a new email change token for a user, ending every
 // earlier pending link of theirs, so only the latest request can be confirmed.
-func (store *SQLStore) RequestEmailChangeTx(ctx context.Context, arg CreateEmailChangeTokenParams) (EmailChangeToken, error) {
+//
+// It locks the user row first (the order UpdateUserTx and ResetPasswordTx use:
+// user, then tokens) and refuses with ErrPasswordChangedSince when the password
+// changed after the request checked it. Without that, a request racing a password
+// change could store its link after the change had burned pending ones, and the
+// old password would still buy an email change.
+func (store *SQLStore) RequestEmailChangeTx(ctx context.Context, arg RequestEmailChangeTxParams) (EmailChangeToken, error) {
 	var token EmailChangeToken
 
 	err := store.execTx(ctx, func(q *Queries) error {
+		if err := q.LockUserForUpdate(ctx, arg.UserID); err != nil {
+			return err
+		}
+		user, err := q.GetUser(ctx, arg.UserID)
+		if err != nil {
+			return err
+		}
+		if !user.PasswordChangedAt.Equal(arg.PasswordChangedAt) {
+			return ErrPasswordChangedSince
+		}
 		if err := q.InvalidateEmailChangeTokensForUser(ctx, arg.UserID); err != nil {
 			return err
 		}
-		var err error
-		token, err = q.CreateEmailChangeToken(ctx, arg)
+		token, err = q.CreateEmailChangeToken(ctx, arg.CreateEmailChangeTokenParams)
 		return err
 	})
 
@@ -126,14 +152,11 @@ func (store *SQLStore) SignOutOtherSessionsTx(ctx context.Context, arg SignOutOt
 			}
 			return err
 		}
-		session, err := q.GetSessionByRefreshTokenHash(ctx, arg.RefreshTokenHash)
+		session, err := keptSession(ctx, q, arg.RefreshTokenHash)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return ErrSessionNotActive
-			}
 			return err
 		}
-		if session.UserID != arg.UserID || !session.ExpiresAt.After(time.Now()) {
+		if session.UserID != arg.UserID || session.IsBlocked || !session.ExpiresAt.After(time.Now()) {
 			return ErrSessionNotActive
 		}
 		blocked, err := q.BlockOtherSessionsForUser(ctx, BlockOtherSessionsForUserParams{
@@ -148,4 +171,22 @@ func (store *SQLStore) SignOutOtherSessionsTx(ctx context.Context, arg SignOutOt
 	})
 
 	return result, err
+}
+
+// keptSessionHops bounds how far keptSession follows rotations.
+const keptSessionHops = 4
+
+// keptSession is the session a refresh token names, or, when that one was rotated
+// meanwhile (this browser refreshed while the request was on its way, so it sent
+// the cookie it had), the session that replaced it. A token that was blocked
+// without being rotated (logout, revoke) is not followed: ErrSessionNotActive.
+func keptSession(ctx context.Context, q *Queries, refreshTokenHash []byte) (Session, error) {
+	session, err := q.GetAnySessionByRefreshTokenHash(ctx, refreshTokenHash)
+	for hop := 0; err == nil && session.IsBlocked && session.ReplacedBy.Valid && hop < keptSessionHops; hop++ {
+		session, err = q.GetSession(ctx, session.ReplacedBy.UUID)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return Session{}, ErrSessionNotActive
+	}
+	return session, err
 }

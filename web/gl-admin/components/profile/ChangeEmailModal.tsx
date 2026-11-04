@@ -86,6 +86,7 @@ export default function ChangeEmailModal({ isOpen, currentEmail, onClose, onSent
           type="email"
           name="new_email"
           autoComplete="email"
+          inputMode="email"
           unmasked
           value={fields.new_email}
           onChange={(e: any) => setFields((prev) => ({ ...prev, new_email: inputValue(e) }))}

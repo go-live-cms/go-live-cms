@@ -6,8 +6,8 @@ import FocalPointPicker from "@gl-admin/components/media/FocalPointPicker"
 import { uploadAvatar } from "@gl-admin/lib/api/users"
 import type { User } from "@gl-admin/lib/api/types"
 import type { FocalPoint } from "@gl-admin/lib/types"
-import { focalObjectPosition } from "@gl-admin/lib/mediaLibrary"
-import { describeAvatarError } from "@gl-admin/lib/profile"
+
+import { avatarCropPosition, describeAvatarError } from "@gl-admin/lib/profile"
 
 interface AvatarPhotoModalProps {
   // The picked file; null keeps the dialog closed.
@@ -28,10 +28,13 @@ export default function AvatarPhotoModal({ file, onClose, onSaved }: AvatarPhoto
   // An object URL for the preview, made and revoked in the same effect (StrictMode
   // runs it twice in dev), so it never points at a revoked URL.
   const [preview, setPreview] = useState<string | null>(null)
+  // The picked image's size, once the preview loads: the crop depends on its shape.
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   useEffect(() => {
     setFocal(CENTER)
     setError(null)
     setSaving(false)
+    setSize(null)
     if (!file) {
       setPreview(null)
       return
@@ -76,7 +79,13 @@ export default function AvatarPhotoModal({ file, onClose, onSaved }: AvatarPhoto
       <div className="gl-profile-photo">
         <FocalPointPicker src={preview} alt="Your new photo" value={focal} onChange={setFocal} className="gl-profile-photo__picker" />
         <figure className="gl-profile-photo__preview">
-          <img src={preview} alt="" style={{ objectPosition: focalObjectPosition(focal) }} data-testid="avatar-preview" />
+          <img
+            src={preview}
+            alt=""
+            style={{ objectPosition: size ? avatarCropPosition(size.width, size.height, focal) : "50% 50%" }}
+            onLoad={(e) => setSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
+            data-testid="avatar-preview"
+          />
           <figcaption>Preview</figcaption>
         </figure>
       </div>

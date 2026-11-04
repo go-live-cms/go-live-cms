@@ -217,7 +217,7 @@ describe("change email", () => {
 
     expect(usersApi.requestEmailChange).toHaveBeenCalledWith("secret-secret", "new@golive.dev")
     expect(dialog()).toBeNull()
-    expect(container.textContent).toContain("We sent a confirmation link to new@golive.dev")
+    expect(container.textContent).toContain("If new@golive.dev can be used, we've sent it a confirmation link.")
     expect(container.textContent).toContain("expires in 24 hours")
     // Not changed yet.
     expect(container.querySelector(".gl-profile__email-value")!.textContent).toBe("luan@golive.dev")
@@ -233,7 +233,8 @@ describe("other devices", () => {
     expect(sessionsApi.signOutOtherDevices).toHaveBeenCalled()
     expect(container.textContent).toContain("Signed out of 2 other devices.")
     expect(container.textContent).toContain("You're not signed in anywhere else.")
-    expect(button("Sign out of other devices")!.disabled).toBe(true)
+    // Still offered: the count is from page load, and someone may have signed in since.
+    expect(button("Sign out of other devices")!.disabled).toBe(false)
   })
 
   it("explains an ended session", async () => {
@@ -251,10 +252,10 @@ describe("other devices", () => {
     expect(button("Sign out of other devices")!.disabled).toBe(false)
   })
 
-  it("with nobody else signed in, there's nothing to do", async () => {
+  it("with nobody else signed in, says so", async () => {
     sessionsApi.getMyDevices.mockResolvedValue({ sessions: [], other_count: 0 })
     await renderProfile()
     expect(container.textContent).toContain("You're not signed in anywhere else.")
-    expect(button("Sign out of other devices")!.disabled).toBe(true)
+    expect(button("Sign out of other devices")!.disabled).toBe(false)
   })
 })

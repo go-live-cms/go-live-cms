@@ -231,6 +231,22 @@ export const AVATAR_MAX_BYTES = 5 * 1024 * 1024
 export const AVATAR_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const
 export const AVATAR_ACCEPT = AVATAR_TYPES.join(",")
 
+// The CSS object-position that shows, in a square box with object-fit: cover, the
+// square the API keeps (avatarCrop in api/avatar_utils.go): the largest one,
+// centered on the focal point and kept inside the image. Plain `focal %` would
+// align the image's focal point with the box's same point instead, which isn't
+// that crop unless the point is the center. width/height: the image as displayed.
+export function avatarCropPosition(width: number, height: number, focal: { x: number; y: number } | null): string {
+  const f = focal ?? { x: 0.5, y: 0.5 }
+  const side = Math.min(width, height)
+  const axis = (length: number, point: number) => {
+    if (!(length > side)) return 50
+    const start = Math.min(Math.max(point * length - side / 2, 0), length - side)
+    return Math.round((start / (length - side)) * 1000) / 10
+  }
+  return `${axis(width, f.x)}% ${axis(height, f.y)}%`
+}
+
 export function validateAvatarFile(file: { type: string; size: number }): string | null {
   if (!(AVATAR_TYPES as readonly string[]).includes(file.type)) return "Use a JPEG, PNG, GIF or WebP image."
   if (file.size > AVATAR_MAX_BYTES) return "That image is too large. Use one under 5 MB."
@@ -268,13 +284,13 @@ export function validateEmailChange(fields: EmailChangeFields, currentEmail: str
   return null
 }
 
-// What the profile says once a link was sent. The API gives the same answer
-// whether or not another account has the address (no enumeration), so this
-// never claims more than that a link is on its way.
+// What the profile says once the request went through. The API gives the same
+// answer whether or not another account has the address (no enumeration), and a
+// taken address gets no email, so this says "if" like the forgot-password page.
 export function emailChangeSentMessage(newEmail: string, expiresInSeconds?: number): string {
   const hours = expiresInSeconds ? Math.round(expiresInSeconds / 3600) : 24
   const expiry = hours === 1 ? "1 hour" : `${hours} hours`
-  return `We sent a confirmation link to ${newEmail.trim()}. Your email changes once you open it; the link expires in ${expiry}.`
+  return `If ${newEmail.trim()} can be used, we've sent it a confirmation link. Your email changes once you open it; the link expires in ${expiry}.`
 }
 
 export function describeEmailChangeError(err: unknown): string {

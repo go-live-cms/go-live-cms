@@ -3130,7 +3130,7 @@ func (mr *MockStoreMockRecorder) ReplaceMenuItemsTx(arg0, arg1 interface{}) *gom
 }
 
 // RequestEmailChangeTx mocks base method.
-func (m *MockStore) RequestEmailChangeTx(arg0 context.Context, arg1 db.CreateEmailChangeTokenParams) (db.EmailChangeToken, error) {
+func (m *MockStore) RequestEmailChangeTx(arg0 context.Context, arg1 db.RequestEmailChangeTxParams) (db.EmailChangeToken, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RequestEmailChangeTx", arg0, arg1)
 	ret0, _ := ret[0].(db.EmailChangeToken)

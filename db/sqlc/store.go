@@ -50,7 +50,7 @@ type Store interface {
 	AcceptInvitationTx(ctx context.Context, arg AcceptInvitationTxParams) (AcceptInvitationTxResult, error)
 	ResetPasswordTx(ctx context.Context, arg ResetPasswordTxParams) (User, error)
 	// profile (#334)
-	RequestEmailChangeTx(ctx context.Context, arg CreateEmailChangeTokenParams) (EmailChangeToken, error)
+	RequestEmailChangeTx(ctx context.Context, arg RequestEmailChangeTxParams) (EmailChangeToken, error)
 	ConfirmEmailChangeTx(ctx context.Context, tokenHash []byte) (ConfirmEmailChangeTxResult, error)
 	SignOutOtherSessionsTx(ctx context.Context, arg SignOutOtherSessionsTxParams) (SignOutOtherSessionsTxResult, error)
 

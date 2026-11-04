@@ -62,7 +62,14 @@ export async function uploadAvatar(file: Blob, focal?: { x: number; y: number } 
     form.append("focal_x", String(focal.x))
     form.append("focal_y", String(focal.y))
   }
-  const response = await authenticatedFetch("/api/v1/users/me/avatar", { method: "PUT", body: form })
+  const send = () => authenticatedFetch("/api/v1/users/me/avatar", { method: "PUT", body: form })
+  let response = await send()
+  if (response.status === 401) {
+    // Like apiCall: the server may reject a token this tab still thinks is fresh.
+    // One real refresh, then one retry (a FormData body can be sent again).
+    const { authManager } = await import("../auth")
+    if (await authManager.forceRefresh().catch(() => false)) response = await send()
+  }
   if (!response.ok) {
     throw await apiErrorFromResponse(response, { fallback: "Upload failed" })
   }

@@ -4,6 +4,7 @@ import { authManager } from "./auth"
 import { updateUser } from "./api/users"
 import {
   AVATAR_MAX_BYTES,
+  avatarCropPosition,
   BIO_MAX,
   adoptPasswordChangeSession,
   describeAvatarError,
@@ -365,6 +366,24 @@ describe("profile photo checks (#334)", () => {
   })
 })
 
+describe("avatarCropPosition (#334)", () => {
+  // The API keeps the largest square centered on the point, clamped to the image.
+  it("is the center for a centered point or a square image", () => {
+    expect(avatarCropPosition(300, 200, null)).toBe("50% 50%")
+    expect(avatarCropPosition(200, 200, { x: 0.9, y: 0.1 })).toBe("50% 50%")
+  })
+
+  it("matches the clamped crop along the long side", () => {
+    // 300x200: the square is 200 wide; at x=0.7 it starts at 110 of the 100 it can move: clamped, 100%.
+    expect(avatarCropPosition(300, 200, { x: 0.7, y: 0.5 })).toBe("100% 50%")
+    // At x=0.5 it starts at 50 of 100.
+    expect(avatarCropPosition(300, 200, { x: 0.5, y: 0.5 })).toBe("50% 50%")
+    // At x=0.4 it starts at 20 of 100 (focal % would say 40%).
+    expect(avatarCropPosition(300, 200, { x: 0.4, y: 0.5 })).toBe("20% 50%")
+    expect(avatarCropPosition(200, 400, { x: 0.5, y: 0 })).toBe("50% 0%")
+  })
+})
+
 describe("email change (#334)", () => {
   it("validates the new address and the password", () => {
     expect(validateEmailChange({ new_email: "new@example.com", current_password: "pw" }, "old@example.com")).toBeNull()
@@ -375,7 +394,7 @@ describe("email change (#334)", () => {
 
   it("never claims more than that a link was sent", () => {
     expect(emailChangeSentMessage(" new@example.com ", 86400)).toBe(
-      "We sent a confirmation link to new@example.com. Your email changes once you open it; the link expires in 24 hours."
+      "If new@example.com can be used, we've sent it a confirmation link. Your email changes once you open it; the link expires in 24 hours."
     )
     expect(emailChangeSentMessage("a@b.co", 3600)).toContain("1 hour.")
     expect(emailChangeSentMessage("a@b.co")).toContain("24 hours")
