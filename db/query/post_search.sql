@@ -91,6 +91,7 @@ SELECT
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     p.publish_at,
+    p.deleted_at, p.trashed_from_status,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -111,9 +112,21 @@ WHERE
     (ps.document @@ websearch_to_tsquery(golive_search_config(), @query::text)
      OR (p.published_settings IS NOT NULL
          AND to_tsvector(golive_search_config(), p.title || ' ' || p.description)
-             @@ websearch_to_tsquery(golive_search_config(), @query::text)))
+             @@ websearch_to_tsquery(golive_search_config(), @query::text))
+     -- #327's "search by title and slug": part of a word ("collab" finds
+     -- "collaboration") and slugs, which the index doesn't hold. title_pattern is
+     -- '%<q>%' with LIKE wildcards escaped; these rank after every index match.
+     OR (@title_pattern::text <> '' AND (p.title ILIKE @title_pattern::text OR p.slug ILIKE @title_pattern::text)))
     AND (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')) END)
+    -- Filters (#327), as in ListPosts: byline author, and every term given.
+    AND (@author_id::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = @author_id::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest(@term_ids::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).
@@ -133,9 +146,21 @@ WHERE
     (ps.document @@ websearch_to_tsquery(golive_search_config(), @query::text)
      OR (p.published_settings IS NOT NULL
          AND to_tsvector(golive_search_config(), p.title || ' ' || p.description)
-             @@ websearch_to_tsquery(golive_search_config(), @query::text)))
+             @@ websearch_to_tsquery(golive_search_config(), @query::text))
+     -- #327's "search by title and slug": part of a word ("collab" finds
+     -- "collaboration") and slugs, which the index doesn't hold. title_pattern is
+     -- '%<q>%' with LIKE wildcards escaped; these rank after every index match.
+     OR (@title_pattern::text <> '' AND (p.title ILIKE @title_pattern::text OR p.slug ILIKE @title_pattern::text)))
     AND (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')) END)
+    -- Filters (#327), as in ListPosts: byline author, and every term given.
+    AND (@author_id::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = @author_id::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest(@term_ids::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).

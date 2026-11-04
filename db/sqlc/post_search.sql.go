@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -64,32 +65,50 @@ WHERE
     (ps.document @@ websearch_to_tsquery(golive_search_config(), $1::text)
      OR (p.published_settings IS NOT NULL
          AND to_tsvector(golive_search_config(), p.title || ' ' || p.description)
-             @@ websearch_to_tsquery(golive_search_config(), $1::text)))
-    AND ($2::text = '' OR p.post_type = $2)
-    AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
-    AND ($4::bigint = 0 OR p.user_id = $4)
+             @@ websearch_to_tsquery(golive_search_config(), $1::text))
+     -- #327's "search by title and slug": part of a word ("collab" finds
+     -- "collaboration") and slugs, which the index doesn't hold. title_pattern is
+     -- '%<q>%' with LIKE wildcards escaped; these rank after every index match.
+     OR ($2::text <> '' AND (p.title ILIKE $2::text OR p.slug ILIKE $2::text)))
+    AND ($3::text = '' OR p.post_type = $3)
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN $4::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace($4::text, ' ', ''), ',')) END)
+    -- Filters (#327), as in ListPosts: byline author, and every term given.
+    AND ($5::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = $5::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest($6::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
+    AND ($7::bigint = 0 OR p.user_id = $7)
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).
-    AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')
-    AND (NOT $6::boolean
+    AND ($8::bigint = 0 OR p.user_id = $8 OR p.post_status = 'published')
+    AND (NOT $9::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 `
 
 type CountSearchPostsParams struct {
-	Query              string `json:"query"`
-	PostType           string `json:"post_type"`
-	PostStatus         string `json:"post_status"`
-	UserID             int64  `json:"user_id"`
-	ViewerID           int64  `json:"viewer_id"`
-	UnpublishedChanges bool   `json:"unpublished_changes"`
+	Query              string  `json:"query"`
+	TitlePattern       string  `json:"title_pattern"`
+	PostType           string  `json:"post_type"`
+	PostStatus         string  `json:"post_status"`
+	AuthorID           int64   `json:"author_id"`
+	TermIds            []int64 `json:"term_ids"`
+	UserID             int64   `json:"user_id"`
+	ViewerID           int64   `json:"viewer_id"`
+	UnpublishedChanges bool    `json:"unpublished_changes"`
 }
 
 // SearchPostsWithMeta's total, with the same filters.
 func (q *Queries) CountSearchPosts(ctx context.Context, arg CountSearchPostsParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countSearchPosts,
 		arg.Query,
+		arg.TitlePattern,
 		arg.PostType,
 		arg.PostStatus,
+		arg.AuthorID,
+		pq.Array(arg.TermIds),
 		arg.UserID,
 		arg.ViewerID,
 		arg.UnpublishedChanges,
@@ -105,6 +124,7 @@ SELECT
     p.post_type, p.post_status, p.post_parent, p.menu_order, p.created_at, p.changed_at, p.published_block_doc, p.slug, p.published_settings,
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     p.publish_at,
+    p.deleted_at, p.trashed_from_status,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -125,29 +145,44 @@ WHERE
     (ps.document @@ websearch_to_tsquery(golive_search_config(), $1::text)
      OR (p.published_settings IS NOT NULL
          AND to_tsvector(golive_search_config(), p.title || ' ' || p.description)
-             @@ websearch_to_tsquery(golive_search_config(), $1::text)))
-    AND ($2::text = '' OR p.post_type = $2)
-    AND ($3::text = '' OR p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')))
-    AND ($4::bigint = 0 OR p.user_id = $4)
+             @@ websearch_to_tsquery(golive_search_config(), $1::text))
+     -- #327's "search by title and slug": part of a word ("collab" finds
+     -- "collaboration") and slugs, which the index doesn't hold. title_pattern is
+     -- '%<q>%' with LIKE wildcards escaped; these rank after every index match.
+     OR ($2::text <> '' AND (p.title ILIKE $2::text OR p.slug ILIKE $2::text)))
+    AND ($3::text = '' OR p.post_type = $3)
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN $4::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace($4::text, ' ', ''), ',')) END)
+    -- Filters (#327), as in ListPosts: byline author, and every term given.
+    AND ($5::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = $5::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest($6::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
+    AND ($7::bigint = 0 OR p.user_id = $7)
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).
-    AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')
-    AND (NOT $6::boolean
+    AND ($8::bigint = 0 OR p.user_id = $8 OR p.post_status = 'published')
+    AND (NOT $9::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), $1::text)) DESC, p.created_at DESC, p.id DESC
-LIMIT $8
-OFFSET $7
+LIMIT $11
+OFFSET $10
 `
 
 type SearchPostsWithMetaParams struct {
-	Query              string `json:"query"`
-	PostType           string `json:"post_type"`
-	PostStatus         string `json:"post_status"`
-	UserID             int64  `json:"user_id"`
-	ViewerID           int64  `json:"viewer_id"`
-	UnpublishedChanges bool   `json:"unpublished_changes"`
-	OffsetCount        int32  `json:"offset_count"`
-	LimitCount         int32  `json:"limit_count"`
+	Query              string  `json:"query"`
+	TitlePattern       string  `json:"title_pattern"`
+	PostType           string  `json:"post_type"`
+	PostStatus         string  `json:"post_status"`
+	AuthorID           int64   `json:"author_id"`
+	TermIds            []int64 `json:"term_ids"`
+	UserID             int64   `json:"user_id"`
+	ViewerID           int64   `json:"viewer_id"`
+	UnpublishedChanges bool    `json:"unpublished_changes"`
+	OffsetCount        int32   `json:"offset_count"`
+	LimitCount         int32   `json:"limit_count"`
 }
 
 type SearchPostsWithMetaRow struct {
@@ -168,6 +203,8 @@ type SearchPostsWithMetaRow struct {
 	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
 	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
 	PublishAt             sql.NullTime          `json:"publish_at"`
+	DeletedAt             sql.NullTime          `json:"deleted_at"`
+	TrashedFromStatus     sql.NullString        `json:"trashed_from_status"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
 }
@@ -181,8 +218,11 @@ type SearchPostsWithMetaRow struct {
 func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMetaParams) ([]SearchPostsWithMetaRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchPostsWithMeta,
 		arg.Query,
+		arg.TitlePattern,
 		arg.PostType,
 		arg.PostStatus,
+		arg.AuthorID,
+		pq.Array(arg.TermIds),
 		arg.UserID,
 		arg.ViewerID,
 		arg.UnpublishedChanges,
@@ -214,6 +254,8 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 			&i.PublishedSettings,
 			&i.HasUnpublishedChanges,
 			&i.PublishAt,
+			&i.DeletedAt,
+			&i.TrashedFromStatus,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

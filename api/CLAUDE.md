@@ -600,6 +600,52 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   (real DB: due-only, two replicas, fencing, flush failure, shutdown, routes, not public) and
   `posts_schedule_test.go`.
 
+## Trash, list filters and bulk actions (#327, `000034`, `posts_trash.go`)
+
+- **Trash is a status, `post_status = 'trash'`,** plus `deleted_at` and `trashed_from_status`
+  (CHECK: all three together). A status on purpose: every public read already wants
+  `published` and the scheduler `scheduled`, so a trashed post is off the site, the sitemap,
+  feeds, search, term/author archives, related/adjacent posts and menus with no query change.
+  Its published snapshot stays, so restoring a published post puts the same content back. A
+  trashed scheduled post keeps `publish_at` (000034 relaxes 000033's CHECK for that). Admin
+  lists: no `status` = every status **but** trash (`ListPosts*`, the counts' `CountFiltered*`,
+  `SearchPostsWithMeta`, `/posts/user/:id`); `status=trash` is the Trash tab; `/posts/counts`
+  has a `trash` count.
+- `DELETE /posts/:id` **moves to the trash** (`TrashPost`, the old delete's rule
+  `canTrashPost` = `canEditPostDetails`; 409 `post_trashed` if already there). `POST
+  /posts/:id/restore` (`canRestorePost`: moderators, or a contributor's own post that wasn't
+  published or scheduled) → `RestorePostFromTrash`: the old status, except a scheduled post
+  whose time passed comes back a **draft** (never published at once). `DELETE
+  /posts/:id/permanent` (`requireContentEditor`, trashed only, else 409 `not_in_trash`) →
+  `DeleteTrashedPostTx` (status checked under the row lock), the old hard delete. No auto-empty.
+- **Nobody edits a trashed post:** `canEditPost` is false, PUT `/posts/:id` and duplicate
+  answer 409 `post_trashed`, `PublishPostTx` returns `db.ErrPostTrashed` (409, checked under
+  the lock), `UnpublishPost` skips it (404), `SchedulePost` already wanted draft/scheduled.
+  The collab store still accepts a trashed post's last store (the edits before the trash).
+- **Collab:** `/internal/users/:id/access` reads the post for **everyone** now and answers
+  **410 `{code: "post_trashed"}`** for a trashed one (the collab server refuses or closes with
+  `post-trashed`, not as a revoked session). After a trash the API calls the collab server's
+  `POST /internal/documents/post-<id>/recheck` (`recheckCollabDoc`, background, best effort; the
+  periodic re-check is the fallback).
+- **Filters** on `GET /posts`, `/posts/type/:type` and `/posts/search`: `author_id` (credited in
+  `user_posts`, not just the owner) and `terms=1,2` (linked to every one, working terms, ≤10),
+  with status, sort and `viewer_id`. `GET /posts/authors?type=` lists who is credited on posts
+  the caller may read (the Author filter's options; editors can't list `/users`). #319 may move
+  bylines; the filter reads `user_posts` as it is today.
+- **Search** (`/posts/search`) also matches part of the title or slug (`title_pattern`, ILIKE,
+  wildcards escaped with `memberSearchPattern`), ranked after every index match. The #145 index
+  stays the main search; there is no second search endpoint.
+- **`POST /posts/bulk {action: publish|trash|restore|delete, ids: [≤100]}`** (any content role):
+  each post is checked exactly as its single route checks it (publish needs a moderator,
+  per item) and runs the same code (`publishPostByID` = flush + `PublishPostTx`, shared with
+  `publishPost`; `trashPostByID`, `restorePostByID`, `deletePostPermanentlyByID`). 200 with
+  `{action, results: [{id, ok, post_status} | {id, ok: false, status, code, error}], succeeded,
+  failed}`, duplicates once, in order. Codes: `forbidden`, `not_found`, `post_trashed`,
+  `not_in_trash`, `collab_unavailable`, `failed`. "Change byline author" waits for #319.
+- Tests: `posts_trash_db_test.go` (real DB: hidden from every `/public` route and menus,
+  scheduler and its fence, restore, permanent delete, the filters combined, counts, bulk with
+  mixed permissions, the authors list) and `posts_trash_test.go`.
+
 ## Theme blocks (#376)
 
 - Themes' custom blocks (`theme:<slug>/<block>`) are declared in TypeScript, so the web

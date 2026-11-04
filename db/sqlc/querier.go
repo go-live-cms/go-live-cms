@@ -275,6 +275,10 @@ type Querier interface {
 	// Empty unless the post is one the public site serves, so it never shows who
 	// wrote a draft, and every author it returns has a page.
 	ListPostAuthorProfiles(ctx context.Context, postID int64) ([]ListPostAuthorProfilesRow, error)
+	// The posts list's Author filter (#327): everyone credited (user_posts) on a post of
+	// this type that the caller may read (viewer_id as in ListPosts, #393), trash aside.
+	// Public fields only. Kept short: a filter menu, not a member directory.
+	ListPostBylineAuthors(ctx context.Context, arg ListPostBylineAuthorsParams) ([]ListPostBylineAuthorsRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
@@ -333,7 +337,10 @@ type Querier interface {
 	LockPostForCollabStore(ctx context.Context, id int64) (LockPostForCollabStoreRow, error)
 	// Publish runs in one transaction from here (PublishPostTx): two publishes of
 	// one post queue on this lock instead of racing for the same version_no.
-	LockPostForPublish(ctx context.Context, id int64) (int64, error)
+	// The status is checked under the lock: a trashed post (#327) is never published.
+	LockPostForPublish(ctx context.Context, id int64) (LockPostForPublishRow, error)
+	// DeleteTrashedPostTx: the post's status under a row lock.
+	LockPostStatus(ctx context.Context, id int64) (string, error)
 	// Inside PublishScheduledPostTx: the post, locked, if it is still scheduled under
 	// this claim. No row: it was cancelled, rescheduled, published by hand, deleted
 	// or claimed again after this claim's lease ran out; nothing is published.
@@ -368,6 +375,12 @@ type Querier interface {
 	// name, description, alt and the focal point alone, so a concurrent metadata
 	// edit is never overwritten by a stale read.
 	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
+	// Takes a post out of the trash with the status it had. A scheduled post whose
+	// time is still ahead is scheduled again (a fresh start: no attempts); one whose
+	// time has passed comes back as a draft, so restoring never publishes at once. A
+	// published post's snapshot was kept, so it is live again as it was. No row:
+	// missing or not in the trash.
+	RestorePostFromTrash(ctx context.Context, id int64) (Post, error)
 	// Restoring a version's settings (#358, #357): the working SEO fields. A social
 	// image deleted since is left out (NULL), like a deleted featured image.
 	RestorePostSEO(ctx context.Context, arg RestorePostSEOParams) error
@@ -446,6 +459,15 @@ type Querier interface {
 	// stamps it.
 	TouchUserLastActive(ctx context.Context, arg TouchUserLastActiveParams) (int64, error)
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
+	// Trash (#327, 000034). DELETE /posts/:id moves a post here; restore brings back
+	// the status it had; permanent delete (DeleteTrashedPostTx) removes the row. The
+	// API decides who may do which (auth_posts.go); these only change the state.
+	// Moves a post to the trash. No row: missing or already there. A scheduled post
+	// keeps its time and who scheduled it (000034's CHECK allows that), but its claim
+	// and retry state are cleared: a scheduler attempt already in flight is fenced off
+	// (LockScheduledPostClaim wants post_status 'scheduled' anyway). changed_at stays:
+	// trashing isn't an edit.
+	TrashPost(ctx context.Context, id int64) (Post, error)
 	// Removes the post's featured image link (order 0). An image that is also in
 	// the content (blocks, #176) keeps its row as a content link, placed after
 	// the others until the next sync puts it at its document position; deleting

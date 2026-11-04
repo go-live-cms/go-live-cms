@@ -47,6 +47,10 @@ type PostResponse struct {
 	// ScheduleFailure is the last failed attempt to publish it on schedule,
 	// while it is still scheduled (the editor's "Scheduled publish failed").
 	ScheduleFailure *ScheduleFailureResponse `json:"schedule_failure,omitempty"`
+	// DeletedAt is when the post was moved to the trash (#327); null unless
+	// post_status is "trash". TrashedFromStatus is the status a restore brings back.
+	DeletedAt         *time.Time `json:"deleted_at,omitempty"`
+	TrashedFromStatus string     `json:"trashed_from_status,omitempty"`
 }
 
 // ScheduleFailureResponse says why a scheduled post isn't live yet (#147) and
@@ -78,8 +82,11 @@ type PostWithMetaResponse struct {
 	ChangedAt       time.Time              `json:"changed_at"`
 	PublishedBlocks map[string]interface{} `json:"published_blocks,omitempty"`
 	// PublishAt as in PostResponse: the list's "Scheduled · Nov 3" pill (#147).
-	PublishAt *time.Time             `json:"publish_at"`
-	Meta      map[string]interface{} `json:"meta,omitempty"`
+	PublishAt *time.Time `json:"publish_at"`
+	// The Trash tab (#327), as in PostResponse.
+	DeletedAt         *time.Time             `json:"deleted_at,omitempty"`
+	TrashedFromStatus string                 `json:"trashed_from_status,omitempty"`
+	Meta              map[string]interface{} `json:"meta,omitempty"`
 	// Every credited author (user_posts), in byline order (#340).
 	Authors []PostAuthorResponse `json:"authors"`
 	// HasUnpublishedChanges (#326): published, and the working copy (body or
@@ -142,23 +149,25 @@ func toPostResponse(post db.Post) PostResponse {
 	}
 
 	return PostResponse{
-		ID:              post.ID,
-		Title:           post.Title,
-		Description:     post.Description,
-		UserID:          post.UserID,
-		Username:        post.Username,
-		Url:             post.Url,
-		Slug:            post.Slug,
-		PostType:        post.PostType,
-		PostStatus:      post.PostStatus,
-		PostParent:      postParent,
-		MenuOrder:       post.MenuOrder,
-		CreatedAt:       post.CreatedAt,
-		ChangedAt:       post.ChangedAt,
-		PublishedBlocks: publishedBlocks,
-		SEO:             toPostSEOResponse(post),
-		PublishAt:       nullTimePtr(post.PublishAt),
-		ScheduleFailure: scheduleFailure(post),
+		ID:                post.ID,
+		Title:             post.Title,
+		Description:       post.Description,
+		UserID:            post.UserID,
+		Username:          post.Username,
+		Url:               post.Url,
+		Slug:              post.Slug,
+		PostType:          post.PostType,
+		PostStatus:        post.PostStatus,
+		PostParent:        postParent,
+		MenuOrder:         post.MenuOrder,
+		CreatedAt:         post.CreatedAt,
+		ChangedAt:         post.ChangedAt,
+		PublishedBlocks:   publishedBlocks,
+		SEO:               toPostSEOResponse(post),
+		PublishAt:         nullTimePtr(post.PublishAt),
+		ScheduleFailure:   scheduleFailure(post),
+		DeletedAt:         nullTimePtr(post.DeletedAt),
+		TrashedFromStatus: post.TrashedFromStatus.String,
 	}
 }
 
@@ -191,6 +200,8 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 		PublishedBlocks:       publishedBlocks,
 		HasUnpublishedChanges: post.HasUnpublishedChanges,
 		PublishAt:             nullTimePtr(post.PublishAt),
+		DeletedAt:             nullTimePtr(post.DeletedAt),
+		TrashedFromStatus:     post.TrashedFromStatus.String,
 	}
 }
 
@@ -214,23 +225,25 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 	}
 
 	return PostWithMetaResponse{
-		ID:              post.ID,
-		Title:           post.Title,
-		Description:     post.Description,
-		UserID:          post.UserID,
-		Username:        post.Username,
-		Url:             post.Url,
-		Slug:            post.Slug,
-		PostType:        post.PostType,
-		PostStatus:      post.PostStatus,
-		PostParent:      postParent,
-		MenuOrder:       post.MenuOrder,
-		CreatedAt:       post.CreatedAt,
-		ChangedAt:       post.ChangedAt,
-		PublishedBlocks: publishedBlocks,
-		PublishAt:       nullTimePtr(post.PublishAt),
-		Meta:            metaMap,
-		Authors:         decodePostAuthors(post.Authors),
+		ID:                post.ID,
+		Title:             post.Title,
+		Description:       post.Description,
+		UserID:            post.UserID,
+		Username:          post.Username,
+		Url:               post.Url,
+		Slug:              post.Slug,
+		PostType:          post.PostType,
+		PostStatus:        post.PostStatus,
+		PostParent:        postParent,
+		MenuOrder:         post.MenuOrder,
+		CreatedAt:         post.CreatedAt,
+		ChangedAt:         post.ChangedAt,
+		PublishedBlocks:   publishedBlocks,
+		PublishAt:         nullTimePtr(post.PublishAt),
+		Meta:              metaMap,
+		DeletedAt:         nullTimePtr(post.DeletedAt),
+		TrashedFromStatus: post.TrashedFromStatus.String,
+		Authors:           decodePostAuthors(post.Authors),
 
 		HasUnpublishedChanges: post.HasUnpublishedChanges,
 	}

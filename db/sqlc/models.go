@@ -106,6 +106,8 @@ type Post struct {
 	PublishNextAttemptAt sql.NullTime          `json:"publish_next_attempt_at"`
 	PublishFailedAt      sql.NullTime          `json:"publish_failed_at"`
 	PublishError         sql.NullString        `json:"publish_error"`
+	DeletedAt            sql.NullTime          `json:"deleted_at"`
+	TrashedFromStatus    sql.NullString        `json:"trashed_from_status"`
 }
 
 type PostMedium struct {

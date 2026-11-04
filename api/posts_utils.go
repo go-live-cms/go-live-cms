@@ -15,7 +15,49 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/gin-gonic/gin"
 )
+
+// maxPostListTerms caps the terms filter (a category and a tag today).
+const maxPostListTerms = 10
+
+// postListFilters are the posts list's Author / Category / Tag filters (#327).
+// They combine with each other, the status tabs, search and sort.
+type postListFilters struct {
+	// AuthorID: credited in the post's byline (user_posts), not just the owner.
+	// 0 = anyone.
+	AuthorID int64
+	// TermIDs: the post is linked to every one of them (its working terms).
+	TermIDs []int64
+}
+
+// parsePostListFilters reads author_id (a user id) and terms (a comma list of
+// term ids) from the query.
+func parsePostListFilters(c *gin.Context) (postListFilters, error) {
+	var filters postListFilters
+	if s := strings.TrimSpace(c.Query("author_id")); s != "" {
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || id <= 0 {
+			return filters, errors.New("invalid author_id parameter")
+		}
+		filters.AuthorID = id
+	}
+	if s := strings.TrimSpace(c.Query("terms")); s != "" {
+		parts := strings.Split(s, ",")
+		if len(parts) > maxPostListTerms {
+			return filters, errors.New("too many terms (at most 10)")
+		}
+		for _, part := range parts {
+			id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+			if err != nil || id <= 0 {
+				return filters, errors.New("invalid terms parameter")
+			}
+			filters.TermIDs = append(filters.TermIDs, id)
+		}
+	}
+	return filters, nil
+}
 
 // parseUnpublishedChangesFilter reads the lists' unpublished_changes parameter
 // (#326): true keeps only published posts whose working copy differs from what

@@ -303,6 +303,11 @@ func (server *Server) updatePost(c *gin.Context) {
 	if !ok || !server.checkPost(c, caller, existingPost, canEditPostDetails) {
 		return
 	}
+	// A trashed post changes only through restore (#327), its status included.
+	if isTrashed(existingPost) {
+		postTrashedError().write(c)
+		return
+	}
 	// Setting the status here is publishing/unpublishing by another route.
 	if req.PostStatus != "" && !strings.EqualFold(req.PostStatus, existingPost.PostStatus) && !canModeratePosts(caller) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "changing the post status requires the editor role"})
@@ -418,37 +423,5 @@ func (server *Server) updatePost(c *gin.Context) {
 	})
 }
 
-// deletePost handles DELETE /posts/:id with full cascade transaction
-func (server *Server) deletePost(c *gin.Context) {
-	idParam := c.Param("id")
-	id, err := strconv.ParseInt(idParam, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid post ID"})
-		return
-	}
-
-	post, err := server.store.GetPost(c.Request.Context(), id)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
-		return
-	}
-
-	caller, ok := server.callerUser(c)
-	if !ok || !server.checkPost(c, caller, post, canEditPostDetails) {
-		return
-	}
-
-	err = server.store.DeletePostTx(c.Request.Context(), id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete post"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "post deleted successfully",
-	})
-}
+// deletePost (DELETE /posts/:id) moves the post to the trash since #327:
+// posts_trash.go.

@@ -43,10 +43,14 @@ type PublishPostTxResult struct {
 func (store *SQLStore) PublishPostTx(ctx context.Context, arg PublishPostTxParams) (PublishPostTxResult, error) {
 	var result PublishPostTxResult
 	err := store.execTx(ctx, func(q *Queries) error {
-		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
+		locked, err := q.LockPostForPublish(ctx, arg.PostID)
+		if err != nil {
 			return err
 		}
-		var err error
+		// Publishing would bring a trashed post back on the site around restore.
+		if locked.PostStatus == PostStatusTrash {
+			return ErrPostTrashed
+		}
 		result, err = publishLockedPost(ctx, q, arg)
 		return err
 	})

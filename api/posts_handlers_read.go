@@ -7,7 +7,9 @@
 //   - limit/offset: pagination (max 100)
 //   - sort: created_at|changed_at|title|id|menu_order (legacy date_desc etc. still work)
 //   - order: asc|desc (default depends on the column; see resolvePostSort)
-//   - type, user_id: filtering; status: one status or a comma list (draft,published)
+//   - type, user_id: filtering; status: one status or a comma list (draft,published);
+//     none = every status but the trash (#327)
+//   - author_id (credited in the byline), terms (comma list, all of them): #327
 //   - with_meta: true|false, meta_level: basic|all|full
 package api
 
@@ -36,6 +38,12 @@ func (server *Server) getPosts(c *gin.Context) {
 		return
 	}
 	unpublishedChanges, err := parseUnpublishedChangesFilter(c.Query("unpublished_changes"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// Author (byline) and term filters (#327).
+	filters, err := parsePostListFilters(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -78,6 +86,8 @@ func (server *Server) getPosts(c *gin.Context) {
 		UserID:             userID,
 		UnpublishedChanges: unpublishedChanges,
 		ViewerID:           viewerID,
+		AuthorID:           filters.AuthorID,
+		TermIds:            filters.TermIDs,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count filtered posts"})
@@ -93,6 +103,8 @@ func (server *Server) getPosts(c *gin.Context) {
 				UserID:             userID,
 				UnpublishedChanges: unpublishedChanges,
 				ViewerID:           viewerID,
+				AuthorID:           filters.AuthorID,
+				TermIds:            filters.TermIDs,
 				SortColumn:         sorting.Column,
 				SortDirection:      sorting.Direction,
 				OffsetCount:        int32(offset),
@@ -132,6 +144,8 @@ func (server *Server) getPosts(c *gin.Context) {
 				UserID:             userID,
 				UnpublishedChanges: unpublishedChanges,
 				ViewerID:           viewerID,
+				AuthorID:           filters.AuthorID,
+				TermIds:            filters.TermIDs,
 				// The admin list: has_unpublished_changes (#326).
 				WithUnpublishedChanges: true,
 				SortColumn:             sorting.Column,
@@ -173,6 +187,8 @@ func (server *Server) getPosts(c *gin.Context) {
 			UserID:             userID,
 			UnpublishedChanges: unpublishedChanges,
 			ViewerID:           viewerID,
+			AuthorID:           filters.AuthorID,
+			TermIds:            filters.TermIDs,
 			SortColumn:         sorting.Column,
 			SortDirection:      sorting.Direction,
 			OffsetCount:        int32(offset),
@@ -404,6 +420,12 @@ func (server *Server) getPostsByType(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// Author (byline) and term filters (#327).
+	filters, err := parsePostListFilters(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	limit, err := strconv.ParseInt(limitStr, 10, 32)
 	if err != nil || limit <= 0 {
@@ -443,6 +465,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				UserID:             int64(0),
 				UnpublishedChanges: unpublishedChanges,
 				ViewerID:           viewerID,
+				AuthorID:           filters.AuthorID,
+				TermIds:            filters.TermIDs,
 				SortColumn:         sorting.Column,
 				SortDirection:      sorting.Direction,
 				OffsetCount:        int32(offset),
@@ -463,6 +487,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				PostStatus:         status,
 				UnpublishedChanges: unpublishedChanges,
 				ViewerID:           viewerID,
+				AuthorID:           filters.AuthorID,
+				TermIds:            filters.TermIDs,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
@@ -492,6 +518,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				UserID:                 int64(0),
 				UnpublishedChanges:     unpublishedChanges,
 				ViewerID:               viewerID,
+				AuthorID:               filters.AuthorID,
+				TermIds:                filters.TermIDs,
 				WithUnpublishedChanges: true,
 				SortColumn:             sorting.Column,
 				SortDirection:          sorting.Direction,
@@ -513,6 +541,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				PostStatus:         status,
 				UnpublishedChanges: unpublishedChanges,
 				ViewerID:           viewerID,
+				AuthorID:           filters.AuthorID,
+				TermIds:            filters.TermIDs,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
@@ -541,6 +571,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			UserID:             int64(0),
 			UnpublishedChanges: unpublishedChanges,
 			ViewerID:           viewerID,
+			AuthorID:           filters.AuthorID,
+			TermIds:            filters.TermIDs,
 			SortColumn:         sorting.Column,
 			SortDirection:      sorting.Direction,
 			OffsetCount:        int32(offset),
@@ -561,6 +593,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			PostStatus:         status,
 			UnpublishedChanges: unpublishedChanges,
 			ViewerID:           viewerID,
+			AuthorID:           filters.AuthorID,
+			TermIds:            filters.TermIDs,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})

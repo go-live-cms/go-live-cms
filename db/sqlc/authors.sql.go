@@ -170,6 +170,7 @@ SELECT
     -- ListPostsWithMeta's column (#326); the public site never shows it.
     false::boolean AS has_unpublished_changes,
     p.publish_at,
+    p.deleted_at, p.trashed_from_status,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -218,6 +219,8 @@ type ListPublishedPostsByAuthorRow struct {
 	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
 	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
 	PublishAt             sql.NullTime          `json:"publish_at"`
+	DeletedAt             sql.NullTime          `json:"deleted_at"`
+	TrashedFromStatus     sql.NullString        `json:"trashed_from_status"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
 }
@@ -251,6 +254,8 @@ func (q *Queries) ListPublishedPostsByAuthor(ctx context.Context, arg ListPublis
 			&i.PublishedSettings,
 			&i.HasUnpublishedChanges,
 			&i.PublishAt,
+			&i.DeletedAt,
+			&i.TrashedFromStatus,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

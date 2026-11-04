@@ -61,6 +61,26 @@ func (server *Server) recheckCollabUser(requestID string, userID int64) {
 	})
 }
 
+// recheckCollabDoc asks the collab server to look up the access of every open
+// connection to post-<id> now (#327): after a post moves to the trash the API
+// answers 410 for it, so the server closes them with post-trashed instead of at
+// its next periodic re-check. Best effort and after the response, like
+// recheckCollabUser; the periodic re-check closes them if this call fails.
+func (server *Server) recheckCollabDoc(requestID string, postID int64) {
+	server.runInBackground(requestID, "collab_doc_recheck", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), collabRecheckTimeout)
+		defer cancel()
+		err := server.postCollabInternal(ctx, fmt.Sprintf("/internal/documents/post-%d/recheck", postID), requestID)
+		if err != nil {
+			logger := server.logger
+			if logger == nil {
+				logger = slog.Default()
+			}
+			logger.Warn("collab_doc_recheck_failed", requestIDKey, requestID, "post_id", postID, "error", err.Error())
+		}
+	})
+}
+
 // postCollabInternal POSTs to one of the collab server's internal endpoints and
 // fails on anything but a 200.
 func (server *Server) postCollabInternal(ctx context.Context, path, requestID string) error {

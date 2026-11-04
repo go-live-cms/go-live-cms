@@ -286,9 +286,9 @@ func TestSearchPostsAdmin(t *testing.T) {
 			query:  "q=draft+notes&type=post&status=draft,published&limit=25&offset=25",
 			caller: &editor,
 			expect: func(store *mockdb.MockStore) {
-				store.EXPECT().CountSearchPosts(gomock.Any(), db.CountSearchPostsParams{Query: "draft notes", PostType: "post", PostStatus: "draft,published"}).Return(int64(26), nil)
+				store.EXPECT().CountSearchPosts(gomock.Any(), db.CountSearchPostsParams{Query: "draft notes", TitlePattern: "%draft notes%", PostType: "post", PostStatus: "draft,published"}).Return(int64(26), nil)
 				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{
-					Query: "draft notes", PostType: "post", PostStatus: "draft,published", OffsetCount: 25, LimitCount: 25,
+					Query: "draft notes", TitlePattern: "%draft notes%", PostType: "post", PostStatus: "draft,published", OffsetCount: 25, LimitCount: 25,
 				}).Return([]db.SearchPostsWithMetaRow{row}, nil)
 			},
 			wantStatus: http.StatusOK,
@@ -312,8 +312,8 @@ func TestSearchPostsAdmin(t *testing.T) {
 			query:  "q=notes&user_id=" + strconv.FormatInt(contributor.ID, 10),
 			caller: &contributor,
 			expect: func(store *mockdb.MockStore) {
-				store.EXPECT().CountSearchPosts(gomock.Any(), db.CountSearchPostsParams{Query: "notes", UserID: contributor.ID, ViewerID: contributor.ID}).Return(int64(0), nil)
-				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{Query: "notes", UserID: contributor.ID, ViewerID: contributor.ID, LimitCount: 10}).Return([]db.SearchPostsWithMetaRow{}, nil)
+				store.EXPECT().CountSearchPosts(gomock.Any(), db.CountSearchPostsParams{Query: "notes", TitlePattern: "%notes%", UserID: contributor.ID, ViewerID: contributor.ID}).Return(int64(0), nil)
+				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{Query: "notes", TitlePattern: "%notes%", UserID: contributor.ID, ViewerID: contributor.ID, LimitCount: 10}).Return([]db.SearchPostsWithMetaRow{}, nil)
 			},
 			wantStatus: http.StatusOK,
 		},
@@ -344,12 +344,36 @@ func TestSearchPostsAdmin(t *testing.T) {
 		{name: "BadOffset", query: "q=a&offset=-1", caller: &editor, expect: func(store *mockdb.MockStore) {}, wantStatus: http.StatusBadRequest},
 		{name: "BadUserID", query: "q=a&user_id=me", caller: &editor, expect: func(store *mockdb.MockStore) {}, wantStatus: http.StatusBadRequest},
 		{
+			// The list's Author / Category / Tag filters (#327) reach the search too.
+			name:   "AuthorAndTermFilters",
+			query:  "q=notes&status=trash&author_id=12&terms=3,4",
+			caller: &editor,
+			expect: func(store *mockdb.MockStore) {
+				store.EXPECT().CountSearchPosts(gomock.Any(), db.CountSearchPostsParams{
+					Query: "notes", TitlePattern: "%notes%", PostStatus: "trash", AuthorID: 12, TermIds: []int64{3, 4},
+				}).Return(int64(0), nil)
+				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{
+					Query: "notes", TitlePattern: "%notes%", PostStatus: "trash", AuthorID: 12, TermIds: []int64{3, 4}, LimitCount: 10,
+				}).Return(nil, nil)
+			},
+			wantStatus: http.StatusOK,
+		},
+		{name: "BadAuthorID", query: "q=a&author_id=x", caller: &editor, expect: func(store *mockdb.MockStore) {}, wantStatus: http.StatusBadRequest},
+		{name: "BadTerms", query: "q=a&terms=1,x", caller: &editor, expect: func(store *mockdb.MockStore) {}, wantStatus: http.StatusBadRequest},
+		{name: "LikeWildcardsEscaped", query: "q=100%25_off", caller: &editor, expect: func(store *mockdb.MockStore) {
+			store.EXPECT().CountSearchPosts(gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, arg db.CountSearchPostsParams) (int64, error) {
+				require.Equal(t, `%100\%\_off%`, arg.TitlePattern)
+				return 0, nil
+			})
+			store.EXPECT().SearchPostsWithMeta(gomock.Any(), gomock.Any()).Return(nil, nil)
+		}, wantStatus: http.StatusOK},
+		{
 			name:   "LimitCapped",
 			query:  "q=a&limit=500",
 			caller: &editor,
 			expect: func(store *mockdb.MockStore) {
 				store.EXPECT().CountSearchPosts(gomock.Any(), gomock.Any()).Return(int64(0), nil)
-				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{Query: "a", LimitCount: 100}).Return(nil, nil)
+				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{Query: "a", TitlePattern: "%a%", LimitCount: 100}).Return(nil, nil)
 			},
 			wantStatus: http.StatusOK,
 		},

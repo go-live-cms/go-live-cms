@@ -66,11 +66,21 @@ SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, 
     -- Changes not published (#326): a published post whose working copy (body or
     -- settings) differs from what the site shows. Migration 000030.
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
-    p.publish_at
+    p.publish_at,
+    -- The Trash tab (#327): when, and the status a restore brings back.
+    p.deleted_at, p.trashed_from_status
 FROM posts p
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')) END)
+    -- Filters (#327): credited in the byline (user_posts), and linked to every term given.
+    AND (@author_id::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = @author_id::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest(@term_ids::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).
@@ -162,6 +172,9 @@ SELECT
     (@with_unpublished_changes::boolean AND golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))::boolean AS has_unpublished_changes,
     -- A scheduled post's time, for the list's "Scheduled · Nov 3" pill (#147).
     p.publish_at,
+    -- The Trash tab (#327): when, and the status a restore brings back. The
+    -- public rows (authors.sql, terms_public.sql) select the same columns.
+    p.deleted_at, p.trashed_from_status,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -183,7 +196,15 @@ SELECT
 FROM posts p
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')) END)
+    -- Filters (#327): credited in the byline (user_posts), and linked to every term given.
+    AND (@author_id::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = @author_id::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest(@term_ids::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).
@@ -212,7 +233,15 @@ OFFSET @offset_count;
 SELECT COUNT(*) AS total FROM posts p
 WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')) END)
+    -- Filters (#327): credited in the byline (user_posts), and linked to every term given.
+    AND (@author_id::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = @author_id::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest(@term_ids::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).
@@ -248,7 +277,15 @@ WHERE p.id = $1;
 -- name: CountPostsByTypeFiltered :one
 SELECT COUNT(*) AS total FROM posts p
 WHERE p.post_type = @post_type
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')) END)
+    -- Filters (#327): credited in the byline (user_posts), and linked to every term given.
+    AND (@author_id::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = @author_id::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest(@term_ids::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')  -- #393, as in ListPosts
     AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
 
@@ -289,7 +326,15 @@ LEFT JOIN users u ON p.user_id = u.id
 LEFT JOIN post_types pt ON p.post_type = pt.name
 WHERE 
     (@post_type::text = '' OR p.post_type = @post_type)
-    AND (@post_status::text = '' OR p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')))
+    -- status: one status or a comma list; none = every status but the trash (#327).
+    AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace(@post_status::text, ' ', ''), ',')) END)
+    -- Filters (#327): credited in the byline (user_posts), and linked to every term given.
+    AND (@author_id::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = @author_id::bigint))
+    AND NOT EXISTS (
+        SELECT 1 FROM unnest(@term_ids::bigint[]) AS ft(id)
+        WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
+    )
     AND (@user_id::bigint = 0 OR p.user_id = @user_id)  -- Add user filter
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).

@@ -367,15 +367,22 @@ func (q *Queries) InsertPublishedVersionFromPost(ctx context.Context, arg Insert
 }
 
 const lockPostForPublish = `-- name: LockPostForPublish :one
-SELECT id FROM posts WHERE id = $1 FOR UPDATE
+SELECT id, post_status FROM posts WHERE id = $1 FOR UPDATE
 `
+
+type LockPostForPublishRow struct {
+	ID         int64  `json:"id"`
+	PostStatus string `json:"post_status"`
+}
 
 // Publish runs in one transaction from here (PublishPostTx): two publishes of
 // one post queue on this lock instead of racing for the same version_no.
-func (q *Queries) LockPostForPublish(ctx context.Context, id int64) (int64, error) {
+// The status is checked under the lock: a trashed post (#327) is never published.
+func (q *Queries) LockPostForPublish(ctx context.Context, id int64) (LockPostForPublishRow, error) {
 	row := q.db.QueryRowContext(ctx, lockPostForPublish, id)
-	err := row.Scan(&id)
-	return id, err
+	var i LockPostForPublishRow
+	err := row.Scan(&i.ID, &i.PostStatus)
+	return i, err
 }
 
 const refreshPublishedSettings = `-- name: RefreshPublishedSettings :exec
@@ -431,7 +438,7 @@ SET title = $2,
     description = $3,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status
 `
 
 type RestorePostTitleAndDescriptionParams struct {
@@ -477,6 +484,8 @@ func (q *Queries) RestorePostTitleAndDescription(ctx context.Context, arg Restor
 		&i.PublishNextAttemptAt,
 		&i.PublishFailedAt,
 		&i.PublishError,
+		&i.DeletedAt,
+		&i.TrashedFromStatus,
 	)
 	return i, err
 }
@@ -523,7 +532,9 @@ SET post_status = 'draft',
     published_block_doc = NULL,
     published_settings = NULL
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error
+  -- A trashed post comes back only through restore (#327). No row: missing or trashed.
+  AND post_status <> 'trash'
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status
 `
 
 // Back to draft and drop the public snapshot (#136), settings included (#358).
@@ -563,6 +574,8 @@ func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishNextAttemptAt,
 		&i.PublishFailedAt,
 		&i.PublishError,
+		&i.DeletedAt,
+		&i.TrashedFromStatus,
 	)
 	return i, err
 }
