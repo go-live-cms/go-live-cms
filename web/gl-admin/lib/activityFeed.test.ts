@@ -32,6 +32,8 @@ describe("describeActivity", () => {
     expect(line({ verb: "unscheduled" })).toBe("Ana Costa cancelled the schedule of October changelog")
     expect(line({ verb: "edited" })).toBe("Ana Costa edited October changelog")
     expect(line({ verb: "version_restored" })).toBe("Ana Costa restored a version of October changelog")
+    expect(line({ verb: "status_changed", payload: { post_status: "archived" } })).toBe("Ana Costa archived October changelog")
+    expect(line({ verb: "status_changed", payload: { post_status: "draft" } })).toBe("Ana Costa set October changelog to draft")
     expect(line({ payload: { scheduled: true } })).toBe("Ana Costa published (scheduled) October changelog")
   })
 
@@ -58,6 +60,7 @@ describe("describeActivity", () => {
     const elena = { id: 5, username: "elena", full_name: "Elena V." }
     expect(line({ object_type: "user", verb: "role_changed", post: undefined, user: elena, payload: { role: "editor" } })).toBe("Ana Costa made Elena V. an editor")
     expect(line({ object_type: "user", verb: "removed", post: undefined, payload: {} })).toBe("Ana Costa removed a former member")
+    expect(line({ object_type: "user", verb: "created", post: undefined, user: elena, payload: { role: "contributor" } })).toBe("Ana Costa added Elena V. as a contributor")
     expect(line({ object_type: "user", verb: "joined", post: undefined, user: ana, payload: { role: "contributor" } })).toBe("Ana Costa joined as a contributor")
     expect(line({ object_type: "settings", verb: "settings_updated", post: undefined, payload: { fields: ["site_title"] } })).toBe("Ana Costa updated the site settings")
   })
@@ -118,5 +121,8 @@ describe("attentionItems", () => {
     expect(items.filter((i) => i.key.startsWith("changes-") && i.key !== "changes-more")).toHaveLength(3)
     expect(items.find((i) => i.key === "changes-more")).toMatchObject({ title: "4 more posts have unpublished changes", href: "/content/post?view=changes" })
     expect(items.find((i) => i.key === "changes-1")?.detail).toBe("Edited 1 hour ago")
+    // Contributors have no Scheduled tab: the rest are under their own posts.
+    const contributor = attentionItems({ ...nothing, failed_schedules: { total: 6, posts: [] } }, now, false)
+    expect(contributor[0]).toMatchObject({ title: "6 more scheduled posts failed to publish", href: "/content/post?view=mine" })
   })
 })

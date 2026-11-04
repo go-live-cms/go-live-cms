@@ -48,6 +48,12 @@ const POST_VERBS: Record<string, string> = {
   version_restored: "restored a version of",
 }
 
+// status_changed (PUT /posts/:id): "archived X", else "set X to draft".
+function statusPart(title: string, status: unknown): { verb: string; what: string } {
+  if (status === "archived") return { verb: "archived", what: title }
+  return typeof status === "string" && status ? { verb: "set", what: `${title} to ${status}` } : { verb: "changed the status of", what: title }
+}
+
 const MEDIA_VERBS: Record<string, string> = {
   uploaded: "uploaded",
   replaced: "replaced",
@@ -58,9 +64,10 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
   const fallbackVerb = event.verb.replace(/_/g, " ")
   switch (event.object_type) {
     case "post": {
-      const verb = POST_VERBS[event.verb] ?? fallbackVerb
-      if (!event.post) return { verb, what: withArticle(postNoun(event)), href: null }
-      return { verb, what: event.post.title || "Untitled", href: `/content/edit/${event.post.id}` }
+      const href = event.post ? `/content/edit/${event.post.id}` : null
+      const title = event.post ? event.post.title || "Untitled" : withArticle(postNoun(event))
+      if (event.verb === "status_changed") return { ...statusPart(title, event.payload.post_status), href }
+      return { verb: POST_VERBS[event.verb] ?? fallbackVerb, what: title, href }
     }
     case "media": {
       const verb = MEDIA_VERBS[event.verb] ?? fallbackVerb
@@ -75,6 +82,7 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       const name = personName(event.user) || "a former member"
       const href = event.user ? "/users" : null
       if (event.verb === "joined") return { verb: "joined as", what: withArticle(role(event.payload.role)), href }
+      if (event.verb === "created") return { verb: "added", what: `${name} as ${withArticle(role(event.payload.role))}`, href }
       if (event.verb === "role_changed") return { verb: "made", what: `${name} ${withArticle(role(event.payload.role))}`, href }
       if (event.verb === "removed") return { verb: "removed", what: name, href: null }
       return { verb: fallbackVerb, what: name, href }
@@ -110,7 +118,8 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 // attentionItems lists Needs attention, most urgent first: failed scheduled publishes,
 // then images without alt text, posts with unpublished changes, review requests (#323).
-export function attentionItems(needs: NeedsAttention, now: Date = new Date()): AttentionItem[] {
+// `moderator`: the list tabs differ (contributors have no Scheduled tab).
+export function attentionItems(needs: NeedsAttention, now: Date = new Date(), moderator = true): AttentionItem[] {
   const items: AttentionItem[] = []
 
   const failed = needs.failed_schedules
@@ -128,8 +137,8 @@ export function attentionItems(needs: NeedsAttention, now: Date = new Date()): A
     items.push({
       key: "failed-more",
       title: `${plural(more, "more scheduled post", "more scheduled posts")} failed to publish`,
-      detail: "Open the Scheduled tab",
-      href: "/content/post?view=scheduled",
+      detail: moderator ? "Open the Scheduled tab" : "Open your posts",
+      href: moderator ? "/content/post?view=scheduled" : "/content/post?view=mine",
       tone: "danger",
     })
   }

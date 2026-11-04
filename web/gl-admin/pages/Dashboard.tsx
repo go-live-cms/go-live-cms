@@ -132,7 +132,7 @@ export default function Dashboard() {
           </section>
 
           <div className="gl-home__columns">
-            <NeedsAttentionSection userId={user?.id} />
+            <NeedsAttentionSection userId={user?.id} moderator={!own} />
             <ActivitySection userId={user?.id} />
           </div>
 
@@ -239,19 +239,19 @@ const ATTENTION_ICONS: Record<AttentionItem["tone"], ReactNode> = {
   neutral: <DocumentIcon size={14} />,
 }
 
-function NeedsAttentionSection({ userId }: { userId?: number }) {
+function NeedsAttentionSection({ userId, moderator }: { userId?: number; moderator: boolean }) {
   const [items, setItems] = useState<Loadable<AttentionItem[]>>({ state: "loading" })
 
   useEffect(() => {
     let live = true
     setItems({ state: "loading" })
     getNeedsAttention()
-      .then((needs) => live && setItems({ state: "ready", value: attentionItems(needs) }))
+      .then((needs) => live && setItems({ state: "ready", value: attentionItems(needs, new Date(), moderator) }))
       .catch((error) => live && setItems({ state: "error", error }))
     return () => {
       live = false
     }
-  }, [userId])
+  }, [userId, moderator])
 
   return (
     <section className="gl-home__section" aria-labelledby="home-attention" aria-busy={items.state === "loading" || undefined}>

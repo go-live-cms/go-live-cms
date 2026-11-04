@@ -140,10 +140,10 @@ func (mr *MockStoreMockRecorder) CancelPostSchedule(arg0, arg1 interface{}) *gom
 }
 
 // ChangeUserRoleTx mocks base method.
-func (m *MockStore) ChangeUserRoleTx(arg0 context.Context, arg1 db.SetUserRoleParams) (db.User, error) {
+func (m *MockStore) ChangeUserRoleTx(arg0 context.Context, arg1 db.SetUserRoleParams) (db.ChangeUserRoleTxResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ChangeUserRoleTx", arg0, arg1)
-	ret0, _ := ret[0].(db.User)
+	ret0, _ := ret[0].(db.ChangeUserRoleTxResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

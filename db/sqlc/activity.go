@@ -22,13 +22,14 @@ const (
 	ActivityScheduled       = "scheduled"
 	ActivityUnscheduled     = "unscheduled"
 	ActivityDeleted         = "deleted"
+	ActivityStatusChanged   = "status_changed" // PUT /posts/:id set another status
 	ActivityVersionRestored = "version_restored"
 
 	// Media (ActivityDeleted too).
 	ActivityUploaded = "uploaded"
 	ActivityReplaced = "replaced"
 
-	// Members and invitations.
+	// Members and invitations (ActivityCreated too: an admin adding a member).
 	ActivityInvited           = "invited"
 	ActivityInvitationRevoked = "invitation_revoked"
 	ActivityJoined            = "joined"

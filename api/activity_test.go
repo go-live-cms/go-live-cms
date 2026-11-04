@@ -108,14 +108,17 @@ func TestActivityRecordedOnPostWritePaths(t *testing.T) {
 	requireStatus(t, as(t, server, editor, http.MethodPost, path+"/publish", nil), http.StatusOK)
 	requireStatus(t, as(t, server, editor, http.MethodPost, path+"/versions/1/restore-settings", nil), http.StatusOK)
 	requireStatus(t, as(t, server, editor, http.MethodPost, path+"/unpublish", nil), http.StatusOK)
+	// A status set through PUT is its own event, whatever was saved just before.
+	requireStatus(t, as(t, server, editor, http.MethodPut, path, gin.H{"title": "Editor's " + word}), http.StatusOK)
+	requireStatus(t, as(t, server, editor, http.MethodPut, path, gin.H{"post_status": "archived"}), http.StatusOK)
 	duplicated := as(t, server, owner, http.MethodPost, path+"/duplicate", nil)
 	requireStatus(t, duplicated, http.StatusCreated)
 	copyID := decodeID(t, duplicated, "post")
 	requireStatus(t, as(t, server, owner, http.MethodDelete, fmt.Sprintf("/api/v1/posts/%d", copyID), nil), http.StatusOK)
 
 	events := objectEvents(t, conn, db.ActivityObjectPost, id)
-	require.Equal(t, []string{"created", "updated", "scheduled", "unscheduled", "published", "version_restored", "unpublished"}, eventVerbs(events))
-	actors := []int64{owner.ID, owner.ID, editor.ID, editor.ID, editor.ID, editor.ID, editor.ID}
+	require.Equal(t, []string{"created", "updated", "scheduled", "unscheduled", "published", "version_restored", "unpublished", "updated", "status_changed"}, eventVerbs(events))
+	actors := []int64{owner.ID, owner.ID, editor.ID, editor.ID, editor.ID, editor.ID, editor.ID, editor.ID, editor.ID}
 	for i, e := range events {
 		require.Equal(t, actors[i], e.Actor.Int64, e.Verb)
 		require.NotContains(t, e.Payload, word, "no titles in the log")
@@ -125,6 +128,7 @@ func TestActivityRecordedOnPostWritePaths(t *testing.T) {
 	require.JSONEq(t, fmt.Sprintf(`{"publish_at":%q}`, publishAt.Format(time.RFC3339)), events[2].Payload)
 	require.JSONEq(t, `{"version_no":1}`, events[4].Payload)
 	require.JSONEq(t, `{"version_no":1}`, events[5].Payload)
+	require.JSONEq(t, `{"post_status":"archived","previous_post_status":"draft"}`, events[8].Payload)
 
 	copyEvents := objectEvents(t, conn, db.ActivityObjectPost, copyID)
 	require.Equal(t, []string{"created", "deleted"}, eventVerbs(copyEvents))
@@ -155,7 +159,21 @@ func TestActivityRecordedOnMemberAndSettingsPaths(t *testing.T) {
 
 	userPath := fmt.Sprintf("/api/v1/users/%d", member.ID)
 	requireStatus(t, as(t, server, admin, http.MethodPut, userPath+"/role", gin.H{"role": RoleEditor}), http.StatusOK)
+	// The role it already has: nothing changed, no event.
+	requireStatus(t, as(t, server, admin, http.MethodPut, userPath+"/role", gin.H{"role": RoleEditor}), http.StatusOK)
 	requireStatus(t, as(t, server, admin, http.MethodPut, userPath, gin.H{"role": RoleContributor}), http.StatusOK)
+
+	added := "added" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+	createdUser := as(t, server, admin, http.MethodPost, "/api/v1/users", gin.H{
+		"username": added, "email": added + "@example.test", "full_name": "Added Member",
+		"password": "correct horse battery staple", "role": RoleContributor,
+	})
+	requireStatus(t, createdUser, http.StatusCreated)
+	addedID := decodeID(t, createdUser, "user")
+	addedEvents := objectEvents(t, conn, db.ActivityObjectUser, addedID)
+	require.Equal(t, []string{"created"}, eventVerbs(addedEvents))
+	require.JSONEq(t, `{"role":"contributor"}`, addedEvents[0].Payload)
+	require.Equal(t, admin.ID, addedEvents[0].Actor.Int64)
 
 	settings, err := store.GetSettings(ctx)
 	require.NoError(t, err)
@@ -171,7 +189,7 @@ func TestActivityRecordedOnMemberAndSettingsPaths(t *testing.T) {
 
 	user := objectEvents(t, conn, db.ActivityObjectUser, member.ID)
 	require.Equal(t, []string{"role_changed", "role_changed", "removed"}, eventVerbs(user))
-	require.JSONEq(t, `{"role":"editor"}`, user[0].Payload)
+	require.JSONEq(t, `{"role":"editor","previous_role":"contributor"}`, user[0].Payload)
 	require.JSONEq(t, `{"role":"contributor","previous_role":"editor"}`, user[1].Payload)
 	require.JSONEq(t, fmt.Sprintf(`{"transfer_to_id":%d,"posts_reassigned":0}`, admin.ID), user[2].Payload)
 	for _, e := range append(invitation, user...) {
@@ -349,11 +367,22 @@ func TestContinueEditing(t *testing.T) {
 	record(owner, db.ActivityUpdated, othersDraft) // can't read it now
 	record(owner, db.ActivityUpdated, othersPublished)
 	record(owner, db.ActivityPublished, older) // not "worked on"
-	// The collab server's last store, by owner: exact time, no event needed.
+	// A post owner only opened: the collab server's state-only store names them as
+	// its last editor, but there is no edit event, so it isn't "worked on".
+	opened := postReadPost(t, store, owner, "draft", "Opened "+word, "opened-"+word)
+	_, err = store.StorePostCollabTx(ctx, db.StorePostCollabTxParams{
+		PostID: opened.ID, State: []byte{1}, Epoch: uuid.New(),
+		BaseRevision: sql.NullInt64{Int64: opened.BlockRevision, Valid: true},
+		LastEditorID: sql.NullInt64{Int64: owner.ID, Valid: true},
+	})
+	require.NoError(t, err)
+	// The collab server's last store, by owner: an "edited" event, and changed_at
+	// as the exact time.
 	_, err = store.StorePostCollabTx(ctx, db.StorePostCollabTxParams{
 		PostID: live.ID, State: []byte{1}, Epoch: uuid.New(),
-		BlockDoc:     json.RawMessage(`{"doc_version":1,"blocks_order":["a"],"blocks":{"a":{"type":"paragraph"}}}`),
-		LastEditorID: sql.NullInt64{Int64: owner.ID, Valid: true},
+		BlockDoc:           json.RawMessage(`{"doc_version":1,"blocks_order":["a"],"blocks":{"a":{"type":"paragraph"}}}`),
+		LastEditorID:       sql.NullInt64{Int64: owner.ID, Valid: true},
+		EditActivityWindow: activityEditWindow,
 	})
 	require.NoError(t, err)
 

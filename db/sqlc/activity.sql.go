@@ -245,33 +245,28 @@ const listContinueEditing = `-- name: ListContinueEditing :many
 WITH worked AS (
     SELECT a.object_id AS post_id, MAX(a.created_at)::timestamptz AS edited_at
     FROM activity a
-    WHERE a.actor_id = $3::bigint
+    WHERE a.actor_id = $1::bigint
       AND a.object_type = 'post'
-      AND a.verb IN ('created', 'edited', 'updated', 'version_restored')
+      AND a.verb IN ('created', 'edited', 'updated', 'version_restored', 'status_changed')
     GROUP BY a.object_id
-    UNION ALL
-    SELECT s.post_id, sp.changed_at::timestamptz AS edited_at
-    FROM post_ydoc_state s
-    JOIN posts sp ON sp.id = s.post_id
-    WHERE s.last_editor_id = $3::bigint
 )
 SELECT
     p.id, p.title, p.post_type, p.post_status, p.publish_at, p.publish_failed_at,
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
-    MAX(w.edited_at)::timestamptz AS edited_at
+    GREATEST(w.edited_at, CASE WHEN s.post_id IS NOT NULL THEN p.changed_at END)::timestamptz AS edited_at
 FROM worked w
 JOIN posts p ON p.id = w.post_id
+LEFT JOIN post_ydoc_state s ON s.post_id = p.id AND s.last_editor_id = $1::bigint
 WHERE p.post_status <> 'archived'
-  AND ($1::bigint = 0 OR p.user_id = $1::bigint OR p.post_status = 'published')
-GROUP BY p.id
+  AND ($2::bigint = 0 OR p.user_id = $2::bigint OR p.post_status = 'published')
 ORDER BY edited_at DESC, p.id DESC
-LIMIT $2::int
+LIMIT $3::int
 `
 
 type ListContinueEditingParams struct {
+	UserID   int64 `json:"user_id"`
 	ViewerID int64 `json:"viewer_id"`
 	RowLimit int32 `json:"row_limit"`
-	UserID   int64 `json:"user_id"`
 }
 
 type ListContinueEditingRow struct {
@@ -286,13 +281,15 @@ type ListContinueEditingRow struct {
 }
 
 // Home's "Continue where you left off": the posts the user last worked on, newest
-// first. "Worked on" = their created/edited/updated/version_restored events (the
-// edit events are throttled, so up to one window behind), or being the last editor
-// the collab server stored (post_ydoc_state.last_editor_id; changed_at is then the
-// exact time). viewer_id 0 = may read any post, else only their own and published
-// ones (canReadPost), as the post is now. Archived posts are left out.
+// first. "Worked on" = their created/edited/updated/version_restored/status_changed
+// events. Those are throttled, so up to one window behind; when the user is also
+// the collab server's last editor (post_ydoc_state.last_editor_id), the post's
+// changed_at is the exact time. That alone never counts: a state-only store (a
+// post merely opened) records its sender too. viewer_id 0 = may read any post,
+// else only their own and published ones (canReadPost), as the post is now.
+// Archived posts are left out.
 func (q *Queries) ListContinueEditing(ctx context.Context, arg ListContinueEditingParams) ([]ListContinueEditingRow, error) {
-	rows, err := q.db.QueryContext(ctx, listContinueEditing, arg.ViewerID, arg.RowLimit, arg.UserID)
+	rows, err := q.db.QueryContext(ctx, listContinueEditing, arg.UserID, arg.ViewerID, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}

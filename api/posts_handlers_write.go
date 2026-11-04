@@ -415,7 +415,16 @@ func (server *Server) updatePost(c *gin.Context) {
 		}
 	}
 
-	server.recordPostUpdated(c, id)
+	if !strings.EqualFold(updatedPost.PostStatus, existingPost.PostStatus) {
+		// A moderator setting the status here (archive, back to draft): its own,
+		// unthrottled event, so a recent settings save can't swallow it.
+		server.recordPostActivity(c, db.ActivityStatusChanged, id, map[string]any{
+			"post_status":          updatedPost.PostStatus,
+			"previous_post_status": existingPost.PostStatus,
+		})
+	} else {
+		server.recordPostUpdated(c, id)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"post": toPostResponse(updatedPost),

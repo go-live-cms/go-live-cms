@@ -615,10 +615,13 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   often several statements and most aren't one transaction, so an event never describes a
   rolled-back change). A failed insert logs `activity_record_failed` (verb + ids) and never
   fails the request. Recorded today: post created (also duplicate, `source_id`), `updated`
-  (PUT `/posts/:id`, `/seo`, the featured image), published (also by the scheduler, actor =
+  (PUT `/posts/:id`, `/seo`, the featured image), `status_changed` (PUT `/posts/:id` setting
+  another status: unthrottled), published (also by the scheduler, actor =
   `publish_scheduled_by`, `scheduled: true`), unpublished, scheduled, unscheduled, deleted,
   `version_restored`; media uploaded (single, linked, bulk), replaced, deleted; invited,
-  `invitation_revoked`, joined (actor = the new member), `role_changed` (both routes), removed;
+  `invitation_revoked`, joined (actor = the new member), user created (POST `/users`),
+  `role_changed` (both routes, `previous_role`; none when the role is unchanged:
+  `ChangeUserRoleTx` returns `PreviousRole`), removed;
   `settings_updated` (`fields`). Trash/restore (#327) and extension settings aren't recorded yet.
 - **Throttle:** high-volume events ("updated", and "edited" from the collab store) are at most
   one per member, verb and object per `activityEditWindow` (10 min, `CreateActivityThrottled`).
@@ -629,8 +632,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   post and media event; contributors events on posts they own or that are published (as the
   post is now, `canReadPost`) and on their own media. Member, invitation and settings events are
   admin-only. `GET /home/continue-editing` (the caller's created/edited/updated/
-  `version_restored` events, plus `post_ydoc_state.last_editor_id` with `changed_at`, readable
-  posts only). `GET /home/needs-attention`: `failed_schedules` (contributors their own),
+  `version_restored`/`status_changed` events, readable posts only; being
+  `post_ydoc_state.last_editor_id` only sharpens the time to `changed_at`, never adds a post:
+  state-only stores, a post merely opened, record their sender too). `GET /home/needs-attention`: `failed_schedules` (contributors their own),
   `unpublished_changes` + `missing_alt` (editors and admins; `null` otherwise),
   `review_requests` (`[]`, the slot for #323).
 - **Retention:** `ACTIVITY_RETENTION` (default 2160h = 90 days, 0 = keep everything);

@@ -185,7 +185,7 @@ func TestChangeUserRoleAPI(t *testing.T) {
 				demoted.Role = RoleContributor
 				store.EXPECT().
 					ChangeUserRoleTx(gomock.Any(), db.SetUserRoleParams{ID: editor.ID, Role: RoleContributor}).
-					Return(demoted, nil)
+					Return(db.ChangeUserRoleTxResult{User: demoted, PreviousRole: RoleEditor}, nil)
 			},
 			wantStatus: http.StatusOK,
 			rechecked:  true,
@@ -196,7 +196,7 @@ func TestChangeUserRoleAPI(t *testing.T) {
 			targetID: fmt.Sprint(admin.ID),
 			body:     gin.H{"role": RoleEditor},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().ChangeUserRoleTx(gomock.Any(), gomock.Any()).Return(db.User{}, db.ErrLastAdmin)
+				store.EXPECT().ChangeUserRoleTx(gomock.Any(), gomock.Any()).Return(db.ChangeUserRoleTxResult{}, db.ErrLastAdmin)
 			},
 			wantStatus: http.StatusConflict,
 			wantCode:   "last_admin",
@@ -207,7 +207,7 @@ func TestChangeUserRoleAPI(t *testing.T) {
 			targetID: "424242",
 			body:     gin.H{"role": RoleEditor},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().ChangeUserRoleTx(gomock.Any(), gomock.Any()).Return(db.User{}, sql.ErrNoRows)
+				store.EXPECT().ChangeUserRoleTx(gomock.Any(), gomock.Any()).Return(db.ChangeUserRoleTxResult{}, sql.ErrNoRows)
 			},
 			wantStatus: http.StatusNotFound,
 		},
@@ -217,7 +217,7 @@ func TestChangeUserRoleAPI(t *testing.T) {
 			targetID: target,
 			body:     gin.H{"role": RoleEditor},
 			buildStubs: func(store *mockdb.MockStore) {
-				store.EXPECT().ChangeUserRoleTx(gomock.Any(), gomock.Any()).Return(db.User{}, errors.New("boom"))
+				store.EXPECT().ChangeUserRoleTx(gomock.Any(), gomock.Any()).Return(db.ChangeUserRoleTxResult{}, errors.New("boom"))
 			},
 			wantStatus: http.StatusInternalServerError,
 		},

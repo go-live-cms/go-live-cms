@@ -265,11 +265,13 @@ type Querier interface {
 	// rows. Each branch is one step along idx_posts_published_type_created_id (000023).
 	ListAdjacentPosts(ctx context.Context, arg ListAdjacentPostsParams) ([]ListAdjacentPostsRow, error)
 	// Home's "Continue where you left off": the posts the user last worked on, newest
-	// first. "Worked on" = their created/edited/updated/version_restored events (the
-	// edit events are throttled, so up to one window behind), or being the last editor
-	// the collab server stored (post_ydoc_state.last_editor_id; changed_at is then the
-	// exact time). viewer_id 0 = may read any post, else only their own and published
-	// ones (canReadPost), as the post is now. Archived posts are left out.
+	// first. "Worked on" = their created/edited/updated/version_restored/status_changed
+	// events. Those are throttled, so up to one window behind; when the user is also
+	// the collab server's last editor (post_ydoc_state.last_editor_id), the post's
+	// changed_at is the exact time. That alone never counts: a state-only store (a
+	// post merely opened) records its sender too. viewer_id 0 = may read any post,
+	// else only their own and published ones (canReadPost), as the post is now.
+	// Archived posts are left out.
 	ListContinueEditing(ctx context.Context, arg ListContinueEditingParams) ([]ListContinueEditingRow, error)
 	ListExtensionSettings(ctx context.Context) ([]ExtensionSetting, error)
 	ListExtensionSettingsByExtension(ctx context.Context, arg ListExtensionSettingsByExtensionParams) ([]ExtensionSetting, error)
