@@ -862,6 +862,15 @@ body {
 .avatars {
   display: flex;
 }
+/* An uploaded picture (#334) fills the circle; the colour stays behind it. */
+.avatar {
+  overflow: hidden;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .avatars .avatar + .avatar {
   margin-left: -8px;
 }

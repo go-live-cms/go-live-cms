@@ -23,6 +23,16 @@ type Activity struct {
 	CreatedAt  time.Time       `json:"created_at"`
 }
 
+type EmailChangeToken struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	NewEmail  string       `json:"new_email"`
+	TokenHash []byte       `json:"token_hash"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	UsedAt    sql.NullTime `json:"used_at"`
+	CreatedAt time.Time    `json:"created_at"`
+}
+
 type ExtensionSetting struct {
 	Key           string          `json:"key"`
 	Value         json.RawMessage `json:"value"`
@@ -297,6 +307,7 @@ type User struct {
 	Bio               string       `json:"bio"`
 	Website           string       `json:"website"`
 	LastActiveAt      sql.NullTime `json:"last_active_at"`
+	AvatarUrl         string       `json:"avatar_url"`
 }
 
 type UserInvitation struct {

@@ -142,7 +142,7 @@ export default function PostAuthors({ postId, readOnly, onChange }: PostAuthorsP
           const name = authorName(author)
           const chip = (
             <>
-              <Avatar user={{ id: author.id, name }} size={20} decorative />
+              <Avatar user={{ id: author.id, name, src: author.avatar }} size={20} decorative />
               <span className="post-authors__name">{name}</span>
             </>
           )

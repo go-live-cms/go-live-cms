@@ -43,6 +43,7 @@ type PublicUserResponse struct {
 	Username  string    `json:"username"`
 	FullName  string    `json:"full_name"`
 	Role      string    `json:"role"`
+	Avatar    *string   `json:"avatar"` // their /uploads URL (#334), or null
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -64,6 +65,7 @@ type PrivateUserResponse struct {
 	Role      string    `json:"role"`
 	Bio       string    `json:"bio"`
 	Website   string    `json:"website"`
+	Avatar    *string   `json:"avatar"` // their /uploads URL (#334), or null
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -104,6 +106,7 @@ func toPublicUser(user db.User) PublicUserResponse {
 		Username:  user.Username,
 		FullName:  user.FullName,
 		Role:      user.Role,
+		Avatar:    avatarResponse(user.AvatarUrl),
 		CreatedAt: user.CreatedAt,
 	}
 }
@@ -127,6 +130,7 @@ func toPrivateUser(user db.User) PrivateUserResponse {
 		Role:      user.Role,
 		Bio:       user.Bio,
 		Website:   user.Website,
+		Avatar:    avatarResponse(user.AvatarUrl),
 		CreatedAt: user.CreatedAt,
 	}
 }

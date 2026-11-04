@@ -245,6 +245,12 @@ body:has(.gl-admin-login) {
       background: var(--warning-bg);
       color: var(--warning-label);
     }
+
+    // Email changed (#334).
+    &--success {
+      background: var(--success-bg);
+      color: var(--success-text);
+    }
   }
 
   &__invite {

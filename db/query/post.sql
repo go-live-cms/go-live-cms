@@ -163,8 +163,8 @@ WHERE post_id = $1;
 
 -- name: ListPostBylineAuthors :many
 -- A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
--- the Authors field. Public fields only.
-SELECT u.id, u.username, u.full_name
+-- the Authors field. Public fields only (the avatar, #334, included).
+SELECT u.id, u.username, u.full_name, u.avatar_url
 FROM user_posts up
 JOIN users u ON u.id = up.user_id
 WHERE up.post_id = $1
@@ -194,7 +194,7 @@ RETURNING *;
 -- Who can be credited (#319): members with one of @roles (the content roles,
 -- from auth_roles.go), matching @pattern by name or username (ILIKE, '' =
 -- everyone), for the Authors field's picker. Public fields only: contributors see it too.
-SELECT id, username, full_name
+SELECT id, username, full_name, avatar_url
 FROM users
 WHERE lower(role) = ANY(sqlc.arg(roles)::text[])
     AND (sqlc.arg(pattern)::text = '' OR full_name ILIKE sqlc.arg(pattern) OR username ILIKE sqlc.arg(pattern))

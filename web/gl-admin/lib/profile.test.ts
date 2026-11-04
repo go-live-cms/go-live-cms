@@ -3,8 +3,18 @@ import { ApiError, apiCall } from "./api"
 import { authManager } from "./auth"
 import { updateUser } from "./api/users"
 import {
+  AVATAR_MAX_BYTES,
+  avatarCropPosition,
   BIO_MAX,
   adoptPasswordChangeSession,
+  describeAvatarError,
+  describeEmailChangeError,
+  describeSignOutError,
+  emailChangeSentMessage,
+  otherDevicesSummary,
+  signedOutMessage,
+  validateAvatarFile,
+  validateEmailChange,
   authorFieldErrors,
   buildProfileUpdate,
   isValidWebsite,
@@ -324,5 +334,93 @@ describe("newPasswordChecklist (Profile's new-password checklist)", () => {
     expect(newPasswordChecklist("MARISOL@example.com", "old-pass", details)[1].met).toBe(false)
     expect(newPasswordChecklist("marisol duarte", "old-pass", details)[1].met).toBe(false)
     expect(newPasswordChecklist("a-new-password", "old-pass", details)[1].met).toBe(true)
+  })
+})
+
+describe("profile photo checks (#334)", () => {
+  it("takes the API's types and size", () => {
+    for (const type of ["image/jpeg", "image/png", "image/gif", "image/webp"]) {
+      expect(validateAvatarFile({ type, size: 1000 })).toBeNull()
+    }
+    expect(validateAvatarFile({ type: "image/svg+xml", size: 10 })).toMatch(/JPEG, PNG, GIF or WebP/)
+    expect(validateAvatarFile({ type: "", size: 10 })).toMatch(/JPEG/)
+    expect(validateAvatarFile({ type: "image/png", size: AVATAR_MAX_BYTES })).toBeNull()
+    expect(validateAvatarFile({ type: "image/png", size: AVATAR_MAX_BYTES + 1 })).toMatch(/5 MB/)
+  })
+
+  it("matches the API's limit (api/avatar_utils.go)", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { resolve } = await import("node:path")
+    const go = readFileSync(resolve(__dirname, "../../../api/avatar_utils.go"), "utf8")
+    expect(go).toMatch(/avatarMaxBytes int64 = 5 << 20/)
+    expect(AVATAR_MAX_BYTES).toBe(5 << 20)
+  })
+
+  it("explains the API's refusals", () => {
+    expect(describeAvatarError(new ApiError("x", 400, null, "avatar_type"))).toMatch(/JPEG/)
+    expect(describeAvatarError(new ApiError("x", 400, null, "avatar_unreadable"))).toMatch(/can read/)
+    expect(describeAvatarError(new ApiError("x", 400, null, "avatar_dimensions"))).toMatch(/too big/)
+    expect(describeAvatarError(new ApiError("x", 413, null, "avatar_too_large"))).toMatch(/5 MB/)
+    expect(describeAvatarError(new ApiError("x", 429, 3))).toMatch(/Try again in 3 seconds/)
+    expect(describeAvatarError(new Error("boom"))).toMatch(/couldn't be saved/)
+  })
+})
+
+describe("avatarCropPosition (#334)", () => {
+  // The API keeps the largest square centered on the point, clamped to the image.
+  it("is the center for a centered point or a square image", () => {
+    expect(avatarCropPosition(300, 200, null)).toBe("50% 50%")
+    expect(avatarCropPosition(200, 200, { x: 0.9, y: 0.1 })).toBe("50% 50%")
+  })
+
+  it("matches the clamped crop along the long side", () => {
+    // 300x200: the square is 200 wide; at x=0.7 it starts at 110 of the 100 it can move: clamped, 100%.
+    expect(avatarCropPosition(300, 200, { x: 0.7, y: 0.5 })).toBe("100% 50%")
+    // At x=0.5 it starts at 50 of 100.
+    expect(avatarCropPosition(300, 200, { x: 0.5, y: 0.5 })).toBe("50% 50%")
+    // At x=0.4 it starts at 20 of 100 (focal % would say 40%).
+    expect(avatarCropPosition(300, 200, { x: 0.4, y: 0.5 })).toBe("20% 50%")
+    expect(avatarCropPosition(200, 400, { x: 0.5, y: 0 })).toBe("50% 0%")
+  })
+})
+
+describe("email change (#334)", () => {
+  it("validates the new address and the password", () => {
+    expect(validateEmailChange({ new_email: "new@example.com", current_password: "pw" }, "old@example.com")).toBeNull()
+    expect(validateEmailChange({ new_email: "nope", current_password: "pw" }, "old@example.com")).toMatch(/valid email/)
+    expect(validateEmailChange({ new_email: " OLD@example.com ", current_password: "pw" }, "old@example.com")).toMatch(/already your/)
+    expect(validateEmailChange({ new_email: "new@example.com", current_password: "" }, "old@example.com")).toMatch(/current password/)
+  })
+
+  it("never claims more than that a link was sent", () => {
+    expect(emailChangeSentMessage(" new@example.com ", 86400)).toBe(
+      "If new@example.com can be used, we've sent it a confirmation link. Your email changes once you open it; the link expires in 24 hours."
+    )
+    expect(emailChangeSentMessage("a@b.co", 3600)).toContain("1 hour.")
+    expect(emailChangeSentMessage("a@b.co")).toContain("24 hours")
+  })
+
+  it("explains failures", () => {
+    expect(describeEmailChangeError(new ApiError("x", 403, null, "current_password_incorrect"))).toMatch(/incorrect/)
+    expect(describeEmailChangeError(new ApiError("x", 400, null, "same_email"))).toMatch(/already your/)
+    expect(describeEmailChangeError(new ApiError("x", 429, null))).toMatch(/Too many attempts/)
+    expect(describeEmailChangeError(new ApiError("x", 400, null))).toMatch(/valid email/)
+  })
+})
+
+describe("other devices (#334)", () => {
+  it("counts them", () => {
+    expect(otherDevicesSummary(0)).toBe("You're not signed in anywhere else.")
+    expect(otherDevicesSummary(1)).toBe("You're signed in on 1 other device.")
+    expect(otherDevicesSummary(3)).toBe("You're signed in on 3 other devices.")
+    expect(signedOutMessage(0)).toBe("No other devices were signed in.")
+    expect(signedOutMessage(1)).toBe("Signed out of 1 other device.")
+    expect(signedOutMessage(2)).toBe("Signed out of 2 other devices.")
+  })
+
+  it("explains failures", () => {
+    expect(describeSignOutError(new ApiError("x", 409, null, "session_not_active"))).toMatch(/session has ended/)
+    expect(describeSignOutError(new ApiError("x", 401, null))).toMatch(/expired/)
+    expect(describeSignOutError(new Error("x"))).toMatch(/couldn't be signed out/)
   })
 })

@@ -1,16 +1,17 @@
 import type { CSSProperties } from "react"
 import "@gl-admin/assets/styles/components/ui/avatar.scss"
-import { presenceColor } from "@gl-admin/lib/presence"
+import { presenceColor, safeAvatarSrc } from "@gl-admin/lib/presence"
 
 export type AvatarUser = {
   // Picks the colour, the same way collaborators' carets do (postCollab.ts): id % 8.
   id: number
   name: string
-  // An uploaded picture; the initial is shown without one.
+  // Their avatar (#334): only an /uploads avatar path renders (safeAvatarSrc);
+  // anything else shows the initial.
   src?: string | null
 }
 
-type AvatarSize = 20 | 24 | 28 | 32 | 40
+type AvatarSize = 20 | 24 | 28 | 32 | 40 | 64
 
 export { presenceColor }
 
@@ -28,11 +29,12 @@ type AvatarProps = {
 
 export default function Avatar({ user, size = 24, decorative = false, className = "" }: AvatarProps) {
   const style = { "--avatar-size": `${size}px`, background: presenceColor(user.id) } as CSSProperties
+  const src = safeAvatarSrc(user.src)
   const label = decorative ? { "aria-hidden": true as const } : { role: "img", "aria-label": user.name }
 
   return (
     <span className={`gl-avatar ${className}`} style={style} {...label}>
-      {user.src ? <img src={user.src} alt="" /> : initial(user.name)}
+      {src ? <img src={src} alt="" /> : initial(user.name)}
     </span>
   )
 }

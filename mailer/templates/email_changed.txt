@@ -1,0 +1,7 @@
+Hi,
+
+The email address of your {{.SiteTitle}} account {{.Username}} was changed to {{.NewEmail}}. Emails about the account, password reset links included, now go there.
+
+If you didn't do this, ask a site admin to restore your email address and reset your password.
+
+{{.SiteTitle}}

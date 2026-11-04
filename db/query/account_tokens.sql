@@ -89,3 +89,39 @@ RETURNING *;
 UPDATE password_reset_tokens
 SET used_at = now()
 WHERE user_id = $1 AND used_at IS NULL;
+
+-- Email change (#334): the confirmation link goes to the new address; the change
+-- happens only when it is redeemed (ConfirmEmailChangeTx).
+
+-- name: CreateEmailChangeToken :one
+INSERT INTO email_change_tokens (
+    user_id,
+    new_email,
+    token_hash,
+    expires_at
+) VALUES (
+    $1, $2, $3, $4
+) RETURNING *;
+
+-- name: CountEmailChangeTokensSince :one
+SELECT COUNT(*) FROM email_change_tokens
+WHERE user_id = $1 AND created_at > $2;
+
+-- name: GetValidEmailChangeTokenByHash :one
+SELECT * FROM email_change_tokens
+WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+LIMIT 1;
+
+-- name: ClaimEmailChangeToken :one
+-- Single-use: like ClaimPasswordResetToken, only one claim can match.
+UPDATE email_change_tokens
+SET used_at = now()
+WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+RETURNING *;
+
+-- name: InvalidateEmailChangeTokensForUser :exec
+-- A newer request, a confirmed change or a password change/reset ends every
+-- other pending link.
+UPDATE email_change_tokens
+SET used_at = now()
+WHERE user_id = $1 AND used_at IS NULL;

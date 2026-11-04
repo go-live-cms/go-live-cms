@@ -8,7 +8,7 @@
 -- The author's public fields and how many of those posts credit them. A user
 -- with none gets post_count 0, which the API answers like an unknown username.
 SELECT
-    u.id, u.username, u.full_name, u.bio, u.website,
+    u.id, u.username, u.full_name, u.bio, u.website, u.avatar_url,
     (
         SELECT COUNT(*)
         FROM post_published_authors ppa
@@ -40,7 +40,6 @@ SELECT
         WHERE pm.post_id = p.id
     ) as meta,
     golive_post_published_byline(p.id)::jsonb as authors
-
 FROM posts p
 JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'
@@ -54,7 +53,7 @@ OFFSET @offset_count;
 -- The "Written by" cards: every author in the post's published byline, in
 -- order. Empty unless the post is one the public site serves, so it never shows
 -- who wrote a draft, and every author it returns has a page.
-SELECT u.id, u.username, u.full_name, u.bio, u.website
+SELECT u.id, u.username, u.full_name, u.bio, u.website, u.avatar_url
 FROM post_published_authors up
 JOIN users u ON u.id = up.user_id
 JOIN posts p ON p.id = up.post_id

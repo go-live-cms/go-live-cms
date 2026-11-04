@@ -117,7 +117,7 @@ function UserMenu() {
       className="gl-sidebar__user-menu"
       trigger={(props) => (
         <button {...props} type="button" className="gl-sidebar__user" aria-label={`Account: ${name}, ${role}`}>
-          <Avatar user={{ id: user.id, name }} size={28} decorative />
+          <Avatar user={{ id: user.id, name, src: user.avatar }} size={28} decorative />
           <span className="gl-sidebar__user-text">
             <span className="gl-sidebar__user-name">{name}</span>
             <span className="gl-sidebar__user-role">{role}</span>

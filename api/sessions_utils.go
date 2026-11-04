@@ -56,6 +56,8 @@ const (
 	LogSessionRefreshed = "session_refreshed"
 	LogPasswordChanged  = "password_changed"
 	LogUserRemoved      = "user_removed"
+	LogEmailChanged     = "email_changed"
+	LogOtherSessionsOut = "other_sessions_signed_out"
 )
 
 // Feature flags for development and debugging

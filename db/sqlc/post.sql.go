@@ -674,7 +674,7 @@ func (q *Queries) InsertPostByline(ctx context.Context, arg InsertPostBylinePara
 }
 
 const listAuthorCandidates = `-- name: ListAuthorCandidates :many
-SELECT id, username, full_name
+SELECT id, username, full_name, avatar_url
 FROM users
 WHERE lower(role) = ANY($1::text[])
     AND ($2::text = '' OR full_name ILIKE $2 OR username ILIKE $2)
@@ -689,9 +689,10 @@ type ListAuthorCandidatesParams struct {
 }
 
 type ListAuthorCandidatesRow struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	FullName string `json:"full_name"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	FullName  string `json:"full_name"`
+	AvatarUrl string `json:"avatar_url"`
 }
 
 // Who can be credited (#319): members with one of @roles (the content roles,
@@ -706,7 +707,12 @@ func (q *Queries) ListAuthorCandidates(ctx context.Context, arg ListAuthorCandid
 	items := []ListAuthorCandidatesRow{}
 	for rows.Next() {
 		var i ListAuthorCandidatesRow
-		if err := rows.Scan(&i.ID, &i.Username, &i.FullName); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -721,7 +727,7 @@ func (q *Queries) ListAuthorCandidates(ctx context.Context, arg ListAuthorCandid
 }
 
 const listPostBylineAuthors = `-- name: ListPostBylineAuthors :many
-SELECT u.id, u.username, u.full_name
+SELECT u.id, u.username, u.full_name, u.avatar_url
 FROM user_posts up
 JOIN users u ON u.id = up.user_id
 WHERE up.post_id = $1
@@ -729,13 +735,14 @@ ORDER BY up."order", u.id
 `
 
 type ListPostBylineAuthorsRow struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	FullName string `json:"full_name"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	FullName  string `json:"full_name"`
+	AvatarUrl string `json:"avatar_url"`
 }
 
 // A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
-// the Authors field. Public fields only.
+// the Authors field. Public fields only (the avatar, #334, included).
 func (q *Queries) ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostBylineAuthors, postID)
 	if err != nil {
@@ -745,7 +752,12 @@ func (q *Queries) ListPostBylineAuthors(ctx context.Context, postID int64) ([]Li
 	items := []ListPostBylineAuthorsRow{}
 	for rows.Next() {
 		var i ListPostBylineAuthorsRow
-		if err := rows.Scan(&i.ID, &i.Username, &i.FullName); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

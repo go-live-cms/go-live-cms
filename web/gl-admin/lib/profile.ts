@@ -224,3 +224,103 @@ export function adoptPasswordChangeSession(
   })
   return "signed-in"
 }
+
+// Profile photo (#334). The API is the source of truth (api/avatar_utils.go:
+// avatarMaxBytes and the accepted types); these catch mistakes before the upload.
+export const AVATAR_MAX_BYTES = 5 * 1024 * 1024
+export const AVATAR_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const
+export const AVATAR_ACCEPT = AVATAR_TYPES.join(",")
+
+// The CSS object-position that shows, in a square box with object-fit: cover, the
+// square the API keeps (avatarCrop in api/avatar_utils.go): the largest one,
+// centered on the focal point and kept inside the image. Plain `focal %` would
+// align the image's focal point with the box's same point instead, which isn't
+// that crop unless the point is the center. width/height: the image as displayed.
+export function avatarCropPosition(width: number, height: number, focal: { x: number; y: number } | null): string {
+  const f = focal ?? { x: 0.5, y: 0.5 }
+  const side = Math.min(width, height)
+  const axis = (length: number, point: number) => {
+    if (!(length > side)) return 50
+    const start = Math.min(Math.max(point * length - side / 2, 0), length - side)
+    return Math.round((start / (length - side)) * 1000) / 10
+  }
+  return `${axis(width, f.x)}% ${axis(height, f.y)}%`
+}
+
+export function validateAvatarFile(file: { type: string; size: number }): string | null {
+  if (!(AVATAR_TYPES as readonly string[]).includes(file.type)) return "Use a JPEG, PNG, GIF or WebP image."
+  if (file.size > AVATAR_MAX_BYTES) return "That image is too large. Use one under 5 MB."
+  return null
+}
+
+// User-facing text for a failed avatar upload or removal (codes from
+// api/avatar_handlers_write.go).
+export function describeAvatarError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 429) return `Too many requests. ${retryHint(err)}`
+    switch (err.code) {
+      case "avatar_type":
+        return "Use a JPEG, PNG, GIF or WebP image."
+      case "avatar_unreadable":
+        return "That file isn't an image we can read. Try another one."
+      case "avatar_dimensions":
+        return "That image is too big to process. Use a smaller one."
+      case "avatar_too_large":
+        return "That image is too large. Use one under 5 MB."
+    }
+    if (err.status === 401) return "Your session has expired. Please sign in again."
+  }
+  return "Your photo couldn't be saved. Please try again."
+}
+
+// Email change (#334): the new address and the current password.
+export type EmailChangeFields = { new_email: string; current_password: string }
+
+export function validateEmailChange(fields: EmailChangeFields, currentEmail: string): string | null {
+  const email = fields.new_email.trim()
+  if (!isValidEmail(email)) return "Enter a valid email address."
+  if (email.toLowerCase() === currentEmail.trim().toLowerCase()) return "That's already your email address."
+  if (!fields.current_password) return "Enter your current password."
+  return null
+}
+
+// What the profile says once the request went through. The API gives the same
+// answer whether or not another account has the address (no enumeration), and a
+// taken address gets no email, so this says "if" like the forgot-password page.
+export function emailChangeSentMessage(newEmail: string, expiresInSeconds?: number): string {
+  const hours = expiresInSeconds ? Math.round(expiresInSeconds / 3600) : 24
+  const expiry = hours === 1 ? "1 hour" : `${hours} hours`
+  return `If ${newEmail.trim()} can be used, we've sent it a confirmation link. Your email changes once you open it; the link expires in ${expiry}.`
+}
+
+export function describeEmailChangeError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 429) return `Too many attempts. ${retryHint(err)}`
+    if (err.code === "current_password_incorrect") return "Your current password is incorrect."
+    if (err.code === "same_email") return "That's already your email address."
+    if (err.status === 401) return "Your session has expired. Please sign in again."
+    if (err.status === 400) return "Enter a valid email address."
+    return err.message
+  }
+  return err instanceof Error ? err.message : "The link couldn't be sent. Please try again."
+}
+
+// Signing out other devices (#334).
+export function otherDevicesSummary(count: number): string {
+  if (count <= 0) return "You're not signed in anywhere else."
+  return count === 1 ? "You're signed in on 1 other device." : `You're signed in on ${count} other devices.`
+}
+
+export function signedOutMessage(count: number): string {
+  if (count <= 0) return "No other devices were signed in."
+  return count === 1 ? "Signed out of 1 other device." : `Signed out of ${count} other devices.`
+}
+
+export function describeSignOutError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.code === "session_not_active") return "This browser's session has ended. Sign in again, then try once more."
+    if (err.status === 429) return `Too many requests. ${retryHint(err)}`
+    if (err.status === 401) return "Your session has expired. Please sign in again."
+  }
+  return "Other devices couldn't be signed out. Please try again."
+}

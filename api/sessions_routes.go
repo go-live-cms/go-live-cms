@@ -67,6 +67,11 @@ func (server *Server) RegisterSessionRoutes(v1 *gin.RouterGroup) {
 	auth.POST("/refresh", server.rateLimits.refresh.perIP(), server.cookieOriginGuard, server.renewAccessToken) // POST /api/v1/auth/refresh
 	auth.POST("/logout", server.cookieOriginGuard, server.requireAuth(), server.logoutUser)                     // POST /api/v1/auth/logout
 
+	// This browser's devices (#334). Under /auth because they read the refresh cookie
+	// (the dev cookie's Path is /api/v1/auth) to know which session is this one.
+	auth.GET("/sessions", server.requireAuth(), server.listMyDevices)                                                  // GET /api/v1/auth/sessions
+	auth.POST("/sessions/sign-out-others", server.cookieOriginGuard, server.requireAuth(), server.signOutOtherDevices) // POST /api/v1/auth/sessions/sign-out-others
+
 	// Session management endpoints - uniformly protected
 	sessions := v1.Group("/sessions")
 	sessions.Use(server.requireAuth())

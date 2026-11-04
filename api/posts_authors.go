@@ -85,7 +85,7 @@ func parsePostIDParam(c *gin.Context) (int64, bool) {
 func toPostBylineResponse(rows []db.ListPostBylineAuthorsRow) []PostAuthorResponse {
 	authors := make([]PostAuthorResponse, len(rows))
 	for i, row := range rows {
-		authors[i] = PostAuthorResponse{ID: row.ID, Username: row.Username, FullName: row.FullName}
+		authors[i] = PostAuthorResponse{ID: row.ID, Username: row.Username, FullName: row.FullName, Avatar: avatarResponse(row.AvatarUrl)}
 	}
 	return authors
 }
@@ -180,7 +180,7 @@ func (server *Server) listAuthorCandidates(c *gin.Context) {
 	}
 	authors := make([]PostAuthorResponse, len(rows))
 	for i, row := range rows {
-		authors[i] = PostAuthorResponse{ID: row.ID, Username: row.Username, FullName: row.FullName}
+		authors[i] = PostAuthorResponse{ID: row.ID, Username: row.Username, FullName: row.FullName, Avatar: avatarResponse(row.AvatarUrl)}
 	}
 	c.JSON(http.StatusOK, gin.H{"authors": authors})
 }

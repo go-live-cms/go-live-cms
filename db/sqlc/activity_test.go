@@ -114,7 +114,7 @@ func TestActivityAppendOnly(t *testing.T) {
 	actor := createTestUser(t)
 	event, err := testQueries.CreateActivity(ctx, CreateActivityParams{
 		ActorID: sql.NullInt64{Int64: actor.ID, Valid: true}, Verb: ActivityPublished,
-		ObjectType: ActivityObjectPost, ObjectID: 42, Payload: json.RawMessage(`{"version_no":1}`),
+		ObjectType: ActivityObjectPost, ObjectID: time.Now().UnixNano(), Payload: json.RawMessage(`{"version_no":1}`),
 	})
 	require.NoError(t, err)
 	require.Equal(t, actor.ID, event.ActorID.Int64)
@@ -134,7 +134,9 @@ func TestActivityAppendOnly(t *testing.T) {
 	// An actor that is already gone is stored as NULL.
 	gone, err := testQueries.CreateActivity(ctx, CreateActivityParams{
 		ActorID: sql.NullInt64{Int64: actor.ID, Valid: true}, Verb: ActivityCreated,
-		ObjectType: ActivityObjectPost, ObjectID: 42, Payload: json.RawMessage(`{}`),
+		// Never a real post's id: the api package's tests run at the same time on this
+		// database and read a post's whole history (TestActivityRecordedOnPostWritePaths).
+		ObjectType: ActivityObjectPost, ObjectID: time.Now().UnixNano(), Payload: json.RawMessage(`{}`),
 	})
 	require.NoError(t, err)
 	require.False(t, gone.ActorID.Valid)
@@ -144,8 +146,10 @@ func TestActivityAppendOnly(t *testing.T) {
 // well-formed verbs.
 func TestActivityPayloadLimits(t *testing.T) {
 	ctx := context.Background()
+	// A marker id, not a real post's: see TestActivityAppendOnly above.
+	objectID := time.Now().UnixNano()
 	insert := func(verb string, payload string) error {
-		_, err := testQueries.CreateActivity(ctx, CreateActivityParams{Verb: verb, ObjectType: ActivityObjectPost, ObjectID: 1, Payload: json.RawMessage(payload)})
+		_, err := testQueries.CreateActivity(ctx, CreateActivityParams{Verb: verb, ObjectType: ActivityObjectPost, ObjectID: objectID, Payload: json.RawMessage(payload)})
 		return err
 	}
 	require.Error(t, insert(ActivityCreated, `[1]`))

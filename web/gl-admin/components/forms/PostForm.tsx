@@ -940,7 +940,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         connection={connection}
         live={collabStatus === "connected"}
         collabUsers={collabUsers}
-        me={signedIn ? { id: signedIn.id, name: signedIn.full_name || signedIn.username } : undefined}
+        me={signedIn ? { id: signedIn.id, name: signedIn.full_name || signedIn.username, src: signedIn.avatar } : undefined}
         viewOnly={contentReadOnly}
         canPublish={canPublish}
         isPublishing={isSubmitting}
@@ -1280,7 +1280,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         {others.length > 0 ? (
           <div className="post-editor__restore-people">
             <AvatarStack
-              users={others.map((u) => ({ id: u.id ?? -u.clientId, name: u.name ?? "Guest" }))}
+              users={others.map((u) => ({ id: u.id ?? -u.clientId, name: u.name ?? "Guest", src: u.avatar }))}
               size={24}
               max={3}
             />

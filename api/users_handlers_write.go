@@ -184,6 +184,16 @@ func (server *Server) updateUser(c *gin.Context) {
 		}
 	}
 
+	// Your own email changes only through POST /users/me/email, which confirms the
+	// new address first (#334). An admin may still set someone else's.
+	if isSelf && req.Email != "" && normEmail(req.Email) != normEmail(existingUser.Email) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "change your email from your profile: the new address must be confirmed",
+			"code":  "email_change_requires_confirmation",
+		})
+		return
+	}
+
 	// Changing your own password requires the current one, so a leaked
 	// access token alone cannot take over the account. Admins resetting
 	// someone else's password skip this.
@@ -478,6 +488,7 @@ func (server *Server) deleteUser(c *gin.Context) {
 
 	logSecurityEvent(c, LogUserRemoved, "all", id, fmt.Sprintf("Removed by user %d; posts to user %d", caller.ID, *req.TransferToID))
 	server.recheckCollabUser(requestIDFromContext(c), id)
+	server.removeOldAvatar(c, id, result.AvatarURL)
 	server.recordRequestActivity(c, activityEvent{
 		Verb:       db.ActivityRemoved,
 		ObjectType: db.ActivityObjectUser,

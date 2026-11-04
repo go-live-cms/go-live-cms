@@ -26,6 +26,8 @@ var (
 const (
 	TemplateInvitation    = "invitation"
 	TemplatePasswordReset = "password-reset"
+	TemplateEmailChange   = "email-change"
+	TemplateEmailChanged  = "email-changed"
 )
 
 // DefaultSiteTitle is used when the site title setting is empty.
@@ -48,6 +50,23 @@ type PasswordReset struct {
 	ExpiresIn time.Duration
 }
 
+// EmailChange is the data for the email change confirmation, sent to the new
+// address (#334).
+type EmailChange struct {
+	SiteTitle string
+	Username  string
+	Link      string
+	ExpiresIn time.Duration
+}
+
+// EmailChanged is the data for the notice sent to the old address once a change
+// is confirmed (#334). NewEmail is shown masked (MaskEmail).
+type EmailChanged struct {
+	SiteTitle string
+	Username  string
+	NewEmail  string
+}
+
 // templateData is what the templates see.
 type templateData struct {
 	SiteTitle string
@@ -56,6 +75,7 @@ type templateData struct {
 	Username  string
 	Link      string
 	ExpiresIn string // "72 hours", "1 hour"
+	NewEmail  string
 }
 
 // RenderInvitation renders the invitation email to to.
@@ -79,6 +99,39 @@ func RenderPasswordReset(to string, d PasswordReset) (Message, error) {
 		ExpiresIn: HumanDuration(d.ExpiresIn),
 	}
 	return render(to, TemplatePasswordReset, fmt.Sprintf("Reset your %s password", data.SiteTitle), "password_reset", data)
+}
+
+// RenderEmailChange renders the confirmation link email to the new address.
+func RenderEmailChange(to string, d EmailChange) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		Username:  d.Username,
+		Link:      d.Link,
+		ExpiresIn: HumanDuration(d.ExpiresIn),
+	}
+	return render(to, TemplateEmailChange, fmt.Sprintf("Confirm your new %s email address", data.SiteTitle), "email_change", data)
+}
+
+// RenderEmailChanged renders the notice to the old address after a change.
+func RenderEmailChanged(to string, d EmailChanged) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		Username:  d.Username,
+		NewEmail:  MaskEmail(d.NewEmail),
+	}
+	return render(to, TemplateEmailChanged, fmt.Sprintf("Your %s email address was changed", data.SiteTitle), "email_changed", data)
+}
+
+// MaskEmail hides most of an address's local part ("ana.lima@example.com" →
+// "a•••@example.com"), so a notice to the old address names the new one without
+// handing it out in full to whoever reads the old inbox.
+func MaskEmail(email string) string {
+	local, domain, ok := strings.Cut(email, "@")
+	if !ok || local == "" {
+		return "•••"
+	}
+	first := []rune(local)[0]
+	return string(first) + "•••@" + domain
 }
 
 func render(to, template, subject, file string, data templateData) (Message, error) {

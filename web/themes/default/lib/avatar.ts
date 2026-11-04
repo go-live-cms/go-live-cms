@@ -21,3 +21,8 @@ export function initial(name: string | undefined): string {
   const ch = (name ?? "").trim().charAt(0)
   return ch ? ch.toUpperCase() : "?"
 }
+
+// The uploaded picture to show instead of the initial (#334), or null. Only an API
+// avatar path (/uploads/…/_avatars/avatar-<hex>.jpg|png) passes, so a bad stored
+// value can't point the page at another host.
+export { safeAvatarSrc as avatarSrc } from "@gl-admin/lib/presence"

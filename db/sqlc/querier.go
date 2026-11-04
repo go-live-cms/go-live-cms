@@ -20,6 +20,8 @@ type Querier interface {
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
 	BlockAllSessionsForUser(ctx context.Context, userID int64) error
+	// Signs a user out everywhere but one session (#334).
+	BlockOtherSessionsForUser(ctx context.Context, arg BlockOtherSessionsForUserParams) (int64, error)
 	BlockSession(ctx context.Context, id uuid.UUID) error
 	// Unscheduling: back to draft, the time cleared. No row: not scheduled (or missing).
 	CancelPostSchedule(ctx context.Context, id int64) (Post, error)
@@ -42,6 +44,8 @@ type Querier interface {
 	// (next_attempt_at) so the others skip it until it ends. The returned
 	// next_attempt_at is the claim's fencing token.
 	ClaimDueScheduledUpdates(ctx context.Context, arg ClaimDueScheduledUpdatesParams) ([]ClaimDueScheduledUpdatesRow, error)
+	// Single-use: like ClaimPasswordResetToken, only one claim can match.
+	ClaimEmailChangeToken(ctx context.Context, tokenHash []byte) (EmailChangeToken, error)
 	// Single-use: like ClaimUserInvitation, only one claim can match.
 	ClaimPasswordResetToken(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	// Marks a valid invitation accepted in one statement, so two concurrent
@@ -58,6 +62,7 @@ type Querier interface {
 	// Duplicating a post (#354, DuplicatePostTx): the copy's relationship rows,
 	// read from the source inside the same transaction as the insert.
 	CopyPostTaxonomyTerms(ctx context.Context, arg CopyPostTaxonomyTermsParams) error
+	CountEmailChangeTokensSince(ctx context.Context, arg CountEmailChangeTokensSinceParams) (int64, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	// The total for GET /media: the rows ListMedia pages through, same filters.
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
@@ -97,6 +102,9 @@ type Querier interface {
 	// The collab store runs it under the post's row lock, so concurrent stores of one
 	// post can't both insert; elsewhere a race costs at most a duplicate.
 	CreateActivityThrottled(ctx context.Context, arg CreateActivityThrottledParams) (int64, error)
+	// Email change (#334): the confirmation link goes to the new address; the change
+	// happens only when it is redeemed (ConfirmEmailChangeTx).
+	CreateEmailChangeToken(ctx context.Context, arg CreateEmailChangeTokenParams) (EmailChangeToken, error)
 	// variants is NULL for media without generated variants, stored as {}.
 	CreateMedia(ctx context.Context, arg CreateMediaParams) (Medium, error)
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
@@ -263,6 +271,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
+	GetValidEmailChangeTokenByHash(ctx context.Context, tokenHash []byte) (EmailChangeToken, error)
 	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	// The new byline (#319): author_ids in credit order, "order" = position from 0.
@@ -275,8 +284,15 @@ type Querier interface {
 	// The scheduled update's version: its frozen body and settings, credited to whoever
 	// scheduled it. Never the working copy (#335: later edits aren't included).
 	InsertPublishedVersionFromScheduledUpdate(ctx context.Context, arg InsertPublishedVersionFromScheduledUpdateParams) (InsertPublishedVersionFromScheduledUpdateRow, error)
+	// A newer request, a confirmed change or a password change/reset ends every
+	// other pending link.
+	InvalidateEmailChangeTokensForUser(ctx context.Context, userID int64) error
 	InvalidatePasswordResetTokensForUser(ctx context.Context, userID int64) error
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
+	// The sessions that can still refresh (#334, Profile's "other devices"): not
+	// blocked (rotated, logged out, revoked) and not expired. Uses the partial index
+	// idx_sessions_user_id_active (000029).
+	ListActiveSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	// Newest first, paged by id (before_id: the last id of the previous page). What a
 	// viewer sees (the API passes its role):
 	//   - admins: everything;
@@ -350,7 +366,7 @@ type Querier interface {
 	// who wrote a draft, and every author it returns has a page.
 	ListPostAuthorProfiles(ctx context.Context, postID int64) ([]ListPostAuthorProfilesRow, error)
 	// A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
-	// the Authors field. Public fields only.
+	// the Authors field. Public fields only (the avatar, #334, included).
 	ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	// One row at most per post (the primary key). The ORDER BY below names every column
@@ -541,6 +557,11 @@ type Querier interface {
 	// is done once the post is published, by the scheduler or by hand: its time and
 	// retry state are cleared.
 	SetPublishedVersionOnPost(ctx context.Context, arg SetPublishedVersionOnPostParams) error
+	// Sets (or, with '', removes) the avatar and returns the one it replaced, so the
+	// API can delete that file after the commit. The row lock makes two uploads at
+	// once each see the other's file as the previous one, so neither leaks.
+	SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (string, error)
+	SetUserEmail(ctx context.Context, arg SetUserEmailParams) (User, error)
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) (User, error)

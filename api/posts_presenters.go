@@ -107,6 +107,8 @@ type PostAuthorResponse struct {
 	ID       int64  `json:"id"`
 	Username string `json:"username"`
 	FullName string `json:"full_name"`
+	// The /uploads URL of their avatar (#334), or null; built in SQL.
+	Avatar *string `json:"avatar"`
 }
 
 // PostWithAllMetaResponse includes post, author, and post-type meta

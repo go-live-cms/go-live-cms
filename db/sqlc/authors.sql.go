@@ -17,7 +17,7 @@ import (
 const getPublicAuthor = `-- name: GetPublicAuthor :one
 
 SELECT
-    u.id, u.username, u.full_name, u.bio, u.website,
+    u.id, u.username, u.full_name, u.bio, u.website, u.avatar_url,
     (
         SELECT COUNT(*)
         FROM post_published_authors ppa
@@ -38,6 +38,7 @@ type GetPublicAuthorRow struct {
 	FullName  string `json:"full_name"`
 	Bio       string `json:"bio"`
 	Website   string `json:"website"`
+	AvatarUrl string `json:"avatar_url"`
 	PostCount int64  `json:"post_count"`
 }
 
@@ -57,13 +58,14 @@ func (q *Queries) GetPublicAuthor(ctx context.Context, username string) (GetPubl
 		&i.FullName,
 		&i.Bio,
 		&i.Website,
+		&i.AvatarUrl,
 		&i.PostCount,
 	)
 	return i, err
 }
 
 const listPostAuthorProfiles = `-- name: ListPostAuthorProfiles :many
-SELECT u.id, u.username, u.full_name, u.bio, u.website
+SELECT u.id, u.username, u.full_name, u.bio, u.website, u.avatar_url
 FROM post_published_authors up
 JOIN users u ON u.id = up.user_id
 JOIN posts p ON p.id = up.post_id
@@ -75,11 +77,12 @@ ORDER BY up.position, u.id
 `
 
 type ListPostAuthorProfilesRow struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	FullName string `json:"full_name"`
-	Bio      string `json:"bio"`
-	Website  string `json:"website"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	FullName  string `json:"full_name"`
+	Bio       string `json:"bio"`
+	Website   string `json:"website"`
+	AvatarUrl string `json:"avatar_url"`
 }
 
 // The "Written by" cards: every author in the post's published byline, in
@@ -100,6 +103,7 @@ func (q *Queries) ListPostAuthorProfiles(ctx context.Context, postID int64) ([]L
 			&i.FullName,
 			&i.Bio,
 			&i.Website,
+			&i.AvatarUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -180,7 +184,6 @@ SELECT
         WHERE pm.post_id = p.id
     ) as meta,
     golive_post_published_byline(p.id)::jsonb as authors
-
 FROM posts p
 JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'

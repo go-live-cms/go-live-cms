@@ -258,8 +258,8 @@ func TestGetPostAuthors(t *testing.T) {
 			require.Equal(t, tc.want, recorder.Code, recorder.Body.String())
 			if tc.want == http.StatusOK {
 				require.JSONEq(t, `{"authors": [
-					{"id": 33, "username": "byline_other", "full_name": ""},
-					{"id": 32, "username": "byline_contrib", "full_name": ""}]}`, recorder.Body.String())
+					{"id": 33, "username": "byline_other", "full_name": "", "avatar": null},
+					{"id": 32, "username": "byline_contrib", "full_name": "", "avatar": null}]}`, recorder.Body.String())
 			}
 		})
 	}
@@ -269,11 +269,11 @@ func TestListAuthorCandidates(t *testing.T) {
 	t.Run("Search", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
 		store.EXPECT().ListAuthorCandidates(gomock.Any(), db.ListAuthorCandidatesParams{Roles: contentRoles, Pattern: `%an\_a%`, LimitCount: authorCandidatesLimit}).
-			Times(1).Return([]db.ListAuthorCandidatesRow{{ID: 3, Username: "ana", FullName: "Ana Costa"}}, nil)
+			Times(1).Return([]db.ListAuthorCandidatesRow{{ID: 3, Username: "ana", FullName: "Ana Costa", AvatarUrl: "/uploads/media/_avatars/avatar-0123456789abcdef0123456789abcdef.jpg"}}, nil)
 		stubRoleLookup(store, bylineContributor)
 		recorder := bylineRequest(t, newTestServer(t, store), bylineContributor, http.MethodGet, "/api/v1/posts/author-candidates?q=+an_a+", "")
 		require.Equal(t, http.StatusOK, recorder.Code)
-		require.JSONEq(t, `{"authors": [{"id": 3, "username": "ana", "full_name": "Ana Costa"}]}`, recorder.Body.String())
+		require.JSONEq(t, `{"authors": [{"id": 3, "username": "ana", "full_name": "Ana Costa", "avatar": "/uploads/media/_avatars/avatar-0123456789abcdef0123456789abcdef.jpg"}]}`, recorder.Body.String())
 	})
 	t.Run("Everyone", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))

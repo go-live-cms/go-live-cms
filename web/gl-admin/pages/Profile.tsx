@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import Avatar from "@gl-admin/components/ui/Avatar"
 import Input from "@gl-admin/components/ui/Input"
 import Textarea from "@gl-admin/components/ui/Textarea"
 import Button from "@gl-admin/components/ui/Button"
@@ -6,17 +7,26 @@ import Notice from "@gl-admin/components/ui/Notice"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import { CheckIcon } from "@gl-admin/components/ui/icons"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
-import { getMe, updateUser } from "@gl-admin/lib/api/users"
+import { getMe, removeAvatar, updateUser } from "@gl-admin/lib/api/users"
+import { getMyDevices, signOutOtherDevices } from "@gl-admin/lib/api/sessions"
+import AvatarPhotoModal from "@gl-admin/components/profile/AvatarPhotoModal"
+import ChangeEmailModal from "@gl-admin/components/profile/ChangeEmailModal"
 import type { User } from "@gl-admin/lib/api/types"
 import { authManager } from "@gl-admin/lib/auth"
 import { roleLabel } from "@gl-admin/lib/roles"
 import {
+  AVATAR_ACCEPT,
   BIO_MAX,
   adoptPasswordChangeSession,
   authorFieldErrors,
   buildProfileUpdate,
+  describeAvatarError,
   describePasswordChangeError,
   describeProfileError,
+  describeSignOutError,
+  otherDevicesSummary,
+  signedOutMessage,
+  validateAvatarFile,
   newPasswordChecklist,
   validatePasswordChange,
   validateProfile,
@@ -52,9 +62,11 @@ const inputValue = (e: any): string => e.currentTarget?.value ?? e.target?.value
 // UserForm: that always sends `role` (403 for non-admins) and saves the password
 // together with the profile.
 //
-// Hidden until #334: the avatar upload, changing the email address (it shows as
-// text) and "Sign out of other devices" (a password change already signs out every
-// other session). The password checklist shows the API's minimum until #329.
+// Account (#334): the profile photo (AvatarPhotoModal: pick, crop around a point,
+// upload; Remove), changing the email address (ChangeEmailModal: a link to the new
+// address, nothing changes until it's opened) and "Sign out of other devices" (every
+// session but this browser's; the count comes from GET /auth/sessions). The design
+// shows no list of sessions, so neither does this.
 export default function Profile() {
   const { toasts, showSuccess, showError, removeToast } = useToast()
   const [user, setUser] = useState<User | null>(null)
@@ -67,6 +79,19 @@ export default function Profile() {
   const [changingPassword, setChangingPassword] = useState(false)
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordNotice, setPasswordNotice] = useState<string | null>(null)
+  // Profile photo.
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [removingPhoto, setRemovingPhoto] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  // Email change.
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [emailNotice, setEmailNotice] = useState<string | null>(null)
+  // Other devices: null while loading, -1 when the count couldn't be read.
+  const [otherDevices, setOtherDevices] = useState<number | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
+  const [devicesError, setDevicesError] = useState<string | null>(null)
+  const [devicesNotice, setDevicesNotice] = useState<string | null>(null)
 
   useEffect(() => {
     document.title = "GoLive Admin | My profile"
@@ -83,6 +108,13 @@ export default function Profile() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
+      })
+    getMyDevices()
+      .then(({ other_count }) => {
+        if (!cancelled) setOtherDevices(other_count)
+      })
+      .catch(() => {
+        if (!cancelled) setOtherDevices(-1)
       })
     return () => {
       cancelled = true
@@ -149,12 +181,61 @@ export default function Profile() {
         return
       }
       setPasswordNotice("Password changed. You were signed out on all other devices and browsers.")
+      setOtherDevices(0)
       showSuccess("Password changed.")
     } catch (err) {
       console.error("Error changing password:", err)
       setPasswordError(describePasswordChangeError(err))
     } finally {
       setChangingPassword(false)
+    }
+  }
+
+  // The account changed here (photo): this page, the sidebar and the next
+  // collaboration connection (presence) all read it.
+  function adoptUser(updated: User) {
+    setUser(updated)
+    authManager.setUser(updated)
+  }
+
+  function handlePhotoPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.currentTarget.files?.[0] ?? null
+    // Picking the same file again must fire change again.
+    e.currentTarget.value = ""
+    if (!file) return
+    const invalid = validateAvatarFile(file)
+    setPhotoError(invalid)
+    if (!invalid) setPhotoFile(file)
+  }
+
+  async function handleRemovePhoto() {
+    if (removingPhoto) return
+    setPhotoError(null)
+    setRemovingPhoto(true)
+    try {
+      const { user: updated } = await removeAvatar()
+      adoptUser(updated)
+      showSuccess("Photo removed.")
+    } catch (err) {
+      setPhotoError(describeAvatarError(err))
+    } finally {
+      setRemovingPhoto(false)
+    }
+  }
+
+  async function handleSignOutOthers() {
+    if (signingOut) return
+    setDevicesError(null)
+    setDevicesNotice(null)
+    setSigningOut(true)
+    try {
+      const { signed_out } = await signOutOtherDevices()
+      setOtherDevices(0)
+      setDevicesNotice(signedOutMessage(signed_out))
+    } catch (err) {
+      setDevicesError(describeSignOutError(err))
+    } finally {
+      setSigningOut(false)
     }
   }
 
@@ -208,6 +289,37 @@ export default function Profile() {
         <h2 className="gl-workspace__section-title" id="gl-profile-details">
           Your details
         </h2>
+        <div className="gl-profile__photo">
+          <Avatar user={{ id: user.id, name: user.full_name || user.username, src: user.avatar }} size={64} decorative />
+          <div className="gl-profile__photo-body">
+            <div className="gl-profile__photo-actions">
+              <Button variant="secondary" onClick={() => fileInput.current?.click()} disabled={removingPhoto}>
+                Upload photo
+              </Button>
+              {user.avatar && (
+                <Button variant="ghost" onClick={handleRemovePhoto} loading={removingPhoto}>
+                  Remove
+                </Button>
+              )}
+              <input
+                ref={fileInput}
+                type="file"
+                accept={AVATAR_ACCEPT}
+                className="gl-workspace__sr"
+                tabIndex={-1}
+                aria-hidden="true"
+                data-testid="avatar-file"
+                onChange={handlePhotoPicked}
+              />
+            </div>
+            <span className="gl-workspace-field__hint">Your colour in shared posts comes from your account and can't be changed.</span>
+            {photoError && (
+              <Notice tone="danger" live="alert">
+                {photoError}
+              </Notice>
+            )}
+          </div>
+        </div>
         <div className="gl-workspace__fields">
           <Input
             title="Name"
@@ -229,7 +341,17 @@ export default function Profile() {
           />
           <div className="gl-profile__fact">
             <span className="gl-profile__fact-label">Email</span>
-            <span className="gl-profile__fact-value">{user.email}</span>
+            <span className="gl-profile__email">
+              <span className="gl-profile__email-value">{user.email}</span>
+              <Button variant="ghost" size="sm" onClick={() => setEmailDialogOpen(true)} aria-label="Change email">
+                Change
+              </Button>
+            </span>
+            {emailNotice && (
+              <Notice tone="info" live="status">
+                {emailNotice}
+              </Notice>
+            )}
           </div>
           <div className="gl-profile__fact">
             <span className="gl-profile__fact-label">Role</span>
@@ -340,6 +462,58 @@ export default function Profile() {
           </div>
         </div>
       </form>
+
+      <hr className="gl-workspace__rule" />
+
+      <section className="gl-workspace__section" aria-labelledby="gl-profile-devices">
+        <div>
+          <h2 className="gl-workspace__section-title" id="gl-profile-devices">
+            Other devices
+          </h2>
+          <p className="gl-workspace__section-intro">
+            {otherDevices === null
+              ? "Checking where else you're signed in…"
+              : otherDevices < 0
+                ? "Sign out of every other browser and device you're signed in on. This one stays signed in."
+                : otherDevicesSummary(otherDevices)}
+          </p>
+        </div>
+        {devicesError && (
+          <Notice tone="danger" live="alert">
+            {devicesError}
+          </Notice>
+        )}
+        {devicesNotice && (
+          <Notice tone="info" live="status">
+            {devicesNotice}
+          </Notice>
+        )}
+        <div>
+          <Button variant="secondary" size="lg" onClick={handleSignOutOthers} loading={signingOut}>
+            Sign out of other devices
+          </Button>
+        </div>
+      </section>
+
+      <AvatarPhotoModal
+        file={photoFile}
+        onClose={() => setPhotoFile(null)}
+        onSaved={(updated) => {
+          setPhotoFile(null)
+          setPhotoError(null)
+          adoptUser(updated)
+          showSuccess("Photo saved.")
+        }}
+      />
+      <ChangeEmailModal
+        isOpen={emailDialogOpen}
+        currentEmail={user.email}
+        onClose={() => setEmailDialogOpen(false)}
+        onSent={(message) => {
+          setEmailDialogOpen(false)
+          setEmailNotice(message)
+        }}
+      />
 
       <ToastContainer toasts={toasts} onRemoveToast={removeToast} />
     </div>

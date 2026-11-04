@@ -59,3 +59,29 @@ func toSessionResponse(session db.Session) SessionResponse {
 		CreatedAt: session.CreatedAt,
 	}
 }
+
+// DeviceSessionResponse is one signed-in browser or device on Profile (#334). The
+// user agent is the caller's own; the IP only in debug mode. A session row is
+// replaced on every refresh, so its created_at is when it was last used.
+type DeviceSessionResponse struct {
+	ID         uuid.UUID `json:"id"`
+	UserAgent  string    `json:"user_agent"`
+	ClientIP   string    `json:"client_ip,omitempty"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	Current    bool      `json:"current"`
+}
+
+func toDeviceSessionResponse(session db.Session, current, includeIP bool) DeviceSessionResponse {
+	rsp := DeviceSessionResponse{
+		ID:         session.ID,
+		UserAgent:  session.UserAgent,
+		LastUsedAt: session.CreatedAt,
+		ExpiresAt:  session.ExpiresAt,
+		Current:    current,
+	}
+	if includeIP {
+		rsp.ClientIP = session.ClientIp
+	}
+	return rsp
+}

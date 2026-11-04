@@ -1,4 +1,4 @@
-import type { Session, ApiResponse } from "./types"
+import type { Session, ApiResponse, DeviceSession } from "./types"
 import { apiCall } from "../api"
 import { apiErrorFromResponse } from "./errors"
 
@@ -84,4 +84,16 @@ export async function blockSession(sessionId: string, token?: string): Promise<a
     body: { session_id: sessionId },
     token,
   })
+}
+
+// This browser's devices (#334): the sessions that can still refresh, which one is
+// this browser (the API reads the refresh cookie), and how many others.
+export async function getMyDevices(): Promise<{ sessions: DeviceSession[]; other_count: number }> {
+  return apiCall("/auth/sessions")
+}
+
+// Signs out every other device and browser; this one stays signed in. 409
+// "session_not_active" when this browser's own session has ended.
+export async function signOutOtherDevices(): Promise<{ signed_out: number }> {
+  return apiCall("/auth/sessions/sign-out-others", { method: "POST" })
 }

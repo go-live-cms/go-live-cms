@@ -91,7 +91,7 @@ export function isAdminPath(pathname: string): boolean {
 
 // The signed-out pages that handle credentials and emailed tokens (#148). Same
 // policy as the admin: their only scripts are our bundled modules.
-const ACCOUNT_PAGES = ["/login", "/forgot-password", "/reset-password", "/accept-invite"]
+const ACCOUNT_PAGES = ["/login", "/forgot-password", "/reset-password", "/accept-invite", "/confirm-email"]
 
 export function isAccountPagePath(pathname: string): boolean {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname

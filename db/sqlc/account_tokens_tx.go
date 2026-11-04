@@ -129,7 +129,11 @@ func (store *SQLStore) ResetPasswordTx(ctx context.Context, arg ResetPasswordTxP
 		if err := q.BlockAllSessionsForUser(ctx, token.UserID); err != nil {
 			return err
 		}
-		return q.InvalidatePasswordResetTokensForUser(ctx, token.UserID)
+		if err := q.InvalidatePasswordResetTokensForUser(ctx, token.UserID); err != nil {
+			return err
+		}
+		// An email change requested with the old password goes too (#334).
+		return q.InvalidateEmailChangeTokensForUser(ctx, token.UserID)
 	})
 
 	return user, err

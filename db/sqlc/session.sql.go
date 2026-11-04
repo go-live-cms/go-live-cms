@@ -24,6 +24,26 @@ func (q *Queries) BlockAllSessionsForUser(ctx context.Context, userID int64) err
 	return err
 }
 
+const blockOtherSessionsForUser = `-- name: BlockOtherSessionsForUser :execrows
+UPDATE sessions
+SET is_blocked = true
+WHERE user_id = $1 AND is_blocked = false AND id <> $2
+`
+
+type BlockOtherSessionsForUserParams struct {
+	UserID int64     `json:"user_id"`
+	KeepID uuid.UUID `json:"keep_id"`
+}
+
+// Signs a user out everywhere but one session (#334).
+func (q *Queries) BlockOtherSessionsForUser(ctx context.Context, arg BlockOtherSessionsForUserParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, blockOtherSessionsForUser, arg.UserID, arg.KeepID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const blockSession = `-- name: BlockSession :exec
 UPDATE sessions
 SET is_blocked = true
@@ -208,6 +228,52 @@ func (q *Queries) GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Sessio
 		&i.ReplacedBy,
 	)
 	return i, err
+}
+
+const listActiveSessionsByUser = `-- name: ListActiveSessionsByUser :many
+SELECT id, user_id, username, user_agent, client_ip, is_blocked, expires_at, created_at, refresh_token_hash, refresh_kid, jti, rotated_at, replaced_by FROM sessions
+WHERE user_id = $1 AND is_blocked = false AND expires_at > now()
+ORDER BY created_at DESC, id
+`
+
+// The sessions that can still refresh (#334, Profile's "other devices"): not
+// blocked (rotated, logged out, revoked) and not expired. Uses the partial index
+// idx_sessions_user_id_active (000029).
+func (q *Queries) ListActiveSessionsByUser(ctx context.Context, userID int64) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveSessionsByUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Session{}
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Username,
+			&i.UserAgent,
+			&i.ClientIp,
+			&i.IsBlocked,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.RefreshTokenHash,
+			&i.RefreshKid,
+			&i.Jti,
+			&i.RotatedAt,
+			&i.ReplacedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSessionsByUser = `-- name: ListSessionsByUser :many

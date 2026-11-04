@@ -1,0 +1,13 @@
+Hi,
+
+Someone asked to use this address for the {{.SiteTitle}} account {{.Username}}.
+
+Confirm the change here:
+
+{{.Link}}
+
+The link works once and expires in {{.ExpiresIn}}. Until it is used, the account keeps its current email address.
+
+If you didn't ask for this, you can ignore this email: nothing changes.
+
+{{.SiteTitle}}

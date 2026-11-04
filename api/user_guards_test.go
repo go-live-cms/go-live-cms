@@ -175,21 +175,21 @@ func TestUpdateUserGuards(t *testing.T) {
 			},
 		},
 		{
-			// Only the sent fields change; the role, hash and password stamp
-			// come from the current row, and the email is normalized.
+			// Only the sent fields change; the role, hash, email and password
+			// stamp come from the current row.
 			name:     "SelfUpdateKeepsUnsentFields",
 			caller:   contributor,
 			targetID: fmt.Sprint(contributor.ID),
-			body:     gin.H{"email": "New.Address@Example.COM"},
+			body:     gin.H{"full_name": "New Name"},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
 					UpdateUserTx(gomock.Any(), gomock.Any()).
 					Times(1).
 					DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
 						require.Equal(t, contributor.ID, arg.ID)
-						require.Equal(t, "new.address@example.com", arg.Email)
+						require.Equal(t, contributor.Email, arg.Email)
 						require.Equal(t, contributor.Username, arg.Username)
-						require.Equal(t, contributor.FullName, arg.FullName)
+						require.Equal(t, "New Name", arg.FullName)
 						require.Equal(t, RoleContributor, arg.Role)
 						require.Equal(t, contributor.HashedPassword, arg.HashedPassword)
 						require.Equal(t, contributor.PasswordChangedAt, arg.PasswordChangedAt)
@@ -197,7 +197,7 @@ func TestUpdateUserGuards(t *testing.T) {
 						require.False(t, arg.PasswordChanged)
 
 						updated := contributor
-						updated.Email = arg.Email
+						updated.FullName = arg.FullName
 						return db.UpdateUserTxResult{User: updated}, nil
 					})
 			},

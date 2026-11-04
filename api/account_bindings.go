@@ -37,3 +37,15 @@ type AcceptInvitationRequest struct {
 	FullName string `json:"full_name" binding:"required,min=2,max=100"`
 	Password string `json:"password" binding:"required,new_password,max_bytes=72"`
 }
+
+// RequestEmailChangeRequest asks to change the caller's own email (#334). The
+// confirmation link goes to new_email; nothing changes until it is used.
+type RequestEmailChangeRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required,max_bytes=72"`
+	NewEmail        string `json:"new_email" binding:"required,email,max=254"`
+}
+
+// ConfirmEmailChangeRequest redeems an email change confirmation token.
+type ConfirmEmailChangeRequest struct {
+	Token string `json:"token" binding:"required,max=64"`
+}

@@ -11,6 +11,29 @@ import (
 	"time"
 )
 
+const claimEmailChangeToken = `-- name: ClaimEmailChangeToken :one
+UPDATE email_change_tokens
+SET used_at = now()
+WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+RETURNING id, user_id, new_email, token_hash, expires_at, used_at, created_at
+`
+
+// Single-use: like ClaimPasswordResetToken, only one claim can match.
+func (q *Queries) ClaimEmailChangeToken(ctx context.Context, tokenHash []byte) (EmailChangeToken, error) {
+	row := q.db.QueryRowContext(ctx, claimEmailChangeToken, tokenHash)
+	var i EmailChangeToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.NewEmail,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const claimPasswordResetToken = `-- name: ClaimPasswordResetToken :one
 UPDATE password_reset_tokens
 SET used_at = now()
@@ -62,6 +85,23 @@ func (q *Queries) ClaimUserInvitation(ctx context.Context, tokenHash []byte) (Us
 	return i, err
 }
 
+const countEmailChangeTokensSince = `-- name: CountEmailChangeTokensSince :one
+SELECT COUNT(*) FROM email_change_tokens
+WHERE user_id = $1 AND created_at > $2
+`
+
+type CountEmailChangeTokensSinceParams struct {
+	UserID    int64     `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func (q *Queries) CountEmailChangeTokensSince(ctx context.Context, arg CountEmailChangeTokensSinceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEmailChangeTokensSince, arg.UserID, arg.CreatedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPasswordResetTokensSince = `-- name: CountPasswordResetTokensSince :one
 SELECT COUNT(*) FROM password_reset_tokens
 WHERE user_id = $1 AND created_at > $2
@@ -77,6 +117,47 @@ func (q *Queries) CountPasswordResetTokensSince(ctx context.Context, arg CountPa
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const createEmailChangeToken = `-- name: CreateEmailChangeToken :one
+
+INSERT INTO email_change_tokens (
+    user_id,
+    new_email,
+    token_hash,
+    expires_at
+) VALUES (
+    $1, $2, $3, $4
+) RETURNING id, user_id, new_email, token_hash, expires_at, used_at, created_at
+`
+
+type CreateEmailChangeTokenParams struct {
+	UserID    int64     `json:"user_id"`
+	NewEmail  string    `json:"new_email"`
+	TokenHash []byte    `json:"token_hash"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+// Email change (#334): the confirmation link goes to the new address; the change
+// happens only when it is redeemed (ConfirmEmailChangeTx).
+func (q *Queries) CreateEmailChangeToken(ctx context.Context, arg CreateEmailChangeTokenParams) (EmailChangeToken, error) {
+	row := q.db.QueryRowContext(ctx, createEmailChangeToken,
+		arg.UserID,
+		arg.NewEmail,
+		arg.TokenHash,
+		arg.ExpiresAt,
+	)
+	var i EmailChangeToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.NewEmail,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const createPasswordResetToken = `-- name: CreatePasswordResetToken :one
@@ -157,6 +238,27 @@ func (q *Queries) CreateUserInvitation(ctx context.Context, arg CreateUserInvita
 	return i, err
 }
 
+const getValidEmailChangeTokenByHash = `-- name: GetValidEmailChangeTokenByHash :one
+SELECT id, user_id, new_email, token_hash, expires_at, used_at, created_at FROM email_change_tokens
+WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+LIMIT 1
+`
+
+func (q *Queries) GetValidEmailChangeTokenByHash(ctx context.Context, tokenHash []byte) (EmailChangeToken, error) {
+	row := q.db.QueryRowContext(ctx, getValidEmailChangeTokenByHash, tokenHash)
+	var i EmailChangeToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.NewEmail,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getValidPasswordResetTokenByHash = `-- name: GetValidPasswordResetTokenByHash :one
 SELECT id, user_id, token_hash, expires_at, used_at, created_at FROM password_reset_tokens
 WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
@@ -200,6 +302,19 @@ func (q *Queries) GetValidUserInvitationByTokenHash(ctx context.Context, tokenHa
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const invalidateEmailChangeTokensForUser = `-- name: InvalidateEmailChangeTokensForUser :exec
+UPDATE email_change_tokens
+SET used_at = now()
+WHERE user_id = $1 AND used_at IS NULL
+`
+
+// A newer request, a confirmed change or a password change/reset ends every
+// other pending link.
+func (q *Queries) InvalidateEmailChangeTokensForUser(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, invalidateEmailChangeTokensForUser, userID)
+	return err
 }
 
 const invalidatePasswordResetTokensForUser = `-- name: InvalidatePasswordResetTokensForUser :exec

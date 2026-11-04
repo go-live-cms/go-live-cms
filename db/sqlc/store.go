@@ -50,6 +50,10 @@ type Store interface {
 	CreateUserInvitationTx(ctx context.Context, arg CreateUserInvitationParams) (UserInvitation, error)
 	AcceptInvitationTx(ctx context.Context, arg AcceptInvitationTxParams) (AcceptInvitationTxResult, error)
 	ResetPasswordTx(ctx context.Context, arg ResetPasswordTxParams) (User, error)
+	// profile (#334)
+	RequestEmailChangeTx(ctx context.Context, arg RequestEmailChangeTxParams) (EmailChangeToken, error)
+	ConfirmEmailChangeTx(ctx context.Context, tokenHash []byte) (ConfirmEmailChangeTxResult, error)
+	SignOutOtherSessionsTx(ctx context.Context, arg SignOutOtherSessionsTxParams) (SignOutOtherSessionsTxResult, error)
 
 	CreatePostWithTaxonomyTermsTx(ctx context.Context, arg CreatePostWithTaxonomyTermsTxParams) (CreatePostWithTaxonomyTermsTxResult, error)
 	DeleteTaxonomyTermTx(ctx context.Context, id int64) error
@@ -257,6 +261,9 @@ type RemoveUserTxParams struct {
 type RemoveUserTxResult struct {
 	// PostsReassigned is the number of posts that changed owner.
 	PostsReassigned int
+	// AvatarURL is the removed member's avatar (#334), for the API to delete its
+	// file after the commit.
+	AvatarURL string
 }
 
 // RemoveUserTx removes a member (#333), in one transaction:
@@ -302,6 +309,7 @@ func (store *SQLStore) RemoveUserTx(ctx context.Context, arg RemoveUserTxParams)
 		if recipient == nil {
 			return ErrReassignTargetNotFound
 		}
+		result.AvatarURL = found.AvatarUrl
 
 		moved, err := q.ReassignPostsOwner(ctx, ReassignPostsOwnerParams{
 			FromID:     arg.UserID,
@@ -439,6 +447,10 @@ func (store *SQLStore) UpdateUserTx(ctx context.Context, arg UpdateUserTxParams)
 			// A reset link requested before the change must not be able
 			// to undo it.
 			if err := q.InvalidatePasswordResetTokensForUser(ctx, arg.ID); err != nil {
+				return err
+			}
+			// Nor an email change requested with the old one (#334).
+			if err := q.InvalidateEmailChangeTokensForUser(ctx, arg.ID); err != nil {
 				return err
 			}
 		}
