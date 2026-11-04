@@ -116,7 +116,7 @@ RETURNING id;
 -- name: ReassignPostBylines :exec
 -- The removed member's byline (user_posts, #319) on the posts that just moved goes to
 -- the new owner, unless they are already credited there. Credits on anyone else's
--- posts are deleted with the account (ON DELETE CASCADE).
+-- posts are dropped (DeleteUserBylines).
 UPDATE user_posts up
 SET user_id = sqlc.arg(to_id)
 WHERE up.user_id = sqlc.arg(from_id)
@@ -124,6 +124,50 @@ WHERE up.user_id = sqlc.arg(from_id)
     AND NOT EXISTS (
         SELECT 1 FROM user_posts o WHERE o.post_id = up.post_id AND o.user_id = sqlc.arg(to_id)
     );
+
+-- name: DeleteUserBylines :many
+-- Removal (#333, #319), after ReassignPostBylines: the member's remaining credits,
+-- returning the posts they were on (CreditOwnersOnEmptyBylines).
+DELETE FROM user_posts
+WHERE user_id = $1
+RETURNING post_id;
+
+-- name: CreditOwnersOnEmptyBylines :exec
+-- A byline is never empty (#319): a post whose only credit was the removed member
+-- credits its owner.
+INSERT INTO user_posts (post_id, user_id, "order")
+SELECT p.id, p.user_id, 0
+FROM posts p
+WHERE p.id = ANY(sqlc.arg(post_ids)::bigint[])
+    AND NOT EXISTS (SELECT 1 FROM user_posts up WHERE up.post_id = p.id);
+
+-- name: ReassignPublishedBylines :exec
+-- Removal (#333, #319): the same rewrite for the published bylines
+-- (published_settings.author_ids), at once rather than on the next Update, since
+-- the member's credit can't be shown without the account. On the posts that moved
+-- (@moved_post_ids, now owned by @to_id) the member's place goes to @to_id unless
+-- they are already credited; elsewhere it is dropped; an empty byline becomes the
+-- owner. Working and published bylines get the same rule, so a post that had no
+-- pending change has none after. post_published_authors follows by trigger.
+WITH affected AS (
+    SELECT p.id, p.user_id AS owner_id, p.published_settings->'author_ids' AS ids,
+        (p.id = ANY(sqlc.arg(moved_post_ids)::bigint[])
+            AND NOT ((p.published_settings->'author_ids') @> to_jsonb(sqlc.arg(to_id)::bigint))) AS take_place
+    FROM posts p
+    -- post_published_authors mirrors author_ids (by trigger) and is indexed by user.
+    WHERE p.id IN (SELECT ppa.post_id FROM post_published_authors ppa WHERE ppa.user_id = sqlc.arg(from_id)::bigint)
+        AND jsonb_typeof(p.published_settings->'author_ids') = 'array'
+)
+UPDATE posts p
+SET published_settings = jsonb_set(p.published_settings, '{author_ids}', coalesce((
+        SELECT jsonb_agg(
+            CASE WHEN e.value = to_jsonb(sqlc.arg(from_id)::bigint) THEN to_jsonb(sqlc.arg(to_id)::bigint) ELSE e.value END
+            ORDER BY e.ord)
+        FROM jsonb_array_elements(a.ids) WITH ORDINALITY AS e(value, ord)
+        WHERE a.take_place OR e.value <> to_jsonb(sqlc.arg(from_id)::bigint)
+    ), jsonb_build_array(a.owner_id)))
+FROM affected a
+WHERE p.id = a.id;
 
 -- name: UpdateUser :one
 UPDATE users 

@@ -1,5 +1,6 @@
 import type {
   Post,
+  PostAuthor,
   PostSEOSettings,
   PostSortOption,
   PostStatusCounts,
@@ -135,6 +136,59 @@ export async function updatePostSEO(id: string | number, seo: PostSEOSettings): 
     throw await apiErrorFromResponse(response, { fallback: "Saving the SEO settings failed" })
   }
   return response.json()
+}
+
+// The byline (#319): who the post credits, in order. Separate from the owner
+// (user_id), which alone decides access; on a published post a change reaches the
+// site on Update.
+export async function getPostAuthors(id: string | number): Promise<PostAuthor[]> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/authors`)
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Loading the authors failed" })
+  }
+  const body = (await response.json()) as { authors?: PostAuthor[] }
+  return body.authors ?? []
+}
+
+// Someone else saved the byline since `base` was loaded (409 byline_changed):
+// nothing was written; `current` is their byline.
+export class BylineChangedError extends Error {
+  constructor(readonly current: PostAuthor[]) {
+    super("Someone else changed the authors. Here are theirs: make your change again.")
+    this.name = "BylineChangedError"
+  }
+}
+
+// PUT /posts/:id/authors: replaces the byline (1–20 users, in credit order).
+// `baseIds` is the byline the change was made to; if it's no longer the current
+// one this throws BylineChangedError instead of overwriting someone's change.
+export async function setPostAuthors(id: string | number, authorIds: number[], baseIds?: number[]): Promise<PostAuthor[]> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/authors`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(baseIds ? { author_ids: authorIds, base_author_ids: baseIds } : { author_ids: authorIds }),
+  })
+  if (response.status === 409) {
+    const body = (await response.clone().json().catch(() => null)) as { code?: string; authors?: PostAuthor[] } | null
+    if (body?.code === "byline_changed") throw new BylineChangedError(body.authors ?? [])
+  }
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Saving the authors failed" })
+  }
+  const body = (await response.json()) as { authors?: PostAuthor[] }
+  return body.authors ?? []
+}
+
+// Who can be credited: members with a content role whose name or username
+// contains `q` (up to 20). Any content role may ask.
+export async function searchAuthorCandidates(q: string): Promise<PostAuthor[]> {
+  const query = q.trim() ? `?q=${encodeURIComponent(q.trim().slice(0, 100))}` : ""
+  const response = await authenticatedFetch(`/api/v1/posts/author-candidates${query}`)
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Searching for authors failed" })
+  }
+  const body = (await response.json()) as { authors?: PostAuthor[] }
+  return body.authors ?? []
 }
 
 export async function updatePost(id: string | number, data: Partial<Post>): Promise<any> {

@@ -110,15 +110,8 @@ SELECT
         FROM post_meta pm
         WHERE pm.post_id = p.id
     ) as meta,
-    (
-        SELECT COALESCE(
-            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name, 'avatar', NULLIF(u.avatar_url, '')) ORDER BY up."order", u.id),
-            '[]'::jsonb
-        )
-        FROM user_posts up
-        JOIN users u ON u.id = up.user_id
-        WHERE up.post_id = p.id
-    )::jsonb as authors
+    -- The working byline (#319): the admin list's avatars.
+    golive_post_byline(p.id)::jsonb as authors
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
 WHERE

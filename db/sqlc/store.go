@@ -71,6 +71,7 @@ type Store interface {
 	PublishPostTx(ctx context.Context, arg PublishPostTxParams) (PublishPostTxResult, error)
 	PublishScheduledPostTx(ctx context.Context, arg PublishScheduledPostTxParams) (PublishPostTxResult, error)
 	RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error)
+	SetPostAuthorsTx(ctx context.Context, arg SetPostAuthorsTxParams) (SetPostAuthorsTxResult, error)
 
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)
 	ReplaceMenuItemsTx(ctx context.Context, arg ReplaceMenuItemsTxParams) ([]MenuItem, error)
@@ -251,8 +252,10 @@ type RemoveUserTxResult struct {
 //   - locks the member and the recipient (LockUsersForUpdate, id order),
 //   - moves every post they own (posts.user_id) to the recipient, with their byline
 //     on those posts (ReassignPostBylines), and the media they uploaded,
+//   - drops their credit on everyone else's posts, crediting the owner where that
+//     leaves a byline empty, in the working and the published bylines alike (#319),
 //   - deletes their sessions, which revokes every refresh token,
-//   - deletes the user row. Their bylines on other people's posts, reset tokens and
+//   - deletes the user row. Their reset tokens and
 //     invitation links go with it (ON DELETE CASCADE / SET NULL); revisions they
 //     published keep a NULL created_by (000032).
 //
@@ -306,6 +309,26 @@ func (store *SQLStore) RemoveUserTx(ctx context.Context, arg RemoveUserTxParams)
 			}); err != nil {
 				return err
 			}
+		}
+		// Bylines (#319): their remaining credits go (other people's posts, or a
+		// moved post that already credits the recipient), a byline left empty
+		// credits the post's owner, and the published bylines get the same rule at
+		// once: the site can't credit an account that no longer exists.
+		credited, err := q.DeleteUserBylines(ctx, arg.UserID)
+		if err != nil {
+			return err
+		}
+		if len(credited) > 0 {
+			if err := q.CreditOwnersOnEmptyBylines(ctx, credited); err != nil {
+				return err
+			}
+		}
+		if err := q.ReassignPublishedBylines(ctx, ReassignPublishedBylinesParams{
+			FromID:       arg.UserID,
+			ToID:         recipient.ID,
+			MovedPostIds: moved,
+		}); err != nil {
+			return err
 		}
 
 		if err := q.TransferMediaToUser(ctx, TransferMediaToUserParams{

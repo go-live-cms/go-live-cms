@@ -153,17 +153,30 @@ type RestoredPostSettings struct {
 	SocialImageID  *int64
 	Noindex        bool
 	CanonicalURL   string
+
+	// AuthorIDs is the version's byline (#319), in credit order. Users removed
+	// since are skipped; nil (a version from before #319), or none left, keeps the
+	// working byline as it is.
+	AuthorIDs []int64
 }
 
 // RestorePostSettingsTx puts a version's settings back into the post's working
 // copy (#358): title, excerpt, featured image (post_media order 0 and the
 // _thumbnail_* meta, as POST /posts/:id/featured-image writes them), term
-// links and the SEO fields (#357). The published settings stay as they are until
+// links, the SEO fields (#357) and the byline (#319). The published settings stay as they are until
 // Update. A featured or social image whose media was deleted since is dropped,
 // and so are deleted terms.
 func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error) {
 	var post Post
 	err := store.execTx(ctx, func(q *Queries) error {
+		// The byline's users before the post, like SetPostAuthorsTx (lock order).
+		var authors []int64
+		if len(arg.Settings.AuthorIDs) > 0 {
+			var err error
+			if authors, err = lockAuthors(ctx, q, arg.Settings.AuthorIDs, false); err != nil {
+				return fmt.Errorf("restore byline: %w", err)
+			}
+		}
 		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
 			return err
 		}
@@ -180,6 +193,9 @@ func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePos
 		}
 		if err := q.RestorePostSEO(ctx, seo); err != nil {
 			return fmt.Errorf("restore SEO: %w", err)
+		}
+		if err := replaceByline(ctx, q, arg.PostID, authors); err != nil {
+			return fmt.Errorf("restore byline: %w", err)
 		}
 		var err error
 		post, err = q.RestorePostTitleAndDescription(ctx, RestorePostTitleAndDescriptionParams{

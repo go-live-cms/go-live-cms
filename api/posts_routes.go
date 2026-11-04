@@ -34,6 +34,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/search", auth, author, server.searchPosts)
 		posts.GET("/type/:type", auth, author, server.getPostsByType)
 		posts.GET("/user/:id", auth, author, server.getPostsByUser)
+		// Who can be credited in a byline (#319, posts_authors.go)
+		posts.GET("/author-candidates", auth, author, server.listAuthorCandidates)
 		posts.GET("/slug/:slug", auth, author, server.getPostBySlug)
 		posts.GET("/:id", auth, author, server.getPostByID)
 
@@ -78,6 +80,10 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 
 		// SEO settings (#357): editors and admins; contributors see them read-only
 		posts.PUT("/:id/seo", auth, requireContentEditor(server), server.updatePostSEO)
+
+		// Byline authors (#319): read with canReadPost, set with canEditPostDetails
+		posts.GET("/:id/authors", auth, author, server.getPostAuthors)
+		posts.PUT("/:id/authors", auth, author, server.setPostAuthors)
 
 		// Working vs published settings (#358): whether a settings change waits for Update
 		posts.GET("/:id/settings", auth, author, server.getPostSettingsState)

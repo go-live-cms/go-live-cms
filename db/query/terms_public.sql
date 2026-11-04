@@ -54,15 +54,8 @@ SELECT
         FROM post_meta pm
         WHERE pm.post_id = p.id
     ) as meta,
-    (
-        SELECT COALESCE(
-            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name, 'avatar', NULLIF(u.avatar_url, '')) ORDER BY up."order", u.id),
-            '[]'::jsonb
-        )
-        FROM user_posts up
-        JOIN users u ON u.id = up.user_id
-        WHERE up.post_id = p.id
-    )::jsonb as authors
+    -- The published byline (#319): what the site credits until the next Update.
+    golive_post_published_byline(p.id)::jsonb as authors
 FROM posts p
 JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'

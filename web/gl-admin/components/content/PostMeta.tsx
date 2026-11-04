@@ -6,7 +6,7 @@ import type { Post } from "@gl-admin/lib/api/types"
 
 // Small pieces the Posts, Pages and Home rows share (#340).
 
-// The byline's avatars, from user_posts (editing them is #319). Falls back to the
+// The byline's avatars, from user_posts (edited in the post settings' Authors field, #319). Falls back to the
 // owner when a row has no authors.
 export function Byline({ post, size = 24 }: { post: Post | null; size?: 20 | 24 }) {
   if (!post) return <Skeleton shape="circle" width={size} height={size} />
