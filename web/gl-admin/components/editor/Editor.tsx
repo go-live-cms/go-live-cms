@@ -402,6 +402,15 @@ const signInAgain = () => void authManager.logout("session-expired")
 function AccessNotice({ access }: { access: CollabAccess }) {
   // Dismissed per change: the next access message is a new object.
   const [dismissed, setDismissed] = useState<CollabAccess | null>(null)
+  // The post went to the trash (#327): the session is fine, the post isn't editable.
+  if (access.trashed) {
+    return (
+      <Notice tone="warning" live="alert" inline className="editor-notice" title="This post was moved to the trash">
+        It's shown read-only, and changes made after that weren't saved. Restore it from the Trash tab of the posts list
+        to edit it again.
+      </Notice>
+    )
+  }
   if (access.revoked) {
     const email = authManager.getState().user?.email
     return (

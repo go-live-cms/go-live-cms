@@ -2,7 +2,7 @@
 // clock and the #280 access contract in memory. server.recheck.test.ts runs the same
 // cases against the real server and real clients.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { ACCESS_REVOKED, createAccessRecheck, type AccessRecheckOptions, type CheckedConnection } from "./recheck"
+import { ACCESS_REVOKED, POST_TRASHED, createAccessRecheck, type AccessRecheckOptions, type CheckedConnection } from "./recheck"
 import { FakeClock, FakeCollabApi } from "./testkit"
 
 const DOC = "post-12"
@@ -364,5 +364,40 @@ describe("access re-check on demand (checkUser)", () => {
     checks.stop()
     expect(checks.checkUser("2")).toBe(0)
     expect(clock.pending).toBe(0)
+  })
+})
+
+// checkDoc (#327): the API asks for a document's connections to be looked up again
+// right after the post moves to the trash; the lookup says trashed and they close with
+// post-trashed (not access-revoked: the session is fine).
+describe("access re-check of one document (checkDoc)", () => {
+  it("closes every connection to a trashed post at once with post-trashed, and only those", async () => {
+    const checks = recheck()
+    const editor = new FakeConnection()
+    const owner = new FakeConnection()
+    const elsewhere = new FakeConnection()
+    checks.add(editor, { userId: "2", issuedAt: ISSUED, docName: DOC })
+    checks.add(owner, { userId: "4", issuedAt: ISSUED, docName: DOC })
+    checks.add(elsewhere, { userId: "2", issuedAt: ISSUED, docName: "post-13" })
+
+    api.trashed.add("12")
+    expect(checks.checkDoc(DOC)).toBe(2)
+    await clock.advance(1)
+    expect(editor.closed).toEqual({ code: 4403, reason: POST_TRASHED })
+    expect(owner.closed).toEqual({ code: 4403, reason: POST_TRASHED })
+    expect(elsewhere.closed).toBeNull()
+    expect(checks.size).toBe(1)
+    expect(events("ws_access_revoked").map((e) => e.reason)).toEqual([POST_TRASHED, POST_TRASHED])
+    expect(checks.checkDoc(DOC)).toBe(0)
+    expect(ACCESS_REVOKED).not.toBe(POST_TRASHED)
+  })
+
+  it("the interval catches a trashed post too", async () => {
+    const checks = recheck()
+    const conn = new FakeConnection()
+    checks.add(conn, { userId: "2", issuedAt: ISSUED, docName: DOC })
+    api.trashed.add("12")
+    await clock.advance(MINUTE)
+    expect(conn.closed?.reason).toBe(POST_TRASHED)
   })
 })

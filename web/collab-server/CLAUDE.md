@@ -105,6 +105,12 @@ differs, and the API compares it with the password change alone).
   have read the API before the change committed), then goes back on the interval. The API
   calls it after a role change or a removal, so a demotion is read-only at once. Answers
   `{docs: n}` once queued; 400 for anything but a positive integer id.
+- **Trash (#327):** the API answers the access lookup with **410 `post_trashed`** for a post in
+  the trash (`fetchDocAccess` → `{trashed: true}`). At connect that's `DENY.trashed`
+  (`post-trashed`); on a re-check the connection closes with **`post-trashed`**
+  (`POST_TRASHED`), not `access-revoked`, so the editor says "moved to the trash" instead of
+  "sign in again". The API calls **`POST /internal/documents/:doc/recheck`** (`checkDoc`, same
+  secret, `{docs: n}`) right after a trash. The store on the last disconnect still goes through.
 - Not re-checked on other events (e.g. a store); the interval bounds how long a change
   takes when the API's call doesn't arrive.
 - Tests: `recheck.test.ts` (fake connections, `FakeClock`) and

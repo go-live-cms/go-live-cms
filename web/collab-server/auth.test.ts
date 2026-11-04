@@ -85,6 +85,13 @@ describe("onAuthenticate", () => {
     }
   })
 
+  it("denies a post in the trash with post-trashed (#327), for every role", async () => {
+    const { all } = deps({ role: null, canEdit: false, trashed: true })
+    const error = await rejection(createAuthenticate(all)(payload({ token: await sign(iat) })))
+    expect(error.reason).toBe(DENY.trashed)
+    expect(error.reason).toBe("post-trashed")
+  })
+
   it("denies when the role lookup fails (API down), and burns the ticket anyway", async () => {
     const { all, guard } = deps(new Error("access lookup failed: API responded 502"))
     const token = await sign(iat)

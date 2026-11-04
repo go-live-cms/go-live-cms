@@ -144,6 +144,11 @@ describe("fetchDocAccess", () => {
     expect(await fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: impl })).toEqual({ role: "contributor", canEdit: false })
   })
 
+  it("says trashed on 410 (#327), so the caller refuses or closes with post-trashed", async () => {
+    const { impl } = fakeFetch(410, { error: "the post is in the trash", code: "post_trashed" })
+    expect(await fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: impl })).toEqual({ role: null, canEdit: false, trashed: true })
+  })
+
   it("returns null on 403/404 and throws on 401, 5xx and network errors", async () => {
     for (const status of [403, 404]) {
       expect(await fetchDocAccess("http://api", identity, "post-12", "s", { fetchImpl: fakeFetch(status).impl })).toBeNull()

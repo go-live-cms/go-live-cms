@@ -8,12 +8,13 @@ let server: Server
 let base: string
 const flush = vi.fn(async (_doc: string): Promise<FlushResult> => ({ ok: true, skipped: false, loaded: true }))
 const recheckUser = vi.fn((_userId: string) => 2)
+const recheckDoc = vi.fn((_docName: string) => 3)
 
 beforeAll(async () => {
   vi.spyOn(console, "log").mockImplementation(() => {})
   vi.spyOn(console, "warn").mockImplementation(() => {})
   vi.spyOn(console, "error").mockImplementation(() => {})
-  server = createInternalServer({ secret: SECRET, flush, recheckUser })
+  server = createInternalServer({ secret: SECRET, flush, recheckUser, recheckDoc })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()))
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 })
@@ -91,5 +92,25 @@ describe("internal listener", () => {
     }
     expect((await fetch(`${base}/internal/users/7/recheck`, { headers: { Authorization: `Bearer ${SECRET}` } })).status).toBe(405)
     expect(recheckUser).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("document re-check (#327)", () => {
+  it("re-checks a document's connections on request, with the secret only", async () => {
+    recheckDoc.mockClear()
+    expect((await post("/internal/documents/post-12/recheck")).status).toBe(401)
+    expect((await post("/internal/documents/post-12/recheck", "Bearer wrong")).status).toBe(401)
+    expect(recheckDoc).not.toHaveBeenCalled()
+
+    const res = await post("/internal/documents/post-12/recheck", `Bearer ${SECRET}`)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ docs: 3 })
+    expect(recheckDoc).toHaveBeenCalledWith("post-12")
+
+    for (const bad of ["post-0", "settings", "%E0%A4%A"]) {
+      expect((await post(`/internal/documents/${bad}/recheck`, `Bearer ${SECRET}`)).status).toBe(400)
+    }
+    expect((await fetch(`${base}/internal/documents/post-12/recheck`, { headers: { Authorization: `Bearer ${SECRET}` } })).status).toBe(405)
+    expect(recheckDoc).toHaveBeenCalledTimes(1)
   })
 })
