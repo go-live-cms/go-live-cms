@@ -1729,6 +1729,21 @@ func (mr *MockStoreMockRecorder) GetPostSettingsState(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostSettingsState", reflect.TypeOf((*MockStore)(nil).GetPostSettingsState), arg0, arg1)
 }
 
+// GetPostStatus mocks base method.
+func (m *MockStore) GetPostStatus(arg0 context.Context, arg1 int64) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostStatus", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostStatus indicates an expected call of GetPostStatus.
+func (mr *MockStoreMockRecorder) GetPostStatus(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostStatus", reflect.TypeOf((*MockStore)(nil).GetPostStatus), arg0, arg1)
+}
+
 // GetPostTaxonomyTerms mocks base method.
 func (m *MockStore) GetPostTaxonomyTerms(arg0 context.Context, arg1 int64) ([]db.GetPostTaxonomyTermsRow, error) {
 	m.ctrl.T.Helper()
@@ -2806,6 +2821,21 @@ func (m *MockStore) LockPostForPublish(arg0 context.Context, arg1 int64) (int64,
 func (mr *MockStoreMockRecorder) LockPostForPublish(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForPublish", reflect.TypeOf((*MockStore)(nil).LockPostForPublish), arg0, arg1)
+}
+
+// LockPostStatusForUpdate mocks base method.
+func (m *MockStore) LockPostStatusForUpdate(arg0 context.Context, arg1 int64) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostStatusForUpdate", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostStatusForUpdate indicates an expected call of LockPostStatusForUpdate.
+func (mr *MockStoreMockRecorder) LockPostStatusForUpdate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostStatusForUpdate", reflect.TypeOf((*MockStore)(nil).LockPostStatusForUpdate), arg0, arg1)
 }
 
 // LockScheduledPostClaim mocks base method.

@@ -106,7 +106,7 @@ func (server *Server) scheduleUpdate(c *gin.Context) {
 	}
 
 	// Refuse before flushing: only a live post has an update to schedule.
-	post, err := server.store.GetPost(c.Request.Context(), postID)
+	status, err := server.store.GetPostStatus(c.Request.Context(), postID)
 	if errors.Is(err, sql.ErrNoRows) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
 		return
@@ -115,8 +115,8 @@ func (server *Server) scheduleUpdate(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
 		return
 	}
-	if post.PostStatus != postStatusPublished {
-		respondUpdateNotSchedulable(c, post.PostStatus)
+	if status != postStatusPublished {
+		respondUpdateNotSchedulable(c, status)
 		return
 	}
 
@@ -183,9 +183,17 @@ func (server *Server) cancelScheduledUpdate(c *gin.Context) {
 }
 
 // respondUpdateNotSchedulable is the 409 for a post that isn't published (status
-// "" when it isn't known any more).
+// "" when it isn't known any more: it was unpublished meanwhile).
 func respondUpdateNotSchedulable(c *gin.Context, status string) {
-	body := gin.H{"error": "only a published post's update can be scheduled; schedule a draft's publish instead"}
+	message := "only a published post's update can be scheduled; this post isn't published any more"
+	switch status {
+	case "":
+	case "draft", postStatusScheduled:
+		message = "only a published post's update can be scheduled; a " + status + " post's publish is scheduled with PUT /posts/:id/schedule"
+	default:
+		message = "only a published post's update can be scheduled; this post is " + status
+	}
+	body := gin.H{"error": message}
 	if status != "" {
 		body["post_status"] = status
 	}

@@ -24,7 +24,13 @@ import EditorTopBar, { ArchiveIcon, OfflineIcon } from "@gl-admin/components/edi
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import ScheduleDialog from "@gl-admin/components/editor/ui/ScheduleDialog"
 import { useSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
-import { formatScheduleTime, scheduledUpdateErrorMessage, scheduleFailureMessage, zoneCity } from "@gl-admin/lib/schedule"
+import {
+  formatScheduleTime,
+  scheduledUpdateEndedMessage,
+  scheduledUpdateErrorMessage,
+  scheduleFailureMessage,
+  zoneCity,
+} from "@gl-admin/lib/schedule"
 import ScheduledUpdateNotice from "@gl-admin/components/editor/ui/ScheduledUpdateNotice"
 import { VersionPreview, versionTime } from "@gl-admin/components/editor/ui/RevisionsPanel"
 import Notice from "@gl-admin/components/ui/Notice"
@@ -213,6 +219,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       setSettingsPending(state.changed)
       setContentPending(state.blocks_changed)
       setLiveTitle(state.published ? state.published.seo_title?.trim() || state.published.title : null)
+      // A scheduled update made, changed or cancelled in another tab (#335).
+      if (state.scheduled_update !== undefined) setScheduledUpdate(state.scheduled_update)
     } catch (error) {
       // Only the hint depends on it.
       console.error("Failed to read the settings state:", error)
@@ -225,6 +233,16 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     storedTimerRef.current = setTimeout(() => void refreshSettingsState(), STORED_REFRESH_DELAY_MS)
   }
   useEffect(() => () => clearTimeout(storedTimerRef.current), [])
+  // Scheduling or cancelling an update (#335) stores nothing, so a tab that was in the
+  // background re-reads the state when it's shown again.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshSettingsState()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => document.removeEventListener("visibilitychange", onVisible)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   useEffect(() => {
     void refreshSettingsState()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -466,7 +484,14 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         if (result) {
           setPublishFailure(null)
           // An Update by hand supersedes a scheduled update (#335): the API ends it.
-          showSuccess(wasPublished ? (scheduledUpdate ? "Post updated · the scheduled update was cancelled" : "Post updated") : "Post published")
+          // The API says whether it superseded one, whichever tab scheduled it.
+          showSuccess(
+            wasPublished
+              ? result.cancelledScheduledUpdate
+                ? "Post updated · the scheduled update was cancelled"
+                : "Post updated"
+              : "Post published"
+          )
           // Update the post status in the form data. Publishing ends a schedule (#147).
           setFormData((prev) => ({ ...prev, post_status: "published" }))
           setPublishAt(null)
@@ -608,7 +633,18 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           if (post.post_status === "published") {
             setRevisionsKey((k) => k + 1)
             void refreshSettingsState()
-            toast.success("The scheduled update is live")
+            // Gone: applied, or cancelled / superseded by an Update elsewhere. The
+            // newest version tells (versions are editors' and admins' only).
+            let latest: string | null = null
+            try {
+              const token = authManager.getAccessToken()
+              if (token) blockAPIClient.setAuthToken(token)
+              latest = (await blockAPIClient.listVersions(updateScheduledId)).versions[0]?.created_at ?? null
+            } catch {
+              // Say only what is known.
+            }
+            if (cancelled) return
+            toast.success(scheduledUpdateEndedMessage(latest, updateAt))
           } else {
             setFormData((prev) => ({ ...prev, post_status: post.post_status as PostFormData["post_status"] }))
           }

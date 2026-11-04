@@ -2,6 +2,16 @@
 -- api/posts_scheduled_update.go; the scheduler is api/scheduled_publish.go (#147's),
 -- and the apply itself is PublishScheduledUpdateTx (db/sqlc/post_publish_tx.go).
 
+-- name: GetPostStatus :one
+-- PUT /posts/:id/scheduled-update's check before the collab flush: the status
+-- alone, without reading the post's body.
+SELECT post_status FROM posts WHERE id = $1;
+
+-- name: LockPostStatusForUpdate :one
+-- ScheduleUpdateTx's first step: lock the post (as LockPostForPublish) and read
+-- its status under the lock.
+SELECT post_status FROM posts WHERE id = $1 FOR UPDATE;
+
 -- name: UpsertScheduledUpdateFromPost :one
 -- Inside ScheduleUpdateTx, with the post locked: freeze the working copy as it is
 -- stored now (after the handler's collab flush), body and settings from the same

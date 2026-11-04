@@ -71,7 +71,7 @@ export type EditorProps = {
   onSaveSuccess?: (revision: number) => void
   onSaveError?: (error: Error) => void
   onPublishStart?: () => void
-  onPublishSuccess?: (result: { versionId: number; versionNo: number }) => void
+  onPublishSuccess?: (result: { versionId: number; versionNo: number; cancelledScheduledUpdate: boolean }) => void
   onPublishError?: (error: Error) => void
   /**
    * The collab server changed this session's access while open (#313). The form re-reads
@@ -88,7 +88,7 @@ export type EditorProps = {
 
 export interface EditorRef {
   forceSave: () => Promise<void>
-  publish: () => Promise<{ versionId: number; versionNo: number } | undefined>
+  publish: () => Promise<{ versionId: number; versionNo: number; cancelledScheduledUpdate: boolean } | undefined>
   // Resolves once the collab server has every edit typed here (publish's first step).
   // Scheduling an update (#335) waits for it too: the API then flushes the server and
   // freezes block_doc, so the snapshot has those edits.

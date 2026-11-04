@@ -640,15 +640,15 @@ WHERE
 ORDER BY
     CASE WHEN $6::text = 'created_at' AND $7::text = 'asc' THEN p.created_at END ASC,
     CASE WHEN $6::text = 'created_at' AND $7::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $6::text = 'changed_at' AND $7::text = 'asc' THEN GREATEST(changed_at, p.created_at) END ASC,
-    CASE WHEN $6::text = 'changed_at' AND $7::text = 'desc' THEN GREATEST(changed_at, p.created_at) END DESC,
-    CASE WHEN $6::text = 'title' AND $7::text = 'asc' THEN title END ASC,
-    CASE WHEN $6::text = 'title' AND $7::text = 'desc' THEN title END DESC,
-    CASE WHEN $6::text = 'menu_order' AND $7::text = 'asc' THEN menu_order END ASC,
-    CASE WHEN $6::text = 'menu_order' AND $7::text = 'desc' THEN menu_order END DESC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $6::text = 'changed_at' AND $7::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $6::text = 'title' AND $7::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $6::text = 'title' AND $7::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $6::text = 'menu_order' AND $7::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $6::text = 'menu_order' AND $7::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $7::text = 'asc' THEN id END ASC,
-    id DESC
+    CASE WHEN $7::text = 'asc' THEN p.id END ASC,
+    p.id DESC
 LIMIT $9
 OFFSET $8
 `
@@ -686,8 +686,8 @@ type ListPostsRow struct {
 	UpdateAt              sql.NullTime          `json:"update_at"`
 }
 
-// One row at most per post (the primary key). su has a created_at too, so the
-// ORDER BY below names p.created_at.
+// One row at most per post (the primary key). The ORDER BY below names every column
+// with p.: su has a created_at too, and may gain others.
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 // of these pairs; anything else falls through to the id tiebreaker.
 // changed_at sorts as GREATEST(changed_at, created_at): never-updated posts

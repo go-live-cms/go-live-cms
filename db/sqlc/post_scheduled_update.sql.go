@@ -123,6 +123,23 @@ func (q *Queries) GetPostScheduledUpdate(ctx context.Context, postID int64) (Get
 	return i, err
 }
 
+const getPostStatus = `-- name: GetPostStatus :one
+
+SELECT post_status FROM posts WHERE id = $1
+`
+
+// Scheduled updates to published posts (#335, 000034). The handlers are
+// api/posts_scheduled_update.go; the scheduler is api/scheduled_publish.go (#147's),
+// and the apply itself is PublishScheduledUpdateTx (db/sqlc/post_publish_tx.go).
+// PUT /posts/:id/scheduled-update's check before the collab flush: the status
+// alone, without reading the post's body.
+func (q *Queries) GetPostStatus(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, getPostStatus, id)
+	var post_status string
+	err := row.Scan(&post_status)
+	return post_status, err
+}
+
 const insertPublishedVersionFromScheduledUpdate = `-- name: InsertPublishedVersionFromScheduledUpdate :one
 INSERT INTO post_versions (post_id, version_no, status, block_doc, settings, created_by)
 SELECT s.post_id, $1::int, 'published', s.block_doc, s.settings, s.scheduled_by
@@ -149,6 +166,19 @@ func (q *Queries) InsertPublishedVersionFromScheduledUpdate(ctx context.Context,
 	var i InsertPublishedVersionFromScheduledUpdateRow
 	err := row.Scan(&i.ID, &i.VersionNo, &i.BlockDoc)
 	return i, err
+}
+
+const lockPostStatusForUpdate = `-- name: LockPostStatusForUpdate :one
+SELECT post_status FROM posts WHERE id = $1 FOR UPDATE
+`
+
+// ScheduleUpdateTx's first step: lock the post (as LockPostForPublish) and read
+// its status under the lock.
+func (q *Queries) LockPostStatusForUpdate(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, lockPostStatusForUpdate, id)
+	var post_status string
+	err := row.Scan(&post_status)
+	return post_status, err
 }
 
 const lockScheduledUpdateClaim = `-- name: LockScheduledUpdateClaim :one
@@ -215,7 +245,6 @@ func (q *Queries) RecordScheduledUpdateFailure(ctx context.Context, arg RecordSc
 }
 
 const upsertScheduledUpdateFromPost = `-- name: UpsertScheduledUpdateFromPost :one
-
 INSERT INTO post_scheduled_updates (post_id, update_at, block_doc, settings, scheduled_by)
 SELECT p.id, $1::timestamptz, p.block_doc, golive_post_settings(p.id), $2::bigint
 FROM posts p
@@ -251,9 +280,6 @@ type UpsertScheduledUpdateFromPostRow struct {
 	CreatedAt     time.Time      `json:"created_at"`
 }
 
-// Scheduled updates to published posts (#335, 000034). The handlers are
-// api/posts_scheduled_update.go; the scheduler is api/scheduled_publish.go (#147's),
-// and the apply itself is PublishScheduledUpdateTx (db/sqlc/post_publish_tx.go).
 // Inside ScheduleUpdateTx, with the post locked: freeze the working copy as it is
 // stored now (after the handler's collab flush), body and settings from the same
 // row, as InsertPublishedVersionFromPost reads them. A new schedule replaces the old

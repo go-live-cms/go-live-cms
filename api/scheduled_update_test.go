@@ -431,6 +431,10 @@ func TestScheduledUpdateRoutes(t *testing.T) {
 		require.Equal(t, http.StatusOK, recorder.Code, list)
 		require.Contains(t, recorder.Body.String(), `"update_at":"`+at.Format(time.RFC3339)+`"`, list)
 	}
+	// The settings state every open editor re-reads carries it too.
+	recorder = scheduleRequest(t, server, contributor, http.MethodGet, fmt.Sprintf("/api/v1/posts/%d/settings", post.ID), "")
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"scheduled_update":{"update_at":"`+at.Format(time.RFC3339)+`"`)
 	// Not on the public lists.
 	publicList := flowServe(server, httptest.NewRequest(http.MethodGet, "/public/posts?type=post&limit=100", nil)).Body.String()
 	require.NotContains(t, publicList, `"update_at"`)
@@ -478,7 +482,12 @@ func TestScheduledUpdateRoutes(t *testing.T) {
 	require.Equal(t, http.StatusOK, scheduleRequest(t, server, editor, http.MethodPut, path(post.ID), when(at)).Code)
 	recorder = scheduleRequest(t, server, editor, http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/publish", post.ID), "")
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Contains(t, recorder.Body.String(), `"cancelled_scheduled_update":true`, "the editor says the Update cancelled it")
 	require.False(t, hasScheduledUpdate(t, conn, post.ID))
+
+	recorder = scheduleRequest(t, server, editor, http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/publish", post.ID), "")
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.NotContains(t, recorder.Body.String(), "cancelled_scheduled_update")
 
 	// Nothing to update now: the live post matches the working copy.
 	recorder = scheduleRequest(t, server, editor, http.MethodPut, path(post.ID), when(at))
@@ -499,6 +508,13 @@ func TestScheduledUpdateRoutes(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), `"post_status":"draft"`)
 	require.Equal(t, flushes, collab.flushCount(post.ID))
 	require.Equal(t, http.StatusNotFound, scheduleRequest(t, server, editor, http.MethodPut, path(1<<60), when(at)).Code)
+
+	// An archived post names its status.
+	_, err = conn.Exec(`UPDATE posts SET post_status = 'archived' WHERE id = $1`, post.ID)
+	require.NoError(t, err)
+	recorder = scheduleRequest(t, server, editor, http.MethodPut, path(post.ID), when(at))
+	require.Equal(t, http.StatusConflict, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `this post is archived`)
 }
 
 // TestScheduleUpdateTxRefusals: the transaction's own checks, for a caller that

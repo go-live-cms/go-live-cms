@@ -8,6 +8,7 @@ import {
   scheduleError,
   scheduleFailureMessage,
   scheduledPillLabel,
+  scheduledUpdateEndedMessage,
   scheduledUpdateErrorMessage,
   scheduledUpdateFailureMessage,
   scheduledUpdateTitle,
@@ -176,6 +177,13 @@ describe("scheduled update text", () => {
       "The update couldn't be published at its time; the live post is unchanged. It's tried again automatically, next at 09:05."
     )
     expect(scheduledUpdateFailureMessage({ next_attempt_at: null }, saoPaulo, now)).toContain("Trying again now.")
+  })
+
+  it("tells an applied update from one that was cancelled or replaced", () => {
+    const at = "2026-11-03T12:00:00Z"
+    expect(scheduledUpdateEndedMessage("2026-11-03T12:00:05Z", at)).toBe("The scheduled update is live")
+    expect(scheduledUpdateEndedMessage("2026-11-03T11:30:00Z", at)).toBe("The scheduled update was cancelled or replaced by an update")
+    expect(scheduledUpdateEndedMessage(null, at)).toBe("The scheduled update is no longer pending")
   })
 
   it("explains the API's codes, else keeps its message", () => {

@@ -1,6 +1,7 @@
 import { capitalize } from "@gl-admin/utils/formatting"
 import Pill, { type PillTone } from "@gl-admin/components/ui/Pill"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
+import { ClockIcon } from "@gl-admin/components/ui/icons"
 import { useSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { scheduledPillLabel, UPDATE_SCHEDULED_LABEL, updateScheduledPillLabel } from "@gl-admin/lib/schedule"
 
@@ -57,15 +58,8 @@ function ScheduledPill({ at, update = false, withTime }: { at: string; update?: 
   const settings = useSiteDateSettings()
   const label = update ? updateScheduledPillLabel : scheduledPillLabel
   return (
-    <Pill tone="info" icon={update ? <ClockIcon /> : undefined}>
+    <Pill tone="info" icon={update ? <ClockIcon size={12} /> : undefined}>
       {settings.loaded ? label(at, settings, { withTime }) : update ? UPDATE_SCHEDULED_LABEL : "Scheduled"}
     </Pill>
   )
 }
-
-const ClockIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
-  </svg>
-)

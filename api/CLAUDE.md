@@ -620,15 +620,18 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   claim; next version from the **snapshot**, credited to `scheduled_by`; `publishInsertedVersion`,
   the rest of `publishLockedPost`). No flush at the time: the working copy isn't read. A failure is
   `RecordScheduledUpdateFailure` (`update_failed`, #147's backoff) and `GET /posts/:id`'s
-  `scheduled_update.failure`. A deleted featured image or term in the snapshot is skipped like a
-  restored version's (the published-terms trigger only keeps existing terms).
+  `scheduled_update.failure`. A term deleted since the snapshot is dropped (the published-terms
+  trigger only keeps existing terms); a deleted featured image stays in the published settings, as
+  it does when an image is deleted after an ordinary publish.
 - **What ends it:** the `posts_cancel_scheduled_update` trigger deletes the row when `post_status`
   or `published_version_id` changes: an **Update by hand** (newer than the snapshot; applying it
-  later would roll the site back), the update itself, unpublish, archive, trash, any status change.
+  later would roll the site back; `PublishPostTx` reports it as `cancelled_scheduled_update` on the
+  publish response), the update itself, unpublish, archive, trash, any status change.
   Post deleted: CASCADE. **Restoring a version** writes the working copy only, so a pending update
   is unaffected (schedule again to include the restored content).
 - Reads: `GET /posts/:id` / `slug/:slug` add `scheduled_update` (`update_at`, `scheduled_at` = when
-  frozen, `scheduled_by`, `failure`) and `update_at`; `ListPosts`, `ListPostsWithMeta` and
+  frozen, `scheduled_by`, `failure`) and `update_at`; so does `GET /posts/:id/settings` (null when
+  none), which every open editor re-reads on collaborators' stores; `ListPosts`, `ListPostsWithMeta` and
   `SearchPostsWithMeta` select `su.update_at` (LEFT JOIN, so `ListPosts` sorts by `p.created_at`);
   the authors/terms queries select `NULL::timestamptz`. Public presenters clear `update_at` (and the
   public `/posts` list now clears `has_unpublished_changes` too, which it used to leak).

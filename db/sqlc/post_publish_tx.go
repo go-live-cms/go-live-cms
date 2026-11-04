@@ -28,6 +28,10 @@ type PublishPostTxResult struct {
 	VersionNo int32
 	// BlockDoc is the published body (the working copy at publish time).
 	BlockDoc json.RawMessage
+	// CancelledScheduledUpdate: PublishPostTx (the Update button) superseded a
+	// pending scheduled update (#335), which 000034's trigger deleted. The editor
+	// says so, whichever tab scheduled it.
+	CancelledScheduledUpdate bool
 }
 
 // PublishPostTx publishes the post's working copy (#136, #358) in one
@@ -46,8 +50,14 @@ func (store *SQLStore) PublishPostTx(ctx context.Context, arg PublishPostTxParam
 		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
 			return err
 		}
+		// Under the post's lock, so no schedule or cancel slips in between.
+		_, pendingErr := q.GetPostScheduledUpdate(ctx, arg.PostID)
+		if pendingErr != nil && !errors.Is(pendingErr, sql.ErrNoRows) {
+			return fmt.Errorf("scheduled update: %w", pendingErr)
+		}
 		var err error
 		result, err = publishLockedPost(ctx, q, arg)
+		result.CancelledScheduledUpdate = pendingErr == nil
 		return err
 	})
 	return result, err
@@ -170,14 +180,11 @@ var (
 func (store *SQLStore) ScheduleUpdateTx(ctx context.Context, arg ScheduleUpdateTxParams) (PostScheduledUpdateRow, error) {
 	var result PostScheduledUpdateRow
 	err := store.execTx(ctx, func(q *Queries) error {
-		if _, err := q.LockPostForPublish(ctx, arg.PostID); err != nil {
-			return err
-		}
-		post, err := q.GetPost(ctx, arg.PostID)
+		status, err := q.LockPostStatusForUpdate(ctx, arg.PostID)
 		if err != nil {
 			return err
 		}
-		if post.PostStatus != "published" {
+		if status != "published" {
 			return ErrPostNotPublished
 		}
 		changed, err := q.GetPostHasUnpublishedChanges(ctx, arg.PostID)

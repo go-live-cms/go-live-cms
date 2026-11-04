@@ -181,6 +181,12 @@ type Querier interface {
 	// (The flag as golive_post_has_unpublished_changes defines it, from the two halves so the
 	// settings are compared once.)
 	GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error)
+	// Scheduled updates to published posts (#335, 000034). The handlers are
+	// api/posts_scheduled_update.go; the scheduler is api/scheduled_publish.go (#147's),
+	// and the apply itself is PublishScheduledUpdateTx (db/sqlc/post_publish_tx.go).
+	// PUT /posts/:id/scheduled-update's check before the collab flush: the status
+	// alone, without reading the post's body.
+	GetPostStatus(ctx context.Context, id int64) (string, error)
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
 	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
@@ -290,8 +296,8 @@ type Querier interface {
 	// wrote a draft, and every author it returns has a page.
 	ListPostAuthorProfiles(ctx context.Context, postID int64) ([]ListPostAuthorProfilesRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
-	// One row at most per post (the primary key). su has a created_at too, so the
-	// ORDER BY below names p.created_at.
+	// One row at most per post (the primary key). The ORDER BY below names every column
+	// with p.: su has a created_at too, and may gain others.
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
 	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -351,6 +357,9 @@ type Querier interface {
 	// Publish runs in one transaction from here (PublishPostTx): two publishes of
 	// one post queue on this lock instead of racing for the same version_no.
 	LockPostForPublish(ctx context.Context, id int64) (int64, error)
+	// ScheduleUpdateTx's first step: lock the post (as LockPostForPublish) and read
+	// its status under the lock.
+	LockPostStatusForUpdate(ctx context.Context, id int64) (string, error)
 	// Inside PublishScheduledPostTx: the post, locked, if it is still scheduled under
 	// this claim. No row: it was cancelled, rescheduled, published by hand, deleted
 	// or claimed again after this claim's lease ran out; nothing is published.
@@ -516,9 +525,6 @@ type Querier interface {
 	// A last_editor_id that no longer exists is stored as NULL rather than
 	// failing the whole store on the foreign key.
 	UpsertPostYdocState(ctx context.Context, arg UpsertPostYdocStateParams) error
-	// Scheduled updates to published posts (#335, 000034). The handlers are
-	// api/posts_scheduled_update.go; the scheduler is api/scheduled_publish.go (#147's),
-	// and the apply itself is PublishScheduledUpdateTx (db/sqlc/post_publish_tx.go).
 	// Inside ScheduleUpdateTx, with the post locked: freeze the working copy as it is
 	// stored now (after the handler's collab flush), body and settings from the same
 	// row, as InsertPublishedVersionFromPost reads them. A new schedule replaces the old

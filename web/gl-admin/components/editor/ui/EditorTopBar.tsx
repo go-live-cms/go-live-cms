@@ -6,7 +6,7 @@ import Modal from "@gl-admin/components/ui/Modal"
 import Pill from "@gl-admin/components/ui/Pill"
 import { PostStatusPill } from "@gl-admin/components/ui/PostStatus"
 import { AvatarStack, type AvatarUser } from "@gl-admin/components/ui/Avatar"
-import { CheckIcon, ChevronDownIcon, DangerIcon, LockIcon } from "@gl-admin/components/ui/icons"
+import { CheckIcon, ChevronDownIcon, ClockIcon, DangerIcon, LockIcon } from "@gl-admin/components/ui/icons"
 import type { CollabUser } from "@gl-admin/components/editor/utils/useCollabPresence"
 import type { ConnectionView } from "@gl-admin/components/editor/utils/connectionState"
 import "@gl-admin/assets/styles/components/editor/editor-top-bar.scss"
@@ -73,12 +73,6 @@ type EditorTopBarProps = {
 const SpinnerIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="editor-top-bar__spin">
     <path d="M21 12a9 9 0 1 1-6.2-8.55" />
-  </svg>
-)
-const ClockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
   </svg>
 )
 export const OfflineIcon = ({ size = 14 }: { size?: number }) => (
@@ -161,7 +155,7 @@ export function SaveState({
   } else if (saveStatus === "saving") {
     content = (
       <>
-        <ClockIcon />
+        <ClockIcon size={14} />
         Saving
       </>
     )
@@ -261,7 +255,7 @@ export default function EditorTopBar({
           {title.trim() || (mode === "create" ? "New" : "Untitled")}
         </span>
         {viewing ? (
-          <Pill tone="info" icon={<ClockIcon />} className="editor-top-bar__pill">
+          <Pill tone="info" icon={<ClockIcon size={14} />} className="editor-top-bar__pill">
             {viewing.label}
           </Pill>
         ) : (

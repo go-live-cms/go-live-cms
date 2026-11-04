@@ -211,10 +211,25 @@ export function scheduledUpdateFailureMessage(
   settings: Pick<DateSettings, "language" | "timeZone">,
   now: Date = new Date()
 ): string {
-  const why = "The update couldn't be published at its time; the live post is unchanged."
-  const next = failure.next_attempt_at ? new Date(failure.next_attempt_at) : null
-  if (!next || Number.isNaN(next.getTime()) || next.getTime() <= now.getTime()) return `${why} Trying again now.`
-  return `${why} It's tried again automatically, next at ${zonedParts(next, settings.timeZone).time}.`
+  return `The update couldn't be published at its time; the live post is unchanged. ${retryLine(failure.next_attempt_at, settings, now)}`
+}
+
+// When a pending update disappears, the post's newest version says why: one made at or
+// after its time is the update going live; otherwise it was cancelled or an Update by
+// hand replaced it. latestVersionAt is null when the versions couldn't be read.
+export function scheduledUpdateEndedMessage(latestVersionAt: string | null, updateAt: string): string {
+  if (latestVersionAt === null) return "The scheduled update is no longer pending"
+  const latest = Date.parse(latestVersionAt)
+  const due = Date.parse(updateAt)
+  if (!Number.isNaN(latest) && !Number.isNaN(due) && latest >= due) return "The scheduled update is live"
+  return "The scheduled update was cancelled or replaced by an update"
+}
+
+// "It's tried again automatically, next at 09:05." (site time), or "Trying again now."
+function retryLine(nextAttemptAt: string | null, settings: Pick<DateSettings, "timeZone">, now: Date): string {
+  const next = nextAttemptAt ? new Date(nextAttemptAt) : null
+  if (!next || Number.isNaN(next.getTime()) || next.getTime() <= now.getTime()) return "Trying again now."
+  return `It's tried again automatically, next at ${zonedParts(next, settings.timeZone).time}.`
 }
 
 // The API's 409 codes for a scheduled update (api/posts_scheduled_update.go).
@@ -234,7 +249,5 @@ export function scheduleFailureMessage(
     failure.reason === "collab_flush_failed"
       ? "The server couldn't save the latest edits, so the post wasn't published at its time."
       : "The post couldn't be published at its time."
-  const next = failure.next_attempt_at ? new Date(failure.next_attempt_at) : null
-  if (!next || Number.isNaN(next.getTime()) || next.getTime() <= now.getTime()) return `${why} Trying again now.`
-  return `${why} It's tried again automatically, next at ${zonedParts(next, settings.timeZone).time}.`
+  return `${why} ${retryLine(failure.next_attempt_at, settings, now)}`
 }
