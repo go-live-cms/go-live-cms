@@ -69,6 +69,9 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       const href = event.post ? `/content/edit/${event.post.id}` : null
       const title = event.post ? event.post.title || "Untitled" : withArticle(postNoun(event))
       if (event.verb === "status_changed") return { ...statusPart(title, event.payload.post_status), href }
+      // The trash (#327); deleting one for good is "deleted".
+      if (event.verb === "trashed") return { verb: "moved", what: `${title} to the trash`, href }
+      if (event.verb === "restored") return { verb: "restored", what: `${title} from the trash`, href }
       return { verb: POST_VERBS[event.verb] ?? fallbackVerb, what: title, href }
     }
     case "media": {

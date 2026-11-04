@@ -140,6 +140,8 @@ export function ticketIdentity(payload: Partial<TicketClaims> | null | undefined
 export interface DocAccess {
   role: string | null
   canEdit: boolean
+  /** The post is in the trash (#327; the API answers 410 post_trashed): nobody may open it. */
+  trashed?: boolean
 }
 
 export interface InternalCallOptions {
@@ -154,6 +156,8 @@ export interface InternalCallOptions {
 //   - { role, canEdit } on 200 (canEdit is true only for a literal `true`)
 //   - null on 403/404 (ticket predates a password change, user deleted, or the post is
 //     gone) → caller denies
+//   - { trashed: true } on 410 (the post is in the trash, #327) → caller denies, or closes,
+//     with post-trashed rather than as a revoked session
 // Throws on any other status (including 401 = ROLE_LOOKUP_SECRET mismatch, a config
 // error rather than a user error), a network error or a timeout → caller denies too,
 // and the client retries with a fresh ticket. Never allowed without the API's answer.
@@ -177,6 +181,7 @@ export async function fetchDocAccess(
   })
 
   if (res.status === 403 || res.status === 404) return null
+  if (res.status === 410) return { role: null, canEdit: false, trashed: true }
   if (res.status === 401) throw new Error("access lookup failed: API rejected ROLE_LOOKUP_SECRET (401)")
   if (!res.ok) throw new Error(`access lookup failed: API responded ${res.status}`)
 

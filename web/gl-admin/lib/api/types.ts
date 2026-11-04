@@ -146,6 +146,10 @@ export interface Post {
   publish_at?: string | null
   // The last failed attempt to publish it on schedule (GET /posts/:id only).
   schedule_failure?: ScheduleFailure | null
+  // The trash (#327): when it was moved there (UTC ISO) and the status a restore brings
+  // back. Only set while post_status is "trash".
+  deleted_at?: string | null
+  trashed_from_status?: string
   // When a published post's scheduled update goes live (#335), UTC ISO; absent when
   // none. Lists and GET /posts/:id.
   update_at?: string | null

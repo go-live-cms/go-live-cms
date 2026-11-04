@@ -114,7 +114,12 @@ func TestActivityRecordedOnPostWritePaths(t *testing.T) {
 	duplicated := as(t, server, owner, http.MethodPost, path+"/duplicate", nil)
 	requireStatus(t, duplicated, http.StatusCreated)
 	copyID := decodeID(t, duplicated, "post")
-	requireStatus(t, as(t, server, owner, http.MethodDelete, fmt.Sprintf("/api/v1/posts/%d", copyID), nil), http.StatusOK)
+	// DELETE moves to the trash (#327); deleting for good is from the trash.
+	copyPath := fmt.Sprintf("/api/v1/posts/%d", copyID)
+	requireStatus(t, as(t, server, owner, http.MethodDelete, copyPath, nil), http.StatusOK)
+	requireStatus(t, as(t, server, editor, http.MethodPost, copyPath+"/restore", nil), http.StatusOK)
+	requireStatus(t, as(t, server, owner, http.MethodDelete, copyPath, nil), http.StatusOK)
+	requireStatus(t, as(t, server, editor, http.MethodDelete, copyPath+"/permanent", nil), http.StatusOK)
 
 	events := objectEvents(t, conn, db.ActivityObjectPost, id)
 	require.Equal(t, []string{"created", "updated", "scheduled", "unscheduled", "published", "version_restored", "unpublished", "updated", "status_changed"}, eventVerbs(events))
@@ -131,8 +136,15 @@ func TestActivityRecordedOnPostWritePaths(t *testing.T) {
 	require.JSONEq(t, `{"post_status":"archived","previous_post_status":"draft"}`, events[8].Payload)
 
 	copyEvents := objectEvents(t, conn, db.ActivityObjectPost, copyID)
-	require.Equal(t, []string{"created", "deleted"}, eventVerbs(copyEvents))
+	require.Equal(t, []string{"created", "trashed", "restored", "trashed", "deleted"}, eventVerbs(copyEvents))
+	copyActors := []int64{owner.ID, owner.ID, editor.ID, owner.ID, editor.ID}
+	for i, e := range copyEvents {
+		require.Equal(t, copyActors[i], e.Actor.Int64, e.Verb)
+	}
 	require.JSONEq(t, fmt.Sprintf(`{"post_type":"post","source_id":%d}`, id), copyEvents[0].Payload)
+	require.JSONEq(t, `{"post_type":"post","from_status":"draft"}`, copyEvents[1].Payload)
+	require.JSONEq(t, `{"post_type":"post","post_status":"draft"}`, copyEvents[2].Payload)
+	require.JSONEq(t, `{"post_type":"post"}`, copyEvents[4].Payload)
 }
 
 // TestActivityRecordedOnMemberAndSettingsPaths: invitations, role changes (both
@@ -415,6 +427,14 @@ func TestContinueEditing(t *testing.T) {
 	record(editor, db.ActivityUpdated, othersDraft)
 	require.Equal(t, []int64{othersDraft.ID}, ids(list(editor, "")))
 	require.Empty(t, list(other, ""), "other's posts were edited by others, not by them")
+
+	// A post in the trash (#327) leaves the list, and comes back with a restore.
+	_, err = store.TrashPost(ctx, othersDraft.ID)
+	require.NoError(t, err)
+	require.Empty(t, list(editor, ""), "trashed")
+	_, err = store.RestorePostFromTrash(ctx, othersDraft.ID)
+	require.NoError(t, err)
+	require.Equal(t, []int64{othersDraft.ID}, ids(list(editor, "")))
 
 	requireStatus(t, as(t, server, owner, http.MethodGet, "/api/v1/home/continue-editing?limit=0", nil), http.StatusBadRequest)
 }

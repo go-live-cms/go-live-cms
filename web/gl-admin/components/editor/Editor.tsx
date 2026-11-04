@@ -411,6 +411,15 @@ const signInAgain = () => void authManager.logout("session-expired")
 function AccessNotice({ access }: { access: CollabAccess }) {
   // Dismissed per change: the next access message is a new object.
   const [dismissed, setDismissed] = useState<CollabAccess | null>(null)
+  // The post went to the trash (#327): the session is fine, the post isn't editable.
+  if (access.trashed) {
+    return (
+      <Notice tone="warning" live="alert" inline className="editor-notice" title="This post was moved to the trash">
+        It's shown read-only, and changes made after that weren't saved. Restore it from the Trash tab of the posts list
+        to edit it again.
+      </Notice>
+    )
+  }
   if (access.revoked) {
     const email = authManager.getState().user?.email
     return (
@@ -539,6 +548,9 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
   if (!editorSettings) return <Placeholder text={live ? "Connecting…" : "Loading…"} />
   const { markdownShortcuts } = editorSettings
   if (!live) return <EditorInner ref={ref} {...props} collab={null} markdownShortcuts={markdownShortcuts} />
+  // Refused at connect because the post is in the trash (#327): it never syncs, so say why
+  // instead of "Connecting…" forever.
+  if (!gate && access?.trashed) return <AccessNotice access={access} />
   if (!gate || gate.collab.postId !== postId || gate.collab.stale) return <Placeholder text="Connecting…" />
   if (!gate.unbuildable) {
     const viewOnly = readOnly || (access?.readOnly ?? gate.collab.readOnly)

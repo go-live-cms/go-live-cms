@@ -74,6 +74,7 @@ func TestUpdatePostSEO(t *testing.T) {
 
 	t.Run("Saves", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
+		stubLivePost(store)
 		stubRoleLookup(store, publishEditor)
 		store.EXPECT().GetMedia(gomock.Any(), int64(12)).Times(1).Return(image, nil)
 		store.EXPECT().UpdatePostSEO(gomock.Any(), db.UpdatePostSEOParams{
@@ -106,6 +107,7 @@ func TestUpdatePostSEO(t *testing.T) {
 
 	t.Run("ClearsEverything", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
+		stubLivePost(store)
 		stubRoleLookup(store, publishEditor)
 		store.EXPECT().GetMedia(gomock.Any(), gomock.Any()).Times(0)
 		store.EXPECT().UpdatePostSEO(gomock.Any(), db.UpdatePostSEOParams{ID: 7}).Times(1).Return(db.Post{ID: 7}, nil)
@@ -157,6 +159,7 @@ func TestUpdatePostSEO(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := mockdb.NewMockStore(gomock.NewController(t))
+			stubLivePost(store)
 			stubRoleLookup(store, tc.user)
 			tc.stubs(store)
 			recorder := seoRequest(t, newTestServer(t, store), http.MethodPut, tc.url, tc.body, tc.user)
@@ -293,6 +296,7 @@ func TestListPublicPostsNoindex(t *testing.T) {
 
 func TestRestorePostVersionSettingsSEO(t *testing.T) {
 	store := mockdb.NewMockStore(gomock.NewController(t))
+	stubLivePost(store)
 	stubRoleLookup(store, publishEditor)
 	store.EXPECT().GetPostVersion(gomock.Any(), db.GetPostVersionParams{PostID: 7, VersionNo: 2}).
 		Return(db.GetPostVersionRow{ID: 11, VersionNo: 2, Settings: seoPublishedPost("12").PublishedSettings}, nil)

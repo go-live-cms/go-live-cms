@@ -42,6 +42,9 @@ export interface PostQueryParams extends PaginationParams {
   user_id?: string | number
   // Only published posts with changes not published (#326).
   unpublished_changes?: boolean
+  // The list filters (#327): credited in the byline, and linked to every term (comma list).
+  author_id?: string | number
+  terms?: string
   with_meta?: boolean
   meta_level?: string // 'basic' | 'full' | 'all'
 }
@@ -55,10 +58,18 @@ export async function getPosts(params: PostQueryParams = {}): Promise<ApiRespons
   }
 }
 
-// The posts list's search box (#145): the full-text index, with the list's type, status
-// and owner filters, best match first. Rows are shaped like getPosts' with_meta rows.
+// The posts list's search box (#145): the full-text index plus part of a title or slug
+// (#327), with the list's type, status, owner, author and term filters, best match first. Rows are shaped like getPosts' with_meta rows.
 export async function searchPosts(
-  params: PaginationParams & { q: string; type?: string; status?: string; user_id?: string | number; unpublished_changes?: boolean }
+  params: PaginationParams & {
+    q: string
+    type?: string
+    status?: string
+    user_id?: string | number
+    unpublished_changes?: boolean
+    author_id?: string | number
+    terms?: string
+  }
 ): Promise<ApiResponse<Post>> {
   const response = await apiCall(buildUrl("/posts/search", params))
   return {
@@ -284,16 +295,79 @@ export async function duplicatePost(id: string | number): Promise<{ post: Post }
   return response.json()
 }
 
-export async function deletePost(id: string | number): Promise<any> {
+// DELETE /posts/:id moves the post to the trash (#327); restorePost takes it out with the
+// status it had, deletePostPermanently (editors and admins, trashed posts only) removes it.
+export async function trashPost(id: string | number): Promise<{ post: Post }> {
   const response = await authenticatedFetch(`/api/v1/posts/${id}`, {
     method: "DELETE",
   })
 
   if (!response.ok) {
-    throw await apiErrorFromResponse(response, { fallback: "Delete post failed" })
+    throw await apiErrorFromResponse(response, { fallback: "Moving the post to the trash failed" })
   }
 
   return response.json()
+}
+
+export async function restorePost(id: string | number): Promise<{ post: Post }> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/restore`, { method: "POST" })
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Restoring the post failed" })
+  }
+  return response.json()
+}
+
+export async function deletePostPermanently(id: string | number): Promise<void> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/permanent`, { method: "DELETE" })
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Deleting the post failed" })
+  }
+}
+
+export type BulkAction = "publish" | "trash" | "restore" | "delete"
+
+// One post's outcome in a bulk action: ok, or the status, code and message its single
+// route would have answered.
+export interface BulkPostResult {
+  id: number
+  ok: boolean
+  post_status?: string
+  status?: number
+  code?: string
+  error?: string
+}
+
+export interface BulkPostsResponse {
+  action: BulkAction
+  results: BulkPostResult[]
+  succeeded: number
+  failed: number
+}
+
+// POST /posts/bulk (#327): up to 100 posts, each checked on its own. A post that fails
+// never stops the others; the answer has a result per post.
+export async function bulkPosts(action: BulkAction, ids: number[]): Promise<BulkPostsResponse> {
+  const response = await authenticatedFetch("/api/v1/posts/bulk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ids }),
+  })
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "The bulk action failed" })
+  }
+  return response.json()
+}
+
+// The posts list's Author filter (#327): everyone credited on a post the caller may read.
+export interface CreditedAuthor {
+  id: number
+  username: string
+  full_name: string
+}
+
+export async function getCreditedAuthors(params: { type?: string } = {}): Promise<CreditedAuthor[]> {
+  const response = await apiCall(buildUrl("/posts/authors", params))
+  return response.authors || []
 }
 
 export async function createPostMedia(postId: number, mediaId: number, order: number = 1): Promise<any> {

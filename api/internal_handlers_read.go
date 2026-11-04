@@ -38,7 +38,8 @@ import (
 //   - 401 Unauthorized: Missing or wrong shared secret
 //   - 403 Forbidden: The ticket predates the user's latest password change, or
 //     the user may not read the post (canReadPost, #393; e.g. unpublished since)
-//   - 404 Not Found: User (or, for a non-moderator, the post) does not exist
+//   - 404 Not Found: User or post does not exist
+//   - 410 Gone: The post is in the trash (#327), {"code": "post_trashed"}
 //   - 500 Internal Server Error: Database query failure
 func (server *Server) getInternalDocAccess(c *gin.Context) {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -74,12 +75,8 @@ func (server *Server) getInternalDocAccess(c *gin.Context) {
 		return
 	}
 
-	// Moderators may edit any post; skip the post lookup like authorizePost.
-	if canModeratePosts(user) {
-		c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": true})
-		return
-	}
-
+	// Everyone's lookup reads the post now, moderators' too: nobody may open a
+	// post in the trash (#327).
 	post, err := server.store.GetPost(c.Request.Context(), postID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -87,6 +84,18 @@ func (server *Server) getInternalDocAccess(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return
+	}
+	// 410 with its own code, so the collab server refuses (or closes) with
+	// post-trashed rather than as a revoked session, and the editor says why.
+	if isTrashed(post) {
+		c.JSON(http.StatusGone, gin.H{"error": "the post is in the trash", "code": codePostTrashed})
+		return
+	}
+
+	// Moderators may edit any post.
+	if canModeratePosts(user) {
+		c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": true})
 		return
 	}
 

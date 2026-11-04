@@ -25,6 +25,8 @@ export const DENY = {
   unavailable: "access-unavailable",
   /** The client's epoch isn't the doc's: drop the local Y.Doc and reconnect fresh. */
   staleEpoch: "stale-epoch",
+  /** The post is in the trash (#327): don't retry; the editor says so. */
+  trashed: "post-trashed",
 } as const
 
 export class AuthRejection extends Error {
@@ -116,6 +118,9 @@ export function createAuthenticate(deps: AuthDeps) {
       access = await deps.fetchAccess(identity, rawDocName, { requestId })
     } catch (error) {
       throw reject(DENY.unavailable, `Access lookup failed: ${errorMessage(error)}`, { userId: identity.userId })
+    }
+    if (access?.trashed) {
+      throw reject(DENY.trashed, "The post is in the trash", { warn: true, userId: identity.userId })
     }
     const mode = accessMode(access)
     if (!mode) {

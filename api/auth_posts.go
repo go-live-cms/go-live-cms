@@ -26,6 +26,13 @@
 //     Anonymous readers get /public only: published snapshots.
 //   - Publishing, scheduling, unpublishing and revisions are moderator-only
 //     (requireContentEditor on those routes).
+//   - Trash (#327): moving a post to the trash is the old delete, so the same
+//     rule (canEditPostDetails). Restoring needs the right to give the post its
+//     old status back: a contributor may restore their own post unless it was
+//     published or scheduled (canRestorePost). Permanent delete is
+//     moderator-only (canDeletePostPermanently). Nobody edits a trashed post:
+//     canEditPost is false for it, the collab server refuses its document, and
+//     the write routes answer 409 (postTrashedError).
 //
 // The owner is posts.user_id. Everything is read from the DB, never the token.
 package api
@@ -46,6 +53,14 @@ const postStatusPublished = "published"
 // postStatusScheduled is a draft waiting for its publish_at (#147). It isn't
 // public: every public read requires postStatusPublished.
 const postStatusScheduled = "scheduled"
+
+// postStatusTrash is a post in the trash (#327): not public, not editable.
+const postStatusTrash = db.PostStatusTrash
+
+// isTrashed reports whether the post is in the trash.
+func isTrashed(post db.Post) bool {
+	return post.PostStatus == postStatusTrash
+}
 
 // requireContentAuthor gates routes any content role may reach: creating
 // posts and media, and the per-post write routes, where the handler then
@@ -77,13 +92,49 @@ func canCreatePost(user db.User, authorIDs []int64, status string) bool {
 // canEditPost reports whether the user may edit the post's working copy: a
 // read-write collab connection. The working copy is not public, but a
 // scheduled post's goes live at its time without another review, so its
-// contributor owner may only watch it (#147).
+// contributor owner may only watch it (#147). Nobody edits a post in the trash
+// (#327): it has to be restored first.
 func canEditPost(user db.User, post db.Post) bool {
+	if isTrashed(post) {
+		return false
+	}
 	if canModeratePosts(user) {
 		return true
 	}
 	return hasRole(user, RoleContributor) && post.UserID == user.ID &&
 		!strings.EqualFold(post.PostStatus, postStatusScheduled)
+}
+
+// canTrashPost reports whether the user may move the post to the trash: the
+// rule DELETE always had (canEditPostDetails), so a contributor may trash their
+// own post only while it isn't published or scheduled. A post already in the
+// trash can't be trashed again.
+func canTrashPost(user db.User, post db.Post) bool {
+	if isTrashed(post) {
+		return false
+	}
+	return canEditPostDetails(user, post)
+}
+
+// canRestorePost reports whether the user may take the post out of the trash.
+// Restoring gives it back its old status, so a published or scheduled post needs
+// the publish permission (a moderator); a contributor may restore their own post
+// that was a draft or archived.
+func canRestorePost(user db.User, post db.Post) bool {
+	if canModeratePosts(user) {
+		return true
+	}
+	if !hasRole(user, RoleContributor) || post.UserID != user.ID {
+		return false
+	}
+	from := post.TrashedFromStatus.String
+	return !strings.EqualFold(from, postStatusPublished) && !strings.EqualFold(from, postStatusScheduled)
+}
+
+// canDeletePostPermanently reports whether the user may delete the post for
+// good (from the trash): admins and editors only.
+func canDeletePostPermanently(user db.User, _ db.Post) bool {
+	return canModeratePosts(user)
 }
 
 // canReadPost reports whether the user may read the post's working copy: the
@@ -127,6 +178,10 @@ func (server *Server) callerViewerID(c *gin.Context) (int64, bool) {
 // owner without moderation rights can do that only while it isn't published
 // (or scheduled, which canEditPost already refuses).
 func canEditPostDetails(user db.User, post db.Post) bool {
+	// A trashed post changes only through restore (#327), moderators' too.
+	if isTrashed(post) {
+		return false
+	}
 	if canModeratePosts(user) {
 		return true
 	}
@@ -192,10 +247,41 @@ func (server *Server) checkLoadedPost(c *gin.Context, post db.Post, allowed func
 	return ok && server.checkPost(c, caller, post, allowed)
 }
 
-// checkPost is authorizePost for a handler that already loaded the post.
+// checkPost is authorizePost for a handler that already loaded the post. A
+// rule refused because the post is in the trash (#327) answers 409
+// post_trashed, to a caller who may read the post: restore it first.
 func (server *Server) checkPost(c *gin.Context, user db.User, post db.Post, allowed func(db.User, db.Post) bool) bool {
 	if !allowed(user, post) {
+		if isTrashed(post) && canReadPost(user, post) {
+			postTrashedError().write(c)
+			return false
+		}
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return false
+	}
+	return true
+}
+
+// authorizeWritePost is authorizePost(canEditPostDetails) for a write route
+// that doesn't load the post itself (media links, SEO, restore-settings):
+// moderators skip the owner rule, not the trash (#327), so their post is read
+// too. A missing post passes, as authorizePost lets moderators through, and
+// the handler reports it.
+func (server *Server) authorizeWritePost(c *gin.Context, postID int64) bool {
+	_, loaded, ok := server.authorizeLoadPost(c, postID, canEditPostDetails)
+	if !ok || loaded {
+		return ok
+	}
+	post, err := server.store.GetPost(c.Request.Context(), postID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return true
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return false
+	}
+	if isTrashed(post) {
+		postTrashedError().write(c)
 		return false
 	}
 	return true

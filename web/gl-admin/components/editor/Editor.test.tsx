@@ -288,6 +288,39 @@ describe("Editor", () => {
     expect(authManager.logout).toHaveBeenCalledWith("session-expired")
   })
 
+  // #327: moving the post to the trash closes its document with post-trashed. The editor
+  // turns view-only and says so; the session is fine, so nobody is asked to sign in.
+  it("says the post was moved to the trash, without ending the session", async () => {
+    tiptapExtensionRegistry.register(Callout)
+    state.user = "2"
+    await mount()
+    await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
+    await until(() => relay.server.recheckedConnections === 1, "the server to track the connection")
+
+    vi.mocked(authManager.logout).mockClear()
+    relay.api.trashed.add("12")
+    relay.server.recheckDoc("post-12")
+    await act(async () => relay.clock.advance(1))
+    await until(() => !!container.querySelector(".editor-notice[role=alert]"), "the trash notice")
+    const notice = container.querySelector(".editor-notice[role=alert]")!
+    expect(notice.textContent).toContain("This post was moved to the trash")
+    expect(container.querySelector("[role=alertdialog]")).toBeNull()
+    expect(pm()!.getAttribute("contenteditable")).toBe("false")
+    expect(pm()!.textContent).toContain("Careful")
+    expect(authManager.logout).not.toHaveBeenCalled()
+  })
+
+  it("says so instead of 'Connecting…' when the post is already in the trash", async () => {
+    vi.mocked(authManager.logout).mockClear()
+    relay.api.trashed.add("12")
+    state.user = "2"
+    await mount()
+    await until(() => !!container.querySelector(".editor-notice[role=alert]"), "the trash notice")
+    expect(container.querySelector(".editor-notice")!.textContent).toContain("This post was moved to the trash")
+    expect(container.textContent).not.toContain("Connecting…")
+    expect(authManager.logout).not.toHaveBeenCalled()
+  })
+
   it("remounts on a fresh doc after stale-epoch (block_doc was written around the server)", async () => {
     tiptapExtensionRegistry.register(Callout)
     await mount()

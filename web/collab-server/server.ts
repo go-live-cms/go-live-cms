@@ -392,6 +392,8 @@ export function createCollabServer(options: CollabServerOptions) {
     flush,
     /** Re-checks a user's open connections now (internal listener, #333). */
     recheckUser: (userId: string) => recheck.checkUser(userId),
+    /** Re-checks a document's open connections now (internal listener; trash, #327). */
+    recheckDoc: (docName: string) => recheck.checkDoc(docName),
     /** Open connections the access re-check is tracking. */
     get recheckedConnections(): number {
       return recheck.size

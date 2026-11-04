@@ -95,6 +95,7 @@ func postPermRoutes() []postPermRoute {
 			},
 		},
 		{
+			// DELETE moves the post to the trash (#327), with delete's old rule.
 			name:    "DeletePost",
 			method:  http.MethodDelete,
 			path:    func(p db.Post) string { return fmt.Sprintf("/api/v1/posts/%d", p.ID) },
@@ -102,7 +103,10 @@ func postPermRoutes() []postPermRoute {
 			okCode:  http.StatusOK,
 			stubs: func(store *mockdb.MockStore, p db.Post, allowed bool) {
 				store.EXPECT().GetPost(gomock.Any(), p.ID).Return(p, nil).AnyTimes()
-				store.EXPECT().DeletePostTx(gomock.Any(), p.ID).Times(timesIf(allowed)).Return(nil)
+				trashed := p
+				trashed.PostStatus = "trash"
+				store.EXPECT().TrashPost(gomock.Any(), p.ID).Times(timesIf(allowed)).Return(trashed, nil)
+				store.EXPECT().DeletePostTx(gomock.Any(), gomock.Any()).Times(0)
 			},
 		},
 		{

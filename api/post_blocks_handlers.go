@@ -3,7 +3,6 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -239,37 +238,15 @@ func (server *Server) publishPost(c *gin.Context) {
 		return
 	}
 
-	// Edits reach block_doc only when the collab server stores (debounced).
-	// Make it store now, or the snapshot below could miss the last seconds of
-	// editing; if it can't, publish nothing (#206).
-	if err := server.flushCollabDoc(c.Request.Context(), postID, requestIDFromContext(c)); err != nil {
-		server.requestLog(c).Warn("collab flush before publish failed", "post_id", postID, "error", err)
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "the collaboration server could not save the latest edits; nothing was published, try again"})
+	// Flush, then PublishPostTx (posts_trash.go, shared with the bulk publish):
+	// 503 if the collab server can't save, 409 for a post in the trash (#327).
+	version, failure := server.publishPostByID(c, postID, userID, stringToNullString(req.Label), stringToNullString(req.Message))
+	if failure != nil {
+		failure.write(c)
 		return
 	}
 
-	// One transaction: the version gets the working copy's blocks and settings
-	// (title, excerpt, featured image, terms; #358), the post's published
-	// snapshot points at it, and the content image links follow the published
-	// body without moving the featured image's (#389).
-	version, err := server.store.PublishPostTx(c, db.PublishPostTxParams{
-		PostID:       postID,
-		Label:        stringToNullString(req.Label),
-		Message:      stringToNullString(req.Message),
-		CreatedBy:    sql.NullInt64{Int64: userID, Valid: true},
-		ContentMedia: publishedContentMedia,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "post not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish post"})
-		return
-	}
-
-	server.recordPostActivity(c, db.ActivityPublished, postID, map[string]any{"version_no": version.VersionNo})
-
+	// publishPostByID recorded the "published" event (#324), for the bulk publish too.
 	c.JSON(http.StatusOK, PublishResponse{
 		VersionID:                version.VersionID,
 		VersionNo:                version.VersionNo,

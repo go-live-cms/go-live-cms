@@ -11,7 +11,8 @@ RETURNING id, version_no;
 -- name: LockPostForPublish :one
 -- Publish runs in one transaction from here (PublishPostTx): two publishes of
 -- one post queue on this lock instead of racing for the same version_no.
-SELECT id FROM posts WHERE id = $1 FOR UPDATE;
+-- The status is checked under the lock: a trashed post (#327) is never published.
+SELECT id, post_status FROM posts WHERE id = $1 FOR UPDATE;
 
 -- name: InsertPublishedVersionFromPost :one
 -- The new version is the post's working copy as stored now: block_doc and its
@@ -56,6 +57,8 @@ SET post_status = 'draft',
     published_block_doc = NULL,
     published_settings = NULL
 WHERE id = $1
+  -- A trashed post comes back only through restore (#327). No row: missing or trashed.
+  AND post_status <> 'trash'
 RETURNING *;
 
 -- name: GetPostVersions :many

@@ -23,6 +23,9 @@ import { collabDebug, collabDebugEnabled, contentFingerprint, fragmentStructure 
 //     and sends `{type:"access", mode, reason}`; losing access altogether closes it with
 //     `access-revoked`. Both surface through `onAccess`: the editor turns view-only and
 //     keeps its local state; after a revoke this instance never reconnects (sign in again).
+//   - Trash (#327): a post moved to the trash closes (or refuses) with `post-trashed`. It
+//     ends the instance like a revoke, with `trashed` set, so the editor says so instead of
+//     asking to sign in again.
 //   - No resyncInterval: Hocuspocus has no periodic resync, so there is no "2s" cadence.
 
 /** Rejection reasons the server sends (web/collab-server/auth.ts DENY). */
@@ -30,10 +33,18 @@ export const DENY_REASON = {
   forbidden: "permission-denied",
   unavailable: "access-unavailable",
   staleEpoch: "stale-epoch",
+  /** The post is in the trash (#327): never retried. */
+  trashed: "post-trashed",
 } as const
 
 /** The close reason when the server's access re-check revokes a session (web/collab-server/recheck.ts). */
 export const ACCESS_REVOKED = "access-revoked"
+
+/**
+ * The close (and deny) reason for a post moved to the trash (#327; web/collab-server/recheck.ts
+ * POST_TRASHED). Ends the connection like a revoke, but the session is fine: no sign-in.
+ */
+export const POST_TRASHED = "post-trashed"
 
 /** Sent to one connection when the server changes its mode (web/collab-server/recheck.ts AccessMessage). */
 export interface AccessMessage {
@@ -49,6 +60,8 @@ export interface CollabAccess {
   reason: AccessMessage["reason"] | null
   /** The server ended the session (access-revoked): no reconnects; sign in again. */
   revoked: boolean
+  /** Ended because the post went to the trash (post-trashed, #327); set only then. */
+  trashed?: boolean
 }
 
 /** Sent with broadcastStateless after each store attempt (web/collab-server/server.ts). */
@@ -109,6 +122,7 @@ export class HocuspocusCollaboration {
   /** Set by an access message; cleared by the next authentication (a fresh lookup). */
   private accessOverride: AccessMessage | null = null
   private _revoked = false
+  private _trashed = false
   private readonly listeners = {
     store: new Set<Listener<StoreMessage>>(),
     access: new Set<Listener<CollabAccess>>(),
@@ -143,6 +157,7 @@ export class HocuspocusCollaboration {
       onStateless: ({ payload }) => this.handleStateless(payload),
       onClose: ({ event }) => {
         if (event?.reason === ACCESS_REVOKED) this.handleRevoked()
+        else if (event?.reason === POST_TRASHED) this.handleRevoked(true)
       },
       onStatus: ({ status }) => {
         if (this.status !== "denied" && this.status !== "revoked") this.setStatus(status as HocuspocusStatus)
@@ -179,7 +194,9 @@ export class HocuspocusCollaboration {
   }
 
   getAccess(): CollabAccess {
-    return { readOnly: this.readOnly, reason: this.accessOverride?.reason ?? null, revoked: this._revoked }
+    const access: CollabAccess = { readOnly: this.readOnly, reason: this.accessOverride?.reason ?? null, revoked: this._revoked }
+    if (this._trashed) access.trashed = true
+    return access
   }
 
   /** Refused with stale-epoch: this Y.Doc must not be used again (remount). */
@@ -295,10 +312,12 @@ export class HocuspocusCollaboration {
     if (hadOverride || wasReadOnly !== this.readOnly) this.emit("access", this.getAccess())
   }
 
-  private handleRevoked() {
+  /** Ended for good: access revoked, or (trashed) the post went to the trash (#327). */
+  private handleRevoked(trashed = false) {
     if (this._revoked || this._destroyed) return
-    console.warn(`[collab] ${this.docName}: the server ended this session (access revoked)`)
+    console.warn(`[collab] ${this.docName}: the server ended this session (${trashed ? "the post is in the trash" : "access revoked"})`)
     this._revoked = true
+    this._trashed = trashed
     if (this.authRetryTimer) clearTimeout(this.authRetryTimer)
     this.authRetryTimer = null
     this.setStatus("revoked")
@@ -317,6 +336,11 @@ export class HocuspocusCollaboration {
       this._stale = true
       this.emit("stale", undefined)
       this.destroy()
+      return
+    }
+    if (reason === DENY_REASON.trashed) {
+      // Refused at connect (#327): the post is in the trash. Like a revoke, never retried.
+      this.handleRevoked(true)
       return
     }
     if (reason === DENY_REASON.forbidden) {

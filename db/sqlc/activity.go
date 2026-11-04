@@ -29,6 +29,11 @@ const (
 	ActivityUpdateUnscheduled = "update_unscheduled"
 	ActivityVersionRestored   = "version_restored"
 
+	// The trash (#327): moved there, and back out. Deleting one for good is
+	// ActivityDeleted, as the hard delete was before the trash.
+	ActivityTrashed  = "trashed"
+	ActivityRestored = "restored"
+
 	// Media (ActivityDeleted too).
 	ActivityUploaded = "uploaded"
 	ActivityReplaced = "replaced"

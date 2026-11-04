@@ -437,6 +437,8 @@ FROM posts p
 LEFT JOIN post_media pm ON p.id = pm.post_id
 LEFT JOIN media m ON pm.media_id = m.id
 WHERE p.user_id = @user_id
+    -- Trashed posts only appear in the Trash tab (#327).
+    AND p.post_status <> 'trash'
     -- What the caller may read (#393, as in ListPosts): 0 = everything.
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
 GROUP BY p.id, p.title, p.description, p.published_block_doc, p.user_id, p.username, p.url, p.created_at, p.changed_at

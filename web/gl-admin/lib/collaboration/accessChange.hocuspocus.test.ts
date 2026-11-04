@@ -113,6 +113,28 @@ describe("access changes while connected (#313)", () => {
     expect(client.getStatus()).toBe("revoked")
   })
 
+  // #327: moving the post to the trash closes its document with post-trashed. The
+  // instance ends like a revoke (no reconnect, doc kept) but says trashed, so the editor
+  // doesn't send anyone to sign in again; opening it again is refused the same way.
+  it("a post moved to the trash ends the session as trashed, and a new connection is refused", async () => {
+    const { client, changes } = await connected("2")
+    relay.api.trashed.add("12")
+    expect(relay.server.recheckDoc("post-12")).toBe(1)
+    await relay.clock.advance(1)
+    await waitFor(() => changes.length === 1, { what: "the close" })
+    expect(changes[0]).toEqual({ readOnly: true, reason: null, revoked: true, trashed: true })
+    expect(client.getStatus()).toBe("revoked")
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    expect(relay.server.hocuspocus.getConnectionsCount()).toBe(0)
+
+    const again = relay.client("1")
+    const refused: CollabAccess[] = []
+    again.onAccess((access) => refused.push(access))
+    await waitFor(() => again.revoked, { what: "the refusal" })
+    expect(refused).toEqual([{ readOnly: true, reason: null, revoked: true, trashed: true }])
+    expect(again.synced).toBe(false)
+  })
+
   it("a password change after connect ends the session", async () => {
     const { client } = await connected("2")
     relay.api.passwordChangedAt.set("2", Math.floor(Date.now() / 1000) + 1)

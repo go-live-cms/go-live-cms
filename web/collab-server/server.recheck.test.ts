@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { canonical } from "../gl-admin/lib/collaboration/fragmentBridge.fixtures"
 import { verifyTicket } from "./access"
-import { ACCESS_REVOKED } from "./recheck"
+import { ACCESS_REVOKED, POST_TRASHED } from "./recheck"
 import { createCollabServer, type CollabServer } from "./server"
 import {
   appendParagraph,
@@ -171,5 +171,49 @@ describe("access re-check of open connections (#313)", () => {
     collab.recheckUser("2")
     await clock.advance(1)
     await waitFor(() => editor.closes.includes(ACCESS_REVOKED), { what: "the close" })
+  })
+})
+
+// #327: a post moved to the trash. The API answers 410 for it and calls the document's
+// re-check, so its editors close with post-trashed (not access-revoked: the session is
+// fine) and nobody can open it again until it is restored.
+describe("a trashed post's document (#327)", () => {
+  it("closes every open connection with post-trashed, and the last edits are stored", async () => {
+    const admin = open("1")
+    const editor = open("2")
+    await synced(admin)
+    await synced(editor)
+    await waitFor(() => collab.recheckedConnections === 2, { what: "both connections tracked" })
+    appendParagraph(editor.doc, "last words", "blk-lastword-0001")
+    await waitFor(() => paragraphs(serverDoc()).includes("last words"), { what: "the edit" })
+
+    api.trashed.add("12")
+    expect(collab.recheckDoc(DOC)).toBe(2)
+    expect(collab.recheckDoc("post-99")).toBe(0)
+    await clock.advance(1)
+    await waitFor(() => admin.closes.includes(POST_TRASHED) && editor.closes.includes(POST_TRASHED), { what: "both closes" })
+    expect(admin.closes).not.toContain(ACCESS_REVOKED)
+    expect(collab.recheckedConnections).toBe(0)
+    // The store on the last disconnect keeps what was typed before the trash.
+    await waitFor(() => (api.posts.get("12")!.block_doc?.blocks_order ?? []).includes("blk-lastword-0001"), { what: "the store" })
+  })
+
+  it("refuses a new connection with post-trashed, and allows it again once restored", async () => {
+    api.trashed.add("12")
+    const refused = open("1")
+    const outcome = await refused.outcome
+    expect(outcome).toEqual({ synced: false, reason: POST_TRASHED })
+
+    api.trashed.delete("12")
+    await synced(open("1"))
+  })
+
+  it("the periodic re-check closes them too when the API's call never arrives", async () => {
+    const editor = open("2")
+    await synced(editor)
+    await waitFor(() => collab.recheckedConnections === 1, { what: "the connection tracked" })
+    api.trashed.add("12")
+    await clock.advance(MINUTE)
+    await waitFor(() => editor.closes.includes(POST_TRASHED), { what: "the close" })
   })
 })

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import { getPostCounts, getPosts, searchPosts } from "@gl-admin/lib/api/posts"
+import { bulkPosts, getCreditedAuthors, getPostCounts, getPosts, searchPosts } from "@gl-admin/lib/api/posts"
+import { getAllTaxonomyTerms } from "@gl-admin/lib/api/taxonomies"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import Pagination from "@gl-admin/components/ui/Pagination"
@@ -10,41 +11,65 @@ import PostType from "@gl-admin/components/ui/PostType"
 import Tabs from "@gl-admin/components/ui/Tabs"
 import Button from "@gl-admin/components/ui/Button"
 import Notice from "@gl-admin/components/ui/Notice"
+import Modal from "@gl-admin/components/ui/Modal"
+import { toast } from "@gl-admin/components/ui/Toast"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import { DocumentIcon, PlusIcon, SearchIcon } from "@gl-admin/components/ui/icons"
 import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
-import { AccessCell, ListHeader, RowActionsCell, SortMenu } from "@gl-admin/components/content/ListParts"
+import {
+  AccessCell,
+  BulkBar,
+  BulkReportNotice,
+  FilterMenu,
+  ListHeader,
+  RowActionsCell,
+  SortMenu,
+  type FilterOption,
+} from "@gl-admin/components/content/ListParts"
 import Pages from "@gl-admin/pages/Pages"
 import NotFound from "@gl-admin/pages/NotFound"
 import { errorMessage } from "@gl-admin/lib/api/errors"
-import { canCreateContent, isContentModerator, type PermissionUser } from "@gl-admin/lib/roles"
+import { canCreateContent, isContentModerator, isTrashed, type PermissionUser } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { useListParams } from "@gl-admin/lib/hooks/useListParams"
 import {
+  BULK_LABELS,
   SORT_OPTIONS,
+  bulkActions,
+  bulkReport,
+  filterQuery,
   findSort,
   findTab,
+  hasFilters,
   listTabs,
   postAccess,
+  readListFilters,
+  selectionAfterBulk,
   tabCount,
   totalCount,
+  trashedPhrase,
+  type BulkAction,
+  type BulkReport,
   type StatusCounts,
 } from "@gl-admin/lib/contentList"
 import { postPath } from "@/lib/seo"
 import type { ApiMeta, Post, PostType as PostTypeInfo } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/pages/content-list.scss"
 
-// The posts list (#340): status tabs with counts, search (#145, the full-text index; ?q=
-// in the URL, best match first, the tab and owner filters still apply), sort, status
-// pills, byline avatars and last edited; contributors get a "Your access" column.
-// Hierarchical types (Pages) get the tree in Pages.tsx instead. A published post with
-// changes not published (#326) shows that pill, and editors get a tab for them.
+// The posts list (#340): status tabs with counts, search (#145, the full-text index plus
+// part of a title or slug, #327; ?q= in the URL, best match first, the tab and filters
+// still apply), sort, status pills, byline avatars and last edited; contributors get a
+// "Your access" column. Hierarchical types (Pages) get the tree in Pages.tsx instead. A
+// published post with changes not published (#326) shows that pill, and editors get a
+// tab for them. Scheduled posts (#147) have their tab and a "Scheduled · Nov 3" pill.
 //
-// Hidden until their issues land: the Author / Category / Tag filters, bulk
-// selection and actions, Import (#150), Trash (#327) and the Category column.
-// Scheduled posts (#147) have their tab and a "Scheduled · Nov 3" pill in site time.
+// #327: the Author (byline) / Category / Tag filters (?author= ?category= ?tag=, with
+// the tabs, sort and search), bulk selection with the tab's actions (bulkActions) and a
+// report of the posts the API refused, and the Trash tab (restore, delete permanently).
+// Hidden until their issues land: Import (#150), the Category column, the byline bulk
+// action (#319) and the design's bulk Archive.
 
 type ContentProps = { title?: string }
 
@@ -83,6 +108,9 @@ function typeLabels(typeName: string | undefined, postType: PostTypeInfo | undef
 
 type ListProps = { typeName?: string; postType?: PostTypeInfo; title?: string }
 
+// The filter params (#327) and the view (tab, sort, search) all live in the URL.
+const FILTER_KEYS = ["author", "category", "tag"] as const
+
 function PostsList({ typeName, postType, title }: ListProps) {
   const navigate = useNavigate()
   const { baseTitle } = useGoLive()
@@ -94,8 +122,11 @@ function PostsList({ typeName, postType, title }: ListProps) {
   const [params, setParam] = useListParams()
   const tabs = listTabs(role)
   const tab = findTab(tabs, params.get("view"))
+  const inTrash = tab.status === "trash"
   const sort = findSort(params.get("sort"))
   const search = params.get("q")?.trim() ?? ""
+  const filters = readListFilters(params)
+  const filtered = hasFilters(filters)
   const { plural, singular } = typeLabels(typeName, postType, title)
   const newType = typeName || "post"
 
@@ -131,6 +162,27 @@ function PostsList({ typeName, postType, title }: ListProps) {
     }
   }, [typeName, moderator, user?.id, refresh])
 
+  // The filters' options (#327): who is credited on posts of this type, and the
+  // categories and tags. One that fails to load (or has nothing to offer) isn't shown.
+  const [authorOptions, setAuthorOptions] = useState<FilterOption[]>([])
+  const [categoryOptions, setCategoryOptions] = useState<FilterOption[]>([])
+  const [tagOptions, setTagOptions] = useState<FilterOption[]>([])
+  useEffect(() => {
+    let live = true
+    getCreditedAuthors({ type: typeName })
+      .then((authors) => live && setAuthorOptions(authors.map((a) => ({ id: String(a.id), label: a.full_name || a.username }))))
+      .catch(() => {})
+    const terms = (type: string, set: (o: FilterOption[]) => void) =>
+      getAllTaxonomyTerms(type)
+        .then((all) => live && set(all.map((t) => ({ id: String(t.id), label: t.name }))))
+        .catch(() => {})
+    terms("category", setCategoryOptions)
+    terms("tag", setTagOptions)
+    return () => {
+      live = false
+    }
+  }, [typeName])
+
   // The search box's text; the URL (and the request) follow it after a pause. The URL is
   // read when the timer fires, so a tab picked during the pause isn't overwritten.
   const [searchText, setSearchText] = useState(search)
@@ -152,25 +204,41 @@ function PostsList({ typeName, postType, title }: ListProps) {
     setSearchText((text) => (text.trim() === search ? text : search))
   }, [search])
 
+  const clearFilters = () => {
+    const next = new URLSearchParams(params)
+    FILTER_KEYS.forEach((k) => next.delete(k))
+    setSearchParams(next, { replace: true })
+  }
+
   const changed = () => {
     setRefresh((n) => n + 1)
     retryList.current()
   }
 
+  const { author_id, terms } = filterQuery(filters)
   const query = useMemo(
     () => ({
       type: typeName || "",
       status: tab.status,
       user_id: tab.mine && user?.id ? String(user.id) : "",
       unpublished_changes: tab.unpublishedChanges ? "true" : "",
+      author_id,
+      terms,
       sort: sort.sort,
       order: sort.order,
       q: search,
     }),
-    [typeName, tab.status, tab.mine, tab.unpublishedChanges, user?.id, sort.sort, sort.order, search]
+    [typeName, tab.status, tab.mine, tab.unpublishedChanges, user?.id, author_id, terms, sort.sort, sort.order, search]
   )
 
+  // A selection belongs to one page: another page (or page size) starts empty, so a bulk
+  // action never reaches rows the user can't see. A reload of the same page keeps it.
+  const [selected, setSelected] = useState<number[]>([])
+  const lastPage = useRef<string | null>(null)
   const fetchData = useCallback(async ({ limit, offset, q, sort, order, ...filters }: ApiMeta & typeof query) => {
+    const page = `${offset}:${limit}`
+    if (lastPage.current !== null && lastPage.current !== page) setSelected([])
+    lastPage.current = page
     const filtered = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""))
     // A search is ranked by the API, so it takes no sort.
     const response = q
@@ -178,6 +246,36 @@ function PostsList({ typeName, postType, title }: ListProps) {
       : await getPosts({ limit, offset, with_meta: true, meta_level: "basic", sort, order, ...filtered })
     return { data: response.data, total: response.meta.total || 0 }
   }, [])
+
+  // Bulk selection (#327): ids on the current page; cleared when the list changes.
+  const available = bulkActions(user, tab)
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [report, setReport] = useState<BulkReport | null>(null)
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const pageRows = useRef<Post[]>([])
+  useEffect(() => {
+    setSelected([])
+    setReport(null)
+  }, [query])
+
+  const runBulk = async (action: BulkAction) => {
+    const ids = [...selected]
+    if (ids.length === 0) return
+    setBulkBusy(true)
+    try {
+      const answer = await bulkPosts(action, ids)
+      const titles = new Map(pageRows.current.map((p) => [p.id, p.title || "Untitled"]))
+      setReport(bulkReport(action, answer.results, titles, singular))
+      setSelected(selectionAfterBulk(answer.results))
+      setConfirmBulkDelete(false)
+      if (answer.succeeded > 0) changed()
+    } catch (e) {
+      toast.error(errorMessage(e, `Couldn't ${BULK_LABELS[action].toLowerCase()} the selected ${plural.toLowerCase()}`))
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+  const onBulk = (action: BulkAction) => (action === "delete" ? setConfirmBulkDelete(true) : void runBulk(action))
 
   const open = (post: Post) => navigate(`/content/edit/${post.id}`)
   const structure = settings?.post_url_structure ?? "id"
@@ -190,9 +288,14 @@ function PostsList({ typeName, postType, title }: ListProps) {
       render: (_, row) =>
         row ? (
           <div className="gl-content-list__title">
-            <Link to={`/content/edit/${row.id}`} className="gl-content-list__link">
-              {row.title || "Untitled"}
-            </Link>
+            {isTrashed(row) ? (
+              // In the trash: not editable, so not a link (restore it first).
+              <span className="gl-content-list__link gl-content-list__link--trashed">{row.title || "Untitled"}</span>
+            ) : (
+              <Link to={`/content/edit/${row.id}`} className="gl-content-list__link">
+                {row.title || "Untitled"}
+              </Link>
+            )}
             <span className="gl-content-list__path">{postPath(row, structure)}</span>
           </div>
         ) : (
@@ -217,7 +320,14 @@ function PostsList({ typeName, postType, title }: ListProps) {
       ),
     },
     { key: "authors", name: "Authors", width: "6rem", render: (_, row) => <Byline post={row} /> },
-    { key: "changed_at", name: "Last edited", width: "8.5rem", render: (_, row) => <LastEdited post={row} /> },
+    inTrash
+      ? {
+          key: "deleted_at",
+          name: "Trashed",
+          width: "8.5rem",
+          render: (_, row) => (row ? <span className="gl-content-list__muted">{trashedPhrase(row.deleted_at)}</span> : <Skeleton shape="text" width={80} />),
+        }
+      : { key: "changed_at", name: "Last edited", width: "8.5rem", render: (_, row) => <LastEdited post={row} /> },
   ]
   if (!typeName) {
     columns.splice(2, 0, {
@@ -227,13 +337,13 @@ function PostsList({ typeName, postType, title }: ListProps) {
       render: (_, row) => <PostType type={row?.post_type || null} iconPath={row?.post_type || null} />,
     })
   }
-  if (!moderator) {
+  if (!moderator && !inTrash) {
     columns.push({ key: "user_id", name: "Your access", width: "16rem", render: (_, row) => <AccessCell post={row} user={user} /> })
   }
   columns.push({
     key: "id",
     name: "Actions",
-    width: moderator ? "3.5rem" : "8.5rem",
+    width: moderator || inTrash ? "3.5rem" : "8.5rem",
     render: (_, row) => row && <RowActionsCell post={row} user={user} onOpen={open} onChanged={changed} noun={singular} />,
   })
 
@@ -271,6 +381,8 @@ function PostsList({ typeName, postType, title }: ListProps) {
     )
   }
 
+  const setFilter = (key: (typeof FILTER_KEYS)[number]) => (id: string) => setParam(key, id, "")
+
   return (
     <section className={`gl-content-list${moderator ? "" : " gl-content-list--contributor"}`}>
       <ListHeader title={plural} actions={newButton} />
@@ -294,6 +406,13 @@ function PostsList({ typeName, postType, title }: ListProps) {
         onChange={(id) => setParam("view", id, tabs[0].id)}
       />
 
+      {inTrash && (
+        <p className="gl-content-list__note">
+          Posts in the trash are off the site and out of every other list. Restore one to give it back the status it had
+          {moderator ? "; delete it permanently to remove it and its revisions." : "."}
+        </p>
+      )}
+
       <div className="gl-content-list__toolbar">
         <label className="gl-content-list__search">
           <SearchIcon />
@@ -306,6 +425,20 @@ function PostsList({ typeName, postType, title }: ListProps) {
             onChange={(e) => setSearchText(e.currentTarget.value)}
           />
         </label>
+        <div className="gl-content-list__filters" role="group" aria-label="Filters">
+          {authorOptions.length > 0 && (
+            <FilterMenu label="Author" options={authorOptions} value={filters.author} onChange={setFilter("author")} />
+          )}
+          {categoryOptions.length > 0 && (
+            <FilterMenu label="Category" options={categoryOptions} value={filters.category} onChange={setFilter("category")} />
+          )}
+          {tagOptions.length > 0 && <FilterMenu label="Tag" options={tagOptions} value={filters.tag} onChange={setFilter("tag")} />}
+          {filtered && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          )}
+        </div>
         {search ? (
           <span className="gl-content-list__sorted">Best match first</span>
         ) : (
@@ -313,9 +446,15 @@ function PostsList({ typeName, postType, title }: ListProps) {
         )}
       </div>
 
+      {report && <BulkReportNotice report={report} onDismiss={() => setReport(null)} />}
+      {selected.length > 0 && (
+        <BulkBar count={selected.length} actions={available} busy={bulkBusy} onAction={onBulk} onClear={() => setSelected([])} />
+      )}
+
       <Pagination fetchData={fetchData} query={query} limitOptions={[10, 25, 50]}>
         {({ data, loading, error, retry }) => {
           retryList.current = retry
+          pageRows.current = data
           if (error) {
             return (
               <EmptyState
@@ -332,24 +471,42 @@ function PostsList({ typeName, postType, title }: ListProps) {
             )
           }
           if (!loading && data.length === 0) {
-            return search ? (
-              <EmptyState
-                compact
-                icon={<SearchIcon size={24} />}
-                title={`No ${plural.toLowerCase()} match “${search}”`}
-                description="Search looks at titles, descriptions, tags and published text. Try other words."
-                action={
-                  <Button variant="secondary" onClick={() => setSearchText("")}>
-                    Clear search
-                  </Button>
-                }
-              />
-            ) : (
+            if (search) {
+              return (
+                <EmptyState
+                  compact
+                  icon={<SearchIcon size={24} />}
+                  title={`No ${plural.toLowerCase()} match “${search}”`}
+                  description="Search looks at titles, slugs, descriptions, tags and published text. Try other words."
+                  action={
+                    <Button variant="secondary" onClick={() => setSearchText("")}>
+                      Clear search
+                    </Button>
+                  }
+                />
+              )
+            }
+            if (filtered) {
+              return (
+                <EmptyState
+                  compact
+                  icon={<DocumentIcon size={24} />}
+                  title={`No ${plural.toLowerCase()} match these filters`}
+                  description={`Nothing in ${tab.label} has that author, category and tag together.`}
+                  action={
+                    <Button variant="secondary" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  }
+                />
+              )
+            }
+            return (
               <EmptyState
                 compact
                 icon={<DocumentIcon size={24} />}
-                title={`Nothing in ${tab.label}`}
-                description={`No ${plural.toLowerCase()} here right now.`}
+                title={inTrash ? "The trash is empty" : `Nothing in ${tab.label}`}
+                description={inTrash ? `${plural} you move to the trash wait here until you restore or delete them.` : `No ${plural.toLowerCase()} here right now.`}
               />
             )
           }
@@ -361,13 +518,43 @@ function PostsList({ typeName, postType, title }: ListProps) {
                 </span>
               )}
               <div className="gl-content-list__table">
-                <Table aria-label={plural} columns={columns} data={data} loading={loading} />
+                <Table
+                  aria-label={plural}
+                  columns={columns}
+                  data={data}
+                  loading={loading}
+                  selectable={available.length > 0 && !loading}
+                  selectedKeys={selected}
+                  onSelectionChange={(keys) => setSelected(keys.map(Number))}
+                  rowLabel={(row) => row.title || "Untitled"}
+                />
               </div>
               <PostCards posts={loading ? null : data} structure={structure} user={moderator ? null : user} />
             </>
           )
         }}
       </Pagination>
+
+      <Modal
+        isOpen={confirmBulkDelete}
+        onClose={() => !bulkBusy && setConfirmBulkDelete(false)}
+        role="alertdialog"
+        size="small"
+        title={`Delete ${selected.length} ${selected.length === 1 ? singular : plural.toLowerCase()} permanently?`}
+        description="They and their revisions are deleted. This can't be undone."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmBulkDelete(false)} disabled={bulkBusy}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={bulkBusy} onClick={() => void runBulk("delete")}>
+              Delete permanently
+            </Button>
+          </>
+        }
+      >
+        {null}
+      </Modal>
     </section>
   )
 }
@@ -380,7 +567,13 @@ function PostCards({ posts, structure, user }: { posts: Post[] | null; structure
     <ul className="gl-post-cards">
       {posts.map((post) => (
         <li key={post.id}>
-          <Link to={`/content/edit/${post.id}`} className="gl-post-cards__link">
+          {/* A trashed post isn't editable, so its card isn't a link (#327); restore it from the table. */}
+          <Link
+            to={`/content/edit/${post.id}`}
+            className="gl-post-cards__link"
+            aria-disabled={isTrashed(post) || undefined}
+            onClick={(e) => isTrashed(post) && e.preventDefault()}
+          >
             <span className="gl-post-cards__title">{post.title || "Untitled"}</span>
             <span className="gl-post-cards__meta">
               <PostStatus

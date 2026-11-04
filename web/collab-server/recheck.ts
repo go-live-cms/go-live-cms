@@ -25,7 +25,9 @@
 //
 // `checkUser` runs a user's checks now instead (#333): the API asks for it after a role
 // change or a removal (POST /internal/users/:id/recheck), so a demotion takes effect at
-// once; the timer stays the fallback if that call never arrives.
+// once; the timer stays the fallback if that call never arrives. `checkDoc` does the same
+// for one document's connections (#327: POST /internal/documents/:doc/recheck after the
+// post moves to the trash; the lookup answers trashed and they close with `post-trashed`).
 //
 // Pure + dependency-injected (lookup, clock, random); unit tested in recheck.test.ts.
 // Must NOT import yjs.
@@ -34,6 +36,12 @@ import { docNameForLog, errorMessage, logEvent, requestIdFrom } from "./logsafe"
 
 /** The close reason a client sees when its access is gone (shown as "session ended"). */
 export const ACCESS_REVOKED = "access-revoked"
+
+/**
+ * The close reason when the post went to the trash (#327; the API answers 410): the
+ * editor says so instead of ending the session. auth.ts refuses new connections with it.
+ */
+export const POST_TRASHED = "post-trashed"
 
 /** Sent to one connection (sendStateless) when the server changes its mode. */
 export interface AccessMessage {
@@ -224,6 +232,18 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
       // Opened while the lookup was in flight (with a newer ticket): checked next time.
       if (!results.has(issuedAt)) continue
       const access = results.get(issuedAt) ?? null
+      if (access?.trashed) {
+        logEvent("info", "ws_access_revoked", {
+          request_id: requestId,
+          doc: docNameForLog(group.docName),
+          user_id: group.userId,
+          from: connection.readOnly ? "read" : "write",
+          reason: POST_TRASHED,
+        })
+        remove(connection)
+        connection.close({ code: CLOSE_CODE, reason: POST_TRASHED })
+        continue
+      }
       const mode = accessMode(access)
       if (!mode) {
         logEvent("warn", "ws_access_revoked", {
@@ -286,19 +306,15 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
      * flight is followed by another one. Returns how many (user, doc) groups it checks.
      */
     checkUser(userId: string): number {
-      if (stopped) return 0
-      let count = 0
-      for (const group of groups.values()) {
-        if (group.userId !== userId) continue
-        count++
-        if (group.checking) {
-          group.again = true
-          continue
-        }
-        if (group.timer) clock.clearTimeout(group.timer)
-        schedule(group, 0)
-      }
-      return count
+      return checkNow((group) => group.userId === userId)
+    },
+    /**
+     * Re-checks every open connection to this document now (#327: the API calls it after
+     * the post moves to the trash, so its editors close with post-trashed at once).
+     * Returns how many (user, doc) groups it checks.
+     */
+    checkDoc(docName: string): number {
+      return checkNow((group) => group.docName === docName)
     },
     /** Open connections being re-checked (tests). */
     get size(): number {
@@ -310,6 +326,23 @@ export function createAccessRecheck(options: AccessRecheckOptions) {
       groups.clear()
       groupOf.clear()
     },
+  }
+
+  /** Looks up every group `matches` picks now; a lookup in flight is followed by another. */
+  function checkNow(matches: (group: Group) => boolean): number {
+    if (stopped) return 0
+    let count = 0
+    for (const group of groups.values()) {
+      if (!matches(group)) continue
+      count++
+      if (group.checking) {
+        group.again = true
+        continue
+      }
+      if (group.timer) clock.clearTimeout(group.timer)
+      schedule(group, 0)
+    }
+    return count
   }
 }
 

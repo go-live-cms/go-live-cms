@@ -365,6 +365,20 @@ are the most fragile part of the codebase. **Before editing anything under
   with the other details (`canEditPostDetails`). The byline is not the owner: crediting someone
   gives no access. The public site gets the published byline from every `/public` read, so the
   theme's `PostByline`/`AuthorCards` need nothing else.
+- **Posts list filters, bulk actions and trash (#327):** Author / Category / Tag filters
+  (`?author=` `?category=` `?tag=`, `FilterMenu`; options from `GET /posts/authors` and the
+  `category` / `tag` terms) combine with the tabs, sort and search (`author_id`, `terms`).
+  Table rows are selectable when the tab has bulk actions (`bulkActions`: publish + move to
+  trash, contributors only trash; in Trash restore + delete permanently, which asks first);
+  `POST /posts/bulk` answers per post and `BulkReportNotice` lists each one it refused and why
+  (`bulkReport`), keeping those selected. The **Trash** tab (moderators: every trashed post;
+  contributors: their own) shows "Trashed …", titles aren't links, and the row menu has only
+  Restore / Delete permanently (`rowActions`; `roles.ts` `canTrashPost`, `canRestorePost`,
+  `canDeletePostPermanently` mirror the API). The row menu's Delete is now **Move to trash**.
+  Pages loads every status (`ALL_STATUSES`) so its tree has the Trash tab too. In the editor,
+  a post moved to the trash while open closes with `post-trashed`: view-only with "This post was
+  moved to the trash", no sign-in prompt. Still hidden: the byline bulk action (#319 landed after this; wiring it to `PUT
+  /posts/:id/authors` is a follow-up), the design's bulk Archive, the Category column, the editor sidebar's Move to trash.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

@@ -41,7 +41,10 @@ every server boot — **read process logs from the very top**.
   (`demoted` / `unverified` / `restored`) or closes the doc with `access-revoked`;
   `onAccess` / `getAccess()` / `readOnly` follow it. A revoke sets status `revoked`,
   disconnects for good (never handed out again by `acquireHocuspocus`) and **keeps the
-  Y.Doc**; the next authentication (a reconnect) replaces any earlier access message. **A
+  Y.Doc**; the next authentication (a reconnect) replaces any earlier access message. A post
+  moved to the trash (#327) closes (or refuses at connect) with `post-trashed`: handled as a
+  revoke with `trashed: true` in `getAccess()`, so `AccessNotice` says so and nobody is sent
+  to sign in again. **A
   promotion with unsynced changes reconnects:** updates sent while read-only were dropped
   by the server (acked as not applied, so still counted as unsynced) and Yjs never resends
   them, so every later update would wait on the server for them and never be stored; the

@@ -160,6 +160,12 @@ func (server *Server) searchPosts(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	// Author (byline) and term filters (#327).
+	filters, err := parsePostListFilters(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	viewerID, ok := server.callerViewerID(c)
 	if !ok {
@@ -170,13 +176,18 @@ func (server *Server) searchPosts(c *gin.Context) {
 	var total int64
 	if query != "" {
 		ctx := c.Request.Context()
+		// Title and slug substrings too (#327): the index finds whole words only.
+		titlePattern := memberSearchPattern(query)
 		total, err = server.store.CountSearchPosts(ctx, db.CountSearchPostsParams{
 			Query:              query,
+			TitlePattern:       titlePattern,
 			PostType:           postType,
 			PostStatus:         status,
 			UserID:             userID,
 			UnpublishedChanges: unpublishedChanges,
 			ViewerID:           viewerID,
+			AuthorID:           filters.AuthorID,
+			TermIds:            filters.TermIDs,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search posts"})
@@ -184,11 +195,14 @@ func (server *Server) searchPosts(c *gin.Context) {
 		}
 		rows, err := server.store.SearchPostsWithMeta(ctx, db.SearchPostsWithMetaParams{
 			Query:              query,
+			TitlePattern:       titlePattern,
 			PostType:           postType,
 			PostStatus:         status,
 			UserID:             userID,
 			UnpublishedChanges: unpublishedChanges,
 			ViewerID:           viewerID,
+			AuthorID:           filters.AuthorID,
+			TermIds:            filters.TermIDs,
 			OffsetCount:        int32(offset),
 			LimitCount:         int32(limit),
 		})

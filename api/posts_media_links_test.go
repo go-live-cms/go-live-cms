@@ -142,6 +142,7 @@ func TestCreatePostMediaAPI(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
+			stubLivePost(store)
 			tc.buildStubs(store)
 			stubRoleLookup(store, user)
 
@@ -345,6 +346,7 @@ func TestDeletePostMediaAPI(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
+			stubLivePost(store)
 			tc.buildStubs(store)
 			stubRoleLookup(store, user)
 
