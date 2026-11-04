@@ -20,10 +20,10 @@ SELECT
     u.id, u.username, u.full_name, u.bio, u.website,
     (
         SELECT COUNT(*)
-        FROM user_posts up
-        JOIN posts p ON p.id = up.post_id
+        FROM post_published_authors ppa
+        JOIN posts p ON p.id = ppa.post_id
         JOIN post_types pt ON pt.name = p.post_type
-        WHERE up.user_id = u.id
+        WHERE ppa.user_id = u.id
             AND p.post_status = 'published'
             AND pt.public AND pt.is_active
     )::bigint AS post_count
@@ -41,10 +41,11 @@ type GetPublicAuthorRow struct {
 	PostCount int64  `json:"post_count"`
 }
 
-// Public author pages (#350). An author is a user credited (user_posts, the
-// byline) on at least one published post of a public, active post type: the
-// posts the public site serves. Nobody else has a page, so these queries are
-// the only place that rule lives.
+// Public author pages (#350). An author is a user credited in the published
+// byline (post_published_authors, the snapshot's author_ids, #319) of at least one
+// published post of a public, active post type: the posts the public site serves.
+// A byline edit not yet published credits nobody. Nobody else has a page, so
+// these queries are the only place that rule lives.
 // The author's public fields and how many of those posts credit them. A user
 // with none gets post_count 0, which the API answers like an unknown username.
 func (q *Queries) GetPublicAuthor(ctx context.Context, username string) (GetPublicAuthorRow, error) {
@@ -63,14 +64,14 @@ func (q *Queries) GetPublicAuthor(ctx context.Context, username string) (GetPubl
 
 const listPostAuthorProfiles = `-- name: ListPostAuthorProfiles :many
 SELECT u.id, u.username, u.full_name, u.bio, u.website
-FROM user_posts up
+FROM post_published_authors up
 JOIN users u ON u.id = up.user_id
 JOIN posts p ON p.id = up.post_id
 JOIN post_types pt ON pt.name = p.post_type
 WHERE up.post_id = $1
     AND p.post_status = 'published'
     AND pt.public AND pt.is_active
-ORDER BY up."order", u.id
+ORDER BY up.position, u.id
 `
 
 type ListPostAuthorProfilesRow struct {
@@ -81,9 +82,9 @@ type ListPostAuthorProfilesRow struct {
 	Website  string `json:"website"`
 }
 
-// The "Written by" cards: every author credited on a post, in byline order.
-// Empty unless the post is one the public site serves, so it never shows who
-// wrote a draft, and every author it returns has a page.
+// The "Written by" cards: every author in the post's published byline, in
+// order. Empty unless the post is one the public site serves, so it never shows
+// who wrote a draft, and every author it returns has a page.
 func (q *Queries) ListPostAuthorProfiles(ctx context.Context, postID int64) ([]ListPostAuthorProfilesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPostAuthorProfiles, postID)
 	if err != nil {
@@ -118,7 +119,7 @@ SELECT
     u.username,
     MAX(GREATEST(p.changed_at, p.created_at))::timestamptz AS last_modified
 FROM users u
-JOIN user_posts up ON up.user_id = u.id
+JOIN post_published_authors up ON up.user_id = u.id
 JOIN posts p ON p.id = up.post_id
 JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'
@@ -175,20 +176,13 @@ SELECT
         FROM post_meta pm
         WHERE pm.post_id = p.id
     ) as meta,
-    (
-        SELECT COALESCE(
-            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name) ORDER BY up2."order", u.id),
-            '[]'::jsonb
-        )
-        FROM user_posts up2
-        JOIN users u ON u.id = up2.user_id
-        WHERE up2.post_id = p.id
-    )::jsonb as authors
+    golive_post_published_byline(p.id)::jsonb as authors
+
 FROM posts p
 JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'
     AND pt.public AND pt.is_active
-    AND EXISTS (SELECT 1 FROM user_posts up WHERE up.post_id = p.id AND up.user_id = $1)
+    AND EXISTS (SELECT 1 FROM post_published_authors ppa WHERE ppa.post_id = p.id AND ppa.user_id = $1)
 ORDER BY p.created_at DESC, p.id DESC
 LIMIT $3
 OFFSET $2

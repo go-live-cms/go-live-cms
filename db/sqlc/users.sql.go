@@ -91,6 +91,21 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const creditOwnersOnEmptyBylines = `-- name: CreditOwnersOnEmptyBylines :exec
+INSERT INTO user_posts (post_id, user_id, "order")
+SELECT p.id, p.user_id, 0
+FROM posts p
+WHERE p.id = ANY($1::bigint[])
+    AND NOT EXISTS (SELECT 1 FROM user_posts up WHERE up.post_id = p.id)
+`
+
+// A byline is never empty (#319): a post whose only credit was the removed member
+// credits its owner.
+func (q *Queries) CreditOwnersOnEmptyBylines(ctx context.Context, postIds []int64) error {
+	_, err := q.db.ExecContext(ctx, creditOwnersOnEmptyBylines, pq.Array(postIds))
+	return err
+}
+
 const deleteUser = `-- name: DeleteUser :exec
 DELETE FROM users
 WHERE id = $1
@@ -99,6 +114,37 @@ WHERE id = $1
 func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteUser, id)
 	return err
+}
+
+const deleteUserBylines = `-- name: DeleteUserBylines :many
+DELETE FROM user_posts
+WHERE user_id = $1
+RETURNING post_id
+`
+
+// Removal (#333, #319), after ReassignPostBylines: the member's remaining credits,
+// returning the posts they were on (CreditOwnersOnEmptyBylines).
+func (q *Queries) DeleteUserBylines(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, deleteUserBylines, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var post_id int64
+		if err := rows.Scan(&post_id); err != nil {
+			return nil, err
+		}
+		items = append(items, post_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
@@ -438,7 +484,7 @@ type ReassignPostBylinesParams struct {
 
 // The removed member's byline (user_posts, #319) on the posts that just moved goes to
 // the new owner, unless they are already credited there. Credits on anyone else's
-// posts are deleted with the account (ON DELETE CASCADE).
+// posts are dropped (DeleteUserBylines).
 func (q *Queries) ReassignPostBylines(ctx context.Context, arg ReassignPostBylinesParams) error {
 	_, err := q.db.ExecContext(ctx, reassignPostBylines, arg.ToID, arg.FromID, pq.Array(arg.PostIds))
 	return err
@@ -478,6 +524,45 @@ func (q *Queries) ReassignPostsOwner(ctx context.Context, arg ReassignPostsOwner
 		return nil, err
 	}
 	return items, nil
+}
+
+const reassignPublishedBylines = `-- name: ReassignPublishedBylines :exec
+WITH affected AS (
+    SELECT p.id, p.user_id AS owner_id, p.published_settings->'author_ids' AS ids,
+        (p.id = ANY($3::bigint[])
+            AND NOT ((p.published_settings->'author_ids') @> to_jsonb($2::bigint))) AS take_place
+    FROM posts p
+    WHERE jsonb_typeof(p.published_settings->'author_ids') = 'array'
+        AND (p.published_settings->'author_ids') @> to_jsonb($1::bigint)
+)
+UPDATE posts p
+SET published_settings = jsonb_set(p.published_settings, '{author_ids}', coalesce((
+        SELECT jsonb_agg(
+            CASE WHEN e.value = to_jsonb($1::bigint) THEN to_jsonb($2::bigint) ELSE e.value END
+            ORDER BY e.ord)
+        FROM jsonb_array_elements(a.ids) WITH ORDINALITY AS e(value, ord)
+        WHERE a.take_place OR e.value <> to_jsonb($1::bigint)
+    ), jsonb_build_array(a.owner_id)))
+FROM affected a
+WHERE p.id = a.id
+`
+
+type ReassignPublishedBylinesParams struct {
+	FromID       int64   `json:"from_id"`
+	ToID         int64   `json:"to_id"`
+	MovedPostIds []int64 `json:"moved_post_ids"`
+}
+
+// Removal (#333, #319): the same rewrite for the published bylines
+// (published_settings.author_ids), at once rather than on the next Update, since
+// the member's credit can't be shown without the account. On the posts that moved
+// (@moved_post_ids, now owned by @to_id) the member's place goes to @to_id unless
+// they are already credited; elsewhere it is dropped; an empty byline becomes the
+// owner. Working and published bylines get the same rule, so a post that had no
+// pending change has none after. post_published_authors follows by trigger.
+func (q *Queries) ReassignPublishedBylines(ctx context.Context, arg ReassignPublishedBylinesParams) error {
+	_, err := q.db.ExecContext(ctx, reassignPublishedBylines, arg.FromID, arg.ToID, pq.Array(arg.MovedPostIds))
+	return err
 }
 
 const setUserPassword = `-- name: SetUserPassword :one

@@ -37,6 +37,10 @@ func createRelatedTestPost(t *testing.T, user User, postType, status string, cre
 	require.NoError(t, err)
 	_, err = testQueries.CreateUserPost(ctx, CreateUserPostParams{PostID: post.ID, UserID: user.ID, Order: 0})
 	require.NoError(t, err)
+	if status == "published" {
+		// Its byline is public once published (#319).
+		republishSettings(t, post.ID)
+	}
 	_, err = testQueries.db.ExecContext(ctx, `UPDATE posts SET created_at = $2 WHERE id = $1`, post.ID, createdAt)
 	require.NoError(t, err)
 	post.CreatedAt = createdAt
