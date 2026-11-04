@@ -102,7 +102,7 @@ RETURNING *;
 -- name: LockUsersForUpdate :many
 -- Row-locks the given users in id order (RemoveUserTx: the member and the one who
 -- receives their posts), so two removals that name each other can't deadlock.
-SELECT id, username FROM users
+SELECT id, username, avatar_url FROM users
 WHERE id = ANY(sqlc.arg(ids)::bigint[])
 ORDER BY id
 FOR UPDATE;
@@ -181,3 +181,18 @@ SELECT id FROM users WHERE id = $1 FOR UPDATE;
 -- Taken by refresh-token rotation so it cannot interleave with a password
 -- change on the same user (which holds the row FOR UPDATE).
 SELECT id FROM users WHERE id = $1 FOR SHARE;
+-- name: SetUserEmail :one
+UPDATE users
+SET email = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: SetUserAvatar :one
+-- Sets (or, with '', removes) the avatar and returns the one it replaced, so the
+-- API can delete that file after the commit. The row lock makes two uploads at
+-- once each see the other's file as the previous one, so neither leaks.
+UPDATE users u
+SET avatar_url = sqlc.arg(avatar_url)
+FROM (SELECT p.id, p.avatar_url FROM users p WHERE p.id = sqlc.arg(user_id) FOR UPDATE) prev
+WHERE u.id = prev.id
+RETURNING prev.avatar_url::text AS previous_avatar_url;

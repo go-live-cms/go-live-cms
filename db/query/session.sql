@@ -69,3 +69,16 @@ WHERE user_id = $1 AND is_blocked = false;
 
 -- name: CountTotalSessions :one
 SELECT COUNT(*) AS total FROM sessions;
+-- name: ListActiveSessionsByUser :many
+-- The sessions that can still refresh (#334, Profile's "other devices"): not
+-- blocked (rotated, logged out, revoked) and not expired. Uses the partial index
+-- idx_sessions_user_id_active (000029).
+SELECT * FROM sessions
+WHERE user_id = $1 AND is_blocked = false AND expires_at > now()
+ORDER BY created_at DESC, id;
+
+-- name: BlockOtherSessionsForUser :execrows
+-- Signs a user out everywhere but one session (#334).
+UPDATE sessions
+SET is_blocked = true
+WHERE user_id = sqlc.arg(user_id) AND is_blocked = false AND id <> sqlc.arg(keep_id);

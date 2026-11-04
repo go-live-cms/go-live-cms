@@ -9,6 +9,8 @@
 //   - POST /auth/invitations/preview: what an invitation is for (email, role)
 //   - POST /auth/invitations/accept: redeems an invitation, creating the user
 //     with the invited email and role
+//   - POST /auth/email-change/confirm: redeems an email change link (#334); the
+//     request is POST /users/me/email (signed in, current password)
 //
 // Tokens travel in request bodies, never in URLs, so they can't end up in
 // access logs or Referer headers. The web pages read them from the link's
@@ -26,10 +28,11 @@ import "github.com/gin-gonic/gin"
 
 func (server *Server) registerAccountRoutes(v1 *gin.RouterGroup) {
 	auth := v1.Group("/auth")
-	auth.POST("/password/forgot", server.rateLimits.passwordForgot.perIP(), server.forgotPassword)  // POST /api/v1/auth/password/forgot
-	auth.POST("/password/reset", server.rateLimits.accountToken.perIP(), server.resetPassword)      // POST /api/v1/auth/password/reset
-	auth.POST("/invitations/preview", server.rateLimits.accountToken.perIP(), server.previewInvite) // POST /api/v1/auth/invitations/preview
-	auth.POST("/invitations/accept", server.rateLimits.accountToken.perIP(), server.acceptInvite)   // POST /api/v1/auth/invitations/accept
+	auth.POST("/password/forgot", server.rateLimits.passwordForgot.perIP(), server.forgotPassword)        // POST /api/v1/auth/password/forgot
+	auth.POST("/password/reset", server.rateLimits.accountToken.perIP(), server.resetPassword)            // POST /api/v1/auth/password/reset
+	auth.POST("/invitations/preview", server.rateLimits.accountToken.perIP(), server.previewInvite)       // POST /api/v1/auth/invitations/preview
+	auth.POST("/invitations/accept", server.rateLimits.accountToken.perIP(), server.acceptInvite)         // POST /api/v1/auth/invitations/accept
+	auth.POST("/email-change/confirm", server.rateLimits.accountToken.perIP(), server.confirmEmailChange) // POST /api/v1/auth/email-change/confirm (#334)
 
 	invitations := v1.Group("/invitations")
 	invitations.Use(server.requireAuth(), requireSiteAdmin(server))

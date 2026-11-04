@@ -17,7 +17,7 @@ import (
 type AuthorProfileResponse struct {
 	Username string `json:"username"`
 	FullName string `json:"full_name"`
-	// Always null until avatars exist (#334); the theme draws initials.
+	// The /uploads URL of their avatar (#334), or null: the theme draws initials.
 	Avatar  *string `json:"avatar"`
 	Bio     string  `json:"bio"`
 	Website string  `json:"website"`
@@ -29,19 +29,20 @@ type PublicAuthorListEntry struct {
 	LastModified time.Time `json:"last_modified"`
 }
 
-func toAuthorProfile(username, fullName, bio, website string) AuthorProfileResponse {
+func toAuthorProfile(username, fullName, bio, website, avatar string) AuthorProfileResponse {
 	return AuthorProfileResponse{
 		Username: username,
 		FullName: fullName,
+		Avatar:   avatarResponse(avatar),
 		Bio:      bio,
 		Website:  website,
 	}
 }
 
 func authorProfileFromRow(row db.GetPublicAuthorRow) AuthorProfileResponse {
-	return toAuthorProfile(row.Username, row.FullName, row.Bio, row.Website)
+	return toAuthorProfile(row.Username, row.FullName, row.Bio, row.Website, row.AvatarUrl)
 }
 
 func authorProfileFromPostRow(row db.ListPostAuthorProfilesRow) AuthorProfileResponse {
-	return toAuthorProfile(row.Username, row.FullName, row.Bio, row.Website)
+	return toAuthorProfile(row.Username, row.FullName, row.Bio, row.Website, row.AvatarUrl)
 }

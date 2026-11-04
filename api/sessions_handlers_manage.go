@@ -44,10 +44,14 @@
 package api
 
 import (
+	"bytes"
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 	"github.com/go-live-cms/go-live-cms/token"
 )
 
@@ -78,6 +82,10 @@ func (server *Server) getUserSessions(ctx *gin.Context) {
 	sessionResponses := make([]SessionResponse, len(sessions))
 	for i, session := range sessions {
 		sessionResponses[i] = toSessionResponse(session)
+		if !server.config.IsDebugMode() {
+			// No raw IPs outside debug (#155, #334).
+			sessionResponses[i].ClientIP = ""
+		}
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
@@ -145,4 +153,77 @@ func (server *Server) blockSession(ctx *gin.Context) {
 		"message":    "session blocked successfully",
 		"session_id": req.SessionID,
 	})
+}
+
+// listMyDevices answers Profile's "other devices" (#334): the caller's sessions that
+// can still refresh, newest first, which of them is this browser's (from the
+// refresh cookie, which is why the route is under /auth: the dev cookie's Path is
+// /api/v1/auth), and how many others there are. No IPs outside debug.
+//
+// Returns 200 {"sessions": [DeviceSessionResponse], "other_count": n}.
+func (server *Server) listMyDevices(c *gin.Context) {
+	payload := getAuthPayload(c)
+	sessions, err := server.store.ListActiveSessionsByUser(c.Request.Context(), payload.UserID)
+	if err != nil {
+		server.requestLog(c).Error("listing sessions failed", "user_id", payload.UserID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get sessions"})
+		return
+	}
+
+	var current []byte
+	if cookie := server.readRefreshCookie(c); cookie != "" {
+		current = token.HashRefresh(cookie)
+	}
+	debug := server.config.IsDebugMode()
+	devices := make([]DeviceSessionResponse, len(sessions))
+	others := 0
+	for i, s := range sessions {
+		isCurrent := current != nil && bytes.Equal(s.RefreshTokenHash, current)
+		if !isCurrent {
+			others++
+		}
+		devices[i] = toDeviceSessionResponse(s, isCurrent, debug)
+	}
+
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, gin.H{"sessions": devices, "other_count": others})
+}
+
+// signOutOtherDevices blocks every session of the caller except this browser's
+// (the one its refresh cookie names), revoking their refresh tokens (#334).
+// Access tokens already issued to the other devices stay valid until they expire
+// (ACCESS_TOKEN_DURATION), as after a logout; only a password change cuts them short.
+//
+// Returns:
+//   - 200 OK: {"signed_out": n}
+//   - 409 Conflict: (code "session_not_active") no refresh cookie, or its session
+//     isn't an active one of the caller's (the client should sign in again)
+func (server *Server) signOutOtherDevices(c *gin.Context) {
+	payload := getAuthPayload(c)
+	cookie := server.readRefreshCookie(c)
+	if cookie == "" {
+		respondSessionNotActive(c)
+		return
+	}
+
+	result, err := server.store.SignOutOtherSessionsTx(c.Request.Context(), db.SignOutOtherSessionsTxParams{
+		UserID:           payload.UserID,
+		RefreshTokenHash: token.HashRefresh(cookie),
+	})
+	if err != nil {
+		if errors.Is(err, db.ErrSessionNotActive) {
+			respondSessionNotActive(c)
+			return
+		}
+		server.requestLog(c).Error("signing out other sessions failed", "user_id", payload.UserID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to sign out other devices"})
+		return
+	}
+
+	logSecurityEvent(c, LogOtherSessionsOut, result.KeptSessionID.String(), payload.UserID, fmt.Sprintf("Blocked %d other sessions", result.Blocked))
+	c.JSON(http.StatusOK, gin.H{"signed_out": result.Blocked})
+}
+
+func respondSessionNotActive(c *gin.Context) {
+	c.JSON(http.StatusConflict, gin.H{"error": "this browser's session has ended; sign in again", "code": "session_not_active"})
 }

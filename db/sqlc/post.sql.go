@@ -904,7 +904,7 @@ SELECT
     -- admin list's avatars. Public fields only (no email or role).
     (
         SELECT COALESCE(
-            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name) ORDER BY up."order", u.id),
+            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name, 'avatar', NULLIF(u.avatar_url, '')) ORDER BY up."order", u.id),
             '[]'::jsonb
         )
         FROM user_posts up

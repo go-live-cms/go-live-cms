@@ -17,7 +17,7 @@ import (
 const getPublicAuthor = `-- name: GetPublicAuthor :one
 
 SELECT
-    u.id, u.username, u.full_name, u.bio, u.website,
+    u.id, u.username, u.full_name, u.bio, u.website, u.avatar_url,
     (
         SELECT COUNT(*)
         FROM user_posts up
@@ -38,6 +38,7 @@ type GetPublicAuthorRow struct {
 	FullName  string `json:"full_name"`
 	Bio       string `json:"bio"`
 	Website   string `json:"website"`
+	AvatarUrl string `json:"avatar_url"`
 	PostCount int64  `json:"post_count"`
 }
 
@@ -56,13 +57,14 @@ func (q *Queries) GetPublicAuthor(ctx context.Context, username string) (GetPubl
 		&i.FullName,
 		&i.Bio,
 		&i.Website,
+		&i.AvatarUrl,
 		&i.PostCount,
 	)
 	return i, err
 }
 
 const listPostAuthorProfiles = `-- name: ListPostAuthorProfiles :many
-SELECT u.id, u.username, u.full_name, u.bio, u.website
+SELECT u.id, u.username, u.full_name, u.bio, u.website, u.avatar_url
 FROM user_posts up
 JOIN users u ON u.id = up.user_id
 JOIN posts p ON p.id = up.post_id
@@ -74,11 +76,12 @@ ORDER BY up."order", u.id
 `
 
 type ListPostAuthorProfilesRow struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	FullName string `json:"full_name"`
-	Bio      string `json:"bio"`
-	Website  string `json:"website"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	FullName  string `json:"full_name"`
+	Bio       string `json:"bio"`
+	Website   string `json:"website"`
+	AvatarUrl string `json:"avatar_url"`
 }
 
 // The "Written by" cards: every author credited on a post, in byline order.
@@ -99,6 +102,7 @@ func (q *Queries) ListPostAuthorProfiles(ctx context.Context, postID int64) ([]L
 			&i.FullName,
 			&i.Bio,
 			&i.Website,
+			&i.AvatarUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -177,7 +181,7 @@ SELECT
     ) as meta,
     (
         SELECT COALESCE(
-            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name) ORDER BY up2."order", u.id),
+            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name, 'avatar', NULLIF(u.avatar_url, '')) ORDER BY up2."order", u.id),
             '[]'::jsonb
         )
         FROM user_posts up2

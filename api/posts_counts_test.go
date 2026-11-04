@@ -121,9 +121,9 @@ func TestListPostsStatusListPassedThrough(t *testing.T) {
 func TestToPostWithMetaResponseAuthors(t *testing.T) {
 	row := db.ListPostsWithMetaRow{
 		ID:      1,
-		Authors: json.RawMessage(`[{"id":4,"username":"ana","full_name":"Ana Costa"},{"id":2,"username":"luan","full_name":"Luan"}]`),
+		Authors: json.RawMessage(`[{"id":4,"username":"ana","full_name":"Ana Costa","avatar":"/uploads/media/_avatars/avatar-0123456789abcdef0123456789abcdef.jpg"},{"id":2,"username":"luan","full_name":"Luan","avatar":null}]`),
 	}
-	require.Equal(t, []PostAuthorResponse{{4, "ana", "Ana Costa"}, {2, "luan", "Luan"}}, toPostWithMetaResponse(row).Authors)
+	require.Equal(t, []PostAuthorResponse{{4, "ana", "Ana Costa", avatarResponse("/uploads/media/_avatars/avatar-0123456789abcdef0123456789abcdef.jpg")}, {2, "luan", "Luan", nil}}, toPostWithMetaResponse(row).Authors)
 
 	// Missing or broken: an empty list, never null in the JSON.
 	for _, raw := range []json.RawMessage{nil, json.RawMessage(`null`), json.RawMessage(`not json`)} {

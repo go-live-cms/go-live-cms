@@ -313,3 +313,31 @@ func TestSMTPTLSMode(t *testing.T) {
 	_, err := New(util.Config{GinMode: util.GinModeRelease, SMTPHost: "smtp.example.com", SMTPPort: 25, SMTPTLS: "none", MailFrom: "a@b.example"}, discardLogger())
 	require.ErrorContains(t, err, "clear text", "startup refuses clear-text SMTP in release")
 }
+
+func TestEmailChangeTemplates(t *testing.T) {
+	msg, err := RenderEmailChange("new@example.com", EmailChange{SiteTitle: "Field Notes", Username: "ana", Link: testLink, ExpiresIn: 24 * time.Hour})
+	require.NoError(t, err)
+	require.Equal(t, TemplateEmailChange, msg.Template)
+	require.Equal(t, "new@example.com", msg.To)
+	require.Contains(t, msg.Subject, "Field Notes")
+	for _, body := range []string{msg.Text, msg.HTML} {
+		require.Contains(t, body, testLink)
+		require.Contains(t, body, "ana")
+		require.Contains(t, body, "24 hours")
+	}
+
+	msg, err = RenderEmailChanged("old@example.com", EmailChanged{SiteTitle: "<b>Site</b>", Username: "ana", NewEmail: "ana.lima@example.org"})
+	require.NoError(t, err)
+	require.Equal(t, TemplateEmailChanged, msg.Template)
+	require.Equal(t, "old@example.com", msg.To)
+	require.Contains(t, msg.Text, "a•••@example.org")
+	require.NotContains(t, msg.Text, "ana.lima")
+	require.NotContains(t, msg.HTML, "<b>Site</b>", "escaped in HTML")
+}
+
+func TestMaskEmail(t *testing.T) {
+	require.Equal(t, "a•••@example.com", MaskEmail("ana.lima@example.com"))
+	require.Equal(t, "é•••@exemplo.pt", MaskEmail("élia@exemplo.pt"))
+	require.Equal(t, "•••", MaskEmail("not-an-address"))
+	require.Equal(t, "•••", MaskEmail("@example.com"))
+}

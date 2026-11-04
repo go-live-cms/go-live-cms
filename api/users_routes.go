@@ -52,6 +52,10 @@ func (server *Server) RegisterUserRoutes(v1 *gin.RouterGroup) {
 	usersAuth := users.Group("")
 	usersAuth.Use(server.requireAuth())
 	usersAuth.GET("/me", server.getMe) // GET /api/v1/users/me
+	// Your own account (#334): avatar and email change.
+	usersAuth.PUT("/me/avatar", server.uploadAvatar)       // PUT /api/v1/users/me/avatar (multipart)
+	usersAuth.DELETE("/me/avatar", server.deleteAvatar)    // DELETE /api/v1/users/me/avatar
+	usersAuth.POST("/me/email", server.requestEmailChange) // POST /api/v1/users/me/email {current_password, new_email}
 
 	// Admin-only routes (require Bearer token + admin role)
 	admin := usersAuth.Group("")

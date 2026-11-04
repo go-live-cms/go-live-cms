@@ -55,7 +55,7 @@ INSERT INTO users (
     role
 ) VALUES (
     $1, $2, $3, $4, $5
-) RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at
+) RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
 `
 
 type CreateUserParams struct {
@@ -87,6 +87,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Bio,
 		&i.Website,
 		&i.LastActiveAt,
+		&i.AvatarUrl,
 	)
 	return i, err
 }
@@ -112,7 +113,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, id int64) error {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
 WHERE id = $1 LIMIT 1
 `
 
@@ -131,12 +132,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Bio,
 		&i.Website,
 		&i.LastActiveAt,
+		&i.AvatarUrl,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
 WHERE email = $1
 LIMIT 1
 `
@@ -156,12 +158,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Bio,
 		&i.Website,
 		&i.LastActiveAt,
+		&i.AvatarUrl,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
 WHERE username = $1
 LIMIT 1
 `
@@ -181,12 +184,13 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Bio,
 		&i.Website,
 		&i.LastActiveAt,
+		&i.AvatarUrl,
 	)
 	return i, err
 }
 
 const listMembers = `-- name: ListMembers :many
-SELECT u.id, u.username, u.full_name, u.email, u.hashed_password, u.password_changed_at, u.created_at, u.role, u.bio, u.website, u.last_active_at,
+SELECT u.id, u.username, u.full_name, u.email, u.hashed_password, u.password_changed_at, u.created_at, u.role, u.bio, u.website, u.last_active_at, u.avatar_url,
     (SELECT count(*) FROM posts p WHERE p.user_id = u.id)::bigint AS posts_owned
 FROM users u
 WHERE ($1::text = ''
@@ -254,6 +258,7 @@ func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]Lis
 			&i.User.Bio,
 			&i.User.Website,
 			&i.User.LastActiveAt,
+			&i.User.AvatarUrl,
 			&i.PostsOwned,
 		); err != nil {
 			return nil, err
@@ -270,7 +275,7 @@ func (q *Queries) ListMembers(ctx context.Context, arg ListMembersParams) ([]Lis
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at FROM users
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
 ORDER BY
     CASE WHEN $1 = 'date_asc' THEN created_at END ASC,
     CASE WHEN $1 = 'date_desc' THEN created_at END DESC,
@@ -314,6 +319,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Bio,
 			&i.Website,
 			&i.LastActiveAt,
+			&i.AvatarUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -384,15 +390,16 @@ func (q *Queries) LockUserForUpdate(ctx context.Context, id int64) error {
 }
 
 const lockUsersForUpdate = `-- name: LockUsersForUpdate :many
-SELECT id, username FROM users
+SELECT id, username, avatar_url FROM users
 WHERE id = ANY($1::bigint[])
 ORDER BY id
 FOR UPDATE
 `
 
 type LockUsersForUpdateRow struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	AvatarUrl string `json:"avatar_url"`
 }
 
 // Row-locks the given users in id order (RemoveUserTx: the member and the one who
@@ -406,7 +413,7 @@ func (q *Queries) LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUs
 	items := []LockUsersForUpdateRow{}
 	for rows.Next() {
 		var i LockUsersForUpdateRow
-		if err := rows.Scan(&i.ID, &i.Username); err != nil {
+		if err := rows.Scan(&i.ID, &i.Username, &i.AvatarUrl); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -480,13 +487,68 @@ func (q *Queries) ReassignPostsOwner(ctx context.Context, arg ReassignPostsOwner
 	return items, nil
 }
 
+const setUserAvatar = `-- name: SetUserAvatar :one
+UPDATE users u
+SET avatar_url = $1
+FROM (SELECT p.id, p.avatar_url FROM users p WHERE p.id = $2 FOR UPDATE) prev
+WHERE u.id = prev.id
+RETURNING prev.avatar_url::text AS previous_avatar_url
+`
+
+type SetUserAvatarParams struct {
+	AvatarUrl string `json:"avatar_url"`
+	UserID    int64  `json:"user_id"`
+}
+
+// Sets (or, with ”, removes) the avatar and returns the one it replaced, so the
+// API can delete that file after the commit. The row lock makes two uploads at
+// once each see the other's file as the previous one, so neither leaks.
+func (q *Queries) SetUserAvatar(ctx context.Context, arg SetUserAvatarParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, setUserAvatar, arg.AvatarUrl, arg.UserID)
+	var previous_avatar_url string
+	err := row.Scan(&previous_avatar_url)
+	return previous_avatar_url, err
+}
+
+const setUserEmail = `-- name: SetUserEmail :one
+UPDATE users
+SET email = $2
+WHERE id = $1
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
+`
+
+type SetUserEmailParams struct {
+	ID    int64  `json:"id"`
+	Email string `json:"email"`
+}
+
+func (q *Queries) SetUserEmail(ctx context.Context, arg SetUserEmailParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, setUserEmail, arg.ID, arg.Email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.FullName,
+		&i.Email,
+		&i.HashedPassword,
+		&i.PasswordChangedAt,
+		&i.CreatedAt,
+		&i.Role,
+		&i.Bio,
+		&i.Website,
+		&i.LastActiveAt,
+		&i.AvatarUrl,
+	)
+	return i, err
+}
+
 const setUserPassword = `-- name: SetUserPassword :one
 UPDATE users
 SET
     hashed_password = $2,
     password_changed_at = $3
 WHERE id = $1
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
 `
 
 type SetUserPasswordParams struct {
@@ -510,6 +572,7 @@ func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams
 		&i.Bio,
 		&i.Website,
 		&i.LastActiveAt,
+		&i.AvatarUrl,
 	)
 	return i, err
 }
@@ -518,7 +581,7 @@ const setUserRole = `-- name: SetUserRole :one
 UPDATE users
 SET role = $1
 WHERE id = $2
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
 `
 
 type SetUserRoleParams struct {
@@ -541,6 +604,7 @@ func (q *Queries) SetUserRole(ctx context.Context, arg SetUserRoleParams) (User,
 		&i.Bio,
 		&i.Website,
 		&i.LastActiveAt,
+		&i.AvatarUrl,
 	)
 	return i, err
 }
@@ -604,7 +668,7 @@ SET
     bio = COALESCE($8, bio),
     website = COALESCE($9, website)
 WHERE id = $1
-RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at
+RETURNING id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url
 `
 
 type UpdateUserParams struct {
@@ -644,6 +708,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Bio,
 		&i.Website,
 		&i.LastActiveAt,
+		&i.AvatarUrl,
 	)
 	return i, err
 }

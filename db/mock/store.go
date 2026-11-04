@@ -110,6 +110,21 @@ func (mr *MockStoreMockRecorder) BlockAllSessionsForUser(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockAllSessionsForUser", reflect.TypeOf((*MockStore)(nil).BlockAllSessionsForUser), arg0, arg1)
 }
 
+// BlockOtherSessionsForUser mocks base method.
+func (m *MockStore) BlockOtherSessionsForUser(arg0 context.Context, arg1 db.BlockOtherSessionsForUserParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BlockOtherSessionsForUser", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BlockOtherSessionsForUser indicates an expected call of BlockOtherSessionsForUser.
+func (mr *MockStoreMockRecorder) BlockOtherSessionsForUser(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockOtherSessionsForUser", reflect.TypeOf((*MockStore)(nil).BlockOtherSessionsForUser), arg0, arg1)
+}
+
 // BlockSession mocks base method.
 func (m *MockStore) BlockSession(arg0 context.Context, arg1 uuid.UUID) error {
 	m.ctrl.T.Helper()
@@ -199,6 +214,21 @@ func (mr *MockStoreMockRecorder) ClaimDueScheduledPosts(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimDueScheduledPosts", reflect.TypeOf((*MockStore)(nil).ClaimDueScheduledPosts), arg0, arg1)
 }
 
+// ClaimEmailChangeToken mocks base method.
+func (m *MockStore) ClaimEmailChangeToken(arg0 context.Context, arg1 []byte) (db.EmailChangeToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimEmailChangeToken", arg0, arg1)
+	ret0, _ := ret[0].(db.EmailChangeToken)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimEmailChangeToken indicates an expected call of ClaimEmailChangeToken.
+func (mr *MockStoreMockRecorder) ClaimEmailChangeToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimEmailChangeToken", reflect.TypeOf((*MockStore)(nil).ClaimEmailChangeToken), arg0, arg1)
+}
+
 // ClaimPasswordResetToken mocks base method.
 func (m *MockStore) ClaimPasswordResetToken(arg0 context.Context, arg1 []byte) (db.PasswordResetToken, error) {
 	m.ctrl.T.Helper()
@@ -243,6 +273,21 @@ func (mr *MockStoreMockRecorder) ClearMenuLocation(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClearMenuLocation", reflect.TypeOf((*MockStore)(nil).ClearMenuLocation), arg0, arg1)
 }
 
+// ConfirmEmailChangeTx mocks base method.
+func (m *MockStore) ConfirmEmailChangeTx(arg0 context.Context, arg1 []byte) (db.ConfirmEmailChangeTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfirmEmailChangeTx", arg0, arg1)
+	ret0, _ := ret[0].(db.ConfirmEmailChangeTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ConfirmEmailChangeTx indicates an expected call of ConfirmEmailChangeTx.
+func (mr *MockStoreMockRecorder) ConfirmEmailChangeTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfirmEmailChangeTx", reflect.TypeOf((*MockStore)(nil).ConfirmEmailChangeTx), arg0, arg1)
+}
+
 // CopyPostFeaturedImage mocks base method.
 func (m *MockStore) CopyPostFeaturedImage(arg0 context.Context, arg1 db.CopyPostFeaturedImageParams) error {
 	m.ctrl.T.Helper()
@@ -283,6 +328,21 @@ func (m *MockStore) CopyPostTaxonomyTerms(arg0 context.Context, arg1 db.CopyPost
 func (mr *MockStoreMockRecorder) CopyPostTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyPostTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).CopyPostTaxonomyTerms), arg0, arg1)
+}
+
+// CountEmailChangeTokensSince mocks base method.
+func (m *MockStore) CountEmailChangeTokensSince(arg0 context.Context, arg1 db.CountEmailChangeTokensSinceParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountEmailChangeTokensSince", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountEmailChangeTokensSince indicates an expected call of CountEmailChangeTokensSince.
+func (mr *MockStoreMockRecorder) CountEmailChangeTokensSince(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountEmailChangeTokensSince", reflect.TypeOf((*MockStore)(nil).CountEmailChangeTokensSince), arg0, arg1)
 }
 
 // CountFilteredPosts mocks base method.
@@ -523,6 +583,21 @@ func (m *MockStore) CountTotalUsers(arg0 context.Context) (int64, error) {
 func (mr *MockStoreMockRecorder) CountTotalUsers(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTotalUsers", reflect.TypeOf((*MockStore)(nil).CountTotalUsers), arg0)
+}
+
+// CreateEmailChangeToken mocks base method.
+func (m *MockStore) CreateEmailChangeToken(arg0 context.Context, arg1 db.CreateEmailChangeTokenParams) (db.EmailChangeToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateEmailChangeToken", arg0, arg1)
+	ret0, _ := ret[0].(db.EmailChangeToken)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateEmailChangeToken indicates an expected call of CreateEmailChangeToken.
+func (mr *MockStoreMockRecorder) CreateEmailChangeToken(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateEmailChangeToken", reflect.TypeOf((*MockStore)(nil).CreateEmailChangeToken), arg0, arg1)
 }
 
 // CreateMedia mocks base method.
@@ -2194,6 +2269,21 @@ func (mr *MockStoreMockRecorder) GetUserMediaCount(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMediaCount", reflect.TypeOf((*MockStore)(nil).GetUserMediaCount), arg0, arg1)
 }
 
+// GetValidEmailChangeTokenByHash mocks base method.
+func (m *MockStore) GetValidEmailChangeTokenByHash(arg0 context.Context, arg1 []byte) (db.EmailChangeToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetValidEmailChangeTokenByHash", arg0, arg1)
+	ret0, _ := ret[0].(db.EmailChangeToken)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetValidEmailChangeTokenByHash indicates an expected call of GetValidEmailChangeTokenByHash.
+func (mr *MockStoreMockRecorder) GetValidEmailChangeTokenByHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidEmailChangeTokenByHash", reflect.TypeOf((*MockStore)(nil).GetValidEmailChangeTokenByHash), arg0, arg1)
+}
+
 // GetValidPasswordResetTokenByHash mocks base method.
 func (m *MockStore) GetValidPasswordResetTokenByHash(arg0 context.Context, arg1 []byte) (db.PasswordResetToken, error) {
 	m.ctrl.T.Helper()
@@ -2254,6 +2344,20 @@ func (mr *MockStoreMockRecorder) InsertPublishedVersionFromPost(arg0, arg1 inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPublishedVersionFromPost", reflect.TypeOf((*MockStore)(nil).InsertPublishedVersionFromPost), arg0, arg1)
 }
 
+// InvalidateEmailChangeTokensForUser mocks base method.
+func (m *MockStore) InvalidateEmailChangeTokensForUser(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InvalidateEmailChangeTokensForUser", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InvalidateEmailChangeTokensForUser indicates an expected call of InvalidateEmailChangeTokensForUser.
+func (mr *MockStoreMockRecorder) InvalidateEmailChangeTokensForUser(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateEmailChangeTokensForUser", reflect.TypeOf((*MockStore)(nil).InvalidateEmailChangeTokensForUser), arg0, arg1)
+}
+
 // InvalidatePasswordResetTokensForUser mocks base method.
 func (m *MockStore) InvalidatePasswordResetTokensForUser(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -2281,6 +2385,21 @@ func (m *MockStore) ListActivePostTypes(arg0 context.Context) ([]db.PostType, er
 func (mr *MockStoreMockRecorder) ListActivePostTypes(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActivePostTypes", reflect.TypeOf((*MockStore)(nil).ListActivePostTypes), arg0)
+}
+
+// ListActiveSessionsByUser mocks base method.
+func (m *MockStore) ListActiveSessionsByUser(arg0 context.Context, arg1 int64) ([]db.Session, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListActiveSessionsByUser", arg0, arg1)
+	ret0, _ := ret[0].([]db.Session)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListActiveSessionsByUser indicates an expected call of ListActiveSessionsByUser.
+func (mr *MockStoreMockRecorder) ListActiveSessionsByUser(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListActiveSessionsByUser", reflect.TypeOf((*MockStore)(nil).ListActiveSessionsByUser), arg0, arg1)
 }
 
 // ListAdjacentPosts mocks base method.
@@ -3010,6 +3129,21 @@ func (mr *MockStoreMockRecorder) ReplaceMenuItemsTx(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceMenuItemsTx", reflect.TypeOf((*MockStore)(nil).ReplaceMenuItemsTx), arg0, arg1)
 }
 
+// RequestEmailChangeTx mocks base method.
+func (m *MockStore) RequestEmailChangeTx(arg0 context.Context, arg1 db.CreateEmailChangeTokenParams) (db.EmailChangeToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RequestEmailChangeTx", arg0, arg1)
+	ret0, _ := ret[0].(db.EmailChangeToken)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RequestEmailChangeTx indicates an expected call of RequestEmailChangeTx.
+func (mr *MockStoreMockRecorder) RequestEmailChangeTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RequestEmailChangeTx", reflect.TypeOf((*MockStore)(nil).RequestEmailChangeTx), arg0, arg1)
+}
+
 // ResetPasswordTx mocks base method.
 func (m *MockStore) ResetPasswordTx(arg0 context.Context, arg1 db.ResetPasswordTxParams) (db.User, error) {
 	m.ctrl.T.Helper()
@@ -3275,6 +3409,36 @@ func (mr *MockStoreMockRecorder) SetPublishedVersionOnPost(arg0, arg1 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPublishedVersionOnPost", reflect.TypeOf((*MockStore)(nil).SetPublishedVersionOnPost), arg0, arg1)
 }
 
+// SetUserAvatar mocks base method.
+func (m *MockStore) SetUserAvatar(arg0 context.Context, arg1 db.SetUserAvatarParams) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetUserAvatar", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetUserAvatar indicates an expected call of SetUserAvatar.
+func (mr *MockStoreMockRecorder) SetUserAvatar(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserAvatar", reflect.TypeOf((*MockStore)(nil).SetUserAvatar), arg0, arg1)
+}
+
+// SetUserEmail mocks base method.
+func (m *MockStore) SetUserEmail(arg0 context.Context, arg1 db.SetUserEmailParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetUserEmail", arg0, arg1)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetUserEmail indicates an expected call of SetUserEmail.
+func (mr *MockStoreMockRecorder) SetUserEmail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserEmail", reflect.TypeOf((*MockStore)(nil).SetUserEmail), arg0, arg1)
+}
+
 // SetUserInvitationAcceptedUser mocks base method.
 func (m *MockStore) SetUserInvitationAcceptedUser(arg0 context.Context, arg1 db.SetUserInvitationAcceptedUserParams) error {
 	m.ctrl.T.Helper()
@@ -3317,6 +3481,21 @@ func (m *MockStore) SetUserRole(arg0 context.Context, arg1 db.SetUserRoleParams)
 func (mr *MockStoreMockRecorder) SetUserRole(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetUserRole", reflect.TypeOf((*MockStore)(nil).SetUserRole), arg0, arg1)
+}
+
+// SignOutOtherSessionsTx mocks base method.
+func (m *MockStore) SignOutOtherSessionsTx(arg0 context.Context, arg1 db.SignOutOtherSessionsTxParams) (db.SignOutOtherSessionsTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SignOutOtherSessionsTx", arg0, arg1)
+	ret0, _ := ret[0].(db.SignOutOtherSessionsTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SignOutOtherSessionsTx indicates an expected call of SignOutOtherSessionsTx.
+func (mr *MockStoreMockRecorder) SignOutOtherSessionsTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignOutOtherSessionsTx", reflect.TypeOf((*MockStore)(nil).SignOutOtherSessionsTx), arg0, arg1)
 }
 
 // StorePostCollabTx mocks base method.

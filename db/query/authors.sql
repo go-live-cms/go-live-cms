@@ -7,7 +7,7 @@
 -- The author's public fields and how many of those posts credit them. A user
 -- with none gets post_count 0, which the API answers like an unknown username.
 SELECT
-    u.id, u.username, u.full_name, u.bio, u.website,
+    u.id, u.username, u.full_name, u.bio, u.website, u.avatar_url,
     (
         SELECT COUNT(*)
         FROM user_posts up
@@ -37,7 +37,7 @@ SELECT
     ) as meta,
     (
         SELECT COALESCE(
-            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name) ORDER BY up2."order", u.id),
+            jsonb_agg(jsonb_build_object('id', u.id, 'username', u.username, 'full_name', u.full_name, 'avatar', NULLIF(u.avatar_url, '')) ORDER BY up2."order", u.id),
             '[]'::jsonb
         )
         FROM user_posts up2
@@ -57,7 +57,7 @@ OFFSET @offset_count;
 -- The "Written by" cards: every author credited on a post, in byline order.
 -- Empty unless the post is one the public site serves, so it never shows who
 -- wrote a draft, and every author it returns has a page.
-SELECT u.id, u.username, u.full_name, u.bio, u.website
+SELECT u.id, u.username, u.full_name, u.bio, u.website, u.avatar_url
 FROM user_posts up
 JOIN users u ON u.id = up.user_id
 JOIN posts p ON p.id = up.post_id

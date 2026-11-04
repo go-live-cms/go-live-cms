@@ -66,7 +66,7 @@ func TestAuthorProfileResponseKeys(t *testing.T) {
 	user := randomUserNew()
 	user.Bio = "Bio"
 	user.Website = "https://example.com"
-	data, err := json.Marshal(toAuthorProfile(user.Username, user.FullName, user.Bio, user.Website))
+	data, err := json.Marshal(toAuthorProfile(user.Username, user.FullName, user.Bio, user.Website, user.AvatarUrl))
 	require.NoError(t, err)
 	requireOnlyAuthorKeys(t, data)
 	require.NotContains(t, string(data), user.Email)

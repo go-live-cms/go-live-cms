@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -483,9 +484,9 @@ func TestUpdateUserAPI(t *testing.T) {
 		{
 			name:   "OK_SelfUpdate",
 			userID: user.ID,
+			// No email: your own changes only through POST /users/me/email (#334).
 			body: gin.H{
 				"username": newUsername,
-				"email":    newEmail,
 			},
 			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
 				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
@@ -500,7 +501,6 @@ func TestUpdateUserAPI(t *testing.T) {
 
 				updatedUser := user
 				updatedUser.Username = newUsername
-				updatedUser.Email = newEmail
 
 				// No password in the body, so no sessions are revoked.
 				store.EXPECT().
@@ -509,6 +509,69 @@ func TestUpdateUserAPI(t *testing.T) {
 					DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
 						require.False(t, arg.PasswordChanged)
 						return db.UpdateUserTxResult{User: updatedUser}, nil
+					})
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			// #334: a new address must be confirmed (POST /users/me/email).
+			name:   "SelfEmailChangeNeedsConfirmation",
+			userID: user.ID,
+			body:   gin.H{"email": newEmail},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				store.EXPECT().UpdateUserTx(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "email_change_requires_confirmation")
+			},
+		},
+		{
+			// Resending your own address (another case) changes nothing and is fine.
+			name:   "OK_SelfUpdateResendsOwnEmail",
+			userID: user.ID,
+			body:   gin.H{"email": strings.ToUpper(user.Email), "full_name": "Renamed Person"},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID, user.Username, time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				store.EXPECT().UpdateUserTx(gomock.Any(), gomock.Any()).Times(1).
+					DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
+						require.Equal(t, normEmail(user.Email), arg.Email)
+						return db.UpdateUserTxResult{User: user}, nil
+					})
+			},
+			checkResponse: func(recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code)
+			},
+		},
+		{
+			// An admin may still set another member's address directly.
+			name:   "OK_AdminSetsAnotherMembersEmail",
+			userID: user.ID,
+			body:   gin.H{"email": newEmail},
+			setupAuth: func(t *testing.T, request *http.Request, tokenMaker token.Maker) {
+				addAuthorization(t, request, tokenMaker, authorizationTypeBearer, user.ID+50, "admin_caller", time.Minute)
+			},
+			buildStubs: func(store *mockdb.MockStore) {
+				adminCaller := randomUserNew()
+				adminCaller.ID = user.ID + 50
+				adminCaller.Role = "admin"
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(adminCaller.ID)).Times(1).Return(adminCaller, nil)
+				store.EXPECT().GetUser(gomock.Any(), gomock.Eq(user.ID)).Times(1).Return(user, nil)
+				store.EXPECT().UpdateUserTx(gomock.Any(), gomock.Any()).Times(1).
+					DoAndReturn(func(_ any, arg db.UpdateUserTxParams) (db.UpdateUserTxResult, error) {
+						require.Equal(t, normEmail(newEmail), arg.Email)
+						updated := user
+						updated.Email = arg.Email
+						return db.UpdateUserTxResult{User: updated}, nil
 					})
 			},
 			checkResponse: func(recorder *httptest.ResponseRecorder) {

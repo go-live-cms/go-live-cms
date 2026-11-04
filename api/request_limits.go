@@ -31,6 +31,7 @@ var bodyLimitOverrides = map[string]int64{
 	"POST /api/v1/media/batch":       0,
 	"POST /api/v1/media/bulk":        0,
 	"POST /api/v1/media/:id/replace": 0,
+	"PUT /api/v1/users/me/avatar":    0, // avatarMaxBytes (#334)
 }
 
 // bodyLimitMiddleware caps the request body for the matched route. It runs as

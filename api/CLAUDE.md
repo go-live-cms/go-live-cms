@@ -517,6 +517,44 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   public, active type. Anyone else gets the same 404 body as an unknown username (tested),
   so the routes can't enumerate accounts.
 
+## Profile: avatar, email change, other devices (#334)
+
+- **Avatar** (`avatar_utils.go`, `avatar_handlers_write.go`): `PUT /users/me/avatar` (multipart
+  `file`, optional `focal_x`/`focal_y` 0..1 as displayed) and `DELETE`. A **dedicated upload,
+  not a media item** (no library row editors could delete or reuse, no `post_media`). Sniffed
+  JPEG/PNG/GIF/WebP only (DecodeConfig must agree), ≤5 MiB (`avatarMaxBytes`, body exempt in
+  `bodyLimitOverrides`), ≤40 MP; a GIF's first frame. The API crops the largest square around
+  the focal point (EXIF orientation applied), scales it to 256 px (never up) and re-encodes it
+  (JPEG, PNG with transparency), so no metadata survives. Stored in `<UPLOAD_PATH>/_avatars/`
+  through `saveUploadedFile` (#399 names, backups include it). `users.avatar_url` (`000034`)
+  holds the **`/uploads` URL path** (`''` = none), so bylines built in SQL return it as is:
+  every user shape has `avatar` (URL or null): private/public user, `PostAuthorResponse`
+  (the `authors` JSON in every list query), `AuthorProfileResponse`. `SetUserAvatar` returns the
+  previous URL under a row lock; its file is removed after the update (`removeAvatarFile`, only
+  a name that parses as ours, `avatarFilePath`), and on member removal (`RemoveUserTxResult.AvatarURL`).
+- **Email change** (`email_change_handlers_write.go`): `POST /users/me/email {current_password,
+  new_email}` (the self password-change limit, per user+IP) → **202 with the same body whatever
+  the address**; the lookup, token and email run after the response (`runInBackground`). A taken
+  address gets no email and no token. Otherwise `RequestEmailChangeTx` ends earlier links and
+  stores one (`email_change_tokens`: hash only, 24 h, single use); the link (`/confirm-email#token=`)
+  goes to the **new** address. `POST /auth/email-change/confirm {token}` (public, account-token
+  limit) → `ConfirmEmailChangeTx` (user row, then token rows, like resets): `invalid_token` (400)
+  for unknown/expired/used/replaced, `email_taken` (409) if another account took it meanwhile;
+  on success the email changes, other pending email links and **password reset links** are used
+  up, and the old address gets a notice (new address masked, `mailer.MaskEmail`). Sessions are
+  not revoked (the issue doesn't ask; the password is unchanged). A password change or reset ends
+  pending email links. **`PUT /users/:id` refuses a self email change** (400
+  `email_change_requires_confirmation`); an admin may still set someone else's.
+- **Other devices** (`sessions_handlers_manage.go`): under `/auth` because they read the refresh
+  cookie (the dev cookie's Path is `/api/v1/auth`) to know which session is this browser's.
+  `GET /auth/sessions` → active sessions (not blocked, not expired; `ListActiveSessionsByUser`,
+  index `000029`) with `current`, `last_used_at` (the row's `created_at`: rows rotate on refresh)
+  and `other_count`; IPs only in debug (also blanked on the old `GET /sessions`).
+  `POST /auth/sessions/sign-out-others` (`cookieOriginGuard`) → `SignOutOtherSessionsTx`: the user
+  row `FOR UPDATE` (serializes with rotation, like a password change), the cookie's session must be
+  an active one of theirs (else 409 `session_not_active`), then `BlockOtherSessionsForUser`. Other
+  devices' access tokens live out `ACCESS_TOKEN_DURATION`, as after a logout.
+
 ## Public term archives (#348)
 
 - `GET /public/taxonomies/:taxonomy/terms/:slug/posts?page=N` (`terms_public_handlers_read.go`)
