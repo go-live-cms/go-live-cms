@@ -166,6 +166,9 @@ type PublishRequest struct {
 type PublishResponse struct {
 	VersionID int64 `json:"version_id"`
 	VersionNo int32 `json:"version_no"`
+	// CancelledScheduledUpdate: this Update superseded a pending scheduled update
+	// (#335); omitted when there was none.
+	CancelledScheduledUpdate bool `json:"cancelled_scheduled_update,omitempty"`
 }
 
 // getAuthPayload retrieves the authenticated user payload from context
@@ -268,8 +271,9 @@ func (server *Server) publishPost(c *gin.Context) {
 	server.recordPostActivity(c, db.ActivityPublished, postID, map[string]any{"version_no": version.VersionNo})
 
 	c.JSON(http.StatusOK, PublishResponse{
-		VersionID: version.VersionID,
-		VersionNo: version.VersionNo,
+		VersionID:                version.VersionID,
+		VersionNo:                version.VersionNo,
+		CancelledScheduledUpdate: version.CancelledScheduledUpdate,
 	})
 }
 

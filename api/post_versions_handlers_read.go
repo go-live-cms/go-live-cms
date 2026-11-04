@@ -176,6 +176,10 @@ type PostSettingsStateResponse struct {
 	// HasUnpublishedChanges: the posts list's flag, a published post with either
 	// of the two (#326). The editor re-reads it after every store of the body.
 	HasUnpublishedChanges bool `json:"has_unpublished_changes"`
+	// ScheduledUpdate is a published post's pending update (#335), null when none.
+	// Every open editor re-reads this state on collaborators' stores, so a tab
+	// opened before someone scheduled or cancelled an update follows.
+	ScheduledUpdate *ScheduledUpdateResponse `json:"scheduled_update"`
 }
 
 // getPostSettingsState handles GET /posts/:id/settings: the editor's "changes
@@ -206,11 +210,16 @@ func (server *Server) getPostSettingsState(c *gin.Context) {
 		return
 	}
 	published, _ := decodePostSettings(row.PublishedSettings)
-	c.JSON(http.StatusOK, PostSettingsStateResponse{
+	resp := PostSettingsStateResponse{
 		Working:               *working,
 		Published:             published,
 		Changed:               row.Changed,
 		BlocksChanged:         row.BlocksChanged,
 		HasUnpublishedChanges: row.HasUnpublishedChanges,
-	})
+	}
+	// Only a published post has published settings, and only it can have one.
+	if row.PublishedSettings.Valid {
+		resp.ScheduledUpdate = server.scheduledUpdate(c, postID)
+	}
+	c.JSON(http.StatusOK, resp)
 }

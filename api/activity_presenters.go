@@ -80,11 +80,13 @@ func toActivityResponse(row db.ListActivityRow) ActivityResponse {
 
 // ContinueEditingPost is one card of Home's "Continue where you left off".
 type ContinueEditingPost struct {
-	ID                    int64      `json:"id"`
-	Title                 string     `json:"title"`
-	PostType              string     `json:"post_type"`
-	PostStatus            string     `json:"post_status"`
-	PublishAt             *time.Time `json:"publish_at,omitempty"`
+	ID         int64      `json:"id"`
+	Title      string     `json:"title"`
+	PostType   string     `json:"post_type"`
+	PostStatus string     `json:"post_status"`
+	PublishAt  *time.Time `json:"publish_at,omitempty"`
+	// UpdateAt is a pending scheduled Update's time (#335).
+	UpdateAt              *time.Time `json:"update_at,omitempty"`
 	HasUnpublishedChanges bool       `json:"has_unpublished_changes,omitempty"`
 	ScheduleFailed        bool       `json:"schedule_failed,omitempty"`
 	// EditedAt is when the caller last worked on it.
@@ -98,6 +100,7 @@ func toContinueEditingPost(row db.ListContinueEditingRow) ContinueEditingPost {
 		PostType:              row.PostType,
 		PostStatus:            row.PostStatus,
 		PublishAt:             nullTimePtr(row.PublishAt),
+		UpdateAt:              nullTimePtr(row.UpdateAt),
 		HasUnpublishedChanges: row.HasUnpublishedChanges,
 		ScheduleFailed:        row.PostStatus == postStatusScheduled && row.PublishFailedAt.Valid,
 		EditedAt:              row.EditedAt,

@@ -613,8 +613,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   (a reason code). `PUT /posts/:id/schedule` (`{"local":"2026-11-03T09:00"}` in the site's zone,
   or `{"publish_at": RFC 3339}`; future, ≤5 years) and `DELETE` (back to draft), both
   `requireContentEditor` (`posts_schedule.go`). Only a draft or a scheduled post (409 otherwise;
-  a published post's update is #335). `siteLocalToUTC` refuses a time the clocks skip and takes
-  the first of one that happens twice; the web's `lib/schedule.ts` mirrors it. POST/PUT `/posts`
+  a published post's update has its own route, #335 below). `siteLocalToUTC` refuses a time the
+  clocks skip and takes the first of one that happens twice; the web's `lib/schedule.ts` mirrors it. POST/PUT `/posts`
   refuse `post_status: "scheduled"` (400) unless unchanged; any other status set through PUT
   clears the schedule (`UpdatePost`), and so does every publish (`SetPublishedVersionOnPost`).
 - **Contributors:** their scheduled post is read-only to them (`canEditPost` false, so the
@@ -633,7 +633,46 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   (real DB: due-only, two replicas, fencing, flush failure, shutdown, routes, not public) and
   `posts_schedule_test.go`.
 
-## Activity log and Home's feeds (#324, `000035`, `activity*.go`)
+## Scheduled updates (#335, `000035`, `posts_scheduled_update.go`)
+
+- A published post with changes not published (#326) schedules its **Update**: `PUT
+  /posts/:id/scheduled-update` (same body as `/schedule`: `local` or `publish_at`, future, ≤5
+  years) and `DELETE` ("Cancel update"), both `requireContentEditor`. 409 for a post that isn't
+  published (`post_status` in the body), `code: no_unpublished_changes` when the live post already
+  matches, `code: not_scheduled` on a DELETE with nothing pending; 503 when the collab flush fails.
+- **The content is frozen when it's scheduled** (the issue and the "Scheduled update" design:
+  "later changes aren't included; schedule again to include them"). The handler flushes the collab
+  doc like publish, then `ScheduleUpdateTx` (lock the post, published, has changes) copies
+  `block_doc` and `golive_post_settings(id)` into `post_scheduled_updates` (one row per post,
+  `UpsertScheduledUpdateFromPost`). Scheduling again (Reschedule) takes a **new** snapshot and resets
+  the retry state. The working copy stays editable by everyone who could edit it (contributors
+  too: their later edits aren't in the update, so #147's read-only rule isn't needed).
+- **The same scheduler applies it** (`applyDueScheduledUpdates` in `scheduled_publish.go`, every
+  round after #147's publishes): `ClaimDueScheduledUpdates` (`FOR UPDATE SKIP LOCKED`, the 2-minute
+  lease is the fencing token) → `PublishScheduledUpdateTx` (lock post, then the update under the
+  claim; next version from the **snapshot**, credited to `scheduled_by`; `publishInsertedVersion`,
+  the rest of `publishLockedPost`). No flush at the time: the working copy isn't read. A failure is
+  `RecordScheduledUpdateFailure` (`update_failed`, #147's backoff) and `GET /posts/:id`'s
+  `scheduled_update.failure`. A term deleted since the snapshot is dropped (the published-terms
+  trigger only keeps existing terms); a deleted featured image stays in the published settings, as
+  it does when an image is deleted after an ordinary publish.
+- **What ends it:** the `posts_cancel_scheduled_update` trigger deletes the row when `post_status`
+  or `published_version_id` changes: an **Update by hand** (newer than the snapshot; applying it
+  later would roll the site back; `PublishPostTx` reports it as `cancelled_scheduled_update` on the
+  publish response), the update itself, unpublish, archive, trash, any status change.
+  Post deleted: CASCADE. **Restoring a version** writes the working copy only, so a pending update
+  is unaffected (schedule again to include the restored content).
+- Reads: `GET /posts/:id` / `slug/:slug` add `scheduled_update` (`update_at`, `scheduled_at` = when
+  frozen, `scheduled_by`, `failure`) and `update_at`; so does `GET /posts/:id/settings` (null when
+  none), which every open editor re-reads on collaborators' stores; `ListPosts`, `ListPostsWithMeta` and
+  `SearchPostsWithMeta` select `su.update_at` (LEFT JOIN, so `ListPosts` sorts by `p.created_at`);
+  the authors/terms queries select `NULL::timestamptz`. Public presenters clear `update_at` (and the
+  public `/posts` list now clears `has_unpublished_changes` too, which it used to leak).
+- Tests: `scheduled_update_test.go` (real DB: the frozen snapshot vs a later edit, public unchanged
+  before the time, two replicas, fencing, failure + retry, the loop, routes and roles) and
+  `posts_unpublished_changes_test.go` (the detail field, public presenters).
+
+## Activity log and Home's feeds (#324, `000036`, `activity*.go`)
 
 - `activity` is **append-only**: actor (`actor_id`, NULL = the system or a member removed
   since: the FK is `ON DELETE SET NULL`, the only UPDATE its trigger allows), `verb`,
@@ -650,7 +689,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   fails the request. Recorded today: post created (also duplicate, `source_id`), `updated`
   (PUT `/posts/:id`, `/seo`, `/authors`, the featured image), `status_changed` (PUT `/posts/:id` setting
   another status: unthrottled), published (also by the scheduler, actor =
-  `publish_scheduled_by`, `scheduled: true`), unpublished, scheduled, unscheduled, deleted,
+  `publish_scheduled_by`, `scheduled: true`), unpublished, scheduled, unscheduled,
+  `update_scheduled`/`update_unscheduled` (#335; applying the update is "published" with
+  `scheduled_update: true`, credited to its `scheduled_by`), deleted,
   `version_restored`; media uploaded (single, linked, bulk), replaced, deleted; invited,
   `invitation_revoked`, joined (actor = the new member), user created (POST `/users`),
   `role_changed` (both routes, `previous_role`; none when the role is unchanged:

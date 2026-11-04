@@ -151,6 +151,12 @@ describe("Home", () => {
     expect(container.querySelector(".gl-home__card")?.textContent).toContain("Scheduled publish failed")
   })
 
+  it("shows a recent post's scheduled update (#335)", async () => {
+    api.getContinueEditing.mockResolvedValue([recent(5, { has_unpublished_changes: true, update_at: "2026-12-01T09:00:00Z" })])
+    await render()
+    expect(container.querySelector(".gl-home__card .gl-pill")?.textContent).toMatch(/^Update scheduled/)
+  })
+
   it("says so when there is nothing to continue", async () => {
     api.getContinueEditing.mockResolvedValue([])
     await render()

@@ -4,6 +4,7 @@ import type {
   PostSEOSettings,
   PostSortOption,
   PostStatusCounts,
+  ScheduledUpdate,
   SortOrder,
   PaginationParams,
   ApiResponse,
@@ -237,6 +238,36 @@ export async function cancelPostSchedule(id: string | number): Promise<{ post: P
   }
 
   return response.json()
+}
+
+// A published post's scheduled update (#335, editors and admins): the API flushes the
+// collab document and freezes the working copy as it is now, to go live at `local` (a
+// wall-clock time in the site's zone). Scheduling again takes a new snapshot.
+export async function scheduleUpdate(id: string | number, local: string): Promise<{ scheduled_update: ScheduledUpdate }> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/scheduled-update`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ local }),
+  })
+
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Scheduling the update failed" })
+  }
+
+  return response.json()
+}
+
+// "Cancel update": the live post and the working copy stay as they are.
+export async function cancelScheduledUpdate(id: string | number): Promise<void> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/scheduled-update`, {
+    method: "DELETE",
+  })
+
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Cancelling the update failed" })
+  }
 }
 
 // A draft copy owned by the caller (#354): same type, parent, terms, featured image

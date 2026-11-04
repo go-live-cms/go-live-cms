@@ -217,7 +217,13 @@ function RecentCard({ post }: { post: ContinueEditingPost | null }) {
   }
   return (
     <Link to={`/content/edit/${post.id}`} className="gl-home__card">
-      <PostStatus status={post.post_status} iconPath={post.post_status} unpublishedChanges={post.has_unpublished_changes} publishAt={post.publish_at} />
+      <PostStatus
+        status={post.post_status}
+        iconPath={post.post_status}
+        unpublishedChanges={post.has_unpublished_changes}
+        publishAt={post.publish_at}
+        updateAt={post.update_at}
+      />
       <span className="gl-home__card-title">{post.title || "Untitled"}</span>
       <span className="gl-home__card-meta">
         {post.schedule_failed && <span className="gl-home__card-alert">Scheduled publish failed ·</span>}

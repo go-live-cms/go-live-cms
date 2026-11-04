@@ -380,11 +380,16 @@ func TestGetPostSettingsState(t *testing.T) {
 		store.EXPECT().GetPostSettingsState(gomock.Any(), int64(7)).Times(1).Return(db.GetPostSettingsStateRow{
 			Working: json.RawMessage(working), PublishedSettings: publishedSettings(publishedSettingsJSON), Changed: true,
 		}, nil)
+		// A pending scheduled update (#335) comes with the state, so other tabs follow.
+		updateAt := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+		store.EXPECT().GetPostScheduledUpdate(gomock.Any(), int64(7)).Return(db.PostScheduledUpdateRow{PostID: 7, UpdateAt: updateAt}, nil)
 		recorder := settingsRequest(t, newTestServer(t, store), http.MethodGet, "/api/v1/posts/7/settings", contributor)
 		require.Equal(t, http.StatusOK, recorder.Code)
 		var resp PostSettingsStateResponse
 		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
 		require.True(t, resp.Changed)
+		require.NotNil(t, resp.ScheduledUpdate)
+		require.True(t, updateAt.Equal(resp.ScheduledUpdate.UpdateAt))
 		require.Equal(t, "Working title", resp.Working.Title)
 		require.Equal(t, "Published title", resp.Published.Title)
 	})
@@ -399,7 +404,7 @@ func TestGetPostSettingsState(t *testing.T) {
 		// A snapshot without the SEO keys reads as their defaults (#357).
 		withSEO := `{"title": "Working title", "description": "Working excerpt", "featured_image": null, "term_ids": [3],
 			"seo_title": "", "seo_description": "", "social_image_id": null, "noindex": false, "canonical_url": ""}`
-		require.JSONEq(t, `{"working": `+withSEO+`, "published": null, "changed": false, "blocks_changed": false, "has_unpublished_changes": false}`, recorder.Body.String())
+		require.JSONEq(t, `{"working": `+withSEO+`, "published": null, "changed": false, "blocks_changed": false, "has_unpublished_changes": false, "scheduled_update": null}`, recorder.Body.String())
 	})
 
 	// The body half (#326): the editor's publish bar reads both.
@@ -411,6 +416,7 @@ func TestGetPostSettingsState(t *testing.T) {
 			Working: json.RawMessage(working), PublishedSettings: publishedSettings(publishedSettingsJSON),
 			BlocksChanged: true, HasUnpublishedChanges: true,
 		}, nil)
+		store.EXPECT().GetPostScheduledUpdate(gomock.Any(), int64(7)).Return(db.PostScheduledUpdateRow{}, sql.ErrNoRows)
 		recorder := settingsRequest(t, newTestServer(t, store), http.MethodGet, "/api/v1/posts/7/settings", contributor)
 		require.Equal(t, http.StatusOK, recorder.Code)
 		var resp PostSettingsStateResponse

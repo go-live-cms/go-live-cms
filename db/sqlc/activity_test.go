@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The activity log (#324, 000035) against the real database: the throttle, the
+// The activity log (#324, 000036) against the real database: the throttle, the
 // collab store's "edited" event, append-only, and removed actors.
 
 func activityVerbs(t *testing.T, objectType string, objectID int64) []string {

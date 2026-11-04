@@ -11,7 +11,7 @@ import (
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
-// Activity log (#324, 000035): one row per notable event, read by GET /activity
+// Activity log (#324, 000036): one row per notable event, read by GET /activity
 // and Home ("Continue where you left off", the Activity feed). Other features
 // read it too: review requests (#323), access requests (#321), per-block "last
 // edited by" (#328). To record a new kind of event, add its verb to

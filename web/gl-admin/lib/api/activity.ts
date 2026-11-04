@@ -46,6 +46,8 @@ export interface ContinueEditingPost {
   post_type: string
   post_status: string
   publish_at?: string | null
+  // A pending scheduled Update's time (#335).
+  update_at?: string | null
   has_unpublished_changes?: boolean
   schedule_failed?: boolean
   // When the caller last worked on it.

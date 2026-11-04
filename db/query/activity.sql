@@ -1,4 +1,4 @@
--- Activity log (#324, 000035). Written by the API's write paths (api/activity.go)
+-- Activity log (#324, 000036). Written by the API's write paths (api/activity.go)
 -- and the collab store (StorePostCollabTx); read by GET /activity and Home.
 
 -- name: CreateActivity :one
@@ -90,10 +90,13 @@ WITH worked AS (
 SELECT
     p.id, p.title, p.post_type, p.post_status, p.publish_at, p.publish_failed_at,
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
-    GREATEST(w.edited_at, CASE WHEN s.post_id IS NOT NULL THEN p.changed_at END)::timestamptz AS edited_at
+    GREATEST(w.edited_at, CASE WHEN s.post_id IS NOT NULL THEN p.changed_at END)::timestamptz AS edited_at,
+    su.update_at AS update_at
 FROM worked w
 JOIN posts p ON p.id = w.post_id
 LEFT JOIN post_ydoc_state s ON s.post_id = p.id AND s.last_editor_id = @user_id::bigint
+-- A pending scheduled Update (#335), for the card's pill.
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
 WHERE p.post_status <> 'archived'
   AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id::bigint OR p.post_status = 'published')
 ORDER BY edited_at DESC, p.id DESC

@@ -6,7 +6,7 @@ import Modal from "@gl-admin/components/ui/Modal"
 import Pill from "@gl-admin/components/ui/Pill"
 import { PostStatusPill } from "@gl-admin/components/ui/PostStatus"
 import { AvatarStack, type AvatarUser } from "@gl-admin/components/ui/Avatar"
-import { CheckIcon, ChevronDownIcon, DangerIcon, LockIcon } from "@gl-admin/components/ui/icons"
+import { CheckIcon, ChevronDownIcon, ClockIcon, DangerIcon, LockIcon } from "@gl-admin/components/ui/icons"
 import type { CollabUser } from "@gl-admin/components/editor/utils/useCollabPresence"
 import type { ConnectionView } from "@gl-admin/components/editor/utils/connectionState"
 import "@gl-admin/assets/styles/components/editor/editor-top-bar.scss"
@@ -16,7 +16,8 @@ import "@gl-admin/assets/styles/components/editor/editor-top-bar.scss"
 // button with its menu. Everything it does was there before the redesign; features in
 // the design without a backend yet (Comments, Move to trash, "N edits
 // waiting", click an avatar to jump to its cursor) stay out until their issues land
-// (table on #341). Schedule… (#147) opens ScheduleDialog, which PostForm owns.
+// (table on #341). Schedule… (#147) and Schedule update… (#335) open ScheduleDialog,
+// which PostForm owns.
 
 type SaveStatus = "saved" | "saving" | "error" | null
 
@@ -55,6 +56,11 @@ type EditorTopBarProps = {
   // Opens the Schedule dialog (a draft) or Reschedule (a scheduled post).
   onSchedule?: () => void
   onCancelSchedule?: () => Promise<void>
+  // A published post's scheduled update (#335): its update_at (the pill shows it), and
+  // the menu's Schedule update… / Reschedule update… and Cancel update.
+  updateAt?: string | null
+  onScheduleUpdate?: () => void
+  onCancelScheduledUpdate?: () => Promise<void>
   // A published post's title, excerpt, featured image or terms differ from the live ones
   // (#358): they reach the site on Update.
   settingsPending?: boolean
@@ -67,12 +73,6 @@ type EditorTopBarProps = {
 const SpinnerIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true" className="editor-top-bar__spin">
     <path d="M21 12a9 9 0 1 1-6.2-8.55" />
-  </svg>
-)
-const ClockIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
   </svg>
 )
 export const OfflineIcon = ({ size = 14 }: { size?: number }) => (
@@ -155,7 +155,7 @@ export function SaveState({
   } else if (saveStatus === "saving") {
     content = (
       <>
-        <ClockIcon />
+        <ClockIcon size={14} />
         Saving
       </>
     )
@@ -207,6 +207,9 @@ export default function EditorTopBar({
   publishAt,
   onSchedule,
   onCancelSchedule,
+  updateAt,
+  onScheduleUpdate,
+  onCancelScheduledUpdate,
 }: EditorTopBarProps) {
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -214,6 +217,8 @@ export default function EditorTopBar({
   const unpublishedChanges = published && (settingsPending || contentPending)
   const archived = postStatus === "archived"
   const scheduled = postStatus === "scheduled"
+  // A published post's pending update (#335).
+  const updateScheduled = published && !!updateAt
   // Publishing needs the server: off until connected (the API flushes the collab server).
   const connected = mode === "create" || live
   const publishDisabled = viewOnly || isSaving || isPublishing || busy || !connected
@@ -250,13 +255,19 @@ export default function EditorTopBar({
           {title.trim() || (mode === "create" ? "New" : "Untitled")}
         </span>
         {viewing ? (
-          <Pill tone="info" icon={<ClockIcon />} className="editor-top-bar__pill">
+          <Pill tone="info" icon={<ClockIcon size={14} />} className="editor-top-bar__pill">
             {viewing.label}
           </Pill>
         ) : (
           <>
             {mode === "edit" && (
-              <PostStatusPill status={postStatus || "draft"} unpublishedChanges={unpublishedChanges} publishAt={publishAt} withTime />
+              <PostStatusPill
+                status={postStatus || "draft"}
+                unpublishedChanges={unpublishedChanges}
+                publishAt={publishAt}
+                updateAt={updateScheduled ? updateAt : null}
+                withTime
+              />
             )}
             {viewOnly && mode === "edit" && (
               <Pill tone="neutral" icon={<LockIcon size={12} />} className="editor-top-bar__pill">
@@ -346,9 +357,9 @@ export default function EditorTopBar({
                   disabled={publishDisabled}
                   loading={isPublishing}
                 >
-                  {published ? "Update" : "Publish"}
+                  {published ? (updateScheduled ? "Update now" : "Update") : "Publish"}
                 </Button>
-                {mode === "edit" && (onUnpublish || onArchive || onSchedule) && (
+                {mode === "edit" && (onUnpublish || onArchive || onSchedule || onScheduleUpdate) && (
                   <Menu
                     label="Publish options"
                     placement="bottom-end"
@@ -370,9 +381,11 @@ export default function EditorTopBar({
                       disabled={publishDisabled}
                       description={
                         published
-                          ? settingsPending
-                            ? "Replace the live post and its settings with this version"
-                            : "Replace the live post with this version"
+                          ? updateScheduled
+                            ? "Replace the live post with this version and cancel the scheduled update"
+                            : settingsPending
+                              ? "Replace the live post and its settings with this version"
+                              : "Replace the live post with this version"
                           : "Put this version on the site"
                       }
                     >
@@ -390,6 +403,28 @@ export default function EditorTopBar({
                     {scheduled && onCancelSchedule && (
                       <MenuItem onSelect={() => run(onCancelSchedule)} description="Keep it as a draft">
                         Cancel schedule
+                      </MenuItem>
+                    )}
+                    {published && onScheduleUpdate && (
+                      <MenuItem
+                        onSelect={onScheduleUpdate}
+                        // Something to update: the working copy differs from the live post.
+                        // Rescheduling takes the post as it is now, so it needs that too.
+                        disabled={publishDisabled || !unpublishedChanges}
+                        description={
+                          !unpublishedChanges
+                            ? "The live post already matches this version"
+                            : updateScheduled
+                              ? "Another time, with the post as it is now"
+                              : "Replace the live post at a date and time"
+                        }
+                      >
+                        {updateScheduled ? "Reschedule update…" : "Schedule update…"}
+                      </MenuItem>
+                    )}
+                    {updateScheduled && onCancelScheduledUpdate && (
+                      <MenuItem onSelect={() => run(onCancelScheduledUpdate)} description="Keep the live post as it is">
+                        Cancel update
                       </MenuItem>
                     )}
                     <MenuSeparator />
@@ -417,7 +452,9 @@ export default function EditorTopBar({
         role="alertdialog"
         size="small"
         title="Unpublish this post?"
-        description="It comes off the site and moves to Drafts. Its link will show your 404 page until you publish it again."
+        description={`It comes off the site and moves to Drafts. Its link will show your 404 page until you publish it again.${
+          updateScheduled ? " Its scheduled update is cancelled." : ""
+        }`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirmUnpublish(false)} disabled={busy}>

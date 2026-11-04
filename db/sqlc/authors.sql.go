@@ -171,6 +171,8 @@ SELECT
     -- ListPostsWithMeta's column (#326); the public site never shows it.
     false::boolean AS has_unpublished_changes,
     p.publish_at,
+    -- ListPostsWithMeta's scheduled update (#335): the admin's business.
+    NULL::timestamptz AS update_at,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -212,6 +214,7 @@ type ListPublishedPostsByAuthorRow struct {
 	PublishedSettings     pqtype.NullRawMessage `json:"published_settings"`
 	HasUnpublishedChanges bool                  `json:"has_unpublished_changes"`
 	PublishAt             sql.NullTime          `json:"publish_at"`
+	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
 }
@@ -245,6 +248,7 @@ func (q *Queries) ListPublishedPostsByAuthor(ctx context.Context, arg ListPublis
 			&i.PublishedSettings,
 			&i.HasUnpublishedChanges,
 			&i.PublishAt,
+			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

@@ -46,6 +46,8 @@ const POST_VERBS: Record<string, string> = {
   unscheduled: "cancelled the schedule of",
   deleted: "deleted",
   version_restored: "restored a version of",
+  update_scheduled: "scheduled an update to",
+  update_unscheduled: "cancelled the scheduled update of",
 }
 
 // status_changed (PUT /posts/:id): "archived X", else "set X to draft".

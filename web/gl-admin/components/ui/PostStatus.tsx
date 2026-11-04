@@ -1,8 +1,9 @@
 import { capitalize } from "@gl-admin/utils/formatting"
 import Pill, { type PillTone } from "@gl-admin/components/ui/Pill"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
+import { ClockIcon } from "@gl-admin/components/ui/icons"
 import { useSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
-import { scheduledPillLabel } from "@gl-admin/lib/schedule"
+import { scheduledPillLabel, UPDATE_SCHEDULED_LABEL, updateScheduledPillLabel } from "@gl-admin/lib/schedule"
 
 const TONES: Record<string, PillTone> = {
   published: "success",
@@ -22,6 +23,9 @@ type StatusProps = {
   unpublishedChanges?: boolean
   // A scheduled post's publish_at (#147): the pill reads "Scheduled · Nov 3", in site time.
   publishAt?: string | null
+  // A published post's scheduled update (#335, update_at): "Update scheduled · Nov 3",
+  // in place of "Changes not published" (the changes are on their way).
+  updateAt?: string | null
   // The editor's pill adds the time: "Scheduled · Nov 3, 09:00".
   withTime?: boolean
 }
@@ -33,26 +37,29 @@ export default function PostStatus({
   iconPath,
   unpublishedChanges,
   publishAt,
+  updateAt,
 }: Omit<StatusProps, "status" | "withTime"> & { status: string | null; iconPath: string | null }) {
   if (!status || !iconPath) {
     return <Skeleton shape="pill" />
   }
 
-  return <PostStatusPill status={status} unpublishedChanges={unpublishedChanges} publishAt={publishAt} />
+  return <PostStatusPill status={status} unpublishedChanges={unpublishedChanges} publishAt={publishAt} updateAt={updateAt} />
 }
 
 // The pill alone, for places that always have the status (the editor's top bar).
-export function PostStatusPill({ status, unpublishedChanges = false, publishAt, withTime }: StatusProps) {
+export function PostStatusPill({ status, unpublishedChanges = false, publishAt, updateAt, withTime }: StatusProps) {
+  if (status === "published" && updateAt) return <ScheduledPill at={updateAt} update withTime={withTime} />
   if (unpublishedChanges && status === "published") return <Pill tone="accent">{UNPUBLISHED_CHANGES_LABEL}</Pill>
-  if (status === "scheduled" && publishAt) return <ScheduledPill publishAt={publishAt} withTime={withTime} />
+  if (status === "scheduled" && publishAt) return <ScheduledPill at={publishAt} withTime={withTime} />
   return <Pill tone={TONES[status] ?? "neutral"}>{capitalize(status)}</Pill>
 }
 
-function ScheduledPill({ publishAt, withTime }: { publishAt: string; withTime?: boolean }) {
+function ScheduledPill({ at, update = false, withTime }: { at: string; update?: boolean; withTime?: boolean }) {
   const settings = useSiteDateSettings()
+  const label = update ? updateScheduledPillLabel : scheduledPillLabel
   return (
-    <Pill tone="info">
-      {settings.loaded ? scheduledPillLabel(publishAt, settings, { withTime }) : "Scheduled"}
+    <Pill tone="info" icon={update ? <ClockIcon size={12} /> : undefined}>
+      {settings.loaded ? label(at, settings, { withTime }) : update ? UPDATE_SCHEDULED_LABEL : "Scheduled"}
     </Pill>
   )
 }

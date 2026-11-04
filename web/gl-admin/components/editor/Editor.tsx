@@ -71,7 +71,7 @@ export type EditorProps = {
   onSaveSuccess?: (revision: number) => void
   onSaveError?: (error: Error) => void
   onPublishStart?: () => void
-  onPublishSuccess?: (result: { versionId: number; versionNo: number }) => void
+  onPublishSuccess?: (result: { versionId: number; versionNo: number; cancelledScheduledUpdate: boolean }) => void
   onPublishError?: (error: Error) => void
   /**
    * The collab server changed this session's access while open (#313). The form re-reads
@@ -88,7 +88,11 @@ export type EditorProps = {
 
 export interface EditorRef {
   forceSave: () => Promise<void>
-  publish: () => Promise<{ versionId: number; versionNo: number } | undefined>
+  publish: () => Promise<{ versionId: number; versionNo: number; cancelledScheduledUpdate: boolean } | undefined>
+  // Resolves once the collab server has every edit typed here (publish's first step).
+  // Scheduling an update (#335) waits for it too: the API then flushes the server and
+  // freezes block_doc, so the snapshot has those edits.
+  whenAcknowledged: () => Promise<void>
   // Load a stored version into the working copy through the editor (#136)
   restoreVersion: (doc: BlockDocV1) => Promise<{ saved: boolean }>
   /**
@@ -297,6 +301,11 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
         } finally {
           setIsPublishing(false)
         }
+      },
+      whenAcknowledged: async () => {
+        if (unbuildable) throw blockedError()
+        if (readOnly) return
+        await saveStatus?.whenAcknowledged()
       },
       restoreVersion: async (doc) => {
         if (unbuildable) throw blockedError()

@@ -33,6 +33,8 @@ describe("describeActivity", () => {
     expect(line({ verb: "edited" })).toBe("Ana Costa edited October changelog")
     expect(line({ verb: "version_restored" })).toBe("Ana Costa restored a version of October changelog")
     expect(line({ verb: "status_changed", payload: { post_status: "archived" } })).toBe("Ana Costa archived October changelog")
+    expect(line({ verb: "update_scheduled" })).toBe("Ana Costa scheduled an update to October changelog")
+    expect(line({ verb: "update_unscheduled" })).toBe("Ana Costa cancelled the scheduled update of October changelog")
     expect(line({ verb: "status_changed", payload: { post_status: "draft" } })).toBe("Ana Costa set October changelog to draft")
     expect(line({ payload: { scheduled: true } })).toBe("Ana Costa published (scheduled) October changelog")
   })

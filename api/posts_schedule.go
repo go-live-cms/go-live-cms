@@ -3,8 +3,8 @@
 // Scheduling a draft sets post_status "scheduled" and publish_at (UTC); the
 // scheduler (scheduled_publish.go) publishes it at that time through the
 // Publish button's path. Same permission as publishing: admins and editors
-// (requireContentEditor). A published post can't be scheduled here: scheduling
-// an update to one is #335.
+// (requireContentEditor). A published post can't be scheduled here: its update
+// is scheduled with PUT /posts/:id/scheduled-update (#335, posts_scheduled_update.go).
 package api
 
 import (
@@ -84,6 +84,46 @@ func (server *Server) siteLocation(c *gin.Context) (*time.Location, error) {
 	return time.LoadLocation(settings.SiteTimezone)
 }
 
+// scheduleTime reads the instant a schedule request names (publish_at, or local in
+// the site's zone) and checks it is in the future and within maxScheduleAhead.
+// Otherwise it answers 400 (pastMessage for a time that has passed) or 500 and
+// returns false. Shared by a draft's schedule (#147) and an update's (#335).
+func (server *Server) scheduleTime(c *gin.Context, req SchedulePostRequest, pastMessage string) (time.Time, bool) {
+	var at time.Time
+	switch {
+	case req.PublishAt != nil && req.Local != "":
+		c.JSON(http.StatusBadRequest, gin.H{"error": "send publish_at or local, not both"})
+		return time.Time{}, false
+	case req.PublishAt != nil:
+		at = req.PublishAt.UTC()
+	case req.Local != "":
+		loc, err := server.siteLocation(c)
+		if err != nil {
+			server.requestLog(c).Warn("reading the site time zone failed", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the site's time zone"})
+			return time.Time{}, false
+		}
+		at, err = siteLocalToUTC(req.Local, loc)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "fields": gin.H{"local": err.Error()}})
+			return time.Time{}, false
+		}
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "publish_at or local is required"})
+		return time.Time{}, false
+	}
+	now := time.Now()
+	if !at.After(now) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": pastMessage})
+		return time.Time{}, false
+	}
+	if at.After(now.Add(maxScheduleAhead)) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "pick a time within the next five years"})
+		return time.Time{}, false
+	}
+	return at, true
+}
+
 // schedulePost handles PUT /posts/:id/schedule: schedule a draft, or move a
 // scheduled post to a new time (Reschedule). The time must be in the future.
 func (server *Server) schedulePost(c *gin.Context) {
@@ -100,37 +140,8 @@ func (server *Server) schedulePost(c *gin.Context) {
 	if !ok {
 		return
 	}
-
-	var publishAt time.Time
-	switch {
-	case req.PublishAt != nil && req.Local != "":
-		c.JSON(http.StatusBadRequest, gin.H{"error": "send publish_at or local, not both"})
-		return
-	case req.PublishAt != nil:
-		publishAt = req.PublishAt.UTC()
-	case req.Local != "":
-		loc, err := server.siteLocation(c)
-		if err != nil {
-			server.requestLog(c).Warn("reading the site time zone failed", "error", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read the site's time zone"})
-			return
-		}
-		publishAt, err = siteLocalToUTC(req.Local, loc)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "fields": gin.H{"local": err.Error()}})
-			return
-		}
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "publish_at or local is required"})
-		return
-	}
-	now := time.Now()
-	if !publishAt.After(now) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "the time has passed: pick a later one, or publish now"})
-		return
-	}
-	if publishAt.After(now.Add(maxScheduleAhead)) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "pick a time within the next five years"})
+	publishAt, ok := server.scheduleTime(c, req, "the time has passed: pick a later one, or publish now")
+	if !ok {
 		return
 	}
 

@@ -30,7 +30,7 @@ type CreateActivityParams struct {
 	Payload    json.RawMessage `json:"payload"`
 }
 
-// Activity log (#324, 000035). Written by the API's write paths (api/activity.go)
+// Activity log (#324, 000036). Written by the API's write paths (api/activity.go)
 // and the collab store (StorePostCollabTx); read by GET /activity and Home.
 // An actor that no longer exists is stored as NULL rather than failing on the
 // foreign key (a member removed while their request was in flight).
@@ -253,10 +253,12 @@ WITH worked AS (
 SELECT
     p.id, p.title, p.post_type, p.post_status, p.publish_at, p.publish_failed_at,
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
-    GREATEST(w.edited_at, CASE WHEN s.post_id IS NOT NULL THEN p.changed_at END)::timestamptz AS edited_at
+    GREATEST(w.edited_at, CASE WHEN s.post_id IS NOT NULL THEN p.changed_at END)::timestamptz AS edited_at,
+    su.update_at AS update_at
 FROM worked w
 JOIN posts p ON p.id = w.post_id
 LEFT JOIN post_ydoc_state s ON s.post_id = p.id AND s.last_editor_id = $1::bigint
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
 WHERE p.post_status <> 'archived'
   AND ($2::bigint = 0 OR p.user_id = $2::bigint OR p.post_status = 'published')
 ORDER BY edited_at DESC, p.id DESC
@@ -278,6 +280,7 @@ type ListContinueEditingRow struct {
 	PublishFailedAt       sql.NullTime `json:"publish_failed_at"`
 	HasUnpublishedChanges bool         `json:"has_unpublished_changes"`
 	EditedAt              time.Time    `json:"edited_at"`
+	UpdateAt              sql.NullTime `json:"update_at"`
 }
 
 // Home's "Continue where you left off": the posts the user last worked on, newest
@@ -288,6 +291,7 @@ type ListContinueEditingRow struct {
 // post merely opened) records its sender too. viewer_id 0 = may read any post,
 // else only their own and published ones (canReadPost), as the post is now.
 // Archived posts are left out.
+// A pending scheduled Update (#335), for the card's pill.
 func (q *Queries) ListContinueEditing(ctx context.Context, arg ListContinueEditingParams) ([]ListContinueEditingRow, error) {
 	rows, err := q.db.QueryContext(ctx, listContinueEditing, arg.UserID, arg.ViewerID, arg.RowLimit)
 	if err != nil {
@@ -306,6 +310,7 @@ func (q *Queries) ListContinueEditing(ctx context.Context, arg ListContinueEditi
 			&i.PublishFailedAt,
 			&i.HasUnpublishedChanges,
 			&i.EditedAt,
+			&i.UpdateAt,
 		); err != nil {
 			return nil, err
 		}

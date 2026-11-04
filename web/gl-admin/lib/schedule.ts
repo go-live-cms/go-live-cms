@@ -186,6 +186,59 @@ export function scheduledPillLabel(
   return when ? `Scheduled · ${when}` : "Scheduled"
 }
 
+// A published post's scheduled update (#335): "Update scheduled · Nov 3" (lists),
+// "Update scheduled · Nov 3, 09:00" (the editor).
+export const UPDATE_SCHEDULED_LABEL = "Update scheduled"
+export function updateScheduledPillLabel(
+  updateAt: string | null | undefined,
+  settings: Pick<DateSettings, "language" | "timeZone">,
+  options: { withTime?: boolean; now?: Date } = {}
+): string {
+  const when = updateAt ? formatScheduleTime(updateAt, settings, options) : ""
+  return when ? `${UPDATE_SCHEDULED_LABEL} · ${when}` : UPDATE_SCHEDULED_LABEL
+}
+
+// The editor's notice for a scheduled update (#335): "Update scheduled for Nov 3, 09:00",
+// and the reminder that later edits aren't part of it.
+export const SCHEDULED_UPDATE_EXCLUDES = "later changes aren’t included"
+export function scheduledUpdateTitle(updateAt: string, settings: Pick<DateSettings, "language" | "timeZone">, now: Date = new Date()): string {
+  return `Update scheduled for ${formatScheduleTime(updateAt, settings, { withTime: true, now })}`
+}
+
+// The notice after a failed attempt to apply a scheduled update: when it's tried again.
+export function scheduledUpdateFailureMessage(
+  failure: { next_attempt_at: string | null },
+  settings: Pick<DateSettings, "language" | "timeZone">,
+  now: Date = new Date()
+): string {
+  return `The update couldn't be published at its time; the live post is unchanged. ${retryLine(failure.next_attempt_at, settings, now)}`
+}
+
+// When a pending update disappears, the post's newest version says why: one made at or
+// after its time is the update going live; otherwise it was cancelled or an Update by
+// hand replaced it. latestVersionAt is null when the versions couldn't be read.
+export function scheduledUpdateEndedMessage(latestVersionAt: string | null, updateAt: string): string {
+  if (latestVersionAt === null) return "The scheduled update is no longer pending"
+  const latest = Date.parse(latestVersionAt)
+  const due = Date.parse(updateAt)
+  if (!Number.isNaN(latest) && !Number.isNaN(due) && latest >= due) return "The scheduled update is live"
+  return "The scheduled update was cancelled or replaced by an update"
+}
+
+// "It's tried again automatically, next at 09:05." (site time), or "Trying again now."
+function retryLine(nextAttemptAt: string | null, settings: Pick<DateSettings, "timeZone">, now: Date): string {
+  const next = nextAttemptAt ? new Date(nextAttemptAt) : null
+  if (!next || Number.isNaN(next.getTime()) || next.getTime() <= now.getTime()) return "Trying again now."
+  return `It's tried again automatically, next at ${zonedParts(next, settings.timeZone).time}.`
+}
+
+// The API's 409 codes for a scheduled update (api/posts_scheduled_update.go).
+export function scheduledUpdateErrorMessage(code: string | undefined, fallback: string): string {
+  if (code === "no_unpublished_changes") return "There's nothing to update: the live post already matches this version."
+  if (code === "not_scheduled") return "No update is scheduled for this post any more."
+  return fallback
+}
+
 // The editor's "Scheduled publish failed" notice: why, and when it's tried again.
 export function scheduleFailureMessage(
   failure: { reason: string; next_attempt_at: string | null },
@@ -196,7 +249,5 @@ export function scheduleFailureMessage(
     failure.reason === "collab_flush_failed"
       ? "The server couldn't save the latest edits, so the post wasn't published at its time."
       : "The post couldn't be published at its time."
-  const next = failure.next_attempt_at ? new Date(failure.next_attempt_at) : null
-  if (!next || Number.isNaN(next.getTime()) || next.getTime() <= now.getTime()) return `${why} Trying again now.`
-  return `${why} It's tried again automatically, next at ${zonedParts(next, settings.timeZone).time}.`
+  return `${why} ${retryLine(failure.next_attempt_at, settings, now)}`
 }
