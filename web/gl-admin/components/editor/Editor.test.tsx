@@ -136,7 +136,7 @@ beforeEach(async () => {
   vi.mocked(blockAPIClient.getPostBlocks).mockResolvedValue({
     doc: { doc_version: 1, blocks_order: ["intro-block-0001"], blocks: { "intro-block-0001": doc.blocks["intro-block-0001"] } },
   } as any)
-  vi.mocked(blockAPIClient.publishPost).mockResolvedValue({ versionId: 1, versionNo: 1 })
+  vi.mocked(blockAPIClient.publishPost).mockResolvedValue({ versionId: 1, versionNo: 1, cancelledScheduledUpdate: false })
   container = document.createElement("div")
   document.body.appendChild(container)
   root = createRoot(container)
@@ -228,7 +228,7 @@ describe("Editor", () => {
     const ref = await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
     const result = await act(async () => ref.current!.publish())
-    expect(result).toEqual({ versionId: 1, versionNo: 1 })
+    expect(result).toEqual({ versionId: 1, versionNo: 1, cancelledScheduledUpdate: false })
     expect(blockAPIClient.publishPost).toHaveBeenCalledWith(POST)
   })
 

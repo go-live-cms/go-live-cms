@@ -136,6 +136,19 @@ type PostPublishedTerm struct {
 	TaxonomyTermID int64 `json:"taxonomy_term_id"`
 }
 
+type PostScheduledUpdate struct {
+	PostID        int64           `json:"post_id"`
+	UpdateAt      time.Time       `json:"update_at"`
+	BlockDoc      json.RawMessage `json:"block_doc"`
+	Settings      json.RawMessage `json:"settings"`
+	ScheduledBy   sql.NullInt64   `json:"scheduled_by"`
+	Attempts      int32           `json:"attempts"`
+	NextAttemptAt sql.NullTime    `json:"next_attempt_at"`
+	FailedAt      sql.NullTime    `json:"failed_at"`
+	Error         sql.NullString  `json:"error"`
+	CreatedAt     time.Time       `json:"created_at"`
+}
+
 type PostSearch struct {
 	PostID   int64       `json:"post_id"`
 	BodyText string      `json:"body_text"`

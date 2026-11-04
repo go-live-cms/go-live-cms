@@ -766,9 +766,12 @@ SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, 
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     p.publish_at,
     -- The Trash tab (#327): when, and the status a restore brings back.
-    p.deleted_at, p.trashed_from_status
+    p.deleted_at, p.trashed_from_status,
+    -- A published post's scheduled update (#335, 000035), for the list's pill.
+    su.update_at
 FROM posts p
-WHERE 
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
+WHERE
     ($1::text = '' OR p.post_type = $1)
     -- status: one status or a comma list; none = every status but the trash (#327).
     AND (CASE WHEN $2::text = '' THEN p.post_status <> 'trash'
@@ -785,17 +788,17 @@ WHERE
     AND ($6::bigint = 0 OR p.user_id = $6 OR p.post_status = 'published')
     AND (NOT $7::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
 ORDER BY
-    CASE WHEN $8::text = 'created_at' AND $9::text = 'asc' THEN created_at END ASC,
-    CASE WHEN $8::text = 'created_at' AND $9::text = 'desc' THEN created_at END DESC,
-    CASE WHEN $8::text = 'changed_at' AND $9::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
-    CASE WHEN $8::text = 'changed_at' AND $9::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
-    CASE WHEN $8::text = 'title' AND $9::text = 'asc' THEN title END ASC,
-    CASE WHEN $8::text = 'title' AND $9::text = 'desc' THEN title END DESC,
-    CASE WHEN $8::text = 'menu_order' AND $9::text = 'asc' THEN menu_order END ASC,
-    CASE WHEN $8::text = 'menu_order' AND $9::text = 'desc' THEN menu_order END DESC,
+    CASE WHEN $8::text = 'created_at' AND $9::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $8::text = 'created_at' AND $9::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $8::text = 'changed_at' AND $9::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $8::text = 'changed_at' AND $9::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $8::text = 'title' AND $9::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $8::text = 'title' AND $9::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $8::text = 'menu_order' AND $9::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $8::text = 'menu_order' AND $9::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $9::text = 'asc' THEN id END ASC,
-    id DESC
+    CASE WHEN $9::text = 'asc' THEN p.id END ASC,
+    p.id DESC
 LIMIT $11
 OFFSET $10
 `
@@ -834,8 +837,11 @@ type ListPostsRow struct {
 	PublishAt             sql.NullTime          `json:"publish_at"`
 	DeletedAt             sql.NullTime          `json:"deleted_at"`
 	TrashedFromStatus     sql.NullString        `json:"trashed_from_status"`
+	UpdateAt              sql.NullTime          `json:"update_at"`
 }
 
+// One row at most per post (the primary key). The ORDER BY below names every column
+// with p.: su has a created_at too, and may gain others.
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 // of these pairs; anything else falls through to the id tiebreaker.
 // changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -881,6 +887,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.PublishAt,
 			&i.DeletedAt,
 			&i.TrashedFromStatus,
+			&i.UpdateAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1066,6 +1073,8 @@ SELECT
     -- The Trash tab (#327): when, and the status a restore brings back. The
     -- public rows (authors.sql, terms_public.sql) select the same columns.
     p.deleted_at, p.trashed_from_status,
+    -- A published post's scheduled update (#335, 000035): "Update scheduled · Nov 3".
+    su.update_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -1081,7 +1090,8 @@ SELECT
         ELSE golive_post_byline(p.id)
     END)::jsonb as authors
 FROM posts p
-WHERE 
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
+WHERE
     ($3::text = '' OR p.post_type = $3)
     -- status: one status or a comma list; none = every status but the trash (#327).
     AND (CASE WHEN $4::text = '' THEN p.post_status <> 'trash'
@@ -1149,10 +1159,12 @@ type ListPostsWithMetaRow struct {
 	PublishAt             sql.NullTime          `json:"publish_at"`
 	DeletedAt             sql.NullTime          `json:"deleted_at"`
 	TrashedFromStatus     sql.NullString        `json:"trashed_from_status"`
+	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
 }
 
+// The scheduled update (#335): one row at most per post, as in ListPosts.
 // Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 // of these pairs; anything else falls through to the id tiebreaker.
 // changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -1200,6 +1212,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.PublishAt,
 			&i.DeletedAt,
 			&i.TrashedFromStatus,
+			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

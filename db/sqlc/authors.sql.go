@@ -172,6 +172,8 @@ SELECT
     false::boolean AS has_unpublished_changes,
     p.publish_at,
     p.deleted_at, p.trashed_from_status,
+    -- ListPostsWithMeta's scheduled update (#335): the admin's business.
+    NULL::timestamptz AS update_at,
     (
         SELECT COALESCE(jsonb_object_agg(pm.meta_key, pm.meta_value), '{}'::jsonb)
         FROM post_meta pm
@@ -215,6 +217,7 @@ type ListPublishedPostsByAuthorRow struct {
 	PublishAt             sql.NullTime          `json:"publish_at"`
 	DeletedAt             sql.NullTime          `json:"deleted_at"`
 	TrashedFromStatus     sql.NullString        `json:"trashed_from_status"`
+	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
 }
@@ -250,6 +253,7 @@ func (q *Queries) ListPublishedPostsByAuthor(ctx context.Context, arg ListPublis
 			&i.PublishAt,
 			&i.DeletedAt,
 			&i.TrashedFromStatus,
+			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
 		); err != nil {

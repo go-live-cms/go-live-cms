@@ -239,6 +239,9 @@ func (server *Server) listPublicPosts(c *gin.Context) {
 		posts[i].PostResponse = toPostResponseFromListRow(row)
 		// The feeds don't render bodies; leave the snapshot out of the response.
 		posts[i].PublishedBlocks = nil
+		// The working copy's state is the admin's business (#326, #335).
+		posts[i].HasUnpublishedChanges = false
+		posts[i].UpdateAt = nil
 		posts[i].Title, posts[i].Description = publicTitleAndDescription(row.Title, row.Description, row.PublishedSettings)
 		settings, _ := decodePostSettings(row.PublishedSettings)
 		posts[i].Noindex = publishedNoindex(settings)

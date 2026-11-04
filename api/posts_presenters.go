@@ -51,6 +51,11 @@ type PostResponse struct {
 	// post_status is "trash". TrashedFromStatus is the status a restore brings back.
 	DeletedAt         *time.Time `json:"deleted_at,omitempty"`
 	TrashedFromStatus string     `json:"trashed_from_status,omitempty"`
+	// UpdateAt is when a published post's scheduled update goes live (#335), in
+	// UTC: the lists' "Update scheduled · Nov 3" pill. Omitted when none.
+	UpdateAt *time.Time `json:"update_at,omitempty"`
+	// ScheduledUpdate is that update in full, on GET /posts/:id and /slug/:slug.
+	ScheduledUpdate *ScheduledUpdateResponse `json:"scheduled_update,omitempty"`
 }
 
 // ScheduleFailureResponse says why a scheduled post isn't live yet (#147) and
@@ -84,9 +89,11 @@ type PostWithMetaResponse struct {
 	// PublishAt as in PostResponse: the list's "Scheduled · Nov 3" pill (#147).
 	PublishAt *time.Time `json:"publish_at"`
 	// The Trash tab (#327), as in PostResponse.
-	DeletedAt         *time.Time             `json:"deleted_at,omitempty"`
-	TrashedFromStatus string                 `json:"trashed_from_status,omitempty"`
-	Meta              map[string]interface{} `json:"meta,omitempty"`
+	DeletedAt         *time.Time `json:"deleted_at,omitempty"`
+	TrashedFromStatus string     `json:"trashed_from_status,omitempty"`
+	// UpdateAt as in PostResponse: "Update scheduled · Nov 3" (#335).
+	UpdateAt *time.Time             `json:"update_at,omitempty"`
+	Meta     map[string]interface{} `json:"meta,omitempty"`
 	// Every credited author (user_posts), in byline order (#340).
 	Authors []PostAuthorResponse `json:"authors"`
 	// HasUnpublishedChanges (#326): published, and the working copy (body or
@@ -202,6 +209,7 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 		PublishAt:             nullTimePtr(post.PublishAt),
 		DeletedAt:             nullTimePtr(post.DeletedAt),
 		TrashedFromStatus:     post.TrashedFromStatus.String,
+		UpdateAt:              nullTimePtr(post.UpdateAt),
 	}
 }
 
@@ -243,6 +251,7 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 		Meta:              metaMap,
 		DeletedAt:         nullTimePtr(post.DeletedAt),
 		TrashedFromStatus: post.TrashedFromStatus.String,
+		UpdateAt:          nullTimePtr(post.UpdateAt),
 		Authors:           decodePostAuthors(post.Authors),
 
 		HasUnpublishedChanges: post.HasUnpublishedChanges,
@@ -255,6 +264,7 @@ func toPublicPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResp
 	resp := toPostWithMetaResponse(post)
 	// The working copy is the admin's business.
 	resp.HasUnpublishedChanges = false
+	resp.UpdateAt = nil
 	applyPublishedSettings(&resp, post.PublishedSettings)
 	return resp
 }

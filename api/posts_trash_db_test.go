@@ -272,6 +272,51 @@ func TestTrashStopsTheScheduler(t *testing.T) {
 	require.Zero(t, got.PublishAttempts)
 }
 
+// TestTrashEndsScheduledUpdate: a published post's pending update (#335) ends
+// with the trash (000035's status trigger), so the scheduler never applies it,
+// a replica that claimed it just before is fenced off, and a restore brings the
+// post back as it was published, without the update.
+func TestTrashEndsScheduledUpdate(t *testing.T) {
+	conn, store := scheduleTestDB(t)
+	editor := scheduleUser(t, store, RoleEditor)
+	collab := newStubCollab(t, 0)
+	server := scheduleServer(t, store, collab)
+	ctx := context.Background()
+
+	post := publishedPost(t, store, editor)
+	live := publishedBody(t, store, post.ID)
+	editWorkingCopy(t, conn, post.ID, scheduleWord())
+	scheduleUpdateAt(t, store, post.ID, editor, time.Now().Add(-time.Minute))
+	require.True(t, hasScheduledUpdate(t, conn, post.ID))
+
+	recorder := trashCall(t, server, &editor, http.MethodDelete, fmt.Sprintf("/api/v1/posts/%d", post.ID), nil)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.False(t, hasScheduledUpdate(t, conn, post.ID), "the trash ends the pending update")
+
+	server.applyDueScheduledUpdates(ctx)
+	require.Equal(t, "trash", reloadPost(t, store, post.ID).PostStatus)
+	require.Equal(t, 1, versionCount(t, conn, post.ID))
+
+	// Claimed just before the trash: the claim's fence finds no update.
+	fenced := publishedPost(t, store, editor)
+	editWorkingCopy(t, conn, fenced.ID, scheduleWord())
+	scheduleUpdateAt(t, store, fenced.ID, editor, time.Now().Add(-time.Minute))
+	claim := claimUpdateFor(t, store, fenced.ID)
+	_, err := store.TrashPost(ctx, fenced.ID)
+	require.NoError(t, err)
+	_, err = store.PublishScheduledUpdateTx(ctx, db.PublishScheduledUpdateTxParams{PostID: fenced.ID, Claim: claim.Claim.Time})
+	require.ErrorIs(t, err, db.ErrScheduleChanged)
+	require.Equal(t, 1, versionCount(t, conn, fenced.ID))
+
+	recorder = trashCall(t, server, &editor, http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/restore", post.ID), nil)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Equal(t, "published", reloadPost(t, store, post.ID).PostStatus)
+	require.Equal(t, live, publishedBody(t, store, post.ID), "restored as it was published")
+	require.False(t, hasScheduledUpdate(t, conn, post.ID), "restore doesn't bring the update back")
+	server.applyDueScheduledUpdates(ctx)
+	require.Equal(t, 1, versionCount(t, conn, post.ID))
+}
+
 // TestPermanentDelete: only from the trash, only admins and editors, and the
 // row and what hangs off it are gone.
 func TestPermanentDelete(t *testing.T) {

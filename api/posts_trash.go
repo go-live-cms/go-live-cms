@@ -1,6 +1,6 @@
 // Package api — Trash and bulk actions for the posts list (#327)
 //
-// DELETE /posts/:id moves a post to the trash (post_status 'trash', 000034);
+// DELETE /posts/:id moves a post to the trash (post_status 'trash', 000036);
 // it used to delete the row. From the trash, POST /posts/:id/restore gives it
 // back the status it had, and DELETE /posts/:id/permanent (admins and editors)
 // is the old hard delete. POST /posts/bulk runs publish, trash, restore or

@@ -161,4 +161,22 @@
     font-size: 12px;
     line-height: 16px;
   }
+
+  // A scheduled update's content is frozen when scheduled (#335).
+  &__note {
+    background: var(--background-subtle);
+    border-radius: var(--radius-lg, 8px);
+    display: flex;
+    font-size: 13px;
+    gap: 10px;
+    line-height: 18px;
+    margin: 0;
+    padding: 10px 12px;
+
+    svg {
+      color: var(--text-secondary);
+      flex: none;
+      margin-top: 1px;
+    }
+  }
 }

@@ -613,8 +613,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   (a reason code). `PUT /posts/:id/schedule` (`{"local":"2026-11-03T09:00"}` in the site's zone,
   or `{"publish_at": RFC 3339}`; future, ≤5 years) and `DELETE` (back to draft), both
   `requireContentEditor` (`posts_schedule.go`). Only a draft or a scheduled post (409 otherwise;
-  a published post's update is #335). `siteLocalToUTC` refuses a time the clocks skip and takes
-  the first of one that happens twice; the web's `lib/schedule.ts` mirrors it. POST/PUT `/posts`
+  a published post's update has its own route, #335 below). `siteLocalToUTC` refuses a time the
+  clocks skip and takes the first of one that happens twice; the web's `lib/schedule.ts` mirrors it. POST/PUT `/posts`
   refuse `post_status: "scheduled"` (400) unless unchanged; any other status set through PUT
   clears the schedule (`UpdatePost`), and so does every publish (`SetPublishedVersionOnPost`).
 - **Contributors:** their scheduled post is read-only to them (`canEditPost` false, so the
@@ -633,14 +633,14 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   (real DB: due-only, two replicas, fencing, flush failure, shutdown, routes, not public) and
   `posts_schedule_test.go`.
 
-## Trash, list filters and bulk actions (#327, `000034`, `posts_trash.go`)
+## Trash, list filters and bulk actions (#327, `000036`, `posts_trash.go`)
 
 - **Trash is a status, `post_status = 'trash'`,** plus `deleted_at` and `trashed_from_status`
   (CHECK: all three together). A status on purpose: every public read already wants
   `published` and the scheduler `scheduled`, so a trashed post is off the site, the sitemap,
   feeds, search, term/author archives, related/adjacent posts and menus with no query change.
   Its published snapshot stays, so restoring a published post puts the same content back. A
-  trashed scheduled post keeps `publish_at` (000034 relaxes 000033's CHECK for that). Admin
+  trashed scheduled post keeps `publish_at` (000036 relaxes 000033's CHECK for that). Admin
   lists: no `status` = every status **but** trash (`ListPosts*`, the counts' `CountFiltered*`,
   `SearchPostsWithMeta`, `/posts/user/:id`); `status=trash` is the Trash tab; `/posts/counts`
   has a `trash` count.
@@ -650,7 +650,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   published or scheduled) → `RestorePostFromTrash`: the old status, except a scheduled post
   whose time passed comes back a **draft** (never published at once). `DELETE
   /posts/:id/permanent` (`requireContentEditor`, trashed only, else 409 `not_in_trash`) →
-  `DeleteTrashedPostTx` (status checked under the row lock), the old hard delete. No auto-empty.
+  `DeleteTrashedPostTx` (status checked under the row lock), the old hard delete. No auto-empty. A pending scheduled update (#335) ends with the trash (its `posts_cancel_scheduled_update` trigger), so a restored post has none.
 - **Nobody edits a trashed post:** `canEditPost` and `canEditPostDetails` are false for it,
   moderators included; `checkPost` answers 409 `post_trashed` (not 403) to a caller who may
   read it, and the write routes that don't load the post (media links, SEO, restore-settings)
@@ -665,8 +665,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **Filters** on `GET /posts`, `/posts/type/:type` and `/posts/search`: `author_id` (credited in
   `user_posts`, not just the owner) and `terms=1,2` (linked to every one, working terms, ≤10),
   with status, sort and `viewer_id`. `GET /posts/authors?type=` lists who is credited on posts
-  the caller may read (the Author filter's options; editors can't list `/users`). #319 may move
-  bylines; the filter reads `user_posts` as it is today.
+  the caller may read (the Author filter's options; editors can't list `/users`).
+  The filter reads the working byline (`user_posts`, #319).
 - **Search** (`/posts/search`) also matches part of the title or slug (`title_pattern`, ILIKE,
   wildcards escaped with `memberSearchPattern`), ranked after every index match. The #145 index
   stays the main search; there is no second search endpoint.
@@ -676,10 +676,48 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `publishPost`; `trashPostByID`, `restorePostByID`, `deletePostPermanentlyByID`). 200 with
   `{action, results: [{id, ok, post_status} | {id, ok: false, status, code, error}], succeeded,
   failed}`, duplicates once, in order. Codes: `forbidden`, `not_found`, `post_trashed`,
-  `not_in_trash`, `collab_unavailable`, `failed`. "Change byline author" waits for #319.
+  `not_in_trash`, `collab_unavailable`, `failed`. "Change byline author" is not a bulk action yet (#319's `PUT /posts/:id/authors` is per post).
 - Tests: `posts_trash_db_test.go` (real DB: hidden from every `/public` route and menus,
   scheduler and its fence, restore, permanent delete, the filters combined, counts, bulk with
   mixed permissions, the authors list) and `posts_trash_test.go`.
+## Scheduled updates (#335, `000035`, `posts_scheduled_update.go`)
+
+- A published post with changes not published (#326) schedules its **Update**: `PUT
+  /posts/:id/scheduled-update` (same body as `/schedule`: `local` or `publish_at`, future, ≤5
+  years) and `DELETE` ("Cancel update"), both `requireContentEditor`. 409 for a post that isn't
+  published (`post_status` in the body), `code: no_unpublished_changes` when the live post already
+  matches, `code: not_scheduled` on a DELETE with nothing pending; 503 when the collab flush fails.
+- **The content is frozen when it's scheduled** (the issue and the "Scheduled update" design:
+  "later changes aren't included; schedule again to include them"). The handler flushes the collab
+  doc like publish, then `ScheduleUpdateTx` (lock the post, published, has changes) copies
+  `block_doc` and `golive_post_settings(id)` into `post_scheduled_updates` (one row per post,
+  `UpsertScheduledUpdateFromPost`). Scheduling again (Reschedule) takes a **new** snapshot and resets
+  the retry state. The working copy stays editable by everyone who could edit it (contributors
+  too: their later edits aren't in the update, so #147's read-only rule isn't needed).
+- **The same scheduler applies it** (`applyDueScheduledUpdates` in `scheduled_publish.go`, every
+  round after #147's publishes): `ClaimDueScheduledUpdates` (`FOR UPDATE SKIP LOCKED`, the 2-minute
+  lease is the fencing token) → `PublishScheduledUpdateTx` (lock post, then the update under the
+  claim; next version from the **snapshot**, credited to `scheduled_by`; `publishInsertedVersion`,
+  the rest of `publishLockedPost`). No flush at the time: the working copy isn't read. A failure is
+  `RecordScheduledUpdateFailure` (`update_failed`, #147's backoff) and `GET /posts/:id`'s
+  `scheduled_update.failure`. A term deleted since the snapshot is dropped (the published-terms
+  trigger only keeps existing terms); a deleted featured image stays in the published settings, as
+  it does when an image is deleted after an ordinary publish.
+- **What ends it:** the `posts_cancel_scheduled_update` trigger deletes the row when `post_status`
+  or `published_version_id` changes: an **Update by hand** (newer than the snapshot; applying it
+  later would roll the site back; `PublishPostTx` reports it as `cancelled_scheduled_update` on the
+  publish response), the update itself, unpublish, archive, trash, any status change.
+  Post deleted: CASCADE. **Restoring a version** writes the working copy only, so a pending update
+  is unaffected (schedule again to include the restored content).
+- Reads: `GET /posts/:id` / `slug/:slug` add `scheduled_update` (`update_at`, `scheduled_at` = when
+  frozen, `scheduled_by`, `failure`) and `update_at`; so does `GET /posts/:id/settings` (null when
+  none), which every open editor re-reads on collaborators' stores; `ListPosts`, `ListPostsWithMeta` and
+  `SearchPostsWithMeta` select `su.update_at` (LEFT JOIN, so `ListPosts` sorts by `p.created_at`);
+  the authors/terms queries select `NULL::timestamptz`. Public presenters clear `update_at` (and the
+  public `/posts` list now clears `has_unpublished_changes` too, which it used to leak).
+- Tests: `scheduled_update_test.go` (real DB: the frozen snapshot vs a later edit, public unchanged
+  before the time, two replicas, fencing, failure + retry, the loop, routes and roles) and
+  `posts_unpublished_changes_test.go` (the detail field, public presenters).
 
 ## Theme blocks (#376)
 

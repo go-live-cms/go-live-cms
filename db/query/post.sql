@@ -68,9 +68,14 @@ SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, 
     golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings)::boolean AS has_unpublished_changes,
     p.publish_at,
     -- The Trash tab (#327): when, and the status a restore brings back.
-    p.deleted_at, p.trashed_from_status
+    p.deleted_at, p.trashed_from_status,
+    -- A published post's scheduled update (#335, 000035), for the list's pill.
+    su.update_at
 FROM posts p
-WHERE 
+-- One row at most per post (the primary key). The ORDER BY below names every column
+-- with p.: su has a created_at too, and may gain others.
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
+WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     -- status: one status or a comma list; none = every status but the trash (#327).
     AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'
@@ -91,17 +96,17 @@ WHERE
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
 -- keep the 0001-01-01 sentinel and rank by creation time instead.
 ORDER BY
-    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN created_at END ASC,
-    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN created_at END DESC,
-    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'asc' THEN GREATEST(changed_at, created_at) END ASC,
-    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN GREATEST(changed_at, created_at) END DESC,
-    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN title END ASC,
-    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN title END DESC,
-    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN menu_order END ASC,
-    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN menu_order END DESC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN @sort_column::text = 'created_at' AND @sort_direction::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN @sort_column::text = 'changed_at' AND @sort_direction::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'asc' THEN p.title END ASC,
+    CASE WHEN @sort_column::text = 'title' AND @sort_direction::text = 'desc' THEN p.title END DESC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN @sort_column::text = 'menu_order' AND @sort_direction::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN @sort_direction::text = 'asc' THEN id END ASC,
-    id DESC
+    CASE WHEN @sort_direction::text = 'asc' THEN p.id END ASC,
+    p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
 
@@ -215,6 +220,8 @@ SELECT
     -- The Trash tab (#327): when, and the status a restore brings back. The
     -- public rows (authors.sql, terms_public.sql) select the same columns.
     p.deleted_at, p.trashed_from_status,
+    -- A published post's scheduled update (#335, 000035): "Update scheduled · Nov 3".
+    su.update_at,
     -- Per-row subquery instead of LEFT JOIN + GROUP BY (#131): Postgres runs
     -- it after ORDER BY + LIMIT, so only the returned page reads post_meta.
     (
@@ -230,7 +237,9 @@ SELECT
         ELSE golive_post_byline(p.id)
     END)::jsonb as authors
 FROM posts p
-WHERE 
+-- The scheduled update (#335): one row at most per post, as in ListPosts.
+LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
+WHERE
     (@post_type::text = '' OR p.post_type = @post_type)
     -- status: one status or a comma list; none = every status but the trash (#327).
     AND (CASE WHEN @post_status::text = '' THEN p.post_status <> 'trash'

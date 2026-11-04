@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 
 import Modal from "@gl-admin/components/ui/Modal"
 import Button from "@gl-admin/components/ui/Button"
 import { FieldError } from "@gl-admin/components/ui/Input"
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "@gl-admin/components/ui/icons"
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, InfoIcon } from "@gl-admin/components/ui/icons"
 import {
   dateFieldLabel,
   defaultScheduleParts,
@@ -21,6 +21,8 @@ import "@gl-admin/assets/styles/components/editor/schedule-dialog.scss"
 // The Schedule dialog (#147, "Schedule update dialog" on the redesign canvas, which #335's
 // "Schedule update" shares): date, time, a month calendar and the site's time zone. Times
 // are in the site's zone (Settings › General); the API converts them (lib/schedule.ts).
+// mode "update" (#335) schedules a published post's Update: the content is frozen when
+// it's scheduled, so the dialog says later changes aren't included.
 
 type ScheduleDialogProps = {
   isOpen: boolean
@@ -33,8 +35,34 @@ type ScheduleDialogProps = {
   settings: Pick<DateSettings, "language" | "timeZone"> & { loaded?: boolean }
   // Sends the wall-clock time ("2026-11-03T09:00"); a rejection's message is shown.
   onSchedule: (local: string) => Promise<void>
+  // "publish" (a draft's first publish, #147) or "update" (a published post's, #335).
+  mode?: ScheduleMode
   now?: () => Date
 }
+
+export type ScheduleMode = "publish" | "update"
+
+// The dialog's words per mode, rescheduling or not.
+export function scheduleDialogText(mode: ScheduleMode, rescheduling: boolean) {
+  if (mode === "update") {
+    return {
+      title: rescheduling ? "Reschedule update" : "Schedule update",
+      description: "The live post stays as it is until then.",
+      action: rescheduling ? "Reschedule" : "Schedule update",
+      note: SCHEDULED_UPDATE_NOTE,
+    }
+  }
+  return {
+    title: rescheduling ? "Reschedule" : "Schedule post",
+    description: "It goes live at this time, with its content as it is then.",
+    action: rescheduling ? "Reschedule" : "Schedule",
+    note: null,
+  }
+}
+
+// What a scheduled update publishes (#335): the content as it is when it's scheduled.
+export const SCHEDULED_UPDATE_NOTE =
+  "The update uses the post as it is now. Changes made after you schedule aren’t included; schedule again to include them."
 
 function addMonths(year: number, month: number, delta: number): { year: number; month: number } {
   const total = year * 12 + month + delta
@@ -46,7 +74,7 @@ function addDays(date: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
 }
 
-export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, onSchedule, now = () => new Date() }: ScheduleDialogProps) {
+export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, onSchedule, mode = "publish", now = () => new Date() }: ScheduleDialogProps) {
   const { language, timeZone } = settings
   const zoneKnown = settings.loaded !== false
   const ids = useId()
@@ -121,14 +149,15 @@ export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, o
 
   const shownError = serverError ?? (touched ? error : null)
   const rescheduling = !!publishAt
+  const text = scheduleDialogText(mode, rescheduling)
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={() => !busy && onClose()}
       size="small"
-      title={rescheduling ? "Reschedule" : "Schedule post"}
-      description="It goes live at this time, with its content as it is then."
+      title={text.title}
+      description={text.description}
       initialFocus={timeRef}
       footer={
         <>
@@ -136,7 +165,7 @@ export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, o
             Cancel
           </Button>
           <Button variant="primary" onClick={submit} loading={busy} disabled={!zoneKnown}>
-            {rescheduling ? "Reschedule" : "Schedule"}
+            {text.action}
           </Button>
         </>
       }
@@ -238,6 +267,12 @@ export default function ScheduleDialog({ isOpen, onClose, publishAt, settings, o
         <span id={`${ids}-zone`} className="gl-schedule__zone">
           {zoneKnown ? timeZoneLine(timeZone, instant ?? now()) : "Loading the site's time zone from Settings…"}
         </span>
+        {text.note && (
+          <p className="gl-schedule__note">
+            <InfoIcon size={16} />
+            <span>{text.note}</span>
+          </p>
+        )}
         {shownError && <FieldError id={`${ids}-error`}>{shownError}</FieldError>}
       </div>
     </Modal>

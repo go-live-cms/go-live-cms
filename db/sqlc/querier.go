@@ -23,6 +23,10 @@ type Querier interface {
 	BlockSession(ctx context.Context, id uuid.UUID) error
 	// Unscheduling: back to draft, the time cleared. No row: not scheduled (or missing).
 	CancelPostSchedule(ctx context.Context, id int64) (Post, error)
+	// "Cancel update": the snapshot is dropped, the live post and the working copy stay
+	// as they are. 0 rows: nothing was scheduled. An apply in flight is fenced off
+	// (LockScheduledUpdateClaim finds no row).
+	CancelPostScheduledUpdate(ctx context.Context, postID int64) (int64, error)
 	// exclude_id skips the post being edited; pass 0 when creating.
 	CheckSlugExists(ctx context.Context, arg CheckSlugExistsParams) (bool, error)
 	CheckURLExists(ctx context.Context, url string) (bool, error)
@@ -33,6 +37,11 @@ type Querier interface {
 	// returned publish_next_attempt_at is the claim's fencing token. A row locked by
 	// something else (a collab store) is skipped this round, not waited for.
 	ClaimDueScheduledPosts(ctx context.Context, arg ClaimDueScheduledPostsParams) ([]ClaimDueScheduledPostsRow, error)
+	// ClaimDueScheduledPosts (#147) for updates: up to max_posts due rows, FOR UPDATE
+	// SKIP LOCKED so two replicas never take the same one, and a lease
+	// (next_attempt_at) so the others skip it until it ends. The returned
+	// next_attempt_at is the claim's fencing token.
+	ClaimDueScheduledUpdates(ctx context.Context, arg ClaimDueScheduledUpdatesParams) ([]ClaimDueScheduledUpdatesRow, error)
 	// Single-use: like ClaimUserInvitation, only one claim can match.
 	ClaimPasswordResetToken(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	// Marks a valid invitation accepted in one statement, so two concurrent
@@ -166,6 +175,8 @@ type Querier interface {
 	GetPostMediaCount(ctx context.Context, postID int64) (int64, error)
 	GetPostMeta(ctx context.Context, postID int64) ([]PostMetum, error)
 	GetPostMetaByKey(ctx context.Context, arg GetPostMetaByKeyParams) (PostMetum, error)
+	// A post's pending update without its snapshot: GET /posts/:id's scheduled_update.
+	GetPostScheduledUpdate(ctx context.Context, postID int64) (GetPostScheduledUpdateRow, error)
 	// The editor's view of a post's settings (#358): the working ones, the published
 	// ones (NULL when nothing is published) and whether they differ, i.e. whether a
 	// settings change is waiting for Update (golive_post_settings_changed, 000030; 000031
@@ -176,6 +187,12 @@ type Querier interface {
 	// (The flag as golive_post_has_unpublished_changes defines it, from the two halves so the
 	// settings are compared once.)
 	GetPostSettingsState(ctx context.Context, id int64) (GetPostSettingsStateRow, error)
+	// Scheduled updates to published posts (#335, 000035). The handlers are
+	// api/posts_scheduled_update.go; the scheduler is api/scheduled_publish.go (#147's),
+	// and the apply itself is PublishScheduledUpdateTx (db/sqlc/post_publish_tx.go).
+	// PUT /posts/:id/scheduled-update's check before the collab flush: the status
+	// alone, without reading the post's body.
+	GetPostStatus(ctx context.Context, id int64) (string, error)
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
 	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
@@ -242,6 +259,9 @@ type Querier interface {
 	// settings (title, excerpt, featured image, terms; golive_post_settings, #358),
 	// read in the same statement so they belong together.
 	InsertPublishedVersionFromPost(ctx context.Context, arg InsertPublishedVersionFromPostParams) (InsertPublishedVersionFromPostRow, error)
+	// The scheduled update's version: its frozen body and settings, credited to whoever
+	// scheduled it. Never the working copy (#335: later edits aren't included).
+	InsertPublishedVersionFromScheduledUpdate(ctx context.Context, arg InsertPublishedVersionFromScheduledUpdateParams) (InsertPublishedVersionFromScheduledUpdateRow, error)
 	InvalidatePasswordResetTokensForUser(ctx context.Context, userID int64) error
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
 	// Older/newer and related posts for the public post page (#351).
@@ -296,6 +316,8 @@ type Querier interface {
 	// the Authors field. Public fields only.
 	ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
+	// One row at most per post (the primary key). The ORDER BY below names every column
+	// with p.: su has a created_at too, and may gain others.
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
 	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -307,6 +329,7 @@ type Querier interface {
 	// keep the 0001-01-01 sentinel and rank by creation time instead.
 	ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAllMetaParams) ([]ListPostsWithAllMetaRow, error)
 	ListPostsWithMedia(ctx context.Context, arg ListPostsWithMediaParams) ([]ListPostsWithMediaRow, error)
+	// The scheduled update (#335): one row at most per post, as in ListPosts.
 	// Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 	// of these pairs; anything else falls through to the id tiebreaker.
 	// changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -357,10 +380,19 @@ type Querier interface {
 	LockPostForPublish(ctx context.Context, id int64) (LockPostForPublishRow, error)
 	// DeleteTrashedPostTx: the post's status under a row lock.
 	LockPostStatus(ctx context.Context, id int64) (string, error)
+	// ScheduleUpdateTx's first step: lock the post (as LockPostForPublish) and read
+	// its status under the lock.
+	LockPostStatusForUpdate(ctx context.Context, id int64) (string, error)
 	// Inside PublishScheduledPostTx: the post, locked, if it is still scheduled under
 	// this claim. No row: it was cancelled, rescheduled, published by hand, deleted
 	// or claimed again after this claim's lease ran out; nothing is published.
 	LockScheduledPostClaim(ctx context.Context, arg LockScheduledPostClaimParams) (LockScheduledPostClaimRow, error)
+	// Inside PublishScheduledUpdateTx, after the post's row lock: the pending update,
+	// locked, if it is still the one this claim took and the post is still published. No
+	// row: cancelled, rescheduled (a new snapshot), applied, superseded by an Update by
+	// hand or an unpublish (the 000035 trigger deletes it), or claimed again after this
+	// claim's lease ran out. Nothing is published then.
+	LockScheduledUpdateClaim(ctx context.Context, arg LockScheduledUpdateClaimParams) (LockScheduledUpdateClaimRow, error)
 	// Taken by refresh-token rotation so it cannot interleave with a password
 	// change on the same user (which holds the row FOR UPDATE).
 	LockUserForShare(ctx context.Context, id int64) error
@@ -390,6 +422,9 @@ type Querier interface {
 	// A failed attempt under this claim: the reason the editor shows, and the next try
 	// after the backoff. 0 rows: the schedule changed meanwhile, nothing to record.
 	RecordScheduledPublishFailure(ctx context.Context, arg RecordScheduledPublishFailureParams) (int64, error)
+	// RecordScheduledPublishFailure for updates: the reason the editor shows and the
+	// next try after the backoff. 0 rows: the schedule changed meanwhile.
+	RecordScheduledUpdateFailure(ctx context.Context, arg RecordScheduledUpdateFailureParams) (int64, error)
 	// The dev seed (#358): published posts whose terms and featured images were linked
 	// after they were published get them in their published settings.
 	RefreshPublishedSettings(ctx context.Context, ids []int64) error
@@ -432,6 +467,7 @@ type Querier interface {
 	// working copy is never indexed. The index has a published post's published
 	// title and excerpt (#358), and the list shows its working ones, so those match
 	// too: a post renamed but not yet updated is found by its new name.
+	// The scheduled update (#335), as in ListPostsWithMeta.
 	SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMetaParams) ([]SearchPostsWithMetaRow, error)
 	// Full-text search (#145) over post_search (000024_post_search). The query text
 	// goes through websearch_to_tsquery, which accepts any input: quotes, OR and -
@@ -489,11 +525,11 @@ type Querier interface {
 	// stamps it.
 	TouchUserLastActive(ctx context.Context, arg TouchUserLastActiveParams) (int64, error)
 	TransferMediaToUser(ctx context.Context, arg TransferMediaToUserParams) error
-	// Trash (#327, 000034). DELETE /posts/:id moves a post here; restore brings back
+	// Trash (#327, 000036). DELETE /posts/:id moves a post here; restore brings back
 	// the status it had; permanent delete (DeleteTrashedPostTx) removes the row. The
 	// API decides who may do which (auth_posts.go); these only change the state.
 	// Moves a post to the trash. No row: missing or already there. A scheduled post
-	// keeps its time and who scheduled it (000034's CHECK allows that), but its claim
+	// keeps its time and who scheduled it (000036's CHECK allows that), but its claim
 	// and retry state are cleared: a scheduler attempt already in flight is fenced off
 	// (LockScheduledPostClaim wants post_status 'scheduled' anyway). changed_at stays:
 	// trashing isn't an edit.
@@ -541,6 +577,12 @@ type Querier interface {
 	// A last_editor_id that no longer exists is stored as NULL rather than
 	// failing the whole store on the foreign key.
 	UpsertPostYdocState(ctx context.Context, arg UpsertPostYdocStateParams) error
+	// Inside ScheduleUpdateTx, with the post locked: freeze the working copy as it is
+	// stored now (after the handler's collab flush), body and settings from the same
+	// row, as InsertPublishedVersionFromPost reads them. A new schedule replaces the old
+	// one whole: a new snapshot, a new time, no attempts, failure or claim, so an apply
+	// in flight for the old one is fenced off. No row: the post isn't published.
+	UpsertScheduledUpdateFromPost(ctx context.Context, arg UpsertScheduledUpdateFromPostParams) (UpsertScheduledUpdateFromPostRow, error)
 	UpsertThemeSetting(ctx context.Context, arg UpsertThemeSettingParams) (ThemeSetting, error)
 }
 

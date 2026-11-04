@@ -99,3 +99,42 @@ describe("PostStatus for a scheduled post", () => {
     expect(container.textContent).toBe("DraftScheduled")
   })
 })
+
+// A published post's scheduled update (#335): "Update scheduled · Nov 3", in place of
+// "Changes not published".
+describe("PostStatus for a scheduled update", () => {
+  let container: HTMLDivElement
+  let root: Root
+  beforeEach(() => {
+    resetSiteDateSettings()
+    getSettings.mockReset()
+    getSettings.mockResolvedValue({ site_language: "en-US", site_timezone: "America/Sao_Paulo", date_format: "month_day_year" })
+    container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+  })
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("shows the update's day in the site's zone, over the changes flag", async () => {
+    const year = new Date().getUTCFullYear()
+    await act(async () =>
+      root.render(
+        <>
+          <PostStatus status="published" iconPath="published" unpublishedChanges updateAt={`${year}-11-04T01:30:00Z`} />
+          <PostStatusPill status="published" updateAt={`${year}-11-04T01:30:00Z`} withTime />
+        </>
+      )
+    )
+    const pills = [...container.querySelectorAll(".gl-pill")]
+    expect(pills.map((p) => p.textContent)).toEqual(["Update scheduled · Nov 3", "Update scheduled · Nov 3, 22:30"])
+    expect(pills[0].classList.contains("gl-pill--info")).toBe(true)
+  })
+
+  it("is only for published posts", async () => {
+    await act(async () => root.render(<PostStatusPill status="draft" updateAt="2026-11-04T01:30:00Z" />))
+    expect(container.textContent).toBe("Draft")
+  })
+})

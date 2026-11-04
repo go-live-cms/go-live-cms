@@ -1,10 +1,10 @@
--- Trash (#327, 000034). DELETE /posts/:id moves a post here; restore brings back
+-- Trash (#327, 000036). DELETE /posts/:id moves a post here; restore brings back
 -- the status it had; permanent delete (DeleteTrashedPostTx) removes the row. The
 -- API decides who may do which (auth_posts.go); these only change the state.
 
 -- name: TrashPost :one
 -- Moves a post to the trash. No row: missing or already there. A scheduled post
--- keeps its time and who scheduled it (000034's CHECK allows that), but its claim
+-- keeps its time and who scheduled it (000036's CHECK allows that), but its claim
 -- and retry state are cleared: a scheduler attempt already in flight is fenced off
 -- (LockScheduledPostClaim wants post_status 'scheduled' anyway). changed_at stays:
 -- trashing isn't an edit.
