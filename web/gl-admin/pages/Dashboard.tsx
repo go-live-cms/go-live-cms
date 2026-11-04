@@ -4,22 +4,31 @@ import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import PostStatus from "@gl-admin/components/ui/PostStatus"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
-import { ChevronRightIcon, DocumentIcon, PageIcon, PencilIcon, UploadIcon } from "@gl-admin/components/ui/icons"
+import Avatar from "@gl-admin/components/ui/Avatar"
+import Button from "@gl-admin/components/ui/Button"
+import { ChevronRightIcon, CheckIcon, DangerIcon, DocumentIcon, PageIcon, PencilIcon, UploadIcon, WarningIcon } from "@gl-admin/components/ui/icons"
 import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
 import { getPostCounts, getPosts } from "@gl-admin/lib/api/posts"
 import { getMedia } from "@gl-admin/lib/api/media"
+import { getActivity, getContinueEditing, getNeedsAttention, type ActivityEvent, type ContinueEditingPost } from "@gl-admin/lib/api/activity"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
-import { ACTIVE_STATUSES } from "@gl-admin/lib/contentList"
+import { editedPhrase } from "@gl-admin/lib/contentList"
+import { attentionItems, describeActivity, type AttentionItem } from "@gl-admin/lib/activityFeed"
+import { formatFullDate } from "@gl-admin/utils/formatting"
 import type { Post } from "@gl-admin/lib/api/types"
 import "@gl-admin/assets/styles/pages/home.scss"
 
-// Home (#9, #340): quick actions, the posts you were working on, drafts and counts, with
-// the posts whose changes aren't published yet (#326). The design's "Needs attention" and
-// "Activity" sections, presence on the recent cards and "from a template" wait for #324,
-// #325, #323 and #322.
+// Home (#9, #340, #324): quick actions, "Continue where you left off" (the posts you
+// last worked on, from the activity log), "Needs attention" (failed scheduled publishes;
+// for editors, images without alt text and posts with unpublished changes), the
+// Activity feed, then drafts and counts. Still waiting: presence on the recent cards
+// (who's editing now), review requests (#323) and "from a template" (#322).
+
+// Activity rows per page ("Show more" loads the next).
+const ACTIVITY_PAGE = 8
 
 export function greeting(date: Date = new Date()): string {
   const h = date.getHours()
@@ -27,7 +36,7 @@ export function greeting(date: Date = new Date()): string {
 }
 
 type HomeData = {
-  recent: Post[]
+  recent: ContinueEditingPost[]
   drafts: Post[]
   // null: that count failed to load.
   counts: { published: number | null; changes: number | null; drafts: number | null; pages: number | null; media: number | null }
@@ -54,7 +63,7 @@ export default function Dashboard() {
     // A count that fails shows a dash; only the post lists failing is an error.
     const optional = <T,>(p: Promise<T>) => p.catch(() => null)
     Promise.all([
-      getPosts({ ...list, ...mine, status: ACTIVE_STATUSES, limit: 3 }),
+      getContinueEditing({ limit: 3 }),
       getPosts({ ...list, ...mine, type: "post", status: "draft", limit: 5 }),
       optional(getPostCounts({ type: "post", ...mine })),
       optional(getPostCounts({ type: "page", ...mine })),
@@ -63,7 +72,7 @@ export default function Dashboard() {
       .then(([recent, drafts, posts, pages, media]) => {
         if (!live) return
         setData({
-          recent: recent.data,
+          recent,
           drafts: drafts.data,
           counts: {
             published: posts ? (posts.counts.published ?? 0) : null,
@@ -121,6 +130,11 @@ export default function Dashboard() {
               </div>
             )}
           </section>
+
+          <div className="gl-home__columns">
+            <NeedsAttentionSection userId={user?.id} />
+            <ActivitySection userId={user?.id} />
+          </div>
 
           <div className="gl-home__columns">
             <section className="gl-home__section" aria-labelledby="home-drafts" aria-busy={!data || undefined}>
@@ -191,7 +205,7 @@ function QuickAction({ to, icon, title, detail, accent = false }: { to: string; 
   )
 }
 
-function RecentCard({ post }: { post: Post | null }) {
+function RecentCard({ post }: { post: ContinueEditingPost | null }) {
   if (!post) {
     return (
       <div className="gl-home__card" aria-hidden="true">
@@ -206,12 +220,158 @@ function RecentCard({ post }: { post: Post | null }) {
       <PostStatus status={post.post_status} iconPath={post.post_status} unpublishedChanges={post.has_unpublished_changes} publishAt={post.publish_at} />
       <span className="gl-home__card-title">{post.title || "Untitled"}</span>
       <span className="gl-home__card-meta">
-        <Byline post={post} size={20} />
-        <span>
-          <LastEdited post={post} phrase />
-        </span>
+        {post.schedule_failed && <span className="gl-home__card-alert">Scheduled publish failed ·</span>}
+        <time className="gl-last-edited" dateTime={post.edited_at} title={formatFullDate(post.edited_at)}>
+          {editedPhrase(post.edited_at)}
+        </time>
       </span>
     </Link>
+  )
+}
+
+// A section that loads on its own: a failure shows here, not over the whole page.
+type Loadable<T> = { state: "loading" } | { state: "error"; error: unknown } | { state: "ready"; value: T }
+
+const ATTENTION_ICONS: Record<AttentionItem["tone"], ReactNode> = {
+  danger: <DangerIcon size={14} />,
+  warning: <WarningIcon size={14} />,
+  accent: <PencilIcon size={14} />,
+  neutral: <DocumentIcon size={14} />,
+}
+
+function NeedsAttentionSection({ userId }: { userId?: number }) {
+  const [items, setItems] = useState<Loadable<AttentionItem[]>>({ state: "loading" })
+
+  useEffect(() => {
+    let live = true
+    setItems({ state: "loading" })
+    getNeedsAttention()
+      .then((needs) => live && setItems({ state: "ready", value: attentionItems(needs) }))
+      .catch((error) => live && setItems({ state: "error", error }))
+    return () => {
+      live = false
+    }
+  }, [userId])
+
+  return (
+    <section className="gl-home__section" aria-labelledby="home-attention" aria-busy={items.state === "loading" || undefined}>
+      <h2 id="home-attention">Needs attention</h2>
+      {items.state === "error" ? (
+        <EmptyState compact variant="error" icon="close" title="Couldn't load what needs attention" description={errorMessage(items.error)} />
+      ) : items.state === "ready" && items.value.length === 0 ? (
+        <EmptyState compact icon={<CheckIcon size={24} />} title="All caught up" description="Failed scheduled posts, missing alt text and changes waiting to be published show up here." />
+      ) : (
+        <ul className="gl-home__list gl-home__attention">
+          {(items.state === "ready" ? items.value : [null, null]).map((item, i) => (
+            <li key={item?.key ?? i}>
+              {item ? (
+                <Link to={item.href} className="gl-home__row">
+                  <span className={`gl-home__attention-icon gl-home__attention-icon--${item.tone}`} aria-hidden="true">
+                    {ATTENTION_ICONS[item.tone]}
+                  </span>
+                  <span className="gl-home__row-text">
+                    <span className="gl-home__row-title">{item.title}</span>
+                    <span className="gl-home__row-detail">{item.detail}</span>
+                  </span>
+                  <ChevronRightIcon className="gl-home__chevron" />
+                </Link>
+              ) : (
+                <span className="gl-home__row">
+                  <Skeleton shape="text" width="60%" />
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function ActivitySection({ userId }: { userId?: number }) {
+  const [feed, setFeed] = useState<Loadable<{ events: ActivityEvent[]; next: number | null }>>({ state: "loading" })
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [moreError, setMoreError] = useState<unknown>(null)
+
+  useEffect(() => {
+    let live = true
+    setFeed({ state: "loading" })
+    getActivity({ limit: ACTIVITY_PAGE })
+      .then((page) => live && setFeed({ state: "ready", value: { events: page.activity, next: page.next_before } }))
+      .catch((error) => live && setFeed({ state: "error", error }))
+    return () => {
+      live = false
+    }
+  }, [userId])
+
+  const showMore = () => {
+    if (feed.state !== "ready" || feed.value.next === null) return
+    const { events, next } = feed.value
+    setLoadingMore(true)
+    setMoreError(null)
+    getActivity({ limit: ACTIVITY_PAGE, before: next })
+      .then((page) => setFeed({ state: "ready", value: { events: [...events, ...page.activity], next: page.next_before } }))
+      .catch((error) => setMoreError(error))
+      .finally(() => setLoadingMore(false))
+  }
+
+  return (
+    <section className="gl-home__section" aria-labelledby="home-activity" aria-busy={feed.state === "loading" || undefined}>
+      <h2 id="home-activity">Activity</h2>
+      {feed.state === "error" ? (
+        <EmptyState compact variant="error" icon="close" title="Couldn't load the activity" description={errorMessage(feed.error)} />
+      ) : feed.state === "ready" && feed.value.events.length === 0 ? (
+        <EmptyState compact icon={<DocumentIcon size={24} />} title="No activity yet" description="Posts created, published or scheduled, uploads and invitations show up here." />
+      ) : (
+        <>
+          <ol className="gl-home__activity">
+            {(feed.state === "ready" ? feed.value.events : [null, null, null]).map((event, i) => (
+              <ActivityRow key={event?.id ?? i} event={event} userId={userId} />
+            ))}
+          </ol>
+          {feed.state === "ready" && feed.value.next !== null && (
+            <div className="gl-home__activity-more">
+              <Button variant="ghost" size="sm" loading={loadingMore} onClick={showMore}>
+                Show more
+              </Button>
+              {moreError ? <span className="gl-home__row-detail" role="alert">{errorMessage(moreError)}</span> : null}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+function ActivityRow({ event, userId }: { event: ActivityEvent | null; userId?: number }) {
+  if (!event) {
+    return (
+      <li className="gl-home__event" aria-hidden="true">
+        <Skeleton shape="circle" width={24} height={24} />
+        <span className="gl-home__event-text">
+          <Skeleton shape="text" width="70%" />
+        </span>
+      </li>
+    )
+  }
+  const line = describeActivity(event, userId)
+  return (
+    <li className="gl-home__event">
+      {line.actorId !== null ? (
+        <Avatar user={{ id: line.actorId, name: line.who }} size={24} decorative />
+      ) : (
+        <span className="gl-home__event-system" aria-hidden="true" />
+      )}
+      <span className="gl-home__event-text">
+        <span>
+          <strong>{line.who}</strong> <span className="gl-home__event-verb">{line.verb}</span>{" "}
+          {line.what && (line.href ? <Link to={line.href}>{line.what}</Link> : line.what)}
+        </span>
+        <time className="gl-home__row-detail" dateTime={event.created_at} title={formatFullDate(event.created_at)}>
+          {line.when}
+        </time>
+      </span>
+    </li>
   )
 }
 
