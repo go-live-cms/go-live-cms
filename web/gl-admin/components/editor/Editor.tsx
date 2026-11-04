@@ -539,6 +539,9 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
   if (!editorSettings) return <Placeholder text={live ? "Connecting…" : "Loading…"} />
   const { markdownShortcuts } = editorSettings
   if (!live) return <EditorInner ref={ref} {...props} collab={null} markdownShortcuts={markdownShortcuts} />
+  // Refused at connect because the post is in the trash (#327): it never syncs, so say why
+  // instead of "Connecting…" forever.
+  if (!gate && access?.trashed) return <AccessNotice access={access} />
   if (!gate || gate.collab.postId !== postId || gate.collab.stale) return <Placeholder text="Connecting…" />
   if (!gate.unbuildable) {
     const viewOnly = readOnly || (access?.readOnly ?? gate.collab.readOnly)

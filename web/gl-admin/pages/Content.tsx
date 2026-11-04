@@ -231,7 +231,14 @@ function PostsList({ typeName, postType, title }: ListProps) {
     [typeName, tab.status, tab.mine, tab.unpublishedChanges, user?.id, author_id, terms, sort.sort, sort.order, search]
   )
 
+  // A selection belongs to one page: another page (or page size) starts empty, so a bulk
+  // action never reaches rows the user can't see. A reload of the same page keeps it.
+  const [selected, setSelected] = useState<number[]>([])
+  const lastPage = useRef<string | null>(null)
   const fetchData = useCallback(async ({ limit, offset, q, sort, order, ...filters }: ApiMeta & typeof query) => {
+    const page = `${offset}:${limit}`
+    if (lastPage.current !== null && lastPage.current !== page) setSelected([])
+    lastPage.current = page
     const filtered = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""))
     // A search is ranked by the API, so it takes no sort.
     const response = q
@@ -242,7 +249,6 @@ function PostsList({ typeName, postType, title }: ListProps) {
 
   // Bulk selection (#327): ids on the current page; cleared when the list changes.
   const available = bulkActions(user, tab)
-  const [selected, setSelected] = useState<number[]>([])
   const [bulkBusy, setBulkBusy] = useState(false)
   const [report, setReport] = useState<BulkReport | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)

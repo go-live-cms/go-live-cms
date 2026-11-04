@@ -80,3 +80,9 @@ func TestPublishPostTrashed(t *testing.T) {
 	require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
 	require.Contains(t, recorder.Body.String(), codePostTrashed)
 }
+
+// stubLivePost answers the trash check of the write routes that read the post
+// for moderators too (authorizeWritePost, #327) with a post that isn't trashed.
+func stubLivePost(store *mockdb.MockStore) {
+	store.EXPECT().GetPost(gomock.Any(), gomock.Any()).Return(db.Post{ID: 7, PostStatus: "draft"}, nil).AnyTimes()
+}

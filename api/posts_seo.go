@@ -106,6 +106,10 @@ func (server *Server) updatePostSEO(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
+	// Not while the post is in the trash (#327).
+	if !server.authorizeWritePost(c, id) {
+		return
+	}
 	params := db.UpdatePostSEOParams{
 		ID:             id,
 		SeoTitle:       strings.TrimSpace(req.SEOTitle),

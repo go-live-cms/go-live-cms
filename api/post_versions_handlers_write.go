@@ -54,6 +54,10 @@ func (server *Server) restorePostVersionSettings(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid version number"})
 		return
 	}
+	// Not while the post is in the trash (#327).
+	if !server.authorizeWritePost(c, postID) {
+		return
+	}
 
 	version, err := server.store.GetPostVersion(c, db.GetPostVersionParams{PostID: postID, VersionNo: int32(versionNo)})
 	if err != nil {

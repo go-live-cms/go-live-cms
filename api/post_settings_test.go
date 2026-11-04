@@ -290,6 +290,7 @@ func TestRestorePostVersionSettings(t *testing.T) {
 	t.Run("Restores", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
+		stubLivePost(store)
 		stubRoleLookup(store, publishEditor)
 		store.EXPECT().GetPostVersion(gomock.Any(), db.GetPostVersionParams{PostID: 7, VersionNo: 1}).Times(1).
 			Return(db.GetPostVersionRow{ID: 11, VersionNo: 1, Settings: publishedSettings(publishedSettingsJSON)}, nil)
@@ -321,6 +322,7 @@ func TestRestorePostVersionSettings(t *testing.T) {
 	t.Run("VersionWithoutSettings", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
+		stubLivePost(store)
 		stubRoleLookup(store, publishEditor)
 		store.EXPECT().GetPostVersion(gomock.Any(), gomock.Any()).Times(1).Return(db.GetPostVersionRow{ID: 11, VersionNo: 1}, nil)
 		store.EXPECT().RestorePostSettingsTx(gomock.Any(), gomock.Any()).Times(0)
@@ -358,6 +360,7 @@ func TestRestorePostVersionSettings(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			store := mockdb.NewMockStore(gomock.NewController(t))
+			stubLivePost(store)
 			stubRoleLookup(store, tc.user)
 			tc.stubs(store)
 			require.Equal(t, tc.want, settingsRequest(t, newTestServer(t, store), http.MethodPost, tc.url, tc.user).Code)

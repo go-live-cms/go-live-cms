@@ -47,18 +47,7 @@ func (server *Server) flushCollabDoc(ctx context.Context, postID int64, requestI
 // commits. Runs after the response (runInBackground), so a slow or down collab
 // server never delays it; a failure is only logged.
 func (server *Server) recheckCollabUser(requestID string, userID int64) {
-	server.runInBackground(requestID, "collab_recheck", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), collabRecheckTimeout)
-		defer cancel()
-		err := server.postCollabInternal(ctx, fmt.Sprintf("/internal/users/%d/recheck", userID), requestID)
-		if err != nil {
-			logger := server.logger
-			if logger == nil {
-				logger = slog.Default()
-			}
-			logger.Warn("collab_recheck_failed", requestIDKey, requestID, "user_id", userID, "error", err.Error())
-		}
-	})
+	server.recheckCollab(requestID, "collab_recheck", fmt.Sprintf("/internal/users/%d/recheck", userID), "user_id", userID)
 }
 
 // recheckCollabDoc asks the collab server to look up the access of every open
@@ -67,16 +56,21 @@ func (server *Server) recheckCollabUser(requestID string, userID int64) {
 // its next periodic re-check. Best effort and after the response, like
 // recheckCollabUser; the periodic re-check closes them if this call fails.
 func (server *Server) recheckCollabDoc(requestID string, postID int64) {
-	server.runInBackground(requestID, "collab_doc_recheck", func() {
+	server.recheckCollab(requestID, "collab_doc_recheck", fmt.Sprintf("/internal/documents/post-%d/recheck", postID), "post_id", postID)
+}
+
+// recheckCollab is the best-effort POST both re-checks make, after the response
+// (runInBackground); a failure logs <task>_failed with the subject (idKey, id).
+func (server *Server) recheckCollab(requestID, task, path, idKey string, id int64) {
+	server.runInBackground(requestID, task, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), collabRecheckTimeout)
 		defer cancel()
-		err := server.postCollabInternal(ctx, fmt.Sprintf("/internal/documents/post-%d/recheck", postID), requestID)
-		if err != nil {
+		if err := server.postCollabInternal(ctx, path, requestID); err != nil {
 			logger := server.logger
 			if logger == nil {
 				logger = slog.Default()
 			}
-			logger.Warn("collab_doc_recheck_failed", requestIDKey, requestID, "post_id", postID, "error", err.Error())
+			logger.Warn(task+"_failed", requestIDKey, requestID, idKey, id, "error", err.Error())
 		}
 	})
 }

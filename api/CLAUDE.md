@@ -618,8 +618,10 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   whose time passed comes back a **draft** (never published at once). `DELETE
   /posts/:id/permanent` (`requireContentEditor`, trashed only, else 409 `not_in_trash`) →
   `DeleteTrashedPostTx` (status checked under the row lock), the old hard delete. No auto-empty.
-- **Nobody edits a trashed post:** `canEditPost` is false, PUT `/posts/:id` and duplicate
-  answer 409 `post_trashed`, `PublishPostTx` returns `db.ErrPostTrashed` (409, checked under
+- **Nobody edits a trashed post:** `canEditPost` and `canEditPostDetails` are false for it,
+  moderators included; `checkPost` answers 409 `post_trashed` (not 403) to a caller who may
+  read it, and the write routes that don't load the post (media links, SEO, restore-settings)
+  use `authorizeWritePost`, which reads it for moderators too. Duplicate answers 409, `PublishPostTx` returns `db.ErrPostTrashed` (409, checked under
   the lock), `UnpublishPost` skips it (404), `SchedulePost` already wanted draft/scheduled.
   The collab store still accepts a trashed post's last store (the edits before the trash).
 - **Collab:** `/internal/users/:id/access` reads the post for **everyone** now and answers

@@ -542,6 +542,21 @@ describe("Posts list filters, bulk actions and trash (#327)", () => {
     expect(bar()).toBeNull()
   })
 
+  it("starts a new page with nothing selected, so a bulk action never reaches rows out of sight", async () => {
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 20 }, total: 20 })
+    api.getPosts.mockImplementation(({ offset }: { offset: number }) =>
+      Promise.resolve({ data: Array.from({ length: 10 }, (_, i) => post(offset + i + 1)), meta: { total: 20 } })
+    )
+    await render("/content/post")
+    await check("Post 1")
+    expect(bar()!.textContent).toContain("1 selected")
+
+    const second = Array.from(container.querySelectorAll(".gl-pagination__navigation button")).find((b) => b.textContent === "2")
+    await click(second)
+    expect(text()).toContain("Post 11")
+    expect(bar()).toBeNull()
+  })
+
   it("gives a contributor only Move to trash in bulk", async () => {
     api.user.role = "contributor"
     api.getPosts.mockImplementation(() => list([post(1)]))

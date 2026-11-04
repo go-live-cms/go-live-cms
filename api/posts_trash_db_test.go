@@ -177,6 +177,23 @@ func TestTrashHidesPostEverywhere(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, recorder.Code, recorder.Body.String())
 	recorder = trashCall(t, server, &editor, http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/duplicate", post.ID), nil)
 	require.Equal(t, http.StatusConflict, recorder.Code, recorder.Body.String())
+	// The other write routes too, moderators included (they skip the owner rule, not the trash).
+	for _, w := range []struct {
+		method, path string
+		body         any
+	}{
+		{http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/meta", post.ID), map[string]any{"meta_key": "note", "meta_value": "x"}},
+		{http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/featured-image", post.ID), map[string]any{"media_id": 1}},
+		{http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/media", post.ID), map[string]any{"media_id": 1, "order": 1}},
+		{http.MethodDelete, fmt.Sprintf("/api/v1/posts/%d/media/1", post.ID), nil},
+		{http.MethodPut, fmt.Sprintf("/api/v1/posts/%d/seo", post.ID), map[string]any{"seo_title": "", "seo_description": "", "noindex": false, "canonical_url": ""}},
+		{http.MethodPost, fmt.Sprintf("/api/v1/posts/%d/versions/1/restore-settings", post.ID), nil},
+	} {
+		recorder = trashCall(t, server, &editor, w.method, w.path, w.body)
+		require.Equal(t, http.StatusConflict, recorder.Code, "%s %s: %s", w.method, w.path, recorder.Body.String())
+		require.Contains(t, recorder.Body.String(), codePostTrashed, w.path)
+	}
+
 	recorder = trashCall(t, server, &editor, http.MethodDelete, fmt.Sprintf("/api/v1/posts/%d", post.ID), nil)
 	require.Equal(t, http.StatusConflict, recorder.Code, "trashing twice: %s", recorder.Body.String())
 	require.Equal(t, "trash", reloadPost(t, store, post.ID).PostStatus)
@@ -440,8 +457,9 @@ func TestBulkActionsMixedPermissions(t *testing.T) {
 	require.Equal(t, 3, answer.Failed)
 	require.Equal(t, ownDraft.ID, answer.Results[0].ID, "in the order given")
 	require.Equal(t, "published", reloadPost(t, store, ownPublished.ID).PostStatus)
-	// The collab server was asked to re-check the trashed post's open editors.
-	require.Equal(t, 1, collab.recheckCount(ownDraft.ID))
+	// The collab server was asked to re-check the trashed post's open editors (after
+	// the response, in the background).
+	require.Eventually(t, func() bool { return collab.recheckCount(ownDraft.ID) == 1 }, 5*time.Second, 20*time.Millisecond)
 	require.Zero(t, collab.recheckCount(ownPublished.ID))
 
 	// Publish needs the editor role, per item.

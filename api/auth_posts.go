@@ -178,6 +178,10 @@ func (server *Server) callerViewerID(c *gin.Context) (int64, bool) {
 // owner without moderation rights can do that only while it isn't published
 // (or scheduled, which canEditPost already refuses).
 func canEditPostDetails(user db.User, post db.Post) bool {
+	// A trashed post changes only through restore (#327), moderators' too.
+	if isTrashed(post) {
+		return false
+	}
 	if canModeratePosts(user) {
 		return true
 	}
@@ -243,10 +247,41 @@ func (server *Server) checkLoadedPost(c *gin.Context, post db.Post, allowed func
 	return ok && server.checkPost(c, caller, post, allowed)
 }
 
-// checkPost is authorizePost for a handler that already loaded the post.
+// checkPost is authorizePost for a handler that already loaded the post. A
+// rule refused because the post is in the trash (#327) answers 409
+// post_trashed, to a caller who may read the post: restore it first.
 func (server *Server) checkPost(c *gin.Context, user db.User, post db.Post, allowed func(db.User, db.Post) bool) bool {
 	if !allowed(user, post) {
+		if isTrashed(post) && canReadPost(user, post) {
+			postTrashedError().write(c)
+			return false
+		}
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return false
+	}
+	return true
+}
+
+// authorizeWritePost is authorizePost(canEditPostDetails) for a write route
+// that doesn't load the post itself (media links, SEO, restore-settings):
+// moderators skip the owner rule, not the trash (#327), so their post is read
+// too. A missing post passes, as authorizePost lets moderators through, and
+// the handler reports it.
+func (server *Server) authorizeWritePost(c *gin.Context, postID int64) bool {
+	_, loaded, ok := server.authorizeLoadPost(c, postID, canEditPostDetails)
+	if !ok || loaded {
+		return ok
+	}
+	post, err := server.store.GetPost(c.Request.Context(), postID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return true
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get post"})
+		return false
+	}
+	if isTrashed(post) {
+		postTrashedError().write(c)
 		return false
 	}
 	return true

@@ -299,13 +299,9 @@ func (server *Server) updatePost(c *gin.Context) {
 		return
 	}
 
+	// A trashed post changes only through restore (#327): checkPost answers 409.
 	caller, ok := server.callerUser(c)
 	if !ok || !server.checkPost(c, caller, existingPost, canEditPostDetails) {
-		return
-	}
-	// A trashed post changes only through restore (#327), its status included.
-	if isTrashed(existingPost) {
-		postTrashedError().write(c)
 		return
 	}
 	// Setting the status here is publishing/unpublishing by another route.

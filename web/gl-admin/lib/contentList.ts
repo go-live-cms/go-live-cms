@@ -9,6 +9,7 @@ import {
   type PermissionUser,
 } from "@gl-admin/lib/roles"
 import type { Post, PostSortField, SortOrder } from "@gl-admin/lib/api/types"
+import type { BulkAction } from "@gl-admin/lib/api/posts"
 
 // The posts list's rules (#340), as data so they're testable: which status tabs a role
 // gets and their counts, what the signed-in user may do to each row, the sort menu
@@ -165,7 +166,7 @@ export function rowActions(user: PermissionUser | null | undefined, post: ListPo
 
 // Bulk actions (#327): what the bar offers on a tab. The API checks each post again and
 // reports the ones it refused. "Change byline author" waits for #319's byline writes.
-export type BulkAction = "publish" | "trash" | "restore" | "delete"
+export type { BulkAction }
 
 export function bulkActions(user: PermissionUser | null | undefined, tab: ListTab): BulkAction[] {
   const moderator = isContentModerator(user?.role)

@@ -310,6 +310,17 @@ describe("Editor", () => {
     expect(authManager.logout).not.toHaveBeenCalled()
   })
 
+  it("says so instead of 'Connecting…' when the post is already in the trash", async () => {
+    vi.mocked(authManager.logout).mockClear()
+    relay.api.trashed.add("12")
+    state.user = "2"
+    await mount()
+    await until(() => !!container.querySelector(".editor-notice[role=alert]"), "the trash notice")
+    expect(container.querySelector(".editor-notice")!.textContent).toContain("This post was moved to the trash")
+    expect(container.textContent).not.toContain("Connecting…")
+    expect(authManager.logout).not.toHaveBeenCalled()
+  })
+
   it("remounts on a fresh doc after stale-epoch (block_doc was written around the server)", async () => {
     tiptapExtensionRegistry.register(Callout)
     await mount()
