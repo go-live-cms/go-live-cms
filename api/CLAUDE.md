@@ -570,7 +570,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - After the commit: `recheckCollabDoc` (the #313 re-check on that document), so a
   contributor who lost the post drops to read-only at once (and one who received it gets
   write); activity `transferred` with `previous_owner_id`, `owner_id`, `byline_changed`. A
-  removal now also re-checks the recipient (`recheckCollabUser`) when posts moved.
+  removal now also re-checks the recipient (`recheckCollabUser`) when posts moved, and
+  applies the same active-member rule to its recipient (`RemoveUserTxParams.OwnerRoles` =
+  `contentRoles`, else 400 `invalid_transfer_target`).
 - Tests: `post_owner_test.go` (real DB: byline kept/replaced, published byline waits,
   refusals incl. a removed member, removal and transfer give the same result) and
   `posts_owner_test.go` (roles, codes, the re-check, the event).
