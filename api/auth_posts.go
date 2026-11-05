@@ -33,11 +33,20 @@
 //     moderator-only (canDeletePostPermanently). Nobody edits a trashed post:
 //     canEditPost is false for it, the collab server refuses its document, and
 //     the write routes answer 409 (postTrashedError).
+//   - Edit access grants (#321): a contributor watching someone else's post
+//     may ask for edit access (canRequestPostAccess); the owner, an editor or
+//     an admin grants or declines it (canReviewPostAccess) and may revoke it.
+//     A grant (post_collaborators) lets them edit that post's working copy
+//     (canEditWorkingCopy: the collab connection) while they may read the
+//     post, i.e. while it is published. It gives nothing else: no read access
+//     to a draft, no live fields (canEditPostDetails stays the owner's), no
+//     byline, publish or trash rights, and no parent rule (canEditPost).
 //
 // The owner is posts.user_id. Everything is read from the DB, never the token.
 package api
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"net/http"
@@ -103,6 +112,62 @@ func canEditPost(user db.User, post db.Post) bool {
 	}
 	return hasRole(user, RoleContributor) && post.UserID == user.ID &&
 		!strings.EqualFold(post.PostStatus, postStatusScheduled)
+}
+
+// canEditAsCollaborator reports whether a per-post grant (#321) applies to the
+// user on this post: a contributor on someone else's published post, which they
+// may read (canReadPost) but not edit. A grant never reveals a draft, so it
+// rests while the post is unpublished, and a scheduled post isn't published, so
+// a grant never edits what the scheduler would publish unreviewed (#147).
+func canEditAsCollaborator(user db.User, post db.Post) bool {
+	return !isTrashed(post) && hasRole(user, RoleContributor) && post.UserID != user.ID &&
+		strings.EqualFold(post.PostStatus, postStatusPublished)
+}
+
+// canRequestPostAccess reports whether the user may ask for edit access to the
+// post: exactly the posts a grant would apply to (the caller checks they don't
+// hold one already).
+func canRequestPostAccess(user db.User, post db.Post) bool {
+	return canEditAsCollaborator(user, post)
+}
+
+// canReviewPostAccess reports whether the user may answer the post's access
+// requests and revoke its grants: admins and editors, and the post's owner (a
+// contributor shares the editing of their own post; the working copy still
+// goes live only when a moderator publishes). Nobody grants on a trashed post.
+func canReviewPostAccess(user db.User, post db.Post) bool {
+	if isTrashed(post) {
+		return false
+	}
+	if canModeratePosts(user) {
+		return true
+	}
+	return hasRole(user, RoleContributor) && post.UserID == user.ID
+}
+
+// canEditWorkingCopy is canEditPost plus edit access grants (#321): the rule for
+// a read-write collab connection (the internal access lookup) and the editor's
+// "can edit" (GET /posts/:id/access). The grant is read only when it could
+// matter (canEditAsCollaborator).
+func (server *Server) canEditWorkingCopy(ctx context.Context, user db.User, post db.Post) (bool, error) {
+	canEdit, _, err := server.workingCopyAccess(ctx, user, post)
+	return canEdit, err
+}
+
+// workingCopyAccess is canEditWorkingCopy that also says whether a grant is what
+// allows it (collaborator: the user holds one that applies now).
+func (server *Server) workingCopyAccess(ctx context.Context, user db.User, post db.Post) (canEdit, collaborator bool, err error) {
+	if canEditPost(user, post) {
+		return true, false, nil
+	}
+	if !canEditAsCollaborator(user, post) {
+		return false, false, nil
+	}
+	collaborator, err = server.store.IsPostCollaborator(ctx, db.IsPostCollaboratorParams{PostID: post.ID, UserID: user.ID})
+	if err != nil {
+		return false, false, err
+	}
+	return collaborator, collaborator, nil
 }
 
 // canTrashPost reports whether the user may move the post to the trash: the

@@ -47,4 +47,12 @@ const (
 
 	// Site settings.
 	ActivitySettingsUpdated = "settings_updated"
+
+	// Edit access (#321), on the post. The requester is the actor of
+	// access_requested; the others are the reviewer's, with the requester (or
+	// the member whose grant was revoked) as payload.user_id.
+	ActivityAccessRequested = "access_requested"
+	ActivityAccessGranted   = "access_granted"
+	ActivityAccessDeclined  = "access_declined"
+	ActivityAccessRevoked   = "access_revoked"
 )

@@ -193,6 +193,9 @@ type Config struct {
 	// that redeem an emailed token: POST /auth/password/reset and
 	// /auth/invitations/{preview,accept}.
 	RateLimitAccountTokenPerMinute int `mapstructure:"RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE"`
+	// RateLimitAccessRequestPerMinute applies to POST /posts/:id/access-requests
+	// (#321) per member and client IP: each request emails the post's reviewers.
+	RateLimitAccessRequestPerMinute int `mapstructure:"RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE"`
 
 	// Outgoing email (#148): invitations and password resets.
 	//
@@ -332,6 +335,7 @@ func LoadConfig(path string) (config Config, err error) {
 	viper.SetDefault("RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE", 5)
 	viper.SetDefault("RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE", 5)
 	viper.SetDefault("RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE", 10)
+	viper.SetDefault("RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE", 3)
 	viper.SetDefault("RATE_LIMIT_EXEMPT_CIDRS", "")
 
 	// Members' "last active" (#333): written at most once per interval per user.
@@ -452,6 +456,7 @@ func LoadConfig(path string) (config Config, err error) {
 		"RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE": config.RateLimitPasswordChangePerMinute,
 		"RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE": config.RateLimitPasswordForgotPerMinute,
 		"RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE":   config.RateLimitAccountTokenPerMinute,
+		"RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE":  config.RateLimitAccessRequestPerMinute,
 	} {
 		if v < 0 {
 			return config, fmt.Errorf("invalid %s %d: must be >= 0 (0 disables the limit)", name, v)

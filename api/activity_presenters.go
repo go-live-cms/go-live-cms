@@ -42,6 +42,9 @@ type ActivityResponse struct {
 	Post       *ActivityPost   `json:"post,omitempty"`
 	Media      *ActivityMedia  `json:"media,omitempty"`
 	User       *ActivityPerson `json:"user,omitempty"`
+	// Subject is the member an edit access event is about (#321: the requester
+	// of a grant or decline, whose grant was revoked), while they exist.
+	Subject *ActivityPerson `json:"subject,omitempty"`
 	// Payload: the event's details (a role, a version number, setting names).
 	Payload json.RawMessage `json:"payload"`
 }
@@ -60,6 +63,9 @@ func toActivityResponse(row db.ListActivityRow) ActivityResponse {
 	}
 	if row.ActorID.Valid && row.ActorUsername.Valid {
 		rsp.Actor = &ActivityPerson{ID: row.ActorID.Int64, Username: row.ActorUsername.String, FullName: row.ActorFullName.String}
+	}
+	if row.SubjectID.Valid && row.SubjectUsername.Valid {
+		rsp.Subject = &ActivityPerson{ID: row.SubjectID.Int64, Username: row.SubjectUsername.String, FullName: row.SubjectFullName.String}
 	}
 	switch row.ObjectType {
 	case db.ActivityObjectPost:
@@ -146,8 +152,39 @@ type NeedsAttentionResponse struct {
 	FailedSchedules    AttentionList[FailedSchedule]          `json:"failed_schedules"`
 	UnpublishedChanges *AttentionList[UnpublishedChangesPost] `json:"unpublished_changes"`
 	MissingAlt         *MissingAltSummary                     `json:"missing_alt"`
+	// AccessRequests are open edit access requests the caller may answer (#321).
+	AccessRequests AttentionList[AttentionAccessRequest] `json:"access_requests"`
 	// ReviewRequests is the slot for #323's review requests; always empty now.
 	ReviewRequests []any `json:"review_requests"`
+}
+
+// AttentionAccessRequest is an open edit access request (#321): who asked, for
+// which post. The item lists posts, so the request is keyed by its post.
+type AttentionAccessRequest struct {
+	RequestID int64          `json:"request_id"`
+	ID        int64          `json:"id"`
+	Title     string         `json:"title"`
+	PostType  string         `json:"post_type"`
+	Message   string         `json:"message"`
+	CreatedAt time.Time      `json:"created_at"`
+	Requester ActivityPerson `json:"requester"`
+}
+
+func toAttentionAccessRequests(rows []db.ListPendingAccessRequestsForReviewerRow) AttentionList[AttentionAccessRequest] {
+	list := AttentionList[AttentionAccessRequest]{Posts: make([]AttentionAccessRequest, len(rows))}
+	for i, row := range rows {
+		list.Total = row.Total
+		list.Posts[i] = AttentionAccessRequest{
+			RequestID: row.ID,
+			ID:        row.PostID,
+			Title:     row.PostTitle,
+			PostType:  row.PostType,
+			Message:   row.Message,
+			CreatedAt: row.CreatedAt,
+			Requester: ActivityPerson{ID: row.RequesterID, Username: row.RequesterUsername, FullName: row.RequesterFullName},
+		}
+	}
+	return list
 }
 
 func toFailedSchedules(rows []db.ListFailedScheduledPostsRow) AttentionList[FailedSchedule] {

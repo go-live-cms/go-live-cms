@@ -25,6 +25,9 @@
 //     /auth/invitations/{preview,accept}, per client
 //     (RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE). The tokens are 256-bit random,
 //     so this is about abuse, not guessing.
+//   - Edit access requests (#321): POST /posts/:id/access-requests, per member
+//     and client (RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE): each one emails the
+//     post's reviewers.
 //
 // The internal listener (/internal/*) is not limited: only the collab WS server
 // can reach it, it calls once per connection for every editor, and its
@@ -306,6 +309,9 @@ type rateLimits struct {
 	// email); accountToken the endpoints that redeem an emailed token.
 	passwordForgot *rateLimiter
 	accountToken   *rateLimiter
+	// accessRequest limits edit access requests (#321) per member and client
+	// IP: each one emails the post's reviewers.
+	accessRequest *rateLimiter
 	// generalExempt client IPs skip the general limit only.
 	generalExempt []netip.Prefix
 }
@@ -326,6 +332,7 @@ func newRateLimits(config util.Config) (rateLimits, error) {
 		passwordChange: newRateLimiter("password", config.RateLimitPasswordChangePerMinute),
 		passwordForgot: newRateLimiter("password-forgot", config.RateLimitPasswordForgotPerMinute),
 		accountToken:   newRateLimiter("account-token", config.RateLimitAccountTokenPerMinute),
+		accessRequest:  newRateLimiter("access-request", config.RateLimitAccessRequestPerMinute),
 		generalExempt:  exempt,
 	}, nil
 }
