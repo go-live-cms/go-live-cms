@@ -10,10 +10,11 @@ ALTER TABLE "settings" ADD COLUMN "allow_signup" boolean NOT NULL DEFAULT false;
 -- needs: the first to confirm gets them.
 --
 -- Like invitations, password resets (000018) and email changes (000038), only the
--- token's SHA-256 is stored, it is single use and it expires. The password is the
--- bcrypt hash the account will get. A newer signup for the same email replaces the
--- older one, and rows that expired or were used are deleted whenever a new one is
--- stored (DeleteStaleSignupRequests), so unconfirmed details don't pile up.
+-- token's SHA-256 is stored, it expires, and it is single use: redeeming it deletes
+-- the row (ClaimSignupRequest). The password is the bcrypt hash the account will get.
+-- A newer signup for the same email replaces the older one, and expired rows are
+-- deleted hourly and whenever a new one is stored (DeleteStaleSignupRequests), so
+-- unconfirmed details don't pile up.
 CREATE TABLE "signup_requests" (
   "id" bigserial PRIMARY KEY,
   "email" varchar NOT NULL,
@@ -22,7 +23,6 @@ CREATE TABLE "signup_requests" (
   "hashed_password" varchar NOT NULL,
   "token_hash" bytea NOT NULL UNIQUE,
   "expires_at" timestamptz NOT NULL,
-  "used_at" timestamptz,
   "created_at" timestamptz NOT NULL DEFAULT (now())
 );
 

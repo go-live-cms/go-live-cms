@@ -691,6 +691,8 @@ describe("open signup (#191)", () => {
       expect(form.hidden).toBe(false)
       expect(errorText()).toMatch(message)
       expect(navigate).not.toHaveBeenCalled()
+      // A dead link: a reload has nothing to resend.
+      expect(sessionStorage.length).toBe(0)
     })
   })
 

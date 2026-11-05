@@ -672,10 +672,17 @@ export function mountVerifyEmailPage(doc: Document = document, navigate: Navigat
         showSignupClosed(doc, form)
         return
       }
+      // The link can't work any more for these: the details it carries are fixed.
       if (err instanceof ApiError && err.code === "username_unavailable") {
-        // The link can't work any more: the details it carries are fixed.
         dropLinkToken(win)
         ui.showError("Someone took that username after you signed up. Sign up again with another one.", { fields: false })
+        return
+      }
+      if (err instanceof ApiError && err.code === "email_registered") {
+        dropLinkToken(win)
+        ui.showError("An account with this email already exists, so no new one was created. Sign in, or reset its password.", {
+          fields: false,
+        })
         return
       }
       ui.showError(describeAccountError(err), { fields: false })

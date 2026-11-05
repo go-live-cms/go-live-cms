@@ -57,13 +57,14 @@ func (q *Queries) ClaimPasswordResetToken(ctx context.Context, tokenHash []byte)
 }
 
 const claimSignupRequest = `-- name: ClaimSignupRequest :one
-UPDATE signup_requests
-SET used_at = now()
-WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
-RETURNING id, email, username, full_name, hashed_password, token_hash, expires_at, used_at, created_at
+DELETE FROM signup_requests
+WHERE token_hash = $1 AND expires_at > now()
+RETURNING id, email, username, full_name, hashed_password, token_hash, expires_at, created_at
 `
 
-// Single-use: like ClaimPasswordResetToken, only one claim can match.
+// Single use: the claim deletes the row, so only one claim can match (a second
+// waits on the row lock and then finds nothing). Rolled back with the transaction
+// if the account can't be created.
 func (q *Queries) ClaimSignupRequest(ctx context.Context, tokenHash []byte) (SignupRequest, error) {
 	row := q.db.QueryRowContext(ctx, claimSignupRequest, tokenHash)
 	var i SignupRequest
@@ -75,7 +76,6 @@ func (q *Queries) ClaimSignupRequest(ctx context.Context, tokenHash []byte) (Sig
 		&i.HashedPassword,
 		&i.TokenHash,
 		&i.ExpiresAt,
-		&i.UsedAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -226,7 +226,7 @@ INSERT INTO signup_requests (
     expires_at
 ) VALUES (
     $1, $2, $3, $4, $5, $6
-) RETURNING id, email, username, full_name, hashed_password, token_hash, expires_at, used_at, created_at
+) RETURNING id, email, username, full_name, hashed_password, token_hash, expires_at, created_at
 `
 
 type CreateSignupRequestParams struct {
@@ -258,7 +258,6 @@ func (q *Queries) CreateSignupRequest(ctx context.Context, arg CreateSignupReque
 		&i.HashedPassword,
 		&i.TokenHash,
 		&i.ExpiresAt,
-		&i.UsedAt,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -323,14 +322,17 @@ func (q *Queries) DeleteSignupRequestsByEmail(ctx context.Context, email string)
 	return err
 }
 
-const deleteStaleSignupRequests = `-- name: DeleteStaleSignupRequests :exec
-DELETE FROM signup_requests WHERE expires_at <= now() OR used_at IS NOT NULL
+const deleteStaleSignupRequests = `-- name: DeleteStaleSignupRequests :execrows
+DELETE FROM signup_requests WHERE expires_at <= now()
 `
 
-// Expired and used rows hold unconfirmed details nobody can use any more.
-func (q *Queries) DeleteStaleSignupRequests(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteStaleSignupRequests)
-	return err
+// Expired rows hold unconfirmed details nobody can use any more.
+func (q *Queries) DeleteStaleSignupRequests(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteStaleSignupRequests)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const getValidEmailChangeTokenByHash = `-- name: GetValidEmailChangeTokenByHash :one

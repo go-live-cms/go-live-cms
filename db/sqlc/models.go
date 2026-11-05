@@ -251,15 +251,14 @@ type Setting struct {
 }
 
 type SignupRequest struct {
-	ID             int64        `json:"id"`
-	Email          string       `json:"email"`
-	Username       string       `json:"username"`
-	FullName       string       `json:"full_name"`
-	HashedPassword string       `json:"hashed_password"`
-	TokenHash      []byte       `json:"token_hash"`
-	ExpiresAt      time.Time    `json:"expires_at"`
-	UsedAt         sql.NullTime `json:"used_at"`
-	CreatedAt      time.Time    `json:"created_at"`
+	ID             int64     `json:"id"`
+	Email          string    `json:"email"`
+	Username       string    `json:"username"`
+	FullName       string    `json:"full_name"`
+	HashedPassword string    `json:"hashed_password"`
+	TokenHash      []byte    `json:"token_hash"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type TaxonomyTerm struct {

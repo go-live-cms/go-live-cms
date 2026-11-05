@@ -12,10 +12,11 @@
 //     across usernames.
 //   - Register (open signup, #191): POST /auth/register, per client
 //     (RATE_LIMIT_LOGIN_PER_MINUTE) and, checked in register once the body is
-//     bound, per email address (RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE: like a
-//     forgot request, each may send an email), so one inbox can't be flooded
-//     from many IPs. On top of them an address gets at most one signup email a
-//     minute (processSignup), silently. POST /auth/register/verify is an
+//     bound, per client and email address (RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE:
+//     like a forgot request, each may send an email; never the address alone,
+//     which would let anyone lock its owner out). On top of them an address gets
+//     at most one signup email a minute (processSignup), silently, so one inbox
+//     can't be flooded from many IPs. POST /auth/register/verify is an
 //     emailed-token endpoint (below).
 //   - Refresh: POST /auth/refresh, per client (RATE_LIMIT_REFRESH_PER_MINUTE).
 //     The admin client keeps the user signed in on a 429 and retries later.

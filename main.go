@@ -71,6 +71,9 @@ func main() {
 	// Activity log retention (#324): every replica prunes; deleting is idempotent.
 	go server.RunActivityRetention(ctx, config.ActivityRetention)
 
+	// Open signup (#191): expired pending signups are deleted hourly.
+	go server.RunSignupRequestPrune(ctx, 0)
+
 	// Server-to-server routes (collab WS role lookup, metrics) run on their own
 	// listener, which must not be published to the internet.
 	go func() {

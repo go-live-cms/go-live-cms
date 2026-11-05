@@ -234,3 +234,74 @@ func TestConfirmSignupTxCleansUp(t *testing.T) {
 	_, err = store.ConfirmSignupTx(ctx, hash)
 	require.ErrorIs(t, err, db.ErrTokenInvalid)
 }
+
+func TestSignupTreatsAnAddressWithCapitalsAsTaken(t *testing.T) {
+	store := authFlowStore(t)
+	ctx := context.Background()
+	setAllowSignup(t, store, true)
+	server, rec := profileFlowServer(t, store)
+
+	// The first admin is created with SQL (deploy.md), so its address may keep capitals.
+	local := strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
+	owner, err := store.CreateUser(ctx, db.CreateUserParams{
+		Username: uniqueUsername("caps"), FullName: "Caps Owner", Email: "Ana." + local + "@Example.TEST",
+		HashedPassword: "x", Role: RoleAdmin,
+	})
+	require.NoError(t, err)
+
+	recorder := postRegister(t, server, signupBody(uniqueUsername("dup"), strings.ToLower(owner.Email)), nil)
+	require.Equal(t, http.StatusAccepted, recorder.Code, recorder.Body.String())
+	msgs := rec.messages()
+	require.Len(t, msgs, 1)
+	require.Equal(t, mailer.TemplateSignupExisting, msgs[0].Template, "the owner gets the note, not a second account's link")
+	require.Equal(t, owner.Email, msgs[0].To)
+
+	// And a link stored before the account existed can't create a second one.
+	token, hash, err := newAccountToken()
+	require.NoError(t, err)
+	_, err = store.CreateSignupRequest(ctx, db.CreateSignupRequestParams{
+		Email: strings.ToLower(owner.Email), Username: uniqueUsername("late"), FullName: "Late",
+		HashedPassword: "x", TokenHash: hash, ExpiresAt: time.Now().Add(time.Hour),
+	})
+	require.NoError(t, err)
+	requireErrorCode(t, postVerifySignup(t, server, token), http.StatusConflict, "email_registered")
+}
+
+func TestSignupRequestPrune(t *testing.T) {
+	conn, store := scheduleTestDB(t)
+	ctx := context.Background()
+	server := authFlowServer(t, store, nil)
+
+	_, expired, err := newAccountToken()
+	require.NoError(t, err)
+	_, live, err := newAccountToken()
+	require.NoError(t, err)
+	for _, row := range []struct {
+		hash    []byte
+		expires time.Time
+	}{{expired, time.Now().Add(-time.Minute)}, {live, time.Now().Add(time.Hour)}} {
+		_, err := store.CreateSignupRequest(ctx, db.CreateSignupRequestParams{
+			Email: uniqueEmail("prune"), Username: uniqueUsername("prune"), FullName: "Prune",
+			HashedPassword: "x", TokenHash: row.hash, ExpiresAt: row.expires,
+		})
+		require.NoError(t, err)
+	}
+	exists := func(hash []byte) bool {
+		var n int
+		require.NoError(t, conn.QueryRow(`SELECT count(*) FROM signup_requests WHERE token_hash = $1`, hash).Scan(&n))
+		return n == 1
+	}
+
+	// The loop prunes once at start, then stops with its context.
+	runCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() { server.RunSignupRequestPrune(runCtx, time.Hour); close(done) }()
+	require.Eventually(t, func() bool { return !exists(expired) }, 5*time.Second, 20*time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunSignupRequestPrune did not stop with its context")
+	}
+	require.True(t, exists(live), "an unexpired request stays")
+}

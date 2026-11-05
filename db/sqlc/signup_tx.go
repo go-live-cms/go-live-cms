@@ -18,12 +18,12 @@ var ErrUsernameTaken = errors.New("username is already in use")
 
 // RequestSignupTx stores a pending signup (#191), ending every earlier pending link
 // for the same email, so only the latest request can be confirmed, and deleting
-// rows that expired or were used.
+// rows that expired.
 func (store *SQLStore) RequestSignupTx(ctx context.Context, arg CreateSignupRequestParams) (SignupRequest, error) {
 	var request SignupRequest
 
 	err := store.execTx(ctx, func(q *Queries) error {
-		if err := q.DeleteStaleSignupRequests(ctx); err != nil {
+		if _, err := q.DeleteStaleSignupRequests(ctx); err != nil {
 			return err
 		}
 		if err := q.DeleteSignupRequestsByEmail(ctx, arg.Email); err != nil {
@@ -38,8 +38,8 @@ func (store *SQLStore) RequestSignupTx(ctx context.Context, arg CreateSignupRequ
 }
 
 // ConfirmSignupTx redeems a signup link (#191): it claims the pending signup and
-// creates its account as a contributor, then deletes the address's pending
-// signups (this one included, so its password hash doesn't linger).
+// creates its account as a contributor (the claim deletes the row, so its password
+// hash doesn't linger), then deletes the address's other pending signups.
 //
 // Returns ErrTokenInvalid for a token that is unknown, expired or used,
 // ErrEmailTaken when an account with the email exists now (an invitation accepted
@@ -59,7 +59,7 @@ func (store *SQLStore) ConfirmSignupTx(ctx context.Context, tokenHash []byte) (U
 
 		// Checked first so the answer doesn't depend on which unique index the
 		// insert would trip; the insert's own violation covers a race.
-		if _, err := q.GetUserByEmail(ctx, request.Email); err == nil {
+		if _, err := q.GetUserByEmailFold(ctx, request.Email); err == nil {
 			return ErrEmailTaken
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
@@ -78,7 +78,7 @@ func (store *SQLStore) ConfirmSignupTx(ctx context.Context, tokenHash []byte) (U
 			Role:           SignupRole,
 		})
 		if err != nil {
-			if isUniqueViolationError(err) {
+			if IsUniqueViolation(err) {
 				if strings.Contains(err.Error(), "email") {
 					return ErrEmailTaken
 				}
@@ -93,9 +93,9 @@ func (store *SQLStore) ConfirmSignupTx(ctx context.Context, tokenHash []byte) (U
 	return user, err
 }
 
-// isUniqueViolationError reports a unique constraint violation (the api
-// package's isUniqueViolation, by message, so no driver type is needed).
-func isUniqueViolationError(err error) bool {
+// IsUniqueViolation reports a unique constraint violation, by message, so no
+// driver type is needed (the api package's isUniqueViolation uses it).
+func IsUniqueViolation(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "unique constraint")
 }

@@ -378,20 +378,25 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   rules + email, `new_password` + `checkPasswordDetails`, `checkUsernameFormat`) → **202, the same
   body for any address**. The lookup, bcrypt, token and email run after the response
   (`runInBackground` → `processSignup`), so timing doesn't tell either. A taken address gets a note
-  to its owner (`signup_existing` template, a forgot-password link) and nothing is stored.
-- **No user row until the link is used:** `signup_requests` (hash-only token, 24 h, single use,
-  bcrypt hash; email and username aren't unique there). `RequestSignupTx` deletes the address's earlier
-  request and every expired/used row; `ConfirmSignupTx` claims it, creates the user as
+  to its owner (`signup_existing` template, a forgot-password link) and nothing is stored. The
+  check ignores case (`GetUserByEmailFold`): the SQL-created first admin may have capitals.
+- **No user row until the link is used:** `signup_requests` (hash-only token, 24 h, bcrypt hash;
+  email and username aren't unique there). `RequestSignupTx` deletes the address's earlier request
+  and every expired row (so does `RunSignupRequestPrune`, hourly, main.go); `ConfirmSignupTx` claims
+  it (`ClaimSignupRequest` DELETEs the row: single use), creates the user as
   `db.SignupRole` (**contributor, fixed**: editor publishes, never admin; the request can't name a
   role), deletes the address's rows. 409 `email_registered` / `username_unavailable` if taken
   since. Link: `PUBLIC_BASE_URL/verify-email#token=`; the page confirms on its button.
 - **Username conflicts can't be hidden:** a taken username is a generic 409 `username_unavailable`
   before the response (the person must choose another; usernames show in bylines). It says
   nothing about the email.
-- **Limits:** `register` per IP (middleware), `registerEmail` per address after binding
-  (`RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE`, visible 429; the same for any address), and
+- **Limits:** `register` per IP (middleware), `registerEmail` per IP+address after binding
+  (`RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE`, visible 429; never the address alone, or anyone could
+  lock its owner out), and
   `signupMail`, a silent one-email-a-minute cooldown per address (`allowSilently`) in the
-  background. Verify is an `accountToken` endpoint. No CAPTCHA.
+  background (it also drops a corrected re-signup within the minute). Verify is an `accountToken`
+  endpoint. No CAPTCHA. The password is chosen before verifying, so the email says to confirm only
+  if you signed up yourself.
 - Activity: `signed_up` (actor = the new member, `{role}`) on confirmation, never on the request.
 - Tests: `signup_test.go` (mock: off, validation, no enumeration incl. the pre-response calls,
   limits, settings) and `signup_flow_test.go` (real DB: no sign-in before confirming, single use,

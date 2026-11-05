@@ -1317,11 +1317,12 @@ func (mr *MockStoreMockRecorder) DeleteSignupRequestsByEmail(arg0, arg1 interfac
 }
 
 // DeleteStaleSignupRequests mocks base method.
-func (m *MockStore) DeleteStaleSignupRequests(arg0 context.Context) error {
+func (m *MockStore) DeleteStaleSignupRequests(arg0 context.Context) (int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteStaleSignupRequests", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // DeleteStaleSignupRequests indicates an expected call of DeleteStaleSignupRequests.
@@ -2458,6 +2459,21 @@ func (m *MockStore) GetUserByEmail(arg0 context.Context, arg1 string) (db.User, 
 func (mr *MockStoreMockRecorder) GetUserByEmail(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByEmail", reflect.TypeOf((*MockStore)(nil).GetUserByEmail), arg0, arg1)
+}
+
+// GetUserByEmailFold mocks base method.
+func (m *MockStore) GetUserByEmailFold(arg0 context.Context, arg1 string) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserByEmailFold", arg0, arg1)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserByEmailFold indicates an expected call of GetUserByEmailFold.
+func (mr *MockStoreMockRecorder) GetUserByEmailFold(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByEmailFold", reflect.TypeOf((*MockStore)(nil).GetUserByEmailFold), arg0, arg1)
 }
 
 // GetUserByUsername mocks base method.

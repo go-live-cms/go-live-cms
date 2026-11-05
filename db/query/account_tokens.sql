@@ -146,13 +146,14 @@ INSERT INTO signup_requests (
 -- other pending link for it.
 DELETE FROM signup_requests WHERE email = $1;
 
--- name: DeleteStaleSignupRequests :exec
--- Expired and used rows hold unconfirmed details nobody can use any more.
-DELETE FROM signup_requests WHERE expires_at <= now() OR used_at IS NOT NULL;
+-- name: DeleteStaleSignupRequests :execrows
+-- Expired rows hold unconfirmed details nobody can use any more.
+DELETE FROM signup_requests WHERE expires_at <= now();
 
 -- name: ClaimSignupRequest :one
--- Single-use: like ClaimPasswordResetToken, only one claim can match.
-UPDATE signup_requests
-SET used_at = now()
-WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+-- Single use: the claim deletes the row, so only one claim can match (a second
+-- waits on the row lock and then finds nothing). Rolled back with the transaction
+-- if the account can't be created.
+DELETE FROM signup_requests
+WHERE token_hash = $1 AND expires_at > now()
 RETURNING *;

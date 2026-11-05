@@ -31,10 +31,13 @@
 //
 // # Abuse
 //
-// A per-IP limit (the register limiter, middleware), a per-email limit checked
-// once the body is bound (so one address can't be flooded from many IPs), and at
-// most one signup email a minute per address, dropped silently like
-// forgot-password's cooldown. No CAPTCHA.
+// A per-IP limit (the register limiter, middleware), a per IP+address limit checked
+// once the body is bound (never the address alone: that would let anyone lock its
+// owner out), and at most one signup email a minute per address, dropped silently
+// like forgot-password's cooldown, so one inbox can't be flooded from many IPs.
+// The cooldown means a second signup to the same address within a minute is
+// dropped too (the first link still works); the page says to wait for the email.
+// No CAPTCHA.
 package api
 
 import (
@@ -137,8 +140,10 @@ func (server *Server) register(c *gin.Context) {
 	if !checkPasswordDetails(c, signup.password, signup.email, signup.username, signup.fullName) {
 		return
 	}
-	// Per address, whoever sends it: caps the emails one inbox gets.
-	if !server.rateLimits.registerEmail.allow(c, signup.email) {
+	// Per client and address, like login's per IP+username limit: a key on the
+	// address alone would let anyone lock its owner out of signing up. Inbox
+	// flooding from many IPs is the silent per-address cooldown's job.
+	if !server.rateLimits.registerEmail.allow(c, clientKey(c.ClientIP())+"|"+signup.email) {
 		return
 	}
 
@@ -172,7 +177,8 @@ func (server *Server) processSignup(logger *slog.Logger, signup pendingSignup) {
 		return
 	}
 
-	existing, err := server.store.GetUserByEmail(ctx, signup.email)
+	// Ignoring case: an account made with SQL may have capitals in its address.
+	existing, err := server.store.GetUserByEmailFold(ctx, signup.email)
 	if err == nil {
 		server.sendSignupExistingNotice(ctx, logger, existing)
 		return

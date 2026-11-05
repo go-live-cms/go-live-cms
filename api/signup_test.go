@@ -146,7 +146,7 @@ func TestRegisterUsernameUnavailable(t *testing.T) {
 // returns what RequestSignupTx stored.
 func expectFreeSignup(store *mockdb.MockStore, email string) *db.CreateSignupRequestParams {
 	stored := &db.CreateSignupRequestParams{}
-	store.EXPECT().GetUserByEmail(gomock.Any(), email).Return(db.User{}, sql.ErrNoRows)
+	store.EXPECT().GetUserByEmailFold(gomock.Any(), email).Return(db.User{}, sql.ErrNoRows)
 	store.EXPECT().RequestSignupTx(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, arg db.CreateSignupRequestParams) (db.SignupRequest, error) {
 			*stored = arg
@@ -212,7 +212,7 @@ func TestRegisterTakenEmailIsIndistinguishable(t *testing.T) {
 	}
 
 	taken, takenMail := run(t, owner.Email, func(store *mockdb.MockStore) {
-		store.EXPECT().GetUserByEmail(gomock.Any(), owner.Email).Return(owner, nil)
+		store.EXPECT().GetUserByEmailFold(gomock.Any(), owner.Email).Return(owner, nil)
 		store.EXPECT().GetSettings(gomock.Any()).Return(db.Setting{}, nil)
 	})
 	free, freeMail := run(t, "free@example.com", func(store *mockdb.MockStore) {
@@ -241,7 +241,7 @@ func TestRegisterFailuresAfterTheResponseAreNotReported(t *testing.T) {
 	store := mockdb.NewMockStore(ctrl)
 	signupOpen(store)
 	store.EXPECT().GetUserByUsername(gomock.Any(), "samsignup").Return(db.User{}, sql.ErrNoRows)
-	store.EXPECT().GetUserByEmail(gomock.Any(), "sam@example.com").Return(db.User{}, sql.ErrNoRows)
+	store.EXPECT().GetUserByEmailFold(gomock.Any(), "sam@example.com").Return(db.User{}, sql.ErrNoRows)
 	store.EXPECT().RequestSignupTx(gomock.Any(), gomock.Any()).Return(db.SignupRequest{}, errors.New("db down"))
 	server, rec := newAccountTestServer(t, store)
 
@@ -270,18 +270,20 @@ func TestRegisterRateLimits(t *testing.T) {
 		require.Equal(t, http.StatusConflict, postRegister(t, server, signupBody("taken", "c@example.com"), from("203.0.113.2")).Code)
 	})
 
-	t.Run("per email, whatever the IP", func(t *testing.T) {
+	t.Run("per IP and email, never the email alone", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		store := mockdb.NewMockStore(ctrl)
-		signupOpen(store).Times(4)
-		store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Times(3).Return(randomUserNew(), nil)
+		signupOpen(store).Times(5)
+		store.EXPECT().GetUserByUsername(gomock.Any(), gomock.Any()).Times(4).Return(randomUserNew(), nil)
 		server := newRateLimitedTestServer(t, store, func(c *util.Config) { c.RateLimitPasswordForgotPerMinute = 2 })
 
 		require.Equal(t, http.StatusConflict, postRegister(t, server, signupBody("taken", "flood@example.com"), from("203.0.113.1")).Code)
-		require.Equal(t, http.StatusConflict, postRegister(t, server, signupBody("taken", "Flood@Example.com"), from("203.0.113.2")).Code)
-		requireRateLimited(t, postRegister(t, server, signupBody("taken", "flood@example.com"), from("203.0.113.3")))
-		// Another address is unaffected.
-		require.Equal(t, http.StatusConflict, postRegister(t, server, signupBody("taken", "other@example.com"), from("203.0.113.3")).Code)
+		require.Equal(t, http.StatusConflict, postRegister(t, server, signupBody("taken", "Flood@Example.com"), from("203.0.113.1")).Code)
+		requireRateLimited(t, postRegister(t, server, signupBody("taken", "flood@example.com"), from("203.0.113.1")))
+		// Another address from that client, and the address from another client
+		// (its owner, say), are unaffected.
+		require.Equal(t, http.StatusConflict, postRegister(t, server, signupBody("taken", "other@example.com"), from("203.0.113.1")).Code)
+		require.Equal(t, http.StatusConflict, postRegister(t, server, signupBody("taken", "flood@example.com"), from("203.0.113.2")).Code)
 	})
 
 	t.Run("at most one email a minute per address, silently", func(t *testing.T) {
@@ -426,4 +428,20 @@ func TestUpdateSettingsAllowSignup(t *testing.T) {
 		recorder = doJSON(t, server, http.MethodPut, "/api/v1/settings", gin.H{"allow_signup": true}, nil)
 		require.Equal(t, http.StatusUnauthorized, recorder.Code, recorder.Body.String())
 	})
+}
+
+func TestPruneSignupRequestsSurvivesAFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	store := mockdb.NewMockStore(ctrl)
+	store.EXPECT().DeleteStaleSignupRequests(gomock.Any()).Return(int64(0), errors.New("db down"))
+	store.EXPECT().DeleteStaleSignupRequests(gomock.Any()).Return(int64(3), nil)
+	server, _ := newAccountTestServer(t, store)
+	server.pruneSignupRequests(context.Background()) // logged, not fatal
+	server.pruneSignupRequests(context.Background())
+
+	// A cancelled loop prunes once and returns; 0 picks the hourly default.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	store.EXPECT().DeleteStaleSignupRequests(gomock.Any()).Return(int64(0), context.Canceled)
+	server.RunSignupRequestPrune(ctx, 0)
 }
