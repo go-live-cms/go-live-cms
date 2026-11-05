@@ -2,6 +2,11 @@
 import AccountPage from "@/layouts/AccountPage.astro"
 import AccountError from "@/components/account/AccountError.astro"
 import { SITE_TITLE } from "@/consts"
+import { getSiteSettings } from "@/lib/siteSettings"
+
+// Open signup (#191): "Create an account" only while Settings allows it (public
+// GET /settings; off, or unreadable, keeps the invitation line).
+const { allowSignup } = await getSiteSettings(Astro.locals)
 ---
 
 <AccountPage title="Sign in" description="Sign in to the GoLive admin">
@@ -59,7 +64,15 @@ import { SITE_TITLE } from "@/consts"
     </button>
   </form>
 
-  <p class="gl-admin-login__after" slot="after">Don't have an account? Ask an admin to invite you.</p>
+  {
+    allowSignup ? (
+      <p class="gl-admin-login__after" slot="after">
+        Don't have an account? <a class="gl-admin-login__link" href="/register" data-signup-link>Create an account</a>
+      </p>
+    ) : (
+      <p class="gl-admin-login__after" slot="after">Don't have an account? Ask an admin to invite you.</p>
+    )
+  }
 </AccountPage>
 
 <script>

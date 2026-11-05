@@ -1,0 +1,137 @@
+---
+import AccountPage from "@/layouts/AccountPage.astro"
+import AccountError from "@/components/account/AccountError.astro"
+import NewPasswordField from "@/components/account/NewPasswordField.astro"
+import { SITE_TITLE } from "@/consts"
+import { PASSWORD_MIN } from "@gl-admin/lib/passwordRules"
+import { getSiteSettings } from "@/lib/siteSettings"
+
+// Open signup (#191, api/signup_handlers_write.go). The design has no sign-up
+// board, so this is the "Accept invite" layout with an email field. Only while
+// Settings › Accounts allows it; otherwise (or when the settings can't be read)
+// the page shows just the "closed" panel. The API answers the same for an address
+// that already has an account, so success is one "check your email" panel.
+const { allowSignup } = await getSiteSettings(Astro.locals)
+---
+
+<AccountPage title="Create an account" description={`Create an account on ${SITE_TITLE}`}>
+  <form class="gl-admin-login__view" id="registerForm" novalidate hidden={!allowSignup}>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title">Join {SITE_TITLE}</h1>
+      <p class="gl-admin-login__subtitle">Create an account. We'll email you a link to confirm your address.</p>
+    </header>
+    <p class="gl-admin-login__role">
+      New accounts are contributors: they write drafts and upload media, and an editor or administrator publishes them.
+    </p>
+
+    <AccountError />
+
+    <div class="gl-admin-login__fields">
+      <div class="gl-input">
+        <label class="gl-input__label" for="full_name">Your name</label>
+        <input
+          class="gl-input__field"
+          type="text"
+          id="full_name"
+          name="full_name"
+          required
+          minlength="2"
+          maxlength="100"
+          autocomplete="name"
+          aria-describedby="full_name-hint"
+        />
+        <p class="gl-field__hint" id="full_name-hint">Shown in bylines and next to your cursor.</p>
+      </div>
+      <div class="gl-input">
+        <label class="gl-input__label" for="username">Username</label>
+        <input
+          class="gl-input__field"
+          type="text"
+          id="username"
+          name="username"
+          required
+          minlength="3"
+          maxlength="50"
+          autocomplete="username"
+          autocapitalize="none"
+          spellcheck="false"
+          aria-describedby="username-hint"
+        />
+        <p class="gl-field__hint" id="username-hint">Letters and numbers. You sign in with this.</p>
+      </div>
+      <div class="gl-input">
+        <label class="gl-input__label" for="email">Email</label>
+        <input
+          class="gl-input__field"
+          type="email"
+          id="email"
+          name="email"
+          required
+          maxlength="254"
+          autocomplete="email"
+          autocapitalize="none"
+          spellcheck="false"
+        />
+      </div>
+      <NewPasswordField id="password" label="Create a password" />
+      <div class="gl-input">
+        <label class="gl-input__label" for="confirm_password">Confirm password</label>
+        <input
+          class="gl-input__field"
+          type="password"
+          id="confirm_password"
+          name="confirm_password"
+          required
+          minlength={PASSWORD_MIN}
+          autocomplete="new-password"
+        />
+      </div>
+    </div>
+
+    <button type="submit" class="gl-button gl-button--primary gl-admin-login__submit">
+      <span class="gl-button__spinner" data-spinner aria-hidden="true" hidden></span>
+      <span data-label>Create account</span>
+    </button>
+  </form>
+
+  <!-- The same whether or not the address already has an account (its owner gets
+       a note instead of a link). -->
+  <section class="gl-admin-login__view" id="signupSent" role="status" hidden>
+    <span class="gl-admin-login__badge gl-admin-login__badge--success" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+        ><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg
+      >
+    </span>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title" tabindex="-1">Check your email</h1>
+      <p class="gl-admin-login__subtitle">
+        We sent a link to <strong id="sentTo"></strong>. Open it within 24 hours to finish creating your account. You can't sign in
+        until then.
+      </p>
+    </header>
+    <button type="button" class="gl-button gl-button--secondary gl-admin-login__submit" id="useAnotherEmail">Use another email</button>
+  </section>
+
+  <section class="gl-admin-login__view" id="signupClosed" role="status" hidden={allowSignup}>
+    <span class="gl-admin-login__badge gl-admin-login__badge--warning" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+        ><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg
+      >
+    </span>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title" tabindex="-1">Sign-up is closed</h1>
+      <p class="gl-admin-login__subtitle">Accounts on {SITE_TITLE} are by invitation. Ask an administrator to invite you.</p>
+    </header>
+    <a class="gl-button gl-button--secondary gl-admin-login__submit" href="/login">Go to sign in</a>
+  </section>
+
+  <p class="gl-admin-login__after" slot="after">
+    Already have an account? <a class="gl-admin-login__link" href="/login">Sign in</a>
+  </p>
+</AccountPage>
+
+<script>
+  import { mountRegisterPage } from "@gl-admin/lib/accountPages"
+
+  mountRegisterPage()
+</script>

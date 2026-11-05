@@ -17,6 +17,8 @@ export interface Settings {
   editor_markdown_shortcuts: boolean
   // Embed provider ids (EMBED_PROVIDERS in settingsForm.ts); used by #352's embed block.
   editor_allowed_embeds: string[]
+  // #191: "Allow anyone to sign up" (off by default). Public: the sign-in page reads it.
+  allow_signup: boolean
   // PUBLIC_BASE_URL, read-only ("" when not configured): the domain is deploy config.
   site_address: string
   created_at: string
@@ -33,6 +35,7 @@ export interface UpdateSettingsRequest {
   date_format?: DateFormat
   editor_markdown_shortcuts?: boolean
   editor_allowed_embeds?: string[]
+  allow_signup?: boolean
 }
 
 export interface ExtensionSetting {
