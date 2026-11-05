@@ -48,6 +48,8 @@ const POST_VERBS: Record<string, string> = {
   version_restored: "restored a version of",
   update_scheduled: "scheduled an update to",
   update_unscheduled: "cancelled the scheduled update of",
+  // Ownership (#353). The payload has ids only (no names), so the line names the post.
+  transferred: "transferred",
 }
 
 // status_changed (PUT /posts/:id): "archived X", else "set X to draft".

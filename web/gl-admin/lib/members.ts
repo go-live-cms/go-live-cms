@@ -33,8 +33,18 @@ export function canRemoveMember(member: Pick<User, "id">, me: Pick<User, "id"> |
 // Who may receive a removed member's posts: anyone else, with the person removing
 // them first (the dialog's default), then by name.
 export function recipientOptions(members: User[], removing: Pick<User, "id">, me: Pick<User, "id"> | null | undefined) {
+    return memberOptions(members, { exclude: [removing.id], me })
+}
+
+// The member picker's options (MemberPicker: a removal's recipient, #333, and a post's
+// new owner, #353): every member but `exclude` that `eligible` accepts, you first, then
+// by name, each with their email and role.
+export function memberOptions(
+    members: User[],
+    { exclude = [], me, eligible }: { exclude?: number[]; me: Pick<User, "id"> | null | undefined; eligible?: (member: User) => boolean },
+) {
     return members
-        .filter((m) => m.id !== removing.id)
+        .filter((m) => !exclude.includes(m.id) && (!eligible || eligible(m)))
         .sort((a, b) => {
             if (me && a.id === me.id) return -1
             if (me && b.id === me.id) return 1

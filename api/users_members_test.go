@@ -325,7 +325,7 @@ func TestDeleteUserAPI(t *testing.T) {
 			body:     gin.H{"transfer_to_id": editor.ID},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					RemoveUserTx(gomock.Any(), db.RemoveUserTxParams{UserID: contributor.ID, ReassignTo: editor.ID}).
+					RemoveUserTx(gomock.Any(), db.RemoveUserTxParams{UserID: contributor.ID, ReassignTo: editor.ID, OwnerRoles: contentRoles}).
 					Return(db.RemoveUserTxResult{PostsReassigned: 3}, nil)
 			},
 			wantStatus: http.StatusOK,
@@ -400,6 +400,18 @@ func TestDeleteUserAPI(t *testing.T) {
 			wantCode:   "invalid_transfer_target",
 		},
 		{
+			// The recipient owns the posts from now on: an active member (#353's rule).
+			name:     "TransferTargetInactive",
+			caller:   admin,
+			targetID: target,
+			body:     gin.H{"transfer_to_id": 31},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().RemoveUserTx(gomock.Any(), gomock.Any()).Return(db.RemoveUserTxResult{}, db.ErrReassignTargetInactive)
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "invalid_transfer_target",
+		},
+		{
 			name:     "TransferToThemselves",
 			caller:   admin,
 			targetID: target,
@@ -447,7 +459,12 @@ func TestDeleteUserAPI(t *testing.T) {
 				require.Contains(t, rec.Body.String(), `"code":"`+tc.wantCode+`"`)
 			}
 			if tc.rechecked {
-				require.Equal(t, []string{"POST /internal/users/" + tc.targetID + "/recheck"}, collab.calls())
+				// The member's connections close; the recipient's (who now owns 3
+				// posts) are re-checked too.
+				require.Equal(t, []string{
+					"POST /internal/users/" + tc.targetID + "/recheck",
+					fmt.Sprintf("POST /internal/users/%d/recheck", editor.ID),
+				}, collab.calls())
 				require.Contains(t, rec.Body.String(), `"posts_reassigned":3`)
 			} else {
 				require.Empty(t, collab.calls())

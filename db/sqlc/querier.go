@@ -151,6 +151,10 @@ type Querier interface {
 	DeleteMenu(ctx context.Context, id int64) (int64, error)
 	DeleteMenuItems(ctx context.Context, menuID int64) error
 	DeletePost(ctx context.Context, id int64) error
+	// After ReassignPostBylines: @user_id's credit left on @post_ids (the new owner was
+	// already credited there, so it couldn't take their place). Never empties a byline:
+	// each of those posts still credits the new owner.
+	DeletePostBylineCredits(ctx context.Context, arg DeletePostBylineCreditsParams) error
 	DeletePostMedia(ctx context.Context, arg DeletePostMediaParams) error
 	DeletePostMediaByOrder(ctx context.Context, arg DeletePostMediaByOrderParams) error
 	DeletePostMedias(ctx context.Context, postID int64) error
@@ -446,11 +450,20 @@ type Querier interface {
 	// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
 	// acquire in the same order and cannot deadlock each other.
 	LockAdminUserIDs(ctx context.Context) ([]int64, error)
+	// Post ownership (#353): TransferPostOwnerTx and the reassignment it shares with a
+	// member's removal (RemoveUserTx, #333). See db/sqlc/post_owner_tx.go.
+	// The member about to own a post (#353), FOR KEY SHARE: a concurrent removal (#333,
+	// which deletes the row FOR UPDATE) waits for the transfer, or wins and the transfer
+	// finds no row. Taken before the post's lock, RemoveUserTx's order (users, then posts).
+	LockNewPostOwner(ctx context.Context, id int64) (LockNewPostOwnerRow, error)
 	LockPostForCollabStore(ctx context.Context, id int64) (LockPostForCollabStoreRow, error)
 	// Publish runs in one transaction from here (PublishPostTx): two publishes of
 	// one post queue on this lock instead of racing for the same version_no.
 	// The status is checked under the lock: a trashed post (#327) is never published.
 	LockPostForPublish(ctx context.Context, id int64) (LockPostForPublishRow, error)
+	// The post being transferred (#353), locked: its current owner and status are read
+	// under the lock, so two transfers queue instead of both reading the same owner.
+	LockPostOwner(ctx context.Context, id int64) (LockPostOwnerRow, error)
 	// DeleteTrashedPostTx: the post's status under a row lock.
 	LockPostStatus(ctx context.Context, id int64) (string, error)
 	// ScheduleUpdateTx's first step: lock the post (as LockPostForPublish) and read
@@ -479,10 +492,12 @@ type Querier interface {
 	// Row-locks the given users in id order (RemoveUserTx: the member and the one who
 	// receives their posts), so two removals that name each other can't deadlock.
 	LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error)
-	// The removed member's byline (user_posts, #319) on the posts that just moved goes to
-	// the new owner, unless they are already credited there. Credits on anyone else's
-	// posts are dropped (DeleteUserBylines).
+	// The old owner's byline (user_posts, #319) on the posts that just moved goes to the
+	// new owner, unless they are already credited there (then DeletePostBylineCredits drops
+	// it). Used by a removal (#333) and by a transfer that replaces the old owner (#353).
 	ReassignPostBylines(ctx context.Context, arg ReassignPostBylinesParams) error
+	// reassignPostOwner (post_owner_tx.go), for a removal (#333: every post @from_id owns,
+	// @all_posts) and a transfer (#353: the posts in @post_ids, if @from_id still owns them).
 	ReassignPostsOwner(ctx context.Context, arg ReassignPostsOwnerParams) ([]int64, error)
 	// Removal (#333, #319): the same rewrite for the published bylines
 	// (published_settings.author_ids), at once rather than on the next Update, since

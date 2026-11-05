@@ -139,6 +139,8 @@ var postReadRouteTemplates = []string{
 	"/api/v1/posts/:id/settings",
 	// The working byline (#319).
 	"/api/v1/posts/:id/authors",
+	// The owner (#353).
+	"/api/v1/posts/:id/owner",
 }
 
 // moderatorPostRoutes are per-post GET routes for editors and admins only
