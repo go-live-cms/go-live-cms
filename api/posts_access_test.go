@@ -347,9 +347,9 @@ func needsAttentionOf(t *testing.T, server *Server, caller db.User) NeedsAttenti
 	return rsp
 }
 
-// hasAccessRequest looks among the listed requests. Other tests' requests may
-// fill an editor's list (the database is shared), so a reviewer's own request
-// is checked through the total too.
+// hasAccessRequest looks among the listed requests (the newest few). The tests
+// in this package run one after another, so the request a test just made is
+// the newest one an editor sees.
 func hasAccessRequest(needs NeedsAttentionResponse, requestID int64) bool {
 	for _, r := range needs.AccessRequests.Posts {
 		if r.RequestID == requestID {
@@ -465,6 +465,9 @@ func TestAccessRequestPermissions(t *testing.T) {
 	requireStatus(t, as(t, f.server, f.editor, http.MethodDelete, accessPath(f.post, ""), nil), http.StatusOK)
 	status, _ = collabCanEdit(t, f.server, f.other, f.post)
 	require.Equal(t, http.StatusGone, status)
+	trashedAsk := requestAccess(t, f, f.editor, f.post, "")
+	requireStatus(t, trashedAsk, http.StatusConflict)
+	require.Equal(t, codePostTrashed, errorCode(t, trashedAsk), "restore it first, as the other write routes say")
 	pending := decodeRequest(t, requestAccess(t, f, f.asker, f.modPost, ""))
 	requireStatus(t, as(t, f.server, f.editor, http.MethodDelete, accessPath(f.modPost, ""), nil), http.StatusOK)
 	trashed := as(t, f.server, f.editor, http.MethodPost, accessPath(f.modPost, fmt.Sprintf("/access-requests/%d/grant", pending.ID)), nil)
@@ -479,6 +482,8 @@ func TestAccessRequestRateLimit(t *testing.T) {
 	f := newAccessFixture(t, func(config *util.Config) { config.RateLimitAccessRequestPerMinute = 1 })
 	requireStatus(t, requestAccess(t, f, f.asker, f.post, ""), http.StatusCreated)
 	sent := len(f.mail.messages())
+	// Asking again for the same post is answered before the limit: 409, not 429.
+	requireStatus(t, requestAccess(t, f, f.asker, f.post, ""), http.StatusConflict)
 
 	limited := requestAccess(t, f, f.asker, f.modPost, "")
 	requireStatus(t, limited, http.StatusTooManyRequests)

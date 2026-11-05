@@ -265,9 +265,20 @@ func (server *Server) requestPostAccess(c *gin.Context) {
 	if !ok {
 		return
 	}
+	ctx := c.Request.Context()
+	// Ownership, a moderator's role or a grant (canEditWorkingCopy).
+	canEdit, _, err := server.workingCopyAccess(ctx, caller, post)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check edit access"})
+		return
+	}
+	if canEdit {
+		c.JSON(http.StatusConflict, gin.H{"error": "you can already edit this post", "code": codeAlreadyHasAccess})
+		return
+	}
 	if !canRequestPostAccess(caller, post) {
-		if canEditPost(caller, post) {
-			c.JSON(http.StatusConflict, gin.H{"error": "you can already edit this post", "code": codeAlreadyHasAccess})
+		if isTrashed(post) {
+			postTrashedError().write(c)
 			return
 		}
 		c.JSON(http.StatusForbidden, gin.H{"error": "edit access can't be requested for this post"})
@@ -279,14 +290,19 @@ func (server *Server) requestPostAccess(c *gin.Context) {
 	}
 	message := strings.TrimSpace(req.Message)
 
-	ctx := c.Request.Context()
-	collaborator, err := server.store.IsPostCollaborator(ctx, db.IsPostCollaboratorParams{PostID: post.ID, UserID: caller.ID})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check edit access"})
+	// An open request or a recent decline is answered before the rate limit, so
+	// repeated clicks don't use up the allowance for other posts. The INSERT
+	// below checks both again (a race only costs a 409 from there).
+	latest, err := server.store.GetLatestPostAccessRequest(ctx, db.GetLatestPostAccessRequestParams{PostID: post.ID, RequesterID: caller.ID})
+	switch {
+	case err == nil && latest.Status == db.AccessRequestPending:
+		c.JSON(http.StatusConflict, gin.H{"error": "you already asked for edit access to this post", "code": codeAccessRequestOpen, "request": toAccessRequestResponse(latest)})
 		return
-	}
-	if collaborator {
-		c.JSON(http.StatusConflict, gin.H{"error": "you can already edit this post", "code": codeAlreadyHasAccess})
+	case err == nil && !mayRequestAgain(&latest, time.Now()):
+		c.JSON(http.StatusConflict, gin.H{"error": "your last request for this post was declined recently", "code": codeRecentlyDeclined, "request_again_at": toAccessRequestResponse(latest).RequestAgainAt})
+		return
+	case err != nil && !errors.Is(err, sql.ErrNoRows):
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read access requests"})
 		return
 	}
 	// Per member and client: a member can't flood the reviewers, and a stolen
@@ -444,7 +460,9 @@ func (server *Server) revokePostAccess(c *gin.Context) {
 // (ListAccessRequestReviewers), after the response. Failures are only logged:
 // the request stands and shows in Home's Needs attention anyway.
 func (server *Server) notifyAccessReviewers(logger *slog.Logger, post db.Post, requester db.User, request db.PostAccessRequest) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*mailSendTimeout)
+	// The lookups get one deadline; each email its own (sendMail), so a slow
+	// relay delays the later reviewers' emails but never drops them.
+	ctx, cancel := context.WithTimeout(context.Background(), mailSendTimeout)
 	defer cancel()
 
 	reviewers, err := server.store.ListAccessRequestReviewers(ctx, db.ListAccessRequestReviewersParams{RequesterID: requester.ID, PostID: post.ID})
@@ -471,7 +489,7 @@ func (server *Server) notifyAccessReviewers(logger *slog.Logger, post db.Post, r
 			Link:      link,
 		})
 		if err == nil {
-			err = server.sendMail(ctx, msg)
+			err = server.sendMail(context.Background(), msg)
 		}
 		if err != nil {
 			logger.Error("access request email failed", "post_id", post.ID, "request_id", request.ID, "user_id", reviewer.ID, "error", err)

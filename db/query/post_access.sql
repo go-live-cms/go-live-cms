@@ -59,8 +59,10 @@ ORDER BY r.created_at, r.id;
 -- name: ListPendingAccessRequestsForReviewer :many
 -- Home's "Needs attention": the open requests a member may answer, newest
 -- first. viewer_id 0 = every post (admins and editors), else the posts the
--- viewer owns (canReviewPostAccess). Posts in the trash are left out (nobody
--- may grant on them). total is the count before the limit.
+-- viewer owns (canReviewPostAccess). Only published posts: a grant applies
+-- only there (canEditAsCollaborator), so a request on a post unpublished or
+-- trashed since waits until it is published again. total is the count before
+-- the limit.
 SELECT r.id, r.post_id, r.message, r.created_at,
        p.title AS post_title, p.post_type,
        u.id AS requester_id, u.username AS requester_username, u.full_name AS requester_full_name,
@@ -69,7 +71,7 @@ FROM post_access_requests r
 JOIN posts p ON p.id = r.post_id
 JOIN users u ON u.id = r.requester_id
 WHERE r.status = 'pending'
-  AND p.post_status <> 'trash'
+  AND p.post_status = 'published'
   AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id::bigint)
 ORDER BY r.created_at DESC, r.id DESC
 LIMIT @row_limit::int;

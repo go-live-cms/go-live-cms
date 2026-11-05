@@ -17,7 +17,7 @@ vi.mock("@gl-admin/lib/api/postAccess", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@gl-admin/lib/api/postAccess")>()),
   ...api,
 }))
-const { ViewOnlyNotice, AccessRequestsNotice, PostCollaborators } = await import("./PostEditAccess")
+const { ViewOnlyNotice, AccessRequestsNotice, PostCollaborators, PENDING_REFRESH_MS } = await import("./PostEditAccess")
 const { ApiError } = await import("@gl-admin/lib/api/errors")
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -88,6 +88,24 @@ describe("ViewOnlyNotice", () => {
     expect(button("Request access")).toBeUndefined()
     expect(button("Request sent")?.disabled).toBe(true)
     expect(container.textContent).toContain("You asked for edit access.")
+  })
+
+  // A decline doesn't touch the collab connection, so nothing else would tell this editor.
+  it("re-reads the access while a request waits, so a decline shows up", async () => {
+    vi.useFakeTimers()
+    try {
+      const onChanged = vi.fn()
+      const pending = access({ can_request: false, request: { id: 4, post_id: 9, status: "pending", message: "", created_at: "", reviewed_at: null } })
+      await act(async () => root.render(<ViewOnlyNotice postId={9} access={pending} onChanged={onChanged} />))
+      await act(async () => vi.advanceTimersByTime(PENDING_REFRESH_MS * 2))
+      expect(onChanged).toHaveBeenCalledTimes(2)
+      // Answered: no more looking.
+      await act(async () => root.render(<ViewOnlyNotice postId={9} access={access({ can_request: false })} onChanged={onChanged} />))
+      await act(async () => vi.advanceTimersByTime(PENDING_REFRESH_MS * 2))
+      expect(onChanged).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("has no button when edit access can't be asked for", async () => {

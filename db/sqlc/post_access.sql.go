@@ -223,7 +223,7 @@ FROM post_access_requests r
 JOIN posts p ON p.id = r.post_id
 JOIN users u ON u.id = r.requester_id
 WHERE r.status = 'pending'
-  AND p.post_status <> 'trash'
+  AND p.post_status = 'published'
   AND ($1::bigint = 0 OR p.user_id = $1::bigint)
 ORDER BY r.created_at DESC, r.id DESC
 LIMIT $2::int
@@ -249,8 +249,10 @@ type ListPendingAccessRequestsForReviewerRow struct {
 
 // Home's "Needs attention": the open requests a member may answer, newest
 // first. viewer_id 0 = every post (admins and editors), else the posts the
-// viewer owns (canReviewPostAccess). Posts in the trash are left out (nobody
-// may grant on them). total is the count before the limit.
+// viewer owns (canReviewPostAccess). Only published posts: a grant applies
+// only there (canEditAsCollaborator), so a request on a post unpublished or
+// trashed since waits until it is published again. total is the count before
+// the limit.
 func (q *Queries) ListPendingAccessRequestsForReviewer(ctx context.Context, arg ListPendingAccessRequestsForReviewerParams) ([]ListPendingAccessRequestsForReviewerRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPendingAccessRequestsForReviewer, arg.ViewerID, arg.RowLimit)
 	if err != nil {

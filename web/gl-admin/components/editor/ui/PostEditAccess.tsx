@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Notice from "@gl-admin/components/ui/Notice"
 import Button from "@gl-admin/components/ui/Button"
 import Modal from "@gl-admin/components/ui/Modal"
@@ -23,6 +23,9 @@ import { ACCESS_REQUEST_MESSAGE_MAX, accessErrorMessage, memberName, requestTitl
 // requester's open editor through the collab server's re-check (#313): the editor turns
 // editable without a reload.
 
+// How often a pending request's notice re-reads GET /posts/:id/access.
+export const PENDING_REFRESH_MS = 30_000
+
 // The view-only notice for someone who can't edit the post, with Request access when
 // they may ask (a contributor watching someone else's published post).
 export function ViewOnlyNotice({ postId, access, onChanged }: { postId: number; access: PostAccess | null; onChanged: () => void }) {
@@ -32,6 +35,18 @@ export function ViewOnlyNotice({ postId, access, onChanged }: { postId: number; 
   const [error, setError] = useState<string | null>(null)
   const notice = viewOnlyNotice(access)
   const tooLong = [...message].length > ACCESS_REQUEST_MESSAGE_MAX
+
+  // A grant reaches this editor through the collab re-check (an access message), but a
+  // decline changes nothing on the connection: while the request waits, look again now
+  // and then so "Request sent" turns into the answer.
+  const onChangedRef = useRef(onChanged)
+  onChangedRef.current = onChanged
+  const waiting = notice.action === "sent"
+  useEffect(() => {
+    if (!waiting) return
+    const timer = setInterval(() => onChangedRef.current(), PENDING_REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [waiting])
 
   const close = () => {
     if (sending) return
