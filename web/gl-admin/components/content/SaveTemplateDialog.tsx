@@ -38,7 +38,9 @@ export default function SaveTemplateDialog({ isOpen, post, noun = "post", onClos
     setNameError(null)
     setError(null)
     setSaving(false)
-  }, [isOpen, post.id, post.title])
+    // Only when it opens: a list reload while it is open must not wipe what was typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -66,7 +68,7 @@ export default function SaveTemplateDialog({ isOpen, post, noun = "post", onClos
       isOpen
       onClose={() => !saving && onClose()}
       title="Save as template"
-      description={`New ${noun}s can start from its content, as it is now. Later edits to this ${noun} don't change the template.`}
+      description={`Everyone who writes ${noun}s can start from its content, as it is now, contributors included. Later edits to this ${noun} don't change the template.`}
       size="medium"
       closeOnBackdrop={false}
       footer={
@@ -86,7 +88,7 @@ export default function SaveTemplateDialog({ isOpen, post, noun = "post", onClos
           title="Template name"
           name="name"
           unmasked
-          maxLength={TEMPLATE_NAME_MAX}
+          // No maxLength: it counts UTF-16 units, the API characters (templateNameError).
           value={name}
           error={nameError ?? undefined}
           onChange={(e: any) => setName(inputValue(e))}

@@ -17,7 +17,6 @@ import {
 } from "@gl-admin/lib/api/postTemplates"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import {
-  TEMPLATE_NAME_MAX,
   deletedTemplateMessage,
   fromTemplateMessage,
   templateNameConflict,
@@ -47,7 +46,9 @@ type NewPostDialogProps = {
 // the chooser closes, so deleting the last template there takes effect.
 export function useNewPostChooser({ postType, noun, canCreate, canManage }: { postType: string; noun: string; canCreate: boolean; canManage: boolean }) {
   const navigate = useNavigate()
-  const [hasTemplates, setHasTemplates] = useState(false)
+  // null until the check answers: the chooser then opens (it loads the list itself and
+  // always offers Blank), so a quick click never skips the templates.
+  const [hasTemplates, setHasTemplates] = useState<boolean | null>(null)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export function useNewPostChooser({ postType, noun, canCreate, canManage }: { po
     }
   }, [postType, canCreate, open])
 
-  const start = () => (hasTemplates ? setOpen(true) : navigate(`/content/${postType}/new`))
+  const start = () => (hasTemplates !== false ? setOpen(true) : navigate(`/content/${postType}/new`))
   const dialog = <NewPostDialog isOpen={open} onClose={() => setOpen(false)} postType={postType} noun={noun} canManage={canManage} />
   return { start, dialog, hasTemplates }
 }
@@ -206,7 +207,6 @@ export default function NewPostDialog({ isOpen, onClose, postType, noun, canMana
                     title={`Rename “${template.name}”`}
                     unmasked
                     autoFocus
-                    maxLength={TEMPLATE_NAME_MAX}
                     value={renaming.name}
                     error={renaming.error ?? undefined}
                     onChange={(e: any) => setRenaming({ ...renaming, name: inputValue(e) })}

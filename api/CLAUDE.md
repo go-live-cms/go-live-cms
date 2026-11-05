@@ -789,6 +789,11 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `CreatePostFromTemplateTx` (terms, featured image as `setFeaturedImage` writes it, content
   media links). No Yjs state; activity `created` with `template_id`. Deleting a template
   leaves the posts made from it alone (nothing points back).
+- **Saving a template shares its content with every content role** (decision): listing
+  and using one don't check `canReadPost` on the post it came from, so an editor who saves
+  an unpublished draft makes that content available to contributors. Saving is the
+  editor's explicit act, and the Save dialog says so ("Everyone who writes posts can start
+  from its content, contributors included").
 - Tests: `post_templates_test.go` (handler matrix on the mock store, validation, theme
   blocks) and `post_templates_db_test.go` (real DB: saving changes no list, count, search or
   `/public` read; the post's content, ids, terms, featured image, byline; rename, delete).

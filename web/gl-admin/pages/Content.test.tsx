@@ -415,6 +415,17 @@ describe("Post templates in the list (#322)", () => {
     expect(dialog()).toBeNull()
     expect(container.querySelector("[data-testid='blank']")).not.toBeNull()
   })
+
+  it("opens the chooser while the templates check is still out, so a quick click doesn't skip them", async () => {
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 1 }, total: 1 })
+    api.listPostTemplates.mockImplementation(never)
+    await render("/content/post")
+    await act(async () => buttonByText("New post")!.click())
+    await settle()
+    expect(dialog()?.textContent).toContain("Blank post")
+    expect(container.querySelector("[data-testid='blank']")).toBeNull()
+  })
 })
 
 describe("Posts list search (#145)", () => {
