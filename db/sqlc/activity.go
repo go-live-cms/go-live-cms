@@ -34,9 +34,9 @@ const (
 	ActivityTrashed  = "trashed"
 	ActivityRestored = "restored"
 
-	// Review requests (#323, 000039), on the post. Payload: request_id, plus
+	// Review requests (#323, 000040), on the post. Payload: request_id, plus
 	// reviewer_id on a request, resolution ("published") on review_resolved, which
-	// 000039's publish trigger writes, and withdrawn on a requester's dismissal. Never
+	// 000040's publish trigger writes, and withdrawn on a requester's dismissal. Never
 	// the notes (content).
 	ActivityReviewRequested        = "review_requested"
 	ActivityReviewResolved         = "review_resolved"
@@ -51,6 +51,7 @@ const (
 	ActivityInvited           = "invited"
 	ActivityInvitationRevoked = "invitation_revoked"
 	ActivityJoined            = "joined"
+	ActivitySignedUp          = "signed_up" // open signup (#191): the new member, once the email is confirmed
 	ActivityRoleChanged       = "role_changed"
 	ActivityRemoved           = "removed"
 

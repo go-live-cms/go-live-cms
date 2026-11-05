@@ -1,5 +1,6 @@
 // The signed-out account pages (#148): /forgot-password, /reset-password,
-// /accept-invite and /confirm-email (#334) (web/src/pages). Like /login they live outside the admin SPA
+// /accept-invite, /confirm-email (#334), /register and /verify-email (#191: open
+// signup) (web/src/pages). Like /login they live outside the admin SPA
 // and are plain forms; each page's <script> only calls its mount function, so
 // the logic is bundled (no inline script, CSP #161) and tested here.
 //
@@ -10,7 +11,7 @@
 import { ApiError, apiErrorFromResponse } from "./api/errors"
 import { passwordRule } from "./passwordRules"
 import { presenceColor } from "./presence"
-import { FULL_NAME_MAX, FULL_NAME_MIN, USERNAME_MAX, USERNAME_MIN, retryHint, validateNewPassword } from "./profile"
+import { FULL_NAME_MAX, FULL_NAME_MIN, USERNAME_MAX, USERNAME_MIN, isValidEmail, retryHint, validateNewPassword } from "./profile"
 import { USER_ROLE_OPTIONS } from "./roles"
 
 const API_BASE = "/api/v1"
@@ -74,6 +75,31 @@ export function acceptInvitation(token: string, fields: AcceptInvitationFields):
     full_name: fields.full_name.trim(),
     password: fields.password,
   })
+}
+
+// Open signup (#191). 202 for any address (the API never says whether it has an
+// account); codes: signup_disabled (403), username_unavailable (409).
+export interface RegisterFields {
+  full_name: string
+  username: string
+  email: string
+  password: string
+  confirm_password: string
+}
+
+export function registerAccount(fields: RegisterFields): Promise<{ message: string; expires_in_seconds: number }> {
+  return postJSON("/auth/register", {
+    full_name: fields.full_name.trim(),
+    username: fields.username.trim(),
+    email: fields.email.trim(),
+    password: fields.password,
+  })
+}
+
+// Redeems a signup link. Codes: invalid_token (400), signup_disabled (403),
+// email_registered and username_unavailable (409).
+export function confirmSignup(token: string): Promise<{ user: { username: string } }> {
+  return postJSON("/auth/register/verify", { token })
 }
 
 // --- Tokens -----------------------------------------------------------------
@@ -150,6 +176,28 @@ export function validateAcceptInvitation(fields: AcceptInvitationFields, email?:
   return validatePassword(fields.password, fields.confirm_password, [username, fullName, email])
 }
 
+// Mirrors RegisterRequest (api/account_bindings.go) and the API's checks: a
+// username of letters and digits (what sign-in accepts), and a password that isn't
+// the email, username or name.
+export function validateRegistration(fields: RegisterFields): string | null {
+  const username = fields.username.trim()
+  const fullName = fields.full_name.trim()
+  const email = fields.email.trim()
+  if (runeLength(fullName) < FULL_NAME_MIN || runeLength(fullName) > FULL_NAME_MAX) {
+    return `Your name must be ${FULL_NAME_MIN}–${FULL_NAME_MAX} characters.`
+  }
+  if (runeLength(username) < USERNAME_MIN || runeLength(username) > USERNAME_MAX) {
+    return `Username must be ${USERNAME_MIN}–${USERNAME_MAX} characters.`
+  }
+  if (!/^[A-Za-z0-9]+$/.test(username)) return "Usernames can only have letters and numbers."
+  if (!isValidEmail(email) || email.length > 254) return "Enter a valid email address."
+  return validatePassword(fields.password, fields.confirm_password, [username, fullName, email])
+}
+
+export function isSignupClosedError(err: unknown): boolean {
+  return err instanceof ApiError && err.code === "signup_disabled"
+}
+
 export function isInvalidLinkError(err: unknown): boolean {
   return err instanceof ApiError && err.code === "invalid_token"
 }
@@ -160,6 +208,8 @@ export function describeAccountError(err: unknown): string {
     if (err.status === 429) return `Too many attempts. ${retryHint(err)}`
     if (err.code === "invalid_token") return "This link is invalid or has expired."
     if (err.code === "username_taken") return "That username is taken. Choose another one."
+    if (err.code === "username_unavailable") return "That username isn't available. Choose another one."
+    if (err.code === "signup_disabled") return "Sign-up is closed on this site. Ask an administrator to invite you."
     if (err.code === "email_registered") return "An account with this email already exists. Sign in, or reset its password."
     if (err.code === "email_taken") return "Another account uses this address now, so your email wasn't changed."
     if (err.status >= 500) return "Something went wrong on the server. Please try again in a moment."
@@ -523,4 +573,122 @@ function showInvitation(doc: Document, invite: InvitationPreview) {
     email.value = invite.email
     email.closest<HTMLElement>("[data-invite-email]")?.removeAttribute("hidden")
   }
+}
+
+// Swaps whatever the page shows for the "sign-up is closed" panel.
+function showSignupClosed(doc: Document, ...views: (HTMLElement | null)[]) {
+  for (const view of views) if (view) view.hidden = true
+  const panel = doc.getElementById("signupClosed")
+  if (panel) {
+    panel.hidden = false
+    panel.querySelector<HTMLElement>("h1")?.focus()
+  }
+}
+
+// /register (#191): open signup, when Settings allows it (the page renders only the
+// "closed" panel otherwise). The answer is the same whether or not the address has
+// an account, so the page shows one "check your email" panel either way.
+export function mountRegisterPage(doc: Document = document): void {
+  const form = doc.getElementById("registerForm") as HTMLFormElement | null
+  if (!form || form.hidden) return
+  const ui = formUi(doc, form, "Create account", "Creating account…")
+  wirePasswordRules(doc)
+  wirePasswordToggles(doc)
+  const sent = doc.getElementById("signupSent")
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault()
+    ui.hideError()
+    const fields: RegisterFields = {
+      full_name: field(form, "full_name"),
+      username: field(form, "username"),
+      email: field(form, "email"),
+      password: field(form, "password"),
+      confirm_password: field(form, "confirm_password"),
+    }
+    const invalid = validateRegistration(fields)
+    if (invalid) {
+      ui.showError(invalid)
+      return
+    }
+    ui.setLoading(true)
+    try {
+      await registerAccount(fields)
+    } catch (err) {
+      ui.setLoading(false)
+      if (isSignupClosedError(err)) {
+        showSignupClosed(doc, form)
+        return
+      }
+      ui.showError(describeAccountError(err))
+      if (err instanceof ApiError && err.code === "username_unavailable") doc.getElementById("username")?.focus()
+      return
+    }
+    ui.setLoading(false)
+    form.hidden = true
+    const sentTo = doc.getElementById("sentTo")
+    if (sentTo) sentTo.textContent = fields.email.trim()
+    if (sent) {
+      sent.hidden = false
+      sent.querySelector<HTMLElement>("h1")?.focus()
+    }
+  })
+
+  // "Use another email": back to the form, everything kept for editing.
+  doc.getElementById("useAnotherEmail")?.addEventListener("click", () => {
+    if (sent) sent.hidden = true
+    form.hidden = false
+    doc.getElementById("email")?.focus()
+  })
+}
+
+// /verify-email (#191): the link from a signup. Like /confirm-email, nothing is sent
+// until the button is pressed, so a mail scanner that opens links can't use the
+// token up. The account exists only once this succeeds; then the person signs in.
+export function mountVerifyEmailPage(doc: Document = document, navigate: Navigate = defaultNavigate(doc)): void {
+  const win = doc.defaultView!
+  const form = doc.getElementById("verifyEmailForm") as HTMLFormElement
+  const ui = formUi(doc, form, "Confirm and create account", "Creating account…")
+  const token = takeLinkToken(win)
+  if (!token) {
+    showInvalidLink(doc, form)
+    return
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault()
+    ui.hideError()
+    ui.setLoading(true)
+    try {
+      await confirmSignup(token)
+    } catch (err) {
+      ui.setLoading(false)
+      if (isInvalidLinkError(err)) {
+        showInvalidLink(doc, form)
+        return
+      }
+      if (isSignupClosedError(err)) {
+        dropLinkToken(win)
+        showSignupClosed(doc, form)
+        return
+      }
+      // The link can't work any more for these: the details it carries are fixed.
+      if (err instanceof ApiError && err.code === "username_unavailable") {
+        dropLinkToken(win)
+        ui.showError("Someone took that username after you signed up. Sign up again with another one.", { fields: false })
+        return
+      }
+      if (err instanceof ApiError && err.code === "email_registered") {
+        dropLinkToken(win)
+        ui.showError("An account with this email already exists, so no new one was created. Sign in, or reset its password.", {
+          fields: false,
+        })
+        return
+      }
+      ui.showError(describeAccountError(err), { fields: false })
+      return
+    }
+    dropLinkToken(win)
+    navigate("/login?reason=signup-confirmed")
+  })
 }

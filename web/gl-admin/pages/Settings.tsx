@@ -32,7 +32,8 @@ import {
 } from "@gl-admin/lib/settingsForm"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 
-// Settings (#343, #330; the Settings board): General and Editor. Changes wait in the
+// Settings (#343, #330; the Settings board): General, Editor and Accounts (#191: open
+// signup; the board has no Accounts section, so it reuses the Editor card). Changes wait in the
 // sticky unsaved-changes bar until saved or discarded. Admins only (the route's
 // AdminOnly; the API's requireSiteAdmin).
 //
@@ -46,6 +47,7 @@ const CHANGE_DOMAIN_URL = "https://github.com/go-live-cms/go-live-cms/blob/main/
 const SECTIONS = [
   { id: "general", label: "General" },
   { id: "editor", label: "Editor" },
+  { id: "accounts", label: "Accounts" },
 ]
 
 const URL_OPTIONS = [
@@ -364,6 +366,25 @@ const SettingsPage: React.FC = () => {
                   description="Typing #, - or > at the start of a line turns it into a heading, list or quote. Applies to posts opened after you save."
                   checked={draft.editor_markdown_shortcuts}
                   onChange={(checked) => update({ editor_markdown_shortcuts: checked })}
+                />
+              </div>
+            </section>
+
+            <hr className="gl-workspace__rule" />
+
+            <section className="gl-workspace__section" id="gl-settings-accounts" aria-labelledby="gl-settings-accounts-h">
+              <div>
+                <h2 className="gl-workspace__section-title" id="gl-settings-accounts-h">
+                  Accounts
+                </h2>
+                <p className="gl-workspace__section-intro">Who can get an account on this site.</p>
+              </div>
+              <div className="gl-settings__card">
+                <Switch
+                  label="Allow anyone to sign up"
+                  description="Adds “Create an account” to the sign-in page. New accounts are contributors and can sign in once they confirm their email address. When it's off, people join only by invitation."
+                  checked={draft.allow_signup}
+                  onChange={(checked) => update({ allow_signup: checked })}
                 />
               </div>
             </section>

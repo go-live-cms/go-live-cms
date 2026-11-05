@@ -1,4 +1,4 @@
--- Review requests (#323, 000039). Publishing resolves the open one in a trigger
+-- Review requests (#323, 000040). Publishing resolves the open one in a trigger
 -- (golive_resolve_review_on_publish); the API writes the rest here.
 
 -- name: CreateReviewRequest :one

@@ -1,11 +1,11 @@
-// Package api — Review requests (#323, 000039)
+// Package api — Review requests (#323, 000040)
 //
 // Anyone who may edit a post (canRequestReview = canEditPost) asks the editors and
 // admins to review it, optionally naming one of them. Contributors above all: they
 // can't publish (#135), so this is how their work reaches an editor.
 //
 //   - POST /posts/:id/review-request {reviewer_id?, message?} → 201 {review_request}.
-//     One open request per post (000039's unique index): a second one while it is open
+//     One open request per post (000040's unique index): a second one while it is open
 //     answers 409 code review_already_requested with the open request, and emails
 //     nobody. To name another reviewer, withdraw it (dismiss) and ask again.
 //   - GET /posts/:id/review-request → {review_request | null}: the open request, or
@@ -16,7 +16,7 @@
 //   - POST /review-requests/:id/request-changes {note}: a reviewer; the note is
 //     required, plain text (comments, #192, aren't built). The requester is emailed.
 //   - Publishing resolves the open request by any path (Publish/Update, bulk, the
-//     scheduler, a status set through PUT): 000039's trigger, which also records the
+//     scheduler, a status set through PUT): 000040's trigger, which also records the
 //     review_resolved event.
 //
 // Who is emailed when a request is made: the named reviewer; with none, every
@@ -52,7 +52,7 @@ const (
 // when no reviewer is named).
 const reviewRecipientLimit = 100
 
-// The notes' limits in characters, once trimmed (000039's CHECKs).
+// The notes' limits in characters, once trimmed (000040's CHECKs).
 const (
 	reviewMessageMax = 1000
 	reviewNoteMax    = 2000

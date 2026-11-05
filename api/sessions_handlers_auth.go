@@ -531,11 +531,3 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 		"message": "logged out successfully",
 	})
 }
-
-// register is a placeholder endpoint for user registration functionality.
-// TODO: Implement full user registration with validation and account creation.
-func (server *Server) register(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, gin.H{
-		"message": "Register endpoint - coming soon",
-	})
-}

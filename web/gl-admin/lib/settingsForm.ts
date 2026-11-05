@@ -16,6 +16,7 @@ export type SettingsDraft = Pick<
   | "posts_per_page"
   | "post_url_structure"
   | "editor_markdown_shortcuts"
+  | "allow_signup"
 >
 
 // In form order.
@@ -28,6 +29,7 @@ const FIELDS: { key: keyof SettingsDraft; label: string }[] = [
   { key: "posts_per_page", label: "posts per page" },
   { key: "post_url_structure", label: "post URL structure" },
   { key: "editor_markdown_shortcuts", label: "Markdown shortcuts" },
+  { key: "allow_signup", label: "sign-up setting" },
 ]
 
 // The API's bounds (binding tags on the settings request).
@@ -61,6 +63,7 @@ export function toDraft(settings: Settings): SettingsDraft {
     posts_per_page: settings.posts_per_page,
     post_url_structure: settings.post_url_structure,
     editor_markdown_shortcuts: settings.editor_markdown_shortcuts ?? true,
+    allow_signup: settings.allow_signup ?? false,
   }
 }
 

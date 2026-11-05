@@ -272,7 +272,7 @@ export function metaDescription(text: string | null | undefined, maxLength = 160
 }
 
 // The signed-out account pages (#148): they handle credentials and emailed tokens.
-const ACCOUNT_PATHS = ["/login", "/forgot-password", "/reset-password", "/accept-invite", "/confirm-email"]
+const ACCOUNT_PATHS = ["/login", "/forgot-password", "/reset-password", "/accept-invite", "/confirm-email", "/register", "/verify-email"]
 
 // Pages that must not be indexed even when a crawler ignores robots.txt: the
 // admin SPA, the account pages, search results (#145; never in the sitemap

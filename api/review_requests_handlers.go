@@ -187,7 +187,7 @@ func (server *Server) requestReview(c *gin.Context) {
 		Message:     message,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		// One open request per post (000039). Answer with it, so the editor shows it.
+		// One open request per post (000040). Answer with it, so the editor shows it.
 		rsp := gin.H{"error": "a review was already requested for this post", "code": codeReviewAlreadyRequested}
 		if current, err := server.currentReviewRequest(c, id); err == nil && current != nil {
 			rsp["review_request"] = current
