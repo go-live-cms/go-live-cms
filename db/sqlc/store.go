@@ -253,10 +253,18 @@ var ErrReassignToRemovedUser = errors.New("posts can't be reassigned to the memb
 // receive the posts doesn't exist.
 var ErrReassignTargetNotFound = errors.New("the user to reassign posts to doesn't exist")
 
+// ErrReassignTargetInactive is returned by RemoveUserTx when the user who should
+// receive the posts has none of OwnerRoles: they couldn't edit the posts they'd own
+// (the rule a transfer applies too, #353).
+var ErrReassignTargetInactive = errors.New("the user to reassign posts to is not an active member")
+
 type RemoveUserTxParams struct {
 	UserID int64
 	// ReassignTo receives the posts and media the member owns.
 	ReassignTo int64
+	// OwnerRoles are the roles the recipient may have (the API's content roles), as
+	// for a transfer's new owner. nil accepts any role.
+	OwnerRoles []string
 }
 
 type RemoveUserTxResult struct {
@@ -310,6 +318,9 @@ func (store *SQLStore) RemoveUserTx(ctx context.Context, arg RemoveUserTxParams)
 		}
 		if recipient == nil {
 			return ErrReassignTargetNotFound
+		}
+		if arg.OwnerRoles != nil && !roleIn(recipient.Role, arg.OwnerRoles) {
+			return ErrReassignTargetInactive
 		}
 		result.AvatarURL = found.AvatarUrl
 

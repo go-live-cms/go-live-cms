@@ -10,6 +10,7 @@ import type { User } from "@gl-admin/lib/api/types"
 
 const api = vi.hoisted(() => ({
   getPostOwner: vi.fn(),
+  getPostAuthors: vi.fn(),
   transferPost: vi.fn(),
 }))
 const users = vi.hoisted(() => ({ getUsers: vi.fn() }))
@@ -40,6 +41,8 @@ beforeEach(() => {
   document.body.appendChild(container)
   root = createRoot(container)
   api.getPostOwner.mockReset().mockResolvedValue({ id: luan.id, username: luan.username, full_name: luan.full_name })
+  // The owner is credited, so the dialog offers to replace them.
+  api.getPostAuthors.mockReset().mockResolvedValue([{ id: luan.id, username: luan.username, full_name: luan.full_name }])
   api.transferPost.mockReset().mockResolvedValue({
     post: { id: 7, user_id: ana.id },
     owner: { id: ana.id, username: ana.username, full_name: ana.full_name },
@@ -142,6 +145,31 @@ describe("PostOwner", () => {
     await act(async () => button("Transfer").click())
     await flush()
     expect(api.transferPost).toHaveBeenCalledWith(7, ana.id, true)
+  })
+
+  it("offers no byline swap when the owner isn't credited", async () => {
+    api.getPostAuthors.mockResolvedValue([{ id: bea.id, username: bea.username, full_name: bea.full_name }])
+    await mount()
+    await openDialog()
+    await pick("Ana Costa")
+    expect(dialog()!.querySelector('input[type="checkbox"]')).toBeNull()
+    expect(dialog()?.textContent).toContain("Ana Costa will own this post. The byline stays as it is.")
+    await act(async () => button("Transfer").click())
+    await flush()
+    expect(api.transferPost).toHaveBeenCalledWith(7, ana.id, false)
+  })
+
+  it("reloads the owner when someone else transferred it meanwhile", async () => {
+    api.transferPost.mockRejectedValueOnce(new ApiError("Request failed.", 409, null, "already_owner"))
+    await mount()
+    api.getPostOwner.mockResolvedValue({ id: ana.id, username: ana.username, full_name: ana.full_name })
+    await openDialog()
+    await pick("Ana Costa")
+    await act(async () => button("Transfer").click())
+    await flush()
+    expect(dialog()?.textContent).toContain("They already own this post.")
+    expect(api.getPostOwner).toHaveBeenCalledTimes(2)
+    expect(container.querySelector(".post-owner__name")?.textContent).toBe("Ana Costa")
   })
 
   it("keeps the dialog open with the API's reason when it refuses", async () => {

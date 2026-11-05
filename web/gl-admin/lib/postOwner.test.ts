@@ -52,6 +52,11 @@ describe("the Transfer dialog", () => {
     expect(transferConfirmLine(marco, ana, me, true)).toBe("marco will own this post. marco takes Ana Costa’s place in the byline.")
   })
 
+  it("promises nothing about the byline when the owner isn't in it", () => {
+    expect(transferConfirmLine(ana, luan, me, false, false)).toBe("Ana Costa will own this post. The byline stays as it is.")
+    expect(transferConfirmLine(ana, luan, me, true, false)).toBe("Ana Costa will own this post. The byline stays as it is.")
+  })
+
   it("asks to replace you, or the owner, in the byline", () => {
     expect(replaceInBylineLabel(luan, me)).toBe("Also replace me in the byline")
     expect(replaceInBylineLabel(ana, me)).toBe("Also replace Ana Costa in the byline")

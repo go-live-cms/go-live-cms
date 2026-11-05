@@ -10,7 +10,7 @@ import {
   updatePost,
   updatePostSEO,
 } from "@gl-admin/lib/api/posts"
-import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
+import { getPostOwner, type CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post, PostSEOSettings, ScheduledUpdate } from "@gl-admin/lib/api/types"
 import { firstParagraphFromHtml, sameSeo, seoFromPost, seoPayload, seoSaveable } from "@gl-admin/lib/postSeo"
 import { firstParagraphText, postPath } from "@/lib/seo"
@@ -145,7 +145,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [mode])
 
-  // The owner decides access (#135); an admin's Transfer (#353) changes it while open.
+  // The owner decides access (#135); a Transfer (#353) changes it while open: here after
+  // our own, and in every other open form when the collab re-check changes its access.
   const [ownerId, setOwnerId] = useState<number | undefined>(initialData?.user_id)
   useEffect(() => setOwnerId(initialData?.user_id), [initialData?.user_id])
   const access = postEditorAccess(
@@ -1152,6 +1153,15 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               onAccessChange={(change) => {
                 if (change.revoked || change.reason === "unverified") return
                 void authManager.refreshUser().then((user) => setMe(user ?? undefined))
+                // Or the post changed owner (#353): a contributor who lost it keeps
+                // the body read-only and must lose the details too.
+                if (initialData?.id) {
+                  void getPostOwner(initialData.id)
+                    .then((owner) => setOwnerId(owner.id))
+                    .catch(() => {
+                      // The API's own checks still refuse their saves.
+                    })
+                }
               }}
               value={formData.content}
               title={formData.title}

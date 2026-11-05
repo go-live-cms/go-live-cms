@@ -21,10 +21,11 @@ export default function PostOwner({ postId, me, canTransfer, onTransferred }: Po
   const [loadError, setLoadError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // Bumped when a transfer was refused because the owner changed meanwhile.
+  const [reload, setReload] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    setOwner(null)
     setLoadError(null)
     getPostOwner(postId)
       .then((found) => !cancelled && setOwner(found))
@@ -32,7 +33,7 @@ export default function PostOwner({ postId, me, canTransfer, onTransferred }: Po
     return () => {
       cancelled = true
     }
-  }, [postId])
+  }, [postId, reload])
 
   if (loadError) return <small className="post-settings__error">{loadError}</small>
   if (!owner) return <small className="post-settings__hint">Loading the owner…</small>
@@ -68,6 +69,7 @@ export default function PostOwner({ postId, me, canTransfer, onTransferred }: Po
           owner={owner}
           me={me}
           onClose={() => setOpen(false)}
+          onStale={() => setReload((n) => n + 1)}
           onTransferred={(result) => {
             setOpen(false)
             setOwner(result.owner)

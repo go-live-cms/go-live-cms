@@ -139,6 +139,9 @@ func TestTransferPostOwnerTxRefusals(t *testing.T) {
 	t.Run("no such post", func(t *testing.T) {
 		_, err := testStore.TransferPostOwnerTx(ctx, TransferPostOwnerTxParams{PostID: 1 << 60, ToID: ana.ID, OwnerRoles: ownerRoles})
 		require.ErrorIs(t, err, sql.ErrNoRows)
+		// The post is judged first, whoever was picked.
+		_, err = testStore.TransferPostOwnerTx(ctx, TransferPostOwnerTxParams{PostID: 1 << 60, ToID: 1 << 60, OwnerRoles: ownerRoles})
+		require.ErrorIs(t, err, sql.ErrNoRows)
 	})
 	t.Run("in the trash", func(t *testing.T) {
 		trashed := createBylinePost(t, owner)
@@ -195,6 +198,21 @@ func TestRemovalAndTransferShareTheReassignment(t *testing.T) {
 		require.Equal(t, bylineIDs(t, pair[0].ID), bylineIDs(t, pair[1].ID))
 	}
 	require.Equal(t, []int64{bo.ID, recipient.ID}, bylineIDs(t, viaRemoval.inPlace.ID), "the recipient takes the member's place")
+}
+
+// A removal's recipient must be an active member too, like a transfer's new owner.
+func TestRemoveUserTxRefusesInactiveRecipient(t *testing.T) {
+	ctx := context.Background()
+	member := createTestUserWithRole(t, "contributor")
+	reader := createTestUserWithRole(t, "user")
+	post := createBylinePost(t, member)
+
+	_, err := testStore.RemoveUserTx(ctx, RemoveUserTxParams{UserID: member.ID, ReassignTo: reader.ID, OwnerRoles: ownerRoles})
+	require.ErrorIs(t, err, ErrReassignTargetInactive)
+	id, _ := postOwner(t, post.ID)
+	require.Equal(t, member.ID, id, "nothing moved")
+	_, err = testQueries.GetUser(ctx, member.ID)
+	require.NoError(t, err, "and nobody was removed")
 }
 
 // reassignPostOwner on its own: AllPosts moves only the posts From still owns, and

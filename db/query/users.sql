@@ -102,7 +102,7 @@ RETURNING *;
 -- name: LockUsersForUpdate :many
 -- Row-locks the given users in id order (RemoveUserTx: the member and the one who
 -- receives their posts), so two removals that name each other can't deadlock.
-SELECT id, username, avatar_url FROM users
+SELECT id, username, avatar_url, role FROM users
 WHERE id = ANY(sqlc.arg(ids)::bigint[])
 ORDER BY id
 FOR UPDATE;

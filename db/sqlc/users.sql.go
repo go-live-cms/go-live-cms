@@ -436,7 +436,7 @@ func (q *Queries) LockUserForUpdate(ctx context.Context, id int64) error {
 }
 
 const lockUsersForUpdate = `-- name: LockUsersForUpdate :many
-SELECT id, username, avatar_url FROM users
+SELECT id, username, avatar_url, role FROM users
 WHERE id = ANY($1::bigint[])
 ORDER BY id
 FOR UPDATE
@@ -446,6 +446,7 @@ type LockUsersForUpdateRow struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
 	AvatarUrl string `json:"avatar_url"`
+	Role      string `json:"role"`
 }
 
 // Row-locks the given users in id order (RemoveUserTx: the member and the one who
@@ -459,7 +460,12 @@ func (q *Queries) LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUs
 	items := []LockUsersForUpdateRow{}
 	for rows.Next() {
 		var i LockUsersForUpdateRow
-		if err := rows.Scan(&i.ID, &i.Username, &i.AvatarUrl); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.AvatarUrl,
+			&i.Role,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

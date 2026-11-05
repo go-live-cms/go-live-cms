@@ -6,6 +6,7 @@ import MemberPicker from "@gl-admin/components/users/MemberPicker"
 import { deleteUser } from "@gl-admin/lib/api/users"
 import type { User } from "@gl-admin/lib/api/types"
 import { memberName, reassignSummary, removeMemberError } from "@gl-admin/lib/members"
+import { canOwnPosts } from "@gl-admin/lib/postOwner"
 import "@gl-admin/assets/styles/components/users/invitations.scss"
 
 interface RemoveMemberModalProps {
@@ -82,10 +83,12 @@ export default function RemoveMemberModal({ member, me, onClose, onRemoved }: Re
                     onChange={setRecipient}
                     me={me}
                     exclude={[member.id]}
+                    // They'll own the posts: an active member, as for a transfer (#353).
+                    eligible={canOwnPosts}
                     disabled={saving}
                     // You by default.
                     onLoaded={(members) => {
-                        const mine = members.find((m) => m.id === meId && m.id !== member.id)
+                        const mine = members.find((m) => m.id === meId && m.id !== member.id && canOwnPosts(m))
                         if (mine) setRecipient((current) => current ?? mine)
                     }}
                 />

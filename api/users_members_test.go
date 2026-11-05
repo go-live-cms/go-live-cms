@@ -325,7 +325,7 @@ func TestDeleteUserAPI(t *testing.T) {
 			body:     gin.H{"transfer_to_id": editor.ID},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
-					RemoveUserTx(gomock.Any(), db.RemoveUserTxParams{UserID: contributor.ID, ReassignTo: editor.ID}).
+					RemoveUserTx(gomock.Any(), db.RemoveUserTxParams{UserID: contributor.ID, ReassignTo: editor.ID, OwnerRoles: contentRoles}).
 					Return(db.RemoveUserTxResult{PostsReassigned: 3}, nil)
 			},
 			wantStatus: http.StatusOK,
@@ -395,6 +395,18 @@ func TestDeleteUserAPI(t *testing.T) {
 			body:     gin.H{"transfer_to_id": 999999},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().RemoveUserTx(gomock.Any(), gomock.Any()).Return(db.RemoveUserTxResult{}, db.ErrReassignTargetNotFound)
+			},
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "invalid_transfer_target",
+		},
+		{
+			// The recipient owns the posts from now on: an active member (#353's rule).
+			name:     "TransferTargetInactive",
+			caller:   admin,
+			targetID: target,
+			body:     gin.H{"transfer_to_id": 31},
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().RemoveUserTx(gomock.Any(), gomock.Any()).Return(db.RemoveUserTxResult{}, db.ErrReassignTargetInactive)
 			},
 			wantStatus: http.StatusBadRequest,
 			wantCode:   "invalid_transfer_target",

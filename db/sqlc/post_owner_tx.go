@@ -104,8 +104,9 @@ type TransferPostOwnerTxResult struct {
 
 // TransferPostOwnerTx gives a post to another member (#353), in one transaction:
 // lock the new owner FOR KEY SHARE (so a removal waits, or wins and this is
-// ErrNewOwnerNotFound) and check their role, then lock the post and read its
-// owner, then reassignPostOwner (the code a removal runs). Users before the post,
+// ErrNewOwnerNotFound), then lock the post and read its owner, check the post
+// (missing, trashed) before the new owner (missing, role), then reassignPostOwner
+// (the code a removal runs). Users before the post,
 // RemoveUserTx's and SetPostAuthorsTx's order, so they can't deadlock.
 //
 // The working byline changes only with ReplaceInByline; on a published post the
@@ -118,18 +119,12 @@ type TransferPostOwnerTxResult struct {
 func (store *SQLStore) TransferPostOwnerTx(ctx context.Context, arg TransferPostOwnerTxParams) (TransferPostOwnerTxResult, error) {
 	var result TransferPostOwnerTxResult
 	err := store.execTx(ctx, func(q *Queries) error {
-		owner, err := q.LockNewPostOwner(ctx, arg.ToID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNewOwnerNotFound
+		// Locked in this order (users, then the post), but judged post first: a
+		// missing or trashed post says so whoever was picked.
+		owner, ownerErr := q.LockNewPostOwner(ctx, arg.ToID)
+		if ownerErr != nil && !errors.Is(ownerErr, sql.ErrNoRows) {
+			return fmt.Errorf("lock new owner: %w", ownerErr)
 		}
-		if err != nil {
-			return fmt.Errorf("lock new owner: %w", err)
-		}
-		if !roleIn(owner.Role, arg.OwnerRoles) {
-			return ErrNewOwnerInactive
-		}
-		result.Owner = owner
-
 		post, err := q.LockPostOwner(ctx, arg.PostID)
 		if err != nil {
 			return err
@@ -137,6 +132,13 @@ func (store *SQLStore) TransferPostOwnerTx(ctx context.Context, arg TransferPost
 		if post.PostStatus == PostStatusTrash {
 			return ErrPostTrashed
 		}
+		if errors.Is(ownerErr, sql.ErrNoRows) {
+			return ErrNewOwnerNotFound
+		}
+		if !roleIn(owner.Role, arg.OwnerRoles) {
+			return ErrNewOwnerInactive
+		}
+		result.Owner = owner
 		if post.UserID == owner.ID {
 			return ErrAlreadyOwner
 		}
@@ -171,7 +173,8 @@ func (store *SQLStore) TransferPostOwnerTx(ctx context.Context, arg TransferPost
 }
 
 // roleIn reports whether role is one of roles, case-insensitively (roles are
-// matched that way everywhere, api/auth_roles.go).
+// matched that way everywhere, api/auth_roles.go). The rule both owner changes
+// apply to the new owner: a transfer and a removal's recipient.
 func roleIn(role string, roles []string) bool {
 	for _, r := range roles {
 		if strings.EqualFold(role, r) {

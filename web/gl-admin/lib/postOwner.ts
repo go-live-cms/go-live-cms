@@ -33,22 +33,26 @@ export function replaceInBylineLabel(owner: Named & { id: number }, me: { id: nu
 }
 
 // The confirm line under the picker: "Ana Costa will own this post. You keep your
-// place in the byline."
+// place in the byline." `ownerCredited`: the old owner is in the byline (otherwise
+// there's no place to keep or give, and the dialog offers no replacing).
 export function transferConfirmLine(
   next: Named,
   owner: Named & { id: number },
   me: { id: number } | null | undefined,
   replaceInByline: boolean,
+  ownerCredited = true,
 ): string {
   const you = !!me && owner.id === me.id
   const name = ownerName(next)
-  const byline = replaceInByline
-    ? you
-      ? `${name} takes your place in the byline.`
-      : `${name} takes ${ownerName(owner)}’s place in the byline.`
-    : you
-      ? "You keep your place in the byline."
-      : "The byline stays as it is."
+  const byline = !ownerCredited
+    ? "The byline stays as it is."
+    : replaceInByline
+      ? you
+        ? `${name} takes your place in the byline.`
+        : `${name} takes ${ownerName(owner)}’s place in the byline.`
+      : you
+        ? "You keep your place in the byline."
+        : "The byline stays as it is."
   return `${name} will own this post. ${byline}`
 }
 
