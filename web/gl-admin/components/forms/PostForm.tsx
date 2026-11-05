@@ -185,6 +185,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [publishFailure, setPublishFailure] = useState<PublishFailure | null>(null)
   // History (#136): the version shown in the canvas, and the one waiting for confirmation.
   const [viewingVersion, setViewingVersion] = useState<PostVersion | null>(null)
+  // "Highlight changes" (#355) re-reads the working copy when the collab server stored it.
+  const [workingCopyKey, setWorkingCopyKey] = useState(0)
+  const viewingVersionRef = useRef(false)
+  viewingVersionRef.current = !!viewingVersion
   const [confirmRestore, setConfirmRestore] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
 
@@ -235,7 +239,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const storedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const handleStored = () => {
     clearTimeout(storedTimerRef.current)
-    storedTimerRef.current = setTimeout(() => void refreshSettingsState(), STORED_REFRESH_DELAY_MS)
+    storedTimerRef.current = setTimeout(() => {
+      void refreshSettingsState()
+      if (viewingVersionRef.current) setWorkingCopyKey((k) => k + 1)
+    }, STORED_REFRESH_DELAY_MS)
   }
   useEffect(() => () => clearTimeout(storedTimerRef.current), [])
   // Scheduling or cancelling an update (#335) stores nothing, so a tab that was in the
@@ -1104,7 +1111,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         <main className="post-editor__canvas">
           {viewingVersion && (
             <div className="post-editor__document">
-              <VersionPreview version={viewingVersion} />
+              <VersionPreview version={viewingVersion} postId={initialData?.id} workingKey={workingCopyKey} />
             </div>
           )}
           {/* Hidden, not unmounted, while a version is shown: the bound editor stays connected. */}

@@ -247,6 +247,18 @@ type Setting struct {
 	DateFormat              string         `json:"date_format"`
 	EditorMarkdownShortcuts bool           `json:"editor_markdown_shortcuts"`
 	EditorAllowedEmbeds     []string       `json:"editor_allowed_embeds"`
+	AllowSignup             bool           `json:"allow_signup"`
+}
+
+type SignupRequest struct {
+	ID             int64     `json:"id"`
+	Email          string    `json:"email"`
+	Username       string    `json:"username"`
+	FullName       string    `json:"full_name"`
+	HashedPassword string    `json:"hashed_password"`
+	TokenHash      []byte    `json:"token_hash"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type TaxonomyTerm struct {

@@ -12,6 +12,7 @@ SET
   site_timezone = COALESCE(sqlc.narg('site_timezone'), site_timezone),
   date_format = COALESCE(sqlc.narg('date_format'), date_format),
   editor_markdown_shortcuts = COALESCE(sqlc.narg('editor_markdown_shortcuts'), editor_markdown_shortcuts),
+  allow_signup = COALESCE(sqlc.narg('allow_signup'), allow_signup),
   -- A nil slice is NULL (keep); an empty one clears the list.
   editor_allowed_embeds = COALESCE(sqlc.narg('editor_allowed_embeds')::text[], editor_allowed_embeds),
   changed_at = now()

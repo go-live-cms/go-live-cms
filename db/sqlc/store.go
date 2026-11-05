@@ -54,6 +54,9 @@ type Store interface {
 	RequestEmailChangeTx(ctx context.Context, arg RequestEmailChangeTxParams) (EmailChangeToken, error)
 	ConfirmEmailChangeTx(ctx context.Context, tokenHash []byte) (ConfirmEmailChangeTxResult, error)
 	SignOutOtherSessionsTx(ctx context.Context, arg SignOutOtherSessionsTxParams) (SignOutOtherSessionsTxResult, error)
+	// open signup (#191)
+	RequestSignupTx(ctx context.Context, arg CreateSignupRequestParams) (SignupRequest, error)
+	ConfirmSignupTx(ctx context.Context, tokenHash []byte) (User, error)
 
 	CreatePostWithTaxonomyTermsTx(ctx context.Context, arg CreatePostWithTaxonomyTermsTxParams) (CreatePostWithTaxonomyTermsTxResult, error)
 	DeleteTaxonomyTermTx(ctx context.Context, id int64) error

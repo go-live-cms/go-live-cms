@@ -89,6 +89,8 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       const name = personName(event.user) || "a former member"
       const href = event.user ? "/users" : null
       if (event.verb === "joined") return { verb: "joined as", what: withArticle(role(event.payload.role)), href }
+      // Open signup (#191): recorded once the email is confirmed.
+      if (event.verb === "signed_up") return { verb: "signed up as", what: withArticle(role(event.payload.role)), href }
       if (event.verb === "created") return { verb: "added", what: `${name} as ${withArticle(role(event.payload.role))}`, href }
       if (event.verb === "role_changed") return { verb: "made", what: `${name} ${withArticle(role(event.payload.role))}`, href }
       if (event.verb === "removed") return { verb: "removed", what: name, href: null }

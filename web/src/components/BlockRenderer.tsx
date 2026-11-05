@@ -29,10 +29,33 @@ interface BlockRendererProps {
  */
 export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings }: BlockRendererProps) {
   const headingIds = new Map((headings ?? headingAnchors(doc)).map((h) => [h.blockId, h.id]))
+  const renderBlock = blockRendererFor(doc)
 
-  /**
-   * Render a single block by ID using the registry
-   */
+  // Deduplicate blocks_order to prevent duplicate rendering
+  const uniqueBlockIds = Array.from(new Set(doc.blocks_order))
+  // Drop blank paragraphs at the end. The editor appends an empty paragraph after a final
+  // image, list, quote or heading (TipTap's TrailingNode), and the author never typed it;
+  // rendering it would add space at the bottom of every such post. Blank lines anywhere
+  // else are the author's spacing and render as one line (ParagraphBlock, #306).
+  while (uniqueBlockIds.length > 0 && isBlankParagraph(doc.blocks[uniqueBlockIds[uniqueBlockIds.length - 1]] as Block)) {
+    uniqueBlockIds.pop()
+  }
+
+  return (
+    <ImageSizesContext.Provider value={imageSizes}>
+      <HeadingIdsContext.Provider value={headingIds}>
+        <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
+      </HeadingIdsContext.Provider>
+    </ImageSizesContext.Provider>
+  )
+}
+
+/**
+ * Renders one block of `doc` by id, as BlockRenderer does (children through the same
+ * function); null for a block nothing in this build renders. The admin's History
+ * comparison (#355) renders blocks one at a time with it.
+ */
+export function blockRendererFor(doc: BlockDocV1): (blockId: string) => React.ReactElement | null {
   const renderBlock = (blockId: string): React.ReactElement | null => {
     const block = doc.blocks[blockId] as Block
     if (!block) return null
@@ -69,22 +92,5 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
       />
     )
   }
-
-  // Deduplicate blocks_order to prevent duplicate rendering
-  const uniqueBlockIds = Array.from(new Set(doc.blocks_order))
-  // Drop blank paragraphs at the end. The editor appends an empty paragraph after a final
-  // image, list, quote or heading (TipTap's TrailingNode), and the author never typed it;
-  // rendering it would add space at the bottom of every such post. Blank lines anywhere
-  // else are the author's spacing and render as one line (ParagraphBlock, #306).
-  while (uniqueBlockIds.length > 0 && isBlankParagraph(doc.blocks[uniqueBlockIds[uniqueBlockIds.length - 1]] as Block)) {
-    uniqueBlockIds.pop()
-  }
-
-  return (
-    <ImageSizesContext.Provider value={imageSizes}>
-      <HeadingIdsContext.Provider value={headingIds}>
-        <div className="block-content">{uniqueBlockIds.map((blockId) => renderBlock(blockId))}</div>
-      </HeadingIdsContext.Provider>
-    </ImageSizesContext.Provider>
-  )
+  return renderBlock
 }

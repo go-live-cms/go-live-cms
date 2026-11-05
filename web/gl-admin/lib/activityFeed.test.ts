@@ -68,6 +68,7 @@ describe("describeActivity", () => {
     expect(line({ object_type: "user", verb: "removed", post: undefined, payload: {} })).toBe("Ana Costa removed a former member")
     expect(line({ object_type: "user", verb: "created", post: undefined, user: elena, payload: { role: "contributor" } })).toBe("Ana Costa added Elena V. as a contributor")
     expect(line({ object_type: "user", verb: "joined", post: undefined, user: ana, payload: { role: "contributor" } })).toBe("Ana Costa joined as a contributor")
+    expect(line({ object_type: "user", verb: "signed_up", post: undefined, user: ana, payload: { role: "contributor" } })).toBe("Ana Costa signed up as a contributor")
     expect(line({ object_type: "settings", verb: "settings_updated", post: undefined, payload: { fields: ["site_title"] } })).toBe("Ana Costa updated the site settings")
   })
 

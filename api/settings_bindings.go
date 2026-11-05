@@ -14,6 +14,8 @@ type UpdateSettingsRequest struct {
 	DateFormat              *string   `json:"date_format" binding:"omitempty,oneof=month_day_year day_month_year iso"`
 	EditorMarkdownShortcuts *bool     `json:"editor_markdown_shortcuts"`
 	EditorAllowedEmbeds     *[]string `json:"editor_allowed_embeds" binding:"omitempty,max=20,dive,max=32,embed_provider"`
+	// "Allow anyone to sign up" (#191). Admins only, like every settings write.
+	AllowSignup *bool `json:"allow_signup"`
 }
 
 // setFields lists the JSON names of the settings the request sets, in field
@@ -34,6 +36,7 @@ func (req UpdateSettingsRequest) setFields() []string {
 	add(req.DateFormat != nil, "date_format")
 	add(req.EditorMarkdownShortcuts != nil, "editor_markdown_shortcuts")
 	add(req.EditorAllowedEmbeds != nil, "editor_allowed_embeds")
+	add(req.AllowSignup != nil, "allow_signup")
 	return fields
 }
 
@@ -49,6 +52,9 @@ type SettingsResponse struct {
 	DateFormat              string   `json:"date_format"`
 	EditorMarkdownShortcuts bool     `json:"editor_markdown_shortcuts"`
 	EditorAllowedEmbeds     []string `json:"editor_allowed_embeds"`
+	// Open signup (#191). Public on purpose: the sign-in page reads it to decide
+	// whether to offer "Create an account".
+	AllowSignup bool `json:"allow_signup"`
 	// The public origin (PUBLIC_BASE_URL), read-only: the domain is deploy config
 	// (docs/operations/deploy.md, "Change domain"). "" when it isn't configured.
 	SiteAddress string `json:"site_address"`

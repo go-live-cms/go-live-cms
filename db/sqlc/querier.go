@@ -48,6 +48,10 @@ type Querier interface {
 	ClaimEmailChangeToken(ctx context.Context, tokenHash []byte) (EmailChangeToken, error)
 	// Single-use: like ClaimUserInvitation, only one claim can match.
 	ClaimPasswordResetToken(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
+	// Single use: the claim deletes the row, so only one claim can match (a second
+	// waits on the row lock and then finds nothing). Rolled back with the transaction
+	// if the account can't be created.
+	ClaimSignupRequest(ctx context.Context, tokenHash []byte) (SignupRequest, error)
 	// Marks a valid invitation accepted in one statement, so two concurrent
 	// accepts can't both succeed: the loser re-checks accepted_at after the
 	// winner commits and matches no row.
@@ -115,6 +119,9 @@ type Querier interface {
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
 	CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
+	// Open signup (#191): the account is created only when the emailed link is
+	// redeemed (ConfirmSignupTx).
+	CreateSignupRequest(ctx context.Context, arg CreateSignupRequestParams) (SignupRequest, error)
 	// Taxonomy Terms Management
 	CreateTaxonomyTerm(ctx context.Context, arg CreateTaxonomyTermParams) (TaxonomyTerm, error)
 	// Taxonomy Types Management
@@ -153,6 +160,11 @@ type Querier interface {
 	DeletePostMedias(ctx context.Context, postID int64) error
 	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
 	DeletePostType(ctx context.Context, name string) error
+	// A newer signup for the address, or its account being created, ends every
+	// other pending link for it.
+	DeleteSignupRequestsByEmail(ctx context.Context, email string) error
+	// Expired rows hold unconfirmed details nobody can use any more.
+	DeleteStaleSignupRequests(ctx context.Context) (int64, error)
 	DeleteTaxonomyTerm(ctx context.Context, id int64) error
 	DeleteTaxonomyType(ctx context.Context, name string) error
 	DeleteTheme(ctx context.Context, id int64) error
@@ -273,6 +285,10 @@ type Querier interface {
 	GetThemeSetting(ctx context.Context, arg GetThemeSettingParams) (ThemeSetting, error)
 	GetUser(ctx context.Context, id int64) (User, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	// Ignoring case: emails are stored lowercased by the API, but an account created
+	// with SQL (the first admin, deploy.md) may hold capitals. Open signup (#191) must
+	// still treat that address as taken.
+	GetUserByEmailFold(ctx context.Context, email string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserMediaCount(ctx context.Context, userID int64) (int64, error)
 	GetValidEmailChangeTokenByHash(ctx context.Context, tokenHash []byte) (EmailChangeToken, error)

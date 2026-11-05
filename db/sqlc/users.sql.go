@@ -209,6 +209,35 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	return i, err
 }
 
+const getUserByEmailFold = `-- name: GetUserByEmailFold :one
+SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
+WHERE lower(email) = lower($1::text)
+LIMIT 1
+`
+
+// Ignoring case: emails are stored lowercased by the API, but an account created
+// with SQL (the first admin, deploy.md) may hold capitals. Open signup (#191) must
+// still treat that address as taken.
+func (q *Queries) GetUserByEmailFold(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmailFold, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.FullName,
+		&i.Email,
+		&i.HashedPassword,
+		&i.PasswordChangedAt,
+		&i.CreatedAt,
+		&i.Role,
+		&i.Bio,
+		&i.Website,
+		&i.LastActiveAt,
+		&i.AvatarUrl,
+	)
+	return i, err
+}
+
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT id, username, full_name, email, hashed_password, password_changed_at, created_at, role, bio, website, last_active_at, avatar_url FROM users
 WHERE username = $1

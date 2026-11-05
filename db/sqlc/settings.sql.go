@@ -56,7 +56,7 @@ func (q *Queries) GetExtensionSetting(ctx context.Context, key string) (Extensio
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds FROM settings WHERE id = 1
+SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup FROM settings WHERE id = 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
@@ -75,6 +75,7 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.DateFormat,
 		&i.EditorMarkdownShortcuts,
 		pq.Array(&i.EditorAllowedEmbeds),
+		&i.AllowSignup,
 	)
 	return i, err
 }
@@ -166,11 +167,12 @@ SET
   site_timezone = COALESCE($6, site_timezone),
   date_format = COALESCE($7, date_format),
   editor_markdown_shortcuts = COALESCE($8, editor_markdown_shortcuts),
+  allow_signup = COALESCE($9, allow_signup),
   -- A nil slice is NULL (keep); an empty one clears the list.
-  editor_allowed_embeds = COALESCE($9::text[], editor_allowed_embeds),
+  editor_allowed_embeds = COALESCE($10::text[], editor_allowed_embeds),
   changed_at = now()
 WHERE id = 1
-RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds
+RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup
 `
 
 type UpdateSettingsParams struct {
@@ -182,6 +184,7 @@ type UpdateSettingsParams struct {
 	SiteTimezone            sql.NullString `json:"site_timezone"`
 	DateFormat              sql.NullString `json:"date_format"`
 	EditorMarkdownShortcuts sql.NullBool   `json:"editor_markdown_shortcuts"`
+	AllowSignup             sql.NullBool   `json:"allow_signup"`
 	EditorAllowedEmbeds     []string       `json:"editor_allowed_embeds"`
 }
 
@@ -195,6 +198,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.SiteTimezone,
 		arg.DateFormat,
 		arg.EditorMarkdownShortcuts,
+		arg.AllowSignup,
 		pq.Array(arg.EditorAllowedEmbeds),
 	)
 	var i Setting
@@ -211,6 +215,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.DateFormat,
 		&i.EditorMarkdownShortcuts,
 		pq.Array(&i.EditorAllowedEmbeds),
+		&i.AllowSignup,
 	)
 	return i, err
 }

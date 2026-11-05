@@ -23,6 +23,14 @@ SELECT * FROM users
 WHERE email = $1
 LIMIT 1;
 
+-- name: GetUserByEmailFold :one
+-- Ignoring case: emails are stored lowercased by the API, but an account created
+-- with SQL (the first admin, deploy.md) may hold capitals. Open signup (#191) must
+-- still treat that address as taken.
+SELECT * FROM users
+WHERE lower(email) = lower(sqlc.arg(email)::text)
+LIMIT 1;
+
 -- name: ListUsers :many
 SELECT * FROM users
 ORDER BY

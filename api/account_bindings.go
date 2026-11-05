@@ -45,6 +45,22 @@ type RequestEmailChangeRequest struct {
 	NewEmail        string `json:"new_email" binding:"required,email,max=254"`
 }
 
+// RegisterRequest is an open signup (#191), when Settings allows it. The same
+// rules as AcceptInvitationRequest plus the email, which an invitation would fix.
+// There is no password confirmation field: the page checks that, like the other
+// account forms.
+type RegisterRequest struct {
+	Username string `json:"username" binding:"required,min=3,max=50"`
+	FullName string `json:"full_name" binding:"required,min=2,max=100"`
+	Email    string `json:"email" binding:"required,email,max=254"`
+	Password string `json:"password" binding:"required,new_password,max_bytes=72"`
+}
+
+// ConfirmSignupRequest redeems a signup confirmation token (#191).
+type ConfirmSignupRequest struct {
+	Token string `json:"token" binding:"required,max=64"`
+}
+
 // ConfirmEmailChangeRequest redeems an email change confirmation token.
 type ConfirmEmailChangeRequest struct {
 	Token string `json:"token" binding:"required,max=64"`

@@ -40,6 +40,7 @@ const SIGN_OUT_NOTICES: Record<string, string> = {
   "session-expired": "Your session has expired. Please sign in again.",
   "password-reset": "Your password was reset and every session signed out. Sign in with your new password.",
   "invite-accepted": "Your account is ready. Sign in with your new username and password.",
+  "signup-confirmed": "Your email is confirmed and your account is ready. Sign in with your new username and password.",
 }
 
 export function signOutNotice(search: string): string | null {
