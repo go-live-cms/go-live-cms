@@ -10,7 +10,7 @@ import {
   updatePost,
   updatePostSEO,
 } from "@gl-admin/lib/api/posts"
-import type { CreatePostRequest } from "@gl-admin/lib/api/posts"
+import { getPostOwner, type CreatePostRequest } from "@gl-admin/lib/api/posts"
 import type { Post, PostSEOSettings, ScheduledUpdate } from "@gl-admin/lib/api/types"
 import { firstParagraphFromHtml, sameSeo, seoFromPost, seoPayload, seoSaveable } from "@gl-admin/lib/postSeo"
 import { firstParagraphText, postPath } from "@/lib/seo"
@@ -48,6 +48,7 @@ import {
 import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
 import { getPostAccess, type PostAccess } from "@gl-admin/lib/api/postAccess"
 import { AccessRequestsNotice, PostCollaborators, ViewOnlyNotice } from "@gl-admin/components/editor/ui/PostEditAccess"
+import { canTransferPost } from "@gl-admin/lib/postOwner"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 
 // After the collab server stores a changed body, how long to wait for the next store of the
@@ -160,11 +161,15 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [mode, reloadAccess])
 
+  // The owner decides access (#135); a Transfer (#353) changes it while open: here after
+  // our own, and in every other open form when the collab re-check changes its access.
+  const [ownerId, setOwnerId] = useState<number | undefined>(initialData?.user_id)
+  useEffect(() => setOwnerId(initialData?.user_id), [initialData?.user_id])
   const access = postEditorAccess(
     me,
     mode,
     mode === "edit" && initialData
-      ? { user_id: initialData.user_id, post_status: formData.post_status, collaborator: postAccess?.collaborator }
+      ? { user_id: ownerId ?? initialData.user_id, post_status: formData.post_status, collaborator: postAccess?.collaborator }
       : undefined
   )
   const contentReadOnly = !access.content
@@ -1177,6 +1182,15 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                 if (change.revoked || change.reason === "unverified") return
                 void authManager.refreshUser().then((user) => setMe(user ?? undefined))
                 void reloadAccess()
+                // Or the post changed owner (#353): a contributor who lost it keeps
+                // the body read-only and must lose the details too.
+                if (initialData?.id) {
+                  void getPostOwner(initialData.id)
+                    .then((owner) => setOwnerId(owner.id))
+                    .catch(() => {
+                      // The API's own checks still refuse their saves.
+                    })
+                }
               }}
               value={formData.content}
               title={formData.title}
@@ -1265,6 +1279,15 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           settingsPending={settingsPending}
           publishAt={scheduled ? publishAt : null}
           onSchedule={collabEnabled && canPublish ? () => setScheduleOpen(true) : undefined}
+          owner={
+            mode === "edit" && initialData?.id
+              ? {
+                  me,
+                  canTransfer: canTransferPost(me, { post_status: formData.post_status }),
+                  onTransferred: (result) => setOwnerId(result.owner.id),
+                }
+              : undefined
+          }
           seo={
             mode === "edit" && initialData?.id
               ? {

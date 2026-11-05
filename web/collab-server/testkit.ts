@@ -78,6 +78,15 @@ export class FakeCollabApi implements InternalApi {
     this.posts.set(postId, { block_doc: blockDoc, block_revision: revision, state: null, epoch: null, state_revision: null })
   }
 
+  /** An admin gave the post to another member (#353, POST /posts/:id/transfer): it leaves the old owner's `owns`. */
+  transferPost(postId: string, toUserId: string) {
+    for (const user of this.users.values()) {
+      if (user.owns) user.owns = user.owns.filter((id) => id !== postId)
+    }
+    const owner = this.users.get(toUserId)!
+    owner.owns = [...(owner.owns ?? []), postId]
+  }
+
   /** Something wrote block_doc around the collab server (a rollback, an import). */
   writeAround(postId: string, blockDoc: BlockDocV1) {
     const post = this.posts.get(postId)!
