@@ -14,6 +14,7 @@ const api = vi.hoisted(() => ({
   getContinueEditing: vi.fn(),
   getNeedsAttention: vi.fn(),
   getActivity: vi.fn(),
+  listPostTemplates: vi.fn(),
 }))
 
 vi.mock("@gl-admin/lib/auth", () => ({
@@ -25,6 +26,12 @@ vi.mock("@gl-admin/lib/api/activity", () => ({
   getContinueEditing: api.getContinueEditing,
   getNeedsAttention: api.getNeedsAttention,
   getActivity: api.getActivity,
+}))
+vi.mock("@gl-admin/lib/api/postTemplates", () => ({
+  listPostTemplates: api.listPostTemplates,
+  createPostFromTemplate: vi.fn(),
+  renamePostTemplate: vi.fn(),
+  deletePostTemplate: vi.fn(),
 }))
 vi.mock("@gl-admin/lib/api/settings", () => ({
   getSettings: () => Promise.resolve({ post_url_structure: "id", site_title: "GoLive Blog" }),
@@ -115,6 +122,7 @@ beforeEach(() => {
   api.getContinueEditing.mockResolvedValue([recent(1, { has_unpublished_changes: true })])
   api.getNeedsAttention.mockResolvedValue(nothingNeeded)
   api.getActivity.mockResolvedValue({ activity: [], next_before: null })
+  api.listPostTemplates.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -123,6 +131,39 @@ afterEach(() => {
 })
 
 describe("Home", () => {
+  // #322, "Home" on the redesign canvas: "New post · Blank or from a template".
+  it("New post opens the Blank-or-template chooser", async () => {
+    api.listPostTemplates.mockResolvedValue([
+      { id: 4, post_type: "post", name: "Weekly update", terms: [], featured_image_id: null, created_by_id: 7, created_by_name: "", created_at: "", changed_at: "" },
+    ])
+    await render()
+    const action = Array.from(container.querySelectorAll<HTMLElement>(".gl-home__action")).find((a) => a.textContent?.startsWith("New post"))!
+    expect(action.tagName).toBe("BUTTON")
+    expect(action.textContent).toBe("New postBlank or from a template")
+    expect(api.listPostTemplates).not.toHaveBeenCalled()
+    await act(async () => action.click())
+    await flush()
+    expect(api.listPostTemplates).toHaveBeenCalledWith("post")
+    const dialog = container.querySelector("[role='dialog']")
+    expect(dialog?.textContent).toContain("Blank post")
+    expect(dialog?.textContent).toContain("Weekly update")
+    // An editor manages them here (rename, delete).
+    expect(container.querySelector("button[aria-label='Manage “Weekly update”']")).not.toBeNull()
+  })
+
+  it("gives a contributor the chooser without the manager", async () => {
+    api.user.role = "contributor"
+    api.listPostTemplates.mockResolvedValue([
+      { id: 4, post_type: "post", name: "Weekly update", terms: [], featured_image_id: null, created_by_id: 7, created_by_name: "", created_at: "", changed_at: "" },
+    ])
+    await render()
+    const action = Array.from(container.querySelectorAll<HTMLElement>(".gl-home__action")).find((a) => a.textContent?.startsWith("New post"))!
+    await act(async () => action.click())
+    await flush()
+    expect(container.querySelector("[role='dialog']")?.textContent).toContain("Weekly update")
+    expect(container.querySelector("button[aria-label^='Manage']")).toBeNull()
+  })
+
   it("greets by the time of day", () => {
     expect(greeting(new Date(2026, 9, 27, 9))).toBe("Good morning")
     expect(greeting(new Date(2026, 9, 27, 14))).toBe("Good afternoon")

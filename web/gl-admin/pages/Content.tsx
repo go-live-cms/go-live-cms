@@ -19,6 +19,7 @@ import EmptyState from "@gl-admin/components/ui/EmptyState"
 import { DocumentIcon, PlusIcon, SearchIcon } from "@gl-admin/components/ui/icons"
 import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
 import ReviewRequestedPill from "@gl-admin/components/content/ReviewRequestedPill"
+import { useNewPostChooser } from "@gl-admin/components/content/NewPostDialog"
 import {
   AccessCell,
   BulkBar,
@@ -136,6 +137,8 @@ function PostsList({ typeName, postType, title }: ListProps) {
   const filtered = hasFilters(filters)
   const { plural, singular } = typeLabels(typeName, postType, title)
   const newType = typeName || "post"
+  // New: Blank or a template of this type (#322), when it has any.
+  const newPost = useNewPostChooser({ postType: newType, noun: singular, canCreate, canManage: moderator })
 
   const [counts, setCounts] = useState<StatusCounts | null>(null)
   const [mineCounts, setMineCounts] = useState<StatusCounts | null>(null)
@@ -365,7 +368,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
   })
 
   const newButton = canCreate && (
-    <Button variant="primary" icon={<PlusIcon />} onClick={() => navigate(`/content/${newType}/new`)}
+    <Button variant="primary" icon={<PlusIcon />} onClick={newPost.start}
       // The mobile bar has its own New post button.
       className={newType === "post" ? "gl-content-list__new" : undefined}
     >
@@ -377,6 +380,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
     return (
       <section className="gl-content-list">
         <ListHeader title={plural} actions={newButton} />
+        {newPost.dialog}
         <EmptyState
           className="gl-content-list__empty"
           icon={<DocumentIcon size={24} />}
@@ -388,7 +392,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
           }
           action={
             canCreate && (
-              <Button variant="primary" size="lg" onClick={() => navigate(`/content/${newType}/new`)}>
+              <Button variant="primary" size="lg" onClick={newPost.start}>
                 Write a {singular}
               </Button>
             )
@@ -403,6 +407,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
   return (
     <section className={`gl-content-list${moderator ? "" : " gl-content-list--contributor"}`}>
       <ListHeader title={plural} actions={newButton} />
+      {newPost.dialog}
 
       {!moderator && (
         <Notice tone="info">

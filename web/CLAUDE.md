@@ -182,6 +182,17 @@ are the most fragile part of the codebase. **Before editing anything under
   the tree. Features without a backend yet stay hidden (comments at the top of each page).
   The row menu's **Duplicate** (#354, any content role) calls `POST /posts/:id/duplicate`
   and opens the copy in the editor with the toast `DUPLICATED_MESSAGE`.
+- **Post templates (#322):** Home's **New post** ("Blank or from a template") opens
+  `components/content/NewPostDialog.tsx`: Blank goes to `/content/post/new` as before, a
+  template calls `POST /post-templates/:id/posts` and opens the new draft. The lists' New
+  button (Posts, Pages, any type) opens it too when the type has templates
+  (`useNewPostChooser`), else goes straight to a blank post. The chooser **is** the
+  templates manager: admins and editors rename (in place) and delete (asks first) from
+  each template's menu; contributors only use them. Templates are saved from the row
+  menu's **Save as template…** (moderators, not in the trash; `rowActions`' `template`),
+  `SaveTemplateDialog`: a name (the post's title by default) and "Also save its category
+  and featured image". Rules and wording: `lib/postTemplates.ts` (tested, limits checked
+  against the Go); client: `lib/api/postTemplates.ts`.
 - **Editor chrome (#341):** `components/editor/ui/EditorTopBar.tsx` (breadcrumb, status,
   save/connection state, presence, publish menu), `PostSidebar` (Post · History), History
   preview in the canvas (`RevisionsPanel`'s `VersionPreview`; the bound editor stays mounted,

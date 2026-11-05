@@ -1,7 +1,8 @@
 // Package api — duplicating a post (#354)
 //
 // POST /posts/:id/duplicate copies a post into a new draft owned by the
-// caller. copyPost holds the copy itself, so templates (#322) can reuse it.
+// caller. newPostCopy holds the copy itself (fresh block ids, unique slug and
+// url); posts made from a template (#322, post_templates.go) use it too.
 //
 // What the copy gets
 //   - title "<title> (copy)", a new unique slug and url, status draft
@@ -59,50 +60,100 @@ type postCopy struct {
 	Parent sql.NullInt64
 }
 
-// copyPost creates a draft copy of source (see the file comment for what is
-// copied) in one transaction (DuplicatePostTx).
-func (server *Server) copyPost(ctx context.Context, source db.Post, opts postCopy) (db.Post, error) {
-	blockDoc, err := regenerateBlockIDs(source.BlockDoc, uuid.NewString)
+// copySource is what a new post is copied from: another post (duplicate,
+// #354) or a template (#322).
+type copySource struct {
+	BlockDoc    json.RawMessage
+	PostType    string
+	Description string
+	MenuOrder   int32
+	// SlugBase is the slug the copy starts from; it is made unique (-2, -3, …).
+	SlugBase string
+	// URL is the copy's url (before generateUniqueURL) for its final slug.
+	URL func(slug string) string
+	// Check runs the regenerated block_doc through prepareForStore, the checks
+	// any new post's body gets (POST /posts). A template's content is checked
+	// again when it is used, since the installed theme blocks may have changed
+	// since it was saved. A duplicate copies a stored working copy as it is.
+	Check bool
+}
+
+// errInvalidCopyBlockDoc wraps a prepareForStore refusal of a copy's
+// block_doc (copySource.Check): the caller answers 400, not 500.
+var errInvalidCopyBlockDoc = errors.New("invalid block document")
+
+// newPostCopy builds a copy's row, shared by duplicates and posts made from a
+// template: the source's block_doc with every block id regenerated
+// (regenerateBlockIDs), a unique slug and url, draft status, the owner, title
+// and parent from opts. It also returns the copy's content media uses for the
+// post_media sync. Nothing is written.
+func (server *Server) newPostCopy(ctx context.Context, src copySource, opts postCopy) (db.CreatePostsParams, []db.ContentMediaUse, error) {
+	blockDoc, err := regenerateBlockIDs(src.BlockDoc, uuid.NewString)
 	if err != nil {
-		return db.Post{}, fmt.Errorf("copy block_doc: %w", err)
+		return db.CreatePostsParams{}, nil, fmt.Errorf("copy block_doc: %w", err)
 	}
 	var parsed BlockDocV1
 	if err := json.Unmarshal(blockDoc, &parsed); err != nil {
-		return db.Post{}, fmt.Errorf("copy block_doc: %w", err)
+		return db.CreatePostsParams{}, nil, fmt.Errorf("copy block_doc: %w", err)
+	}
+	if src.Check {
+		if err := parsed.prepareForStore(server.themeBlocks); err != nil {
+			return db.CreatePostsParams{}, nil, fmt.Errorf("%w: %v", errInvalidCopyBlockDoc, err)
+		}
+		if blockDoc, err = json.Marshal(parsed); err != nil {
+			return db.CreatePostsParams{}, nil, fmt.Errorf("copy block_doc: %w", err)
+		}
 	}
 
-	slug, err := server.generateUniqueSlug(ctx, copySlug(source.Slug), 0)
+	slug, err := server.generateUniqueSlug(ctx, src.SlugBase, 0)
 	if errors.Is(err, errSlugsExhausted) {
 		// x-copy … x-copy-99 are all taken: a random suffix instead, so a post
-		// copied that often (a template, #322) still copies.
+		// copied that often (or a template used that often, #322) still copies.
 		random := "-" + uuid.NewString()[:8]
-		base := truncateRunes(copySlug(source.Slug), postSlugMax-len("-99")-len(random))
+		base := truncateRunes(src.SlugBase, postSlugMax-len("-99")-len(random))
 		slug, err = server.generateUniqueSlug(ctx, base+random, 0)
 	}
 	if err != nil {
-		return db.Post{}, err
+		return db.CreatePostsParams{}, nil, err
 	}
-	url, err := server.generateUniqueURL(ctx, copyURL(source.Url, source.Slug, slug))
+	url, err := server.generateUniqueURL(ctx, src.URL(slug))
+	if err != nil {
+		return db.CreatePostsParams{}, nil, err
+	}
+
+	return db.CreatePostsParams{
+		Title:       opts.Title,
+		Description: src.Description,
+		UserID:      opts.Owner.ID,
+		Username:    opts.Owner.Username,
+		Url:         url,
+		PostType:    src.PostType,
+		PostStatus:  "draft",
+		PostParent:  opts.Parent,
+		MenuOrder:   src.MenuOrder,
+		Slug:        slug,
+		BlockDoc:    blockDoc,
+	}, parsed.contentMediaUses(), nil
+}
+
+// copyPost creates a draft copy of source (see the file comment for what is
+// copied) in one transaction (DuplicatePostTx).
+func (server *Server) copyPost(ctx context.Context, source db.Post, opts postCopy) (db.Post, error) {
+	params, media, err := server.newPostCopy(ctx, copySource{
+		BlockDoc:    source.BlockDoc,
+		PostType:    source.PostType,
+		Description: source.Description,
+		MenuOrder:   source.MenuOrder,
+		SlugBase:    copySlug(source.Slug),
+		URL:         func(slug string) string { return copyURL(source.Url, source.Slug, slug) },
+	}, opts)
 	if err != nil {
 		return db.Post{}, err
 	}
-
 	return server.store.DuplicatePostTx(ctx, db.DuplicatePostTxParams{
-		SourceID: source.ID,
-		CreatePostsParams: db.CreatePostsParams{
-			Title:       opts.Title,
-			Description: source.Description,
-			UserID:      opts.Owner.ID,
-			Username:    opts.Owner.Username,
-			Url:         url,
-			PostType:    source.PostType,
-			PostStatus:  "draft",
-			PostParent:  opts.Parent,
-			MenuOrder:   source.MenuOrder,
-			Slug:        slug,
-			BlockDoc:    blockDoc,
-		},
-		ContentMedia: parsed.contentMediaUses(),
+		SourceID:          source.ID,
+		CreatePostsParams: params,
+		ContentMedia:      media,
 	})
 }
 
