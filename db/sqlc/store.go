@@ -75,6 +75,7 @@ type Store interface {
 	PublishScheduledUpdateTx(ctx context.Context, arg PublishScheduledUpdateTxParams) (PublishPostTxResult, error)
 	RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error)
 	SetPostAuthorsTx(ctx context.Context, arg SetPostAuthorsTxParams) (SetPostAuthorsTxResult, error)
+	TransferPostOwnerTx(ctx context.Context, arg TransferPostOwnerTxParams) (TransferPostOwnerTxResult, error)
 
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)
 	ReplaceMenuItemsTx(ctx context.Context, arg ReplaceMenuItemsTxParams) ([]MenuItem, error)
@@ -271,7 +272,8 @@ type RemoveUserTxResult struct {
 //     demotions of admins),
 //   - locks the member and the recipient (LockUsersForUpdate, id order),
 //   - moves every post they own (posts.user_id) to the recipient, with their byline
-//     on those posts (ReassignPostBylines), and the media they uploaded,
+//     on those posts (reassignPostOwner, shared with TransferPostOwnerTx, #353), and
+//     the media they uploaded,
 //   - drops their credit on everyone else's posts, crediting the owner where that
 //     leaves a byline empty, in the working and the published bylines alike (#319),
 //   - deletes their sessions, which revokes every refresh token,
@@ -311,29 +313,24 @@ func (store *SQLStore) RemoveUserTx(ctx context.Context, arg RemoveUserTxParams)
 		}
 		result.AvatarURL = found.AvatarUrl
 
-		moved, err := q.ReassignPostsOwner(ctx, ReassignPostsOwnerParams{
-			FromID:     arg.UserID,
-			ToID:       recipient.ID,
-			ToUsername: recipient.Username,
+		// The same reassignment a transfer runs (#353), for every post they own,
+		// with their byline on those posts: the credit can't stay on a deleted row.
+		moved, err := reassignPostOwner(ctx, q, postOwnerChange{
+			FromID:          arg.UserID,
+			ToID:            recipient.ID,
+			ToUsername:      recipient.Username,
+			AllPosts:        true,
+			ReplaceInByline: true,
 		})
 		if err != nil {
 			return err
 		}
 		result.PostsReassigned = len(moved)
 
-		if len(moved) > 0 {
-			if err := q.ReassignPostBylines(ctx, ReassignPostBylinesParams{
-				FromID:  arg.UserID,
-				ToID:    recipient.ID,
-				PostIds: moved,
-			}); err != nil {
-				return err
-			}
-		}
-		// Bylines (#319): their remaining credits go (other people's posts, or a
-		// moved post that already credits the recipient), a byline left empty
-		// credits the post's owner, and the published bylines get the same rule at
-		// once: the site can't credit an account that no longer exists.
+		// Bylines (#319): their remaining credits go (other people's posts), a
+		// byline left empty credits the post's owner, and the published bylines get
+		// the same rule at once: the site can't credit an account that no longer
+		// exists.
 		credited, err := q.DeleteUserBylines(ctx, arg.UserID)
 		if err != nil {
 			return err

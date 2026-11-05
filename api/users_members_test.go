@@ -447,7 +447,12 @@ func TestDeleteUserAPI(t *testing.T) {
 				require.Contains(t, rec.Body.String(), `"code":"`+tc.wantCode+`"`)
 			}
 			if tc.rechecked {
-				require.Equal(t, []string{"POST /internal/users/" + tc.targetID + "/recheck"}, collab.calls())
+				// The member's connections close; the recipient's (who now owns 3
+				// posts) are re-checked too.
+				require.Equal(t, []string{
+					"POST /internal/users/" + tc.targetID + "/recheck",
+					fmt.Sprintf("POST /internal/users/%d/recheck", editor.ID),
+				}, collab.calls())
 				require.Contains(t, rec.Body.String(), `"posts_reassigned":3`)
 			} else {
 				require.Empty(t, collab.calls())

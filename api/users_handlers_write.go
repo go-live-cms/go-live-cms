@@ -488,6 +488,11 @@ func (server *Server) deleteUser(c *gin.Context) {
 
 	logSecurityEvent(c, LogUserRemoved, "all", id, fmt.Sprintf("Removed by user %d; posts to user %d", caller.ID, *req.TransferToID))
 	server.recheckCollabUser(requestIDFromContext(c), id)
+	// The recipient now owns those posts (the reassignment a transfer runs, #353): a
+	// contributor's read-only connections to them become read-write at once.
+	if result.PostsReassigned > 0 {
+		server.recheckCollabUser(requestIDFromContext(c), *req.TransferToID)
+	}
 	server.removeOldAvatar(c, id, result.AvatarURL)
 	server.recordRequestActivity(c, activityEvent{
 		Verb:       db.ActivityRemoved,
