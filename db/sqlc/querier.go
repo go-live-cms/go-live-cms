@@ -385,8 +385,10 @@ type Querier interface {
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
 	// Home's "Needs attention": the open requests a member may answer, newest
 	// first. viewer_id 0 = every post (admins and editors), else the posts the
-	// viewer owns (canReviewPostAccess). Posts in the trash are left out (nobody
-	// may grant on them). total is the count before the limit.
+	// viewer owns (canReviewPostAccess). Only published posts: a grant applies
+	// only there (canEditAsCollaborator), so a request on a post unpublished or
+	// trashed since waits until it is published again. total is the count before
+	// the limit.
 	ListPendingAccessRequestsForReviewer(ctx context.Context, arg ListPendingAccessRequestsForReviewerParams) ([]ListPendingAccessRequestsForReviewerRow, error)
 	// A post's open requests with who asked, oldest first (the editor's notice).
 	ListPendingPostAccessRequests(ctx context.Context, postID int64) ([]ListPendingPostAccessRequestsRow, error)
