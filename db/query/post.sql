@@ -91,6 +91,9 @@ WHERE
     -- contributor's id = their own posts plus published ones (canReadPost).
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- Review requested (#323): an open review request; for a contributor only on
+    -- their own posts (they don't see others' requests).
+    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -255,6 +258,9 @@ WHERE
     -- contributor's id = their own posts plus published ones (canReadPost).
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- Review requested (#323): an open review request; for a contributor only on
+    -- their own posts (they don't see others' requests).
+    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts
@@ -292,7 +298,8 @@ WHERE
     -- contributor's id = their own posts plus published ones (canReadPost).
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean
-         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
+         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)));
 
 -- name: CountPostsByStatus :many
 -- The admin list's status tabs (#340): one count per status, with the list's
@@ -332,7 +339,8 @@ WHERE p.post_type = @post_type
         WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
     )
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')  -- #393, as in ListPosts
-    AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
+    AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)));
 
 
 -- name: ListPostsWithAllMeta :many
@@ -385,6 +393,9 @@ WHERE
     -- contributor's id = their own posts plus published ones (canReadPost).
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- Review requested (#323): an open review request; for a contributor only on
+    -- their own posts (they don't see others' requests).
+    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)))
 -- Whitelisted sort (#89): the API resolves sort_column/sort_direction to one
 -- of these pairs; anything else falls through to the id tiebreaker.
 -- changed_at sorts as GREATEST(changed_at, created_at): never-updated posts

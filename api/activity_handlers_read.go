@@ -145,7 +145,10 @@ func (server *Server) listContinueEditing(c *gin.Context) {
 //   - unpublished_changes (#326) and missing_alt (#325): editors and admins only,
 //     the people who can act on them (publish; edit anyone's media). null for
 //     other roles.
-//   - review_requests (#323): always [] until review requests exist.
+//   - review_requests (#323): open review requests for the caller to review:
+//     naming them, naming nobody, or naming someone who can no longer review;
+//     never their own. Editors and admins only (null for contributors, who
+//     can't review; their requests' outcome shows in the editor).
 //
 // Auth: any content role.
 func (server *Server) getNeedsAttention(c *gin.Context) {
@@ -166,7 +169,6 @@ func (server *Server) getNeedsAttention(c *gin.Context) {
 	}
 	rsp := NeedsAttentionResponse{
 		FailedSchedules: toFailedSchedules(failed),
-		ReviewRequests:  []any{},
 	}
 
 	if canModeratePosts(caller) {
@@ -185,6 +187,18 @@ func (server *Server) getNeedsAttention(c *gin.Context) {
 			return
 		}
 		rsp.MissingAlt = &MissingAltSummary{MediaCount: missing.MediaCount, PublishedPostCount: missing.PublishedPostCount}
+
+		reviews, err := server.store.ListReviewRequestsForReviewer(ctx, db.ListReviewRequestsForReviewerParams{
+			ViewerID:      caller.ID,
+			ReviewerRoles: reviewerRoles,
+			RowLimit:      needsAttentionListLimit,
+		})
+		if err != nil {
+			server.requestLog(c).Warn("listing review requests failed", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load what needs attention"})
+			return
+		}
+		rsp.ReviewRequests = toReviewRequestAttention(reviews)
 	}
 
 	c.JSON(http.StatusOK, rsp)

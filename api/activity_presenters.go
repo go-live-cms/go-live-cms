@@ -146,8 +146,9 @@ type NeedsAttentionResponse struct {
 	FailedSchedules    AttentionList[FailedSchedule]          `json:"failed_schedules"`
 	UnpublishedChanges *AttentionList[UnpublishedChangesPost] `json:"unpublished_changes"`
 	MissingAlt         *MissingAltSummary                     `json:"missing_alt"`
-	// ReviewRequests is the slot for #323's review requests; always empty now.
-	ReviewRequests []any `json:"review_requests"`
+	// ReviewRequests (#323): open review requests the caller should review (editors
+	// and admins; null otherwise), see ListReviewRequestsForReviewer.
+	ReviewRequests *AttentionList[ReviewRequestAttention] `json:"review_requests"`
 }
 
 func toFailedSchedules(rows []db.ListFailedScheduledPostsRow) AttentionList[FailedSchedule] {

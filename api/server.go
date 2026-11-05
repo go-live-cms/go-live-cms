@@ -452,6 +452,7 @@ func (server *Server) setupRoutes() error {
 
 	// Activity feed and Home's lists (see activity_routes.go, #324)
 	server.registerActivityRoutes(v1)
+	server.registerReviewRequestRoutes(v1)
 
 	// Public API routes for SSR/public content
 	server.registerPublicRoutes(public)

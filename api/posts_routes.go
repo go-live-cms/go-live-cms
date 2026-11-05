@@ -38,6 +38,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/user/:id", auth, author, server.getPostsByUser)
 		// Who can be credited in a byline (#319, posts_authors.go)
 		posts.GET("/author-candidates", auth, author, server.listAuthorCandidates)
+		// Who can be asked for a review (#323, review_requests.go)
+		posts.GET("/reviewers", auth, author, server.listReviewers)
 		posts.GET("/slug/:slug", auth, author, server.getPostBySlug)
 		posts.GET("/:id", auth, author, server.getPostByID)
 
@@ -99,6 +101,11 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 
 		// Working vs published settings (#358): whether a settings change waits for Update
 		posts.GET("/:id/settings", auth, author, server.getPostSettingsState)
+
+		// Review requests (#323, review_requests.go): asked by anyone who may edit the
+		// post; resolving them is under /review-requests/:id
+		posts.GET("/:id/review-request", auth, author, server.getPostReviewRequest)
+		posts.POST("/:id/review-request", auth, author, server.requestReview)
 
 	}
 }

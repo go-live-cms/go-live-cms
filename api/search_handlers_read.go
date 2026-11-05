@@ -188,6 +188,7 @@ func (server *Server) searchPosts(c *gin.Context) {
 			ViewerID:           viewerID,
 			AuthorID:           filters.AuthorID,
 			TermIds:            filters.TermIDs,
+			ReviewPending:      filters.ReviewPending,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to search posts"})
@@ -203,6 +204,7 @@ func (server *Server) searchPosts(c *gin.Context) {
 			ViewerID:           viewerID,
 			AuthorID:           filters.AuthorID,
 			TermIds:            filters.TermIDs,
+			ReviewPending:      filters.ReviewPending,
 			OffsetCount:        int32(offset),
 			LimitCount:         int32(limit),
 		})
@@ -214,6 +216,7 @@ func (server *Server) searchPosts(c *gin.Context) {
 			// Same columns as ListPostsWithMeta (post_search.sql).
 			posts = append(posts, toPostWithMetaResponse(db.ListPostsWithMetaRow(row)))
 		}
+		server.attachCallerReviewRequests(c, posts)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

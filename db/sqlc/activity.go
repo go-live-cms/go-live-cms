@@ -34,6 +34,15 @@ const (
 	ActivityTrashed  = "trashed"
 	ActivityRestored = "restored"
 
+	// Review requests (#323, 000039), on the post. Payload: request_id, plus
+	// reviewer_id on a request, resolution ("published") on review_resolved, which
+	// 000039's publish trigger writes, and withdrawn on a requester's dismissal. Never
+	// the notes (content).
+	ActivityReviewRequested        = "review_requested"
+	ActivityReviewResolved         = "review_resolved"
+	ActivityReviewDismissed        = "review_dismissed"
+	ActivityReviewChangesRequested = "review_changes_requested"
+
 	// Media (ActivityDeleted too).
 	ActivityUploaded = "uploaded"
 	ActivityReplaced = "replaced"

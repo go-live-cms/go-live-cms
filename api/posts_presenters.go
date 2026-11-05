@@ -100,6 +100,10 @@ type PostWithMetaResponse struct {
 	// settings) differs from what the site shows. Lists and GET /posts/:id set it;
 	// omitted when false.
 	HasUnpublishedChanges bool `json:"has_unpublished_changes,omitempty"`
+	// ReviewRequest (#323): the post's open review request, for the admin list's
+	// indicator; omitted when none, or when the caller doesn't see the post's
+	// requests (canSeeReviewRequests).
+	ReviewRequest *ReviewRequestSummary `json:"review_request,omitempty"`
 }
 
 // PostAuthorResponse is one byline entry: public fields only.

@@ -114,6 +114,11 @@ type Querier interface {
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
 	CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error)
+	// Review requests (#323, 000039). Publishing resolves the open one in a trigger
+	// (golive_resolve_review_on_publish); the API writes the rest here.
+	// A new open request. Nothing is inserted (sql.ErrNoRows) when the post already
+	// has one: review_requests_one_open decides, so two requests racing can't both win.
+	CreateReviewRequest(ctx context.Context, arg CreateReviewRequestParams) (ReviewRequest, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	// Taxonomy Terms Management
 	CreateTaxonomyTerm(ctx context.Context, arg CreateTaxonomyTermParams) (TaxonomyTerm, error)
@@ -163,6 +168,10 @@ type Querier interface {
 	// Get active theme with its settings
 	GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error)
 	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
+	// The editor's review notice: the post's latest request when it is open, or when a
+	// reviewer asked for changes and nothing was published since (the note still
+	// applies). Names are joined now; NULL for a member removed since.
+	GetCurrentReviewRequest(ctx context.Context, postID int64) (GetCurrentReviewRequestRow, error)
 	GetExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error)
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
 	GetLatestPublishedVersion(ctx context.Context, postID int64) (GetLatestPublishedVersionRow, error)
@@ -250,6 +259,7 @@ type Querier interface {
 	// The terms a published post shows on the site (#358): its published set, in the
 	// shape of GetPostTaxonomyTerms.
 	GetPublishedPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPublishedPostTaxonomyTermsRow, error)
+	GetReviewRequest(ctx context.Context, id int64) (ReviewRequest, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error)
@@ -358,6 +368,8 @@ type Querier interface {
 	// settings come along: readers see its published title (#358, resolveMenuItem).
 	ListMenuItemsWithTargets(ctx context.Context, menuID int64) ([]ListMenuItemsWithTargetsRow, error)
 	ListMenus(ctx context.Context) ([]ListMenusRow, error)
+	// The posts list's "Review requested" indicator, for one page of rows.
+	ListOpenReviewRequestsForPosts(ctx context.Context, postIds []int64) ([]ListOpenReviewRequestsForPostsRow, error)
 	// What the admin Users page shows. Invitations that expired over 30 days ago
 	// are dropped (nobody is waiting on them any more), and the list is capped.
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
@@ -419,6 +431,19 @@ type Querier interface {
 	// ranking never scans the whole posts table. Those are enough: if fewer than
 	// @limit_count published posts share a term, the latest ones fill the gap.
 	ListRelatedPosts(ctx context.Context, arg ListRelatedPostsParams) ([]ListRelatedPostsRow, error)
+	// Who a new request emails: the named reviewer (@reviewer_id), or with none every
+	// editor and admin (@roles); never the requester (@requester_id). Each gets their own
+	// email, so recipients never see each other's addresses. Past @limit_count, the most
+	// recently active (then the newest accounts) are the ones emailed.
+	ListReviewRecipients(ctx context.Context, arg ListReviewRecipientsParams) ([]ListReviewRecipientsRow, error)
+	// Home's Needs attention for an editor or admin (@viewer_id): open requests naming
+	// them, or naming nobody, or naming someone who can no longer review (not one of
+	// @reviewer_roles, auth_roles.go), never their own requests, never a post in the
+	// trash. Theirs first, then the longest waiting. total = how many in all.
+	ListReviewRequestsForReviewer(ctx context.Context, arg ListReviewRequestsForReviewerParams) ([]ListReviewRequestsForReviewerRow, error)
+	// Who can review (#323): members with one of @roles (editors and admins, from
+	// auth_roles.go), for the Request review picker. Public fields only.
+	ListReviewers(ctx context.Context, arg ListReviewersParams) ([]ListReviewersRow, error)
 	ListSessionsByUser(ctx context.Context, userID int64) ([]Session, error)
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
 	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)
@@ -495,6 +520,9 @@ type Querier interface {
 	// name, description, alt and the focal point alone, so a concurrent metadata
 	// edit is never overwritten by a stale read.
 	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
+	// Dismiss or request changes (the API checks who may). Only an open request:
+	// sql.ErrNoRows when it was resolved meanwhile (published, dismissed, ...).
+	ResolveReviewRequest(ctx context.Context, arg ResolveReviewRequestParams) (ReviewRequest, error)
 	// Takes a post out of the trash with the status it had. A scheduled post whose
 	// time is still ahead is scheduled again (a fresh start: no attempts); one whose
 	// time has passed comes back as a draft, so restoring never publishes at once. A

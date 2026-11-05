@@ -35,6 +35,7 @@ func serveGet(t *testing.T, store *mockdb.MockStore, url string) *httptest.Respo
 func TestListPostsUnpublishedChanges(t *testing.T) {
 	t.Run("FlagOnRows", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
+		allowReviewLookups(store)
 		store.EXPECT().CountFilteredPosts(gomock.Any(), gomock.Any()).Return(int64(2), nil)
 		store.EXPECT().ListPostsWithMeta(gomock.Any(), gomock.Any()).Return([]db.ListPostsWithMetaRow{
 			{ID: 1, PostStatus: "published", HasUnpublishedChanges: true},
@@ -80,6 +81,7 @@ func TestListPostsUnpublishedChanges(t *testing.T) {
 	} {
 		t.Run("Filter"+tc.name, func(t *testing.T) {
 			store := mockdb.NewMockStore(gomock.NewController(t))
+			allowReviewLookups(store)
 			store.EXPECT().
 				CountFilteredPosts(gomock.Any(), db.CountFilteredPostsParams{PostStatus: "published", UnpublishedChanges: true}).
 				Return(int64(1), nil)
@@ -98,6 +100,7 @@ func TestListPostsUnpublishedChanges(t *testing.T) {
 	// /posts/type/:type takes the same filter, and its count follows it.
 	t.Run("FilterByType", func(t *testing.T) {
 		store := mockdb.NewMockStore(gomock.NewController(t))
+		allowReviewLookups(store)
 		store.EXPECT().GetPostType(gomock.Any(), "page").Return(db.PostType{Name: "page"}, nil)
 		store.EXPECT().ListPostsWithMeta(gomock.Any(), gomock.Any()).DoAndReturn(func(_ any, arg db.ListPostsWithMetaParams) ([]db.ListPostsWithMetaRow, error) {
 			require.True(t, arg.UnpublishedChanges)

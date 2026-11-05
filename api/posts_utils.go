@@ -30,6 +30,9 @@ type postListFilters struct {
 	AuthorID int64
 	// TermIDs: the post is linked to every one of them (its working terms).
 	TermIDs []int64
+	// ReviewPending (#323, review=pending): an open review request; for a
+	// contributor only on their own posts (the queries' viewer_id).
+	ReviewPending bool
 }
 
 // parsePostListFilters reads author_id (a user id) and terms (a comma list of
@@ -55,6 +58,13 @@ func parsePostListFilters(c *gin.Context) (postListFilters, error) {
 			}
 			filters.TermIDs = append(filters.TermIDs, id)
 		}
+	}
+	switch strings.TrimSpace(c.Query("review")) {
+	case "":
+	case "pending":
+		filters.ReviewPending = true
+	default:
+		return filters, errors.New("invalid review parameter (pending)")
 	}
 	return filters, nil
 }

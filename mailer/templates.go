@@ -28,6 +28,10 @@ const (
 	TemplatePasswordReset = "password-reset"
 	TemplateEmailChange   = "email-change"
 	TemplateEmailChanged  = "email-changed"
+
+	// Review requests (#323): to a reviewer, and back to the requester.
+	TemplateReviewRequested        = "review-requested"
+	TemplateReviewChangesRequested = "review-changes-requested"
 )
 
 // DefaultSiteTitle is used when the site title setting is empty.
@@ -76,6 +80,11 @@ type templateData struct {
 	Link      string
 	ExpiresIn string // "72 hours", "1 hour"
 	NewEmail  string
+	// Review requests (#323).
+	ActorName string
+	PostTitle string
+	Note      string
+	Assigned  bool
 }
 
 // RenderInvitation renders the invitation email to to.
@@ -120,6 +129,69 @@ func RenderEmailChanged(to string, d EmailChanged) (Message, error) {
 		NewEmail:  MaskEmail(d.NewEmail),
 	}
 	return render(to, TemplateEmailChanged, fmt.Sprintf("Your %s email address was changed", data.SiteTitle), "email_changed", data)
+}
+
+// ReviewRequested is the data for a review request email (#323), sent to each
+// reviewer on their own. Assigned: the requester named this reviewer (else every
+// editor and admin got one). Note is the requester's optional message, plain text.
+type ReviewRequested struct {
+	SiteTitle     string
+	RequesterName string
+	PostTitle     string
+	Note          string
+	Link          string
+	Assigned      bool
+}
+
+// ReviewChangesRequested is the data for the email back to a requester when a
+// reviewer asks for changes (#323). Note is the reviewer's note, plain text.
+type ReviewChangesRequested struct {
+	SiteTitle    string
+	ReviewerName string
+	PostTitle    string
+	Note         string
+	Link         string
+}
+
+// RenderReviewRequested renders a review request email to to.
+func RenderReviewRequested(to string, d ReviewRequested) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		ActorName: personName(d.RequesterName),
+		PostTitle: postTitle(d.PostTitle),
+		Note:      strings.TrimSpace(d.Note),
+		Link:      d.Link,
+		Assigned:  d.Assigned,
+	}
+	return render(to, TemplateReviewRequested, fmt.Sprintf("%s asked for a review: %s", data.ActorName, data.PostTitle), "review_requested", data)
+}
+
+// RenderReviewChangesRequested renders the changes-requested email to to.
+func RenderReviewChangesRequested(to string, d ReviewChangesRequested) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		ActorName: personName(d.ReviewerName),
+		PostTitle: postTitle(d.PostTitle),
+		Note:      strings.TrimSpace(d.Note),
+		Link:      d.Link,
+	}
+	return render(to, TemplateReviewChangesRequested, fmt.Sprintf("Changes requested: %s", data.PostTitle), "review_changes_requested", data)
+}
+
+// personName and postTitle keep a name or title to one line (it goes in the
+// subject header too), with a fallback when it is empty.
+func personName(name string) string {
+	if name = oneLine(name); name != "" {
+		return name
+	}
+	return "Someone"
+}
+
+func postTitle(title string) string {
+	if title = oneLine(title); title != "" {
+		return title
+	}
+	return "Untitled"
 }
 
 // MaskEmail hides most of an address's local part ("ana.lima@example.com" →

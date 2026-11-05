@@ -120,6 +120,7 @@ WHERE
     AND ($6::bigint = 0 OR p.user_id = $6 OR p.post_status = 'published')
     AND (NOT $7::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND (NOT $8::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($6::bigint = 0 OR p.user_id = $6)))
 `
 
 type CountFilteredPostsParams struct {
@@ -130,6 +131,7 @@ type CountFilteredPostsParams struct {
 	UserID             int64   `json:"user_id"`
 	ViewerID           int64   `json:"viewer_id"`
 	UnpublishedChanges bool    `json:"unpublished_changes"`
+	ReviewPending      bool    `json:"review_pending"`
 }
 
 func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error) {
@@ -141,6 +143,7 @@ func (q *Queries) CountFilteredPosts(ctx context.Context, arg CountFilteredPosts
 		arg.UserID,
 		arg.ViewerID,
 		arg.UnpublishedChanges,
+		arg.ReviewPending,
 	)
 	var total int64
 	err := row.Scan(&total)
@@ -227,6 +230,7 @@ WHERE p.post_type = $1
     )
     AND ($5::bigint = 0 OR p.user_id = $5 OR p.post_status = 'published')  -- #393, as in ListPosts
     AND (NOT $6::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND (NOT $7::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($5::bigint = 0 OR p.user_id = $5)))
 `
 
 type CountPostsByTypeFilteredParams struct {
@@ -236,6 +240,7 @@ type CountPostsByTypeFilteredParams struct {
 	TermIds            []int64 `json:"term_ids"`
 	ViewerID           int64   `json:"viewer_id"`
 	UnpublishedChanges bool    `json:"unpublished_changes"`
+	ReviewPending      bool    `json:"review_pending"`
 }
 
 func (q *Queries) CountPostsByTypeFiltered(ctx context.Context, arg CountPostsByTypeFilteredParams) (int64, error) {
@@ -246,6 +251,7 @@ func (q *Queries) CountPostsByTypeFiltered(ctx context.Context, arg CountPostsBy
 		pq.Array(arg.TermIds),
 		arg.ViewerID,
 		arg.UnpublishedChanges,
+		arg.ReviewPending,
 	)
 	var total int64
 	err := row.Scan(&total)
@@ -799,20 +805,23 @@ WHERE
     -- contributor's id = their own posts plus published ones (canReadPost).
     AND ($6::bigint = 0 OR p.user_id = $6 OR p.post_status = 'published')
     AND (NOT $7::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- Review requested (#323): an open review request; for a contributor only on
+    -- their own posts (they don't see others' requests).
+    AND (NOT $8::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($6::bigint = 0 OR p.user_id = $6)))
 ORDER BY
-    CASE WHEN $8::text = 'created_at' AND $9::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $8::text = 'created_at' AND $9::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $8::text = 'changed_at' AND $9::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $8::text = 'changed_at' AND $9::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $8::text = 'title' AND $9::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $8::text = 'title' AND $9::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $8::text = 'menu_order' AND $9::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $8::text = 'menu_order' AND $9::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $9::text = 'created_at' AND $10::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $9::text = 'created_at' AND $10::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $9::text = 'changed_at' AND $10::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $9::text = 'changed_at' AND $10::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $9::text = 'title' AND $10::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $9::text = 'title' AND $10::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $9::text = 'menu_order' AND $10::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $9::text = 'menu_order' AND $10::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $9::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $10::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $11
-OFFSET $10
+LIMIT $12
+OFFSET $11
 `
 
 type ListPostsParams struct {
@@ -823,6 +832,7 @@ type ListPostsParams struct {
 	UserID             int64   `json:"user_id"`
 	ViewerID           int64   `json:"viewer_id"`
 	UnpublishedChanges bool    `json:"unpublished_changes"`
+	ReviewPending      bool    `json:"review_pending"`
 	SortColumn         string  `json:"sort_column"`
 	SortDirection      string  `json:"sort_direction"`
 	OffsetCount        int32   `json:"offset_count"`
@@ -867,6 +877,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 		arg.UserID,
 		arg.ViewerID,
 		arg.UnpublishedChanges,
+		arg.ReviewPending,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,
@@ -964,20 +975,23 @@ WHERE
     -- contributor's id = their own posts plus published ones (canReadPost).
     AND ($6::bigint = 0 OR p.user_id = $6 OR p.post_status = 'published')
     AND (NOT $7::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- Review requested (#323): an open review request; for a contributor only on
+    -- their own posts (they don't see others' requests).
+    AND (NOT $8::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($6::bigint = 0 OR p.user_id = $6)))
 ORDER BY
-    CASE WHEN $8::text = 'created_at' AND $9::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $8::text = 'created_at' AND $9::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $8::text = 'changed_at' AND $9::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $8::text = 'changed_at' AND $9::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $8::text = 'title' AND $9::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $8::text = 'title' AND $9::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $8::text = 'menu_order' AND $9::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $8::text = 'menu_order' AND $9::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $9::text = 'created_at' AND $10::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $9::text = 'created_at' AND $10::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $9::text = 'changed_at' AND $10::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $9::text = 'changed_at' AND $10::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $9::text = 'title' AND $10::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $9::text = 'title' AND $10::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $9::text = 'menu_order' AND $10::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $9::text = 'menu_order' AND $10::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $9::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $10::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $11
-OFFSET $10
+LIMIT $12
+OFFSET $11
 `
 
 type ListPostsWithAllMetaParams struct {
@@ -988,6 +1002,7 @@ type ListPostsWithAllMetaParams struct {
 	UserID             int64   `json:"user_id"`
 	ViewerID           int64   `json:"viewer_id"`
 	UnpublishedChanges bool    `json:"unpublished_changes"`
+	ReviewPending      bool    `json:"review_pending"`
 	SortColumn         string  `json:"sort_column"`
 	SortDirection      string  `json:"sort_direction"`
 	OffsetCount        int32   `json:"offset_count"`
@@ -1028,6 +1043,7 @@ func (q *Queries) ListPostsWithAllMeta(ctx context.Context, arg ListPostsWithAll
 		arg.UserID,
 		arg.ViewerID,
 		arg.UnpublishedChanges,
+		arg.ReviewPending,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,
@@ -1119,20 +1135,23 @@ WHERE
     -- contributor's id = their own posts plus published ones (canReadPost).
     AND ($8::bigint = 0 OR p.user_id = $8 OR p.post_status = 'published')
     AND (NOT $9::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- Review requested (#323): an open review request; for a contributor only on
+    -- their own posts (they don't see others' requests).
+    AND (NOT $10::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($8::bigint = 0 OR p.user_id = $8)))
 ORDER BY
-    CASE WHEN $10::text = 'created_at' AND $11::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $10::text = 'created_at' AND $11::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $10::text = 'changed_at' AND $11::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $10::text = 'changed_at' AND $11::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $10::text = 'title' AND $11::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $10::text = 'title' AND $11::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $10::text = 'menu_order' AND $11::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $10::text = 'menu_order' AND $11::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $11::text = 'created_at' AND $12::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $11::text = 'created_at' AND $12::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $11::text = 'changed_at' AND $12::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $11::text = 'changed_at' AND $12::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $11::text = 'title' AND $12::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $11::text = 'title' AND $12::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $11::text = 'menu_order' AND $12::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $11::text = 'menu_order' AND $12::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $11::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $12::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $13
-OFFSET $12
+LIMIT $14
+OFFSET $13
 `
 
 type ListPostsWithMetaParams struct {
@@ -1145,6 +1164,7 @@ type ListPostsWithMetaParams struct {
 	UserID                 int64   `json:"user_id"`
 	ViewerID               int64   `json:"viewer_id"`
 	UnpublishedChanges     bool    `json:"unpublished_changes"`
+	ReviewPending          bool    `json:"review_pending"`
 	SortColumn             string  `json:"sort_column"`
 	SortDirection          string  `json:"sort_direction"`
 	OffsetCount            int32   `json:"offset_count"`
@@ -1192,6 +1212,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 		arg.UserID,
 		arg.ViewerID,
 		arg.UnpublishedChanges,
+		arg.ReviewPending,
 		arg.SortColumn,
 		arg.SortDirection,
 		arg.OffsetCount,

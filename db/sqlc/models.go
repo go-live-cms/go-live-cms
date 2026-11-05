@@ -218,6 +218,19 @@ type PostYdocState struct {
 	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
+type ReviewRequest struct {
+	ID             int64         `json:"id"`
+	PostID         int64         `json:"post_id"`
+	RequestedBy    sql.NullInt64 `json:"requested_by"`
+	ReviewerID     sql.NullInt64 `json:"reviewer_id"`
+	Message        string        `json:"message"`
+	Status         string        `json:"status"`
+	ResolvedBy     sql.NullInt64 `json:"resolved_by"`
+	ResolutionNote string        `json:"resolution_note"`
+	CreatedAt      time.Time     `json:"created_at"`
+	ResolvedAt     sql.NullTime  `json:"resolved_at"`
+}
+
 type Session struct {
 	ID               uuid.UUID      `json:"id"`
 	UserID           int64          `json:"user_id"`
