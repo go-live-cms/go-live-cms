@@ -1,4 +1,5 @@
-// account_routes wires the invite-only account flows (#148).
+// account_routes wires the emailed-link account flows: invitations (#148), password
+// reset, email change (#334) and open signup (#191).
 //
 // # Public, rate limited (/api/v1/auth)
 //
@@ -11,6 +12,11 @@
 //     with the invited email and role
 //   - POST /auth/email-change/confirm: redeems an email change link (#334); the
 //     request is POST /users/me/email (signed in, current password)
+//   - POST /auth/register: open signup (#191), only while Settings allows it
+//     (403 "signup_disabled" otherwise); always 202 for a valid request, and
+//     emails a confirmation link (no account until it is used)
+//   - POST /auth/register/verify: redeems a signup link, creating the account
+//     as a contributor
 //
 // Tokens travel in request bodies, never in URLs, so they can't end up in
 // access logs or Referer headers. The web pages read them from the link's
@@ -33,6 +39,8 @@ func (server *Server) registerAccountRoutes(v1 *gin.RouterGroup) {
 	auth.POST("/invitations/preview", server.rateLimits.accountToken.perIP(), server.previewInvite)       // POST /api/v1/auth/invitations/preview
 	auth.POST("/invitations/accept", server.rateLimits.accountToken.perIP(), server.acceptInvite)         // POST /api/v1/auth/invitations/accept
 	auth.POST("/email-change/confirm", server.rateLimits.accountToken.perIP(), server.confirmEmailChange) // POST /api/v1/auth/email-change/confirm (#334)
+	auth.POST("/register", server.rateLimits.register.perIP(), server.register)                           // POST /api/v1/auth/register (#191; + per-email limit in the handler)
+	auth.POST("/register/verify", server.rateLimits.accountToken.perIP(), server.confirmSignup)           // POST /api/v1/auth/register/verify (#191)
 
 	invitations := v1.Group("/invitations")
 	invitations.Use(server.requireAuth(), requireSiteAdmin(server))

@@ -14,6 +14,9 @@ export interface SiteSettings extends DateSettings {
   tagline: string
   postsPerPage: number
   urlStructure: unknown
+  // Open signup (#191): the sign-in page offers "Create an account" only when it's on.
+  // False when the settings can't be read: the API refuses then anyway.
+  allowSignup: boolean
 }
 
 // Error pages render this too, and an unreachable API is a common cause of a 500: give
@@ -43,6 +46,7 @@ async function loadSiteSettings(): Promise<SiteSettings> {
     tagline,
     postsPerPage: Number.isInteger(perPage) && perPage > 0 ? perPage : 10,
     urlStructure: settings?.post_url_structure,
+    allowSignup: settings?.allow_signup === true,
     ...normalizeDateSettings({
       language: settings?.site_language,
       timeZone: settings?.site_timezone,

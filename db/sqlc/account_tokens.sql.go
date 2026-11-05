@@ -56,6 +56,31 @@ func (q *Queries) ClaimPasswordResetToken(ctx context.Context, tokenHash []byte)
 	return i, err
 }
 
+const claimSignupRequest = `-- name: ClaimSignupRequest :one
+DELETE FROM signup_requests
+WHERE token_hash = $1 AND expires_at > now()
+RETURNING id, email, username, full_name, hashed_password, token_hash, expires_at, created_at
+`
+
+// Single use: the claim deletes the row, so only one claim can match (a second
+// waits on the row lock and then finds nothing). Rolled back with the transaction
+// if the account can't be created.
+func (q *Queries) ClaimSignupRequest(ctx context.Context, tokenHash []byte) (SignupRequest, error) {
+	row := q.db.QueryRowContext(ctx, claimSignupRequest, tokenHash)
+	var i SignupRequest
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.FullName,
+		&i.HashedPassword,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const claimUserInvitation = `-- name: ClaimUserInvitation :one
 UPDATE user_invitations
 SET accepted_at = now()
@@ -190,6 +215,54 @@ func (q *Queries) CreatePasswordResetToken(ctx context.Context, arg CreatePasswo
 	return i, err
 }
 
+const createSignupRequest = `-- name: CreateSignupRequest :one
+
+INSERT INTO signup_requests (
+    email,
+    username,
+    full_name,
+    hashed_password,
+    token_hash,
+    expires_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6
+) RETURNING id, email, username, full_name, hashed_password, token_hash, expires_at, created_at
+`
+
+type CreateSignupRequestParams struct {
+	Email          string    `json:"email"`
+	Username       string    `json:"username"`
+	FullName       string    `json:"full_name"`
+	HashedPassword string    `json:"hashed_password"`
+	TokenHash      []byte    `json:"token_hash"`
+	ExpiresAt      time.Time `json:"expires_at"`
+}
+
+// Open signup (#191): the account is created only when the emailed link is
+// redeemed (ConfirmSignupTx).
+func (q *Queries) CreateSignupRequest(ctx context.Context, arg CreateSignupRequestParams) (SignupRequest, error) {
+	row := q.db.QueryRowContext(ctx, createSignupRequest,
+		arg.Email,
+		arg.Username,
+		arg.FullName,
+		arg.HashedPassword,
+		arg.TokenHash,
+		arg.ExpiresAt,
+	)
+	var i SignupRequest
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.FullName,
+		&i.HashedPassword,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createUserInvitation = `-- name: CreateUserInvitation :one
 
 INSERT INTO user_invitations (
@@ -236,6 +309,30 @@ func (q *Queries) CreateUserInvitation(ctx context.Context, arg CreateUserInvita
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const deleteSignupRequestsByEmail = `-- name: DeleteSignupRequestsByEmail :exec
+DELETE FROM signup_requests WHERE email = $1
+`
+
+// A newer signup for the address, or its account being created, ends every
+// other pending link for it.
+func (q *Queries) DeleteSignupRequestsByEmail(ctx context.Context, email string) error {
+	_, err := q.db.ExecContext(ctx, deleteSignupRequestsByEmail, email)
+	return err
+}
+
+const deleteStaleSignupRequests = `-- name: DeleteStaleSignupRequests :execrows
+DELETE FROM signup_requests WHERE expires_at <= now()
+`
+
+// Expired rows hold unconfirmed details nobody can use any more.
+func (q *Queries) DeleteStaleSignupRequests(ctx context.Context) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteStaleSignupRequests)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const getValidEmailChangeTokenByHash = `-- name: GetValidEmailChangeTokenByHash :one

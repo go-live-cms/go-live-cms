@@ -28,6 +28,7 @@ const saved: SettingsDraft = {
   posts_per_page: 10,
   post_url_structure: "slug",
   editor_markdown_shortcuts: true,
+  allow_signup: false,
 }
 
 describe("changedFields", () => {
@@ -44,6 +45,7 @@ describe("changedFields", () => {
       changedFields(saved, { ...saved, editor_markdown_shortcuts: false, site_timezone: "UTC", site_tagline: "" })
     ).toEqual(["tagline", "time zone", "Markdown shortcuts"])
     expect(changedFields(saved, { ...saved, site_language: "pt-BR", date_format: "iso" })).toEqual(["language", "date format"])
+    expect(changedFields(saved, { ...saved, allow_signup: true })).toEqual(["sign-up setting"])
   })
 
   it("is empty before the settings have loaded", () => {

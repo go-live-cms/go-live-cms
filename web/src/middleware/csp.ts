@@ -61,6 +61,9 @@ export function buildAdminCsp({ nonce, pageOrigin, apiUrl, collabUrl }: AdminCsp
     "img-src": ["'self'", "data:", "blob:", ...extra([apiOrigin])],
     "font-src": ["'self'", "data:"],
     "connect-src": connectSrc,
+    // History's diff worker (#355) is a bundled same-origin file. Explicit, so blob: and
+    // data: workers stay blocked whatever script-src (its fallback) allows later.
+    "worker-src": ["'self'"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
@@ -91,7 +94,7 @@ export function isAdminPath(pathname: string): boolean {
 
 // The signed-out pages that handle credentials and emailed tokens (#148). Same
 // policy as the admin: their only scripts are our bundled modules.
-const ACCOUNT_PAGES = ["/login", "/forgot-password", "/reset-password", "/accept-invite", "/confirm-email"]
+const ACCOUNT_PAGES = ["/login", "/forgot-password", "/reset-password", "/accept-invite", "/confirm-email", "/register", "/verify-email"]
 
 export function isAccountPagePath(pathname: string): boolean {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname

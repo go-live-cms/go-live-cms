@@ -370,3 +370,27 @@ func TestAccessRequestTemplate(t *testing.T) {
 	require.NotContains(t, plain.HTML, "<blockquote")
 	require.Contains(t, plain.Text, DefaultSiteTitle)
 }
+
+func TestSignupTemplates(t *testing.T) {
+	msg, err := RenderSignupVerify("sam@example.com", SignupVerify{SiteTitle: "Field Notes", Username: "samsignup", Link: testLink, ExpiresIn: 24 * time.Hour})
+	require.NoError(t, err)
+	require.Equal(t, TemplateSignupVerify, msg.Template)
+	require.Equal(t, "sam@example.com", msg.To)
+	require.Contains(t, msg.Subject, "Field Notes")
+	for _, body := range []string{msg.Text, msg.HTML} {
+		require.Contains(t, body, testLink)
+		require.Contains(t, body, "samsignup")
+		require.Contains(t, body, "24 hours")
+	}
+
+	forgot := "https://cms.example.com/forgot-password"
+	msg, err = RenderSignupExisting("owner@example.com", SignupExisting{SiteTitle: "<b>Site</b>", Username: "owner", Link: forgot})
+	require.NoError(t, err)
+	require.Equal(t, TemplateSignupExisting, msg.Template)
+	require.Equal(t, "owner@example.com", msg.To)
+	for _, body := range []string{msg.Text, msg.HTML} {
+		require.Contains(t, body, forgot)
+		require.Contains(t, body, "owner")
+	}
+	require.NotContains(t, msg.HTML, "<b>Site</b>", "escaped in HTML")
+}

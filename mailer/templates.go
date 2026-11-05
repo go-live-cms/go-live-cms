@@ -24,12 +24,54 @@ var (
 
 // Template names (Message.Template).
 const (
-	TemplateInvitation    = "invitation"
-	TemplatePasswordReset = "password-reset"
-	TemplateEmailChange   = "email-change"
-	TemplateEmailChanged  = "email-changed"
-	TemplateAccessRequest = "access-request"
+	TemplateInvitation     = "invitation"
+	TemplatePasswordReset  = "password-reset"
+	TemplateEmailChange    = "email-change"
+	TemplateEmailChanged   = "email-changed"
+	TemplateSignupVerify   = "signup-verify"
+	TemplateSignupExisting = "signup-existing"
+	TemplateAccessRequest  = "access-request"
 )
+
+// SignupVerify is the data for the open signup confirmation link (#191), sent to
+// the address the account will have.
+type SignupVerify struct {
+	SiteTitle string
+	Username  string
+	Link      string
+	ExpiresIn time.Duration
+}
+
+// SignupExisting is the data for the note sent instead when the address already
+// has an account (#191): the signup form can't say so (account enumeration), so
+// the owner hears about it. Link is the forgot-password page.
+type SignupExisting struct {
+	SiteTitle string
+	Username  string
+	Link      string
+}
+
+// RenderSignupVerify renders the signup confirmation email to to.
+func RenderSignupVerify(to string, d SignupVerify) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		Username:  d.Username,
+		Link:      d.Link,
+		ExpiresIn: HumanDuration(d.ExpiresIn),
+	}
+	return render(to, TemplateSignupVerify, fmt.Sprintf("Confirm your email for %s", data.SiteTitle), "signup_verify", data)
+}
+
+// RenderSignupExisting renders the "someone tried to sign up with your address"
+// note to to, the existing account's address.
+func RenderSignupExisting(to string, d SignupExisting) (Message, error) {
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		Username:  d.Username,
+		Link:      d.Link,
+	}
+	return render(to, TemplateSignupExisting, fmt.Sprintf("Someone tried to sign up to %s with your address", data.SiteTitle), "signup_existing", data)
+}
 
 // AccessRequest is the data for the email to a post's reviewers when a member
 // asks for edit access (#321). PostTitle and Message are the member's text:

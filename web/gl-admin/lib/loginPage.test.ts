@@ -41,6 +41,7 @@ describe("redirectTarget", () => {
 describe("signOutNotice", () => {
   it("shows only known reasons", () => {
     expect(signOutNotice("?reason=password-reset")).toMatch(/password was reset/)
+    expect(signOutNotice("?reason=signup-confirmed")).toMatch(/email is confirmed/)
     expect(signOutNotice("?reason=<script>")).toBeNull()
   })
 })

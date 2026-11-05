@@ -10,7 +10,14 @@
 //     account down, while one client's bad guesses can't lock out everyone
 //     else behind the same IP. The looser per-client limit caps spraying
 //     across usernames.
-//   - Register: POST /auth/register, per client (RATE_LIMIT_LOGIN_PER_MINUTE).
+//   - Register (open signup, #191): POST /auth/register, per client
+//     (RATE_LIMIT_LOGIN_PER_MINUTE) and, checked in register once the body is
+//     bound, per client and email address (RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE:
+//     like a forgot request, each may send an email; never the address alone,
+//     which would let anyone lock its owner out). On top of them an address gets
+//     at most one signup email a minute (processSignup), silently, so one inbox
+//     can't be flooded from many IPs. POST /auth/register/verify is an
+//     emailed-token endpoint (below).
 //   - Refresh: POST /auth/refresh, per client (RATE_LIMIT_REFRESH_PER_MINUTE).
 //     The admin client keeps the user signed in on a 429 and retries later.
 //   - Password change: a self PUT /users/:id with a password, per user and
@@ -21,8 +28,9 @@
 //   - Forgot password: POST /auth/password/forgot, per client
 //     (RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE). On top of it, a user gets at
 //     most one reset email a minute (forgotPassword), silently.
-//   - Emailed tokens: POST /auth/password/reset and
-//     /auth/invitations/{preview,accept}, per client
+//   - Emailed tokens: POST /auth/password/reset,
+//     /auth/invitations/{preview,accept}, /auth/email-change/confirm and
+//     /auth/register/verify, per client
 //     (RATE_LIMIT_ACCOUNT_TOKEN_PER_MINUTE). The tokens are 256-bit random,
 //     so this is about abuse, not guessing.
 //   - Edit access requests (#321): POST /posts/:id/access-requests, per member
@@ -245,6 +253,30 @@ func (l *rateLimiter) allow(c *gin.Context, key string) bool {
 	return true
 }
 
+// allowSilently consumes one request for key and reports whether it was
+// allowed, writing no response: for work after the response (a cooldown on
+// emails). Store errors fail open, like allow.
+func (l *rateLimiter) allowSilently(ctx context.Context, key string) bool {
+	if l == nil {
+		return true
+	}
+	ok, _, err := l.store.Take(ctx, l.name+":"+key)
+	if err != nil {
+		slog.Warn("rate limit store error, allowing request", "limit", l.name, "error", err)
+		return true
+	}
+	return ok
+}
+
+// newCooldownLimiter returns a limiter of one request a minute per key, or nil
+// (disabled) when enabled is false: zero-config tests run with limits off.
+func newCooldownLimiter(name string, enabled bool) *rateLimiter {
+	if !enabled {
+		return nil
+	}
+	return newRateLimiter(name, 1)
+}
+
 // perIP returns middleware limiting each client (clientKey). exempt client
 // IPs skip it.
 func (l *rateLimiter) perIP(exempt ...netip.Prefix) gin.HandlerFunc {
@@ -300,9 +332,13 @@ type rateLimits struct {
 	general *rateLimiter
 	// loginIP limits each client's login attempts across usernames; login
 	// limits each client and username pair.
-	loginIP        *rateLimiter
-	login          *rateLimiter
-	register       *rateLimiter
+	loginIP  *rateLimiter
+	login    *rateLimiter
+	register *rateLimiter
+	// registerEmail limits signups per email address; signupMail is the silent
+	// one-email-a-minute cooldown per address (allowSilently).
+	registerEmail  *rateLimiter
+	signupMail     *rateLimiter
 	refresh        *rateLimiter
 	passwordChange *rateLimiter
 	// passwordForgot limits forgot-password requests (each may send an
@@ -328,6 +364,8 @@ func newRateLimits(config util.Config) (rateLimits, error) {
 		loginIP:        newRateLimiter("login-ip", config.RateLimitLoginIPPerMinute),
 		login:          newRateLimiter("login", config.RateLimitLoginPerMinute),
 		register:       newRateLimiter("register", config.RateLimitLoginPerMinute),
+		registerEmail:  newRateLimiter("register-email", config.RateLimitPasswordForgotPerMinute),
+		signupMail:     newCooldownLimiter("signup-mail", config.RateLimitPasswordForgotPerMinute > 0),
 		refresh:        newRateLimiter("refresh", config.RateLimitRefreshPerMinute),
 		passwordChange: newRateLimiter("password", config.RateLimitPasswordChangePerMinute),
 		passwordForgot: newRateLimiter("password-forgot", config.RateLimitPasswordForgotPerMinute),
