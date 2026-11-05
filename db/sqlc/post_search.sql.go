@@ -86,6 +86,7 @@ WHERE
     AND ($8::bigint = 0 OR p.user_id = $8 OR p.post_status = 'published')
     AND (NOT $9::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND (NOT $10::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($8::bigint = 0 OR p.user_id = $8)))
 `
 
 type CountSearchPostsParams struct {
@@ -98,6 +99,7 @@ type CountSearchPostsParams struct {
 	UserID             int64   `json:"user_id"`
 	ViewerID           int64   `json:"viewer_id"`
 	UnpublishedChanges bool    `json:"unpublished_changes"`
+	ReviewPending      bool    `json:"review_pending"`
 }
 
 // SearchPostsWithMeta's total, with the same filters.
@@ -112,6 +114,7 @@ func (q *Queries) CountSearchPosts(ctx context.Context, arg CountSearchPostsPara
 		arg.UserID,
 		arg.ViewerID,
 		arg.UnpublishedChanges,
+		arg.ReviewPending,
 	)
 	var total int64
 	err := row.Scan(&total)
@@ -161,9 +164,11 @@ WHERE
     AND ($8::bigint = 0 OR p.user_id = $8 OR p.post_status = 'published')
     AND (NOT $9::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- Review requested (#323), as in ListPosts.
+    AND (NOT $10::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($8::bigint = 0 OR p.user_id = $8)))
 ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), $1::text)) DESC, p.created_at DESC, p.id DESC
-LIMIT $11
-OFFSET $10
+LIMIT $12
+OFFSET $11
 `
 
 type SearchPostsWithMetaParams struct {
@@ -176,6 +181,7 @@ type SearchPostsWithMetaParams struct {
 	UserID             int64   `json:"user_id"`
 	ViewerID           int64   `json:"viewer_id"`
 	UnpublishedChanges bool    `json:"unpublished_changes"`
+	ReviewPending      bool    `json:"review_pending"`
 	OffsetCount        int32   `json:"offset_count"`
 	LimitCount         int32   `json:"limit_count"`
 }
@@ -223,6 +229,7 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 		arg.UserID,
 		arg.ViewerID,
 		arg.UnpublishedChanges,
+		arg.ReviewPending,
 		arg.OffsetCount,
 		arg.LimitCount,
 	)

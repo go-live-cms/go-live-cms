@@ -32,6 +32,16 @@ import {
   zoneCity,
 } from "@gl-admin/lib/schedule"
 import ScheduledUpdateNotice from "@gl-admin/components/editor/ui/ScheduledUpdateNotice"
+import ReviewRequestNotice from "@gl-admin/components/editor/ui/ReviewRequestNotice"
+import { RequestChangesDialog, RequestReviewDialog } from "@gl-admin/components/editor/ui/ReviewDialogs"
+import {
+  dismissReviewRequest,
+  getPostReviewRequest,
+  requestReview,
+  requestReviewChanges,
+  type ReviewRequest,
+} from "@gl-admin/lib/api/reviewRequests"
+import { REVIEW_ALREADY_REQUESTED, reviewErrorMessage, reviewPersonName } from "@gl-admin/lib/reviewRequests"
 import { VersionPreview, versionTime } from "@gl-admin/components/editor/ui/RevisionsPanel"
 import Notice from "@gl-admin/components/ui/Notice"
 import Button from "@gl-admin/components/ui/Button"
@@ -186,6 +196,30 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   // A published post's scheduled update (#335): its content was frozen when scheduled.
   const [scheduledUpdate, setScheduledUpdate] = useState<ScheduledUpdate | null>(initialData?.scheduled_update ?? null)
   const [scheduleUpdateOpen, setScheduleUpdateOpen] = useState(false)
+
+  // Review requests (#323): the post's open request, or the latest one when a reviewer
+  // asked for changes and nothing was published since. Re-read on open, after a publish
+  // (which resolves it) and when the tab is shown again (someone else may have acted).
+  const [reviewRequest, setReviewRequest] = useState<ReviewRequest | null>(null)
+  const [requestReviewOpen, setRequestReviewOpen] = useState(false)
+  const [requestChangesOpen, setRequestChangesOpen] = useState(false)
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const reviewReadRef = useRef(0)
+  const refreshReview = async () => {
+    if (mode !== "edit" || !initialData?.id) return
+    const read = ++reviewReadRef.current
+    try {
+      const current = await getPostReviewRequest(initialData.id)
+      if (read === reviewReadRef.current) setReviewRequest(current)
+    } catch (error) {
+      // Only the notice depends on it.
+      console.error("Failed to read the review request:", error)
+    }
+  }
+  useEffect(() => {
+    void refreshReview()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, initialData?.id])
   const dateSettings = useSiteDateSettings()
 
   const { status: collabStatus, users: collabUsers, unsynced } = useCollabPresence(initialData?.id, collabEnabled)
@@ -267,7 +301,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   // background re-reads the state when it's shown again.
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") void refreshSettingsState()
+      if (document.visibilityState !== "visible") return
+      void refreshSettingsState()
+      void refreshReview()
     }
     document.addEventListener("visibilitychange", onVisible)
     return () => document.removeEventListener("visibilitychange", onVisible)
@@ -527,6 +563,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           setPublishAt(null)
           setScheduleFailure(null)
           setScheduledUpdate(null)
+          // Publishing resolves an open review request (#323).
+          void refreshReview()
         }
       } catch (error) {
         console.error("Block publish failed:", error)
@@ -946,6 +984,64 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }
 
+  // Review requests (#323). Asking saves pending settings and lets this tab's edits
+  // reach the collab server first, so the reviewer opens what was asked about.
+  const handleRequestReview = async (body: { reviewer_id?: number; message?: string }) => {
+    if (!initialData?.id) return
+    await saveTitle()
+    await editorRef.current?.whenAcknowledged()
+    try {
+      setReviewRequest(await requestReview(initialData.id, body))
+      toast.success(body.reviewer_id ? "Review requested · the reviewer was emailed" : "Review requested · the editors were emailed")
+    } catch (error) {
+      if (error instanceof ApiError && error.code === REVIEW_ALREADY_REQUESTED) {
+        // Someone asked meanwhile: show theirs.
+        void refreshReview()
+        toast.info(reviewErrorMessage(error.code, ""))
+        return
+      }
+      throw new Error(error instanceof ApiError ? reviewErrorMessage(error.code, error.message) : errorMessage(error, "Couldn't request a review"))
+    }
+  }
+
+  const reviewAction = async (action: () => Promise<ReviewRequest>, done: string, failed: string) => {
+    setReviewBusy(true)
+    try {
+      const resolved = await action()
+      // A dismissed request leaves no notice; changes requested shows the note.
+      setReviewRequest(resolved.status === "changes_requested" ? resolved : null)
+      toast.success(done)
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "review_not_open") void refreshReview()
+      toast.error(error instanceof ApiError ? reviewErrorMessage(error.code, error.message) : errorMessage(error, failed))
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+  const handleDismissReview = () => {
+    if (!reviewRequest) return
+    const withdrawing = reviewRequest.requested_by?.id === me?.id
+    void reviewAction(
+      () => dismissReviewRequest(reviewRequest.id),
+      withdrawing ? "Review request withdrawn" : "Review request dismissed",
+      "Couldn't dismiss the review request"
+    )
+  }
+  const handleRequestChanges = async (note: string) => {
+    if (!reviewRequest) return
+    try {
+      const resolved = await requestReviewChanges(reviewRequest.id, note)
+      setReviewRequest(resolved)
+      toast.success("Changes requested · the author was emailed")
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "review_not_open") void refreshReview()
+      throw new Error(error instanceof ApiError ? reviewErrorMessage(error.code, error.message) : errorMessage(error, "Couldn't request changes"))
+    }
+  }
+  const reviewOpen = reviewRequest?.status === "open"
+  // Anyone who may edit the post may ask (the API's canRequestReview = canEditPost).
+  const canRequestReview = mode === "edit" && roleVerified && !contentReadOnly && !!initialData?.id
+
   const contentTypeName = getContentTypeName()
   const postType = contentType || initialData?.post_type || "post"
   const liveUrl =
@@ -991,6 +1087,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         updateAt={formData.post_status === "published" ? (scheduledUpdate?.update_at ?? null) : null}
         onScheduleUpdate={collabEnabled && canPublish && formData.post_status === "published" ? () => setScheduleUpdateOpen(true) : undefined}
         onCancelScheduledUpdate={collabEnabled && canPublish ? handleCancelScheduledUpdate : undefined}
+        reviewRequested={reviewOpen}
+        onRequestReview={collabEnabled && canRequestReview ? () => setRequestReviewOpen(true) : undefined}
         viewing={
           viewingVersion
             ? {
@@ -1022,7 +1120,38 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         />
       )}
 
+      {canRequestReview && (
+        <RequestReviewDialog
+          isOpen={requestReviewOpen}
+          onClose={() => setRequestReviewOpen(false)}
+          meId={me?.id}
+          onSubmit={handleRequestReview}
+        />
+      )}
+      {canPublish && reviewRequest && (
+        <RequestChangesDialog
+          isOpen={requestChangesOpen}
+          onClose={() => setRequestChangesOpen(false)}
+          requesterName={reviewPersonName(reviewRequest.requested_by)}
+          onSubmit={handleRequestChanges}
+        />
+      )}
+
       {/* Banners across the editor: only when you need to act or wait. */}
+      {mode === "edit" && roleVerified && (
+        <ReviewRequestNotice
+          request={reviewRequest}
+          viewer={{ id: me?.id, canReview: canPublish, canRequest: canRequestReview }}
+          published={formData.post_status === "published"}
+          publishable={formData.post_status !== "archived"}
+          onPublish={handlePublish}
+          onRequestChanges={() => setRequestChangesOpen(true)}
+          onDismiss={handleDismissReview}
+          onRequestAgain={() => setRequestReviewOpen(true)}
+          connected={collabStatus === "connected"}
+          busy={reviewBusy || isSubmitting}
+        />
+      )}
       {connection === "offline" && !contentReadOnly && (
         <Notice tone="warning" live="alert" className="post-editor__banner" title="You're offline">
           Your edits wait in this tab and are sent when you're back online. Keep this tab open until then. You can

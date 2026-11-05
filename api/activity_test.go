@@ -493,7 +493,7 @@ func TestNeedsAttention(t *testing.T) {
 	require.GreaterOrEqual(t, mine.FailedSchedules.Total, int64(1))
 	require.Nil(t, mine.UnpublishedChanges)
 	require.Nil(t, mine.MissingAlt)
-	require.Contains(t, body, `"review_requests":[]`)
+	require.Contains(t, body, `"review_requests":null`)
 	require.Contains(t, body, `"unpublished_changes":null`)
 
 	theirs, _ := get(other)

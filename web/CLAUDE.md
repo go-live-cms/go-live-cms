@@ -258,7 +258,7 @@ are the most fragile part of the codebase. **Before editing anything under
 - **Home's feeds (#324):** "Continue where you left off" is `getContinueEditing` (the posts
   you last worked on, from the API's activity log: "Edited 2 hours ago" is when *you* did),
   "Needs attention" is `getNeedsAttention` (failed scheduled publishes; for editors, images
-  without alt text and posts with unpublished changes; review requests #323 later) and
+  without alt text, posts with unpublished changes and review requests, #323) and
   "Activity" is `getActivity` (8 a page, "Show more"), all in `lib/api/activity.ts`. How an
   event or item reads is `lib/activityFeed.ts` (`describeActivity`, `attentionItems`, tested):
   current names and titles from the API, "You" for yourself, "Someone" without an actor, an
@@ -427,6 +427,22 @@ are the most fragile part of the codebase. **Before editing anything under
   (`postCollab.ts` sends `avatar` with name/colour/id), which any collaborator can set. Presence
   colours stay the account's. `/confirm-email` is an account page (#344 patterns, CSP and noindex
   lists): it confirms only on the button (a mail scanner running scripts can't spend the token).
+- **Review requests (#323):** `lib/api/reviewRequests.ts` (the API's routes) and `lib/reviewRequests.ts`
+  (tested: what the editor's notice says and offers to whom, the row indicator, the API's codes).
+  Anyone who can edit the post asks: the top bar's **Request review** button replaces Publish for
+  those who can't publish, and is a "Request review…" entry in the Publish menu for those who can;
+  both open `RequestReviewDialog` (`components/editor/ui/ReviewDialogs.tsx`: reviewer, "Any editor or
+  admin" by default, and an optional note). `PostForm` reads `GET /posts/:id/review-request` on open,
+  after a publish (which resolves it, the API's trigger) and when the tab is shown again, and renders
+  `ReviewRequestNotice`: reviewers get Approve and publish/update (the Publish button's path; not on an
+  archived post, which has no Publish),
+  Request changes (`RequestChangesDialog`, a required plain-text note; comments #192 aren't built) and
+  Dismiss; the requester Withdraw request; after changes are requested, the note (warning tone) and
+  Request review again. The top bar shows a "Review requested" pill. The posts list's rows show
+  `ReviewRequestedPill` under the path (who asked whom in its title/screen-reader text) and the Review
+  filter (`?review=pending`, `ListFilters.review`); Home lists the requests ("Kenji asked for a
+  review", `attentionItems`). The canvas draws only Home's item; the dialogs and notices use the #338
+  components. Not on the Pages tree yet.
 - **Edit access requests (#321):** the editor's view-only notice (`components/editor/ui/
   PostEditAccess.tsx` `ViewOnlyNotice`) has **Request access** (a dialog, optional message ≤500)
   for a contributor watching someone else's published post, then "Request sent", or "declined,

@@ -259,7 +259,8 @@ export function selectionAfterBulk(results: BulkResult[]): number[] {
 
 // The list filters (#327): Author (byline), Category and Tag, from the URL (?author=,
 // ?category=, ?tag=) to the API's author_id and terms. Ids only; anything else is ignored.
-export type ListFilters = { author: string; category: string; tag: string }
+// Review requested (#323, ?review=pending): posts with an open review request.
+export type ListFilters = { author: string; category: string; tag: string; review: "" | "pending" }
 
 const ID = /^[1-9][0-9]{0,18}$/
 
@@ -268,15 +269,25 @@ export function readListFilters(params: URLSearchParams): ListFilters {
     const v = params.get(key)?.trim() ?? ""
     return ID.test(v) ? v : ""
   }
-  return { author: id("author"), category: id("category"), tag: id("tag") }
+  return { author: id("author"), category: id("category"), tag: id("tag"), review: params.get("review") === "pending" ? "pending" : "" }
 }
 
-export function filterQuery(filters: ListFilters): { author_id: string; terms: string } {
-  return { author_id: filters.author, terms: [filters.category, filters.tag].filter(Boolean).join(",") }
+export function filterQuery(filters: ListFilters): { author_id: string; terms: string; review: string } {
+  return { author_id: filters.author, terms: [filters.category, filters.tag].filter(Boolean).join(","), review: filters.review }
+}
+
+// The empty state of a filtered tab: what the filters ask for, in words.
+export function filterEmptyMessage(filters: ListFilters, tabLabel: string): string {
+  const terms = [filters.author && "author", filters.category && "category", filters.tag && "tag"].filter(Boolean) as string[]
+  const which = terms.length === 0 ? "" : terms.length === 1 ? terms[0] : `${terms.slice(0, -1).join(", ")} and ${terms[terms.length - 1]}`
+  if (filters.review && !which) return `Nothing in ${tabLabel} is waiting for a review.`
+  const together = terms.length > 1 ? " together" : ""
+  const review = filters.review ? " and a review request" : ""
+  return `Nothing in ${tabLabel} has that ${which}${review}${together}.`
 }
 
 export function hasFilters(filters: ListFilters): boolean {
-  return !!(filters.author || filters.category || filters.tag)
+  return !!(filters.author || filters.category || filters.tag || filters.review)
 }
 
 // "Trashed 3 days ago" for the Trash tab's rows.

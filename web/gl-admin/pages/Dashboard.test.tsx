@@ -83,7 +83,7 @@ const nothingNeeded = {
   unpublished_changes: { total: 0, posts: [] },
   missing_alt: { media_count: 0, published_post_count: 0 },
   access_requests: { total: 0, posts: [] },
-  review_requests: [],
+  review_requests: null,
 }
 
 async function render() {
@@ -234,7 +234,7 @@ describe("Home: Needs attention", () => {
         total: 1,
         posts: [{ id: 8, title: "October changelog", post_type: "post", changed_at: "2026-10-22T10:00:00Z", last_editor: ana }],
       },
-      review_requests: [],
+      review_requests: null,
     })
     await render()
     const rows = Array.from(section("home-attention").querySelectorAll<HTMLAnchorElement>("a.gl-home__row"))
@@ -245,6 +245,30 @@ describe("Home: Needs attention", () => {
     ])
     expect(rows[1].textContent).toContain("Used in 2 published posts")
     expect(rows[2].textContent).toContain("by Ana Costa")
+  })
+
+  // #323, the canvas's "Kenji asked for a review": the request, then the post's title.
+  it("lists review requests, theirs first, linking to the editor", async () => {
+    const kenji = { id: 4, username: "kenji", full_name: "Kenji Tanaka" }
+    api.getNeedsAttention.mockResolvedValue({
+      ...nothingNeeded,
+      review_requests: {
+        total: 7,
+        posts: [
+          { id: 21, post_id: 12, title: "How we cut image load time in half", post_type: "post", created_at: "2026-10-27T10:00:00Z", requested_by: kenji, assigned: true },
+          { id: 22, post_id: 13, title: "", post_type: "post", created_at: "2026-10-27T11:00:00Z", requested_by: null, assigned: false },
+        ],
+      },
+    })
+    await render()
+    const rows = Array.from(section("home-attention").querySelectorAll<HTMLAnchorElement>("a.gl-home__row"))
+    expect(rows.map((a) => [a.querySelector(".gl-home__row-title")?.textContent, a.getAttribute("href")])).toEqual([
+      ["Kenji Tanaka asked you for a review", "/content/edit/12"],
+      ["Someone asked for a review", "/content/edit/13"],
+      ["5 more posts are waiting for a review", "/content?review=pending"],
+    ])
+    expect(rows[0].textContent).toContain("How we cut image load time in half")
+    expect(rows[1].textContent).toContain("Untitled")
   })
 
   // #321: a request for edit access to a post the viewer may answer opens that post,

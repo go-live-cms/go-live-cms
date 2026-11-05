@@ -68,6 +68,14 @@ vi.mock("@gl-admin/lib/api/posts", () => ({
   getPostOwner: vi.fn(async () => ({ id: 1, username: "admin", full_name: "" })),
 }))
 // The settings sidebar loads taxonomies and media; it isn't what's tested here.
+// Review requests (#323): none on this post.
+vi.mock("@gl-admin/lib/api/reviewRequests", () => ({
+  getPostReviewRequest: vi.fn(async () => null),
+  getReviewers: vi.fn(async () => []),
+  requestReview: vi.fn(),
+  dismissReviewRequest: vi.fn(),
+  requestReviewChanges: vi.fn(),
+}))
 vi.mock("@gl-admin/components/editor/ui/PostSidebar", () => ({ default: () => null }))
 vi.mock("@gl-admin/components/editor/ui/BubbleMenu", () => ({ default: () => null }))
 vi.mock("@gl-admin/components/editor/ui/BlockTypeToolbar", () => ({ default: () => null }))

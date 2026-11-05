@@ -102,8 +102,20 @@ export interface NeedsAttention {
   missing_alt: { media_count: number; published_post_count: number } | null
   // Edit access requests on posts the caller owns (every post for editors), #321.
   access_requests: AttentionList<AttentionAccessRequest>
-  // Review requests (#323): always empty until they exist.
-  review_requests: unknown[]
+  // Open review requests to review (#323): editors and admins; null otherwise.
+  review_requests: AttentionList<ReviewRequestAttention> | null
+}
+
+// One request of Needs attention (#323): "Kenji asked for a review".
+export interface ReviewRequestAttention {
+  id: number
+  post_id: number
+  title: string
+  post_type: string
+  created_at: string
+  requested_by: ActivityPerson | null
+  // It names the caller (else nobody, or someone who can't review any more).
+  assigned: boolean
 }
 
 export async function getNeedsAttention(): Promise<NeedsAttention> {
@@ -113,6 +125,6 @@ export async function getNeedsAttention(): Promise<NeedsAttention> {
     unpublished_changes: response.unpublished_changes ?? null,
     missing_alt: response.missing_alt ?? null,
     access_requests: response.access_requests ?? { total: 0, posts: [] },
-    review_requests: response.review_requests ?? [],
+    review_requests: response.review_requests ?? null,
   }
 }

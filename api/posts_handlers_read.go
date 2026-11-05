@@ -88,6 +88,7 @@ func (server *Server) getPosts(c *gin.Context) {
 		ViewerID:           viewerID,
 		AuthorID:           filters.AuthorID,
 		TermIds:            filters.TermIDs,
+		ReviewPending:      filters.ReviewPending,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count filtered posts"})
@@ -105,6 +106,7 @@ func (server *Server) getPosts(c *gin.Context) {
 				ViewerID:           viewerID,
 				AuthorID:           filters.AuthorID,
 				TermIds:            filters.TermIDs,
+				ReviewPending:      filters.ReviewPending,
 				SortColumn:         sorting.Column,
 				SortDirection:      sorting.Direction,
 				OffsetCount:        int32(offset),
@@ -146,6 +148,7 @@ func (server *Server) getPosts(c *gin.Context) {
 				ViewerID:           viewerID,
 				AuthorID:           filters.AuthorID,
 				TermIds:            filters.TermIDs,
+				ReviewPending:      filters.ReviewPending,
 				// The admin list: has_unpublished_changes (#326).
 				WithUnpublishedChanges: true,
 				SortColumn:             sorting.Column,
@@ -162,6 +165,8 @@ func (server *Server) getPosts(c *gin.Context) {
 			for i, post := range posts {
 				postResponses[i] = toPostWithMetaResponse(post)
 			}
+			// The admin list's "Review requested" indicator (#323).
+			server.attachCallerReviewRequests(c, postResponses)
 
 			c.JSON(http.StatusOK, gin.H{
 				"posts": postResponses,
@@ -189,6 +194,7 @@ func (server *Server) getPosts(c *gin.Context) {
 			ViewerID:           viewerID,
 			AuthorID:           filters.AuthorID,
 			TermIds:            filters.TermIDs,
+			ReviewPending:      filters.ReviewPending,
 			SortColumn:         sorting.Column,
 			SortDirection:      sorting.Direction,
 			OffsetCount:        int32(offset),
@@ -473,6 +479,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				ViewerID:           viewerID,
 				AuthorID:           filters.AuthorID,
 				TermIds:            filters.TermIDs,
+				ReviewPending:      filters.ReviewPending,
 				SortColumn:         sorting.Column,
 				SortDirection:      sorting.Direction,
 				OffsetCount:        int32(offset),
@@ -495,6 +502,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				ViewerID:           viewerID,
 				AuthorID:           filters.AuthorID,
 				TermIds:            filters.TermIDs,
+				ReviewPending:      filters.ReviewPending,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
@@ -526,6 +534,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				ViewerID:               viewerID,
 				AuthorID:               filters.AuthorID,
 				TermIds:                filters.TermIDs,
+				ReviewPending:          filters.ReviewPending,
 				WithUnpublishedChanges: true,
 				SortColumn:             sorting.Column,
 				SortDirection:          sorting.Direction,
@@ -541,6 +550,8 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			for i, post := range posts {
 				postResponses[i] = toPostWithMetaResponse(post)
 			}
+			// The admin list's "Review requested" indicator (#323).
+			server.attachCallerReviewRequests(c, postResponses)
 
 			totalCount, err := server.store.CountPostsByTypeFiltered(c.Request.Context(), db.CountPostsByTypeFilteredParams{
 				PostType:           postType,
@@ -549,6 +560,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 				ViewerID:           viewerID,
 				AuthorID:           filters.AuthorID,
 				TermIds:            filters.TermIDs,
+				ReviewPending:      filters.ReviewPending,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})
@@ -579,6 +591,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			ViewerID:           viewerID,
 			AuthorID:           filters.AuthorID,
 			TermIds:            filters.TermIDs,
+			ReviewPending:      filters.ReviewPending,
 			SortColumn:         sorting.Column,
 			SortDirection:      sorting.Direction,
 			OffsetCount:        int32(offset),
@@ -601,6 +614,7 @@ func (server *Server) getPostsByType(c *gin.Context) {
 			ViewerID:           viewerID,
 			AuthorID:           filters.AuthorID,
 			TermIds:            filters.TermIDs,
+			ReviewPending:      filters.ReviewPending,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count posts by type"})

@@ -40,6 +40,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/author-candidates", auth, author, server.listAuthorCandidates)
 		// The caller's edit access grants (#321, posts_access.go), for the lists
 		posts.GET("/collaborations", auth, author, server.listCollaborations)
+		// Who can be asked for a review (#323, review_requests.go)
+		posts.GET("/reviewers", auth, author, server.listReviewers)
 		posts.GET("/slug/:slug", auth, author, server.getPostBySlug)
 		posts.GET("/:id", auth, author, server.getPostByID)
 
@@ -107,6 +109,10 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		// Working vs published settings (#358): whether a settings change waits for Update
 		posts.GET("/:id/settings", auth, author, server.getPostSettingsState)
 
+		// Review requests (#323, review_requests.go): asked by anyone who may edit the
+		// post; resolving them is under /review-requests/:id
+		posts.GET("/:id/review-request", auth, author, server.getPostReviewRequest)
+		posts.POST("/:id/review-request", auth, author, server.requestReview)
 		// Edit access requests and grants (#321, posts_access.go): asked for by a
 		// contributor watching the post, answered by its owner, editors and admins
 		posts.GET("/:id/access", auth, author, server.getPostAccess)

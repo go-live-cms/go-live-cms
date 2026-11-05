@@ -68,6 +68,10 @@ type EditorTopBarProps = {
   // Either of the two is "Changes not published": the status pill says so, and the
   // save state next to Update says what goes live.
   contentPending?: boolean
+  // Review requests (#323): an open request (the pill), and Request review (the button
+  // for anyone who can't publish, a menu entry for those who can). Absent: no entry.
+  reviewRequested?: boolean
+  onRequestReview?: () => void
 }
 
 const SpinnerIcon = () => (
@@ -210,6 +214,8 @@ export default function EditorTopBar({
   updateAt,
   onScheduleUpdate,
   onCancelScheduledUpdate,
+  reviewRequested = false,
+  onRequestReview,
 }: EditorTopBarProps) {
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -268,6 +274,11 @@ export default function EditorTopBar({
                 updateAt={updateScheduled ? updateAt : null}
                 withTime
               />
+            )}
+            {reviewRequested && mode === "edit" && (
+              <Pill tone="info" className="editor-top-bar__pill">
+                Review requested
+              </Pill>
             )}
             {viewOnly && mode === "edit" && (
               <Pill tone="neutral" icon={<LockIcon size={12} />} className="editor-top-bar__pill">
@@ -342,6 +353,13 @@ export default function EditorTopBar({
               </Button>
             )}
 
+            {/* Contributors can't publish (#135): they ask an editor instead (#323). */}
+            {!canPublish && mode === "edit" && onRequestReview && !reviewRequested && (
+              <Button variant="primary" onClick={onRequestReview} disabled={viewOnly || isSaving}>
+                Request review
+              </Button>
+            )}
+
             {canPublish && archived && mode === "edit" && onRestoreToDrafts && (
               <Button variant="secondary" onClick={() => run(onRestoreToDrafts)} loading={busy} disabled={viewOnly}>
                 Restore to drafts
@@ -359,7 +377,7 @@ export default function EditorTopBar({
                 >
                   {published ? (updateScheduled ? "Update now" : "Update") : "Publish"}
                 </Button>
-                {mode === "edit" && (onUnpublish || onArchive || onSchedule || onScheduleUpdate) && (
+                {mode === "edit" && (onUnpublish || onArchive || onSchedule || onScheduleUpdate || onRequestReview) && (
                   <Menu
                     label="Publish options"
                     placement="bottom-end"
@@ -425,6 +443,11 @@ export default function EditorTopBar({
                     {updateScheduled && onCancelScheduledUpdate && (
                       <MenuItem onSelect={() => run(onCancelScheduledUpdate)} description="Keep the live post as it is">
                         Cancel update
+                      </MenuItem>
+                    )}
+                    {onRequestReview && !reviewRequested && (
+                      <MenuItem onSelect={onRequestReview} description="Ask another editor or admin to look first">
+                        Request review…
                       </MenuItem>
                     )}
                     <MenuSeparator />

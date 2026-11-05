@@ -253,6 +253,39 @@ func canEditPostDetails(user db.User, post db.Post) bool {
 	return canEditPost(user, post) && !strings.EqualFold(post.PostStatus, postStatusPublished)
 }
 
+// Review requests (#323). reviewerRoles are who may be asked to review: the
+// roles that may publish (canModeratePosts), for the SQL lists.
+var reviewerRoles = []string{RoleAdmin, RoleEditor}
+
+// canRequestReview reports whether the user may ask for a review of the post:
+// anyone who may edit it (canEditPost), contributors above all, since they can't
+// publish (#135).
+func canRequestReview(user db.User, post db.Post) bool {
+	return canEditPost(user, post)
+}
+
+// canSeeReviewRequests reports whether the user sees the post's review requests
+// (the editor's notice, the list's indicator): reviewers, and the post's owner.
+// Another contributor reading a published post doesn't.
+func canSeeReviewRequests(user db.User, post db.Post) bool {
+	if canModeratePosts(user) {
+		return true
+	}
+	return hasRole(user, RoleContributor) && post.UserID == user.ID
+}
+
+// canReview reports whether the user may be named as a reviewer and may request
+// changes: editors and admins, who can publish.
+func canReview(user db.User) bool {
+	return canModeratePosts(user)
+}
+
+// canDismissReviewRequest reports whether the user may dismiss the request: a
+// reviewer, or its requester (withdrawing it).
+func canDismissReviewRequest(user db.User, request db.ReviewRequest) bool {
+	return canReview(user) || (request.RequestedBy.Valid && request.RequestedBy.Int64 == user.ID)
+}
+
 // authorizePost checks a per-post permission for the caller and writes the
 // error response when it fails. Moderators pass without loading the post
 // (the handler reports a missing post itself, as before #135); anyone else

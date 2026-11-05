@@ -958,6 +958,21 @@ func (mr *MockStoreMockRecorder) CreatePosts(arg0, arg1 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePosts", reflect.TypeOf((*MockStore)(nil).CreatePosts), arg0, arg1)
 }
 
+// CreateReviewRequest mocks base method.
+func (m *MockStore) CreateReviewRequest(arg0 context.Context, arg1 db.CreateReviewRequestParams) (db.ReviewRequest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateReviewRequest", arg0, arg1)
+	ret0, _ := ret[0].(db.ReviewRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateReviewRequest indicates an expected call of CreateReviewRequest.
+func (mr *MockStoreMockRecorder) CreateReviewRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateReviewRequest", reflect.TypeOf((*MockStore)(nil).CreateReviewRequest), arg0, arg1)
+}
+
 // CreateSession mocks base method.
 func (m *MockStore) CreateSession(arg0 context.Context, arg1 db.CreateSessionParams) (db.Session, error) {
 	m.ctrl.T.Helper()
@@ -1678,6 +1693,21 @@ func (mr *MockStoreMockRecorder) GetAnySessionByRefreshTokenHash(arg0, arg1 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAnySessionByRefreshTokenHash", reflect.TypeOf((*MockStore)(nil).GetAnySessionByRefreshTokenHash), arg0, arg1)
 }
 
+// GetCurrentReviewRequest mocks base method.
+func (m *MockStore) GetCurrentReviewRequest(arg0 context.Context, arg1 int64) (db.GetCurrentReviewRequestRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCurrentReviewRequest", arg0, arg1)
+	ret0, _ := ret[0].(db.GetCurrentReviewRequestRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCurrentReviewRequest indicates an expected call of GetCurrentReviewRequest.
+func (mr *MockStoreMockRecorder) GetCurrentReviewRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentReviewRequest", reflect.TypeOf((*MockStore)(nil).GetCurrentReviewRequest), arg0, arg1)
+}
+
 // GetExtensionSetting mocks base method.
 func (m *MockStore) GetExtensionSetting(arg0 context.Context, arg1 string) (db.ExtensionSetting, error) {
 	m.ctrl.T.Helper()
@@ -2381,6 +2411,36 @@ func (m *MockStore) GetPublishedPostTaxonomyTerms(arg0 context.Context, arg1 int
 func (mr *MockStoreMockRecorder) GetPublishedPostTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublishedPostTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).GetPublishedPostTaxonomyTerms), arg0, arg1)
+}
+
+// GetReviewRequest mocks base method.
+func (m *MockStore) GetReviewRequest(arg0 context.Context, arg1 int64) (db.ReviewRequest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReviewRequest", arg0, arg1)
+	ret0, _ := ret[0].(db.ReviewRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetReviewRequest indicates an expected call of GetReviewRequest.
+func (mr *MockStoreMockRecorder) GetReviewRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReviewRequest", reflect.TypeOf((*MockStore)(nil).GetReviewRequest), arg0, arg1)
+}
+
+// GetReviewRequestDetail mocks base method.
+func (m *MockStore) GetReviewRequestDetail(arg0 context.Context, arg1 int64) (db.GetReviewRequestDetailRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReviewRequestDetail", arg0, arg1)
+	ret0, _ := ret[0].(db.GetReviewRequestDetailRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetReviewRequestDetail indicates an expected call of GetReviewRequestDetail.
+func (mr *MockStoreMockRecorder) GetReviewRequestDetail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReviewRequestDetail", reflect.TypeOf((*MockStore)(nil).GetReviewRequestDetail), arg0, arg1)
 }
 
 // GetSession mocks base method.
@@ -3114,6 +3174,21 @@ func (mr *MockStoreMockRecorder) ListMenus(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListMenus", reflect.TypeOf((*MockStore)(nil).ListMenus), arg0)
 }
 
+// ListOpenReviewRequestsForPosts mocks base method.
+func (m *MockStore) ListOpenReviewRequestsForPosts(arg0 context.Context, arg1 []int64) ([]db.ListOpenReviewRequestsForPostsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOpenReviewRequestsForPosts", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListOpenReviewRequestsForPostsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOpenReviewRequestsForPosts indicates an expected call of ListOpenReviewRequestsForPosts.
+func (mr *MockStoreMockRecorder) ListOpenReviewRequestsForPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOpenReviewRequestsForPosts", reflect.TypeOf((*MockStore)(nil).ListOpenReviewRequestsForPosts), arg0, arg1)
+}
+
 // ListOpenUserInvitations mocks base method.
 func (m *MockStore) ListOpenUserInvitations(arg0 context.Context) ([]db.UserInvitation, error) {
 	m.ctrl.T.Helper()
@@ -3382,6 +3457,51 @@ func (m *MockStore) ListRelatedPosts(arg0 context.Context, arg1 db.ListRelatedPo
 func (mr *MockStoreMockRecorder) ListRelatedPosts(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRelatedPosts", reflect.TypeOf((*MockStore)(nil).ListRelatedPosts), arg0, arg1)
+}
+
+// ListReviewRecipients mocks base method.
+func (m *MockStore) ListReviewRecipients(arg0 context.Context, arg1 db.ListReviewRecipientsParams) ([]db.ListReviewRecipientsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListReviewRecipients", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListReviewRecipientsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListReviewRecipients indicates an expected call of ListReviewRecipients.
+func (mr *MockStoreMockRecorder) ListReviewRecipients(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReviewRecipients", reflect.TypeOf((*MockStore)(nil).ListReviewRecipients), arg0, arg1)
+}
+
+// ListReviewRequestsForReviewer mocks base method.
+func (m *MockStore) ListReviewRequestsForReviewer(arg0 context.Context, arg1 db.ListReviewRequestsForReviewerParams) ([]db.ListReviewRequestsForReviewerRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListReviewRequestsForReviewer", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListReviewRequestsForReviewerRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListReviewRequestsForReviewer indicates an expected call of ListReviewRequestsForReviewer.
+func (mr *MockStoreMockRecorder) ListReviewRequestsForReviewer(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReviewRequestsForReviewer", reflect.TypeOf((*MockStore)(nil).ListReviewRequestsForReviewer), arg0, arg1)
+}
+
+// ListReviewers mocks base method.
+func (m *MockStore) ListReviewers(arg0 context.Context, arg1 db.ListReviewersParams) ([]db.ListReviewersRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListReviewers", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListReviewersRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListReviewers indicates an expected call of ListReviewers.
+func (mr *MockStoreMockRecorder) ListReviewers(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReviewers", reflect.TypeOf((*MockStore)(nil).ListReviewers), arg0, arg1)
 }
 
 // ListSessionsByUser mocks base method.
@@ -3988,6 +4108,21 @@ func (m *MockStore) ResetPasswordTx(arg0 context.Context, arg1 db.ResetPasswordT
 func (mr *MockStoreMockRecorder) ResetPasswordTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPasswordTx", reflect.TypeOf((*MockStore)(nil).ResetPasswordTx), arg0, arg1)
+}
+
+// ResolveReviewRequest mocks base method.
+func (m *MockStore) ResolveReviewRequest(arg0 context.Context, arg1 db.ResolveReviewRequestParams) (db.ReviewRequest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResolveReviewRequest", arg0, arg1)
+	ret0, _ := ret[0].(db.ReviewRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResolveReviewRequest indicates an expected call of ResolveReviewRequest.
+func (mr *MockStoreMockRecorder) ResolveReviewRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveReviewRequest", reflect.TypeOf((*MockStore)(nil).ResolveReviewRequest), arg0, arg1)
 }
 
 // RestorePostFromTrash mocks base method.

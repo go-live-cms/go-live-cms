@@ -86,7 +86,7 @@ describe("describeActivity", () => {
   })
 
   it("passes an unknown verb through (later features add their own)", () => {
-    expect(line({ verb: "review_requested" })).toBe("Ana Costa review requested October changelog")
+    expect(line({ verb: "bookmarked" })).toBe("Ana Costa bookmarked October changelog")
     expect(line({ object_type: "comment", verb: "commented" })).toBe("Ana Costa commented")
   })
 })
@@ -96,7 +96,7 @@ const nothing: NeedsAttention = {
   unpublished_changes: null,
   missing_alt: null,
   access_requests: { total: 0, posts: [] },
-  review_requests: [],
+  review_requests: null,
 }
 
 describe("attentionItems", () => {
@@ -140,7 +140,7 @@ describe("attentionItems", () => {
           posts: [{ id: 8, title: "October changelog", post_type: "post", changed_at: "2026-11-03T10:00:00Z", last_editor: ana }],
         },
         access_requests: { total: 0, posts: [] },
-        review_requests: [],
+        review_requests: null,
       },
       now
     )
@@ -171,5 +171,33 @@ describe("attentionItems", () => {
     // Contributors have no Scheduled tab: the rest are under their own posts.
     const contributor = attentionItems({ ...nothing, failed_schedules: { total: 6, posts: [] } }, now, false)
     expect(contributor[0]).toMatchObject({ title: "6 more scheduled posts failed to publish", href: "/content/post?view=mine" })
+  })
+})
+
+// #323: review requests in the feed, and Home's "Kenji asked for a review".
+describe("review requests", () => {
+  it("reads the review events", () => {
+    expect(line({ verb: "review_requested", payload: { request_id: 1 } })).toBe("Ana Costa asked for a review of October changelog")
+    expect(line({ verb: "review_changes_requested" })).toBe("Ana Costa requested changes to October changelog")
+    expect(line({ verb: "review_dismissed", payload: { withdrawn: false } })).toBe("Ana Costa dismissed the review request of October changelog")
+    expect(line({ verb: "review_dismissed", payload: { withdrawn: true } })).toBe("Ana Costa withdrew the review request of October changelog")
+    expect(line({ verb: "review_resolved", actor: null, payload: { resolution: "published" } })).toBe("Someone completed the review of October changelog")
+  })
+
+  it("lists review requests after the rest, with the post's title", () => {
+    const needs: NeedsAttention = {
+      failed_schedules: { total: 0, posts: [] },
+      unpublished_changes: null,
+      missing_alt: null,
+      access_requests: { total: 0, posts: [] },
+      review_requests: {
+        total: 1,
+        posts: [{ id: 3, post_id: 12, title: "How we cut image load time in half", post_type: "post", created_at: "2026-11-04T10:00:00Z", requested_by: { id: 4, username: "kenji", full_name: "Kenji" }, assigned: false }],
+      },
+    }
+    expect(attentionItems(needs, now)).toEqual([
+      { key: "review-3", title: "Kenji asked for a review", detail: "How we cut image load time in half", href: "/content/edit/12", tone: "neutral" },
+    ])
+    expect(attentionItems({ ...needs, review_requests: null }, now)).toEqual([])
   })
 })

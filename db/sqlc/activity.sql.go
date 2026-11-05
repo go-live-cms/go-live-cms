@@ -152,7 +152,9 @@ WHERE ($1::bigint IS NULL OR a.id < $1::bigint)
     OR (a.object_type = 'post' AND (
           $5::boolean
           OR p.user_id = $6::bigint
-          OR (p.post_status = 'published' AND (
+          -- Review requests (#323) are seen by reviewers and the post's owner only
+          -- (canSeeReviewRequests), not by every reader of a published post.
+          OR (p.post_status = 'published' AND a.verb NOT LIKE 'review\_%' AND (
                 a.verb NOT LIKE 'access\_%'
                 OR a.actor_id = $6::bigint
                 OR a.payload->'user_id' = to_jsonb($6::bigint)))))

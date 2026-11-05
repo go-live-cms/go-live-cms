@@ -129,6 +129,8 @@ WHERE
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean
          OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    -- Review requested (#323), as in ListPosts.
+    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)))
 ORDER BY ts_rank(ps.document, websearch_to_tsquery(golive_search_config(), @query::text)) DESC, p.created_at DESC, p.id DESC
 LIMIT @limit_count
 OFFSET @offset_count;
@@ -162,4 +164,5 @@ WHERE
     -- contributor's id = their own posts plus published ones (canReadPost).
     AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id OR p.post_status = 'published')
     AND (NOT @unpublished_changes::boolean
-         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings));
+         OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND (NOT @review_pending::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND (@viewer_id::bigint = 0 OR p.user_id = @viewer_id)));

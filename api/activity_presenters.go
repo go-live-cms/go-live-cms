@@ -154,8 +154,9 @@ type NeedsAttentionResponse struct {
 	MissingAlt         *MissingAltSummary                     `json:"missing_alt"`
 	// AccessRequests are open edit access requests the caller may answer (#321).
 	AccessRequests AttentionList[AttentionAccessRequest] `json:"access_requests"`
-	// ReviewRequests is the slot for #323's review requests; always empty now.
-	ReviewRequests []any `json:"review_requests"`
+	// ReviewRequests (#323): open review requests the caller should review (editors
+	// and admins; null otherwise), see ListReviewRequestsForReviewer.
+	ReviewRequests *AttentionList[ReviewRequestAttention] `json:"review_requests"`
 }
 
 // AttentionAccessRequest is an open edit access request (#321): who asked, for

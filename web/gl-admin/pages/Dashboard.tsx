@@ -24,11 +24,11 @@ import "@gl-admin/assets/styles/pages/home.scss"
 
 // Home (#9, #340, #324): quick actions, "Continue where you left off" (the posts you
 // last worked on, from the activity log), "Needs attention" (failed scheduled publishes;
-// for editors, images without alt text and posts with unpublished changes; requests for
-// edit access to posts you own, or any post for editors, #321), the
-// Activity feed, then drafts and counts. "New post" offers Blank or a template (#322,
-// NewPostDialog, which is also where editors rename and delete templates). Still
-// waiting: presence on the recent cards (who's editing now) and review requests (#323).
+// for editors, images without alt text, posts with unpublished changes and review
+// requests, #323; requests for edit access to posts you own, or any post for editors,
+// #321), the Activity feed, then drafts and counts. "New post" offers Blank or a
+// template (#322, NewPostDialog, which is also where editors rename and delete
+// templates). Still waiting: presence on the recent cards (who's editing now).
 
 // Activity rows per page ("Show more" loads the next).
 const ACTIVITY_PAGE = 8

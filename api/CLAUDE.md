@@ -889,7 +889,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `invitation_revoked`, joined (actor = the new member), user created (POST `/users`),
   `role_changed` (both routes, `previous_role`; none when the role is unchanged:
   `ChangeUserRoleTx` returns `PreviousRole`), removed;
-  `settings_updated` (`fields`). The trash (#327): `trashed` (`from_status`), `restored` (`post_status`) and permanent delete as `deleted`, recorded by the per-post helpers in `posts_trash.go` so the bulk actions log each post too (bulk publish logs `published`: `publishPostByID` records it for both routes). Extension settings aren't recorded yet.
+  `settings_updated` (`fields`); review requests (#323, below). The trash (#327): `trashed` (`from_status`), `restored` (`post_status`) and permanent delete as `deleted`, recorded by the per-post helpers in `posts_trash.go` so the bulk actions log each post too (bulk publish logs `published`: `publishPostByID` records it for both routes). Extension settings aren't recorded yet.
 - **Throttle:** high-volume events ("updated", and "edited" from the collab store) are at most
   one per member, verb and object per `activityEditWindow` (10 min, `CreateActivityThrottled`).
   The collab one is written **inside** `StorePostCollabTx` (`EditActivityWindow`, only stores
@@ -903,13 +903,55 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `post_ydoc_state.last_editor_id` only sharpens the time to `changed_at`, never adds a post:
   state-only stores, a post merely opened, record their sender too). `GET /home/needs-attention`: `failed_schedules` (contributors their own),
   `unpublished_changes` + `missing_alt` (editors and admins; `null` otherwise),
-  `review_requests` (`[]`, the slot for #323).
+  `review_requests` (#323, below: editors and admins; `null` otherwise).
 - **Retention:** `ACTIVITY_RETENTION` (default 2160h = 90 days, 0 = keep everything);
   `RunActivityRetention` (main.go, every replica) prunes hourly in batches of 5000.
 - Handler tests on a mock store get an in-memory recorder (`newActivityWriter` is swapped in
   `test_utils_test.go`; read it with `activityOf(t, server).verbs()`), so they don't expect the
   inserts. `activity_test.go` covers the write paths, visibility, feeds and retention against
   the real database.
+
+## Review requests (#323, `000044`, `review_requests*.go`)
+
+- `review_requests`: post, `requested_by`, optional `reviewer_id` (an editor or admin; NULL = any of
+  them), `message` (≤1000, plain text), `status` open | published | dismissed | changes_requested,
+  `resolved_by`, `resolution_note` (≤2000, required with changes_requested; plain text, comments #192
+  aren't built), times. User FKs SET NULL (a request naming a removed member is open to all), the
+  post CASCADE. **One open request per post** (partial unique index; `CreateReviewRequest` is `ON
+  CONFLICT DO NOTHING`): a second `POST /posts/:id/review-request` answers **409
+  `review_already_requested`** with the open one and emails nobody; withdraw and ask again to name
+  someone else.
+- Who: asking = `canRequestReview` (= `canEditPost`: contributors their own posts but scheduled,
+  moderators any; trashed → 409); the reviewer must be another member who `canReview` (400
+  `invalid_reviewer`, the same for an unknown id). Seeing a post's requests (`GET
+  /posts/:id/review-request`, the list indicator) = `canSeeReviewRequests` (moderators, the owner;
+  another contributor gets `null` / nothing, and `/review-requests/:id/*` answers 404). Dismiss =
+  a reviewer or the requester (`withdrawn` in the event); request changes = reviewers only
+  (`requireContentEditor`). `GET /posts/reviewers` lists editors and admins (public fields).
+- **Publishing resolves it, whatever the path**: the `posts_resolve_review_on_publish` trigger
+  (post_status becomes published, or a new `published_version_id`) sets `published`, credits the new
+  version's `created_by` (who published, or who scheduled it; NULL for a status set through PUT) and
+  inserts the `review_resolved` activity row in the same transaction. Publish/Update, bulk, #147's
+  scheduler, #335's scheduled update and PUT all go through it, so a new publish path needs nothing.
+  Unpublish, archive, trash and restoring a published post from the trash (the old live version,
+  not the reviewed changes) leave it open (Needs attention hides trashed posts).
+- **Email** (`mailer` templates `review_requested`, `review_changes_requested`), after the response
+  (`runInBackground`), one message per recipient: the named reviewer, or with none **every editor and
+  admin but the requester** (≤100, the most recently active first; they also see it on Home). Changes
+  requested emails the requester the note (not when they asked for changes on their own request).
+  Links: `PUBLIC_BASE_URL` + `/gl-admin/content/edit/<id>`. The answer never says who was emailed;
+  logs carry ids and counts only. Activity: `review_requested` (`request_id`, `reviewer_id`),
+  `review_dismissed` (`withdrawn`), `review_changes_requested`, `review_resolved` (the trigger);
+  never the notes. `ListActivity` shows the `review_*` events of a published post to reviewers and its
+  owner only, like the requests themselves.
+- `GET /home/needs-attention`'s `review_requests` (`ListReviewRequestsForReviewer`, moderators): open
+  requests naming the caller, naming nobody, or naming someone who can no longer review; never their
+  own, never a trashed post; theirs first, then the oldest. `GET /posts/:id/review-request` is the
+  open request, or the latest one with changes requested while no version was published after it
+  (the editor's note). Lists (`with_meta`, `/posts/search`) attach `review_request` per row
+  (`ListOpenReviewRequestsForPosts`, one query per page; a failure leaves it out), and
+  `review=pending` filters them (a contributor: only their own posts). Tests:
+  `review_requests_test.go` (real DB).
 
 ## Edit access requests (#321, `000042`, `posts_access.go`)
 

@@ -1,0 +1,15 @@
+Hi,
+
+{{.Requester}} asked {{if .Assigned}}you{{else}}an editor{{end}} to review "{{.PostTitle}}" on {{.SiteTitle}}.
+{{if .Message}}
+Their note:
+
+{{.Message}}
+{{end}}
+Open the post to review it:
+
+{{.Link}}
+
+Publishing the post, requesting changes or dismissing the request resolves it.
+
+{{.SiteTitle}}

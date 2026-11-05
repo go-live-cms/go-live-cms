@@ -351,15 +351,15 @@ describe("bulk actions", () => {
 describe("list filters", () => {
   it("reads ids from the URL and builds the API's author_id and terms", () => {
     const filters = readListFilters(new URLSearchParams("author=12&category=3&tag=40&q=x"))
-    expect(filters).toEqual({ author: "12", category: "3", tag: "40" })
-    expect(filterQuery(filters)).toEqual({ author_id: "12", terms: "3,40" })
+    expect(filters).toEqual({ author: "12", category: "3", tag: "40", review: "" })
+    expect(filterQuery(filters)).toEqual({ author_id: "12", terms: "3,40", review: "" })
     expect(hasFilters(filters)).toBe(true)
-    expect(filterQuery(readListFilters(new URLSearchParams("tag=40")))).toEqual({ author_id: "", terms: "40" })
+    expect(filterQuery(readListFilters(new URLSearchParams("tag=40")))).toEqual({ author_id: "", terms: "40", review: "" })
   })
 
   it("ignores anything that isn't an id", () => {
     const filters = readListFilters(new URLSearchParams("author=me&category=0&tag=1,2"))
-    expect(filters).toEqual({ author: "", category: "", tag: "" })
+    expect(filters).toEqual({ author: "", category: "", tag: "", review: "" })
     expect(hasFilters(filters)).toBe(false)
   })
 })

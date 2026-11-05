@@ -34,6 +34,15 @@ const (
 	ActivityTrashed  = "trashed"
 	ActivityRestored = "restored"
 
+	// Review requests (#323, 000044), on the post. Payload: request_id, plus
+	// reviewer_id on a request, resolution ("published") on review_resolved, which
+	// 000044's publish trigger writes, and withdrawn on a requester's dismissal. Never
+	// the notes (content).
+	ActivityReviewRequested        = "review_requested"
+	ActivityReviewResolved         = "review_resolved"
+	ActivityReviewDismissed        = "review_dismissed"
+	ActivityReviewChangesRequested = "review_changes_requested"
+
 	// Ownership (#353): POST /posts/:id/transfer. The payload has the previous and
 	// new owner's ids and whether the byline changed. A removal (#333) moves posts
 	// too, recorded once as the member's "removed".

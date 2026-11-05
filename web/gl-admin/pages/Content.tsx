@@ -18,6 +18,7 @@ import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import { DocumentIcon, PlusIcon, SearchIcon } from "@gl-admin/components/ui/icons"
 import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
+import ReviewRequestedPill from "@gl-admin/components/content/ReviewRequestedPill"
 import { useNewPostChooser } from "@gl-admin/components/content/NewPostDialog"
 import {
   AccessCell,
@@ -41,6 +42,7 @@ import {
   SORT_OPTIONS,
   bulkActions,
   bulkReport,
+  filterEmptyMessage,
   filterQuery,
   findSort,
   findTab,
@@ -112,7 +114,10 @@ function typeLabels(typeName: string | undefined, postType: PostTypeInfo | undef
 type ListProps = { typeName?: string; postType?: PostTypeInfo; title?: string }
 
 // The filter params (#327) and the view (tab, sort, search) all live in the URL.
-const FILTER_KEYS = ["author", "category", "tag"] as const
+const FILTER_KEYS = ["author", "category", "tag", "review"] as const
+
+// Review requested (#323): posts with an open review request (a contributor: their own).
+const REVIEW_FILTER_OPTIONS: FilterOption[] = [{ id: "pending", label: "Review requested" }]
 
 function PostsList({ typeName, postType, title }: ListProps) {
   const navigate = useNavigate()
@@ -220,7 +225,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
     retryList.current()
   }
 
-  const { author_id, terms } = filterQuery(filters)
+  const { author_id, terms, review } = filterQuery(filters)
   const query = useMemo(
     () => ({
       type: typeName || "",
@@ -229,11 +234,12 @@ function PostsList({ typeName, postType, title }: ListProps) {
       unpublished_changes: tab.unpublishedChanges ? "true" : "",
       author_id,
       terms,
+      review,
       sort: sort.sort,
       order: sort.order,
       q: search,
     }),
-    [typeName, tab.status, tab.mine, tab.unpublishedChanges, user?.id, author_id, terms, sort.sort, sort.order, search]
+    [typeName, tab.status, tab.mine, tab.unpublishedChanges, user?.id, author_id, terms, review, sort.sort, sort.order, search]
   )
 
   // A selection belongs to one page: another page (or page size) starts empty, so a bulk
@@ -310,6 +316,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
               </Link>
             )}
             <span className="gl-content-list__path">{postPath(row, structure)}</span>
+            <ReviewRequestedPill summary={row.review_request} meId={user?.id} />
           </div>
         ) : (
           <div className="gl-content-list__title">
@@ -448,6 +455,9 @@ function PostsList({ typeName, postType, title }: ListProps) {
             <FilterMenu label="Category" options={categoryOptions} value={filters.category} onChange={setFilter("category")} />
           )}
           {tagOptions.length > 0 && <FilterMenu label="Tag" options={tagOptions} value={filters.tag} onChange={setFilter("tag")} />}
+          {!inTrash && (
+            <FilterMenu label="Review" options={REVIEW_FILTER_OPTIONS} value={filters.review} onChange={setFilter("review")} />
+          )}
           {filtered && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               Clear filters
@@ -507,7 +517,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
                   compact
                   icon={<DocumentIcon size={24} />}
                   title={`No ${plural.toLowerCase()} match these filters`}
-                  description={`Nothing in ${tab.label} has that author, category and tag together.`}
+                  description={filterEmptyMessage(filters, tab.label)}
                   action={
                     <Button variant="secondary" onClick={clearFilters}>
                       Clear filters
@@ -577,6 +587,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
 // Phone width: the table becomes a list of links (the 375 board).
 // `user` is set for contributors, whose cards also say whether they can edit.
 function PostCards({ posts, structure, user }: { posts: Post[] | null; structure: "id" | "slug"; user: PermissionUser | null }) {
+  const me = useAuthUser()
   if (!posts) return null
   return (
     <ul className="gl-post-cards">
@@ -598,6 +609,7 @@ function PostCards({ posts, structure, user }: { posts: Post[] | null; structure
                 publishAt={post.publish_at}
                 updateAt={post.update_at}
               />
+              <ReviewRequestedPill summary={post.review_request} meId={me?.id} />
               <Byline post={post} size={20} />
               <LastEdited post={post} />
             </span>

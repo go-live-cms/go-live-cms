@@ -17,6 +17,19 @@
     padding: var(--space-3) var(--space-4);
   }
 
+  // A review note (#323): someone's own words, plain text, kept as typed.
+  &__review-note {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  // The Request review dialog's fields.
+  &__review-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
   &__error-id {
     font-family: var(--font-mono);
     font-size: var(--type-footnote);

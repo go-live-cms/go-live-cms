@@ -1,3 +1,4 @@
+import type { ReviewRequestSummary } from "./reviewRequests"
 import type { BlockDocV1 } from "../blocks-spec"
 
 // Shared types for API modules
@@ -158,6 +159,8 @@ export interface Post {
   update_at?: string | null
   // That update in full (GET /posts/:id only).
   scheduled_update?: ScheduledUpdate | null
+  // Its open review request (#323): with_meta list rows, for reviewers and the owner.
+  review_request?: ReviewRequestSummary | null
 }
 
 // A published post's pending update (#335): its content was frozen at scheduled_at.

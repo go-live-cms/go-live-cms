@@ -286,6 +286,7 @@ func TestSearchPostsAdmin(t *testing.T) {
 			query:  "q=draft+notes&type=post&status=draft,published&limit=25&offset=25",
 			caller: &editor,
 			expect: func(store *mockdb.MockStore) {
+				allowReviewLookups(store)
 				store.EXPECT().CountSearchPosts(gomock.Any(), db.CountSearchPostsParams{Query: "draft notes", TitlePattern: "%draft notes%", PostType: "post", PostStatus: "draft,published"}).Return(int64(26), nil)
 				store.EXPECT().SearchPostsWithMeta(gomock.Any(), db.SearchPostsWithMetaParams{
 					Query: "draft notes", TitlePattern: "%draft notes%", PostType: "post", PostStatus: "draft,published", OffsetCount: 25, LimitCount: 25,

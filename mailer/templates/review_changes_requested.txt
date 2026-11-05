@@ -1,0 +1,11 @@
+Hi,
+
+{{.Reviewer}} reviewed "{{.PostTitle}}" on {{.SiteTitle}} and asked for changes:
+
+{{.Message}}
+
+Open the post to make them, then request another review:
+
+{{.Link}}
+
+{{.SiteTitle}}
