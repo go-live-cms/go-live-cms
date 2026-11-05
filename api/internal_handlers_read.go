@@ -16,7 +16,7 @@ import (
 // The collab server verifies the client's ticket itself and passes the
 // ticket's user_id, iat and doc. Everything is read from the database, never
 // from the ticket: the user's current role, and (for non-moderators) the
-// post's owner, decided by canEditPost.
+// post's owner and edit access grants (#321), decided by canEditWorkingCopy.
 // issued_at is required so a ticket issued before the user's latest password
 // change is refused here exactly as authMiddleware refuses such an access
 // token (issuedBeforePasswordChange).
@@ -106,5 +106,13 @@ func (server *Server) getInternalDocAccess(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": canEditPost(user, post)})
+	// Ownership, or an edit access grant (#321): the collab server's re-check
+	// (#313) picks a grant or a revoke up on its next lookup, which the API
+	// asks for at once (recheckCollabUser).
+	canEdit, err := server.canEditWorkingCopy(c.Request.Context(), user, post)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check edit access"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"role": user.Role, "can_edit": canEdit})
 }

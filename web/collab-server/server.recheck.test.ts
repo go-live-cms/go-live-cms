@@ -174,6 +174,52 @@ describe("access re-check of open connections (#313)", () => {
   })
 })
 
+// #353: an admin transfers the post. The API calls the document's re-check right after
+// the commit (recheckCollabDoc), so a contributor who owned it drops to read-only at once
+// (their later edits are dropped) and one who receives it can write.
+describe("a transferred post's document (#353)", () => {
+  it("the old owner's open connection drops to read-only and their later edits are dropped", async () => {
+    api.users.set("3", { role: "contributor", owns: ["12"] })
+    const oldOwner = open("3")
+    await synced(oldOwner)
+    await waitFor(() => collab.recheckedConnections === 1, { what: "the connection tracked" })
+    appendParagraph(oldOwner.doc, "mine", "blk-mine-0000001")
+    await waitFor(() => paragraphs(serverDoc()).includes("mine"), { what: "the owner's edit" })
+
+    api.transferPost("12", "1")
+    expect(collab.recheckDoc(DOC)).toBe(1)
+    await clock.advance(1)
+    await waitFor(() => oldOwner.stateless.some((m) => (m as { type: string }).type === "access"), { what: "the access message" })
+    expect(oldOwner.stateless).toContainEqual({ type: "access", mode: "read", reason: "demoted" })
+
+    // Their edits from now on are dropped; the new owner's (an admin) still land.
+    const admin = open("1")
+    await synced(admin)
+    appendParagraph(oldOwner.doc, "after", "blk-after-000001")
+    appendParagraph(admin.doc, "admin", "blk-admin-000001")
+    await waitFor(() => paragraphs(serverDoc()).includes("admin"), { what: "the admin's edit" })
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(paragraphs(serverDoc())).not.toContain("after")
+    await waitFor(() => (api.posts.get("12")!.block_doc?.blocks_order ?? []).includes("blk-admin-000001"), { what: "the store" })
+    expect(api.posts.get("12")!.block_doc!.blocks_order).not.toContain("blk-after-000001")
+    // Still connected, as a live read-only view (not revoked).
+    expect(oldOwner.closes).toEqual([])
+  })
+
+  it("a contributor who receives the post gets write access on their open connection", async () => {
+    // Connected read-only: not theirs (the fake answers can_edit false with a content role).
+    api.users.set("4", { role: "contributor", owns: [] })
+    const reader = open("4")
+    await synced(reader)
+    await waitFor(() => collab.recheckedConnections === 1, { what: "the connection tracked" })
+    api.transferPost("12", "4")
+    expect(collab.recheckDoc(DOC)).toBe(1)
+    await clock.advance(1)
+    await waitFor(() => reader.stateless.some((m) => (m as { type: string }).type === "access"), { what: "the access message" })
+    expect(reader.stateless).toContainEqual({ type: "access", mode: "write", reason: "restored" })
+  })
+})
+
 // #327: a post moved to the trash. The API answers 410 for it and calls the document's
 // re-check, so its editors close with post-trashed (not access-revoked: the session is
 // fine) and nobody can open it again until it is restored.

@@ -1,4 +1,4 @@
--- Post templates (#322, 000040). A template is not a post: nothing in post.sql
+-- Post templates (#322, 000043). A template is not a post: nothing in post.sql
 -- or the public queries reads these tables.
 
 -- name: CreatePostTemplate :one

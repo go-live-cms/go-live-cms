@@ -793,6 +793,21 @@ func (mr *MockStoreMockRecorder) CreatePasswordResetToken(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePasswordResetToken", reflect.TypeOf((*MockStore)(nil).CreatePasswordResetToken), arg0, arg1)
 }
 
+// CreatePostAccessRequest mocks base method.
+func (m *MockStore) CreatePostAccessRequest(arg0 context.Context, arg1 db.CreatePostAccessRequestParams) (db.PostAccessRequest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePostAccessRequest", arg0, arg1)
+	ret0, _ := ret[0].(db.PostAccessRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePostAccessRequest indicates an expected call of CreatePostAccessRequest.
+func (mr *MockStoreMockRecorder) CreatePostAccessRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostAccessRequest", reflect.TypeOf((*MockStore)(nil).CreatePostAccessRequest), arg0, arg1)
+}
+
 // CreatePostFromTemplateTx mocks base method.
 func (m *MockStore) CreatePostFromTemplateTx(arg0 context.Context, arg1 db.CreatePostFromTemplateTxParams) (db.Post, error) {
 	m.ctrl.T.Helper()
@@ -1291,6 +1306,35 @@ func (mr *MockStoreMockRecorder) DeletePost(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePost", reflect.TypeOf((*MockStore)(nil).DeletePost), arg0, arg1)
 }
 
+// DeletePostBylineCredits mocks base method.
+func (m *MockStore) DeletePostBylineCredits(arg0 context.Context, arg1 db.DeletePostBylineCreditsParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePostBylineCredits", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePostBylineCredits indicates an expected call of DeletePostBylineCredits.
+func (mr *MockStoreMockRecorder) DeletePostBylineCredits(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostBylineCredits", reflect.TypeOf((*MockStore)(nil).DeletePostBylineCredits), arg0, arg1)
+}
+
+// DeletePostCollaborator mocks base method.
+func (m *MockStore) DeletePostCollaborator(arg0 context.Context, arg1 db.DeletePostCollaboratorParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePostCollaborator", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeletePostCollaborator indicates an expected call of DeletePostCollaborator.
+func (mr *MockStoreMockRecorder) DeletePostCollaborator(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostCollaborator", reflect.TypeOf((*MockStore)(nil).DeletePostCollaborator), arg0, arg1)
+}
+
 // DeletePostMedia mocks base method.
 func (m *MockStore) DeletePostMedia(arg0 context.Context, arg1 db.DeletePostMediaParams) error {
 	m.ctrl.T.Helper()
@@ -1664,6 +1708,21 @@ func (mr *MockStoreMockRecorder) GetFeaturedImage(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFeaturedImage", reflect.TypeOf((*MockStore)(nil).GetFeaturedImage), arg0, arg1)
 }
 
+// GetLatestPostAccessRequest mocks base method.
+func (m *MockStore) GetLatestPostAccessRequest(arg0 context.Context, arg1 db.GetLatestPostAccessRequestParams) (db.PostAccessRequest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestPostAccessRequest", arg0, arg1)
+	ret0, _ := ret[0].(db.PostAccessRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLatestPostAccessRequest indicates an expected call of GetLatestPostAccessRequest.
+func (mr *MockStoreMockRecorder) GetLatestPostAccessRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestPostAccessRequest", reflect.TypeOf((*MockStore)(nil).GetLatestPostAccessRequest), arg0, arg1)
+}
+
 // GetLatestPublishedVersion mocks base method.
 func (m *MockStore) GetLatestPublishedVersion(arg0 context.Context, arg1 int64) (db.GetLatestPublishedVersionRow, error) {
 	m.ctrl.T.Helper()
@@ -1887,6 +1946,21 @@ func (m *MockStore) GetPost(arg0 context.Context, arg1 int64) (db.Post, error) {
 func (mr *MockStoreMockRecorder) GetPost(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPost", reflect.TypeOf((*MockStore)(nil).GetPost), arg0, arg1)
+}
+
+// GetPostAccessRequest mocks base method.
+func (m *MockStore) GetPostAccessRequest(arg0 context.Context, arg1 int64) (db.PostAccessRequest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostAccessRequest", arg0, arg1)
+	ret0, _ := ret[0].(db.PostAccessRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostAccessRequest indicates an expected call of GetPostAccessRequest.
+func (mr *MockStoreMockRecorder) GetPostAccessRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostAccessRequest", reflect.TypeOf((*MockStore)(nil).GetPostAccessRequest), arg0, arg1)
 }
 
 // GetPostBlocks mocks base method.
@@ -2654,6 +2728,20 @@ func (mr *MockStoreMockRecorder) GetValidUserInvitationByTokenHash(arg0, arg1 in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetValidUserInvitationByTokenHash", reflect.TypeOf((*MockStore)(nil).GetValidUserInvitationByTokenHash), arg0, arg1)
 }
 
+// GrantPostCollaborator mocks base method.
+func (m *MockStore) GrantPostCollaborator(arg0 context.Context, arg1 db.GrantPostCollaboratorParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GrantPostCollaborator", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GrantPostCollaborator indicates an expected call of GrantPostCollaborator.
+func (mr *MockStoreMockRecorder) GrantPostCollaborator(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantPostCollaborator", reflect.TypeOf((*MockStore)(nil).GrantPostCollaborator), arg0, arg1)
+}
+
 // InsertPostByline mocks base method.
 func (m *MockStore) InsertPostByline(arg0 context.Context, arg1 db.InsertPostBylineParams) error {
 	m.ctrl.T.Helper()
@@ -2741,6 +2829,36 @@ func (mr *MockStoreMockRecorder) InvalidatePasswordResetTokensForUser(arg0, arg1
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidatePasswordResetTokensForUser", reflect.TypeOf((*MockStore)(nil).InvalidatePasswordResetTokensForUser), arg0, arg1)
 }
 
+// IsPostCollaborator mocks base method.
+func (m *MockStore) IsPostCollaborator(arg0 context.Context, arg1 db.IsPostCollaboratorParams) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsPostCollaborator", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsPostCollaborator indicates an expected call of IsPostCollaborator.
+func (mr *MockStoreMockRecorder) IsPostCollaborator(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsPostCollaborator", reflect.TypeOf((*MockStore)(nil).IsPostCollaborator), arg0, arg1)
+}
+
+// ListAccessRequestReviewers mocks base method.
+func (m *MockStore) ListAccessRequestReviewers(arg0 context.Context, arg1 db.ListAccessRequestReviewersParams) ([]db.ListAccessRequestReviewersRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAccessRequestReviewers", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListAccessRequestReviewersRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAccessRequestReviewers indicates an expected call of ListAccessRequestReviewers.
+func (mr *MockStoreMockRecorder) ListAccessRequestReviewers(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAccessRequestReviewers", reflect.TypeOf((*MockStore)(nil).ListAccessRequestReviewers), arg0, arg1)
+}
+
 // ListActivePostTypes mocks base method.
 func (m *MockStore) ListActivePostTypes(arg0 context.Context) ([]db.PostType, error) {
 	m.ctrl.T.Helper()
@@ -2814,6 +2932,21 @@ func (m *MockStore) ListAuthorCandidates(arg0 context.Context, arg1 db.ListAutho
 func (mr *MockStoreMockRecorder) ListAuthorCandidates(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAuthorCandidates", reflect.TypeOf((*MockStore)(nil).ListAuthorCandidates), arg0, arg1)
+}
+
+// ListCollaboratorPostIDs mocks base method.
+func (m *MockStore) ListCollaboratorPostIDs(arg0 context.Context, arg1 int64) ([]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCollaboratorPostIDs", arg0, arg1)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCollaboratorPostIDs indicates an expected call of ListCollaboratorPostIDs.
+func (mr *MockStoreMockRecorder) ListCollaboratorPostIDs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCollaboratorPostIDs", reflect.TypeOf((*MockStore)(nil).ListCollaboratorPostIDs), arg0, arg1)
 }
 
 // ListContinueEditing mocks base method.
@@ -2996,6 +3129,36 @@ func (mr *MockStoreMockRecorder) ListOpenUserInvitations(arg0 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOpenUserInvitations", reflect.TypeOf((*MockStore)(nil).ListOpenUserInvitations), arg0)
 }
 
+// ListPendingAccessRequestsForReviewer mocks base method.
+func (m *MockStore) ListPendingAccessRequestsForReviewer(arg0 context.Context, arg1 db.ListPendingAccessRequestsForReviewerParams) ([]db.ListPendingAccessRequestsForReviewerRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPendingAccessRequestsForReviewer", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPendingAccessRequestsForReviewerRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPendingAccessRequestsForReviewer indicates an expected call of ListPendingAccessRequestsForReviewer.
+func (mr *MockStoreMockRecorder) ListPendingAccessRequestsForReviewer(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPendingAccessRequestsForReviewer", reflect.TypeOf((*MockStore)(nil).ListPendingAccessRequestsForReviewer), arg0, arg1)
+}
+
+// ListPendingPostAccessRequests mocks base method.
+func (m *MockStore) ListPendingPostAccessRequests(arg0 context.Context, arg1 int64) ([]db.ListPendingPostAccessRequestsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPendingPostAccessRequests", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPendingPostAccessRequestsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPendingPostAccessRequests indicates an expected call of ListPendingPostAccessRequests.
+func (mr *MockStoreMockRecorder) ListPendingPostAccessRequests(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPendingPostAccessRequests", reflect.TypeOf((*MockStore)(nil).ListPendingPostAccessRequests), arg0, arg1)
+}
+
 // ListPostAuthorProfiles mocks base method.
 func (m *MockStore) ListPostAuthorProfiles(arg0 context.Context, arg1 int64) ([]db.ListPostAuthorProfilesRow, error) {
 	m.ctrl.T.Helper()
@@ -3024,6 +3187,21 @@ func (m *MockStore) ListPostBylineAuthors(arg0 context.Context, arg1 int64) ([]d
 func (mr *MockStoreMockRecorder) ListPostBylineAuthors(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostBylineAuthors", reflect.TypeOf((*MockStore)(nil).ListPostBylineAuthors), arg0, arg1)
+}
+
+// ListPostCollaborators mocks base method.
+func (m *MockStore) ListPostCollaborators(arg0 context.Context, arg1 int64) ([]db.ListPostCollaboratorsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostCollaborators", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostCollaboratorsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostCollaborators indicates an expected call of ListPostCollaborators.
+func (mr *MockStoreMockRecorder) ListPostCollaborators(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostCollaborators", reflect.TypeOf((*MockStore)(nil).ListPostCollaborators), arg0, arg1)
 }
 
 // ListPostTemplates mocks base method.
@@ -3326,6 +3504,21 @@ func (mr *MockStoreMockRecorder) LockAdminUserIDs(arg0 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockAdminUserIDs", reflect.TypeOf((*MockStore)(nil).LockAdminUserIDs), arg0)
 }
 
+// LockNewPostOwner mocks base method.
+func (m *MockStore) LockNewPostOwner(arg0 context.Context, arg1 int64) (db.LockNewPostOwnerRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockNewPostOwner", arg0, arg1)
+	ret0, _ := ret[0].(db.LockNewPostOwnerRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockNewPostOwner indicates an expected call of LockNewPostOwner.
+func (mr *MockStoreMockRecorder) LockNewPostOwner(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockNewPostOwner", reflect.TypeOf((*MockStore)(nil).LockNewPostOwner), arg0, arg1)
+}
+
 // LockPostForCollabStore mocks base method.
 func (m *MockStore) LockPostForCollabStore(arg0 context.Context, arg1 int64) (db.LockPostForCollabStoreRow, error) {
 	m.ctrl.T.Helper()
@@ -3354,6 +3547,21 @@ func (m *MockStore) LockPostForPublish(arg0 context.Context, arg1 int64) (db.Loc
 func (mr *MockStoreMockRecorder) LockPostForPublish(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForPublish", reflect.TypeOf((*MockStore)(nil).LockPostForPublish), arg0, arg1)
+}
+
+// LockPostOwner mocks base method.
+func (m *MockStore) LockPostOwner(arg0 context.Context, arg1 int64) (db.LockPostOwnerRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostOwner", arg0, arg1)
+	ret0, _ := ret[0].(db.LockPostOwnerRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostOwner indicates an expected call of LockPostOwner.
+func (mr *MockStoreMockRecorder) LockPostOwner(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostOwner", reflect.TypeOf((*MockStore)(nil).LockPostOwner), arg0, arg1)
 }
 
 // LockPostStatus mocks base method.
@@ -3841,6 +4049,36 @@ func (mr *MockStoreMockRecorder) RestorePostTitleAndDescription(arg0, arg1 inter
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestorePostTitleAndDescription", reflect.TypeOf((*MockStore)(nil).RestorePostTitleAndDescription), arg0, arg1)
 }
 
+// ReviewPostAccessRequest mocks base method.
+func (m *MockStore) ReviewPostAccessRequest(arg0 context.Context, arg1 db.ReviewPostAccessRequestParams) (db.PostAccessRequest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReviewPostAccessRequest", arg0, arg1)
+	ret0, _ := ret[0].(db.PostAccessRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReviewPostAccessRequest indicates an expected call of ReviewPostAccessRequest.
+func (mr *MockStoreMockRecorder) ReviewPostAccessRequest(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReviewPostAccessRequest", reflect.TypeOf((*MockStore)(nil).ReviewPostAccessRequest), arg0, arg1)
+}
+
+// ReviewPostAccessRequestTx mocks base method.
+func (m *MockStore) ReviewPostAccessRequestTx(arg0 context.Context, arg1 db.ReviewPostAccessRequestTxParams) (db.PostAccessRequest, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReviewPostAccessRequestTx", arg0, arg1)
+	ret0, _ := ret[0].(db.PostAccessRequest)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReviewPostAccessRequestTx indicates an expected call of ReviewPostAccessRequestTx.
+func (mr *MockStoreMockRecorder) ReviewPostAccessRequestTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReviewPostAccessRequestTx", reflect.TypeOf((*MockStore)(nil).ReviewPostAccessRequestTx), arg0, arg1)
+}
+
 // RevokeOpenUserInvitationsByEmail mocks base method.
 func (m *MockStore) RevokeOpenUserInvitationsByEmail(arg0 context.Context, arg1 string) error {
 	m.ctrl.T.Helper()
@@ -4251,6 +4489,21 @@ func (m *MockStore) TransferMediaToUser(arg0 context.Context, arg1 db.TransferMe
 func (mr *MockStoreMockRecorder) TransferMediaToUser(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferMediaToUser", reflect.TypeOf((*MockStore)(nil).TransferMediaToUser), arg0, arg1)
+}
+
+// TransferPostOwnerTx mocks base method.
+func (m *MockStore) TransferPostOwnerTx(arg0 context.Context, arg1 db.TransferPostOwnerTxParams) (db.TransferPostOwnerTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TransferPostOwnerTx", arg0, arg1)
+	ret0, _ := ret[0].(db.TransferPostOwnerTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TransferPostOwnerTx indicates an expected call of TransferPostOwnerTx.
+func (mr *MockStoreMockRecorder) TransferPostOwnerTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferPostOwnerTx", reflect.TypeOf((*MockStore)(nil).TransferPostOwnerTx), arg0, arg1)
 }
 
 // TrashPost mocks base method.

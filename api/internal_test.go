@@ -244,16 +244,23 @@ func TestInternalDocAccessPerPost(t *testing.T) {
 	issuedAt := time.Now().Unix()
 
 	testCases := []struct {
-		name        string
-		doc         string
-		post        db.Post
-		postErr     error
-		wantStatus  int
-		wantCanEdit bool
+		name    string
+		doc     string
+		post    db.Post
+		postErr error
+		// collaborator: what the edit access grant lookup (#321) answers; nil =
+		// it must not be asked.
+		collaborator *bool
+		grantErr     error
+		wantStatus   int
+		wantCanEdit  bool
 	}{
 		{name: "OwnPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID, PostStatus: "draft"}, wantStatus: http.StatusOK, wantCanEdit: true},
 		{name: "OwnPublishedPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID, PostStatus: "published"}, wantStatus: http.StatusOK, wantCanEdit: true},
-		{name: "SomeoneElsesPublishedPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "published"}, wantStatus: http.StatusOK, wantCanEdit: false},
+		{name: "SomeoneElsesPublishedPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "published"}, collaborator: ptrBool(false), wantStatus: http.StatusOK, wantCanEdit: false},
+		// An edit access grant (#321) makes it read-write.
+		{name: "GrantedPublishedPost", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "published"}, collaborator: ptrBool(true), wantStatus: http.StatusOK, wantCanEdit: true},
+		{name: "GrantLookupFails", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "published"}, collaborator: ptrBool(false), grantErr: errors.New("db down"), wantStatus: http.StatusInternalServerError},
 		// Not theirs to read (#393), e.g. unpublished since the ticket: the collab
 		// server closes the connection on 403.
 		{name: "SomeoneElsesDraft", doc: "post-7", post: db.Post{ID: 7, UserID: contributor.ID + 1, PostStatus: "draft"}, wantStatus: http.StatusForbidden},
@@ -274,6 +281,11 @@ func TestInternalDocAccessPerPost(t *testing.T) {
 			store := mockdb.NewMockStore(ctrl)
 			store.EXPECT().GetUser(gomock.Any(), contributor.ID).Return(contributor, nil).AnyTimes()
 			store.EXPECT().GetPost(gomock.Any(), int64(7)).Return(tc.post, tc.postErr).AnyTimes()
+			if tc.collaborator != nil {
+				store.EXPECT().
+					IsPostCollaborator(gomock.Any(), db.IsPostCollaboratorParams{PostID: 7, UserID: contributor.ID}).
+					Return(*tc.collaborator, tc.grantErr)
+			}
 
 			server := newTestServer(t, store)
 			request, err := http.NewRequest(http.MethodGet,

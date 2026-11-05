@@ -391,6 +391,16 @@ are the most fragile part of the codebase. **Before editing anything under
   with the other details (`canEditPostDetails`). The byline is not the owner: crediting someone
   gives no access. The public site gets the published byline from every `/public` read, so the
   theme's `PostByline`/`AuthorCards` need nothing else.
+- **Post owner and Transfer (#353):** the post settings' Owner field
+  (`components/editor/ui/PostOwner.tsx`, `GET /posts/:id/owner`: "Luan (you)", Transfer for
+  admins, `canTransferPost`) opens `TransferOwnerModal`: the shared
+  `components/users/MemberPicker.tsx` (the remove dialog's picker too, #333; `memberOptions`
+  in `lib/members.ts`), only members with a content role (`canOwnPosts`), never the current
+  owner, "Also replace me in the byline", and the confirm line ("Ana Costa will own this post.
+  You keep your place in the byline."). Rules and messages: `lib/postOwner.ts` (tested).
+  After it the Authors field reloads if the byline changed (a published post then shows
+  "Settings changed"), and `PostForm` updates the owner its access rules read; the collab
+  server's re-check makes a contributor who lost the post read-only.
 - **Posts list filters, bulk actions and trash (#327):** Author / Category / Tag filters
   (`?author=` `?category=` `?tag=`, `FilterMenu`; options from `GET /posts/authors` and the
   `category` / `tag` terms) combine with the tabs, sort and search (`author_id`, `terms`).
@@ -417,6 +427,18 @@ are the most fragile part of the codebase. **Before editing anything under
   (`postCollab.ts` sends `avatar` with name/colour/id), which any collaborator can set. Presence
   colours stay the account's. `/confirm-email` is an account page (#344 patterns, CSP and noindex
   lists): it confirms only on the button (a mail scanner running scripts can't spend the token).
+- **Edit access requests (#321):** the editor's view-only notice (`components/editor/ui/
+  PostEditAccess.tsx` `ViewOnlyNotice`) has **Request access** (a dialog, optional message ≤500)
+  for a contributor watching someone else's published post, then "Request sent", or "declined,
+  ask again after …"; reviewers (owner, editors, admins) get one notice per open request with
+  Grant / Decline (`AccessRequestsNotice`) and the settings' "Edit access" list with Remove
+  (`PostCollaborators`). All from `GET /posts/:id/access` (`lib/api/postAccess.ts`), which
+  `PostForm` reads with the role before the editor mounts and again on every `onAccessChange`:
+  a grant reaches the open editor as the collab re-check's `restored`, `PostForm` re-reads
+  `collaborator`, and `canEditPost` (`lib/roles.ts`, mirroring `canEditWorkingCopy`) makes it
+  editable without a reload; a revoke is `demoted`. Wording in `lib/postAccess.ts` (tested).
+  Home's Needs attention lists `access_requests` ("Kenji asked for edit access", opening the
+  post), and the Activity feed reads the `access_*` verbs with their `subject`.
 - **Open signup (#191):** Settings › Accounts' "Allow anyone to sign up" (`allow_signup`, off by
   default). `/register` (the Accept-invite layout plus an email; the canvas has no sign-up board)
   and `/verify-email` (confirms on its button, like `/confirm-email`) are account pages (CSP and

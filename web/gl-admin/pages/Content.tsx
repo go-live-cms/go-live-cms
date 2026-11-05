@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { bulkPosts, getCreditedAuthors, getPostCounts, getPosts, searchPosts } from "@gl-admin/lib/api/posts"
+import { getCollaborations } from "@gl-admin/lib/api/postAccess"
 import { getAllTaxonomyTerms } from "@gl-admin/lib/api/taxonomies"
 import { getPostTypes } from "@gl-admin/lib/api/postTypes"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
@@ -45,6 +46,7 @@ import {
   findTab,
   hasFilters,
   listTabs,
+  markCollaborations,
   postAccess,
   readListFilters,
   selectionAfterBulk,
@@ -238,16 +240,24 @@ function PostsList({ typeName, postType, title }: ListProps) {
   // action never reaches rows the user can't see. A reload of the same page keeps it.
   const [selected, setSelected] = useState<number[]>([])
   const lastPage = useRef<string | null>(null)
+  // Contributors' edit access grants (#321) make someone else's post editable: the rows
+  // are marked from GET /posts/collaborations (moderators edit everything anyway).
+  const contributorRef = useRef(!moderator)
+  contributorRef.current = !moderator
   const fetchData = useCallback(async ({ limit, offset, q, sort, order, ...filters }: ApiMeta & typeof query) => {
     const page = `${offset}:${limit}`
     if (lastPage.current !== null && lastPage.current !== page) setSelected([])
     lastPage.current = page
     const filtered = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""))
     // A search is ranked by the API, so it takes no sort.
-    const response = q
-      ? await searchPosts({ limit, offset, q, ...filtered })
-      : await getPosts({ limit, offset, with_meta: true, meta_level: "basic", sort, order, ...filtered })
-    return { data: response.data, total: response.meta.total || 0 }
+    const [response, granted] = await Promise.all([
+      q
+        ? searchPosts({ limit, offset, q, ...filtered })
+        : getPosts({ limit, offset, with_meta: true, meta_level: "basic", sort, order, ...filtered }),
+      // Without it the rows just say view-only, as before; the editor reads the grant itself.
+      contributorRef.current ? getCollaborations().catch(() => [] as number[]) : Promise.resolve([] as number[]),
+    ])
+    return { data: markCollaborations(response.data, granted), total: response.meta.total || 0 }
   }, [])
 
   // Bulk selection (#327): ids on the current page; cleared when the list changes.

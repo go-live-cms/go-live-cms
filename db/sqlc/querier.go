@@ -119,9 +119,13 @@ type Querier interface {
 	CreateMenu(ctx context.Context, arg CreateMenuParams) (Menu, error)
 	CreateMenuItem(ctx context.Context, arg CreateMenuItemParams) (MenuItem, error)
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
+	// A new open request. No row: the member's last request for this post was
+	// declined less than cooldown_seconds ago. A second open request breaks the
+	// post_access_requests_one_open index (a unique violation).
+	CreatePostAccessRequest(ctx context.Context, arg CreatePostAccessRequestParams) (PostAccessRequest, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
-	// Post templates (#322, 000040). A template is not a post: nothing in post.sql
+	// Post templates (#322, 000043). A template is not a post: nothing in post.sql
 	// or the public queries reads these tables.
 	CreatePostTemplate(ctx context.Context, arg CreatePostTemplateParams) (PostTemplate, error)
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
@@ -159,6 +163,11 @@ type Querier interface {
 	DeleteMenu(ctx context.Context, id int64) (int64, error)
 	DeleteMenuItems(ctx context.Context, menuID int64) error
 	DeletePost(ctx context.Context, id int64) error
+	// After ReassignPostBylines: @user_id's credit left on @post_ids (the new owner was
+	// already credited there, so it couldn't take their place). Never empties a byline:
+	// each of those posts still credits the new owner.
+	DeletePostBylineCredits(ctx context.Context, arg DeletePostBylineCreditsParams) error
+	DeletePostCollaborator(ctx context.Context, arg DeletePostCollaboratorParams) (int64, error)
 	DeletePostMedia(ctx context.Context, arg DeletePostMediaParams) error
 	DeletePostMediaByOrder(ctx context.Context, arg DeletePostMediaByOrderParams) error
 	DeletePostMedias(ctx context.Context, postID int64) error
@@ -186,6 +195,8 @@ type Querier interface {
 	GetAnySessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetExtensionSetting(ctx context.Context, key string) (ExtensionSetting, error)
 	GetFeaturedImage(ctx context.Context, postID int64) (GetFeaturedImageRow, error)
+	// The member's newest request for the post (the view-only notice's state).
+	GetLatestPostAccessRequest(ctx context.Context, arg GetLatestPostAccessRequestParams) (PostAccessRequest, error)
 	GetLatestPublishedVersion(ctx context.Context, postID int64) (GetLatestPublishedVersionRow, error)
 	GetMedia(ctx context.Context, id int64) (Medium, error)
 	GetMediaByIDs(ctx context.Context, ids []int64) ([]Medium, error)
@@ -203,6 +214,7 @@ type Querier interface {
 	GetPopularMedia(ctx context.Context, limit int32) ([]GetPopularMediaRow, error)
 	GetPopularTaxonomyTerms(ctx context.Context, arg GetPopularTaxonomyTermsParams) ([]GetPopularTaxonomyTermsRow, error)
 	GetPost(ctx context.Context, id int64) (Post, error)
+	GetPostAccessRequest(ctx context.Context, id int64) (PostAccessRequest, error)
 	GetPostBlocks(ctx context.Context, id int64) (GetPostBlocksRow, error)
 	GetPostBySlug(ctx context.Context, slug string) (Post, error)
 	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
@@ -300,6 +312,8 @@ type Querier interface {
 	GetValidEmailChangeTokenByHash(ctx context.Context, tokenHash []byte) (EmailChangeToken, error)
 	GetValidPasswordResetTokenByHash(ctx context.Context, tokenHash []byte) (PasswordResetToken, error)
 	GetValidUserInvitationByTokenHash(ctx context.Context, tokenHash []byte) (UserInvitation, error)
+	// Idempotent: a grant that already exists keeps its first date and granter.
+	GrantPostCollaborator(ctx context.Context, arg GrantPostCollaboratorParams) error
 	// The new byline (#319): author_ids in credit order, "order" = position from 0.
 	InsertPostByline(ctx context.Context, arg InsertPostBylineParams) error
 	InsertPostVersion(ctx context.Context, arg InsertPostVersionParams) (InsertPostVersionRow, error)
@@ -314,6 +328,13 @@ type Querier interface {
 	// other pending link.
 	InvalidateEmailChangeTokensForUser(ctx context.Context, userID int64) error
 	InvalidatePasswordResetTokensForUser(ctx context.Context, userID int64) error
+	// Edit access requests and per-post grants (#321, 000042). Who may do what is
+	// decided in api/auth_posts.go; these queries only read and write the rows.
+	IsPostCollaborator(ctx context.Context, arg IsPostCollaboratorParams) (bool, error)
+	// Who is emailed about a new request: every admin and editor, and the post's
+	// owner if they are a contributor (canReviewPostAccess). The requester is left
+	// out.
+	ListAccessRequestReviewers(ctx context.Context, arg ListAccessRequestReviewersParams) ([]ListAccessRequestReviewersRow, error)
 	ListActivePostTypes(ctx context.Context) ([]PostType, error)
 	// The sessions that can still refresh (#334, Profile's "other devices"): not
 	// blocked (rotated, logged out, revoked) and not expired. Uses the partial index
@@ -325,9 +346,14 @@ type Querier interface {
 	//   - moderators (editors): every post and media event;
 	//   - everyone else: events on posts they own or that are published (canReadPost,
 	//     judged on the post as it is now, so a deleted post's events are hidden), and
-	//     on media they uploaded.
+	//     on media they uploaded. Edit access events (#321, access_*) on someone
+	//     else's published post only when they are about the viewer (the actor or
+	//     payload.user_id): who asked for or lost access isn't every contributor's
+	//     business.
 	// Member, invitation and settings events are admin-only. Names and titles are
 	// joined now, never stored. object_type/object_id narrow it to one object.
+	// subject_* is the member an access event is about (payload.user_id).
+	// CASE, not AND: Postgres may evaluate the cast before a sibling condition.
 	ListActivity(ctx context.Context, arg ListActivityParams) ([]ListActivityRow, error)
 	// Older/newer and related posts for the public post page (#351).
 	// The published posts of @post_type just before ('previous', older) and just after
@@ -339,6 +365,10 @@ type Querier interface {
 	// from auth_roles.go), matching @pattern by name or username (ILIKE, '' =
 	// everyone), for the Authors field's picker. Public fields only: contributors see it too.
 	ListAuthorCandidates(ctx context.Context, arg ListAuthorCandidatesParams) ([]ListAuthorCandidatesRow, error)
+	// The posts a member holds an edit access grant on that it applies to now
+	// (canEditAsCollaborator: someone else's published post), for the posts lists'
+	// Edit / "Can edit" (#321).
+	ListCollaboratorPostIDs(ctx context.Context, userID int64) ([]int64, error)
 	// Home's "Continue where you left off": the posts the user last worked on, newest
 	// first. "Worked on" = their created/edited/updated/version_restored/status_changed
 	// events. Those are throttled, so up to one window behind; when the user is also
@@ -387,6 +417,15 @@ type Querier interface {
 	// What the admin Users page shows. Invitations that expired over 30 days ago
 	// are dropped (nobody is waiting on them any more), and the list is capped.
 	ListOpenUserInvitations(ctx context.Context) ([]UserInvitation, error)
+	// Home's "Needs attention": the open requests a member may answer, newest
+	// first. viewer_id 0 = every post (admins and editors), else the posts the
+	// viewer owns (canReviewPostAccess). Only published posts: a grant applies
+	// only there (canEditAsCollaborator), so a request on a post unpublished or
+	// trashed since waits until it is published again. total is the count before
+	// the limit.
+	ListPendingAccessRequestsForReviewer(ctx context.Context, arg ListPendingAccessRequestsForReviewerParams) ([]ListPendingAccessRequestsForReviewerRow, error)
+	// A post's open requests with who asked, oldest first (the editor's notice).
+	ListPendingPostAccessRequests(ctx context.Context, postID int64) ([]ListPendingPostAccessRequestsRow, error)
 	// The "Written by" cards: every author in the post's published byline, in
 	// order. Empty unless the post is one the public site serves, so it never shows
 	// who wrote a draft, and every author it returns has a page.
@@ -394,6 +433,8 @@ type Querier interface {
 	// A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
 	// the Authors field. Public fields only (the avatar, #334, included).
 	ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error)
+	// The members granted edit access to a post, earliest grant first.
+	ListPostCollaborators(ctx context.Context, postID int64) ([]ListPostCollaboratorsRow, error)
 	// Without block_doc (the chooser doesn't need it), with the saved category's
 	// names and who saved it. With id, that one template (the create and rename
 	// responses).
@@ -460,11 +501,20 @@ type Querier interface {
 	// (COUNT(*) cannot be combined with FOR UPDATE). Ordered by id so lockers
 	// acquire in the same order and cannot deadlock each other.
 	LockAdminUserIDs(ctx context.Context) ([]int64, error)
+	// Post ownership (#353): TransferPostOwnerTx and the reassignment it shares with a
+	// member's removal (RemoveUserTx, #333). See db/sqlc/post_owner_tx.go.
+	// The member about to own a post (#353), FOR KEY SHARE: a concurrent removal (#333,
+	// which deletes the row FOR UPDATE) waits for the transfer, or wins and the transfer
+	// finds no row. Taken before the post's lock, RemoveUserTx's order (users, then posts).
+	LockNewPostOwner(ctx context.Context, id int64) (LockNewPostOwnerRow, error)
 	LockPostForCollabStore(ctx context.Context, id int64) (LockPostForCollabStoreRow, error)
 	// Publish runs in one transaction from here (PublishPostTx): two publishes of
 	// one post queue on this lock instead of racing for the same version_no.
 	// The status is checked under the lock: a trashed post (#327) is never published.
 	LockPostForPublish(ctx context.Context, id int64) (LockPostForPublishRow, error)
+	// The post being transferred (#353), locked: its current owner and status are read
+	// under the lock, so two transfers queue instead of both reading the same owner.
+	LockPostOwner(ctx context.Context, id int64) (LockPostOwnerRow, error)
 	// DeleteTrashedPostTx: the post's status under a row lock.
 	LockPostStatus(ctx context.Context, id int64) (string, error)
 	// ScheduleUpdateTx's first step: lock the post (as LockPostForPublish) and read
@@ -493,10 +543,12 @@ type Querier interface {
 	// Row-locks the given users in id order (RemoveUserTx: the member and the one who
 	// receives their posts), so two removals that name each other can't deadlock.
 	LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error)
-	// The removed member's byline (user_posts, #319) on the posts that just moved goes to
-	// the new owner, unless they are already credited there. Credits on anyone else's
-	// posts are dropped (DeleteUserBylines).
+	// The old owner's byline (user_posts, #319) on the posts that just moved goes to the
+	// new owner, unless they are already credited there (then DeletePostBylineCredits drops
+	// it). Used by a removal (#333) and by a transfer that replaces the old owner (#353).
 	ReassignPostBylines(ctx context.Context, arg ReassignPostBylinesParams) error
+	// reassignPostOwner (post_owner_tx.go), for a removal (#333: every post @from_id owns,
+	// @all_posts) and a transfer (#353: the posts in @post_ids, if @from_id still owns them).
 	ReassignPostsOwner(ctx context.Context, arg ReassignPostsOwnerParams) ([]int64, error)
 	// Removal (#333, #319): the same rewrite for the published bylines
 	// (published_settings.author_ids), at once rather than on the next Update, since
@@ -538,6 +590,9 @@ type Querier interface {
 	// Restoring a version's settings (#358): the working title and excerpt. Only the
 	// working copy changes; the published settings stay until Update.
 	RestorePostTitleAndDescription(ctx context.Context, arg RestorePostTitleAndDescriptionParams) (Post, error)
+	// Answers an open request (claims it: a request already answered returns no
+	// row). Run by ReviewPostAccessRequestTx under the request's row lock.
+	ReviewPostAccessRequest(ctx context.Context, arg ReviewPostAccessRequestParams) (PostAccessRequest, error)
 	RevokeOpenUserInvitationsByEmail(ctx context.Context, email string) error
 	RevokeUserInvitation(ctx context.Context, id int64) (int64, error)
 	RotateToNewSession(ctx context.Context, arg RotateToNewSessionParams) (int64, error)

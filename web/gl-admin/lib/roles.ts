@@ -63,18 +63,24 @@ export interface PermissionUser {
 export interface PermissionPost {
     user_id: number
     post_status?: string | null
+    // The signed-in user holds an edit access grant on it (#321, GET /posts/:id/access).
+    collaborator?: boolean
 }
 
 // The editor's working copy (blocks, collab socket). Mirrors canEditPost in
 // api/auth_posts.go: moderators any post, contributors their own, except while it is
 // scheduled (#147): the scheduler publishes the working copy as it is then, so a
-// contributor's later edits would go live without an editor seeing them.
+// contributor's later edits would go live without an editor seeing them. Plus edit
+// access grants (#321, canEditWorkingCopy): a contributor granted access to someone
+// else's post edits it while it is published.
 export function canEditPost(user: PermissionUser | null | undefined, post: PermissionPost): boolean {
     if (!user) return false
     // Nobody edits a post in the trash (#327): restore it first.
     if (isTrashed(post)) return false
     if (isContentModerator(user.role)) return true
-    return user.role?.toLowerCase() === "contributor" && post.user_id === user.id && post.post_status?.toLowerCase() !== "scheduled"
+    if (user.role?.toLowerCase() !== "contributor") return false
+    if (post.user_id === user.id) return post.post_status?.toLowerCase() !== "scheduled"
+    return !!post.collaborator && post.post_status?.toLowerCase() === "published"
 }
 
 // Editing, replacing or deleting a media file. Mirrors requireContentAuthor plus

@@ -6,6 +6,8 @@ import type { PostVersion } from "@gl-admin/lib/api/blockAPI"
 import RevisionsPanel from "./RevisionsPanel"
 import PostTaxonomies from "./PostTaxonomies"
 import PostAuthors from "./PostAuthors"
+import PostOwner from "./PostOwner"
+import type { TransferPostResult } from "@gl-admin/lib/api/posts"
 import PostSeoPanel from "./PostSeoPanel"
 import Tabs from "@gl-admin/components/ui/Tabs"
 import type { PostSEOSettings } from "@gl-admin/lib/api/types"
@@ -20,8 +22,9 @@ import "@gl-admin/assets/styles/components/editor/post-settings.scss"
 // The post settings panel (#341, "Post editor" on the redesign canvas): Post, SEO (#357)
 // and History. Status changes go through the top bar's publish menu (Publish / Unpublish /
 // Archive); Publish date (#147) opens the Schedule dialog for a draft or a scheduled post.
-// Authors (#319) is the byline, separate from the owner. Not built yet, so not shown:
-// owner and transfer (#353), move to trash (#327).
+// Owner (#353) is who the post belongs to (access), with Transfer for admins; Authors
+// (#319) is the byline, separate from the owner. Not built yet, so not shown: move to
+// trash (#327).
 
 type SettingsTab = "post" | "seo" | "history"
 
@@ -39,6 +42,9 @@ interface PostSidebarProps {
   readOnly?: boolean
   // "id" or "slug": how the site builds this post's address (Settings)
   urlStructure: "id" | "slug"
+  // Who has edit access through a grant (#321), for those who may revoke it; absent when
+  // nobody does (PostEditAccess's PostCollaborators).
+  editAccess?: React.ReactNode
   // Settings (#358): called after the featured image or terms changed; `settingsKey`
   // changes when they were changed elsewhere (a restored version), to reload them;
   // `settingsPending` says a published post's settings differ from the live ones.
@@ -49,6 +55,13 @@ interface PostSidebarProps {
   // for users who can't schedule).
   publishAt?: string | null
   onSchedule?: () => void
+  // Owner (#353): edit mode. `canTransfer` for admins (canTransferPost); called after a
+  // transfer with the API's answer.
+  owner?: {
+    me: { id: number } | null | undefined
+    canTransfer: boolean
+    onTransferred?: (result: TransferPostResult) => void
+  }
   // SEO (#357): edit mode. `readOnly` for anyone but editors and admins (decision 7).
   seo?: {
     value: PostSEOSettings
@@ -89,16 +102,20 @@ export default function PostSidebar({
   onSlugChange,
   readOnly = false,
   urlStructure,
+  editAccess,
   onSettingsSaved,
   settingsKey = 0,
   settingsPending = false,
   publishAt,
   onSchedule,
+  owner,
   seo,
   history,
 }: PostSidebarProps) {
   const dateSettings = useSiteDateSettings()
   const [activeTab, setActiveTab] = useState<SettingsTab>("post")
+  // A transfer that replaced the old owner in the byline: the Authors field reloads.
+  const [bylineKey, setBylineKey] = useState(0)
 
   const {
     featuredImage,
@@ -196,14 +213,41 @@ export default function PostSidebar({
         </small>
       </div>
 
+      {mode === "edit" && post.id && owner ? (
+        <div className="post-settings__field">
+          <span className="post-settings__label">Owner</span>
+          <PostOwner
+            postId={post.id}
+            me={owner.me}
+            canTransfer={owner.canTransfer}
+            onTransferred={(result) => {
+              if (result.byline_changed) {
+                setBylineKey((k) => k + 1)
+                // On a published post the byline change waits for Update.
+                onSettingsSaved?.()
+              }
+              owner.onTransferred?.(result)
+            }}
+          />
+        </div>
+      ) : null}
+
       <div className="post-settings__field">
         <span className="post-settings__label">Authors</span>
         {mode === "edit" && post.id ? (
-          <PostAuthors key={settingsKey} postId={post.id} readOnly={readOnly} onChange={onSettingsSaved} />
+          <PostAuthors key={`${settingsKey}-${bylineKey}`} postId={post.id} readOnly={readOnly} onChange={onSettingsSaved} />
         ) : (
           <small className="post-settings__hint">You’re the author. Save the post first, then credit others here.</small>
         )}
       </div>
+
+      {editAccess && (
+        <div className="post-settings__field">
+          <span className="post-settings__label">Edit access</span>
+          {editAccess}
+          <small className="post-settings__hint">Granted on request. They edit the content only; the owner stays the owner.</small>
+        </div>
+      )}
 
       <div className="post-settings__field">
         <span className="post-settings__label">Categories and tags</span>

@@ -60,7 +60,7 @@ doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, au
 (`GET /internal/users/:id/access`, 3s timeout, `X-Request-ID`) → mode → epoch check.
 
 - **Mode** (`accessMode`): `can_edit: true` (admins, editors, a contributor on their own
-  post, #135) → read-write. Any other content role (`admin`/`editor`/`contributor`,
+  post, #135, or with an edit access grant on a published post, #321) → read-write. Any other content role (`admin`/`editor`/`contributor`,
   `READ_ROLES`) → **`connectionConfig.readOnly = true`**: a live read-only view;
   Hocuspocus drops that connection's updates. Anything else, a 403/404 from the API, or
   a bad ticket → denied.
@@ -103,7 +103,9 @@ differs, and the API compares it with the password change alone).
   (`COLLAB_INTERNAL_SECRET`, like flush) runs `checkUser(id)`: every (user, doc) group of
   that user is looked up now (a lookup already in flight is followed by another, since it may
   have read the API before the change committed), then goes back on the interval. The API
-  calls it after a role change or a removal, so a demotion is read-only at once. Answers
+  calls it after a role change or a removal, so a demotion is read-only at once, and after an
+  edit access grant or revoke (#321: the member's view-only connection turns read-write,
+  `restored`, or back, `demoted`; `accessGrant.hocuspocus.test.ts`). Answers
   `{docs: n}` once queued; 400 for anything but a positive integer id.
 - **Trash (#327):** the API answers the access lookup with **410 `post_trashed`** for a post in
   the trash (`fetchDocAccess` → `{trashed: true}`). At connect that's `DENY.trashed`
@@ -111,6 +113,10 @@ differs, and the API compares it with the password change alone).
   (`POST_TRASHED`), not `access-revoked`, so the editor says "moved to the trash" instead of
   "sign in again". The API calls **`POST /internal/documents/:doc/recheck`** (`checkDoc`, same
   secret, `{docs: n}`) right after a trash. The store on the last disconnect still goes through.
+- **Transfer (#353):** the API calls the same document re-check (`checkDoc`) after a post
+  changes owner: the old owner (a contributor) drops to read-only (`demoted`), a contributor
+  who received it gets write (`restored`). No server change was needed; `FakeCollabApi.transferPost`
+  models it in the tests.
 - Not re-checked on other events (e.g. a store); the interval bounds how long a change
   takes when the API's call doesn't arrive.
 - Tests: `recheck.test.ts` (fake connections, `FakeClock`) and

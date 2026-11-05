@@ -62,6 +62,12 @@ export class FakeCollabApi implements InternalApi {
   passwordChangedAt = new Map<string, number>()
   /** Post ids in the trash (#327): the access lookup answers 410 post_trashed. */
   trashed = new Set<string>()
+  /**
+   * Edit access grants (#321), as `${userId}:${postId}`: a contributor who doesn't own the
+   * post edits it (canEditWorkingCopy). The API applies a grant only while the post is
+   * published; the fake's posts a contributor reads stand for published ones.
+   */
+  grants = new Set<string>()
   puts: { postId: string; body: CollabStoreBody }[] = []
   accessCalls = 0
   failAccess = false
@@ -70,6 +76,15 @@ export class FakeCollabApi implements InternalApi {
 
   addPost(postId: string, blockDoc: BlockDocV1 | null, revision = 1) {
     this.posts.set(postId, { block_doc: blockDoc, block_revision: revision, state: null, epoch: null, state_revision: null })
+  }
+
+  /** An admin gave the post to another member (#353, POST /posts/:id/transfer): it leaves the old owner's `owns`. */
+  transferPost(postId: string, toUserId: string) {
+    for (const user of this.users.values()) {
+      if (user.owns) user.owns = user.owns.filter((id) => id !== postId)
+    }
+    const owner = this.users.get(toUserId)!
+    owner.owns = [...(owner.owns ?? []), postId]
   }
 
   /** Something wrote block_doc around the collab server (a rollback, an import). */
@@ -93,7 +108,8 @@ export class FakeCollabApi implements InternalApi {
     const moderator = user.role === "admin" || user.role === "editor"
     // canEditPost (#135): a contributor edits only their own post, and only until it is published.
     const ownsDraft = !!user.owns?.includes(postId) && !user.published?.includes(postId)
-    return { role: user.role, canEdit: moderator || (user.role === "contributor" && ownsDraft) }
+    const granted = !user.owns?.includes(postId) && this.grants.has(`${identity.userId}:${postId}`)
+    return { role: user.role, canEdit: moderator || (user.role === "contributor" && (ownsDraft || granted)) }
   }
 
   async getCollab(postId: string): Promise<CollabRecord | null> {

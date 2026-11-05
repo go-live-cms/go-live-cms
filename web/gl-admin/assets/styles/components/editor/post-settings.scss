@@ -743,6 +743,59 @@
     font-weight: 600;
   }
 }
+// Owner (#353, "Owner · Luan (you) · Transfer"): who the post belongs to, which decides
+// access; Transfer for admins.
+.post-owner {
+  align-items: center;
+  background: var(--background-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  display: flex;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 4px 0 10px;
+
+  &__name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__transfer {
+    background: transparent;
+    border: 0;
+    border-radius: 5px;
+    color: var(--text-primary);
+    cursor: pointer;
+    flex: none;
+    font: inherit;
+    font-size: var(--type-footnote);
+    font-weight: 500;
+    height: 28px;
+    padding: 0 8px;
+
+    &:hover {
+      background: var(--background-hover);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  // The Transfer dialog's confirm line.
+  &__confirm {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    margin: 0;
+  }
+}
+
 // Authors (#319): the byline as chips, in credit order, then the add button.
 .post-authors {
   display: flex;
@@ -857,4 +910,28 @@
       outline: 2px solid var(--focus-ring);
     }
   }
+}
+// Who has edit access through a grant (#321), with Remove.
+.post-settings__collaborators {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post-settings__collaborator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+
+.post-settings__collaborator-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

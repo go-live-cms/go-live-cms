@@ -145,6 +145,8 @@ func (server *Server) listContinueEditing(c *gin.Context) {
 //   - unpublished_changes (#326) and missing_alt (#325): editors and admins only,
 //     the people who can act on them (publish; edit anyone's media). null for
 //     other roles.
+//   - access_requests (#321): open edit access requests the caller may
+//     answer (posts they own; every post for editors).
 //   - review_requests (#323): always [] until review requests exist.
 //
 // Auth: any content role.
@@ -164,8 +166,20 @@ func (server *Server) getNeedsAttention(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load what needs attention"})
 		return
 	}
+	// Edit access requests (#321): the ones the caller may answer
+	// (canReviewPostAccess: every post for moderators, their own otherwise).
+	accessRequests, err := server.store.ListPendingAccessRequestsForReviewer(ctx, db.ListPendingAccessRequestsForReviewerParams{
+		ViewerID: postsViewerID(caller),
+		RowLimit: needsAttentionListLimit,
+	})
+	if err != nil {
+		server.requestLog(c).Warn("listing access requests failed", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load what needs attention"})
+		return
+	}
 	rsp := NeedsAttentionResponse{
 		FailedSchedules: toFailedSchedules(failed),
+		AccessRequests:  toAttentionAccessRequests(accessRequests),
 		ReviewRequests:  []any{},
 	}
 

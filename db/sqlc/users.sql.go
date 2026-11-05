@@ -465,7 +465,7 @@ func (q *Queries) LockUserForUpdate(ctx context.Context, id int64) error {
 }
 
 const lockUsersForUpdate = `-- name: LockUsersForUpdate :many
-SELECT id, username, avatar_url FROM users
+SELECT id, username, avatar_url, role FROM users
 WHERE id = ANY($1::bigint[])
 ORDER BY id
 FOR UPDATE
@@ -475,6 +475,7 @@ type LockUsersForUpdateRow struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
 	AvatarUrl string `json:"avatar_url"`
+	Role      string `json:"role"`
 }
 
 // Row-locks the given users in id order (RemoveUserTx: the member and the one who
@@ -488,7 +489,12 @@ func (q *Queries) LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUs
 	items := []LockUsersForUpdateRow{}
 	for rows.Next() {
 		var i LockUsersForUpdateRow
-		if err := rows.Scan(&i.ID, &i.Username, &i.AvatarUrl); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.AvatarUrl,
+			&i.Role,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -518,9 +524,9 @@ type ReassignPostBylinesParams struct {
 	PostIds []int64 `json:"post_ids"`
 }
 
-// The removed member's byline (user_posts, #319) on the posts that just moved goes to
-// the new owner, unless they are already credited there. Credits on anyone else's
-// posts are dropped (DeleteUserBylines).
+// The old owner's byline (user_posts, #319) on the posts that just moved goes to the
+// new owner, unless they are already credited there (then DeletePostBylineCredits drops
+// it). Used by a removal (#333) and by a transfer that replaces the old owner (#353).
 func (q *Queries) ReassignPostBylines(ctx context.Context, arg ReassignPostBylinesParams) error {
 	_, err := q.db.ExecContext(ctx, reassignPostBylines, arg.ToID, arg.FromID, pq.Array(arg.PostIds))
 	return err
@@ -530,17 +536,28 @@ const reassignPostsOwner = `-- name: ReassignPostsOwner :many
 UPDATE posts
 SET user_id = $1, username = $2
 WHERE user_id = $3
+    AND ($4::bool OR id = ANY($5::bigint[]))
 RETURNING id
 `
 
 type ReassignPostsOwnerParams struct {
-	ToID       int64  `json:"to_id"`
-	ToUsername string `json:"to_username"`
-	FromID     int64  `json:"from_id"`
+	ToID       int64   `json:"to_id"`
+	ToUsername string  `json:"to_username"`
+	FromID     int64   `json:"from_id"`
+	AllPosts   bool    `json:"all_posts"`
+	PostIds    []int64 `json:"post_ids"`
 }
 
+// reassignPostOwner (post_owner_tx.go), for a removal (#333: every post @from_id owns,
+// @all_posts) and a transfer (#353: the posts in @post_ids, if @from_id still owns them).
 func (q *Queries) ReassignPostsOwner(ctx context.Context, arg ReassignPostsOwnerParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, reassignPostsOwner, arg.ToID, arg.ToUsername, arg.FromID)
+	rows, err := q.db.QueryContext(ctx, reassignPostsOwner,
+		arg.ToID,
+		arg.ToUsername,
+		arg.FromID,
+		arg.AllPosts,
+		pq.Array(arg.PostIds),
+	)
 	if err != nil {
 		return nil, err
 	}

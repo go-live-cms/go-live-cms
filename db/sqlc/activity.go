@@ -34,6 +34,11 @@ const (
 	ActivityTrashed  = "trashed"
 	ActivityRestored = "restored"
 
+	// Ownership (#353): POST /posts/:id/transfer. The payload has the previous and
+	// new owner's ids and whether the byline changed. A removal (#333) moves posts
+	// too, recorded once as the member's "removed".
+	ActivityTransferred = "transferred"
+
 	// Media (ActivityDeleted too).
 	ActivityUploaded = "uploaded"
 	ActivityReplaced = "replaced"
@@ -48,4 +53,12 @@ const (
 
 	// Site settings.
 	ActivitySettingsUpdated = "settings_updated"
+
+	// Edit access (#321), on the post. The requester is the actor of
+	// access_requested; the others are the reviewer's, with the requester (or
+	// the member whose grant was revoked) as payload.user_id.
+	ActivityAccessRequested = "access_requested"
+	ActivityAccessGranted   = "access_granted"
+	ActivityAccessDeclined  = "access_declined"
+	ActivityAccessRevoked   = "access_revoked"
 )

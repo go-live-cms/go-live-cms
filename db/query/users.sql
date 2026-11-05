@@ -110,21 +110,24 @@ RETURNING *;
 -- name: LockUsersForUpdate :many
 -- Row-locks the given users in id order (RemoveUserTx: the member and the one who
 -- receives their posts), so two removals that name each other can't deadlock.
-SELECT id, username, avatar_url FROM users
+SELECT id, username, avatar_url, role FROM users
 WHERE id = ANY(sqlc.arg(ids)::bigint[])
 ORDER BY id
 FOR UPDATE;
 
 -- name: ReassignPostsOwner :many
+-- reassignPostOwner (post_owner_tx.go), for a removal (#333: every post @from_id owns,
+-- @all_posts) and a transfer (#353: the posts in @post_ids, if @from_id still owns them).
 UPDATE posts
 SET user_id = sqlc.arg(to_id), username = sqlc.arg(to_username)
 WHERE user_id = sqlc.arg(from_id)
+    AND (sqlc.arg(all_posts)::bool OR id = ANY(sqlc.arg(post_ids)::bigint[]))
 RETURNING id;
 
 -- name: ReassignPostBylines :exec
--- The removed member's byline (user_posts, #319) on the posts that just moved goes to
--- the new owner, unless they are already credited there. Credits on anyone else's
--- posts are dropped (DeleteUserBylines).
+-- The old owner's byline (user_posts, #319) on the posts that just moved goes to the
+-- new owner, unless they are already credited there (then DeletePostBylineCredits drops
+-- it). Used by a removal (#333) and by a transfer that replaces the old owner (#353).
 UPDATE user_posts up
 SET user_id = sqlc.arg(to_id)
 WHERE up.user_id = sqlc.arg(from_id)
