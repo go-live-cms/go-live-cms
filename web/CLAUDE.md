@@ -391,6 +391,18 @@ are the most fragile part of the codebase. **Before editing anything under
   (`postCollab.ts` sends `avatar` with name/colour/id), which any collaborator can set. Presence
   colours stay the account's. `/confirm-email` is an account page (#344 patterns, CSP and noindex
   lists): it confirms only on the button (a mail scanner running scripts can't spend the token).
+- **Edit access requests (#321):** the editor's view-only notice (`components/editor/ui/
+  PostEditAccess.tsx` `ViewOnlyNotice`) has **Request access** (a dialog, optional message ≤500)
+  for a contributor watching someone else's published post, then "Request sent", or "declined,
+  ask again after …"; reviewers (owner, editors, admins) get one notice per open request with
+  Grant / Decline (`AccessRequestsNotice`) and the settings' "Edit access" list with Remove
+  (`PostCollaborators`). All from `GET /posts/:id/access` (`lib/api/postAccess.ts`), which
+  `PostForm` reads with the role before the editor mounts and again on every `onAccessChange`:
+  a grant reaches the open editor as the collab re-check's `restored`, `PostForm` re-reads
+  `collaborator`, and `canEditPost` (`lib/roles.ts`, mirroring `canEditWorkingCopy`) makes it
+  editable without a reload; a revoke is `demoted`. Wording in `lib/postAccess.ts` (tested).
+  Home's Needs attention lists `access_requests` ("Kenji asked for edit access", opening the
+  post), and the Activity feed reads the `access_*` verbs with their `subject`.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

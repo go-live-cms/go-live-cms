@@ -39,6 +39,9 @@ interface PostSidebarProps {
   readOnly?: boolean
   // "id" or "slug": how the site builds this post's address (Settings)
   urlStructure: "id" | "slug"
+  // Who has edit access through a grant (#321), for those who may revoke it; absent when
+  // nobody does (PostEditAccess's PostCollaborators).
+  editAccess?: React.ReactNode
   // Settings (#358): called after the featured image or terms changed; `settingsKey`
   // changes when they were changed elsewhere (a restored version), to reload them;
   // `settingsPending` says a published post's settings differ from the live ones.
@@ -89,6 +92,7 @@ export default function PostSidebar({
   onSlugChange,
   readOnly = false,
   urlStructure,
+  editAccess,
   onSettingsSaved,
   settingsKey = 0,
   settingsPending = false,
@@ -204,6 +208,14 @@ export default function PostSidebar({
           <small className="post-settings__hint">You’re the author. Save the post first, then credit others here.</small>
         )}
       </div>
+
+      {editAccess && (
+        <div className="post-settings__field">
+          <span className="post-settings__label">Edit access</span>
+          {editAccess}
+          <small className="post-settings__hint">Granted on request. They edit the content only; the owner stays the owner.</small>
+        </div>
+      )}
 
       <div className="post-settings__field">
         <span className="post-settings__label">Categories and tags</span>
