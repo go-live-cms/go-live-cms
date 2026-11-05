@@ -52,6 +52,7 @@ func (server *Server) updateSettings(c *gin.Context) {
 		DateFormat:       stringToNullString(req.DateFormat),
 
 		EditorMarkdownShortcuts: boolToNullBool(req.EditorMarkdownShortcuts),
+		AllowSignup:             boolToNullBool(req.AllowSignup),
 	}
 	if req.SiteTagline != nil {
 		tagline := strings.TrimSpace(*req.SiteTagline)

@@ -125,3 +125,34 @@ RETURNING *;
 UPDATE email_change_tokens
 SET used_at = now()
 WHERE user_id = $1 AND used_at IS NULL;
+
+-- Open signup (#191): the account is created only when the emailed link is
+-- redeemed (ConfirmSignupTx).
+
+-- name: CreateSignupRequest :one
+INSERT INTO signup_requests (
+    email,
+    username,
+    full_name,
+    hashed_password,
+    token_hash,
+    expires_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6
+) RETURNING *;
+
+-- name: DeleteSignupRequestsByEmail :exec
+-- A newer signup for the address, or its account being created, ends every
+-- other pending link for it.
+DELETE FROM signup_requests WHERE email = $1;
+
+-- name: DeleteStaleSignupRequests :exec
+-- Expired and used rows hold unconfirmed details nobody can use any more.
+DELETE FROM signup_requests WHERE expires_at <= now() OR used_at IS NOT NULL;
+
+-- name: ClaimSignupRequest :one
+-- Single-use: like ClaimPasswordResetToken, only one claim can match.
+UPDATE signup_requests
+SET used_at = now()
+WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
+RETURNING *;

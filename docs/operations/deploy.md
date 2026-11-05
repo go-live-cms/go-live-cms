@@ -153,8 +153,9 @@ Any Linux VM with Docker Engine + the Compose plugin (v2.20+, for `up --wait`), 
    pushes images. Delete `prod.env` afterwards; GitHub is now the source of truth.
 4. **First deploy.** Merge to `main` (or run the `cd` workflow manually with a sha CD
    already pushed). The first run creates the database and the volumes.
-5. **First admin account.** Release mode never seeds accounts, and registration isn't
-   implemented, so create the first admin in the database:
+5. **First admin account.** Release mode never seeds accounts, and open signup (#191) is
+   off by default and only ever creates contributors, so create the first admin in the
+   database:
    ```sh
    cd /opt/golive
    docker compose exec postgres psql -U root -d golive_cms
@@ -164,7 +165,8 @@ Any Linux VM with Docker Engine + the Compose plugin (v2.20+, for `up --wait`), 
    INSERT INTO users (username, full_name, email, hashed_password, role, password_changed_at)
    VALUES ('<username>', '<Full Name>', '<email>', crypt('<a strong password>', gen_salt('bf', 10)), 'admin', now());
    ```
-   Log in at `https://<domain>/login`, then add other users from the admin. Don't use the
+   Log in at `https://<domain>/login`, then add other users from the admin (or let people
+   sign up: Settings › Accounts › "Allow anyone to sign up"). Don't use the
    seeded names (`admin`, `editor`, …) with their dev passwords: the API refuses to start
    while one exists (readme, "Seeded dev accounts in production").
 6. **Backups.** Schedule `scripts/backup/backup.sh` (already copied to

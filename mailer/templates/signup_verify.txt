@@ -1,0 +1,13 @@
+Hi {{.Username}},
+
+Someone used this address to create a {{.SiteTitle}} account with the username {{.Username}}.
+
+Confirm the address to finish creating the account:
+
+{{.Link}}
+
+The link works once and expires in {{.ExpiresIn}}. There is no account until it is used, so you can't sign in before then.
+
+If you didn't sign up, you can ignore this email: no account is created.
+
+{{.SiteTitle}}

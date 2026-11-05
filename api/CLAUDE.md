@@ -342,9 +342,9 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 
 ## Invitations, password reset, mail (#148)
 
-- **Invite-only.** Admins create invitations (`/invitations`, `invitations_handlers_{read,write}.go`);
+- **Invite-only by default.** Admins create invitations (`/invitations`, `invitations_handlers_{read,write}.go`);
   `POST /auth/invitations/accept` creates the user with the invitation's email and
-  role. `/auth/register` is still a placeholder (self-registration is Post-MVP, #191).
+  role. Open signup (#191, below) is off unless an admin turns it on.
 - **Tokens** (`account_tokens_utils.go`): 32 random bytes, base64url; only the
   SHA-256 is stored (`user_invitations`, `password_reset_tokens`). Redeeming is one
   `UPDATE ... RETURNING` claim (`ClaimUserInvitation`, `ClaimPasswordResetToken`),
@@ -366,6 +366,36 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   debug/test or to a loopback relay). Links are built from
   `PUBLIC_BASE_URL`, never the Host header. Templates in `mailer/templates/`
   (text + HTML, site title from settings).
+
+## Open signup (#191, `000039`, `signup_handlers_write.go`)
+
+- **Off by default:** `settings.allow_signup` (Settings › Accounts; `PUT /settings`, admin only;
+  public in `GET /settings`, the sign-in page reads it). The first admin is still created with
+  SQL (deploy.md step 5). Off: `POST /auth/register` and `/auth/register/verify` answer **403
+  `signup_disabled`**, not the unknown-route 404 (the setting is public, so a 404 hides nothing;
+  the code lets the pages say so). Turning it off also ends links already sent.
+- `POST /auth/register {username, full_name, email, password}` (`RegisterRequest`: accept-invite's
+  rules + email, `new_password` + `checkPasswordDetails`, `checkUsernameFormat`) → **202, the same
+  body for any address**. The lookup, bcrypt, token and email run after the response
+  (`runInBackground` → `processSignup`), so timing doesn't tell either. A taken address gets a note
+  to its owner (`signup_existing` template, a forgot-password link) and nothing is stored.
+- **No user row until the link is used:** `signup_requests` (hash-only token, 24 h, single use,
+  bcrypt hash; email and username aren't unique there). `RequestSignupTx` deletes the address's earlier
+  request and every expired/used row; `ConfirmSignupTx` claims it, creates the user as
+  `db.SignupRole` (**contributor, fixed**: editor publishes, never admin; the request can't name a
+  role), deletes the address's rows. 409 `email_registered` / `username_unavailable` if taken
+  since. Link: `PUBLIC_BASE_URL/verify-email#token=`; the page confirms on its button.
+- **Username conflicts can't be hidden:** a taken username is a generic 409 `username_unavailable`
+  before the response (the person must choose another; usernames show in bylines). It says
+  nothing about the email.
+- **Limits:** `register` per IP (middleware), `registerEmail` per address after binding
+  (`RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE`, visible 429; the same for any address), and
+  `signupMail`, a silent one-email-a-minute cooldown per address (`allowSilently`) in the
+  background. Verify is an `accountToken` endpoint. No CAPTCHA.
+- Activity: `signed_up` (actor = the new member, `{role}`) on confirmation, never on the request.
+- Tests: `signup_test.go` (mock: off, validation, no enumeration incl. the pre-response calls,
+  limits, settings) and `signup_flow_test.go` (real DB: no sign-in before confirming, single use,
+  expiry, replaced links, conflicts, closing signup, cleanup).
 
 ## Request validation and hardening (#139)
 
@@ -414,7 +444,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 ## Rate limiting and client IP (#190, #156)
 
 - `ratelimit.go`: a general per-IP limit on the `/api/v1` and `/public` groups, plus
-  stricter per-IP limits on `/auth/register` and `/auth/refresh`. Login has a per-IP
+  stricter per-IP limits on `/auth/register` (plus per email, #191) and `/auth/refresh`. Login has a per-IP
   cap plus a **per IP+username** limit checked in `loginUser` after binding. Self
   password changes have a **per user+IP** limit inside `updateUser`, because only the
   body says whether a password is changing. Per-user-only keys would let an attacker
