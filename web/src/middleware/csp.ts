@@ -61,6 +61,9 @@ export function buildAdminCsp({ nonce, pageOrigin, apiUrl, collabUrl }: AdminCsp
     "img-src": ["'self'", "data:", "blob:", ...extra([apiOrigin])],
     "font-src": ["'self'", "data:"],
     "connect-src": connectSrc,
+    // History's diff worker (#355) is a bundled same-origin file. Explicit, so blob: and
+    // data: workers stay blocked whatever script-src (its fallback) allows later.
+    "worker-src": ["'self'"],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
     "form-action": ["'self'"],

@@ -1,17 +1,71 @@
 // History (#341, "History · 1–3"): the versions list in the settings panel and the
-// read-only preview in the canvas.
+// read-only preview in the canvas; "Highlight changes" (#355) compares it with the working
+// copy. Design tokens only (#337), so light and dark both follow them; every text/background
+// pair below is one tokens.test.ts checks for AA.
+
+@use "@gl-admin/assets/styles/mixins";
 
 .revisions-panel {
   display: flex;
   flex-direction: column;
 
   &__intro {
-    border-bottom: 1px solid var(--border-color);
     color: var(--text-secondary);
     font-size: var(--type-footnote);
     line-height: var(--type-footnote-lh);
     margin: 0;
-    padding: 14px var(--space-4);
+    padding: 14px var(--space-4) var(--space-2);
+  }
+
+  &__highlight {
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    font-size: var(--type-label);
+    font-weight: 500;
+    gap: var(--space-3);
+    justify-content: space-between;
+    line-height: var(--type-label-lh);
+    padding: var(--space-1) var(--space-4) 14px;
+  }
+
+  // The switch (role="switch"): the track says on/off by the knob's place, not only its colour.
+  &__switch {
+    background: var(--control-border);
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    flex: none;
+    height: 20px;
+    padding: 0;
+    position: relative;
+    transition: background var(--duration-fast) var(--ease-out);
+    width: 36px;
+
+    &[aria-checked="true"] {
+      background: var(--accent-solid);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+  }
+
+  &__switch-knob {
+    background: var(--accent-on);
+    border-radius: 50%;
+    box-shadow: var(--card-shadow);
+    height: 16px;
+    left: 2px;
+    position: absolute;
+    top: 2px;
+    transition: left var(--duration-fast) var(--ease-out);
+    width: 16px;
+
+    [aria-checked="true"] > & {
+      left: 18px;
+    }
   }
 
   &__error {
@@ -133,13 +187,27 @@
 }
 
 .revisions-preview {
+  // The admin colours every element (`* { color: var(--text-primary) }`), so nothing
+  // inherits. Inside the preview colour must inherit: a theme block's inline colour
+  // reaches its text, dimmed blocks dim, and one-side blocks tint their text. Kept above
+  // the rules below, which set colours with the same specificity and so win by order.
+  &__content *,
+  &__title *,
+  .version-diff__settings * {
+    color: inherit;
+  }
+
   &__about {
+    align-items: center;
     background: var(--background-subtle);
     border: 1px solid var(--border-color);
     border-radius: 8px;
+    display: flex;
+    flex-wrap: wrap;
     font-size: var(--type-label);
+    gap: var(--space-2) var(--space-4);
     line-height: var(--type-label-lh);
-    margin: 0 0 28px;
+    margin: 0 0 var(--space-3);
     padding: 10px 14px;
 
     strong {
@@ -147,9 +215,421 @@
     }
   }
 
+  &__about-text {
+    flex: 1 1 280px;
+  }
+
+  &__key {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+  }
+
+  &__key-item {
+    align-items: center;
+    display: inline-flex;
+    gap: 6px;
+
+    // In the key the label is plain text on the panel; the swatch carries the colour.
+    .version-diff__ins,
+    .version-diff__del {
+      background: transparent;
+      color: var(--text-primary);
+      padding: 0;
+    }
+  }
+
+  &__swatch {
+    border-radius: 3px;
+    height: 12px;
+    width: 12px;
+
+    &--version {
+      background: var(--success-bg);
+      box-shadow: inset 0 0 0 1px var(--success-text);
+    }
+
+    &--working {
+      background: var(--danger-bg);
+      box-shadow: inset 0 0 0 1px var(--danger-text);
+    }
+  }
+
+  &__status {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    margin: 0 0 28px;
+    min-height: var(--type-footnote-lh);
+  }
+
+  &__error {
+    margin: 0 0 var(--space-4);
+  }
+
+  &__title {
+    color: var(--text-primary);
+    font-size: 40px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin: 0 0 var(--space-6, 24px);
+  }
+
   &__content {
     color: var(--text-primary);
     font-size: 16px;
     line-height: 1.6;
+
+    // The admin resets element styles (Tailwind's preflight), so the preview gives the
+    // public renderer's markup a plain document look: headings, lists (nested lists keep
+    // their indent, which the comparison relies on), quotes, code, figures.
+    .block-content {
+      p {
+        margin: 2px 0;
+        padding: 3px 0;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-weight: 600;
+        line-height: 1.3;
+        margin: 24px 0 4px;
+      }
+
+      h1 {
+        font-size: 2em;
+      }
+
+      h2 {
+        font-size: 1.5em;
+      }
+
+      h3 {
+        font-size: 1.25em;
+      }
+
+      h4,
+      h5,
+      h6 {
+        font-size: 1em;
+      }
+
+      ul:not(.version-diff__attrs),
+      ol {
+        margin: 2px 0;
+        padding-left: 26px;
+      }
+
+      ul:not(.version-diff__attrs) {
+        list-style: disc;
+      }
+
+      ol {
+        list-style: decimal;
+      }
+
+      li {
+        padding: 2px 0 2px 2px;
+      }
+
+      blockquote {
+        border-left: 3px solid var(--border-strong);
+        margin: 10px 0;
+        padding: 2px 0 2px var(--space-4);
+
+        cite {
+          color: var(--text-secondary);
+          display: block;
+          font-size: var(--type-label);
+          font-style: normal;
+          margin-top: var(--space-1);
+
+          &::before {
+            content: "— ";
+          }
+        }
+      }
+
+      pre {
+        background: var(--code-block-background);
+        border-radius: 6px;
+        font-family: var(--font-mono, monospace);
+        font-size: 14px;
+        margin: 10px 0;
+        overflow-x: auto;
+        padding: var(--space-3) var(--space-4);
+        white-space: pre-wrap;
+      }
+
+      figure {
+        margin: 10px 0;
+      }
+
+      figcaption {
+        color: var(--text-secondary);
+        font-size: var(--type-label);
+        margin-top: var(--space-1);
+      }
+
+      img {
+        border-radius: 6px;
+        height: auto;
+        max-width: 100%;
+      }
+
+      hr {
+        border: 0;
+        border-top: 1px solid var(--border-strong);
+        margin: var(--space-6, 24px) 0;
+      }
+    }
+  }
+}
+
+// The comparison. "version" = only in the version shown (what a restore brings back),
+// "working" = only in the working copy (what a restore removes).
+.version-diff {
+  &__sr {
+    @include mixins.visually-hidden;
+  }
+
+  // Inline insertions: underlined as well as tinted (not colour alone).
+  &__ins {
+    background: var(--success-bg);
+    border-radius: 3px;
+    box-decoration-break: clone;
+    color: var(--success-label);
+    padding: 0 2px;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    -webkit-box-decoration-break: clone;
+  }
+
+  // Inline deletions: struck through.
+  &__del {
+    background: var(--danger-bg);
+    border-radius: 3px;
+    box-decoration-break: clone;
+    color: var(--danger-text);
+    padding: 0 2px;
+    text-decoration: line-through;
+    -webkit-box-decoration-break: clone;
+  }
+
+  &__ins a,
+  &__del a,
+  &__whole a {
+    color: inherit;
+  }
+
+  &__block {
+    border-radius: 8px;
+    position: relative;
+
+    // Unchanged blocks step back. --text-secondary, not opacity: it keeps 4.5:1.
+    &--same:not(&--moved) {
+      color: var(--text-secondary);
+
+      img {
+        opacity: 0.6;
+      }
+    }
+
+    &--version,
+    &--working {
+      margin: var(--space-3) 0;
+      padding: 14px var(--space-4) var(--space-2);
+    }
+
+    &--version {
+      background: var(--success-bg);
+      color: var(--success-label);
+    }
+
+    &--working {
+      background: var(--danger-bg);
+      color: var(--danger-text);
+    }
+
+    &--moved {
+      box-shadow: inset 3px 0 0 var(--border-strong);
+      padding-left: var(--space-3);
+    }
+
+    &--changed:has(> .version-diff__attrs) {
+      margin-bottom: var(--space-2);
+    }
+  }
+
+  // Nothing differs: nothing to dim.
+  &--identical &__block--same {
+    color: inherit;
+
+    img {
+      opacity: 1;
+    }
+  }
+
+  // A whole block or list item only on one side. <ins>/<del> are transparent, so the
+  // block keeps its own markup inside.
+  &__whole {
+    color: inherit;
+    display: block;
+    text-decoration: none;
+  }
+
+  del.version-diff__whole,
+  del.version-diff__whole * {
+    text-decoration: line-through;
+  }
+
+  // "Only in this version" / "Only in working copy" / "Moved …": text and an icon.
+  &__label {
+    align-items: center;
+    background: var(--background);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--menu-shadow);
+    display: inline-flex;
+    font-size: var(--type-caption);
+    font-weight: 600;
+    gap: 4px;
+    height: 18px;
+    line-height: var(--type-caption-lh);
+    padding: 0 6px;
+    position: absolute;
+    right: 12px;
+    top: -9px;
+    z-index: 1;
+
+    &--version {
+      color: var(--success-text);
+    }
+
+    &--working {
+      color: var(--danger-text);
+    }
+
+    &--moved {
+      color: var(--text-secondary);
+    }
+  }
+
+  &__block--moved:not(&__block--version, &__block--working) > &__label {
+    margin: 0 0 var(--space-1);
+    position: static;
+  }
+
+  &__list {
+    margin: 2px 0;
+  }
+
+  &__item {
+    border-radius: var(--radius-sm);
+
+    &--version {
+      background: var(--success-bg);
+      color: var(--success-label);
+    }
+
+    &--working {
+      background: var(--danger-bg);
+      color: var(--danger-text);
+    }
+
+    &--version,
+    &--working {
+      padding: 2px 6px 2px 2px;
+    }
+  }
+
+  &__item-mark {
+    display: inline-flex;
+    margin-right: 4px;
+    vertical-align: -1px;
+
+    &--moved {
+      color: var(--text-secondary);
+    }
+  }
+
+  &__attrs {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    list-style: none;
+    margin: var(--space-1) 0 0;
+    padding: 0;
+  }
+
+  &__attr-name {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  &__caption,
+  &__text-changes {
+    font-size: var(--type-label);
+    line-height: var(--type-label-lh);
+    margin: var(--space-1) 0 0;
+  }
+
+  // An inline node other than text, shown by its type ("[mention]").
+  &__node {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+  }
+
+  &__unrenderable {
+    border: 1px dashed var(--border-strong);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  // Settings (#358) the version would bring back.
+  &__settings {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: var(--type-label);
+    line-height: var(--type-label-lh);
+    margin: 0 0 28px;
+    padding: var(--space-3) 14px;
+  }
+
+  &__settings-title {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    font-weight: 600;
+    line-height: var(--type-footnote-lh);
+    margin: 0 0 6px;
+  }
+
+  &__settings-same {
+    margin: 0;
+  }
+
+  &__settings-grid {
+    align-items: baseline;
+    display: grid;
+    gap: var(--space-1) var(--space-3);
+    grid-template-columns: 140px minmax(0, 1fr);
+    margin: 0;
+
+    dt {
+      color: var(--text-secondary);
+    }
+
+    dd {
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
   }
 }

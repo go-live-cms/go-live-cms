@@ -29,6 +29,10 @@ describe("buildAdminCsp", () => {
     expect(prod["connect-src"]).not.toContain("ws://localhost:1234")
   })
 
+  it("allows same-origin workers only: History's bundled diff worker, no blob:/data: (#355)", () => {
+    expect(prod["worker-src"]).toEqual(["'self'"])
+  })
+
   it("locks down framing, plugins, base and forms", () => {
     expect(prod["frame-ancestors"]).toEqual(["'none'"])
     expect(prod["object-src"]).toEqual(["'none'"])

@@ -190,6 +190,21 @@ are the most fragile part of the codebase. **Before editing anything under
   warns on unload while the provider has unsynced changes or the connection is down. Editor
   styles use the design tokens only (never `prefers-color-scheme`). Features in the design
   without a backend stay hidden (comments at the top of each file; table on #341).
+- **History "Highlight changes" (#355):** the History panel's switch (`lib/history/highlightChanges.ts`,
+  in memory only: rule 0 rules out sessionStorage too, it survives a reload; on by default)
+  makes `VersionPreview` compare the version with the working copy **as the collab server
+  last stored it** (`GET /posts/:id/blocks`, plus `GET /posts/:id/settings` for the title and
+  settings), re-read when `Editor`'s `onStored` fires (`workingKey`). It never reads the live
+  editor or the Yjs doc, and writes nothing; Restore is unchanged (rule 9). The diff is
+  `lib/history/blockDiff.ts` (blocks by id, moves = outside the LIS of kept order, list items
+  and nested lists by their ids, attrs compared on their own, theme blocks' declared attrs)
+  over `wordDiff.ts` (word tokens with marks, capped Myers); both pure. It runs in
+  `blockDiff.worker.ts` (Vite's `new Worker(new URL(...))`, a same-origin file; the admin CSP
+  has `worker-src 'self'`), else on the main thread in 8 ms slices (`diffClient.ts`).
+  Rendering is `components/editor/ui/VersionDiff.tsx`: one-side blocks get a label and icon,
+  changed text `<ins>` (underlined) / `<del>` (struck), unchanged blocks `--text-secondary`.
+  `blockDiff.perf.test.ts` bundles the real worker with esbuild and runs 2,000 blocks in a
+  Node worker thread.
 - **Workspace screens (#343):** Users, Taxonomies, Settings, Themes, Profile and the new
   Post types page (`/post-types`, admin only) share `assets/styles/pages/workspace.scss`
   (header, list + side panel, field grids). Their rules live in `lib/settingsForm.ts`
