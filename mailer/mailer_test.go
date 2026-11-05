@@ -342,6 +342,35 @@ func TestMaskEmail(t *testing.T) {
 	require.Equal(t, "•••", MaskEmail("@example.com"))
 }
 
+// The edit access request email (#321): the member's text is escaped in the HTML,
+// the subject is one line, and the message is left out when there is none.
+func TestAccessRequestTemplate(t *testing.T) {
+	msg, err := RenderAccessRequest("ed@example.com", AccessRequest{
+		SiteTitle: "GoLive Blog",
+		Requester: "Kenji <b>T</b>",
+		PostTitle: "Line one\nline <i>two</i>",
+		Message:   "  Please <script>alert(1)</script>  ",
+		Link:      "https://cms.example/gl-admin/content/edit/9",
+	})
+	require.NoError(t, err)
+	require.Equal(t, TemplateAccessRequest, msg.Template)
+	require.Equal(t, "ed@example.com", msg.To)
+	require.Equal(t, "Kenji <b>T</b> asked for edit access to Line one line <i>two</i>", msg.Subject)
+	require.Contains(t, msg.Text, "Please <script>alert(1)</script>")
+	require.Contains(t, msg.Text, "https://cms.example/gl-admin/content/edit/9")
+	require.NotContains(t, msg.HTML, "<script>")
+	require.NotContains(t, msg.HTML, "<b>T</b>")
+	require.Contains(t, msg.HTML, "&lt;script&gt;")
+	require.Contains(t, msg.HTML, `href="https://cms.example/gl-admin/content/edit/9"`)
+
+	plain, err := RenderAccessRequest("ed@example.com", AccessRequest{Requester: "kenji", PostTitle: "", Link: "https://cms.example/x"})
+	require.NoError(t, err)
+	require.Equal(t, "kenji asked for edit access to Untitled", plain.Subject)
+	require.NotContains(t, plain.Text, "Their message")
+	require.NotContains(t, plain.HTML, "<blockquote")
+	require.Contains(t, plain.Text, DefaultSiteTitle)
+}
+
 func TestSignupTemplates(t *testing.T) {
 	msg, err := RenderSignupVerify("sam@example.com", SignupVerify{SiteTitle: "Field Notes", Username: "samsignup", Link: testLink, ExpiresIn: 24 * time.Hour})
 	require.NoError(t, err)

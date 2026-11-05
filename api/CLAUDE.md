@@ -66,6 +66,11 @@ the collab server.
     (403) from anyone who can't publish. A `post_parent` must be a post the caller can
     edit (`canEditPost`).
   - Publish/unpublish/revisions stay `requireContentEditor`.
+  - **Edit access grants (#321):** a contributor granted access to someone else's post
+    (`post_collaborators`) edits its working copy while it is published
+    (`canEditWorkingCopy` = `canEditPost` + the grant; see "Edit access requests" below).
+    Nothing else: `canEditPost` (parent rule), `canEditPostDetails`, `canReadPost` and the
+    list filters stay ownership-based.
   - Per-post write routes use `requireContentAuthor` (any content role) plus, in the
     handler, `server.authorizePost(c, id, rule)` (skips the post lookup for moderators;
     404 for a missing post, 403 when refused). Use `server.checkPost` when the handler
@@ -471,8 +476,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 
 - `GET /internal/users/:id/access?doc=post-<id>&issued_at=<unix>` (`internal_routes.go`,
   `internal_handlers_read.go`) is the collab server's per-connection check. It answers
-  `{role, can_edit}`, where `can_edit` is `canEditPost` for that post (moderators skip
-  the post lookup). 404 if the user, or for a contributor the post, is gone; 403 when a
+  `{role, can_edit}`, where `can_edit` is `canEditWorkingCopy` for that post (ownership, or
+  an edit access grant, #321). 404 if the user, or for a contributor the post, is gone; 403 when a
   contributor may not read it (`canReadPost`, #393: e.g. unpublished since the ticket; the
   collab server's timed recheck then closes the connection). It replaced
   the role-only `/internal/users/:id/role`; Hocuspocus's `onAuthenticate` (#206) calls it.
@@ -865,6 +870,46 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `test_utils_test.go`; read it with `activityOf(t, server).verbs()`), so they don't expect the
   inserts. `activity_test.go` covers the write paths, visibility, feeds and retention against
   the real database.
+
+## Edit access requests (#321, `000042`, `posts_access.go`)
+
+- **Model: a per-post grant, not the byline** (the byline only credits, #319).
+  `post_collaborators` (post, user, granted_by) is the grant; `post_access_requests` the
+  requests (`pending` → `granted` | `declined`, one open per member and post: partial unique
+  index; optional `message` ≤500 characters, never in the activity log). Both CASCADE with the
+  post and the member.
+- **Rules (`auth_posts.go`):** `canRequestPostAccess` = `canEditAsCollaborator`: a contributor
+  on someone else's **published** post (what they may read; a grant never reveals a draft).
+  `canReviewPostAccess`: moderators, or the post's contributor owner; nobody on a trashed post.
+  `canEditWorkingCopy` (`workingCopyAccess`) = `canEditPost` or (`canEditAsCollaborator` and a
+  grant row): the internal access lookup and `GET /posts/:id/access`. A grant on a post that was
+  unpublished since rests (the member can't read it: the lookup answers 403) and applies again
+  once it is published; scheduled posts aren't published, so #147's rule holds.
+- **Routes** (content roles; the rule in the handler, `loadPostForAccess`: 403 without
+  `canReadPost`): `GET /posts/:id/access` (`can_edit`, `collaborator`, `can_request`, the
+  caller's latest `request`; reviewers also `pending` and `collaborators`), `POST
+  /posts/:id/access-requests {message?}` (201; 409 `already_has_access` / `request_open` /
+  `recently_declined` with `request_again_at`; 429), `POST
+  /posts/:id/access-requests/:request_id/{grant,decline}` (`ReviewPostAccessRequestTx`: the
+  UPDATE claims it, so two reviewers can't both answer; 409 `already_answered`; 404 for another
+  post's request), `DELETE /posts/:id/collaborators/:user_id` (204; 404 `not_a_collaborator`).
+- **Abuse limits:** `RATE_LIMIT_ACCESS_REQUEST_PER_MINUTE` (3, per member+IP), the open-request
+  index, and `accessRequestCooldown` (24h after a decline, in `CreatePostAccessRequest`'s
+  INSERT … WHERE NOT EXISTS: no row = refused).
+- **Notify:** after the response, `notifyAccessReviewers` emails every admin and editor plus a
+  contributor owner (`ListAccessRequestReviewers`, never the requester; template
+  `access_request`, link `PUBLIC_BASE_URL/gl-admin/content/edit/<id>`). Home's
+  `/home/needs-attention` has `access_requests` (`ListPendingAccessRequestsForReviewer`:
+  `postsViewerID`, trashed posts left out).
+- **Live:** after a grant or a revoke the API calls `recheckCollabUser` (#333), so the member's
+  open connection goes read-write (`restored`) or read-only (`demoted`) at once; the periodic
+  re-check (#313) is the fallback. The collab server needed no change.
+- **Activity:** `access_requested` (actor = requester, `request_id`), `access_granted` /
+  `access_declined` (`user_id`, `request_id`), `access_revoked` (`user_id`). `ListActivity`
+  joins `payload.user_id` as `subject`, and shows a contributor someone else's published post's
+  `access_*` events only when they are the actor or the subject.
+- Tests: `posts_access_test.go` (real DB: the flow, permissions, cooldown, rate limit, the race,
+  emails, Needs attention, feed visibility, the collab lookup) and `internal_test.go`.
 
 ## Theme blocks (#376)
 

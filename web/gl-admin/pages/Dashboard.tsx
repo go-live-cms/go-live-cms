@@ -23,7 +23,8 @@ import "@gl-admin/assets/styles/pages/home.scss"
 
 // Home (#9, #340, #324): quick actions, "Continue where you left off" (the posts you
 // last worked on, from the activity log), "Needs attention" (failed scheduled publishes;
-// for editors, images without alt text and posts with unpublished changes), the
+// for editors, images without alt text and posts with unpublished changes; requests for
+// edit access to posts you own, or any post for editors, #321), the
 // Activity feed, then drafts and counts. Still waiting: presence on the recent cards
 // (who's editing now), review requests (#323) and "from a template" (#322).
 
@@ -265,7 +266,7 @@ function NeedsAttentionSection({ userId, moderator }: { userId?: number; moderat
       {items.state === "error" ? (
         <EmptyState compact variant="error" icon="close" title="Couldn't load what needs attention" description={errorMessage(items.error)} />
       ) : items.state === "ready" && items.value.length === 0 ? (
-        <EmptyState compact icon={<CheckIcon size={24} />} title="All caught up" description="Failed scheduled posts, missing alt text and changes waiting to be published show up here." />
+        <EmptyState compact icon={<CheckIcon size={24} />} title="All caught up" description="Failed scheduled posts, missing alt text, changes waiting to be published and requests for edit access show up here." />
       ) : (
         <ul className="gl-home__list gl-home__attention">
           {(items.state === "ready" ? items.value : [null, null]).map((item, i) => (

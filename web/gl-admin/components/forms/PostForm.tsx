@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   cancelPostSchedule,
@@ -46,6 +46,8 @@ import {
   useConnectionView,
 } from "@gl-admin/components/editor/utils/connectionState"
 import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
+import { getPostAccess, type PostAccess } from "@gl-admin/lib/api/postAccess"
+import { AccessRequestsNotice, PostCollaborators, ViewOnlyNotice } from "@gl-admin/components/editor/ui/PostEditAccess"
 import { canTransferPost } from "@gl-admin/lib/postOwner"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 
@@ -132,10 +134,24 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   // rejected in a loop.
   const [me, setMe] = useState<PermissionUser | undefined>(() => authManager.getState().user ?? undefined)
   const [roleVerified, setRoleVerified] = useState(mode !== "edit")
+  // Edit access requests and grants (#321): GET /posts/:id/access, read with the role
+  // before the editor mounts (a grant makes it editable), and again whenever the collab
+  // server's re-check changed this connection's access (a grant or a revoke) or a request
+  // was made or answered here. null = not loaded or failed: ownership alone decides.
+  const [postAccess, setPostAccess] = useState<PostAccess | null>(null)
+  const accessRead = useRef(0)
+  const postIdForAccess = mode === "edit" ? initialData?.id : undefined
+  const reloadAccess = useCallback(async () => {
+    if (!postIdForAccess) return
+    const read = ++accessRead.current
+    const next = await getPostAccess(postIdForAccess).catch(() => null)
+    // Only the latest read's answer counts.
+    if (read === accessRead.current) setPostAccess(next)
+  }, [postIdForAccess])
   useEffect(() => {
     if (mode !== "edit") return
     let cancelled = false
-    authManager.refreshUser().then((user) => {
+    Promise.all([authManager.refreshUser(), reloadAccess()]).then(([user]) => {
       if (cancelled) return
       setMe(user ?? undefined)
       setRoleVerified(true)
@@ -143,7 +159,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     return () => {
       cancelled = true
     }
-  }, [mode])
+  }, [mode, reloadAccess])
 
   // The owner decides access (#135); a Transfer (#353) changes it while open: here after
   // our own, and in every other open form when the collab re-check changes its access.
@@ -152,7 +168,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const access = postEditorAccess(
     me,
     mode,
-    mode === "edit" && initialData ? { user_id: ownerId ?? initialData.user_id, post_status: formData.post_status } : undefined
+    mode === "edit" && initialData
+      ? { user_id: ownerId ?? initialData.user_id, post_status: formData.post_status, collaborator: postAccess?.collaborator }
+      : undefined
   )
   const contentReadOnly = !access.content
   const detailsReadOnly = !access.details
@@ -1136,11 +1154,13 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
 
             <div className="post-editor__content">
               {/* Their own scheduled post has its banner above (#147). */}
-              {roleVerified && contentReadOnly && !(scheduled && me?.id === initialData?.user_id) && (
-                <Notice tone="info" live="status" className="post-editor__notice">
-                  <strong>View-only:</strong> you can edit only posts you wrote. You still see others' changes as they
-                  type.
-                </Notice>
+              {/* With Request access when they may ask (#321). */}
+              {roleVerified && contentReadOnly && !(scheduled && me?.id === initialData?.user_id) && initialData?.id && (
+                <ViewOnlyNotice postId={initialData.id} access={postAccess} onChanged={reloadAccess} />
+              )}
+              {/* The open requests, for the owner, editors and admins (#321). */}
+              {roleVerified && initialData?.id && postAccess?.can_review && postAccess.pending && (
+                <AccessRequestsNotice postId={initialData.id} pending={postAccess.pending} onChanged={reloadAccess} />
               )}
               {roleVerified && !contentReadOnly && detailsReadOnly && (
                 <Notice tone="info" live="status" className="post-editor__notice">
@@ -1157,9 +1177,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               // The server re-checked access and it changed (#313): the role cached here is
               // stale. Not after a revoke (the editor shows "sign in again"), nor when the
               // server just couldn't confirm access (the API is struggling; no role change).
+              // A grant or a revoke (#321) changes the access too: re-read it with the role.
               onAccessChange={(change) => {
                 if (change.revoked || change.reason === "unverified") return
                 void authManager.refreshUser().then((user) => setMe(user ?? undefined))
+                void reloadAccess()
                 // Or the post changed owner (#353): a contributor who lost it keeps
                 // the body read-only and must lose the details too.
                 if (initialData?.id) {
@@ -1247,6 +1269,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           onSlugChange={handleSlugChange}
           readOnly={detailsReadOnly}
           urlStructure={urlStructure}
+          editAccess={
+            initialData?.id && postAccess?.can_review && postAccess.collaborators?.length ? (
+              <PostCollaborators postId={initialData.id} collaborators={postAccess.collaborators} onChanged={reloadAccess} />
+            ) : undefined
+          }
           onSettingsSaved={() => void refreshSettingsState()}
           settingsKey={settingsKey}
           settingsPending={settingsPending}

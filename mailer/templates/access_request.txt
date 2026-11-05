@@ -1,0 +1,15 @@
+Hi,
+
+{{.Requester}} asked for edit access to "{{.PostTitle}}" on {{.SiteTitle}}.
+{{if .Message}}
+Their message:
+
+{{.Message}}
+{{end}}
+Open the post to grant or decline it:
+
+{{.Link}}
+
+Edit access lets them change the post's content in the editor. The changes go live only when an editor or admin publishes them.
+
+{{.SiteTitle}}

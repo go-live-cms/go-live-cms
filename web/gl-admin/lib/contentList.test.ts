@@ -4,6 +4,7 @@ import {
   bulkReport,
   filterQuery,
   hasFilters,
+  markCollaborations,
   readListFilters,
   selectionAfterBulk,
   trashedPhrase,
@@ -125,6 +126,23 @@ describe("postAccess (Your access)", () => {
     }
   })
 
+  // #321: an edit access grant (marked from GET /posts/collaborations) makes someone
+  // else's published post editable in the list too, and says whose it is.
+  it("offers Edit on someone else's published post the contributor was granted", () => {
+    const owner = { id: 3, username: "kenji", full_name: "Kenji T." }
+    const granted = post({ user_id: 3, username: "kenji", post_status: "published", authors: [owner], collaborator: true })
+    expect(postAccess(contributor, granted)).toEqual({ canEdit: true, note: "edit access granted · Kenji T. owns it" })
+    // A grant applies only while it's published (the API leaves others out anyway).
+    expect(postAccess(contributor, { ...granted, post_status: "draft" }).canEdit).toBe(false)
+    // Details stay the owner's: no trash, no publish.
+    expect(rowActions(contributor, granted)).toEqual(["duplicate"])
+  })
+
+  it("marks the granted rows only", () => {
+    const rows = [{ id: 1 }, { id: 2 }, { id: 3 }]
+    expect(markCollaborations(rows, [2, 9])).toEqual([{ id: 1 }, { id: 2, collaborator: true }, { id: 3 }])
+    expect(markCollaborations(rows, [])).toBe(rows)
+  })
   it("explains view-only when the contributor is credited but doesn't own it", () => {
     const credited = post({
       user_id: 5,

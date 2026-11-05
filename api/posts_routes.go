@@ -38,6 +38,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/user/:id", auth, author, server.getPostsByUser)
 		// Who can be credited in a byline (#319, posts_authors.go)
 		posts.GET("/author-candidates", auth, author, server.listAuthorCandidates)
+		// The caller's edit access grants (#321, posts_access.go), for the lists
+		posts.GET("/collaborations", auth, author, server.listCollaborations)
 		posts.GET("/slug/:slug", auth, author, server.getPostBySlug)
 		posts.GET("/:id", auth, author, server.getPostByID)
 
@@ -104,6 +106,14 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 
 		// Working vs published settings (#358): whether a settings change waits for Update
 		posts.GET("/:id/settings", auth, author, server.getPostSettingsState)
+
+		// Edit access requests and grants (#321, posts_access.go): asked for by a
+		// contributor watching the post, answered by its owner, editors and admins
+		posts.GET("/:id/access", auth, author, server.getPostAccess)
+		posts.POST("/:id/access-requests", auth, author, server.requestPostAccess)
+		posts.POST("/:id/access-requests/:request_id/grant", auth, author, server.grantPostAccess)
+		posts.POST("/:id/access-requests/:request_id/decline", auth, author, server.declinePostAccess)
+		posts.DELETE("/:id/collaborators/:user_id", auth, author, server.revokePostAccess)
 
 	}
 }

@@ -30,6 +30,7 @@ const (
 	TemplateEmailChanged   = "email-changed"
 	TemplateSignupVerify   = "signup-verify"
 	TemplateSignupExisting = "signup-existing"
+	TemplateAccessRequest  = "access-request"
 )
 
 // SignupVerify is the data for the open signup confirmation link (#191), sent to
@@ -70,6 +71,20 @@ func RenderSignupExisting(to string, d SignupExisting) (Message, error) {
 		Link:      d.Link,
 	}
 	return render(to, TemplateSignupExisting, fmt.Sprintf("Someone tried to sign up to %s with your address", data.SiteTitle), "signup_existing", data)
+}
+
+// AccessRequest is the data for the email to a post's reviewers when a member
+// asks for edit access (#321). PostTitle and Message are the member's text:
+// html/template escapes them, the subject is one line.
+type AccessRequest struct {
+	SiteTitle string
+	// Requester is the asking member's name (full name, else username).
+	Requester string
+	PostTitle string
+	// Message is the optional note (may be empty).
+	Message string
+	// Link opens the post in the admin, where the request is answered.
+	Link string
 }
 
 // DefaultSiteTitle is used when the site title setting is empty.
@@ -118,6 +133,25 @@ type templateData struct {
 	Link      string
 	ExpiresIn string // "72 hours", "1 hour"
 	NewEmail  string
+	Requester string
+	PostTitle string
+	Message   string
+}
+
+// RenderAccessRequest renders the edit access request email to a reviewer.
+func RenderAccessRequest(to string, d AccessRequest) (Message, error) {
+	title := oneLine(d.PostTitle)
+	if title == "" {
+		title = "Untitled"
+	}
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		Requester: oneLine(d.Requester),
+		PostTitle: title,
+		Message:   strings.TrimSpace(d.Message),
+		Link:      d.Link,
+	}
+	return render(to, TemplateAccessRequest, fmt.Sprintf("%s asked for edit access to %s", data.Requester, title), "access_request", data)
 }
 
 // RenderInvitation renders the invitation email to to.

@@ -78,6 +78,8 @@ type Store interface {
 	PublishScheduledUpdateTx(ctx context.Context, arg PublishScheduledUpdateTxParams) (PublishPostTxResult, error)
 	RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error)
 	SetPostAuthorsTx(ctx context.Context, arg SetPostAuthorsTxParams) (SetPostAuthorsTxResult, error)
+	// edit access requests (#321)
+	ReviewPostAccessRequestTx(ctx context.Context, arg ReviewPostAccessRequestTxParams) (PostAccessRequest, error)
 	TransferPostOwnerTx(ctx context.Context, arg TransferPostOwnerTxParams) (TransferPostOwnerTxResult, error)
 
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)

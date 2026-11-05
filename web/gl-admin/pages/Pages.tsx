@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
 import { getPosts } from "@gl-admin/lib/api/posts"
+import { getCollaborations } from "@gl-admin/lib/api/postAccess"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import PostStatus from "@gl-admin/components/ui/PostStatus"
 import Tabs from "@gl-admin/components/ui/Tabs"
@@ -16,7 +17,7 @@ import { canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { useListParams } from "@gl-admin/lib/hooks/useListParams"
-import { MODERATOR_TABS, findTab, lastEdited, tabCount, ALL_STATUSES } from "@gl-admin/lib/contentList"
+import { MODERATOR_TABS, findTab, lastEdited, markCollaborations, tabCount, ALL_STATUSES } from "@gl-admin/lib/contentList"
 import { buildPageTree, type PageRow } from "@gl-admin/lib/pageTree"
 import { postPath } from "@/lib/seo"
 import type { Post, PostType } from "@gl-admin/lib/api/types"
@@ -83,8 +84,9 @@ export default function Pages({ typeName, postType }: PagesProps) {
   useEffect(() => {
     let live = true
     setError(null)
-    loadAllPages(typeName, !moderator)
-      .then((all) => live && setPages(all))
+    // Contributors' edit access grants (#321) mark someone else's page as editable.
+    Promise.all([loadAllPages(typeName, !moderator), moderator ? [] : getCollaborations().catch(() => [] as number[])])
+      .then(([all, granted]) => live && setPages(markCollaborations(all, granted)))
       .catch((e) => live && setError(e))
     return () => {
       live = false
