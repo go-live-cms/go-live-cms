@@ -866,7 +866,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   inserts. `activity_test.go` covers the write paths, visibility, feeds and retention against
   the real database.
 
-## Review requests (#323, `000040`, `review_requests*.go`)
+## Review requests (#323, `000041`, `review_requests*.go`)
 
 - `review_requests`: post, `requested_by`, optional `reviewer_id` (an editor or admin; NULL = any of
   them), `message` (≤1000, plain text), `status` open | published | dismissed | changes_requested,

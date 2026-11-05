@@ -118,7 +118,7 @@ type Querier interface {
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
 	CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error)
-	// Review requests (#323, 000040). Publishing resolves the open one in a trigger
+	// Review requests (#323, 000041). Publishing resolves the open one in a trigger
 	// (golive_resolve_review_on_publish); the API writes the rest here.
 	// A new open request. Nothing is inserted (sql.ErrNoRows) when the post already
 	// has one: review_requests_one_open decides, so two requests racing can't both win.
