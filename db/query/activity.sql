@@ -36,9 +36,13 @@ WHERE u.id = @actor_id
 --   - moderators (editors): every post and media event;
 --   - everyone else: events on posts they own or that are published (canReadPost,
 --     judged on the post as it is now, so a deleted post's events are hidden), and
---     on media they uploaded.
+--     on media they uploaded. Edit access events (#321, access_*) on someone
+--     else's published post only when they are about the viewer (the actor or
+--     payload.user_id): who asked for or lost access isn't every contributor's
+--     business.
 -- Member, invitation and settings events are admin-only. Names and titles are
 -- joined now, never stored. object_type/object_id narrow it to one object.
+-- subject_* is the member an access event is about (payload.user_id).
 SELECT
     a.id, a.actor_id, a.verb, a.object_type, a.object_id, a.payload, a.created_at,
     actor.username AS actor_username,
@@ -48,12 +52,18 @@ SELECT
     p.post_status AS post_status,
     m.name AS media_name,
     target.username AS target_username,
-    target.full_name AS target_full_name
+    target.full_name AS target_full_name,
+    subject.id AS subject_id,
+    subject.username AS subject_username,
+    subject.full_name AS subject_full_name
 FROM activity a
 LEFT JOIN users actor ON actor.id = a.actor_id
 LEFT JOIN posts p ON a.object_type = 'post' AND p.id = a.object_id
 LEFT JOIN media m ON a.object_type = 'media' AND m.id = a.object_id
 LEFT JOIN users target ON a.object_type = 'user' AND target.id = a.object_id
+-- CASE, not AND: Postgres may evaluate the cast before a sibling condition.
+LEFT JOIN users subject ON a.verb LIKE 'access\_%'
+    AND subject.id = CASE WHEN (a.payload->>'user_id') ~ '^[0-9]{1,18}$' THEN (a.payload->>'user_id')::bigint END
 WHERE (sqlc.narg(before_id)::bigint IS NULL OR a.id < sqlc.narg(before_id)::bigint)
   AND (sqlc.narg(object_type)::text IS NULL OR a.object_type = sqlc.narg(object_type)::text)
   AND (sqlc.narg(object_id)::bigint IS NULL OR a.object_id = sqlc.narg(object_id)::bigint)
@@ -64,7 +74,10 @@ WHERE (sqlc.narg(before_id)::bigint IS NULL OR a.id < sqlc.narg(before_id)::bigi
           OR p.user_id = @viewer_id::bigint
           -- Review requests (#323) are seen by reviewers and the post's owner only
           -- (canSeeReviewRequests), not by every reader of a published post.
-          OR (p.post_status = 'published' AND a.verb NOT LIKE 'review\_%')))
+          OR (p.post_status = 'published' AND a.verb NOT LIKE 'review\_%' AND (
+                a.verb NOT LIKE 'access\_%'
+                OR a.actor_id = @viewer_id::bigint
+                OR a.payload->'user_id' = to_jsonb(@viewer_id::bigint)))))
     OR (a.object_type = 'media' AND (
           @is_moderator::boolean
           OR m.user_id = @viewer_id::bigint))

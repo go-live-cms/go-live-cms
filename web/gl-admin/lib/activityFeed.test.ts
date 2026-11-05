@@ -72,8 +72,21 @@ describe("describeActivity", () => {
     expect(line({ object_type: "settings", verb: "settings_updated", post: undefined, payload: { fields: ["site_title"] } })).toBe("Ana Costa updated the site settings")
   })
 
+  // #321: the member an access event is about is `subject`.
+  it("reads edit access events, naming who they're about", () => {
+    const kenji = { id: 5, username: "kenji", full_name: "Kenji Tanaka" }
+    expect(line({ verb: "access_requested", actor: kenji, payload: { request_id: 4 } })).toBe("Kenji Tanaka asked for edit access to October changelog")
+    expect(line({ verb: "access_granted", subject: kenji, payload: { user_id: 5 } })).toBe("Ana Costa gave Kenji Tanaka edit access to October changelog")
+    expect(line({ verb: "access_declined", subject: kenji, payload: { user_id: 5 } })).toBe(
+      "Ana Costa declined Kenji Tanaka's request for edit access to October changelog"
+    )
+    expect(line({ verb: "access_revoked", subject: kenji, payload: { user_id: 5 } })).toBe("Ana Costa removed Kenji Tanaka's edit access to October changelog")
+    expect(line({ verb: "access_revoked", payload: { user_id: 5 } })).toBe("Ana Costa removed a former member's edit access to October changelog")
+    expect(describeActivity(event({ verb: "access_granted", subject: kenji }), 99, now).href).toBe("/content/edit/10")
+  })
+
   it("passes an unknown verb through (later features add their own)", () => {
-    expect(line({ verb: "access_requested" })).toBe("Ana Costa access requested October changelog")
+    expect(line({ verb: "bookmarked" })).toBe("Ana Costa bookmarked October changelog")
     expect(line({ object_type: "comment", verb: "commented" })).toBe("Ana Costa commented")
   })
 })
@@ -82,10 +95,36 @@ const nothing: NeedsAttention = {
   failed_schedules: { total: 0, posts: [] },
   unpublished_changes: null,
   missing_alt: null,
+  access_requests: { total: 0, posts: [] },
   review_requests: null,
 }
 
 describe("attentionItems", () => {
+  // #321: after the other items, each opening the post where it's answered.
+  it("lists requests for edit access, then how many more", () => {
+    const request = (n: number) => ({
+      request_id: 40 + n,
+      id: n,
+      title: n === 1 ? "" : `Post ${n}`,
+      post_type: "post",
+      message: "",
+      created_at: "2026-11-04T14:00:00Z",
+      requester: { id: 5, username: "kenji", full_name: n === 2 ? "" : "Kenji Tanaka" },
+    })
+    const items = attentionItems(
+      { ...nothing, missing_alt: { media_count: 1, published_post_count: 0 }, access_requests: { total: 4, posts: [request(1), request(2)] } },
+      now
+    )
+    expect(items.map((i) => [i.key, i.title, i.detail, i.href, i.tone])).toEqual([
+      ["missing-alt", "1 image has no alt text", "Not used in a published post yet", "/media?alt=missing", "warning"],
+      ["access-41", "Kenji Tanaka asked for edit access", "Untitled", "/content/edit/1", "neutral"],
+      ["access-42", "kenji asked for edit access", "Post 2", "/content/edit/2", "neutral"],
+      ["access-more", "2 more requests for edit access", "Open the posts to answer them", "/content/post", "neutral"],
+    ])
+    // An older API without the field.
+    expect(attentionItems({ ...nothing, access_requests: undefined as never }, now)).toEqual([])
+  })
+
   it("is empty when nothing needs attention", () => {
     expect(attentionItems(nothing, now)).toEqual([])
     expect(attentionItems({ ...nothing, unpublished_changes: { total: 0, posts: [] }, missing_alt: { media_count: 0, published_post_count: 0 } }, now)).toEqual([])
@@ -100,6 +139,7 @@ describe("attentionItems", () => {
           total: 1,
           posts: [{ id: 8, title: "October changelog", post_type: "post", changed_at: "2026-11-03T10:00:00Z", last_editor: ana }],
         },
+        access_requests: { total: 0, posts: [] },
         review_requests: null,
       },
       now
@@ -149,6 +189,7 @@ describe("review requests", () => {
       failed_schedules: { total: 0, posts: [] },
       unpublished_changes: null,
       missing_alt: null,
+      access_requests: { total: 0, posts: [] },
       review_requests: {
         total: 1,
         posts: [{ id: 3, post_id: 12, title: "How we cut image load time in half", post_type: "post", created_at: "2026-11-04T10:00:00Z", requested_by: { id: 4, username: "kenji", full_name: "Kenji" }, assigned: false }],

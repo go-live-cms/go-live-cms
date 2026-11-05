@@ -34,9 +34,9 @@ const (
 	ActivityTrashed  = "trashed"
 	ActivityRestored = "restored"
 
-	// Review requests (#323, 000041), on the post. Payload: request_id, plus
+	// Review requests (#323, 000044), on the post. Payload: request_id, plus
 	// reviewer_id on a request, resolution ("published") on review_resolved, which
-	// 000041's publish trigger writes, and withdrawn on a requester's dismissal. Never
+	// 000044's publish trigger writes, and withdrawn on a requester's dismissal. Never
 	// the notes (content).
 	ActivityReviewRequested        = "review_requested"
 	ActivityReviewResolved         = "review_resolved"
@@ -62,4 +62,12 @@ const (
 
 	// Site settings.
 	ActivitySettingsUpdated = "settings_updated"
+
+	// Edit access (#321), on the post. The requester is the actor of
+	// access_requested; the others are the reviewer's, with the requester (or
+	// the member whose grant was revoked) as payload.user_id.
+	ActivityAccessRequested = "access_requested"
+	ActivityAccessGranted   = "access_granted"
+	ActivityAccessDeclined  = "access_declined"
+	ActivityAccessRevoked   = "access_revoked"
 )

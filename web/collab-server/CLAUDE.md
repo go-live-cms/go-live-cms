@@ -60,7 +60,7 @@ doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, au
 (`GET /internal/users/:id/access`, 3s timeout, `X-Request-ID`) → mode → epoch check.
 
 - **Mode** (`accessMode`): `can_edit: true` (admins, editors, a contributor on their own
-  post, #135) → read-write. Any other content role (`admin`/`editor`/`contributor`,
+  post, #135, or with an edit access grant on a published post, #321) → read-write. Any other content role (`admin`/`editor`/`contributor`,
   `READ_ROLES`) → **`connectionConfig.readOnly = true`**: a live read-only view;
   Hocuspocus drops that connection's updates. Anything else, a 403/404 from the API, or
   a bad ticket → denied.
@@ -103,7 +103,9 @@ differs, and the API compares it with the password change alone).
   (`COLLAB_INTERNAL_SECRET`, like flush) runs `checkUser(id)`: every (user, doc) group of
   that user is looked up now (a lookup already in flight is followed by another, since it may
   have read the API before the change committed), then goes back on the interval. The API
-  calls it after a role change or a removal, so a demotion is read-only at once. Answers
+  calls it after a role change or a removal, so a demotion is read-only at once, and after an
+  edit access grant or revoke (#321: the member's view-only connection turns read-write,
+  `restored`, or back, `demoted`; `accessGrant.hocuspocus.test.ts`). Answers
   `{docs: n}` once queued; 400 for anything but a positive integer id.
 - **Trash (#327):** the API answers the access lookup with **410 `post_trashed`** for a post in
   the trash (`fetchDocAccess` → `{trashed: true}`). At connect that's `DENY.trashed`

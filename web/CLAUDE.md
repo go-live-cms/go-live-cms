@@ -432,6 +432,18 @@ are the most fragile part of the codebase. **Before editing anything under
   filter (`?review=pending`, `ListFilters.review`); Home lists the requests ("Kenji asked for a
   review", `attentionItems`). The canvas draws only Home's item; the dialogs and notices use the #338
   components. Not on the Pages tree yet.
+- **Edit access requests (#321):** the editor's view-only notice (`components/editor/ui/
+  PostEditAccess.tsx` `ViewOnlyNotice`) has **Request access** (a dialog, optional message ≤500)
+  for a contributor watching someone else's published post, then "Request sent", or "declined,
+  ask again after …"; reviewers (owner, editors, admins) get one notice per open request with
+  Grant / Decline (`AccessRequestsNotice`) and the settings' "Edit access" list with Remove
+  (`PostCollaborators`). All from `GET /posts/:id/access` (`lib/api/postAccess.ts`), which
+  `PostForm` reads with the role before the editor mounts and again on every `onAccessChange`:
+  a grant reaches the open editor as the collab re-check's `restored`, `PostForm` re-reads
+  `collaborator`, and `canEditPost` (`lib/roles.ts`, mirroring `canEditWorkingCopy`) makes it
+  editable without a reload; a revoke is `demoted`. Wording in `lib/postAccess.ts` (tested).
+  Home's Needs attention lists `access_requests` ("Kenji asked for edit access", opening the
+  post), and the Activity feed reads the `access_*` verbs with their `subject`.
 - **Open signup (#191):** Settings › Accounts' "Allow anyone to sign up" (`allow_signup`, off by
   default). `/register` (the Accept-invite layout plus an email; the canvas has no sign-up board)
   and `/verify-email` (confirms on its button, like `/confirm-email`) are account pages (CSP and

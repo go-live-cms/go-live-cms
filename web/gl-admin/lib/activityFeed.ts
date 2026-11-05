@@ -58,6 +58,24 @@ const POST_VERBS: Record<string, string> = {
   transferred: "transferred",
 }
 
+// Edit access (#321): "Kenji asked for edit access to X", "Ana gave Kenji edit access to
+// X", "Ana declined Kenji's request for edit access to X", "Ana removed Kenji's edit
+// access to X". The member it's about is `subject` (absent once removed).
+function accessPart(event: ActivityEvent, title: string): { verb: string; what: string } | null {
+  const subject = personName(event.subject) || "a former member"
+  switch (event.verb) {
+    case "access_requested":
+      return { verb: "asked for edit access to", what: title }
+    case "access_granted":
+      return { verb: "gave", what: `${subject} edit access to ${title}` }
+    case "access_declined":
+      return { verb: "declined", what: `${subject}'s request for edit access to ${title}` }
+    case "access_revoked":
+      return { verb: "removed", what: `${subject}'s edit access to ${title}` }
+  }
+  return null
+}
+
 // status_changed (PUT /posts/:id): "archived X", else "set X to draft".
 function statusPart(title: string, status: unknown): { verb: string; what: string } {
   if (status === "archived") return { verb: "archived", what: title }
@@ -82,6 +100,9 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       if (event.verb === "restored") return { verb: "restored", what: `${title} from the trash`, href }
       // A requester withdrawing their own request (#323).
       if (event.verb === "review_dismissed" && event.payload.withdrawn === true) return { verb: "withdrew the review request of", what: title, href }
+      // Edit access (#321). The member it's about is `subject` (absent once removed).
+      const access = accessPart(event, title)
+      if (access) return { ...access, href }
       return { verb: POST_VERBS[event.verb] ?? fallbackVerb, what: title, href }
     }
     case "media": {
@@ -134,7 +155,8 @@ export type AttentionItem = {
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
 // attentionItems lists Needs attention, most urgent first: failed scheduled publishes,
-// then images without alt text, posts with unpublished changes, review requests (#323).
+// then images without alt text, posts with unpublished changes, edit access requests
+// (#321), review requests (#323).
 // `moderator`: the list tabs differ (contributors have no Scheduled tab).
 export function attentionItems(needs: NeedsAttention, now: Date = new Date(), moderator = true): AttentionItem[] {
   const items: AttentionItem[] = []
@@ -195,6 +217,28 @@ export function attentionItems(needs: NeedsAttention, now: Date = new Date(), mo
         tone: "accent",
       })
     }
+  }
+
+  // Edit access requests (#321), opened in the editor, where they're answered.
+  const access = needs.access_requests ?? { total: 0, posts: [] }
+  for (const request of access.posts) {
+    items.push({
+      key: `access-${request.request_id}`,
+      title: `${personName(request.requester) || "Someone"} asked for edit access`,
+      detail: request.title || "Untitled",
+      href: `/content/edit/${request.id}`,
+      tone: "neutral",
+    })
+  }
+  if (access.total > access.posts.length) {
+    const more = access.total - access.posts.length
+    items.push({
+      key: "access-more",
+      title: `${plural(more, "more request", "more requests")} for edit access`,
+      detail: "Open the posts to answer them",
+      href: "/content/post",
+      tone: "neutral",
+    })
   }
 
   // Review requests (#323), for editors and admins: theirs first, then the longest

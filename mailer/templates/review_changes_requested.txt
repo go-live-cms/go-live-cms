@@ -1,8 +1,8 @@
 Hi,
 
-{{.ActorName}} reviewed "{{.PostTitle}}" on {{.SiteTitle}} and asked for changes:
+{{.Reviewer}} reviewed "{{.PostTitle}}" on {{.SiteTitle}} and asked for changes:
 
-{{.Note}}
+{{.Message}}
 
 Open the post to make them, then request another review:
 

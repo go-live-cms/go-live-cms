@@ -1,10 +1,10 @@
 Hi,
 
-{{.ActorName}} asked {{if .Assigned}}you{{else}}an editor{{end}} to review "{{.PostTitle}}" on {{.SiteTitle}}.
-{{if .Note}}
+{{.Requester}} asked {{if .Assigned}}you{{else}}an editor{{end}} to review "{{.PostTitle}}" on {{.SiteTitle}}.
+{{if .Message}}
 Their note:
 
-{{.Note}}
+{{.Message}}
 {{end}}
 Open the post to review it:
 

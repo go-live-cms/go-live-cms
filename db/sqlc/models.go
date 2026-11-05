@@ -130,6 +130,24 @@ type Post struct {
 	TrashedFromStatus    sql.NullString        `json:"trashed_from_status"`
 }
 
+type PostAccessRequest struct {
+	ID          int64         `json:"id"`
+	PostID      int64         `json:"post_id"`
+	RequesterID int64         `json:"requester_id"`
+	Message     string        `json:"message"`
+	Status      string        `json:"status"`
+	ReviewedBy  sql.NullInt64 `json:"reviewed_by"`
+	ReviewedAt  sql.NullTime  `json:"reviewed_at"`
+	CreatedAt   time.Time     `json:"created_at"`
+}
+
+type PostCollaborator struct {
+	PostID    int64         `json:"post_id"`
+	UserID    int64         `json:"user_id"`
+	GrantedBy sql.NullInt64 `json:"granted_by"`
+	CreatedAt time.Time     `json:"created_at"`
+}
+
 type PostMedium struct {
 	PostID  int64           `json:"post_id"`
 	MediaID int64           `json:"media_id"`

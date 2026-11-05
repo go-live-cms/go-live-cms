@@ -30,6 +30,7 @@ const (
 	TemplateEmailChanged   = "email-changed"
 	TemplateSignupVerify   = "signup-verify"
 	TemplateSignupExisting = "signup-existing"
+	TemplateAccessRequest  = "access-request"
 
 	// Review requests (#323): to a reviewer, and back to the requester.
 	TemplateReviewRequested        = "review-requested"
@@ -74,6 +75,20 @@ func RenderSignupExisting(to string, d SignupExisting) (Message, error) {
 		Link:      d.Link,
 	}
 	return render(to, TemplateSignupExisting, fmt.Sprintf("Someone tried to sign up to %s with your address", data.SiteTitle), "signup_existing", data)
+}
+
+// AccessRequest is the data for the email to a post's reviewers when a member
+// asks for edit access (#321). PostTitle and Message are the member's text:
+// html/template escapes them, the subject is one line.
+type AccessRequest struct {
+	SiteTitle string
+	// Requester is the asking member's name (full name, else username).
+	Requester string
+	PostTitle string
+	// Message is the optional note (may be empty).
+	Message string
+	// Link opens the post in the admin, where the request is answered.
+	Link string
 }
 
 // DefaultSiteTitle is used when the site title setting is empty.
@@ -122,11 +137,31 @@ type templateData struct {
 	Link      string
 	ExpiresIn string // "72 hours", "1 hour"
 	NewEmail  string
-	// Review requests (#323).
-	ActorName string
+	// Edit access (#321) and review requests (#323): who asked, which post, and
+	// their plain-text message (a review's resolution note for Reviewer's email).
+	Requester string
 	PostTitle string
-	Note      string
-	Assigned  bool
+	Message   string
+	// Review requests (#323): who asked for changes, and whether the requester
+	// named this reviewer.
+	Reviewer string
+	Assigned bool
+}
+
+// RenderAccessRequest renders the edit access request email to a reviewer.
+func RenderAccessRequest(to string, d AccessRequest) (Message, error) {
+	title := oneLine(d.PostTitle)
+	if title == "" {
+		title = "Untitled"
+	}
+	data := templateData{
+		SiteTitle: siteTitle(d.SiteTitle),
+		Requester: oneLine(d.Requester),
+		PostTitle: title,
+		Message:   strings.TrimSpace(d.Message),
+		Link:      d.Link,
+	}
+	return render(to, TemplateAccessRequest, fmt.Sprintf("%s asked for edit access to %s", data.Requester, title), "access_request", data)
 }
 
 // RenderInvitation renders the invitation email to to.
@@ -199,22 +234,22 @@ type ReviewChangesRequested struct {
 func RenderReviewRequested(to string, d ReviewRequested) (Message, error) {
 	data := templateData{
 		SiteTitle: siteTitle(d.SiteTitle),
-		ActorName: personName(d.RequesterName),
+		Requester: personName(d.RequesterName),
 		PostTitle: postTitle(d.PostTitle),
-		Note:      strings.TrimSpace(d.Note),
+		Message:   strings.TrimSpace(d.Note),
 		Link:      d.Link,
 		Assigned:  d.Assigned,
 	}
-	return render(to, TemplateReviewRequested, fmt.Sprintf("%s asked for a review: %s", data.ActorName, data.PostTitle), "review_requested", data)
+	return render(to, TemplateReviewRequested, fmt.Sprintf("%s asked for a review: %s", data.Requester, data.PostTitle), "review_requested", data)
 }
 
 // RenderReviewChangesRequested renders the changes-requested email to to.
 func RenderReviewChangesRequested(to string, d ReviewChangesRequested) (Message, error) {
 	data := templateData{
 		SiteTitle: siteTitle(d.SiteTitle),
-		ActorName: personName(d.ReviewerName),
+		Reviewer:  personName(d.ReviewerName),
 		PostTitle: postTitle(d.PostTitle),
-		Note:      strings.TrimSpace(d.Note),
+		Message:   strings.TrimSpace(d.Note),
 		Link:      d.Link,
 	}
 	return render(to, TemplateReviewChangesRequested, fmt.Sprintf("Changes requested: %s", data.PostTitle), "review_changes_requested", data)

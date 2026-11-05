@@ -38,6 +38,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/user/:id", auth, author, server.getPostsByUser)
 		// Who can be credited in a byline (#319, posts_authors.go)
 		posts.GET("/author-candidates", auth, author, server.listAuthorCandidates)
+		// The caller's edit access grants (#321, posts_access.go), for the lists
+		posts.GET("/collaborations", auth, author, server.listCollaborations)
 		// Who can be asked for a review (#323, review_requests.go)
 		posts.GET("/reviewers", auth, author, server.listReviewers)
 		posts.GET("/slug/:slug", auth, author, server.getPostBySlug)
@@ -111,6 +113,13 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		// post; resolving them is under /review-requests/:id
 		posts.GET("/:id/review-request", auth, author, server.getPostReviewRequest)
 		posts.POST("/:id/review-request", auth, author, server.requestReview)
+		// Edit access requests and grants (#321, posts_access.go): asked for by a
+		// contributor watching the post, answered by its owner, editors and admins
+		posts.GET("/:id/access", auth, author, server.getPostAccess)
+		posts.POST("/:id/access-requests", auth, author, server.requestPostAccess)
+		posts.POST("/:id/access-requests/:request_id/grant", auth, author, server.grantPostAccess)
+		posts.POST("/:id/access-requests/:request_id/decline", auth, author, server.declinePostAccess)
+		posts.DELETE("/:id/collaborators/:user_id", auth, author, server.revokePostAccess)
 
 	}
 }

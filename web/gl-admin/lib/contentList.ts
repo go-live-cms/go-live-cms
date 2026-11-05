@@ -103,7 +103,7 @@ export function findSort(id: string | null | undefined): SortOption {
   return SORT_OPTIONS.find((s) => s.id === id) ?? SORT_OPTIONS[0]
 }
 
-type ListPost = Pick<Post, "user_id" | "post_status" | "username" | "authors" | "trashed_from_status">
+type ListPost = Pick<Post, "user_id" | "post_status" | "username" | "authors" | "trashed_from_status" | "collaborator">
 
 // The owner's name for "Sofia L. owns it": their byline entry, else posts.username.
 export function ownerName(post: ListPost): string {
@@ -118,11 +118,16 @@ export type PostAccess = {
 }
 
 // The "Your access" column. Contributors may edit the working copy of the posts they
-// own, at any status (canEditPost), and an editor publishes it. Everything else opens
-// view-only, including posts that only credit them as an author.
+// own, at any status (canEditPost), and an editor publishes it, and of someone else's
+// published post they were granted edit access to (#321, `collaborator`, from
+// markCollaborations). Everything else opens view-only, including posts that only credit
+// them as an author.
 export function postAccess(user: PermissionUser | null | undefined, post: ListPost): PostAccess {
   if (canEditPost(user, post)) {
     if (isContentModerator(user?.role)) return { canEdit: true }
+    if (post.collaborator && post.user_id !== user?.id) {
+      return { canEdit: true, note: `edit access granted · ${ownerName(post)} owns it` }
+    }
     const live = post.post_status?.toLowerCase() === "published"
     return { canEdit: true, note: live ? "an editor publishes your changes" : "your draft" }
   }
@@ -132,6 +137,14 @@ export function postAccess(user: PermissionUser | null | undefined, post: ListPo
   }
   const credited = !!user && !!post.authors?.some((a) => a.id === user.id)
   return { canEdit: false, note: credited ? `You’re credited · ${ownerName(post)} owns it` : undefined }
+}
+
+// Marks the rows the signed-in member holds an edit access grant on (#321;
+// GET /posts/collaborations), so postAccess offers Edit for them.
+export function markCollaborations<T extends { id: number }>(posts: T[], grantedIds: readonly number[]): (T & { collaborator?: boolean })[] {
+  if (grantedIds.length === 0) return posts
+  const granted = new Set(grantedIds)
+  return posts.map((post) => (granted.has(post.id) ? { ...post, collaborator: true } : post))
 }
 
 // The row actions (#340, Duplicate #354, the trash #327); the design's View on site waits

@@ -1,11 +1,11 @@
-// Package api — Review requests (#323, 000041)
+// Package api — Review requests (#323, 000044)
 //
 // Anyone who may edit a post (canRequestReview = canEditPost) asks the editors and
 // admins to review it, optionally naming one of them. Contributors above all: they
 // can't publish (#135), so this is how their work reaches an editor.
 //
 //   - POST /posts/:id/review-request {reviewer_id?, message?} → 201 {review_request}.
-//     One open request per post (000041's unique index): a second one while it is open
+//     One open request per post (000044's unique index): a second one while it is open
 //     answers 409 code review_already_requested with the open request, and emails
 //     nobody. To name another reviewer, withdraw it (dismiss) and ask again.
 //   - GET /posts/:id/review-request → {review_request | null}: the open request, or
@@ -16,7 +16,7 @@
 //   - POST /review-requests/:id/request-changes {note}: a reviewer; the note is
 //     required, plain text (comments, #192, aren't built). The requester is emailed.
 //   - Publishing resolves the open request by any path (Publish/Update, bulk, the
-//     scheduler, a status set through PUT): 000041's trigger, which also records the
+//     scheduler, a status set through PUT): 000044's trigger, which also records the
 //     review_resolved event.
 //
 // Who is emailed when a request is made: the named reviewer; with none, every
@@ -31,8 +31,8 @@ package api
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 
@@ -52,7 +52,7 @@ const (
 // when no reviewer is named).
 const reviewRecipientLimit = 100
 
-// The notes' limits in characters, once trimmed (000041's CHECKs).
+// The notes' limits in characters, once trimmed (000044's CHECKs).
 const (
 	reviewMessageMax = 1000
 	reviewNoteMax    = 2000
@@ -61,14 +61,10 @@ const (
 // reviewersListLimit caps GET /posts/reviewers.
 const reviewersListLimit = 200
 
-// reviewMailTimeout bounds the background work after a request (lookups and every
-// email).
-const reviewMailTimeout = 30 * time.Second
-
-// adminPostLink is the editor's address for a post, on the real site address.
-func (server *Server) adminPostLink(postID int64) string {
-	return server.publicURL + "/gl-admin/content/edit/" + strconv.FormatInt(postID, 10)
-}
+// The emails' link is #321's: PUBLIC_BASE_URL + adminEditPath, and they're sent the
+// same way (notifyAccessReviewers): the lookups under one mailSendTimeout, each
+// email under its own (sendMail), so a slow relay delays later emails but never
+// drops them.
 
 // displayName is how emails name a member.
 func displayName(fullName, username string) string {
@@ -238,7 +234,7 @@ func (server *Server) attachCallerReviewRequests(c *gin.Context, posts []PostWit
 // every editor and admin but the requester. Runs after the response; errors are
 // only logged.
 func (server *Server) sendReviewRequestEmails(logger *slog.Logger, request db.ReviewRequest, requester db.User, postTitle string) {
-	ctx, cancel := context.WithTimeout(context.Background(), reviewMailTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), mailSendTimeout)
 	defer cancel()
 
 	recipients, err := server.store.ListReviewRecipients(ctx, db.ListReviewRecipientsParams{
@@ -259,11 +255,11 @@ func (server *Server) sendReviewRequestEmails(logger *slog.Logger, request db.Re
 			RequesterName: displayName(requester.FullName, requester.Username),
 			PostTitle:     postTitle,
 			Note:          request.Message,
-			Link:          server.adminPostLink(request.PostID),
+			Link:          server.publicURL + fmt.Sprintf(adminEditPath, request.PostID),
 			Assigned:      request.ReviewerID.Valid,
 		})
 		if err == nil {
-			err = server.sendMail(ctx, msg)
+			err = server.sendMail(context.Background(), msg)
 		}
 		if err != nil {
 			failed++
@@ -281,7 +277,7 @@ func (server *Server) sendChangesRequestedEmail(logger *slog.Logger, request db.
 	if !request.RequestedBy.Valid || request.RequestedBy.Int64 == reviewer.ID {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), reviewMailTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), mailSendTimeout)
 	defer cancel()
 
 	requester, err := server.store.GetUser(ctx, request.RequestedBy.Int64)
@@ -297,10 +293,10 @@ func (server *Server) sendChangesRequestedEmail(logger *slog.Logger, request db.
 		ReviewerName: displayName(reviewer.FullName, reviewer.Username),
 		PostTitle:    postTitle,
 		Note:         request.ResolutionNote,
-		Link:         server.adminPostLink(request.PostID),
+		Link:         server.publicURL + fmt.Sprintf(adminEditPath, request.PostID),
 	})
 	if err == nil {
-		err = server.sendMail(ctx, msg)
+		err = server.sendMail(context.Background(), msg)
 	}
 	if err != nil {
 		logger.Error("changes requested email failed", "review_request_id", request.ID, "user_id", requester.ID, "error", err)

@@ -133,12 +133,17 @@ SELECT
     p.post_status AS post_status,
     m.name AS media_name,
     target.username AS target_username,
-    target.full_name AS target_full_name
+    target.full_name AS target_full_name,
+    subject.id AS subject_id,
+    subject.username AS subject_username,
+    subject.full_name AS subject_full_name
 FROM activity a
 LEFT JOIN users actor ON actor.id = a.actor_id
 LEFT JOIN posts p ON a.object_type = 'post' AND p.id = a.object_id
 LEFT JOIN media m ON a.object_type = 'media' AND m.id = a.object_id
 LEFT JOIN users target ON a.object_type = 'user' AND target.id = a.object_id
+LEFT JOIN users subject ON a.verb LIKE 'access\_%'
+    AND subject.id = CASE WHEN (a.payload->>'user_id') ~ '^[0-9]{1,18}$' THEN (a.payload->>'user_id')::bigint END
 WHERE ($1::bigint IS NULL OR a.id < $1::bigint)
   AND ($2::text IS NULL OR a.object_type = $2::text)
   AND ($3::bigint IS NULL OR a.object_id = $3::bigint)
@@ -149,7 +154,10 @@ WHERE ($1::bigint IS NULL OR a.id < $1::bigint)
           OR p.user_id = $6::bigint
           -- Review requests (#323) are seen by reviewers and the post's owner only
           -- (canSeeReviewRequests), not by every reader of a published post.
-          OR (p.post_status = 'published' AND a.verb NOT LIKE 'review\_%')))
+          OR (p.post_status = 'published' AND a.verb NOT LIKE 'review\_%' AND (
+                a.verb NOT LIKE 'access\_%'
+                OR a.actor_id = $6::bigint
+                OR a.payload->'user_id' = to_jsonb($6::bigint)))))
     OR (a.object_type = 'media' AND (
           $5::boolean
           OR m.user_id = $6::bigint))
@@ -169,21 +177,24 @@ type ListActivityParams struct {
 }
 
 type ListActivityRow struct {
-	ID             int64           `json:"id"`
-	ActorID        sql.NullInt64   `json:"actor_id"`
-	Verb           string          `json:"verb"`
-	ObjectType     string          `json:"object_type"`
-	ObjectID       int64           `json:"object_id"`
-	Payload        json.RawMessage `json:"payload"`
-	CreatedAt      time.Time       `json:"created_at"`
-	ActorUsername  sql.NullString  `json:"actor_username"`
-	ActorFullName  sql.NullString  `json:"actor_full_name"`
-	PostTitle      sql.NullString  `json:"post_title"`
-	PostType       sql.NullString  `json:"post_type"`
-	PostStatus     sql.NullString  `json:"post_status"`
-	MediaName      sql.NullString  `json:"media_name"`
-	TargetUsername sql.NullString  `json:"target_username"`
-	TargetFullName sql.NullString  `json:"target_full_name"`
+	ID              int64           `json:"id"`
+	ActorID         sql.NullInt64   `json:"actor_id"`
+	Verb            string          `json:"verb"`
+	ObjectType      string          `json:"object_type"`
+	ObjectID        int64           `json:"object_id"`
+	Payload         json.RawMessage `json:"payload"`
+	CreatedAt       time.Time       `json:"created_at"`
+	ActorUsername   sql.NullString  `json:"actor_username"`
+	ActorFullName   sql.NullString  `json:"actor_full_name"`
+	PostTitle       sql.NullString  `json:"post_title"`
+	PostType        sql.NullString  `json:"post_type"`
+	PostStatus      sql.NullString  `json:"post_status"`
+	MediaName       sql.NullString  `json:"media_name"`
+	TargetUsername  sql.NullString  `json:"target_username"`
+	TargetFullName  sql.NullString  `json:"target_full_name"`
+	SubjectID       sql.NullInt64   `json:"subject_id"`
+	SubjectUsername sql.NullString  `json:"subject_username"`
+	SubjectFullName sql.NullString  `json:"subject_full_name"`
 }
 
 // Newest first, paged by id (before_id: the last id of the previous page). What a
@@ -192,10 +203,15 @@ type ListActivityRow struct {
 //   - moderators (editors): every post and media event;
 //   - everyone else: events on posts they own or that are published (canReadPost,
 //     judged on the post as it is now, so a deleted post's events are hidden), and
-//     on media they uploaded.
+//     on media they uploaded. Edit access events (#321, access_*) on someone
+//     else's published post only when they are about the viewer (the actor or
+//     payload.user_id): who asked for or lost access isn't every contributor's
+//     business.
 //
 // Member, invitation and settings events are admin-only. Names and titles are
 // joined now, never stored. object_type/object_id narrow it to one object.
+// subject_* is the member an access event is about (payload.user_id).
+// CASE, not AND: Postgres may evaluate the cast before a sibling condition.
 func (q *Queries) ListActivity(ctx context.Context, arg ListActivityParams) ([]ListActivityRow, error) {
 	rows, err := q.db.QueryContext(ctx, listActivity,
 		arg.BeforeID,
@@ -229,6 +245,9 @@ func (q *Queries) ListActivity(ctx context.Context, arg ListActivityParams) ([]L
 			&i.MediaName,
 			&i.TargetUsername,
 			&i.TargetFullName,
+			&i.SubjectID,
+			&i.SubjectUsername,
+			&i.SubjectFullName,
 		); err != nil {
 			return nil, err
 		}

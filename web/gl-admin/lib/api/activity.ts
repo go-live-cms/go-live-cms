@@ -25,6 +25,8 @@ export interface ActivityEvent {
   post?: { id: number; title: string; post_type: string; post_status: string }
   media?: { id: number; name: string }
   user?: ActivityPerson
+  // The member an edit access event is about (#321: who was granted, declined or revoked).
+  subject?: ActivityPerson
   // Non-personal details: a role, a version number, setting names.
   payload: Record<string, unknown>
 }
@@ -82,11 +84,24 @@ export interface AttentionList<T> {
   posts: T[]
 }
 
+// An open edit access request the caller may answer (#321); keyed by its post.
+export interface AttentionAccessRequest {
+  request_id: number
+  id: number
+  title: string
+  post_type: string
+  message: string
+  created_at: string
+  requester: ActivityPerson
+}
+
 export interface NeedsAttention {
   failed_schedules: AttentionList<FailedSchedule>
   // null for roles that can't act on them (contributors).
   unpublished_changes: AttentionList<UnpublishedChangesPost> | null
   missing_alt: { media_count: number; published_post_count: number } | null
+  // Edit access requests on posts the caller owns (every post for editors), #321.
+  access_requests: AttentionList<AttentionAccessRequest>
   // Open review requests to review (#323): editors and admins; null otherwise.
   review_requests: AttentionList<ReviewRequestAttention> | null
 }
@@ -109,6 +124,7 @@ export async function getNeedsAttention(): Promise<NeedsAttention> {
     failed_schedules: response.failed_schedules ?? { total: 0, posts: [] },
     unpublished_changes: response.unpublished_changes ?? null,
     missing_alt: response.missing_alt ?? null,
+    access_requests: response.access_requests ?? { total: 0, posts: [] },
     review_requests: response.review_requests ?? null,
   }
 }

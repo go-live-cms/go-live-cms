@@ -85,16 +85,6 @@ func openReviewCount(t *testing.T, conn *sql.DB, postID int64) int {
 	return n
 }
 
-func mailsTo(msgs []mailer.Message, address string) []mailer.Message {
-	var out []mailer.Message
-	for _, m := range msgs {
-		if m.To == address {
-			out = append(out, m)
-		}
-	}
-	return out
-}
-
 func TestReviewRequestPermissions(t *testing.T) {
 	conn, store, server, _ := reviewServer(t)
 	owner := scheduleUser(t, store, RoleContributor)

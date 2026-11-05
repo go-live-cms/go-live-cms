@@ -75,6 +75,7 @@ const nothingNeeded = {
   failed_schedules: { total: 0, posts: [] },
   unpublished_changes: { total: 0, posts: [] },
   missing_alt: { media_count: 0, published_post_count: 0 },
+  access_requests: { total: 0, posts: [] },
   review_requests: null,
 }
 
@@ -227,6 +228,34 @@ describe("Home: Needs attention", () => {
     ])
     expect(rows[0].textContent).toContain("How we cut image load time in half")
     expect(rows[1].textContent).toContain("Untitled")
+  })
+
+  // #321: a request for edit access to a post the viewer may answer opens that post,
+  // where they grant or decline it.
+  it("lists requests for edit access, opening the post", async () => {
+    api.getNeedsAttention.mockResolvedValue({
+      ...nothingNeeded,
+      access_requests: {
+        total: 1,
+        posts: [
+          {
+            request_id: 41,
+            id: 9,
+            title: "How we cut image load time in half",
+            post_type: "post",
+            message: "I'd like to fix the numbers.",
+            created_at: "2026-10-22T10:00:00Z",
+            requester: { id: 5, username: "kenji", full_name: "Kenji Tanaka" },
+          },
+        ],
+      },
+    })
+    await render()
+    const rows = Array.from(section("home-attention").querySelectorAll<HTMLAnchorElement>("a.gl-home__row"))
+    expect(rows).toHaveLength(1)
+    expect(rows[0].querySelector(".gl-home__row-title")?.textContent).toBe("Kenji Tanaka asked for edit access")
+    expect(rows[0].querySelector(".gl-home__row-detail")?.textContent).toBe("How we cut image load time in half")
+    expect(rows[0].getAttribute("href")).toBe("/content/edit/9")
   })
 
   it("is all caught up when there is nothing", async () => {
