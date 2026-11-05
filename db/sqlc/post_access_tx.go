@@ -6,7 +6,7 @@ import (
 	"errors"
 )
 
-// Edit access requests (#321, 000040): post_access_requests.status.
+// Edit access requests (#321, 000042): post_access_requests.status.
 const (
 	AccessRequestPending  = "pending"
 	AccessRequestGranted  = "granted"

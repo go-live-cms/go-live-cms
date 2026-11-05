@@ -1,4 +1,4 @@
--- Edit access requests and per-post grants (#321, 000040). Who may do what is
+-- Edit access requests and per-post grants (#321, 000042). Who may do what is
 -- decided in api/auth_posts.go; these queries only read and write the rows.
 
 -- name: IsPostCollaborator :one

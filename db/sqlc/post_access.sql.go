@@ -153,7 +153,7 @@ type IsPostCollaboratorParams struct {
 	UserID int64 `json:"user_id"`
 }
 
-// Edit access requests and per-post grants (#321, 000040). Who may do what is
+// Edit access requests and per-post grants (#321, 000042). Who may do what is
 // decided in api/auth_posts.go; these queries only read and write the rows.
 func (q *Queries) IsPostCollaborator(ctx context.Context, arg IsPostCollaboratorParams) (bool, error) {
 	row := q.db.QueryRowContext(ctx, isPostCollaborator, arg.PostID, arg.UserID)

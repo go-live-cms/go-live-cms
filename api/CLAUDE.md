@@ -871,7 +871,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   inserts. `activity_test.go` covers the write paths, visibility, feeds and retention against
   the real database.
 
-## Edit access requests (#321, `000040`, `posts_access.go`)
+## Edit access requests (#321, `000042`, `posts_access.go`)
 
 - **Model: a per-post grant, not the byline** (the byline only credits, #319).
   `post_collaborators` (post, user, granted_by) is the grant; `post_access_requests` the
