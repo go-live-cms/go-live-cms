@@ -4,7 +4,7 @@
 // new posts from ("New post: Blank or from a template" on Home). Optionally it
 // also keeps the post's settings: its category terms and featured image.
 //
-// Storage: its own table (post_templates, 000039), not posts with a template
+// Storage: its own table (post_templates, 000040), not posts with a template
 // status, so no read of posts can show one: not the admin lists, counts or
 // search, not /public, the sitemap, feeds, menus or archives, not the
 // scheduler, not the collab server. A template has no live document; it is a

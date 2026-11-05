@@ -1,0 +1,66 @@
+---
+import AccountPage from "@/layouts/AccountPage.astro"
+import AccountError from "@/components/account/AccountError.astro"
+import { SITE_TITLE } from "@/consts"
+
+// The link from an open signup (#191, api/signup_handlers_write.go). Like
+// /confirm-email it does nothing until the button is pressed (a mail scanner
+// that opens links can't use the token up). The account is created then, and the
+// page goes on to sign in.
+---
+
+<AccountPage title="Confirm email" description={`Finish creating your account on ${SITE_TITLE}`}>
+  <form class="gl-admin-login__view" id="verifyEmailForm" novalidate>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title">Confirm your email</h1>
+      <p class="gl-admin-login__subtitle">This creates your account on {SITE_TITLE} with the details you signed up with. Then you can sign in.</p>
+    </header>
+
+    <AccountError />
+
+    <button type="submit" class="gl-button gl-button--primary gl-admin-login__submit">
+      <span class="gl-button__spinner" data-spinner aria-hidden="true" hidden></span>
+      <span data-label>Confirm and create account</span>
+    </button>
+  </form>
+
+  <!-- Expired, already used, replaced by a newer signup for the address or
+       malformed: the API answers all of them the same (400 invalid_token). -->
+  <section class="gl-admin-login__view" id="linkInvalid" role="status" hidden>
+    <span class="gl-admin-login__badge gl-admin-login__badge--warning" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+        ><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg
+      >
+    </span>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title">This link has expired</h1>
+      <p class="gl-admin-login__subtitle">
+        Sign-up links work once, for 24 hours, and only the latest one sent to an address. Sign up again to get a new link.
+      </p>
+    </header>
+    <a class="gl-button gl-button--primary gl-admin-login__submit" href="/register">Sign up again</a>
+  </section>
+
+  <section class="gl-admin-login__view" id="signupClosed" role="status" hidden>
+    <span class="gl-admin-login__badge gl-admin-login__badge--warning" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+        ><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg
+      >
+    </span>
+    <header class="gl-admin-login__header">
+      <h1 class="gl-admin-login__title" tabindex="-1">Sign-up is closed</h1>
+      <p class="gl-admin-login__subtitle">
+        {SITE_TITLE} stopped taking new accounts after you signed up, so yours wasn't created. Ask an administrator to invite you.
+      </p>
+    </header>
+    <a class="gl-button gl-button--secondary gl-admin-login__submit" href="/login">Go to sign in</a>
+  </section>
+
+  <a class="gl-admin-login__link gl-admin-login__link--small" href="/login" slot="after">Back to sign in</a>
+</AccountPage>
+
+<script>
+  import { mountVerifyEmailPage } from "@gl-admin/lib/accountPages"
+
+  mountVerifyEmailPage()
+</script>

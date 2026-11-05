@@ -35,6 +35,7 @@ const SAVED = {
   date_format: "month_day_year",
   editor_markdown_shortcuts: true,
   editor_allowed_embeds: ["youtube", "vimeo"],
+  allow_signup: false,
   site_address: "https://cms.example.com",
   created_at: "2026-10-01T00:00:00Z",
   changed_at: "2026-10-01T00:00:00Z",
@@ -136,6 +137,7 @@ describe("the unsaved-changes bar", () => {
         posts_per_page: 10,
         post_url_structure: "slug",
         editor_markdown_shortcuts: true,
+        allow_signup: false,
       },
       "token"
     )
@@ -178,6 +180,7 @@ describe("General and Editor (#330)", () => {
     expect([...nav.querySelectorAll("a")].map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
       ["General", "#gl-settings-general"],
       ["Editor", "#gl-settings-editor"],
+      ["Accounts", "#gl-settings-accounts"],
     ])
   })
 
@@ -246,4 +249,27 @@ it("hides the settings that have no backend yet (#352, #331)", async () => {
   for (const hidden of ["Allowed embeds", "URLs & redirects", "Media", "Email"]) {
     expect(text).not.toContain(hidden)
   }
+})
+
+describe("Accounts (#191)", () => {
+  const signupSwitch = () => container.querySelector<HTMLButtonElement>("#gl-settings-accounts button[role='switch']")!
+
+  it("shows the sign-up switch, off as saved, in its own section", async () => {
+    await render()
+    expect(container.querySelector("#gl-settings-accounts")?.textContent).toContain("Allow anyone to sign up")
+    expect(container.querySelector("nav[aria-label='Settings sections']")?.textContent).toContain("Accounts")
+    expect(signupSwitch().getAttribute("aria-checked")).toBe("false")
+  })
+
+  it("turns sign-up on through the bar", async () => {
+    api.updateSettings.mockImplementation(async (body) => ({ ...SAVED, ...body }))
+    await render()
+    await act(async () => signupSwitch().click())
+    expect(bar()?.textContent).toContain("You changed the sign-up setting")
+
+    await act(async () => button("Save changes").click())
+    await settle()
+    expect(api.updateSettings).toHaveBeenCalledWith(expect.objectContaining({ allow_signup: true }), "token")
+    expect(bar()).toBeNull()
+  })
 })

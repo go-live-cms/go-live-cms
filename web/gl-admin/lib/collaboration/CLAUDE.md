@@ -157,6 +157,10 @@ kept so references in code stay valid.
    11). A version's settings (title, excerpt, featured image, terms; #358) aren't in the
    Yjs doc: after `restoreVersionLive`, `PostForm` calls the API's restore-settings route,
    which writes them into the working copy (the live post waits for Update).
+   Comparing a version with the working copy ("Highlight changes", #355,
+   `lib/history/`) is read-only and goes around the editor on purpose: it reads the
+   stored `block_doc` over REST (re-read on `stored`), never the Yjs doc or the editor's
+   state, so it can't disturb either.
 
 10. **Never bind Collaboration to a doc the editor's schema can't build (#206/#274).**
    `@tiptap/y-tiptap` 3.0.0's `createNodeFromYElement` / `createTextNodesFromYText`

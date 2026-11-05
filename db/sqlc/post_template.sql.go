@@ -80,7 +80,7 @@ type CreatePostTemplateParams struct {
 	CreatedBy    sql.NullInt64   `json:"created_by"`
 }
 
-// Post templates (#322, 000039). A template is not a post: nothing in post.sql
+// Post templates (#322, 000040). A template is not a post: nothing in post.sql
 // or the public queries reads these tables.
 func (q *Queries) CreatePostTemplate(ctx context.Context, arg CreatePostTemplateParams) (PostTemplate, error) {
 	row := q.db.QueryRowContext(ctx, createPostTemplate,
