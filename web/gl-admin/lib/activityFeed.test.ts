@@ -39,6 +39,8 @@ describe("describeActivity", () => {
     expect(line({ payload: { scheduled: true } })).toBe("Ana Costa published (scheduled) October changelog")
     expect(line({ verb: "trashed" })).toBe("Ana Costa moved October changelog to the trash")
     expect(line({ verb: "restored" })).toBe("Ana Costa restored October changelog from the trash")
+    // #353: ids only in the payload, so no names.
+    expect(line({ verb: "transferred", payload: { previous_owner_id: 3, owner_id: 4 } })).toBe("Ana Costa transferred October changelog")
   })
 
   it("says You for the viewer and Someone without an actor", () => {

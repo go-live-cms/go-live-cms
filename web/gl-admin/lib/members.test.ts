@@ -5,6 +5,7 @@ import {
     canRemoveMember,
     demotesSelf,
     lastActiveLabel,
+    memberOptions,
     reassignSummary,
     recipientOptions,
     removeMemberError,
@@ -62,6 +63,18 @@ describe("removal", () => {
         const options = recipientOptions([marco, ana, me, bea], marco, me)
         expect(options.map((o) => o.label)).toEqual(["Luan Admin (you)", "Ana Costa", "Bea Lima"])
         expect(options[0]).toMatchObject({ value: "1", description: "luan@golive.dev · Administrator" })
+    })
+
+    // The picker is shared with a post's Transfer (#353), which also filters by role.
+    it("memberOptions excludes and filters, you first", () => {
+        const reader = user(5, "Rui Leitor", "user")
+        const options = memberOptions([marco, ana, me, bea, reader], {
+            exclude: [ana.id],
+            me,
+            eligible: (m) => m.role !== "user",
+        })
+        expect(options.map((o) => o.label)).toEqual(["Luan Admin (you)", "Bea Lima", "Marco Ruiz"])
+        expect(memberOptions([marco, ana], { me: null }).map((o) => o.value)).toEqual(["2", "3"])
     })
 
     it("says what moves", () => {

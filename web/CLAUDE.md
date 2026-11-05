@@ -365,6 +365,16 @@ are the most fragile part of the codebase. **Before editing anything under
   with the other details (`canEditPostDetails`). The byline is not the owner: crediting someone
   gives no access. The public site gets the published byline from every `/public` read, so the
   theme's `PostByline`/`AuthorCards` need nothing else.
+- **Post owner and Transfer (#353):** the post settings' Owner field
+  (`components/editor/ui/PostOwner.tsx`, `GET /posts/:id/owner`: "Luan (you)", Transfer for
+  admins, `canTransferPost`) opens `TransferOwnerModal`: the shared
+  `components/users/MemberPicker.tsx` (the remove dialog's picker too, #333; `memberOptions`
+  in `lib/members.ts`), only members with a content role (`canOwnPosts`), never the current
+  owner, "Also replace me in the byline", and the confirm line ("Ana Costa will own this post.
+  You keep your place in the byline."). Rules and messages: `lib/postOwner.ts` (tested).
+  After it the Authors field reloads if the byline changed (a published post then shows
+  "Settings changed"), and `PostForm` updates the owner its access rules read; the collab
+  server's re-check makes a contributor who lost the post read-only.
 - **Posts list filters, bulk actions and trash (#327):** Author / Category / Tag filters
   (`?author=` `?category=` `?tag=`, `FilterMenu`; options from `GET /posts/authors` and the
   `category` / `tag` terms) combine with the tabs, sort and search (`author_id`, `terms`).

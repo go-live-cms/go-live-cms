@@ -46,6 +46,7 @@ import {
   useConnectionView,
 } from "@gl-admin/components/editor/utils/connectionState"
 import { postEditorAccess, type PermissionUser } from "@gl-admin/lib/roles"
+import { canTransferPost } from "@gl-admin/lib/postOwner"
 import "@gl-admin/assets/styles/components/editor/post-editor.scss"
 
 // After the collab server stores a changed body, how long to wait for the next store of the
@@ -144,10 +145,13 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [mode])
 
+  // The owner decides access (#135); an admin's Transfer (#353) changes it while open.
+  const [ownerId, setOwnerId] = useState<number | undefined>(initialData?.user_id)
+  useEffect(() => setOwnerId(initialData?.user_id), [initialData?.user_id])
   const access = postEditorAccess(
     me,
     mode,
-    mode === "edit" && initialData ? { user_id: initialData.user_id, post_status: formData.post_status } : undefined
+    mode === "edit" && initialData ? { user_id: ownerId ?? initialData.user_id, post_status: formData.post_status } : undefined
   )
   const contentReadOnly = !access.content
   const detailsReadOnly = !access.details
@@ -1231,6 +1235,15 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           settingsPending={settingsPending}
           publishAt={scheduled ? publishAt : null}
           onSchedule={collabEnabled && canPublish ? () => setScheduleOpen(true) : undefined}
+          owner={
+            mode === "edit" && initialData?.id
+              ? {
+                  me,
+                  canTransfer: canTransferPost(me, { post_status: formData.post_status }),
+                  onTransferred: (result) => setOwnerId(result.owner.id),
+                }
+              : undefined
+          }
           seo={
             mode === "edit" && initialData?.id
               ? {
