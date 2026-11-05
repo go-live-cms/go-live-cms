@@ -1233,6 +1233,20 @@ func (mr *MockStoreMockRecorder) DeletePost(arg0, arg1 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePost", reflect.TypeOf((*MockStore)(nil).DeletePost), arg0, arg1)
 }
 
+// DeletePostBylineCredits mocks base method.
+func (m *MockStore) DeletePostBylineCredits(arg0 context.Context, arg1 db.DeletePostBylineCreditsParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePostBylineCredits", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePostBylineCredits indicates an expected call of DeletePostBylineCredits.
+func (mr *MockStoreMockRecorder) DeletePostBylineCredits(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostBylineCredits", reflect.TypeOf((*MockStore)(nil).DeletePostBylineCredits), arg0, arg1)
+}
+
 // DeletePostMedia mocks base method.
 func (m *MockStore) DeletePostMedia(arg0 context.Context, arg1 db.DeletePostMediaParams) error {
 	m.ctrl.T.Helper()
@@ -3328,6 +3342,21 @@ func (mr *MockStoreMockRecorder) LockAdminUserIDs(arg0 interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockAdminUserIDs", reflect.TypeOf((*MockStore)(nil).LockAdminUserIDs), arg0)
 }
 
+// LockNewPostOwner mocks base method.
+func (m *MockStore) LockNewPostOwner(arg0 context.Context, arg1 int64) (db.LockNewPostOwnerRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockNewPostOwner", arg0, arg1)
+	ret0, _ := ret[0].(db.LockNewPostOwnerRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockNewPostOwner indicates an expected call of LockNewPostOwner.
+func (mr *MockStoreMockRecorder) LockNewPostOwner(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockNewPostOwner", reflect.TypeOf((*MockStore)(nil).LockNewPostOwner), arg0, arg1)
+}
+
 // LockPostForCollabStore mocks base method.
 func (m *MockStore) LockPostForCollabStore(arg0 context.Context, arg1 int64) (db.LockPostForCollabStoreRow, error) {
 	m.ctrl.T.Helper()
@@ -3356,6 +3385,21 @@ func (m *MockStore) LockPostForPublish(arg0 context.Context, arg1 int64) (db.Loc
 func (mr *MockStoreMockRecorder) LockPostForPublish(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForPublish", reflect.TypeOf((*MockStore)(nil).LockPostForPublish), arg0, arg1)
+}
+
+// LockPostOwner mocks base method.
+func (m *MockStore) LockPostOwner(arg0 context.Context, arg1 int64) (db.LockPostOwnerRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostOwner", arg0, arg1)
+	ret0, _ := ret[0].(db.LockPostOwnerRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostOwner indicates an expected call of LockPostOwner.
+func (mr *MockStoreMockRecorder) LockPostOwner(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostOwner", reflect.TypeOf((*MockStore)(nil).LockPostOwner), arg0, arg1)
 }
 
 // LockPostStatus mocks base method.
@@ -4253,6 +4297,21 @@ func (m *MockStore) TransferMediaToUser(arg0 context.Context, arg1 db.TransferMe
 func (mr *MockStoreMockRecorder) TransferMediaToUser(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferMediaToUser", reflect.TypeOf((*MockStore)(nil).TransferMediaToUser), arg0, arg1)
+}
+
+// TransferPostOwnerTx mocks base method.
+func (m *MockStore) TransferPostOwnerTx(arg0 context.Context, arg1 db.TransferPostOwnerTxParams) (db.TransferPostOwnerTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TransferPostOwnerTx", arg0, arg1)
+	ret0, _ := ret[0].(db.TransferPostOwnerTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TransferPostOwnerTx indicates an expected call of TransferPostOwnerTx.
+func (mr *MockStoreMockRecorder) TransferPostOwnerTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TransferPostOwnerTx", reflect.TypeOf((*MockStore)(nil).TransferPostOwnerTx), arg0, arg1)
 }
 
 // TrashPost mocks base method.

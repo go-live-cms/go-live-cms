@@ -53,6 +53,9 @@ const POST_VERBS: Record<string, string> = {
   review_resolved: "completed the review of",
   review_dismissed: "dismissed the review request of",
   review_changes_requested: "requested changes to",
+
+  // Ownership (#353). The payload has ids only (no names), so the line names the post.
+  transferred: "transferred",
 }
 
 // status_changed (PUT /posts/:id): "archived X", else "set X to draft".

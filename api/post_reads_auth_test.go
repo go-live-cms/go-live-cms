@@ -141,6 +141,9 @@ var postReadRouteTemplates = []string{
 	"/api/v1/posts/:id/authors",
 	// Its review request (#323): null for a contributor who isn't the owner.
 	"/api/v1/posts/:id/review-request",
+
+	// The owner (#353).
+	"/api/v1/posts/:id/owner",
 }
 
 // moderatorPostRoutes are per-post GET routes for editors and admins only

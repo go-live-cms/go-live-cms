@@ -43,6 +43,11 @@ const (
 	ActivityReviewDismissed        = "review_dismissed"
 	ActivityReviewChangesRequested = "review_changes_requested"
 
+	// Ownership (#353): POST /posts/:id/transfer. The payload has the previous and
+	// new owner's ids and whether the byline changed. A removal (#333) moves posts
+	// too, recorded once as the member's "removed".
+	ActivityTransferred = "transferred"
+
 	// Media (ActivityDeleted too).
 	ActivityUploaded = "uploaded"
 	ActivityReplaced = "replaced"

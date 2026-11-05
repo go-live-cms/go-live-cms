@@ -194,6 +194,41 @@ export async function setPostAuthors(id: string | number, authorIds: number[], b
   return body.authors ?? []
 }
 
+// The owner (#353): who the post belongs to, which decides access. Public fields only.
+export async function getPostOwner(id: string | number): Promise<PostAuthor> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/owner`)
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Loading the owner failed" })
+  }
+  const body = (await response.json()) as { owner: PostAuthor }
+  return body.owner
+}
+
+export interface TransferPostResult {
+  post: Post
+  owner: PostAuthor
+  previous_owner_id: number
+  // The working byline after the transfer, and whether it changed.
+  authors: PostAuthor[]
+  byline_changed: boolean
+}
+
+// POST /posts/:id/transfer (admins): gives the post to another active member. The
+// byline stays as it is unless `replaceInByline` (the old owner's place goes to the new
+// owner; on a published post that waits for Update). Errors carry the API's code
+// (invalid_owner, already_owner, post_trashed).
+export async function transferPost(id: string | number, userId: number, replaceInByline: boolean): Promise<TransferPostResult> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/transfer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, replace_in_byline: replaceInByline }),
+  })
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Transferring the post failed" })
+  }
+  return response.json()
+}
+
 // Who can be credited: members with a content role whose name or username
 // contains `q` (up to 20). Any content role may ask.
 export async function searchAuthorCandidates(q: string): Promise<PostAuthor[]> {

@@ -585,6 +585,33 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `golive_post_byline()` (`user_posts`). A post published without a snapshot credits nobody
   publicly (the theme shows its owner, unlinked).
 
+## Post ownership: transfer (#353, `posts_owner.go`, `db/sqlc/post_owner_tx.go`)
+
+- `POST /posts/:id/transfer {user_id, replace_in_byline?}` is **admins only**
+  (`requireSiteAdmin`; editors can't, the issue's default). The new owner must be an
+  **active member**: an existing user (removal is a hard delete, #333) with a content role
+  (`contentRoles`), else 400 `invalid_owner`. 409 `already_owner`, 409 `post_trashed`
+  (nobody edits a trashed post), 404 missing post. 200 `{post, owner, previous_owner_id,
+  authors, byline_changed}`. `GET /posts/:id/owner` (`canReadPost`) → `{owner}` (public
+  fields), for the settings panel's Owner field.
+- `TransferPostOwnerTx`: new owner `FOR KEY SHARE` (`LockNewPostOwner`), then the post `FOR
+  UPDATE` (`LockPostOwner`), users before posts like `RemoveUserTx`/`SetPostAuthorsTx`.
+  **`reassignPostOwner` is the one reassignment** for both a transfer (one post) and a
+  removal (`AllPosts`): `user_id` + `username`, and with `ReplaceInByline` the old owner's
+  place in the **working** byline goes to the new owner in place (or their credit is dropped
+  where the new owner is already credited). A transfer never touches
+  `published_settings`: on a published post a byline change waits for Update (#319); an
+  owner change alone is no pending change. `changed_at` moves only when the byline changed.
+- After the commit: `recheckCollabDoc` (the #313 re-check on that document), so a
+  contributor who lost the post drops to read-only at once (and one who received it gets
+  write); activity `transferred` with `previous_owner_id`, `owner_id`, `byline_changed`. A
+  removal now also re-checks the recipient (`recheckCollabUser`) when posts moved, and
+  applies the same active-member rule to its recipient (`RemoveUserTxParams.OwnerRoles` =
+  `contentRoles`, else 400 `invalid_transfer_target`).
+- Tests: `post_owner_test.go` (real DB: byline kept/replaced, published byline waits,
+  refusals incl. a removed member, removal and transfer give the same result) and
+  `posts_owner_test.go` (roles, codes, the re-check, the event).
+
 ## Profile: avatar, email change, other devices (#334)
 
 - **Avatar** (`avatar_utils.go`, `avatar_handlers_write.go`): `PUT /users/me/avatar` (multipart
@@ -813,7 +840,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `publish_scheduled_by`, `scheduled: true`), unpublished, scheduled, unscheduled,
   `update_scheduled`/`update_unscheduled` (#335; applying the update is "published" with
   `scheduled_update: true`, credited to its `scheduled_by`), deleted,
-  `version_restored`; media uploaded (single, linked, bulk), replaced, deleted; invited,
+  `version_restored`, `transferred` (#353, owner ids); media uploaded (single, linked, bulk), replaced, deleted; invited,
   `invitation_revoked`, joined (actor = the new member), user created (POST `/users`),
   `role_changed` (both routes, `previous_role`; none when the role is unchanged:
   `ChangeUserRoleTx` returns `PreviousRole`), removed;

@@ -64,6 +64,8 @@ vi.mock("@gl-admin/lib/api/posts", () => ({
   createPost: vi.fn(),
   getPostById: vi.fn(),
   updatePost: vi.fn(async () => ({})),
+  // Read after an access change (#353).
+  getPostOwner: vi.fn(async () => ({ id: 1, username: "admin", full_name: "" })),
 }))
 // The settings sidebar loads taxonomies and media; it isn't what's tested here.
 // Review requests (#323): none on this post.

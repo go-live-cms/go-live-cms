@@ -99,6 +99,11 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/:id/authors", auth, author, server.getPostAuthors)
 		posts.PUT("/:id/authors", auth, author, server.setPostAuthors)
 
+		// Ownership (#353, posts_owner.go): read with canReadPost; transferring is
+		// admins' only (editors can't: the issue's default).
+		posts.GET("/:id/owner", auth, author, server.getPostOwner)
+		posts.POST("/:id/transfer", auth, requireSiteAdmin(server), server.transferPost)
+
 		// Working vs published settings (#358): whether a settings change waits for Update
 		posts.GET("/:id/settings", auth, author, server.getPostSettingsState)
 

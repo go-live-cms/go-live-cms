@@ -111,6 +111,10 @@ differs, and the API compares it with the password change alone).
   (`POST_TRASHED`), not `access-revoked`, so the editor says "moved to the trash" instead of
   "sign in again". The API calls **`POST /internal/documents/:doc/recheck`** (`checkDoc`, same
   secret, `{docs: n}`) right after a trash. The store on the last disconnect still goes through.
+- **Transfer (#353):** the API calls the same document re-check (`checkDoc`) after a post
+  changes owner: the old owner (a contributor) drops to read-only (`demoted`), a contributor
+  who received it gets write (`restored`). No server change was needed; `FakeCollabApi.transferPost`
+  models it in the tests.
 - Not re-checked on other events (e.g. a store); the interval bounds how long a change
   takes when the API's call doesn't arrive.
 - Tests: `recheck.test.ts` (fake connections, `FakeClock`) and

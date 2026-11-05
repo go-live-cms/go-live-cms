@@ -551,9 +551,48 @@ func TestScheduledPostsAreNotPublic(t *testing.T) {
 		"/public/authors/" + author.Username,
 		"/public/authors/" + author.Username + "/posts",
 	}
+	// The two post lists are paged newest first, and the test database is shared with
+	// packages running at the same time (db/sqlc creates published posts too), so the
+	// post can be anywhere in them: read every page.
+	listed := func(path string) bool {
+		t.Helper()
+		for page := 1; page <= 200; page++ {
+			var url string
+			if strings.Contains(path, "/type/") {
+				url = fmt.Sprintf("%s?page=%d", path, page)
+			} else {
+				url = fmt.Sprintf("%s&offset=%d", path, (page-1)*100)
+			}
+			recorder := get(url)
+			if recorder.Code == http.StatusNotFound && page > 1 {
+				return false // past the last page
+			}
+			require.Equal(t, http.StatusOK, recorder.Code, url)
+			if strings.Contains(recorder.Body.String(), word) {
+				return true
+			}
+			var body struct {
+				Posts      []json.RawMessage `json:"posts"`
+				Pagination *struct {
+					TotalPages int `json:"total_pages"`
+				} `json:"pagination"`
+			}
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body), url)
+			if body.Pagination != nil && page >= body.Pagination.TotalPages {
+				return false
+			}
+			if body.Pagination == nil && len(body.Posts) < 100 {
+				return false
+			}
+		}
+		t.Fatalf("%s: more than 200 pages", path)
+		return false
+	}
+	lists := []string{"/public/posts?type=post&limit=100", "/public/posts/type/post"}
+	for _, path := range lists {
+		require.False(t, listed(path), path)
+	}
 	absent := []string{
-		"/public/posts?type=post&limit=100",
-		"/public/posts/type/post",
 		"/public/authors",
 		fmt.Sprintf("/public/posts/%d/authors", post.ID),
 		fmt.Sprintf("/public/posts/%d/adjacent", post.ID),
@@ -586,8 +625,8 @@ func TestScheduledPostsAreNotPublic(t *testing.T) {
 	for _, path := range notFound {
 		require.Equal(t, http.StatusOK, get(path).Code, path)
 	}
-	for _, path := range []string{"/public/posts?type=post&limit=100", "/public/posts/type/post"} {
-		require.Contains(t, get(path).Body.String(), word, path)
+	for _, path := range lists {
+		require.True(t, listed(path), path)
 	}
 	require.Contains(t, searchResults(), word)
 }
