@@ -1,5 +1,5 @@
 import React, { Fragment, memo } from "react"
-import type { Block, BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { normalizeCite, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import type { PostSettings } from "@gl-admin/lib/api/blockAPI"
 import { blockRendererFor } from "@/components/BlockRenderer"
 import { renderTextNode } from "@/components/blocks/utils/contentRenderer"
@@ -100,11 +100,15 @@ export function DiffText({ segments }: { segments: Segment[] }) {
   return (
     <>
       {segments.map((segment, i) => {
-        const inner = segment.kind ? (
-          <br />
-        ) : (
-          renderTextNode({ type: "text", text: segment.text, marks: segment.marks }, i)
-        )
+        // An inline node (a theme's) has no text: shown by its type, so a change to it shows.
+        const inner =
+          segment.kind === "node" ? (
+            <span className="version-diff__node">[{segment.text}]</span>
+          ) : segment.kind ? (
+            <br />
+          ) : (
+            renderTextNode({ type: "text", text: segment.text, marks: segment.marks }, i)
+          )
         if (segment.op === "version") {
           return (
             <ins key={i} className="version-diff__ins">
@@ -188,7 +192,11 @@ function DiffList({ list }: { list: ListDiff }) {
         return (
           <li
             key={item.id ?? `#${i}`}
-            className={classes("version-diff__item", `version-diff__item--${item.status}`, item.moved && "version-diff__item--moved")}
+            className={classes(
+              "version-diff__item",
+              `version-diff__item--${item.status}`,
+              item.moved && "version-diff__item--moved"
+            )}
           >
             {item.status === "version" ? (
               <ins className="version-diff__whole">{body}</ins>
@@ -240,7 +248,8 @@ function ChangedBlock({ entry, version }: { entry: BlockDiffEntry; version: Bloc
         )
       }
       case "blockquote": {
-        const cite = (block.attrs as { cite?: string }).cite
+        // As the site renders it (BlockquoteBlock).
+        const cite = normalizeCite((block.attrs as { cite?: unknown }).cite)
         return (
           <blockquote>
             <DiffText segments={text} />
@@ -292,7 +301,11 @@ function ChangedBlock({ entry, version }: { entry: BlockDiffEntry; version: Bloc
 }
 
 function DiffBlock({ entry, version, working }: { entry: BlockDiffEntry; version: BlockDocV1; working: BlockDocV1 }) {
-  const className = classes("version-diff__block", `version-diff__block--${entry.status}`, entry.moved && "version-diff__block--moved")
+  const className = classes(
+    "version-diff__block",
+    `version-diff__block--${entry.status}`,
+    entry.moved && "version-diff__block--moved"
+  )
   if (entry.status === "version" || entry.status === "working") {
     const doc = entry.status === "version" ? version : working
     const Whole = entry.status === "version" ? "ins" : "del"

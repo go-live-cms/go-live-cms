@@ -281,6 +281,43 @@ describe("diffBlockDocs", () => {
     })
   })
 
+  it("doesn't fail on an image src with a stray %", () => {
+    const e = entry(diffBlockDocs(doc(img(A, { src: "/uploads/100%-done.jpg" })), doc(img(A))).entries, A)
+    expect(e.attrs[0]).toMatchObject({ key: "file", version: "100%-done.jpg (#7)" })
+  })
+
+  it("counts a change to an inline node that isn't text", () => {
+    const raw = (attrs: J): BlockDocV1 => ({
+      doc_version: 1,
+      blocks_order: [A],
+      blocks: {
+        [A]: {
+          id: A,
+          type: "theme:x/card",
+          version: 1,
+          attrs: { pm: { type: "theme:x/card", content: [text("Hi "), { type: "mention", attrs }] } },
+        },
+      },
+    })
+    const e = entry(diffBlockDocs(raw({ id: 1 }), raw({ id: 2 })).entries, A)
+    expect(e.status).toBe("changed")
+    expect(e.text).toContainEqual({ op: "version", text: "mention", kind: "node" })
+  })
+
+  it("reads a paragraph list child without pm from its plain text", () => {
+    const list = (t: string): BlockDocV1 => ({
+      doc_version: 1,
+      blocks_order: [A],
+      blocks: {
+        [A]: { id: A, type: "bullet_list", version: 1, attrs: {}, children: [B] },
+        [B]: { id: B, type: "paragraph", version: 1, attrs: { text: t } },
+      },
+    })
+    const e = entry(diffBlockDocs(list("old words"), list("new words")).entries, A)
+    // The version (first) has "old words", the working copy "new words".
+    expect(show(e.list!.items[0].text)).toBe("[+old][-new] words")
+  })
+
   it("compares code by word, keeping its whitespace", () => {
     const code = (id: string, src: string) => ({
       type: "codeBlock",

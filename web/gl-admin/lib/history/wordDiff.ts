@@ -14,12 +14,13 @@ export interface Mark {
 
 /**
  * One token of a block's text. `kind` "break" is a hard line break, "para" the boundary
- * between two paragraphs of the same block (a quote's, a list item's).
+ * between two paragraphs of the same block (a quote's, a list item's), "node" an inline
+ * node other than text (a theme's inline node; `text` is its type).
  */
 export interface Token {
   text: string
   marks?: Mark[]
-  kind?: "break" | "para"
+  kind?: "break" | "para" | "node"
   key: string
 }
 
@@ -33,7 +34,7 @@ export interface Segment {
   op: SegmentOp
   text: string
   marks?: Mark[]
-  kind?: "break" | "para"
+  kind?: "break" | "para" | "node"
 }
 
 // Words (letters, digits, marks, joined by ' ’ or -), runs of whitespace, single CJK
@@ -105,9 +106,13 @@ export function contentTokens(content: PMJson[] | undefined, skip?: (node: PMJso
         if (out.length > 0 && out[out.length - 1].kind !== "para") out.push(paraToken())
         walk(node.content, depth + 1)
       } else {
-        // Another inline leaf (a theme's inline node): no text to show, but a change to it
-        // is still a change.
-        out.push({ text: "", key: `\u0000node:${node.type}:${stableJson(node.attrs ?? {})}` })
+        // Another inline leaf (a theme's inline node): no text of its own, but a change to it
+        // is a change, so it's a token of its own (shown by its type).
+        out.push({
+          text: String(node.type ?? "element"),
+          kind: "node",
+          key: `\u0000node:${node.type}:${stableJson(node.attrs ?? {})}`,
+        })
       }
     }
   }
@@ -282,7 +287,7 @@ export function diffTokens(working: Token[], version: Token[], maxEdits = MAX_ED
   const out: Segment[] = []
   const emit = (op: SegmentOp, tokens: Token[]) => {
     for (const t of tokens) {
-      if (t.text === "" && !t.kind) continue
+      if (t.text === "") continue
       const last = out[out.length - 1]
       if (last && last.op === op && !last.kind && !t.kind && marksKey(last.marks) === marksKey(t.marks)) {
         last.text += t.text

@@ -243,7 +243,13 @@ function display(value: unknown): string | null {
 function fileName(src: unknown): string | null {
   if (typeof src !== "string" || src === "") return null
   const path = src.split(/[?#]/)[0]
-  return decodeURIComponent(path.slice(path.lastIndexOf("/") + 1)) || src
+  const name = path.slice(path.lastIndexOf("/") + 1)
+  try {
+    return decodeURIComponent(name) || src
+  } catch {
+    // A stray "%" (not an escape): the name as stored, never a failed comparison.
+    return name || src
+  }
 }
 
 /** The attributes of two blocks of the same type that differ. */
@@ -345,8 +351,10 @@ function listFromBlock(block: Block, doc: Doc): ListNode {
       .map((childId) => doc.blocks[childId])
       .filter((child): child is Block => !!child)
       .map((child) =>
+        // A paragraph child is shown as an item (the bridge wraps it); without its pm, its
+        // plain text.
         child.type === "paragraph"
-          ? itemFromPM({ content: [pmOf(child) ?? {}] }, child.id)
+          ? itemFromPM(pmOf(child) ? { content: [pmOf(child)!] } : undefined, child.id, attrsOf(child).text)
           : itemFromPM(pmOf(child), child.id, attrsOf(child).text)
       ),
   }
@@ -455,7 +463,8 @@ function listTokens(list: ListNode): Token[] {
 
 function isBlankParagraph(block: Block | undefined): boolean {
   if (!block || block.type !== "paragraph") return false
-  return blockTokens(block).every((t) => t.kind !== undefined || !t.text.trim())
+  // Breaks and whitespace show nothing; an inline node does.
+  return blockTokens(block).every((t) => t.kind === "break" || t.kind === "para" || (!t.kind && !t.text.trim()))
 }
 
 /**

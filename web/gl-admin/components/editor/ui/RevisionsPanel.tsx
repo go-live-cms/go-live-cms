@@ -3,13 +3,24 @@ import Notice from "@gl-admin/components/ui/Notice"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import BlockRenderer from "@/components/BlockRenderer"
 import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
-import { blockAPIClient, type PostSettings, type PostVersion, type PostVersionSummary } from "@gl-admin/lib/api/blockAPI"
+import {
+  blockAPIClient,
+  type PostSettings,
+  type PostVersion,
+  type PostVersionSummary,
+} from "@gl-admin/lib/api/blockAPI"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { authManager } from "@gl-admin/lib/auth"
 import type { BlockDocDiff } from "@gl-admin/lib/history/blockDiff"
 import { computeBlockDiff, DiffAbortedError } from "@gl-admin/lib/history/diffClient"
 import { useHighlightChanges } from "@gl-admin/lib/history/highlightChanges"
-import VersionDiff, { diffSummaryText, SettingsDiff, TitleDiff, VERSION_ONLY_LABEL, WORKING_ONLY_LABEL } from "./VersionDiff"
+import VersionDiff, {
+  diffSummaryText,
+  SettingsDiff,
+  TitleDiff,
+  VERSION_ONLY_LABEL,
+  WORKING_ONLY_LABEL,
+} from "./VersionDiff"
 import "@gl-admin/assets/styles/components/editor/revisions-panel.scss"
 
 interface RevisionsPanelProps {
@@ -103,7 +114,16 @@ export default function RevisionsPanel({
       </div>
 
       {error && (
-        <Notice tone="danger" live="alert" className="revisions-panel__error" actions={<button type="button" className="revisions-panel__retry" onClick={load}>Try again</button>}>
+        <Notice
+          tone="danger"
+          live="alert"
+          className="revisions-panel__error"
+          actions={
+            <button type="button" className="revisions-panel__retry" onClick={load}>
+              Try again
+            </button>
+          }
+        >
           {error}
         </Notice>
       )}
@@ -176,7 +196,14 @@ function fullDoc(doc: BlockDocV1 | Record<string, never> | null | undefined): Bl
 type Comparison =
   | { state: "off" }
   | { state: "loading" }
-  | { state: "ready"; versionNo: number; diff: BlockDocDiff; working: BlockDocV1; settings: PostSettings | null }
+  | {
+      state: "ready"
+      postId: number
+      versionNo: number
+      diff: BlockDocDiff
+      working: BlockDocV1
+      settings: PostSettings | null
+    }
   | { state: "error"; message: string }
 
 interface VersionPreviewProps {
@@ -209,7 +236,11 @@ export function VersionPreview({ version, postId, workingKey = 0 }: VersionPrevi
     }
     const controller = new AbortController()
     // A fresher working copy of the same version: keep the last comparison until it's in.
-    setComparison((prev) => (prev.state === "ready" && prev.versionNo === version.version_no ? prev : { state: "loading" }))
+    setComparison((prev) =>
+      prev.state === "ready" && prev.postId === postId && prev.versionNo === version.version_no
+        ? prev
+        : { state: "loading" }
+    )
     void (async () => {
       try {
         const token = authManager.getAccessToken()
@@ -228,7 +259,7 @@ export function VersionPreview({ version, postId, workingKey = 0 }: VersionPrevi
         const working = fullDoc(blocks.doc)
         const diff = await computeBlockDiff(fullDoc(version.doc), working, { signal: controller.signal })
         if (controller.signal.aborted) return
-        setComparison({ state: "ready", versionNo: version.version_no, diff, working, settings })
+        setComparison({ state: "ready", postId, versionNo: version.version_no, diff, working, settings })
       } catch (e) {
         if (controller.signal.aborted || e instanceof DiffAbortedError) return
         setComparison({ state: "error", message: errorMessage(e, "Couldn't compare it with the working copy") })
@@ -237,7 +268,10 @@ export function VersionPreview({ version, postId, workingKey = 0 }: VersionPrevi
     return () => controller.abort()
   }, [compare, postId, version, workingKey, attempt])
 
-  const ready = comparison.state === "ready" && comparison.versionNo === version.version_no ? comparison : null
+  const ready =
+    comparison.state === "ready" && comparison.postId === postId && comparison.versionNo === version.version_no
+      ? comparison
+      : null
   // Stable per version, so a re-render of the page doesn't re-render a long comparison.
   const versionDoc = useMemo(() => fullDoc(version.doc), [version])
   const title = version.settings?.title?.trim() ? version.settings.title : null
@@ -266,7 +300,11 @@ export function VersionPreview({ version, postId, workingKey = 0 }: VersionPrevi
 
       {compare && (
         <p role="status" className="revisions-preview__status">
-          {comparison.state === "loading" ? "Comparing with the working copy…" : ready ? diffSummaryText(ready.diff) : ""}
+          {comparison.state === "loading"
+            ? "Comparing with the working copy…"
+            : ready
+              ? diffSummaryText(ready.diff)
+              : ""}
         </p>
       )}
       {comparison.state === "error" && (
@@ -284,7 +322,9 @@ export function VersionPreview({ version, postId, workingKey = 0 }: VersionPrevi
         </Notice>
       )}
 
-      {ready && version.settings && ready.settings && <SettingsDiff version={version.settings} working={ready.settings} />}
+      {ready && version.settings && ready.settings && (
+        <SettingsDiff version={version.settings} working={ready.settings} />
+      )}
 
       {title && <TitleDiff version={title} working={ready?.settings ? ready.settings.title : null} />}
 

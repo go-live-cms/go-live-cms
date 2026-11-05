@@ -143,12 +143,12 @@ describe("VersionPreview with Highlight changes", () => {
 
   it("only shows the version when the switch is off, and fetches nothing", async () => {
     const api = mockApi(docOf())
-    act(() => root.render(<RevisionsPanel postId={42} onView={() => {}} onBackToWorkingCopy={() => {}} />))
     vi.spyOn(blockAPIClient, "listVersions").mockResolvedValue({
       post_status: "published",
       published_version_id: 9,
       versions: [],
     })
+    act(() => root.render(<RevisionsPanel postId={42} onView={() => {}} onBackToWorkingCopy={() => {}} />))
     const toggle = container.querySelector<HTMLButtonElement>('[role="switch"]')!
     act(() => toggle.click())
     expect(getHighlightChanges()).toBe(false)
