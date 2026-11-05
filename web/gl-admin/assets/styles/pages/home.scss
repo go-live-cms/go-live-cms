@@ -52,6 +52,19 @@
     }
   }
 
+  // New post opens the template chooser (#322): a button that looks like the links.
+  button.gl-home__action {
+    background: none;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    width: 100%;
+
+    &:hover {
+      background: var(--background-hover);
+    }
+  }
+
   &__action-icon {
     background: var(--background-hover);
     border-radius: 8px;

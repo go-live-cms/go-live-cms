@@ -136,7 +136,7 @@ export function postAccess(user: PermissionUser | null | undefined, post: ListPo
 
 // The row actions (#340, Duplicate #354, the trash #327); the design's View on site waits
 // for its issue. "delete" is the permanent delete, from the trash only.
-export type RowAction = "duplicate" | "publish" | "unpublish" | "archive" | "trash" | "restore" | "delete"
+export type RowAction = "duplicate" | "template" | "publish" | "unpublish" | "archive" | "trash" | "restore" | "delete"
 
 // The toast after Duplicate, which then opens the copy in the editor.
 export const DUPLICATED_MESSAGE = "Duplicated. You’re editing the copy."
@@ -146,7 +146,8 @@ export const DUPLICATED_MESSAGE = "Duplicated. You’re editing the copy."
 // archiving (a status change) are moderator-only in the API. Moving to the trash has the
 // old delete's rule (canTrashPost): a contributor only their own post that isn't
 // published. A trashed post only comes back (canRestorePost) or goes for good
-// (canDeletePostPermanently, moderators).
+// (canDeletePostPermanently, moderators). Save as template (#322) is the API's
+// requireContentEditor: moderators, on any post that isn't in the trash.
 export function rowActions(user: PermissionUser | null | undefined, post: ListPost): RowAction[] {
   const status = post.post_status?.toLowerCase()
   const actions: RowAction[] = []
@@ -157,6 +158,7 @@ export function rowActions(user: PermissionUser | null | undefined, post: ListPo
   }
   if (canCreateContent(user?.role)) actions.push("duplicate")
   if (isContentModerator(user?.role)) {
+    actions.push("template")
     actions.push(status === "published" ? "unpublish" : "publish")
     if (status !== "archived") actions.push("archive")
   }

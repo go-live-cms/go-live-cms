@@ -11,6 +11,7 @@ import EmptyState from "@gl-admin/components/ui/EmptyState"
 import { PageIcon, PlusIcon } from "@gl-admin/components/ui/icons"
 import { LastEdited } from "@gl-admin/components/content/PostMeta"
 import { AccessCell, ListHeader, RowActionsCell } from "@gl-admin/components/content/ListParts"
+import { useNewPostChooser } from "@gl-admin/components/content/NewPostDialog"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
@@ -26,8 +27,9 @@ import "@gl-admin/assets/styles/pages/content-list.scss"
 // siblings by menu_order), or flat by last edited. The tree needs all of them, so they
 // load in pages of 100 instead of through Pagination.
 //
-// Hidden until their issues land: search, the Front page badge and the Template column
-// (#336, templates #322). A published page with changes not published (#326) shows that pill.
+// New offers Blank or one of the type's post templates (#322), when it has any.
+// Hidden until their issues land: search, the Front page badge and the (page layout)
+// Template column (#336). A published page with changes not published (#326) shows that pill.
 
 // The moderators' status tabs: pages have no "My posts" view.
 const TABS = MODERATOR_TABS
@@ -71,6 +73,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
   const layout = params.get("layout") === "list" ? "list" : "tree"
   const plural = postType?.label || "Pages"
   const singular = plural.replace(/s$/, "").toLowerCase()
+  const newPost = useNewPostChooser({ postType: typeName, noun: singular, canCreate, canManage: moderator })
 
   const [pages, setPages] = useState<Post[] | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -189,7 +192,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
   })
 
   const newButton = canCreate && (
-    <Button variant="primary" icon={<PlusIcon />} onClick={() => navigate(`/content/${typeName}/new`)}>
+    <Button variant="primary" icon={<PlusIcon />} onClick={newPost.start}>
       New {singular}
     </Button>
   )
@@ -200,6 +203,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
     return (
       <section className="gl-content-list">
         <ListHeader title={plural} actions={newButton} />
+        {newPost.dialog}
         <EmptyState
           variant="error"
           icon="close"
@@ -219,6 +223,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
     return (
       <section className="gl-content-list">
         <ListHeader title={plural} actions={newButton} />
+        {newPost.dialog}
         <EmptyState
           className="gl-content-list__empty"
           icon={<PageIcon size={24} />}
@@ -226,7 +231,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
           description={canCreate ? `Create your first ${singular}: an About, Pricing or Docs page.` : "Nothing has been created here yet."}
           action={
             canCreate && (
-              <Button variant="primary" size="lg" onClick={() => navigate(`/content/${typeName}/new`)}>
+              <Button variant="primary" size="lg" onClick={newPost.start}>
                 Create a {singular}
               </Button>
             )
@@ -241,6 +246,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
   return (
     <section className={`gl-content-list${moderator ? "" : " gl-content-list--contributor"}`}>
       <ListHeader title={plural} actions={newButton} />
+      {newPost.dialog}
 
       <Tabs
         label="Views"

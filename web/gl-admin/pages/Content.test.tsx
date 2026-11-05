@@ -18,6 +18,8 @@ const api = vi.hoisted(() => ({
   restorePost: vi.fn(),
   deletePostPermanently: vi.fn(),
   getAllTaxonomyTerms: vi.fn(),
+  listPostTemplates: vi.fn(),
+  createPostTemplate: vi.fn(),
 }))
 
 vi.mock("@gl-admin/lib/auth", () => ({
@@ -39,6 +41,13 @@ vi.mock("@gl-admin/lib/api/posts", () => ({
   restorePost: api.restorePost,
   deletePostPermanently: api.deletePostPermanently,
 }))
+vi.mock("@gl-admin/lib/api/postTemplates", () => ({
+  listPostTemplates: api.listPostTemplates,
+  createPostTemplate: api.createPostTemplate,
+  createPostFromTemplate: vi.fn(),
+  renamePostTemplate: vi.fn(),
+  deletePostTemplate: vi.fn(),
+}))
 vi.mock("@gl-admin/lib/api/taxonomies", () => ({
   getAllTaxonomyTerms: api.getAllTaxonomyTerms,
 }))
@@ -58,6 +67,8 @@ vi.mock("@gl-admin/lib/api/settings", () => ({
 import Content from "./Content"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { DUPLICATED_MESSAGE } from "@gl-admin/lib/contentList"
+import { ApiError } from "@gl-admin/lib/api/errors"
+import { savedTemplateMessage } from "@gl-admin/lib/postTemplates"
 
 function EditorStub() {
   const { id } = useParams()
@@ -98,6 +109,7 @@ async function render(path: string) {
         <Routes>
           <Route path="/content/:typeName" element={<Content />} />
           <Route path="/content/edit/:id" element={<EditorStub />} />
+          <Route path="/content/:typeName/new" element={<p data-testid="blank">Blank editor</p>} />
         </Routes>
       </MemoryRouter>
     )
@@ -128,6 +140,9 @@ beforeEach(() => {
   api.getCreditedAuthors.mockResolvedValue([])
   api.getAllTaxonomyTerms.mockReset()
   api.getAllTaxonomyTerms.mockResolvedValue([])
+  api.listPostTemplates.mockReset()
+  api.listPostTemplates.mockResolvedValue([])
+  api.createPostTemplate.mockReset()
 })
 
 afterEach(() => {
@@ -293,6 +308,112 @@ describe("Duplicate in the row menu (#354)", () => {
     expect(error).toHaveBeenCalledTimes(1)
     expect(container.querySelector("[data-testid='editor']")).toBeNull()
     expect(text()).toContain("Post 1")
+  })
+})
+
+describe("Post templates in the list (#322)", () => {
+  const settle = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+  const openMenu = async (title: string) => {
+    const trigger = container.querySelector<HTMLButtonElement>(`button[aria-label='Actions for ${title}']`)
+    expect(trigger).not.toBeNull()
+    await act(async () => trigger!.click())
+  }
+  const menuItems = () => Array.from(container.querySelectorAll("[role='menuitem']")).map((m) => m.textContent)
+  const choose = async (label: string) => {
+    const item = Array.from(container.querySelectorAll<HTMLElement>("[role='menuitem']")).find((m) => m.textContent?.startsWith(label))
+    expect(item).toBeDefined()
+    await act(async () => item!.click())
+    await settle()
+  }
+  const dialog = () => container.querySelector<HTMLElement>("[role='dialog']")
+  const buttonByText = (label: string) => Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find((b) => b.textContent === label)
+  async function type(input: HTMLInputElement, value: string) {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+  }
+  const template = { id: 4, post_type: "post", name: "Weekly update", terms: [], featured_image_id: null, created_by_id: 7, created_by_name: "", created_at: "", changed_at: "" }
+
+  afterEach(() => vi.restoreAllMocks())
+
+  it("saves a post as a template from its row menu, with its settings when asked", async () => {
+    const success = vi.spyOn(toast, "success")
+    api.getPosts.mockImplementation(() => list([post(1, { title: "Release notes", post_status: "published" })]))
+    api.getPostCounts.mockResolvedValue({ counts: { published: 1 }, total: 1 })
+    api.createPostTemplate.mockResolvedValue({ ...template, id: 9, name: "Release notes" })
+    await render("/content/post")
+
+    await openMenu("Release notes")
+    expect(menuItems()[2]).toContain("Save as template…")
+    await choose("Save as template…")
+    expect(dialog()?.textContent).toContain("Save as template")
+    const name = container.querySelector<HTMLInputElement>("#gl-save-template-name")!
+    expect(name.value).toBe("Release notes")
+    const settings = dialog()!.querySelector<HTMLInputElement>("input[type='checkbox']")!
+    expect(settings.checked).toBe(false)
+    await act(async () => settings.click())
+    await act(async () => buttonByText("Save template")!.click())
+    await settle()
+
+    expect(api.createPostTemplate).toHaveBeenCalledWith({ post_id: 1, name: "Release notes", with_settings: true })
+    expect(success).toHaveBeenCalledWith(savedTemplateMessage("Release notes"))
+    expect(dialog()).toBeNull()
+  })
+
+  it("keeps the dialog open on a name the type already has", async () => {
+    api.getPosts.mockImplementation(() => list([post(1, { title: "Release notes" })]))
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 1 }, total: 1 })
+    api.createPostTemplate.mockRejectedValue(new ApiError("taken", 409, null, "template_name_taken"))
+    await render("/content/post")
+
+    await openMenu("Release notes")
+    await choose("Save as template…")
+    const name = container.querySelector<HTMLInputElement>("#gl-save-template-name")!
+    await type(name, "x")
+    await act(async () => buttonByText("Save template")!.click())
+    await settle()
+    expect(api.createPostTemplate).not.toHaveBeenCalled()
+    expect(dialog()?.textContent).toContain("Use at least 3 characters.")
+
+    await type(name, "Weekly update")
+    await act(async () => buttonByText("Save template")!.click())
+    await settle()
+    expect(api.createPostTemplate).toHaveBeenCalledWith({ post_id: 1, name: "Weekly update", with_settings: false })
+    expect(dialog()?.textContent).toContain("There's already a post template named “Weekly update”.")
+  })
+
+  it("isn't offered to contributors (the API's editors-only rule)", async () => {
+    api.user.role = "contributor"
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 1 }, total: 1 })
+    await render("/content/post")
+    await openMenu("Post 1")
+    expect(menuItems().some((m) => m?.startsWith("Save as template"))).toBe(false)
+  })
+
+  it("New opens the chooser when the type has templates, else a blank post as before", async () => {
+    api.getPosts.mockImplementation(() => list([post(1)]))
+    api.getPostCounts.mockResolvedValue({ counts: { draft: 1 }, total: 1 })
+    api.listPostTemplates.mockResolvedValue([template])
+    await render("/content/post")
+    expect(api.listPostTemplates).toHaveBeenCalledWith("post")
+    await act(async () => buttonByText("New post")!.click())
+    await settle()
+    expect(dialog()?.textContent).toContain("Weekly update")
+    expect(container.querySelector("[data-testid='blank']")).toBeNull()
+
+    await act(async () => root.unmount())
+    root = createRoot(container)
+    api.listPostTemplates.mockResolvedValue([])
+    await render("/content/post")
+    await act(async () => buttonByText("New post")!.click())
+    await settle()
+    expect(dialog()).toBeNull()
+    expect(container.querySelector("[data-testid='blank']")).not.toBeNull()
   })
 })
 

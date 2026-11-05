@@ -153,16 +153,17 @@ describe("postAccess (Your access)", () => {
 })
 
 describe("rowActions", () => {
-  it("offers moderators duplicate, publish, archive and delete on a draft", () => {
-    expect(rowActions(editor, post())).toEqual(["duplicate", "publish", "archive", "trash"])
+  // #322: Save as template is the API's requireContentEditor, so contributors never get it.
+  it("offers moderators duplicate, save as template, publish, archive and delete on a draft", () => {
+    expect(rowActions(editor, post())).toEqual(["duplicate", "template", "publish", "archive", "trash"])
   })
 
   it("offers unpublish on a published post", () => {
-    expect(rowActions(editor, post({ post_status: "published" }))).toEqual(["duplicate", "unpublish", "archive", "trash"])
+    expect(rowActions(editor, post({ post_status: "published" }))).toEqual(["duplicate", "template", "unpublish", "archive", "trash"])
   })
 
   it("doesn't archive an archived post again", () => {
-    expect(rowActions(editor, post({ post_status: "archived" }))).toEqual(["duplicate", "publish", "trash"])
+    expect(rowActions(editor, post({ post_status: "archived" }))).toEqual(["duplicate", "template", "publish", "trash"])
   })
 
   it("lets a contributor only delete their own unpublished post", () => {
@@ -237,7 +238,7 @@ describe("scheduled posts", () => {
   })
 
   it("offers Publish (now) on a scheduled row, and no delete to its contributor", () => {
-    expect(rowActions(editor, post({ post_status: "scheduled" }))).toEqual(["duplicate", "publish", "archive", "trash"])
+    expect(rowActions(editor, post({ post_status: "scheduled" }))).toEqual(["duplicate", "template", "publish", "archive", "trash"])
     expect(rowActions(contributor, post({ post_status: "scheduled" }))).toEqual(["duplicate"])
   })
 })

@@ -5,6 +5,7 @@ import Modal from "@gl-admin/components/ui/Modal"
 import Button, { IconButton } from "@gl-admin/components/ui/Button"
 import { MoreIcon } from "@gl-admin/components/ui/icons"
 import { toast } from "@gl-admin/components/ui/Toast"
+import SaveTemplateDialog from "@gl-admin/components/content/SaveTemplateDialog"
 import { deletePostPermanently, duplicatePost, restorePost, trashPost, updatePost } from "@gl-admin/lib/api/posts"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { errorMessage } from "@gl-admin/lib/api/errors"
@@ -15,10 +16,11 @@ import type { Post } from "@gl-admin/lib/api/types"
 // The Posts and Pages rows' actions menu (#340): edit and duplicate (#354), then
 // whichever of publish / unpublish / archive / move to trash the user may do
 // (rowActions). In the trash (#327): restore, and delete permanently, which asks first.
-// Duplicate opens the copy in the editor.
+// Duplicate opens the copy in the editor. Save as template… (#322, moderators) opens
+// SaveTemplateDialog.
 
 // The actions that change this post and reload the list.
-type ListAction = Exclude<RowAction, "duplicate">
+type ListAction = Exclude<RowAction, "duplicate" | "template">
 
 const DESCRIPTIONS: Record<ListAction, string | undefined> = {
   publish: "Put the current version on the site",
@@ -83,6 +85,7 @@ export default function PostActions({ post, actions, editLabel, onEdit, onChange
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [savingTemplate, setSavingTemplate] = useState(false)
   const title = post.title || "Untitled"
 
   const duplicate = async () => {
@@ -112,7 +115,7 @@ export default function PostActions({ post, actions, editLabel, onEdit, onChange
   }
 
   // Move to trash and Delete permanently go last, after a separator.
-  const statusActions = actions.filter((a): a is ListAction => a !== "delete" && a !== "duplicate" && a !== "trash")
+  const statusActions = actions.filter((a): a is ListAction => a !== "delete" && a !== "duplicate" && a !== "template" && a !== "trash")
 
   return (
     <>
@@ -127,6 +130,11 @@ export default function PostActions({ post, actions, editLabel, onEdit, onChange
         {actions.includes("duplicate") && (
           <MenuItem description="A new draft you own, with the same content" onSelect={duplicate}>
             Duplicate
+          </MenuItem>
+        )}
+        {actions.includes("template") && (
+          <MenuItem description={`Start new ${noun}s from its content`} onSelect={() => setSavingTemplate(true)}>
+            Save as template…
           </MenuItem>
         )}
         {statusActions.length > 0 && <MenuSeparator />}
@@ -152,6 +160,7 @@ export default function PostActions({ post, actions, editLabel, onEdit, onChange
           </>
         )}
       </Menu>
+      <SaveTemplateDialog isOpen={savingTemplate} post={post} noun={noun} onClose={() => setSavingTemplate(false)} />
       <Modal
         isOpen={confirmDelete}
         onClose={() => !busy && setConfirmDelete(false)}
