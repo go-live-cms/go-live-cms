@@ -58,7 +58,9 @@ describe("edit access grants on an open connection (#321)", () => {
     await apiRechecks(CONTRIBUTOR)
     await waitFor(() => !client.readOnly, { what: "the upgrade" })
     expect(changes.at(-1)).toEqual({ readOnly: false, reason: "restored", revoked: false })
-    expect(client.getStatus()).toBe("connected")
+    // A promotion may reconnect (if the server dropped anything sent while read-only,
+    // HocuspocusCollaboration resyncs), so wait for the connection, not just the mode.
+    await waitFor(() => client.getStatus() === "connected", { what: "the connection after the upgrade" })
 
     appendParagraph(client.doc, "granted edit", "blk-granted-0001")
     await waitFor(() => serverParagraphs().includes("granted edit"), { what: "the edit on the server" })
