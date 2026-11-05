@@ -421,6 +421,9 @@ func (server *Server) setupRoutes() error {
 	// Posts module routes (see posts_routes.go for complete definitions)
 	server.RegisterPostRoutes(v1)
 
+	// Post templates (#322, post_templates.go): a separate table, never a post
+	server.registerPostTemplateRoutes(v1)
+
 	// Legacy taxonomy association route (moved from posts section)
 	posts := v1.Group("/posts")
 	// Same handler and rules as /posts/:id/taxonomy-terms: the working terms (#393).

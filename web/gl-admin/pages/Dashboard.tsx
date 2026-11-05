@@ -8,6 +8,7 @@ import Avatar from "@gl-admin/components/ui/Avatar"
 import Button from "@gl-admin/components/ui/Button"
 import { ChevronRightIcon, CheckIcon, DangerIcon, DocumentIcon, PageIcon, PencilIcon, UploadIcon, WarningIcon } from "@gl-admin/components/ui/icons"
 import { Byline, LastEdited } from "@gl-admin/components/content/PostMeta"
+import NewPostDialog from "@gl-admin/components/content/NewPostDialog"
 import { getPostCounts, getPosts } from "@gl-admin/lib/api/posts"
 import { getMedia } from "@gl-admin/lib/api/media"
 import { getActivity, getContinueEditing, getNeedsAttention, type ActivityEvent, type ContinueEditingPost } from "@gl-admin/lib/api/activity"
@@ -25,8 +26,9 @@ import "@gl-admin/assets/styles/pages/home.scss"
 // last worked on, from the activity log), "Needs attention" (failed scheduled publishes;
 // for editors, images without alt text and posts with unpublished changes; requests for
 // edit access to posts you own, or any post for editors, #321), the
-// Activity feed, then drafts and counts. Still waiting: presence on the recent cards
-// (who's editing now), review requests (#323) and "from a template" (#322).
+// Activity feed, then drafts and counts. "New post" offers Blank or a template (#322,
+// NewPostDialog, which is also where editors rename and delete templates). Still
+// waiting: presence on the recent cards (who's editing now) and review requests (#323).
 
 // Activity rows per page ("Show more" loads the next).
 const ACTIVITY_PAGE = 8
@@ -49,6 +51,7 @@ export default function Dashboard() {
   const settings = useSiteSettings()
   const [data, setData] = useState<HomeData | null>(null)
   const [error, setError] = useState<unknown>(null)
+  const [choosing, setChoosing] = useState(false)
   const canCreate = canCreateContent(user?.role)
   // Contributors' Home is about their own posts; editors see the whole site's.
   const own = !isContentModerator(user?.role)
@@ -109,11 +112,12 @@ export default function Dashboard() {
 
       {canCreate && (
         <section aria-label="Create" className="gl-home__create">
-          <QuickAction to="/content/post/new" icon={<PencilIcon />} accent title="New post" detail="Start a blank post" />
+          <QuickAction onClick={() => setChoosing(true)} icon={<PencilIcon />} accent title="New post" detail="Blank or from a template" />
           <QuickAction to="/content/page/new" icon={<PageIcon />} title="New page" detail="For About, Pricing, Docs" />
           <QuickAction to="/media" icon={<UploadIcon />} title="Upload media" detail="Images, video and files" />
         </section>
       )}
+      <NewPostDialog isOpen={choosing} onClose={() => setChoosing(false)} postType="post" noun="post" canManage={!own} />
 
       {error ? (
         <EmptyState variant="error" icon="close" title="Couldn't load your content" description={errorMessage(error)} />
@@ -192,9 +196,17 @@ export default function Dashboard() {
   )
 }
 
-function QuickAction({ to, icon, title, detail, accent = false }: { to: string; icon: ReactNode; title: string; detail: string; accent?: boolean }) {
-  return (
-    <Link to={to} className="gl-home__action">
+// A link, or with onClick a button (New post opens the chooser, #322).
+function QuickAction({
+  to,
+  onClick,
+  icon,
+  title,
+  detail,
+  accent = false,
+}: { icon: ReactNode; title: string; detail: string; accent?: boolean } & ({ to: string; onClick?: never } | { onClick: () => void; to?: never })) {
+  const content = (
+    <>
       <span className={`gl-home__action-icon${accent ? " gl-home__action-icon--accent" : ""}`} aria-hidden="true">
         {icon}
       </span>
@@ -202,6 +214,18 @@ function QuickAction({ to, icon, title, detail, accent = false }: { to: string; 
         <span className="gl-home__action-title">{title}</span>
         <span className="gl-home__action-detail">{detail}</span>
       </span>
+    </>
+  )
+  if (onClick) {
+    return (
+      <button type="button" className="gl-home__action" aria-haspopup="dialog" onClick={onClick}>
+        {content}
+      </button>
+    )
+  }
+  return (
+    <Link to={to} className="gl-home__action">
+      {content}
     </Link>
   )
 }
