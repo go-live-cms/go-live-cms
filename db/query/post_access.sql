@@ -100,3 +100,15 @@ RETURNING *;
 INSERT INTO post_collaborators (post_id, user_id, granted_by)
 VALUES (@post_id, @user_id, sqlc.narg(granted_by))
 ON CONFLICT (post_id, user_id) DO NOTHING;
+
+-- name: ListCollaboratorPostIDs :many
+-- The posts a member holds an edit access grant on that it applies to now
+-- (canEditAsCollaborator: someone else's published post), for the posts lists'
+-- Edit / "Can edit" (#321).
+SELECT c.post_id
+FROM post_collaborators c
+JOIN posts p ON p.id = c.post_id
+WHERE c.user_id = @user_id
+  AND p.post_status = 'published'
+  AND p.user_id <> @user_id
+ORDER BY c.post_id;

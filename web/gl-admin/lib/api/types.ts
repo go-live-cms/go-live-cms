@@ -150,6 +150,9 @@ export interface Post {
   // back. Only set while post_status is "trash".
   deleted_at?: string | null
   trashed_from_status?: string
+  // Set by the admin, not the API: the signed-in contributor holds an edit access grant
+  // on it that applies now (GET /posts/collaborations, #321; markCollaborations).
+  collaborator?: boolean
   // When a published post's scheduled update goes live (#335), UTC ISO; absent when
   // none. Lists and GET /posts/:id.
   update_at?: string | null

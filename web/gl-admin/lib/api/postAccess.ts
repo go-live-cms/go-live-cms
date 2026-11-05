@@ -79,6 +79,13 @@ export async function declineAccessRequest(postId: number, requestId: number): P
   return response.request
 }
 
+// The posts the signed-in member may edit through a grant now (published, someone
+// else's), for the posts lists. Moderators get [] (they edit everything anyway).
+export async function getCollaborations(): Promise<number[]> {
+  const response = await apiCall("/posts/collaborations")
+  return Array.isArray(response.post_ids) ? response.post_ids : []
+}
+
 export async function revokePostAccess(postId: number, userId: number): Promise<void> {
   await apiCall(`/posts/${postId}/collaborators/${userId}`, { method: "DELETE" })
 }

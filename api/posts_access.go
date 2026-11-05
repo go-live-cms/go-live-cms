@@ -23,6 +23,7 @@
 // Routes (all: requireAuth + requireContentAuthor; the per-post rule in each
 // handler):
 //
+//	GET    /posts/collaborations                                the caller's granted post ids (the posts lists)
 //	GET    /posts/:id/access                                    caller's state; reviewers also the open requests and grants
 //	POST   /posts/:id/access-requests                           {message?} → 201
 //	POST   /posts/:id/access-requests/:request_id/grant         reviewers
@@ -245,6 +246,30 @@ func (server *Server) getPostAccess(c *gin.Context) {
 
 	c.Header("Cache-Control", "no-store")
 	c.JSON(http.StatusOK, rsp)
+}
+
+// listCollaborations handles GET /posts/collaborations: the ids of the posts the
+// caller may edit through a grant now (canEditAsCollaborator), so the posts lists
+// can show them as editable. Moderators edit everything without one: [].
+//
+// Returns:
+//   - 200 OK: {"post_ids": [1, 2]}
+func (server *Server) listCollaborations(c *gin.Context) {
+	caller, ok := server.callerUser(c)
+	if !ok {
+		return
+	}
+	ids := []int64{}
+	if hasRole(caller, RoleContributor) {
+		rows, err := server.store.ListCollaboratorPostIDs(c.Request.Context(), caller.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read edit access"})
+			return
+		}
+		ids = append(ids, rows...)
+	}
+	c.Header("Cache-Control", "no-store")
+	c.JSON(http.StatusOK, gin.H{"post_ids": ids})
 }
 
 // requestPostAccess handles POST /posts/:id/access-requests: a contributor asks

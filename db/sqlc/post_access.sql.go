@@ -214,6 +214,42 @@ func (q *Queries) ListAccessRequestReviewers(ctx context.Context, arg ListAccess
 	return items, nil
 }
 
+const listCollaboratorPostIDs = `-- name: ListCollaboratorPostIDs :many
+SELECT c.post_id
+FROM post_collaborators c
+JOIN posts p ON p.id = c.post_id
+WHERE c.user_id = $1
+  AND p.post_status = 'published'
+  AND p.user_id <> $1
+ORDER BY c.post_id
+`
+
+// The posts a member holds an edit access grant on that it applies to now
+// (canEditAsCollaborator: someone else's published post), for the posts lists'
+// Edit / "Can edit" (#321).
+func (q *Queries) ListCollaboratorPostIDs(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listCollaboratorPostIDs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var post_id int64
+		if err := rows.Scan(&post_id); err != nil {
+			return nil, err
+		}
+		items = append(items, post_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingAccessRequestsForReviewer = `-- name: ListPendingAccessRequestsForReviewer :many
 SELECT r.id, r.post_id, r.message, r.created_at,
        p.title AS post_title, p.post_type,

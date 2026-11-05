@@ -38,6 +38,8 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.GET("/user/:id", auth, author, server.getPostsByUser)
 		// Who can be credited in a byline (#319, posts_authors.go)
 		posts.GET("/author-candidates", auth, author, server.listAuthorCandidates)
+		// The caller's edit access grants (#321, posts_access.go), for the lists
+		posts.GET("/collaborations", auth, author, server.listCollaborations)
 		posts.GET("/slug/:slug", auth, author, server.getPostBySlug)
 		posts.GET("/:id", auth, author, server.getPostByID)
 

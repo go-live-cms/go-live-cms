@@ -530,6 +530,44 @@ func TestAccessRequestReviewRace(t *testing.T) {
 	require.ErrorIs(t, err, db.ErrAccessRequestAnswered)
 }
 
+func collaborationIDs(t *testing.T, server *Server, caller db.User) []int64 {
+	t.Helper()
+	recorder := as(t, server, caller, http.MethodGet, "/api/v1/posts/collaborations", nil)
+	requireStatus(t, recorder, http.StatusOK)
+	var rsp struct {
+		PostIDs []int64 `json:"post_ids"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &rsp))
+	require.NotNil(t, rsp.PostIDs, "always a list")
+	return rsp.PostIDs
+}
+
+// TestListCollaborations: the posts lists learn which posts a grant lets the
+// caller edit, only while it applies (published, not trashed), and nobody
+// else's.
+func TestListCollaborations(t *testing.T) {
+	f := newAccessFixture(t, nil)
+	ctx := context.Background()
+	require.Empty(t, collaborationIDs(t, f.server, f.asker))
+
+	for _, post := range []db.Post{f.post, f.modPost} {
+		_, err := f.store.ReviewPostAccessRequestTx(ctx, db.ReviewPostAccessRequestTxParams{
+			RequestID:  decodeRequest(t, requestAccess(t, f, f.asker, post, "")).ID,
+			ReviewerID: f.editor.ID,
+			Grant:      true,
+		})
+		require.NoError(t, err)
+	}
+	require.Equal(t, []int64{f.post.ID, f.modPost.ID}, collaborationIDs(t, f.server, f.asker))
+	require.Empty(t, collaborationIDs(t, f.server, f.other), "only the caller's own grants")
+	require.Empty(t, collaborationIDs(t, f.server, f.editor), "moderators need none")
+
+	// Unpublished: the grant rests, so the list doesn't offer Edit.
+	requireStatus(t, as(t, f.server, f.editor, http.MethodPost, accessPath(f.modPost, "/unpublish"), nil), http.StatusOK)
+	require.Equal(t, []int64{f.post.ID}, collaborationIDs(t, f.server, f.asker))
+	requireStatus(t, doJSON(t, f.server, http.MethodGet, "/api/v1/posts/collaborations", nil, nil), http.StatusUnauthorized)
+}
+
 func TestMayRequestAgain(t *testing.T) {
 	now := time.Now()
 	reviewed := func(ago time.Duration) sql.NullTime { return sql.NullTime{Time: now.Add(-ago), Valid: true} }

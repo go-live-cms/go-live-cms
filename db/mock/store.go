@@ -2831,6 +2831,21 @@ func (mr *MockStoreMockRecorder) ListAuthorCandidates(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAuthorCandidates", reflect.TypeOf((*MockStore)(nil).ListAuthorCandidates), arg0, arg1)
 }
 
+// ListCollaboratorPostIDs mocks base method.
+func (m *MockStore) ListCollaboratorPostIDs(arg0 context.Context, arg1 int64) ([]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListCollaboratorPostIDs", arg0, arg1)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListCollaboratorPostIDs indicates an expected call of ListCollaboratorPostIDs.
+func (mr *MockStoreMockRecorder) ListCollaboratorPostIDs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListCollaboratorPostIDs", reflect.TypeOf((*MockStore)(nil).ListCollaboratorPostIDs), arg0, arg1)
+}
+
 // ListContinueEditing mocks base method.
 func (m *MockStore) ListContinueEditing(arg0 context.Context, arg1 db.ListContinueEditingParams) ([]db.ListContinueEditingRow, error) {
 	m.ctrl.T.Helper()

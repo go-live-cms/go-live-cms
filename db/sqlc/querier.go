@@ -355,6 +355,10 @@ type Querier interface {
 	// from auth_roles.go), matching @pattern by name or username (ILIKE, '' =
 	// everyone), for the Authors field's picker. Public fields only: contributors see it too.
 	ListAuthorCandidates(ctx context.Context, arg ListAuthorCandidatesParams) ([]ListAuthorCandidatesRow, error)
+	// The posts a member holds an edit access grant on that it applies to now
+	// (canEditAsCollaborator: someone else's published post), for the posts lists'
+	// Edit / "Can edit" (#321).
+	ListCollaboratorPostIDs(ctx context.Context, userID int64) ([]int64, error)
 	// Home's "Continue where you left off": the posts the user last worked on, newest
 	// first. "Worked on" = their created/edited/updated/version_restored/status_changed
 	// events. Those are throttled, so up to one window behind; when the user is also
