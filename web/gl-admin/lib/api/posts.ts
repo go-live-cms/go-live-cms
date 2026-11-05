@@ -45,6 +45,8 @@ export interface PostQueryParams extends PaginationParams {
   // The list filters (#327): credited in the byline, and linked to every term (comma list).
   author_id?: string | number
   terms?: string
+  // Review requested (#323): "pending" = an open review request.
+  review?: string
   with_meta?: boolean
   meta_level?: string // 'basic' | 'full' | 'all'
 }
@@ -69,6 +71,7 @@ export async function searchPosts(
     unpublished_changes?: boolean
     author_id?: string | number
     terms?: string
+    review?: string
   }
 ): Promise<ApiResponse<Post>> {
   const response = await apiCall(buildUrl("/posts/search", params))

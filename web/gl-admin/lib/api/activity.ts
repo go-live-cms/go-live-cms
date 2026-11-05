@@ -87,8 +87,20 @@ export interface NeedsAttention {
   // null for roles that can't act on them (contributors).
   unpublished_changes: AttentionList<UnpublishedChangesPost> | null
   missing_alt: { media_count: number; published_post_count: number } | null
-  // Review requests (#323): always empty until they exist.
-  review_requests: unknown[]
+  // Open review requests to review (#323): editors and admins; null otherwise.
+  review_requests: AttentionList<ReviewRequestAttention> | null
+}
+
+// One request of Needs attention (#323): "Kenji asked for a review".
+export interface ReviewRequestAttention {
+  id: number
+  post_id: number
+  title: string
+  post_type: string
+  created_at: string
+  requested_by: ActivityPerson | null
+  // It names the caller (else nobody, or someone who can't review any more).
+  assigned: boolean
 }
 
 export async function getNeedsAttention(): Promise<NeedsAttention> {
@@ -97,6 +109,6 @@ export async function getNeedsAttention(): Promise<NeedsAttention> {
     failed_schedules: response.failed_schedules ?? { total: 0, posts: [] },
     unpublished_changes: response.unpublished_changes ?? null,
     missing_alt: response.missing_alt ?? null,
-    review_requests: response.review_requests ?? [],
+    review_requests: response.review_requests ?? null,
   }
 }

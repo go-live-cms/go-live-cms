@@ -48,6 +48,11 @@ const POST_VERBS: Record<string, string> = {
   version_restored: "restored a version of",
   update_scheduled: "scheduled an update to",
   update_unscheduled: "cancelled the scheduled update of",
+  // Review requests (#323). review_resolved is the publish that resolved one.
+  review_requested: "asked for a review of",
+  review_resolved: "completed the review of",
+  review_dismissed: "dismissed the review request of",
+  review_changes_requested: "requested changes to",
 }
 
 // status_changed (PUT /posts/:id): "archived X", else "set X to draft".
@@ -72,6 +77,8 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
       // The trash (#327); deleting one for good is "deleted".
       if (event.verb === "trashed") return { verb: "moved", what: `${title} to the trash`, href }
       if (event.verb === "restored") return { verb: "restored", what: `${title} from the trash`, href }
+      // A requester withdrawing their own request (#323).
+      if (event.verb === "review_dismissed" && event.payload.withdrawn === true) return { verb: "withdrew the review request of", what: title, href }
       return { verb: POST_VERBS[event.verb] ?? fallbackVerb, what: title, href }
     }
     case "media": {
@@ -185,6 +192,30 @@ export function attentionItems(needs: NeedsAttention, now: Date = new Date(), mo
     }
   }
 
-  // #323 fills needs.review_requests; nothing to show until then.
+  // Review requests (#323), for editors and admins: theirs first, then the longest
+  // waiting. "Kenji asked for a review" · the post's title.
+  const reviews = needs.review_requests
+  if (reviews) {
+    for (const request of reviews.posts) {
+      const who = personName(request.requested_by) || "Someone"
+      items.push({
+        key: `review-${request.id}`,
+        title: request.assigned ? `${who} asked you for a review` : `${who} asked for a review`,
+        detail: request.title || "Untitled",
+        href: `/content/edit/${request.post_id}`,
+        tone: "neutral",
+      })
+    }
+    if (reviews.total > reviews.posts.length) {
+      const more = reviews.total - reviews.posts.length
+      items.push({
+        key: "review-more",
+        title: `${plural(more, "more post is", "more posts are")} waiting for a review`,
+        detail: "Open Review requested",
+        href: "/content/post?view=all&review=pending",
+        tone: "neutral",
+      })
+    }
+  }
   return items
 }

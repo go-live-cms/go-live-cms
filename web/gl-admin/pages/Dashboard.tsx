@@ -23,9 +23,9 @@ import "@gl-admin/assets/styles/pages/home.scss"
 
 // Home (#9, #340, #324): quick actions, "Continue where you left off" (the posts you
 // last worked on, from the activity log), "Needs attention" (failed scheduled publishes;
-// for editors, images without alt text and posts with unpublished changes), the
-// Activity feed, then drafts and counts. Still waiting: presence on the recent cards
-// (who's editing now), review requests (#323) and "from a template" (#322).
+// for editors, images without alt text, posts with unpublished changes and review
+// requests, #323), the Activity feed, then drafts and counts. Still waiting: presence on
+// the recent cards (who's editing now) and "from a template" (#322).
 
 // Activity rows per page ("Show more" loads the next).
 const ACTIVITY_PAGE = 8

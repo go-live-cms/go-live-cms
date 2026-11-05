@@ -244,7 +244,8 @@ export function selectionAfterBulk(results: BulkResult[]): number[] {
 
 // The list filters (#327): Author (byline), Category and Tag, from the URL (?author=,
 // ?category=, ?tag=) to the API's author_id and terms. Ids only; anything else is ignored.
-export type ListFilters = { author: string; category: string; tag: string }
+// Review requested (#323, ?review=pending): posts with an open review request.
+export type ListFilters = { author: string; category: string; tag: string; review: "" | "pending" }
 
 const ID = /^[1-9][0-9]{0,18}$/
 
@@ -253,15 +254,15 @@ export function readListFilters(params: URLSearchParams): ListFilters {
     const v = params.get(key)?.trim() ?? ""
     return ID.test(v) ? v : ""
   }
-  return { author: id("author"), category: id("category"), tag: id("tag") }
+  return { author: id("author"), category: id("category"), tag: id("tag"), review: params.get("review") === "pending" ? "pending" : "" }
 }
 
-export function filterQuery(filters: ListFilters): { author_id: string; terms: string } {
-  return { author_id: filters.author, terms: [filters.category, filters.tag].filter(Boolean).join(",") }
+export function filterQuery(filters: ListFilters): { author_id: string; terms: string; review: string } {
+  return { author_id: filters.author, terms: [filters.category, filters.tag].filter(Boolean).join(","), review: filters.review }
 }
 
 export function hasFilters(filters: ListFilters): boolean {
-  return !!(filters.author || filters.category || filters.tag)
+  return !!(filters.author || filters.category || filters.tag || filters.review)
 }
 
 // "Trashed 3 days ago" for the Trash tab's rows.

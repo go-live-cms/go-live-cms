@@ -177,6 +177,12 @@
     @include mixins.visually-hidden;
   }
 
+  // Review requested (#323), under the title's path.
+  .gl-review-pill {
+    align-self: flex-start;
+    margin-top: 2px;
+  }
+
   // Below this the table scrolls sideways inside its box (.gl-table-scroll).
   .gl-table {
     min-width: 640px;
