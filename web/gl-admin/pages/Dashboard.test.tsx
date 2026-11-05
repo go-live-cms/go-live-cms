@@ -223,7 +223,7 @@ describe("Home: Needs attention", () => {
     expect(rows.map((a) => [a.querySelector(".gl-home__row-title")?.textContent, a.getAttribute("href")])).toEqual([
       ["Kenji Tanaka asked you for a review", "/content/edit/12"],
       ["Someone asked for a review", "/content/edit/13"],
-      ["5 more posts are waiting for a review", "/content/post?view=all&review=pending"],
+      ["5 more posts are waiting for a review", "/content?review=pending"],
     ])
     expect(rows[0].textContent).toContain("How we cut image load time in half")
     expect(rows[1].textContent).toContain("Untitled")

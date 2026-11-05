@@ -52,6 +52,12 @@ const (
 // when no reviewer is named).
 const reviewRecipientLimit = 100
 
+// The notes' limits in characters, once trimmed (000039's CHECKs).
+const (
+	reviewMessageMax = 1000
+	reviewNoteMax    = 2000
+)
+
 // reviewersListLimit caps GET /posts/reviewers.
 const reviewersListLimit = 200
 

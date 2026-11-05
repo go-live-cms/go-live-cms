@@ -1,3 +1,4 @@
+import { personName } from "@gl-admin/lib/activityFeed"
 import type { ReviewPerson, ReviewRequest, ReviewRequestSummary } from "@gl-admin/lib/api/reviewRequests"
 
 // Review requests (#323): how the editor's notice, the posts list's indicator and
@@ -15,9 +16,8 @@ export const INVALID_REVIEWER = "invalid_reviewer"
 export const REVIEW_MESSAGE_MAX = 1000
 export const REVIEW_NOTE_MAX = 2000
 
-export function reviewPersonName(person: Pick<ReviewPerson, "full_name" | "username"> | null | undefined): string {
-  return (person?.full_name || person?.username || "").trim()
-}
+// A member's name as Home's feeds show it (activityFeed's personName).
+export const reviewPersonName = personName
 
 // "You", the person's name, or a fallback for a member removed since.
 function nameFor(person: ReviewPerson | null | undefined, meId: number | null | undefined, fallback: string): string {

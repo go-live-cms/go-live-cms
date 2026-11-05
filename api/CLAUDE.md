@@ -835,7 +835,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   Links: `PUBLIC_BASE_URL` + `/gl-admin/content/edit/<id>`. The answer never says who was emailed;
   logs carry ids and counts only. Activity: `review_requested` (`request_id`, `reviewer_id`),
   `review_dismissed` (`withdrawn`), `review_changes_requested`, `review_resolved` (the trigger);
-  never the notes.
+  never the notes. `ListActivity` shows the `review_*` events of a published post to reviewers and its
+  owner only, like the requests themselves.
 - `GET /home/needs-attention`'s `review_requests` (`ListReviewRequestsForReviewer`, moderators): open
   requests naming the caller, naming nobody, or naming someone who can no longer review; never their
   own, never a trashed post; theirs first, then the oldest. `GET /posts/:id/review-request` is the

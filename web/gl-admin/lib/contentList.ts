@@ -261,6 +261,16 @@ export function filterQuery(filters: ListFilters): { author_id: string; terms: s
   return { author_id: filters.author, terms: [filters.category, filters.tag].filter(Boolean).join(","), review: filters.review }
 }
 
+// The empty state of a filtered tab: what the filters ask for, in words.
+export function filterEmptyMessage(filters: ListFilters, tabLabel: string): string {
+  const terms = [filters.author && "author", filters.category && "category", filters.tag && "tag"].filter(Boolean) as string[]
+  const which = terms.length === 0 ? "" : terms.length === 1 ? terms[0] : `${terms.slice(0, -1).join(", ")} and ${terms[terms.length - 1]}`
+  if (filters.review && !which) return `Nothing in ${tabLabel} is waiting for a review.`
+  const together = terms.length > 1 ? " together" : ""
+  const review = filters.review ? " and a review request" : ""
+  return `Nothing in ${tabLabel} has that ${which}${review}${together}.`
+}
+
 export function hasFilters(filters: ListFilters): boolean {
   return !!(filters.author || filters.category || filters.tag || filters.review)
 }

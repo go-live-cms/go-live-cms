@@ -212,7 +212,7 @@ export function attentionItems(needs: NeedsAttention, now: Date = new Date(), mo
         key: "review-more",
         title: `${plural(more, "more post is", "more posts are")} waiting for a review`,
         detail: "Open Review requested",
-        href: "/content/post?view=all&review=pending",
+        href: "/content?review=pending",
         tone: "neutral",
       })
     }

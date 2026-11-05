@@ -15,6 +15,9 @@ type Props = {
   // "Approve and publish" or "Approve and update": the Publish button's path, which
   // resolves the request.
   published: boolean
+  // False for an archived post: the top bar has no Publish for it (Restore to drafts
+  // first), so the banner doesn't offer one either.
+  publishable: boolean
   onPublish: () => void
   onRequestChanges: () => void
   onDismiss: () => void
@@ -24,11 +27,11 @@ type Props = {
   busy: boolean
 }
 
-export default function ReviewRequestNotice({ request, viewer, published, onPublish, onRequestChanges, onDismiss, onRequestAgain, connected, busy }: Props) {
+export default function ReviewRequestNotice({ request, viewer, published, publishable, onPublish, onRequestChanges, onDismiss, onRequestAgain, connected, busy }: Props) {
   const notice = reviewNotice(request, viewer)
   if (!notice) return null
 
-  const actions = notice.actions.map((action) => {
+  const actions = notice.actions.filter((action) => publishable || action !== "publish").map((action) => {
     switch (action) {
       case "publish":
         return (

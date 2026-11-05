@@ -398,7 +398,8 @@ are the most fragile part of the codebase. **Before editing anything under
   both open `RequestReviewDialog` (`components/editor/ui/ReviewDialogs.tsx`: reviewer, "Any editor or
   admin" by default, and an optional note). `PostForm` reads `GET /posts/:id/review-request` on open,
   after a publish (which resolves it, the API's trigger) and when the tab is shown again, and renders
-  `ReviewRequestNotice`: reviewers get Approve and publish/update (the Publish button's path),
+  `ReviewRequestNotice`: reviewers get Approve and publish/update (the Publish button's path; not on an
+  archived post, which has no Publish),
   Request changes (`RequestChangesDialog`, a required plain-text note; comments #192 aren't built) and
   Dismiss; the requester Withdraw request; after changes are requested, the note (warning tone) and
   Request review again. The top bar shows a "Review requested" pill. The posts list's rows show

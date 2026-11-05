@@ -144,6 +144,68 @@ func (q *Queries) GetReviewRequest(ctx context.Context, id int64) (ReviewRequest
 	return i, err
 }
 
+const getReviewRequestDetail = `-- name: GetReviewRequestDetail :one
+SELECT rr.id, rr.post_id, rr.status, rr.message, rr.resolution_note, rr.created_at, rr.resolved_at,
+    rr.requested_by, rq.username AS requester_username, rq.full_name AS requester_full_name, rq.avatar_url AS requester_avatar_url,
+    rr.reviewer_id, rv.username AS reviewer_username, rv.full_name AS reviewer_full_name, rv.avatar_url AS reviewer_avatar_url,
+    rr.resolved_by, rs.username AS resolver_username, rs.full_name AS resolver_full_name, rs.avatar_url AS resolver_avatar_url
+FROM review_requests rr
+LEFT JOIN users rq ON rq.id = rr.requested_by
+LEFT JOIN users rv ON rv.id = rr.reviewer_id
+LEFT JOIN users rs ON rs.id = rr.resolved_by
+WHERE rr.id = $1
+`
+
+type GetReviewRequestDetailRow struct {
+	ID                 int64          `json:"id"`
+	PostID             int64          `json:"post_id"`
+	Status             string         `json:"status"`
+	Message            string         `json:"message"`
+	ResolutionNote     string         `json:"resolution_note"`
+	CreatedAt          time.Time      `json:"created_at"`
+	ResolvedAt         sql.NullTime   `json:"resolved_at"`
+	RequestedBy        sql.NullInt64  `json:"requested_by"`
+	RequesterUsername  sql.NullString `json:"requester_username"`
+	RequesterFullName  sql.NullString `json:"requester_full_name"`
+	RequesterAvatarUrl sql.NullString `json:"requester_avatar_url"`
+	ReviewerID         sql.NullInt64  `json:"reviewer_id"`
+	ReviewerUsername   sql.NullString `json:"reviewer_username"`
+	ReviewerFullName   sql.NullString `json:"reviewer_full_name"`
+	ReviewerAvatarUrl  sql.NullString `json:"reviewer_avatar_url"`
+	ResolvedBy         sql.NullInt64  `json:"resolved_by"`
+	ResolverUsername   sql.NullString `json:"resolver_username"`
+	ResolverFullName   sql.NullString `json:"resolver_full_name"`
+	ResolverAvatarUrl  sql.NullString `json:"resolver_avatar_url"`
+}
+
+// One request with GetCurrentReviewRequest's columns (the response after a write).
+func (q *Queries) GetReviewRequestDetail(ctx context.Context, id int64) (GetReviewRequestDetailRow, error) {
+	row := q.db.QueryRowContext(ctx, getReviewRequestDetail, id)
+	var i GetReviewRequestDetailRow
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.Status,
+		&i.Message,
+		&i.ResolutionNote,
+		&i.CreatedAt,
+		&i.ResolvedAt,
+		&i.RequestedBy,
+		&i.RequesterUsername,
+		&i.RequesterFullName,
+		&i.RequesterAvatarUrl,
+		&i.ReviewerID,
+		&i.ReviewerUsername,
+		&i.ReviewerFullName,
+		&i.ReviewerAvatarUrl,
+		&i.ResolvedBy,
+		&i.ResolverUsername,
+		&i.ResolverFullName,
+		&i.ResolverAvatarUrl,
+	)
+	return i, err
+}
+
 const listOpenReviewRequestsForPosts = `-- name: ListOpenReviewRequestsForPosts :many
 SELECT rr.id, rr.post_id, rr.created_at,
     rr.requested_by, rq.username AS requester_username, rq.full_name AS requester_full_name,

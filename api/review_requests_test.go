@@ -119,6 +119,9 @@ func TestReviewRequestPermissions(t *testing.T) {
 	// Unknown fields and an overlong message are refused.
 	requireStatus(t, as(t, server, owner, http.MethodPost, reviewPath(draft.ID), gin.H{"reviewer": 1}), http.StatusBadRequest)
 	requireStatus(t, as(t, server, owner, http.MethodPost, reviewPath(draft.ID), gin.H{"message": strings.Repeat("x", 1001)}), http.StatusBadRequest)
+	// The limit counts the trimmed note.
+	padded := scheduleDraft(t, store, owner, scheduleWord())
+	requestReviewAs(t, server, owner, padded.ID, gin.H{"message": "  " + strings.Repeat("é", 1000) + "\n\n"})
 
 	// The owner asks, naming a reviewer, with a note.
 	created := requestReviewAs(t, server, owner, draft.ID, gin.H{"reviewer_id": reviewer.ID, "message": "  Ready for a look  "})
@@ -327,7 +330,11 @@ func TestReviewRequestDismissAndChangesRequested(t *testing.T) {
 	withdrawn := requestReviewAs(t, server, owner, post.ID, nil)
 	recorder := as(t, server, owner, http.MethodPost, dismissPath(withdrawn.ID), nil)
 	requireStatus(t, recorder, http.StatusOK)
-	require.Equal(t, db.ReviewStatusDismissed, decodeReview(t, recorder).ReviewRequest.Status)
+	dismissed := decodeReview(t, recorder).ReviewRequest
+	require.Equal(t, db.ReviewStatusDismissed, dismissed.Status)
+	// The answer names people like every other one.
+	require.Equal(t, owner.Username, dismissed.RequestedBy.Username)
+	require.Equal(t, owner.Username, dismissed.ResolvedBy.Username)
 	require.Equal(t, sql.NullInt64{Int64: owner.ID, Valid: true}, loadReviewRow(t, conn, withdrawn.ID).ResolvedBy)
 	// Resolved: dismissing or asking for changes again is a 409.
 	again := as(t, server, editor, http.MethodPost, dismissPath(withdrawn.ID), nil)
@@ -624,6 +631,21 @@ func TestReviewRequestListIndicatorAndFilter(t *testing.T) {
 	require.NotNil(t, find(searched, pending.ID).ReviewRequest)
 
 	requireStatus(t, as(t, server, editor, http.MethodGet, "/api/v1/posts?review=maybe", nil), http.StatusBadRequest)
+
+	// The activity log follows the same rule: another contributor may read the published
+	// post's events, but not its review requests.
+	verbsFor := func(caller db.User) []string {
+		t.Helper()
+		page := getActivity(t, server, caller, fmt.Sprintf("?post_id=%d&limit=50", pending.ID))
+		var verbs []string
+		for _, e := range page.Activity {
+			verbs = append(verbs, e.Verb)
+		}
+		return verbs
+	}
+	require.Contains(t, verbsFor(owner), db.ActivityReviewRequested)
+	require.Contains(t, verbsFor(editor), db.ActivityReviewRequested)
+	require.NotContains(t, verbsFor(other), db.ActivityReviewRequested)
 }
 
 func TestReviewRequestEmailTemplates(t *testing.T) {

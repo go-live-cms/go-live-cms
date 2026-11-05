@@ -62,7 +62,9 @@ WHERE (sqlc.narg(before_id)::bigint IS NULL OR a.id < sqlc.narg(before_id)::bigi
     OR (a.object_type = 'post' AND (
           @is_moderator::boolean
           OR p.user_id = @viewer_id::bigint
-          OR p.post_status = 'published'))
+          -- Review requests (#323) are seen by reviewers and the post's owner only
+          -- (canSeeReviewRequests), not by every reader of a published post.
+          OR (p.post_status = 'published' AND a.verb NOT LIKE 'review\_%')))
     OR (a.object_type = 'media' AND (
           @is_moderator::boolean
           OR m.user_id = @viewer_id::bigint))

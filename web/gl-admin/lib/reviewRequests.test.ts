@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { ReviewRequest } from "@gl-admin/lib/api/reviewRequests"
-import { readListFilters, filterQuery, hasFilters } from "@gl-admin/lib/contentList"
+import { filterEmptyMessage, readListFilters, filterQuery, hasFilters } from "@gl-admin/lib/contentList"
 import {
   ANY_REVIEWER,
   reviewErrorMessage,
@@ -129,5 +129,15 @@ describe("the posts list's Review requested filter", () => {
     expect(filterQuery(filters)).toEqual({ author_id: "3", terms: "", review: "pending" })
     expect(readListFilters(new URLSearchParams("review=yes")).review).toBe("")
     expect(hasFilters(readListFilters(new URLSearchParams("")))).toBe(false)
+  })
+})
+
+describe("the filtered list's empty state", () => {
+  it("says what the filters ask for", () => {
+    const f = (q: string) => filterEmptyMessage(readListFilters(new URLSearchParams(q)), "Drafts")
+    expect(f("review=pending")).toBe("Nothing in Drafts is waiting for a review.")
+    expect(f("author=3")).toBe("Nothing in Drafts has that author.")
+    expect(f("author=3&category=4&tag=5")).toBe("Nothing in Drafts has that author, category and tag together.")
+    expect(f("tag=5&review=pending")).toBe("Nothing in Drafts has that tag and a review request.")
   })
 })

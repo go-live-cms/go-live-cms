@@ -40,6 +40,18 @@ WHERE rr.id = (SELECT max(l.id) FROM review_requests l WHERE l.post_id = sqlc.ar
          OR (rr.status = 'changes_requested'
              AND NOT EXISTS (SELECT 1 FROM post_versions v WHERE v.post_id = rr.post_id AND v.created_at > rr.resolved_at)));
 
+-- name: GetReviewRequestDetail :one
+-- One request with GetCurrentReviewRequest's columns (the response after a write).
+SELECT rr.id, rr.post_id, rr.status, rr.message, rr.resolution_note, rr.created_at, rr.resolved_at,
+    rr.requested_by, rq.username AS requester_username, rq.full_name AS requester_full_name, rq.avatar_url AS requester_avatar_url,
+    rr.reviewer_id, rv.username AS reviewer_username, rv.full_name AS reviewer_full_name, rv.avatar_url AS reviewer_avatar_url,
+    rr.resolved_by, rs.username AS resolver_username, rs.full_name AS resolver_full_name, rs.avatar_url AS resolver_avatar_url
+FROM review_requests rr
+LEFT JOIN users rq ON rq.id = rr.requested_by
+LEFT JOIN users rv ON rv.id = rr.reviewer_id
+LEFT JOIN users rs ON rs.id = rr.resolved_by
+WHERE rr.id = $1;
+
 -- name: ListOpenReviewRequestsForPosts :many
 -- The posts list's "Review requested" indicator, for one page of rows.
 SELECT rr.id, rr.post_id, rr.created_at,

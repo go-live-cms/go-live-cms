@@ -2177,6 +2177,21 @@ func (mr *MockStoreMockRecorder) GetReviewRequest(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReviewRequest", reflect.TypeOf((*MockStore)(nil).GetReviewRequest), arg0, arg1)
 }
 
+// GetReviewRequestDetail mocks base method.
+func (m *MockStore) GetReviewRequestDetail(arg0 context.Context, arg1 int64) (db.GetReviewRequestDetailRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReviewRequestDetail", arg0, arg1)
+	ret0, _ := ret[0].(db.GetReviewRequestDetailRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetReviewRequestDetail indicates an expected call of GetReviewRequestDetail.
+func (mr *MockStoreMockRecorder) GetReviewRequestDetail(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReviewRequestDetail", reflect.TypeOf((*MockStore)(nil).GetReviewRequestDetail), arg0, arg1)
+}
+
 // GetSession mocks base method.
 func (m *MockStore) GetSession(arg0 context.Context, arg1 uuid.UUID) (db.Session, error) {
 	m.ctrl.T.Helper()

@@ -1113,6 +1113,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           request={reviewRequest}
           viewer={{ id: me?.id, canReview: canPublish, canRequest: canRequestReview }}
           published={formData.post_status === "published"}
+          publishable={formData.post_status !== "archived"}
           onPublish={handlePublish}
           onRequestChanges={() => setRequestChangesOpen(true)}
           onDismiss={handleDismissReview}

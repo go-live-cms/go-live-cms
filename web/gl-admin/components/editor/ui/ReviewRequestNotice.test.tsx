@@ -43,9 +43,9 @@ const open: ReviewRequest = {
   resolved_by: null,
 }
 
-function renderNotice(request: ReviewRequest | null, viewer: { id: number; canReview: boolean; canRequest: boolean }, published = false) {
+function renderNotice(request: ReviewRequest | null, viewer: { id: number; canReview: boolean; canRequest: boolean }, published = false, publishable = true) {
   const handlers = { onPublish: vi.fn(), onRequestChanges: vi.fn(), onDismiss: vi.fn(), onRequestAgain: vi.fn() }
-  act(() => root.render(<ReviewRequestNotice request={request} viewer={viewer} published={published} connected busy={false} {...handlers} />))
+  act(() => root.render(<ReviewRequestNotice request={request} viewer={viewer} published={published} publishable={publishable} connected busy={false} {...handlers} />))
   return handlers
 }
 const buttons = () => Array.from(container.querySelectorAll("button")).map((b) => b.textContent)
@@ -77,6 +77,11 @@ describe("ReviewRequestNotice", () => {
   it("says Approve and update on a published post", () => {
     renderNotice(open, { id: 2, canReview: true, canRequest: true }, true)
     expect(buttons()[0]).toBe("Approve and update")
+  })
+
+  it("offers no publish on an archived post (Restore to drafts first)", () => {
+    renderNotice(open, { id: 2, canReview: true, canRequest: true }, false, false)
+    expect(buttons()).toEqual(["Request changes", "Dismiss"])
   })
 
   it("lets the requester withdraw", () => {

@@ -40,6 +40,7 @@ import {
   SORT_OPTIONS,
   bulkActions,
   bulkReport,
+  filterEmptyMessage,
   filterQuery,
   findSort,
   findTab,
@@ -501,7 +502,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
                   compact
                   icon={<DocumentIcon size={24} />}
                   title={`No ${plural.toLowerCase()} match these filters`}
-                  description={`Nothing in ${tab.label} has that author, category and tag together.`}
+                  description={filterEmptyMessage(filters, tab.label)}
                   action={
                     <Button variant="secondary" onClick={clearFilters}>
                       Clear filters

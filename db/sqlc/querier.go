@@ -260,6 +260,8 @@ type Querier interface {
 	// shape of GetPostTaxonomyTerms.
 	GetPublishedPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPublishedPostTaxonomyTermsRow, error)
 	GetReviewRequest(ctx context.Context, id int64) (ReviewRequest, error)
+	// One request with GetCurrentReviewRequest's columns (the response after a write).
+	GetReviewRequestDetail(ctx context.Context, id int64) (GetReviewRequestDetailRow, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash []byte) (Session, error)
 	GetSessionForUpdate(ctx context.Context, id uuid.UUID) (Session, error)

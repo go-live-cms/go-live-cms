@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -28,14 +29,17 @@ func (server *Server) registerReviewRequestRoutes(v1 *gin.RouterGroup) {
 type CreateReviewRequestRequest struct {
 	// ReviewerID names an editor or admin; absent or 0 = any of them.
 	ReviewerID int64 `json:"reviewer_id" binding:"omitempty,min=1"`
-	// Message is an optional note for the reviewer, plain text.
-	Message string `json:"message" binding:"max=1000"`
+	// Message is an optional note for the reviewer, plain text: at most
+	// reviewMessageMax characters once trimmed (requestReview checks; the binding
+	// only bounds the body).
+	Message string `json:"message" binding:"max=4000"`
 }
 
 // RequestReviewChangesRequest is POST /review-requests/:id/request-changes's body.
 type RequestReviewChangesRequest struct {
-	// Note says what to change, plain text (comments, #192, aren't built).
-	Note string `json:"note" binding:"required,max=2000"`
+	// Note says what to change, plain text (comments, #192, aren't built): at most
+	// reviewNoteMax characters once trimmed.
+	Note string `json:"note" binding:"required,max=8000"`
 }
 
 // currentReviewRequest reads the post's current request for a response; nil
@@ -55,12 +59,12 @@ func (server *Server) currentReviewRequest(c *gin.Context, postID int64) (*Revie
 // reviewRequestResponseFor is the response after a write: the request with its
 // names, re-read; just the ids if that read fails (the write stands).
 func (server *Server) reviewRequestResponseFor(c *gin.Context, rr db.ReviewRequest) ReviewRequestResponse {
-	if rr.Status == db.ReviewStatusOpen || rr.Status == db.ReviewStatusChangesRequested {
-		if current, err := server.currentReviewRequest(c, rr.PostID); err == nil && current != nil && current.ID == rr.ID {
-			return *current
-		}
+	row, err := server.store.GetReviewRequestDetail(c.Request.Context(), rr.ID)
+	if err != nil {
+		server.requestLog(c).Warn("re-reading the review request failed", "review_request_id", rr.ID, "error", err)
+		return reviewRequestFromRow(rr)
 	}
-	return reviewRequestFromRow(rr)
+	return toReviewRequestResponse(db.GetCurrentReviewRequestRow(row))
 }
 
 // getPostReviewRequest handles GET /posts/:id/review-request: the post's open
@@ -153,6 +157,12 @@ func (server *Server) requestReview(c *gin.Context) {
 		return
 	}
 
+	message := strings.TrimSpace(req.Message)
+	if utf8.RuneCountInString(message) > reviewMessageMax {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "message must be at most 1000 characters", "fields": gin.H{"message": "must be at most 1000 characters"}})
+		return
+	}
+
 	reviewer := sql.NullInt64{}
 	if req.ReviewerID != 0 {
 		named, err := server.store.GetUser(ctx, req.ReviewerID)
@@ -174,7 +184,7 @@ func (server *Server) requestReview(c *gin.Context) {
 		PostID:      id,
 		RequestedBy: sql.NullInt64{Int64: caller.ID, Valid: true},
 		ReviewerID:  reviewer,
-		Message:     strings.TrimSpace(req.Message),
+		Message:     message,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		// One open request per post (000039). Answer with it, so the editor shows it.
@@ -309,6 +319,10 @@ func (server *Server) requestReviewChanges(c *gin.Context) {
 	note := strings.TrimSpace(req.Note)
 	if note == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "note is required", "fields": gin.H{"note": "is required"}})
+		return
+	}
+	if utf8.RuneCountInString(note) > reviewNoteMax {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note must be at most 2000 characters", "fields": gin.H{"note": "must be at most 2000 characters"}})
 		return
 	}
 	rr, post, caller, ok := server.loadReviewRequest(c)
