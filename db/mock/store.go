@@ -318,6 +318,20 @@ func (mr *MockStoreMockRecorder) ConfirmEmailChangeTx(arg0, arg1 interface{}) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfirmEmailChangeTx", reflect.TypeOf((*MockStore)(nil).ConfirmEmailChangeTx), arg0, arg1)
 }
 
+// CopyPostCategoryTermsToTemplate mocks base method.
+func (m *MockStore) CopyPostCategoryTermsToTemplate(arg0 context.Context, arg1 db.CopyPostCategoryTermsToTemplateParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CopyPostCategoryTermsToTemplate", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CopyPostCategoryTermsToTemplate indicates an expected call of CopyPostCategoryTermsToTemplate.
+func (mr *MockStoreMockRecorder) CopyPostCategoryTermsToTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyPostCategoryTermsToTemplate", reflect.TypeOf((*MockStore)(nil).CopyPostCategoryTermsToTemplate), arg0, arg1)
+}
+
 // CopyPostFeaturedImage mocks base method.
 func (m *MockStore) CopyPostFeaturedImage(arg0 context.Context, arg1 db.CopyPostFeaturedImageParams) error {
 	m.ctrl.T.Helper()
@@ -358,6 +372,20 @@ func (m *MockStore) CopyPostTaxonomyTerms(arg0 context.Context, arg1 db.CopyPost
 func (mr *MockStoreMockRecorder) CopyPostTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyPostTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).CopyPostTaxonomyTerms), arg0, arg1)
+}
+
+// CopyTemplateTermsToPost mocks base method.
+func (m *MockStore) CopyTemplateTermsToPost(arg0 context.Context, arg1 db.CopyTemplateTermsToPostParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CopyTemplateTermsToPost", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CopyTemplateTermsToPost indicates an expected call of CopyTemplateTermsToPost.
+func (mr *MockStoreMockRecorder) CopyTemplateTermsToPost(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyTemplateTermsToPost", reflect.TypeOf((*MockStore)(nil).CopyTemplateTermsToPost), arg0, arg1)
 }
 
 // CountEmailChangeTokensSince mocks base method.
@@ -735,6 +763,21 @@ func (mr *MockStoreMockRecorder) CreatePasswordResetToken(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePasswordResetToken", reflect.TypeOf((*MockStore)(nil).CreatePasswordResetToken), arg0, arg1)
 }
 
+// CreatePostFromTemplateTx mocks base method.
+func (m *MockStore) CreatePostFromTemplateTx(arg0 context.Context, arg1 db.CreatePostFromTemplateTxParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePostFromTemplateTx", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePostFromTemplateTx indicates an expected call of CreatePostFromTemplateTx.
+func (mr *MockStoreMockRecorder) CreatePostFromTemplateTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostFromTemplateTx", reflect.TypeOf((*MockStore)(nil).CreatePostFromTemplateTx), arg0, arg1)
+}
+
 // CreatePostMedia mocks base method.
 func (m *MockStore) CreatePostMedia(arg0 context.Context, arg1 db.CreatePostMediaParams) (db.PostMedium, error) {
 	m.ctrl.T.Helper()
@@ -763,6 +806,36 @@ func (m *MockStore) CreatePostMeta(arg0 context.Context, arg1 db.CreatePostMetaP
 func (mr *MockStoreMockRecorder) CreatePostMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostMeta", reflect.TypeOf((*MockStore)(nil).CreatePostMeta), arg0, arg1)
+}
+
+// CreatePostTemplate mocks base method.
+func (m *MockStore) CreatePostTemplate(arg0 context.Context, arg1 db.CreatePostTemplateParams) (db.PostTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePostTemplate", arg0, arg1)
+	ret0, _ := ret[0].(db.PostTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePostTemplate indicates an expected call of CreatePostTemplate.
+func (mr *MockStoreMockRecorder) CreatePostTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostTemplate", reflect.TypeOf((*MockStore)(nil).CreatePostTemplate), arg0, arg1)
+}
+
+// CreatePostTemplateTx mocks base method.
+func (m *MockStore) CreatePostTemplateTx(arg0 context.Context, arg1 db.CreatePostTemplateTxParams) (db.PostTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePostTemplateTx", arg0, arg1)
+	ret0, _ := ret[0].(db.PostTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePostTemplateTx indicates an expected call of CreatePostTemplateTx.
+func (mr *MockStoreMockRecorder) CreatePostTemplateTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostTemplateTx", reflect.TypeOf((*MockStore)(nil).CreatePostTemplateTx), arg0, arg1)
 }
 
 // CreatePostTx mocks base method.
@@ -1227,6 +1300,21 @@ func (m *MockStore) DeletePostMeta(arg0 context.Context, arg1 db.DeletePostMetaP
 func (mr *MockStoreMockRecorder) DeletePostMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostMeta", reflect.TypeOf((*MockStore)(nil).DeletePostMeta), arg0, arg1)
+}
+
+// DeletePostTemplate mocks base method.
+func (m *MockStore) DeletePostTemplate(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePostTemplate", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeletePostTemplate indicates an expected call of DeletePostTemplate.
+func (mr *MockStoreMockRecorder) DeletePostTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostTemplate", reflect.TypeOf((*MockStore)(nil).DeletePostTemplate), arg0, arg1)
 }
 
 // DeletePostTx mocks base method.
@@ -1920,6 +2008,21 @@ func (m *MockStore) GetPostTaxonomyTerms(arg0 context.Context, arg1 int64) ([]db
 func (mr *MockStoreMockRecorder) GetPostTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).GetPostTaxonomyTerms), arg0, arg1)
+}
+
+// GetPostTemplate mocks base method.
+func (m *MockStore) GetPostTemplate(arg0 context.Context, arg1 int64) (db.PostTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostTemplate", arg0, arg1)
+	ret0, _ := ret[0].(db.PostTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostTemplate indicates an expected call of GetPostTemplate.
+func (mr *MockStoreMockRecorder) GetPostTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostTemplate", reflect.TypeOf((*MockStore)(nil).GetPostTemplate), arg0, arg1)
 }
 
 // GetPostType mocks base method.
@@ -2834,6 +2937,21 @@ func (mr *MockStoreMockRecorder) ListPostBylineAuthors(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostBylineAuthors", reflect.TypeOf((*MockStore)(nil).ListPostBylineAuthors), arg0, arg1)
 }
 
+// ListPostTemplates mocks base method.
+func (m *MockStore) ListPostTemplates(arg0 context.Context, arg1 db.ListPostTemplatesParams) ([]db.ListPostTemplatesRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostTemplates", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostTemplatesRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostTemplates indicates an expected call of ListPostTemplates.
+func (mr *MockStoreMockRecorder) ListPostTemplates(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostTemplates", reflect.TypeOf((*MockStore)(nil).ListPostTemplates), arg0, arg1)
+}
+
 // ListPostTypes mocks base method.
 func (m *MockStore) ListPostTypes(arg0 context.Context) ([]db.PostType, error) {
 	m.ctrl.T.Helper()
@@ -3468,6 +3586,21 @@ func (m *MockStore) RemoveUserTx(arg0 context.Context, arg1 db.RemoveUserTxParam
 func (mr *MockStoreMockRecorder) RemoveUserTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveUserTx", reflect.TypeOf((*MockStore)(nil).RemoveUserTx), arg0, arg1)
+}
+
+// RenamePostTemplate mocks base method.
+func (m *MockStore) RenamePostTemplate(arg0 context.Context, arg1 db.RenamePostTemplateParams) (db.PostTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RenamePostTemplate", arg0, arg1)
+	ret0, _ := ret[0].(db.PostTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RenamePostTemplate indicates an expected call of RenamePostTemplate.
+func (mr *MockStoreMockRecorder) RenamePostTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RenamePostTemplate", reflect.TypeOf((*MockStore)(nil).RenamePostTemplate), arg0, arg1)
 }
 
 // RenewUserInvitation mocks base method.

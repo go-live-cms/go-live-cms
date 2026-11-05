@@ -54,6 +54,9 @@ type Querier interface {
 	ClaimUserInvitation(ctx context.Context, tokenHash []byte) (UserInvitation, error)
 	// Frees a location for another menu (assigning a location moves it).
 	ClearMenuLocation(ctx context.Context, arg ClearMenuLocationParams) error
+	// The source's category terms (taxonomy "category"), the template's saved
+	// category. Tags and other taxonomies describe one post, not a kind of post.
+	CopyPostCategoryTermsToTemplate(ctx context.Context, arg CopyPostCategoryTermsToTemplateParams) error
 	// The featured image is the order-0 post_media link plus its _thumbnail_*
 	// meta (setFeaturedImage). The content image links (order > 0) are synced
 	// from the copy's block_doc instead (SyncPostContentMedia).
@@ -62,6 +65,8 @@ type Querier interface {
 	// Duplicating a post (#354, DuplicatePostTx): the copy's relationship rows,
 	// read from the source inside the same transaction as the insert.
 	CopyPostTaxonomyTerms(ctx context.Context, arg CopyPostTaxonomyTermsParams) error
+	// A post made from a template gets its saved category.
+	CopyTemplateTermsToPost(ctx context.Context, arg CopyTemplateTermsToPostParams) error
 	CountEmailChangeTokensSince(ctx context.Context, arg CountEmailChangeTokensSinceParams) (int64, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	// The total for GET /media: the rows ListMedia pages through, same filters.
@@ -112,6 +117,9 @@ type Querier interface {
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
+	// Post templates (#322, 000039). A template is not a post: nothing in post.sql
+	// or the public queries reads these tables.
+	CreatePostTemplate(ctx context.Context, arg CreatePostTemplateParams) (PostTemplate, error)
 	CreatePostType(ctx context.Context, arg CreatePostTypeParams) (PostType, error)
 	CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
@@ -148,6 +156,7 @@ type Querier interface {
 	DeletePostMediaByOrder(ctx context.Context, arg DeletePostMediaByOrderParams) error
 	DeletePostMedias(ctx context.Context, postID int64) error
 	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
+	DeletePostTemplate(ctx context.Context, id int64) (int64, error)
 	DeletePostType(ctx context.Context, name string) error
 	DeleteTaxonomyTerm(ctx context.Context, id int64) error
 	DeleteTaxonomyType(ctx context.Context, name string) error
@@ -215,6 +224,7 @@ type Querier interface {
 	// alone, without reading the post's body.
 	GetPostStatus(ctx context.Context, id int64) (string, error)
 	GetPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPostTaxonomyTermsRow, error)
+	GetPostTemplate(ctx context.Context, id int64) (PostTemplate, error)
 	GetPostType(ctx context.Context, name string) (PostType, error)
 	GetPostTypeByID(ctx context.Context, id int64) (PostType, error)
 	GetPostVersion(ctx context.Context, arg GetPostVersionParams) (GetPostVersionRow, error)
@@ -368,6 +378,10 @@ type Querier interface {
 	// A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
 	// the Authors field. Public fields only (the avatar, #334, included).
 	ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error)
+	// Without block_doc (the chooser doesn't need it), with the saved category's
+	// names and who saved it. With id, that one template (the create and rename
+	// responses).
+	ListPostTemplates(ctx context.Context, arg ListPostTemplatesParams) ([]ListPostTemplatesRow, error)
 	ListPostTypes(ctx context.Context) ([]PostType, error)
 	// One row at most per post (the primary key). The ORDER BY below names every column
 	// with p.: su has a created_at too, and may gain others.
@@ -488,6 +502,7 @@ type Querier interface {
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
+	RenamePostTemplate(ctx context.Context, arg RenamePostTemplateParams) (PostTemplate, error)
 	// Resend: a new token (the old link stops working) and a new expiry.
 	RenewUserInvitation(ctx context.Context, arg RenewUserInvitationParams) (UserInvitation, error)
 	// File-only update used by POST /media/:id/replace: swaps the columns that

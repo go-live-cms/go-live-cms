@@ -233,8 +233,12 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   with **every block id regenerated** (`regenerateBlockIDs`: keys, `id`,
   `blocks_order`, `children`, every `data-block-id` in `pm`). Never versions, comments,
   other meta or `post_ydoc_state`: the collab server seeds the copy from `block_doc`.
-  The writes are one transaction (`DuplicatePostTx`); `copyPost` is the reusable part
-  (templates, #322). `duplicatePost.vectors.json` (web) is shared with the collab test.
+  The writes are one transaction (`DuplicatePostTx`); `newPostCopy` is the reusable part
+  (shared with templates, #322, below). `duplicatePost.vectors.json` (web) is shared with
+  the collab tests.
+- **`POST /post-templates/:id/posts`** (#322) is the third: a post made from a template,
+  built by the same `newPostCopy` (fresh block ids, unique slug and url) and seeded by the
+  collab server like any new post. See "Post templates" below.
 - **Tickets:** `POST /collab/tickets` uses `canReadPost` (moderators any post, contributors
   their own and published ones, #393): contributors get a read-only live view of others'
   published posts, never their drafts. The ticket
@@ -757,6 +761,37 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - Tests: `scheduled_update_test.go` (real DB: the frozen snapshot vs a later edit, public unchanged
   before the time, two replicas, fencing, failure + retry, the loop, routes and roles) and
   `posts_unpublished_changes_test.go` (the detail field, public presenters).
+
+## Post templates (#322, `000039`, `post_templates.go`)
+
+- **Storage (decision): their own table, `post_templates`** (+ `post_template_terms`), not
+  posts with a template status. Every read of `posts` (admin lists, counts, search and its
+  index triggers, every `/public` route, sitemap, feeds, menus, related/adjacent, term and
+  author archives, "Used in", the activity feeds, the scheduler, the collab server; #394's
+  map, and #327's trash filtering shows what a status costs) would have to leave a template
+  status out, and every new query would have to remember to. A row in another table can't
+  leak through any of them. No collab document either: a template is a snapshot.
+- A template: `post_type` (FK `post_types.name`, cascades), `name` (3–120 characters, one
+  line, unique per type case-insensitively → 409 `template_name_taken`), `block_doc`, and
+  optionally the source's settings: `featured_media_id` (`ON DELETE SET NULL`) and its
+  **category** terms (taxonomy `category`; tags describe one post, not a kind of post).
+  `created_by` (`SET NULL` on removal).
+- Routes: `GET /post-templates?type=` (any content role: the new-post chooser), `POST
+  /post-templates {post_id, name, with_settings}`, `PUT /post-templates/:id {name}` and
+  `DELETE` (admins and editors, `requireContentEditor`). Saving reads the post like
+  duplicate: `canReadPost`, trashed → 409, **collab flush first** (503 on failure), then
+  `parseStoredBlockDoc` + **`prepareForStore`** (sanitizer, limits, theme blocks #376; 400),
+  `CreatePostTemplateTx` (featured image and category read inside it).
+- **`POST /post-templates/:id/posts`** (any content role, `canCreatePost` for an own draft):
+  `newPostCopy` with `Check: true` (the content goes through `prepareForStore` again: the
+  installed theme blocks may have changed; 400 "no longer valid"), title = the template's
+  name, slug from it, url `/<type>/<slug>`, owner and byline the caller, then
+  `CreatePostFromTemplateTx` (terms, featured image as `setFeaturedImage` writes it, content
+  media links). No Yjs state; activity `created` with `template_id`. Deleting a template
+  leaves the posts made from it alone (nothing points back).
+- Tests: `post_templates_test.go` (handler matrix on the mock store, validation, theme
+  blocks) and `post_templates_db_test.go` (real DB: saving changes no list, count, search or
+  `/public` read; the post's content, ids, terms, featured image, byline; rename, delete).
 
 ## Activity log and Home's feeds (#324, `000036`, `activity*.go`)
 

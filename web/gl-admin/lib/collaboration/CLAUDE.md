@@ -177,9 +177,12 @@ kept so references in code stay valid.
    matches the post's current `block_revision`. The client never seeds and never writes
    content outside the editor (no REST save exists any more). The only writers of
    `block_doc` are the collab server's store (`PUT /internal/posts/:id/collab`), and for a
-   new post's initial body (nothing is live yet) `POST /posts` and `POST
+   new post's initial body (nothing is live yet) `POST /posts`, `POST
    /posts/:id/duplicate` (#354: a copy with new block ids and no Yjs state, seeded like
-   any new post; `duplicatePost.collab.test.ts`). A server-side
+   any new post; `duplicatePost.collab.test.ts`) and `POST /post-templates/:id/posts`
+   (#322: a template's content with new block ids, the same Go function, no Yjs state;
+   `postFromTemplate.collab.test.ts`). Templates themselves live in their own table and
+   never reach the collab server. A server-side
    restore, import or migration tool would have to go through the collab server
    (`openDirectConnection`, #286), not `UPDATE posts`.
 

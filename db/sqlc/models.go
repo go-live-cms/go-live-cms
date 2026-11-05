@@ -181,6 +181,22 @@ type PostTaxonomyRelationship struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+type PostTemplate struct {
+	ID              int64           `json:"id"`
+	PostType        string          `json:"post_type"`
+	Name            string          `json:"name"`
+	BlockDoc        json.RawMessage `json:"block_doc"`
+	FeaturedMediaID sql.NullInt64   `json:"featured_media_id"`
+	CreatedBy       sql.NullInt64   `json:"created_by"`
+	CreatedAt       time.Time       `json:"created_at"`
+	ChangedAt       time.Time       `json:"changed_at"`
+}
+
+type PostTemplateTerm struct {
+	TemplateID int64 `json:"template_id"`
+	TermID     int64 `json:"term_id"`
+}
+
 type PostType struct {
 	ID           int64           `json:"id"`
 	Name         string          `json:"name"`
