@@ -292,6 +292,17 @@ func TestReviewRequestResolvedByEveryPublishPath(t *testing.T) {
 		requireResolved(t, rr.ID, post.ID, sql.NullInt64{})
 	})
 
+	t.Run("restoring a published post from the trash leaves it open", func(t *testing.T) {
+		post := publishedPost(t, store, owner)
+		editWorkingCopy(t, conn, post.ID, scheduleWord())
+		rr := requestReviewAs(t, server, owner, post.ID, nil)
+		path := fmt.Sprintf("/api/v1/posts/%d", post.ID)
+		requireStatus(t, as(t, server, editor, http.MethodDelete, path, nil), http.StatusOK)
+		requireStatus(t, as(t, server, editor, http.MethodPost, path+"/restore", nil), http.StatusOK)
+		require.Equal(t, postStatusPublished, reloadPost(t, store, post.ID).PostStatus)
+		require.Equal(t, db.ReviewStatusOpen, loadReviewRow(t, conn, rr.ID).Status, "the old live version came back, not the reviewed changes")
+	})
+
 	t.Run("unpublish and other statuses leave it open", func(t *testing.T) {
 		post := publishedPost(t, store, owner)
 		rr := requestReviewAs(t, server, owner, post.ID, nil)

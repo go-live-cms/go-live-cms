@@ -826,7 +826,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   version's `created_by` (who published, or who scheduled it; NULL for a status set through PUT) and
   inserts the `review_resolved` activity row in the same transaction. Publish/Update, bulk, #147's
   scheduler, #335's scheduled update and PUT all go through it, so a new publish path needs nothing.
-  Unpublish, archive and trash leave it open (Needs attention hides trashed posts).
+  Unpublish, archive, trash and restoring a published post from the trash (the old live version,
+  not the reviewed changes) leave it open (Needs attention hides trashed posts).
 - **Email** (`mailer` templates `review_requested`, `review_changes_requested`), after the response
   (`runInBackground`), one message per recipient: the named reviewer, or with none **every editor and
   admin but the requester** (≤100, the most recently active first; they also see it on Home). Changes

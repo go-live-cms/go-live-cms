@@ -76,7 +76,9 @@ $$;
 CREATE TRIGGER "posts_resolve_review_on_publish"
 AFTER UPDATE OF "post_status", "published_version_id" ON "posts"
 FOR EACH ROW
+-- Restoring a published post from the trash (#327) isn't a publish: it puts the old
+-- live version back, not the changes under review, so the request stays open.
 WHEN (NEW.post_status = 'published'
-      AND (OLD.post_status IS DISTINCT FROM NEW.post_status
+      AND ((OLD.post_status IS DISTINCT FROM NEW.post_status AND OLD.post_status <> 'trash')
            OR OLD.published_version_id IS DISTINCT FROM NEW.published_version_id))
 EXECUTE PROCEDURE golive_resolve_review_on_publish();
