@@ -10,7 +10,7 @@ vi.mock("@/lib/menus", async (importOriginal) => ({
 // The site settings (#330): no API call; a test may set a tagline.
 const getSiteSettings = vi.fn()
 vi.mock("@/lib/siteSettings", () => ({ getSiteSettings: (...args: unknown[]) => getSiteSettings(...args) }))
-const SITE = { title: "My Site", tagline: "", postsPerPage: 10, urlStructure: "slug", language: "en-US", timeZone: "UTC", dateFormat: "month_day_year" }
+const SITE = { title: "My Site", tagline: "", postsPerPage: 10, urlStructure: "slug", allowSignup: false, language: "en-US", timeZone: "UTC", dateFormat: "month_day_year" }
 import SeoHead from "./SeoHead.astro"
 import DefaultPostLayout from "../../themes/default/layouts/post/default.astro"
 import DefaultErrorLayout from "../../themes/default/layouts/error/default.astro"

@@ -6,10 +6,13 @@ import {
   mountAcceptInvitePage,
   mountConfirmEmailPage,
   mountForgotPasswordPage,
+  mountRegisterPage,
   mountResetPasswordPage,
+  mountVerifyEmailPage,
   readLinkToken,
   validateAcceptInvitation,
   validatePassword,
+  validateRegistration,
 } from "./accountPages"
 
 const TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_abcde"
@@ -519,5 +522,182 @@ describe("confirm email page (#334)", () => {
     await submit(form)
     expect(errorText()).toMatch(/Can't reach the server/)
     expect(form.querySelector("button")!.disabled).toBe(false)
+  })
+})
+describe("open signup (#191)", () => {
+  const signupFields = ["full_name", "username", "email", "password", "confirm_password"]
+  const good = {
+    full_name: "Sam Signup",
+    username: "samsignup",
+    email: "sam@example.com",
+    password: "a-long-signup-password",
+    confirm_password: "a-long-signup-password",
+  }
+  const panels = `
+    <section id="signupSent" hidden><h1 tabindex="-1">Check your email</h1><strong id="sentTo"></strong>
+      <button type="button" id="useAnotherEmail">Use another email</button></section>
+    <section id="signupClosed" hidden><h1 tabindex="-1">Sign-up is closed</h1></section>`
+
+  describe("validateRegistration", () => {
+    it("accepts a complete form", () => {
+      expect(validateRegistration(good)).toBeNull()
+    })
+
+    it.each([
+      [{ full_name: " a " }, /Your name must be 2–100/],
+      [{ username: "sa" }, /Username must be 3–50/],
+      [{ username: "sam-signup" }, /letters and numbers/],
+      [{ email: "not-an-email" }, /valid email/],
+      [{ password: "too-short", confirm_password: "too-short" }, /12/],
+      [{ confirm_password: "something-else-entirely" }, /match/i],
+      [{ password: "Sam@Example.com", confirm_password: "Sam@Example.com" }, /email|name/i],
+      [{ password: "SAMSIGNUP", confirm_password: "SAMSIGNUP" }, /./],
+    ])("refuses %o", (change, message) => {
+      expect(validateRegistration({ ...good, ...change })).toMatch(message)
+    })
+  })
+
+  describe("register page", () => {
+    it("sends the details and shows one 'check your email' panel", async () => {
+      const form = renderPage("registerForm", signupFields, panels)
+      mountRegisterPage(document)
+      fill({ ...good, email: " sam@example.com " })
+      fetchMock.mockResolvedValue(json(202, { message: "Check your email", expires_in_seconds: 86400 }))
+      await submit(form)
+
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/register")
+      expect(sentBody()).toEqual({ full_name: "Sam Signup", username: "samsignup", email: "sam@example.com", password: good.password })
+      expect(form.hidden).toBe(true)
+      expect(visible("signupSent")).toBe(true)
+      expect(document.getElementById("sentTo")!.textContent).toBe("sam@example.com")
+      expect(document.activeElement?.textContent).toBe("Check your email")
+
+      // "Use another email" goes back with everything kept.
+      document.getElementById("useAnotherEmail")!.click()
+      expect(form.hidden).toBe(false)
+      expect(visible("signupSent")).toBe(false)
+      expect((document.getElementById("username") as HTMLInputElement).value).toBe("samsignup")
+    })
+
+    it("checks the form before sending anything", async () => {
+      const form = renderPage("registerForm", signupFields, panels)
+      mountRegisterPage(document)
+      fill({ ...good, password: "short", confirm_password: "short" })
+      await submit(form)
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(errorText()).toMatch(/12/)
+      expect(visible("errorMessage")).toBe(true)
+    })
+
+    it("asks for another username when it isn't available", async () => {
+      const form = renderPage("registerForm", signupFields, panels)
+      mountRegisterPage(document)
+      fill(good)
+      fetchMock.mockResolvedValue(json(409, { error: "that username isn't available", code: "username_unavailable" }))
+      await submit(form)
+      expect(form.hidden).toBe(false)
+      expect(errorText()).toMatch(/username isn't available/)
+      expect(document.activeElement?.id).toBe("username")
+      expect(visible("signupSent")).toBe(false)
+    })
+
+    it("shows the closed panel when sign-up was turned off meanwhile", async () => {
+      const form = renderPage("registerForm", signupFields, panels)
+      mountRegisterPage(document)
+      fill(good)
+      fetchMock.mockResolvedValue(json(403, { error: "sign-up is closed on this site", code: "signup_disabled" }))
+      await submit(form)
+      expect(form.hidden).toBe(true)
+      expect(visible("signupClosed")).toBe(true)
+    })
+
+    it("explains the rate limit", async () => {
+      const form = renderPage("registerForm", signupFields, panels)
+      mountRegisterPage(document)
+      fill(good)
+      fetchMock.mockResolvedValue(json(429, { error: "too many requests, try again later" }, { "Retry-After": "30" }))
+      await submit(form)
+      expect(errorText()).toMatch(/Too many attempts/)
+      expect(form.querySelector("button")!.disabled).toBe(false)
+    })
+
+    it("does nothing when the page rendered closed", () => {
+      const form = renderPage("registerForm", signupFields, panels)
+      form.hidden = true
+      mountRegisterPage(document)
+      form.dispatchEvent(new Event("submit", { cancelable: true }))
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("verify email page", () => {
+    it("shows the invalid-link panel when the link has no token", () => {
+      setUrl("/verify-email")
+      const form = renderPage("verifyEmailForm", [], panels)
+      mountVerifyEmailPage(document, vi.fn())
+      expect(form.hidden).toBe(true)
+      expect(visible("linkInvalid")).toBe(true)
+    })
+
+    it("sends nothing until asked, then creates the account and goes to sign in", async () => {
+      setUrl(`/verify-email#token=${TOKEN}`)
+      const form = renderPage("verifyEmailForm", [], panels)
+      const navigate = vi.fn()
+      mountVerifyEmailPage(document, navigate)
+      expect(window.location.hash).toBe("")
+      expect(fetchMock).not.toHaveBeenCalled()
+
+      fetchMock.mockResolvedValue(json(201, { user: { username: "samsignup" } }))
+      await submit(form)
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/register/verify")
+      expect(sentBody()).toEqual({ token: TOKEN })
+      expect(navigate).toHaveBeenCalledWith("/login?reason=signup-confirmed")
+      expect(sessionStorage.length).toBe(0)
+    })
+
+    it("swaps to the invalid-link panel for a used, expired or replaced link", async () => {
+      setUrl(`/verify-email#token=${TOKEN}`)
+      const form = renderPage("verifyEmailForm", [], panels)
+      const navigate = vi.fn()
+      mountVerifyEmailPage(document, navigate)
+      fetchMock.mockResolvedValue(json(400, { error: "this link is invalid or has expired", code: "invalid_token" }))
+      await submit(form)
+      expect(form.hidden).toBe(true)
+      expect(visible("linkInvalid")).toBe(true)
+      expect(navigate).not.toHaveBeenCalled()
+    })
+
+    it("shows the closed panel when sign-up was turned off since", async () => {
+      setUrl(`/verify-email#token=${TOKEN}`)
+      const form = renderPage("verifyEmailForm", [], panels)
+      mountVerifyEmailPage(document, vi.fn())
+      fetchMock.mockResolvedValue(json(403, { error: "sign-up is closed on this site", code: "signup_disabled" }))
+      await submit(form)
+      expect(form.hidden).toBe(true)
+      expect(visible("signupClosed")).toBe(true)
+      expect(sessionStorage.length).toBe(0)
+    })
+
+    it.each([
+      ["username_unavailable", /Someone took that username/],
+      ["email_registered", /An account with this email already exists/],
+    ])("explains %s and keeps the page", async (code, message) => {
+      setUrl(`/verify-email#token=${TOKEN}`)
+      const form = renderPage("verifyEmailForm", [], panels)
+      const navigate = vi.fn()
+      mountVerifyEmailPage(document, navigate)
+      fetchMock.mockResolvedValue(json(409, { error: "conflict", code }))
+      await submit(form)
+      expect(form.hidden).toBe(false)
+      expect(errorText()).toMatch(message)
+      expect(navigate).not.toHaveBeenCalled()
+      // A dead link: a reload has nothing to resend.
+      expect(sessionStorage.length).toBe(0)
+    })
+  })
+
+  it("describes the signup codes", () => {
+    expect(describeAccountError(new ApiError("x", 409, null, "username_unavailable"))).toMatch(/isn't available/)
+    expect(describeAccountError(new ApiError("x", 403, null, "signup_disabled"))).toMatch(/Sign-up is closed/)
   })
 })

@@ -27,6 +27,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
+
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
 // normEmail normalizes email addresses for consistent storage and lookup.
@@ -109,8 +111,7 @@ func isValidUserSortOption(sort string) bool {
 // Returns:
 //   - bool: True if error indicates unique constraint violation
 func isUniqueViolation(err error) bool {
-	return containsString(err.Error(), "duplicate key value") ||
-		containsString(err.Error(), "unique constraint")
+	return db.IsUniqueViolation(err)
 }
 
 // checkUsernameFormat answers 400 and returns false unless username (already

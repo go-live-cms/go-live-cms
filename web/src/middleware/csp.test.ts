@@ -119,7 +119,7 @@ describe("isAdminPath", () => {
 
 describe("isAccountPagePath", () => {
   it("covers the signed-out credential pages only", () => {
-    for (const path of ["/login", "/login/", "/forgot-password", "/reset-password/", "/accept-invite", "/confirm-email"]) {
+    for (const path of ["/login", "/login/", "/forgot-password", "/reset-password/", "/accept-invite", "/confirm-email", "/register", "/verify-email/"]) {
       expect(isAccountPagePath(path)).toBe(true)
     }
     for (const path of ["/", "/blog/login", "/login-help", "/reset-password/extra", "/gl-admin"]) {

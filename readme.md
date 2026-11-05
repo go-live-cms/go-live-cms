@@ -208,6 +208,7 @@ refills evenly. `0` turns a limit off.
 | `RATE_LIMIT_LOGIN_IP_PER_MINUTE` | 100 | `POST /auth/login` per IP across all usernames |
 | `RATE_LIMIT_REFRESH_PER_MINUTE` | 30 | `POST /auth/refresh`, per IP |
 | `RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE` | 5 | changing your own password (`PUT /users/:id`), per user and IP |
+| `RATE_LIMIT_PASSWORD_FORGOT_PER_MINUTE` | 5 | `POST /auth/password/forgot` per IP; `POST /auth/register` per IP and email address (open signup, #191) |
 | `RATE_LIMIT_EXEMPT_CIDRS` | empty | IPs/CIDRs that skip the general limit (auth limits still apply) |
 
 `/health`, `/readyz`, `/uploads` and the internal listener aren't limited. IPv6 clients are

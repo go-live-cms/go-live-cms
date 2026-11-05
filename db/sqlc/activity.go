@@ -42,6 +42,7 @@ const (
 	ActivityInvited           = "invited"
 	ActivityInvitationRevoked = "invitation_revoked"
 	ActivityJoined            = "joined"
+	ActivitySignedUp          = "signed_up" // open signup (#191): the new member, once the email is confirmed
 	ActivityRoleChanged       = "role_changed"
 	ActivityRemoved           = "removed"
 

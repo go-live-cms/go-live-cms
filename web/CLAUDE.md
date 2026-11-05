@@ -391,6 +391,14 @@ are the most fragile part of the codebase. **Before editing anything under
   (`postCollab.ts` sends `avatar` with name/colour/id), which any collaborator can set. Presence
   colours stay the account's. `/confirm-email` is an account page (#344 patterns, CSP and noindex
   lists): it confirms only on the button (a mail scanner running scripts can't spend the token).
+- **Open signup (#191):** Settings › Accounts' "Allow anyone to sign up" (`allow_signup`, off by
+  default). `/register` (the Accept-invite layout plus an email; the canvas has no sign-up board)
+  and `/verify-email` (confirms on its button, like `/confirm-email`) are account pages (CSP and
+  noindex lists); `mountRegisterPage`/`mountVerifyEmailPage` in `lib/accountPages.ts`. `/login`
+  and `/register` read the setting server-side (`getSiteSettings(...).allowSignup`, false when
+  unreadable): "Create an account" shows only while it's on, and `/register` renders just the
+  "Sign-up is closed" panel otherwise. Success is one "Check your email" panel whatever the
+  address (the API doesn't say), then `/login?reason=signup-confirmed`.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

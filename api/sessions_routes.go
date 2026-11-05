@@ -62,7 +62,6 @@ func (server *Server) RegisterSessionRoutes(v1 *gin.RouterGroup) {
 	// top of the general one (brute force, token hammering; see ratelimit.go).
 	// Login, refresh and logout set or use the refresh cookie, so they also
 	// refuse cross-origin browser requests (origin_guard.go).
-	auth.POST("/register", server.rateLimits.register.perIP(), server.register)                                 // POST /api/v1/auth/register
 	auth.POST("/login", server.rateLimits.loginIP.perIP(), server.cookieOriginGuard, server.loginUser)          // POST /api/v1/auth/login (+ per-username limit in the handler)
 	auth.POST("/refresh", server.rateLimits.refresh.perIP(), server.cookieOriginGuard, server.renewAccessToken) // POST /api/v1/auth/refresh
 	auth.POST("/logout", server.cookieOriginGuard, server.requireAuth(), server.logoutUser)                     // POST /api/v1/auth/logout
