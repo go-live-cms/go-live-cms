@@ -1,7 +1,8 @@
 import type { Editor } from "@tiptap/core"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
-import { acceptsChild, containerOfNode, containerRule, isContainerType } from "@gl-admin/lib/blocks-spec/nesting"
+import { acceptsChild, containerOfNode, containerRule, isContainerType, isStandaloneFlowType } from "@gl-admin/lib/blocks-spec/nesting"
 import { createImagePlaceholder } from "./mediaBlocks"
+import { openTableSizePicker } from "../ui/TableSizePicker"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -84,6 +85,7 @@ export const ICONS = {
   divider: "M3 12h18M8 6h8M8 18h8",
   html: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",
   group: "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h8v8H8z",
+  table: "M3 5h18v14H3zM3 10h18M3 15h18M9 5v14",
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
@@ -169,6 +171,22 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     icon: { path: ICONS.code },
     insert: (editor, range) => chain(editor, range).setCodeBlock().run(),
     turnInto: (editor) => editor.chain().focus().setCodeBlock().run(),
+  },
+  // #420: the size picker first ("Columns", "Rows", Create table); the table replaces the
+  // line (now empty) when it's created, and nothing is inserted if it's closed.
+  {
+    id: "table",
+    type: "table",
+    name: "Table",
+    group: "text",
+    keywords: ["grid", "rows", "columns", "spreadsheet", "cells"],
+    icon: { path: ICONS.table },
+    insert: (editor, range) => {
+      // No `.focus()`: TipTap focuses the editor a frame later, which would take focus
+      // from the picker's first field.
+      editor.chain().deleteRange(range).run()
+      openTableSizePicker(editor)
+    },
   },
   // Media
   {
@@ -258,7 +276,9 @@ export function slotAcceptsAt(editor: Editor): (entry: CatalogEntry) => boolean 
   if (!parent || parent.type.name === "doc") return (entry) => !isContainerType(entry.type) || !!containerRule(entry.type)?.topLevel
   const container = containerOfNode(parent.type.name)
   if (container) return (entry) => acceptsChild(container.type, entry.type)
-  return (entry) => !isContainerType(entry.type)
+  // Another block's own content: no container, and no table (#420: a block of the doc or
+  // of a container only, never part of a quote, a list item or a cell).
+  return (entry) => !isContainerType(entry.type) && !isStandaloneFlowType(entry.type)
 }
 
 // The active theme, set by ThemeProvider when the admin loads (only its blocks are

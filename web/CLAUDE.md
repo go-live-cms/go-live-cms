@@ -542,6 +542,17 @@ are the most fragile part of the codebase. **Before editing anything under
   default theme's styles in `themes/default/styles/theme.css`. History's diff compares a
   container's children by id (`blockDiff.ts`, `VersionDiff`'s `version-diff__container`).
   Theme blocks may hold text only since then (`THEME_BLOCK_CONTENT_NAMES`).
+- **Table block (#420):** a Text entry in the catalog (`/table`) whose insert opens the size
+  picker (`components/editor/ui/TableSizePicker.ts`: a plain-DOM dialog at the caret, Columns 3 and
+  Rows 2 to start, Rows counting the header row, Create table; Esc closes it and inserts nothing).
+  The node and its commands are `extensions/TableBlock.ts` (schema in `schemaExtensions`, the keys in
+  `TableKeyboard`, editor only); the view (Row ▾ and Column ▾ menus, the Header row switch, ⌥F10 to
+  reach them, the grid in a scrolling `tableWrapper`) is `TableBlockView` in `BlockNodeViews.ts`.
+  No slash menu, Turn into or "Type /" hint in a cell (paragraphs only) or a caption. The public
+  `src/components/blocks/table/` and the default theme's `.table-scroll` rules (`theme.css`) make
+  a wide table scroll in its own box at 375px. Rules: `gl-admin/lib/collaboration/CLAUDE.md`
+  (blockBridge notes, Table). History compares its cells as text, the caption like an image's and
+  the header row as an attribute.
 - **Taxonomies and redirects (#331):** admin: one category per post. The editor sidebar's
   `PostTaxonomies` shows the `category` taxonomy as a radio group (picking one calls the PUT,
   which replaces the category; `post`-type posts have no "None", the API puts the default

@@ -44,6 +44,12 @@ posts.block_doc → publish → post_versions → public site (SSR)
 - **group** (#414): a container: `children` are its blocks (flow only: no group, no list
   item), `attrs.style` `tinted` (absent: none) and `attrs.align` `wide`/`full` (absent:
   content)
+- **table** (#420): a flow block (no `children`). `attrs.pm` is the `table` node: `tableRow`s
+  of `tableCell`s, each cell `paragraph+`, its only attrs `colspan`/`rowspan` (integers
+  2..`TABLE_MAX_SPAN`, absent when 1); every stored cell is a `tableCell`, and
+  `attrs.headerRow: true` (absent: none) makes the first row the header row. `attrs.caption`
+  is runs like an image's, `attrs.text` the cells' text. `tableRows(pm)` reads it as the
+  renderer does. Rules: `../collaboration/CLAUDE.md` (blockBridge notes, Table).
 - Theme blocks: unknown types keep their ProseMirror JSON in `attrs.pm` and round-trip
   unchanged.
 

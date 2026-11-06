@@ -2,6 +2,8 @@ import { Node as PMNode, Schema } from "prosemirror-model"
 import {
   BLOCKQUOTE_BLOCK_VERSION,
   captionRuns,
+  clampTableSpan,
+  tableRows,
   IMAGE_BLOCK_VERSION,
   isImageAlign,
   normalizeBlockColor,
@@ -269,6 +271,9 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         // children are set by the caller
       }
 
+    case "tableBlock":
+      return tableNodeToBlock(node, id)
+
     default:
       // Custom/theme block - preserve full PM data for round-trip fidelity
       return {
@@ -418,6 +423,94 @@ function captionToPM(caption: unknown, schema: Schema): any[] {
     return marks && marks.length > 0 ? { ...run, marks } : { type: "text", text: run.text }
   })
 }
+
+/**
+ * A table block (#420) for Block Spec: the grid's rows as `attrs.pm` (every cell a
+ * `tableCell`: whether the first row is a header row is `attrs.headerRow`, canonical, so a
+ * stored cell type can't disagree with it), spans only when not 1, each cell's paragraphs
+ * as `pmJSON` gives them; the caption as runs, like an image's; `text` the cells' text.
+ * Defaults left out: no `headerRow` without one, no `caption` when it's empty.
+ */
+function tableNodeToBlock(node: PMNode, id: BlockID): Block {
+  const grid = node.firstChild
+  const caption = node.lastChild
+  const rows: any[] = []
+  const lines: string[] = []
+  grid?.forEach((row) => {
+    const cells: any[] = []
+    const texts: string[] = []
+    row.forEach((cell) => {
+      const spans: Record<string, number> = {}
+      const colspan = clampTableSpan(cell.attrs.colspan)
+      const rowspan = clampTableSpan(cell.attrs.rowspan)
+      if (colspan !== 1) spans.colspan = colspan
+      if (rowspan !== 1) spans.rowspan = rowspan
+      const content: any[] = []
+      const paragraphs: string[] = []
+      cell.forEach((paragraph) => {
+        content.push(pmJSON(paragraph))
+        if (paragraph.textContent) paragraphs.push(paragraph.textContent)
+      })
+      cells.push({ type: "tableCell", ...(Object.keys(spans).length > 0 ? { attrs: spans } : {}), content })
+      if (paragraphs.length > 0) texts.push(paragraphs.join(" "))
+    })
+    rows.push({ type: "tableRow", content: cells })
+    lines.push(texts.join(" ").trim())
+  })
+  const text = lines.join("\n").trim()
+  const headerRow = grid?.type.name === "table" && grid.firstChild ? everyChild(grid.firstChild, (cell) => cell.type.name === "tableHeader") : false
+  return {
+    id,
+    type: "table",
+    version: 1,
+    attrs: {
+      pm: { type: "table", content: rows },
+      text: text || undefined,
+      ...(headerRow ? { headerRow: true as const } : {}),
+      ...(caption?.type.name === "tableCaption" && caption.content.size > 0 ? { caption: caption.content.toJSON() as CaptionText[] } : {}),
+    },
+  }
+}
+
+function everyChild(node: PMNode, test: (child: PMNode) => boolean): boolean {
+  if (node.childCount === 0) return false
+  for (let i = 0; i < node.childCount; i++) if (!test(node.child(i))) return false
+  return true
+}
+
+/**
+ * A stored table as `tableBlock` JSON (#420): its rows from `attrs.pm` (`tableRows`: only
+ * rows, cells and their paragraphs, spans clamped), the first row's cells header cells
+ * when `attrs.headerRow`, every other cell a plain one (whatever the pm says), and the
+ * caption from `attrs.caption`. A table with no rows can't be built: it throws, so the
+ * block is dropped (hidden, kept) like any other block the editor can't show (#213).
+ */
+function tableBlockToPM(block: Block, baseAttrs: Record<string, unknown>, schema: Schema): any {
+  const attrs = block.attrs as { pm?: unknown; headerRow?: unknown; caption?: unknown }
+  const rows = tableRows(attrs.pm)
+  if (rows.length === 0) throw new Error(`table ${block.id} has no rows`)
+  const headerRow = attrs.headerRow === true
+  return {
+    type: "tableBlock",
+    attrs: baseAttrs,
+    content: [
+      {
+        type: "table",
+        content: rows.map((cells, rowIndex) => ({
+          type: "tableRow",
+          content: cells.map((cell) => ({
+            type: rowIndex === 0 && headerRow ? "tableHeader" : "tableCell",
+            attrs: { colspan: cell.colspan, rowspan: cell.rowspan },
+            content: cell.content,
+          })),
+        })),
+      },
+      { type: "tableCaption", ...captionContent(captionToPM(attrs.caption, schema)) },
+    ],
+  }
+}
+
+const captionContent = (runs: any[]) => (runs.length > 0 ? { content: runs } : {})
 
 /**
  * Calls `visit` for `rootId` and each block under it (list and container children, any depth) in
@@ -722,6 +815,9 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
         content: containerChildrenToPM(block, allBlocks, ctx),
       }
     }
+
+    case "table":
+      return tableBlockToPM(block, baseAttrs, ctx.schema)
 
     case "list_item":
       if (block.attrs.pm) {

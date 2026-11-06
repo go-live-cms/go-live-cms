@@ -14,7 +14,13 @@ import {
   type GroupStyle,
 } from "@gl-admin/lib/blocks-spec"
 
+import { TableView } from "@tiptap/extension-table"
+import { hasHeaderRow, normalizeHeaderCells } from "./TableBlock"
+
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
+
+/** The grid's narrowest column, in px (TipTap's `cellMinWidth`). */
+const TABLE_CELL_MIN_WIDTH = 25
 
 /**
  * The editor's views of the image (figure, width, caption), quote (citation input) and
@@ -38,9 +44,12 @@ export const BlockNodeViews = Extension.create({
             image: (node, view, getPos) => new ImageView(node, view, getPos as () => number | undefined, editor),
             blockquote: (node, view, getPos) => new QuoteView(node, view, getPos as () => number | undefined),
             group: (node, view, getPos) => new GroupView(node, view, getPos as () => number | undefined),
+            // #420: the table block (its toolbar) and the grid, which scrolls in its own box.
+            tableBlock: (node, view, getPos) => new TableBlockView(node, view, getPos as () => number | undefined, editor),
+            table: (node) => new TableView(node, TABLE_CELL_MIN_WIDTH),
           },
           // Marks the quote the cursor is in, so its empty citation field shows, and the
-          // group it is in (or that is selected), so its settings show.
+          // group or table it is in (or that is selected), so its settings show.
           decorations: (state) => {
             if (!editor.isEditable) return null
             const { selection } = state
@@ -52,10 +61,12 @@ export const BlockNodeViews = Extension.create({
               seen.add(node.type.name)
               marked.push(Decoration.node(pos, pos + node.nodeSize, { class: "has-selection" }))
             }
-            if (selection instanceof NodeSelection && selection.node.type.name === "group") mark(selection.from, selection.node)
+            if (selection instanceof NodeSelection && (selection.node.type.name === "group" || selection.node.type.name === "tableBlock")) {
+              mark(selection.from, selection.node)
+            }
             for (let depth = $from.depth; depth > 0; depth--) {
               const name = $from.node(depth).type.name
-              if (name === "blockquote" || name === "group") mark($from.before(depth), $from.node(depth))
+              if (name === "blockquote" || name === "group" || name === "tableBlock") mark($from.before(depth), $from.node(depth))
             }
             return marked.length > 0 ? DecorationSet.create(state.doc, marked) : null
           },
@@ -345,3 +356,226 @@ class GroupView implements NodeView {
     return !this.contentDOM.contains(mutation.target)
   }
 }
+
+type TableAction = { label: string; run: (editor: Editor) => boolean; can: (editor: Editor) => boolean; danger?: boolean }
+
+/** The Row and Column menus (#420, the canvas's table toolbar), each one command, so one Yjs update. */
+const TABLE_MENUS: { label: string; items: (TableAction | "separator")[] }[] = [
+  {
+    label: "Row",
+    items: [
+      { label: "Insert row above", run: (e) => e.chain().focus().addTableRow("before").run(), can: (e) => e.can().addTableRow("before") },
+      { label: "Insert row below", run: (e) => e.chain().focus().addTableRow("after").run(), can: (e) => e.can().addTableRow("after") },
+      "separator",
+      { label: "Delete row", danger: true, run: (e) => e.chain().focus().deleteTableRow().run(), can: (e) => e.can().deleteTableRow() },
+    ],
+  },
+  {
+    label: "Column",
+    items: [
+      { label: "Insert column left", run: (e) => e.chain().focus().addTableColumn("before").run(), can: (e) => e.can().addTableColumn("before") },
+      { label: "Insert column right", run: (e) => e.chain().focus().addTableColumn("after").run(), can: (e) => e.can().addTableColumn("after") },
+      "separator",
+      { label: "Delete column", danger: true, run: (e) => e.chain().focus().deleteTableColumn().run(), can: (e) => e.can().deleteTableColumn() },
+    ],
+  },
+]
+
+const CHEVRON = "m6 9 6 6 6-6"
+
+/**
+ * A table block (#420): the grid and its caption, plus a toolbar while the cursor is in
+ * it (or it is selected), as on the canvas: **Row ▾** (insert above / below, delete),
+ * **Column ▾** (insert left / right, delete) and the **Header row** switch. The menus act
+ * on the cell the caret is in (their items are disabled in the caption, and Delete when
+ * it's the last row or column). ⌥F10 in a cell focuses the toolbar (`TableKeyboard`):
+ * ← → move between its buttons, Esc goes back to the text.
+ */
+class TableBlockView implements NodeView {
+  dom: HTMLElement
+  contentDOM: HTMLElement
+  private toolbar: HTMLElement
+  private headerSwitch: HTMLButtonElement
+  private menu: { button: HTMLButtonElement; list: HTMLElement } | null = null
+
+  constructor(
+    private node: PMNode,
+    private view: EditorView,
+    private getPos: () => number | undefined,
+    private editor: Editor,
+  ) {
+    const doc = view.dom.ownerDocument
+    this.dom = doc.createElement("figure")
+    this.dom.className = "editor-table"
+    this.dom.dataset.type = "table"
+    this.toolbar = doc.createElement("div")
+    this.toolbar.className = "editor-table__toolbar"
+    this.toolbar.contentEditable = "false"
+    this.toolbar.setAttribute("role", "toolbar")
+    this.toolbar.setAttribute("aria-label", "Table")
+    for (const menu of TABLE_MENUS) this.toolbar.append(this.menuButton(menu))
+    const separator = doc.createElement("span")
+    separator.className = "editor-table__separator"
+    separator.setAttribute("aria-hidden", "true")
+    this.headerSwitch = doc.createElement("button")
+    this.headerSwitch.type = "button"
+    this.headerSwitch.className = "editor-table__switch"
+    this.headerSwitch.setAttribute("role", "switch")
+    this.headerSwitch.textContent = "Header row"
+    this.headerSwitch.title = "Header cells name each column for screen readers"
+    this.headerSwitch.addEventListener("mousedown", (event) => event.preventDefault())
+    this.headerSwitch.addEventListener("click", () => this.toggleHeaderRow())
+    this.toolbar.append(separator, this.headerSwitch)
+    this.toolbar.addEventListener("keydown", (event) => this.onToolbarKey(event))
+    this.contentDOM = doc.createElement("div")
+    this.contentDOM.className = "editor-table__content"
+    this.dom.append(this.toolbar, this.contentDOM)
+    this.render()
+  }
+
+  private menuButton(menu: (typeof TABLE_MENUS)[number]) {
+    const doc = this.dom.ownerDocument
+    const button = doc.createElement("button")
+    button.type = "button"
+    button.className = "editor-table__button"
+    button.setAttribute("aria-haspopup", "menu")
+    button.setAttribute("aria-expanded", "false")
+    button.append(doc.createTextNode(menu.label))
+    const svg = doc.createElementNS("http://www.w3.org/2000/svg", "svg")
+    svg.setAttribute("width", "12")
+    svg.setAttribute("height", "12")
+    svg.setAttribute("viewBox", "0 0 24 24")
+    svg.setAttribute("fill", "none")
+    svg.setAttribute("stroke", "currentColor")
+    svg.setAttribute("stroke-width", "2")
+    svg.setAttribute("aria-hidden", "true")
+    const path = doc.createElementNS("http://www.w3.org/2000/svg", "path")
+    path.setAttribute("d", CHEVRON)
+    svg.append(path)
+    button.append(svg)
+    // Keep the caret in its cell: the menu acts on it.
+    button.addEventListener("mousedown", (event) => event.preventDefault())
+    button.addEventListener("click", () => (this.menu?.button === button ? this.closeMenu(true) : this.openMenu(button, menu)))
+    return button
+  }
+
+  private openMenu(button: HTMLButtonElement, menu: (typeof TABLE_MENUS)[number], focusFirst = false) {
+    this.closeMenu(false)
+    const doc = this.dom.ownerDocument
+    const list = doc.createElement("div")
+    list.className = "editor-table__menu"
+    list.setAttribute("role", "menu")
+    list.setAttribute("aria-label", menu.label)
+    for (const item of menu.items) {
+      if (item === "separator") {
+        const hr = doc.createElement("div")
+        hr.className = "editor-table__menu-separator"
+        hr.setAttribute("role", "separator")
+        list.append(hr)
+        continue
+      }
+      const option = doc.createElement("button")
+      option.type = "button"
+      option.className = item.danger ? "editor-table__menu-item is-danger" : "editor-table__menu-item"
+      option.setAttribute("role", "menuitem")
+      option.textContent = item.label
+      // `editable` can change without an update (a demotion, #313).
+      const enabled = this.view.editable && item.can(this.editor)
+      option.disabled = !enabled
+      option.setAttribute("aria-disabled", String(!enabled))
+      option.addEventListener("mousedown", (event) => event.preventDefault())
+      option.addEventListener("click", () => {
+        this.closeMenu(false)
+        if (this.view.editable) item.run(this.editor)
+      })
+      list.append(option)
+    }
+    list.addEventListener("keydown", (event) => this.onMenuKey(event))
+    button.setAttribute("aria-expanded", "true")
+    button.after(list)
+    this.menu = { button, list }
+    if (focusFirst) list.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus()
+  }
+
+  private closeMenu(refocusButton: boolean) {
+    if (!this.menu) return
+    const { button, list } = this.menu
+    this.menu = null
+    list.remove()
+    button.setAttribute("aria-expanded", "false")
+    if (refocusButton) button.focus()
+  }
+
+  private onMenuKey(event: KeyboardEvent) {
+    if (!this.menu) return
+    const items = Array.from(this.menu.list.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"))
+    const at = items.indexOf(this.dom.ownerDocument.activeElement as HTMLButtonElement)
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault()
+      const step = event.key === "ArrowDown" ? 1 : items.length - 1
+      items[(at + step + items.length) % items.length]?.focus()
+    } else if (event.key === "Escape") {
+      event.preventDefault()
+      event.stopPropagation()
+      this.closeMenu(true)
+    }
+  }
+
+  private onToolbarKey(event: KeyboardEvent) {
+    if (this.menu?.list.contains(event.target as globalThis.Node)) return
+    const buttons = Array.from(this.toolbar.querySelectorAll<HTMLButtonElement>(":scope > button"))
+    const at = buttons.indexOf(this.dom.ownerDocument.activeElement as HTMLButtonElement)
+    if (at === -1) return
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      event.preventDefault()
+      buttons[(at + (event.key === "ArrowRight" ? 1 : buttons.length - 1)) % buttons.length].focus()
+    } else if (event.key === "ArrowDown" && buttons[at].getAttribute("aria-haspopup") === "menu") {
+      event.preventDefault()
+      const menu = TABLE_MENUS.find((m) => buttons[at].textContent === m.label)
+      if (menu) this.openMenu(buttons[at], menu, true)
+    } else if (event.key === "Escape") {
+      event.preventDefault()
+      this.closeMenu(false)
+      this.view.focus()
+    }
+  }
+
+  private toggleHeaderRow() {
+    if (!this.view.editable) return
+    const pos = this.getPos()
+    const current = pos === undefined ? null : this.view.state.doc.nodeAt(pos)
+    const table = current?.firstChild
+    if (pos === undefined || !current || current.type.name !== "tableBlock" || table?.type.name !== "table") return
+    this.view.dispatch(normalizeHeaderCells(this.view.state.tr, pos + 1, !hasHeaderRow(table)))
+  }
+
+  private render() {
+    const table = this.node.firstChild
+    this.headerSwitch.setAttribute("aria-checked", String(!!table && table.type.name === "table" && hasHeaderRow(table)))
+    setBlockId(this.dom, this.node)
+    // Not hidden or disabled here: `editable` changes without an update (#313). The
+    // editor's `[contenteditable="false"]` style hides the toolbar of a read-only view.
+  }
+
+  update(node: PMNode) {
+    if (node.type !== this.node.type) return false
+    this.node = node
+    this.render()
+    return true
+  }
+
+  stopEvent(event: Event) {
+    const target = event.target as globalThis.Node | null
+    return Boolean(target && this.toolbar.contains(target))
+  }
+
+  ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {
+    if (mutation.type === "selection") return false
+    return !this.contentDOM.contains(mutation.target)
+  }
+
+  destroy() {
+    this.closeMenu(false)
+  }
+}
+

@@ -247,7 +247,7 @@ kept so references in code stay valid.
 
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
-  bullet_list/ordered_list/listItem and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
+  bullet_list/ordered_list/listItem/tableBlock and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
 - **Containers (#414, `blocks-spec/nesting.ts`, design `docs/design/block-library.md` 2.1–2.11).**
   A container (Group today; columns, details, … later, each a row of the table) holds its
@@ -290,6 +290,43 @@ kept so references in code stay valid.
     trips, drops, synthesized ids, cycles, the store's per-child fallback),
     `components/editor/extensions/GroupBlock.test.ts` (commands, view, split/duplicate/paste ids)
     and `GroupBlock.collab.test.ts` (two users in one group on the relay, the stored doc).
+- **Table (#420, `components/editor/extensions/TableBlock.ts`): a flow block, not a container.**
+  The block node is `tableBlock` (`table tableCaption`, `BLOCK_NODE_NAMES.table`): TipTap's
+  `table` (prosemirror-tables reads every child of `table` as a row, so the caption can't live
+  there) plus a caption that is always there (empty = none). Cells are **`paragraph+`** and their
+  only attrs are `colspan`/`rowspan` (no `colwidth`, no resizing). `tableBlock` is **not in the
+  `block` group** (`STANDALONE_FLOW_NODE_NAMES` in `nesting.ts`): the doc and flow containers
+  name it, so a table is never part of a quote's, a list item's or a theme block's `pm` (paste
+  lifts it out; `slotAcceptsAt` doesn't offer it there).
+  - **Block Spec `table` v1:** `attrs.pm` = the `table` node's JSON with **every cell a
+    `tableCell`** (spans only when not 1), `attrs.headerRow` (`true` or absent) **canonical**:
+    on load the first row's cells become `tableHeader` when it's set and every other cell a
+    `tableCell`, whatever the pm says (`tableRows` keeps only rows, cells and paragraphs, spans
+    clamped to `TABLE_MAX_SPAN`); `attrs.caption` runs like an image's; `attrs.text` the cell
+    texts. A table with no rows can't be built: dropped and kept (#213). No `children`.
+  - **Rule 7:** prosemirror-tables' `tableEditing` plugin has an `appendTransaction`
+    (`fixTables` pads short rows). `GlTable` wraps it to skip collaboration-sync transactions,
+    or every peer would pad a table two people reshaped at once and each padding would sync;
+    only a local change fixes a table (`TableBlock.collab.test.ts` fails without the guard).
+  - **One transaction each:** `insertTableBlock`, `addTableRow`/`addTableColumn`,
+    `deleteTableRow`/`deleteTableColumn` (never the last one), `toggleTableHeaderRow`, and the
+    row/column ones put the cell types back in order (`normalizeHeaderCells`) in the same
+    transaction, so the editor shows what a reload would.
+  - **Keys** (`TableKeyboard`, editor only, priority 200): Tab / ⇧Tab between cells, Tab in the
+    last cell adds a row, ⌥F10 focuses the toolbar, Backspace with every cell selected deletes the
+    table block. **Only while the caret is in a cell**; anywhere else they return false, so lists,
+    the gutter's Tab and #417's keys run as before.
+  - **Paste:** `PasteSanitizer` keeps `td`/`th` (with clamped `colspan`/`rowspan`), turns each
+    cell's content into paragraphs (`flattenCell`: a heading, a list item or a nested table's
+    cell ends a line), and moves a `<caption>` into the figure's `figcaption`. A `<th>` is a
+    header cell only in a header row (`isHeaderRowCell`).
+  - **Stale clients:** a bundle from before #420 has no table nodes (and a narrower doc), so
+    y-tiptap would delete a table a newer peer inserts; the fingerprint guard (#416) refuses
+    such a tab (`schemaFingerprint.test.ts` pins that the table changed it).
+  - Tests: `blockBridge.table.test.ts` (bridge, fragment, Zod), `TableBlock.test.ts` (commands,
+    keys, picker, toolbar, paste), `TableBlock.collab.test.ts` (two users in different cells; a
+    column and a row at once), `src/components/blocks/table/TableBlock.test.tsx`, Go
+    `post_blocks_table_test.go`, and two cases in `nestingVectors.json`.
 - `pmToBlockDoc` regenerates duplicate/invalid block ids.
 - **Known limitation:** a `code_block` with empty code can't be shown in the editor
   (ProseMirror disallows empty text nodes). It is dropped like any other unbuildable

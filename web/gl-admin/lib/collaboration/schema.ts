@@ -10,6 +10,7 @@ import { BlockIdExtension } from "../../components/editor/extensions/BlockIdExte
 import { QuoteCitation } from "../../components/editor/extensions/QuoteCitation"
 import { BlockColor } from "../../components/editor/extensions/BlockColor"
 import { Group, GroupDocument } from "../../components/editor/extensions/GroupBlock"
+import { TableBlock } from "../../components/editor/extensions/TableBlock"
 
 const lowlight = createLowlight(common)
 
@@ -65,6 +66,9 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     blockColor: BlockColor,
     // #414: the first container. Its content expression is the nesting table's.
     group: Group,
+    // #420: the table block (figure: TipTap's table, cells `paragraph+`, plus a caption).
+    // After paragraph, so `block` content still fills with a paragraph.
+    table: TableBlock,
     blockId: BlockIdExtension,
   }
 }

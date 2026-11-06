@@ -1,7 +1,7 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
 import DOMPurify from "dompurify"
-import { CONTAINER_NODE_NAMES, isGroupAlign, isGroupStyle, normalizeBlockColor } from "@gl-admin/lib/blocks-spec"
+import { clampTableSpan, CONTAINER_NODE_NAMES, isGroupAlign, isGroupStyle, normalizeBlockColor } from "@gl-admin/lib/blocks-spec"
 
 const pasteSanitizerPluginKey = new PluginKey("pasteSanitizer")
 
@@ -70,7 +70,7 @@ function getPurifier() {
   purifier = DOMPurify(window)
   purifier.setConfig({
     ALLOWED_TAGS,
-    ALLOWED_ATTR: ["href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align"],
+    ALLOWED_ATTR: ["href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align", "colspan", "rowspan"],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
     ALLOWED_URI_REGEXP,
@@ -93,6 +93,11 @@ function getPurifier() {
       if (!isGroupDiv(node) || !isGroupStyle(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-align") {
       if (!isGroupDiv(node) || !isGroupAlign(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "colspan" || data.attrName === "rowspan") {
+      // A cell's span (#420), on a cell only, as the integer Block Spec stores (1..TABLE_MAX_SPAN).
+      const span = node.nodeName === "TD" || node.nodeName === "TH" ? clampTableSpan(data.attrValue) : 1
+      if (span === 1) data.keepAttr = false
+      else data.attrValue = String(span)
     } else if (data.attrName === "data-pm-slice") {
       const value = sanitizeSliceContext(data.attrValue)
       if (value === null) data.keepAttr = false
@@ -190,9 +195,17 @@ function normalizeClipboardMarkup(root: HTMLElement) {
     }
   }
 
-  // ProseMirror doesn't treat these as block boundaries, so a row's cells (or a nav
-  // and the text after it) would run together into one paragraph. Make them divs.
-  for (const cell of Array.from(root.querySelectorAll("td, th, caption, nav, details, summary"))) {
+  // Tables (#420) become table blocks: a <caption> moves out to the figure's caption (where
+  // the table block's parse rule reads it), and every cell holds paragraphs only, the
+  // only thing a cell may hold, so a heading or list in a pasted cell can't split the table.
+  for (const caption of Array.from(root.querySelectorAll("table > caption"))) moveCaptionOut(caption)
+  for (const cell of Array.from(root.querySelectorAll("td, th"))) {
+    if (root.contains(cell)) flattenCell(cell as HTMLElement)
+  }
+
+  // ProseMirror doesn't treat these as block boundaries, so a nav (or a details) and the
+  // text after it would run together into one paragraph. Make them divs.
+  for (const cell of Array.from(root.querySelectorAll("caption, nav, details, summary"))) {
     const div = cell.ownerDocument.createElement("div")
     div.append(...Array.from(cell.childNodes))
     cell.replaceWith(div)
@@ -223,6 +236,55 @@ const BLOCK_TAGS = new Set([
   "P", "H1", "H2", "H3", "H4", "H5", "H6", "UL", "OL", "LI", "PRE", "HR", "ADDRESS",
   "HGROUP", "FIGCAPTION", "DL", "DT", "DD", "TABLE", "THEAD", "TBODY", "TFOOT", "TR",
 ])
+
+// What a pasted cell's content is split into lines at (#420): every block element. Each
+// line becomes a paragraph of the cell; an <hr> just ends one.
+const CELL_LINE_TAGS = new Set([...BLOCK_TAGS, "TD", "TH", "CAPTION", "NAV", "DETAILS", "SUMMARY", "LI"])
+
+/**
+ * A pasted cell's content as paragraphs only (#420: cells are `paragraph+`): each block
+ * element in it (a heading, a list item, a nested table's cell, …) ends a line, and the
+ * inline content of each line goes in its own <p>. Whitespace between blocks is dropped.
+ */
+function flattenCell(cell: HTMLElement) {
+  const doc = cell.ownerDocument
+  const lines: HTMLElement[] = []
+  let line: HTMLElement | null = null
+  const walk = (parent: globalThis.Node) => {
+    for (const child of Array.from(parent.childNodes)) {
+      if (child.nodeType === Node.ELEMENT_NODE && CELL_LINE_TAGS.has((child as Element).tagName)) {
+        line = null
+        if ((child as Element).tagName !== "HR") walk(child)
+        line = null
+      } else if (child.nodeType === Node.TEXT_NODE && !line && !child.textContent!.trim()) {
+        continue
+      } else {
+        if (!line) {
+          line = doc.createElement("p")
+          lines.push(line)
+        }
+        line.append(child)
+      }
+    }
+  }
+  walk(cell)
+  cell.replaceChildren(...lines)
+}
+
+/** `<table><caption>X</caption>…</table>` → `<figure><table>…</table><figcaption>X</figcaption></figure>`. */
+function moveCaptionOut(caption: Element) {
+  const table = caption.parentElement!
+  const doc = caption.ownerDocument
+  const figcaption = doc.createElement("figcaption")
+  figcaption.append(...Array.from(caption.childNodes))
+  caption.remove()
+  const figure = table.parentElement?.tagName === "FIGURE" ? table.parentElement : doc.createElement("figure")
+  if (figure !== table.parentElement) {
+    table.replaceWith(figure)
+    figure.append(table)
+  }
+  if (!figure.querySelector(":scope > figcaption")) figure.append(figcaption)
+}
 
 /**
  * Moves `el` out of its closest `selector` ancestor (within `root`) by splitting that
@@ -277,8 +339,11 @@ function parseStyle(style: string): Record<string, string> {
 
 // Wrapper node types a pasted slice context may recreate: lists, quotes and the
 // containers (#414), so a slice copied from inside a group pastes into a new group with
-// default attrs.
-const SLICE_CONTEXT_TYPES = new Set(["bulletList", "orderedList", "listItem", "blockquote", ...CONTAINER_NODE_NAMES])
+// default attrs, and a table's parts (#420), so cells copied from a table paste as cells.
+const SLICE_CONTEXT_TYPES = new Set([
+  "bulletList", "orderedList", "listItem", "blockquote", ...CONTAINER_NODE_NAMES,
+  "tableBlock", "table", "tableRow", "tableCell", "tableHeader",
+])
 
 /**
  * ProseMirror's own clipboard HTML carries `data-pm-slice="<openStart> <openEnd>

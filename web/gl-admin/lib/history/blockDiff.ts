@@ -226,6 +226,7 @@ const TYPE_LABELS: Record<string, string> = {
   ordered_list: "Numbered list",
   list_item: "List item",
   group: "Group",
+  table: "Table",
 }
 
 /** "Heading", "Bulleted list", or a theme block's name ("theme:example/alert" → "Alert"). */
@@ -302,6 +303,13 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       const style = (a: Record<string, unknown>) => GROUP_STYLE_LABELS[String(a.style ?? "none")] ?? GROUP_STYLE_LABELS.none
       add("align", "Width", width(va), width(wa))
       add("style", "Background", style(va), style(wa))
+      break
+    }
+    case "table": {
+      // #420: the cells are the text (word diff, a paragraph break between cells), the
+      // caption is diffed like an image's; the header row is the attribute.
+      const header = (a: Record<string, unknown>) => (a.headerRow === true ? "On" : "Off")
+      add("headerRow", "Header row", header(va), header(wa))
       break
     }
     case "divider":
@@ -458,7 +466,7 @@ function diffBlock(id: string, v: Block, w: Block, vDoc: Doc, wDoc: Doc, moved: 
 
   const attrs = attrChanges(v, w)
   const text = v.type === "image" || v.type === "divider" ? undefined : diffTokens(blockTokens(w), blockTokens(v))
-  const caption = v.type === "image" ? diffTokens(captionTokens(w), captionTokens(v)) : undefined
+  const caption = v.type === "image" || v.type === "table" ? diffTokens(captionTokens(w), captionTokens(v)) : undefined
   const changed = attrs.length > 0 || (text ? hasChanges(text) : false) || (caption ? hasChanges(caption) : false)
   return {
     id,

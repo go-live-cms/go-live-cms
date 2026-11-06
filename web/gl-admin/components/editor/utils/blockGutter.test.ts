@@ -5,6 +5,7 @@ import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 import { CORE_BLOCKS } from "../blocks/catalog"
 import { refOf, topLevelBlockAt } from "./blockActions"
 import { insertFromGutter } from "./blockGutter"
+import { currentTableSizePicker } from "../ui/TableSizePicker"
 
 // Inserting from the gutter's + (#415): every catalog block, below a block or into the
 // empty line + is on, by the block's id.
@@ -32,7 +33,11 @@ const PM_NODE: Record<string, string> = {
   image: "image",
   divider: "horizontalRule",
   group: "group",
+  table: "tableBlock",
 }
+
+// The table asks for its size first (#420): Create table with the defaults.
+const createPickedTable = () => currentTableSizePicker()?.submit()
 
 const types = (ed: Editor) => {
   const out: string[] = []
@@ -45,6 +50,7 @@ describe("insertFromGutter", () => {
     const ed = makeEditor("<h2>Intro</h2><p>alpha</p><p>end</p>")
     const alpha = topLevelBlockAt(ed.state.doc, ed.state.doc.firstChild!.nodeSize)!
     expect(insertFromGutter(ed, refOf(alpha), entry)).toBe(true)
+    createPickedTable()
     expect(types(ed)[2]).toBe(PM_NODE[entry.type])
     expect(ed.state.doc.child(1).textContent).toBe("alpha")
     expect(ed.state.doc.lastChild!.textContent).toBe("end")
@@ -55,6 +61,7 @@ describe("insertFromGutter", () => {
     const ed = makeEditor("<p>alpha</p><p></p><p>end</p>")
     const empty = topLevelBlockAt(ed.state.doc, ed.state.doc.firstChild!.nodeSize)!
     expect(insertFromGutter(ed, refOf(empty), entry)).toBe(true)
+    createPickedTable()
     expect(types(ed)[1]).toBe(PM_NODE[entry.type])
     expect(ed.state.doc.firstChild!.textContent).toBe("alpha")
   })

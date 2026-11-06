@@ -494,7 +494,7 @@ tests at each step including the collab round trip.
 | Callout | flow | `tone` (`info`/`success`/`warning`/`danger`) | Icon plus a visually hidden label ("Info: "), `role="note"`. Content: paragraphs. |
 | Pull quote | flow | `cite` (as quote's, capped) | Rendered as `figure.pullquote` with `figcaption`. |
 | To-do list | flow | — | TipTap TaskList/TaskItem; items are blocks with `checked`, like list items (the id predicate's list rule covers `taskItem`). Published read-only checkboxes. |
-| Table | flow | `caption` (runs), `headerRow` | TipTap table, cells restricted to `paragraph+` (no blocks in cells); the table is one block with its rows in `pm`. Published in a scrolling, focusable region. |
+| Table | flow | `caption` (runs), `headerRow` | TipTap table, cells restricted to `paragraph+` (no blocks in cells); the table is one block with its rows in `pm`. Published in a scrolling, focusable region. Built in #420: the block node is a `tableBlock` (grid + caption), outside the `block` group so it can't land in a quote or list item; `headerRow` is canonical (stored cells are all `tableCell`). |
 | Details | container | `summary` (runs), `open` | 2.4 (summary part, slot if TipTap's extension is used). |
 | Footnotes | container + inline node | `footnoteRef`: inline atom with `footnoteId`; `footnotes` holds `footnote` blocks (id = footnoteId) | Numbered by order of references. The `footnotes` block is created by the insert command, never by an appendTransaction (rule 7). |
 | Video, audio | flow | `mediaId`, `caption` | Native players. |

@@ -279,8 +279,9 @@ function ChangedBlock({ entry, version, working }: { entry: BlockDiffEntry; vers
     }
   }
 
-  if (block.type === "image" && !typeChanged) {
-    // The image as it renders, with its caption replaced by the caption's diff.
+  if ((block.type === "image" || block.type === "table") && !typeChanged) {
+    // The image (or table, #420) as it renders, with its caption replaced by the caption's
+    // diff; a table's changed cell text under it.
     const attrs = { ...(block.attrs as Record<string, unknown>) }
     delete attrs.caption
     const bare = { ...version, blocks: { ...version.blocks, [entry.id]: { ...block, attrs } as Block } }
@@ -291,6 +292,11 @@ function ChangedBlock({ entry, version, working }: { entry: BlockDiffEntry; vers
         {hasCaption && (
           <p className="version-diff__caption">
             <DiffText segments={entry.caption!} />
+          </p>
+        )}
+        {block.type === "table" && text && hasChanges(text) && (
+          <p className="version-diff__text-changes">
+            <span className="version-diff__attr-name">Cells:</span> <DiffText segments={text} />
           </p>
         )}
       </>

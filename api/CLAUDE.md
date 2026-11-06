@@ -1216,6 +1216,12 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - The sanitizer still walks the flat map, so a nested block gets its type's rules.
   `sanitizeGroupAttrs` is an allowlist (`style` none/tinted, `align` content/wide/full; anything
   else deleted).
+- **Table (#420, `post_blocks_table_test.go`):** a flow type (`flowBlockTypes`), rows in its
+  pm, no `children`. `sanitizeTableAttrs` is an allowlist (`pm` that is a `table` node, `text`
+  string, `headerRow` only `true`, `caption` reduced like an image's by `sanitizeCaption`), and
+  `sanitizePMNode` keeps no attrs on `table`/`tableRow` and only `colspan`/`rowspan` on a cell,
+  clamped to 1..`tableMaxSpan` (64, the web's `TABLE_MAX_SPAN`) and left out when 1, at any
+  depth. The bridge's output passes through unchanged (a test pins it).
 - **`contentMediaUses` walks the tree** (`walkBlocks`: blocks_order, then children depth
   first, each once), so an image in a group is in `post_media` and "Used in".
   `blockDocMediaIDs` (the public `media` map) already walks the flat map. `regenerateBlockIDs`

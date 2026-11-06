@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest"
 import { createHash } from "node:crypto"
 import { Extension, getSchema, Mark, Node } from "@tiptap/core"
 import { Schema, type MarkSpec, type NodeSpec } from "prosemirror-model"
+import { TableCell, TableHeader } from "@tiptap/extension-table"
 import { getCoreSchema, schemaExtensions } from "./schema"
+import { Group } from "../../components/editor/extensions/GroupBlock"
+import { GlTable, GlTableRow, TableBlock, TableCaption } from "../../components/editor/extensions/TableBlock"
 import {
   decodeCollabAuthToken,
   describeSchemaForFingerprint,
@@ -161,6 +164,26 @@ describe("schemaFingerprint (#416)", () => {
       const onlyGroup = getSchema([OldDocument, ...Object.values({ ...rest, group: _group })])
       expect(schemaFingerprint(onlyGroup)).not.toBe(schemaFingerprint(before))
       expect(schemaFingerprint(onlyGroup)).not.toBe(core)
+    })
+
+    it("the table (#420) changed it: new node types, and a doc and a group that name the table block", () => {
+      // The schema as it was before #420: no table nodes, `(block | group)+` doc, `block+` group.
+      const { table: _table, document: _document, group: _group, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "(block | group)+" })
+      const OldGroup = Group.extend({ content: "block+" })
+      const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
+      expect(before.nodes.tableBlock).toBeUndefined()
+      for (const name of ["tableBlock", "table", "tableRow", "tableCell", "tableHeader", "tableCaption"]) {
+        expect(getCoreSchema().nodes[name], name).toBeDefined()
+      }
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // A stale tab whose cells took any block (TipTap's default `block+`) is refused too.
+      expect(getCoreSchema().nodes.tableCell.spec.content).toBe("paragraph+")
+      const blockCells = getSchema([
+        ...Object.values({ ...schemaExtensions({ collaborating: true }), table: TableBlock.extend({ addExtensions: () => [GlTable, GlTableRow, TableHeader, TableCell, TableCaption] }) }),
+      ])
+      expect(blockCells.nodes.tableCell.spec.content).toBe("block+")
+      expect(schemaFingerprint(blockCells)).not.toBe(core)
     })
 
     it("an extension without schema doesn't", () => {

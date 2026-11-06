@@ -973,6 +973,28 @@ These are always available and don't need registration:
 | `bullet_list`  | Unordered list                                            |
 | `ordered_list` | Ordered list                                              |
 | `list_item`    | A list's item                                             |
+| `group`        | Blocks kept together (`div.group`, `is-tinted`, `alignwide`/`alignfull`) |
+| `table`        | Rows and columns with an optional header row and caption (below) |
+
+**Table markup (#420).** A theme styles it; nothing else is needed:
+
+```html
+<figure class="table-block">
+  <div class="table-scroll" role="region" tabindex="0" aria-labelledby="b-<id>-caption">
+    <table>
+      <thead><tr><th scope="col">…</th></tr></thead>  <!-- only with a header row -->
+      <tbody><tr><td>…</td></tr></tbody>
+    </table>
+  </div>
+  <figcaption id="b-<id>-caption">…</figcaption>      <!-- only with a caption -->
+</figure>
+```
+
+Make `.table-scroll` scroll sideways (`overflow-x: auto`) and give the `<table>` a
+`min-width`, so a wide table scrolls inside its box on a phone instead of widening the
+page; the box is focusable, so show its focus ring (the arrow keys scroll it). Without a
+caption the region is named "Table" (`aria-label`). Cells hold paragraphs only, rendered
+inline with `<br>` between them. The default theme's rules are in `styles/theme.css`.
 
 ---
 
