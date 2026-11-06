@@ -54,3 +54,25 @@ describe("redirectOn404 (#331)", () => {
     warn.mockRestore()
   })
 })
+
+describe("lookupRedirect", () => {
+  it("keeps answers for a minute, found or not, but not failures", async () => {
+    const { lookupRedirect, clearRedirectCache } = await import("./redirects")
+    clearRedirectCache()
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: "no redirect" }), { status: 404 }))
+    vi.stubGlobal("fetch", fetchMock)
+    expect(await lookupRedirect("/probe", 0)).toBeNull()
+    expect(await lookupRedirect("/probe", 1000)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(await lookupRedirect("/probe", 61_000)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    fetchMock.mockImplementationOnce(async () => new Response("down", { status: 500 }))
+    await expect(lookupRedirect("/flaky", 0)).rejects.toThrow()
+    await Promise.resolve()
+    expect(await lookupRedirect("/flaky", 0)).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    vi.unstubAllGlobals()
+    clearRedirectCache()
+  })
+})

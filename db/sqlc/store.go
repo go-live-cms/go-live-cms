@@ -677,7 +677,7 @@ func (store *SQLStore) CreateTaxonomyTermAndLinkTx(ctx context.Context, arg Crea
 		}
 
 		// Validate that the post exists
-		_, err = q.GetPost(ctx, arg.PostID)
+		_, err = q.LockPostForTerms(ctx, arg.PostID)
 		if err != nil {
 			return fmt.Errorf("post %d not found: %w", arg.PostID, err)
 		}
@@ -686,6 +686,11 @@ func (store *SQLStore) CreateTaxonomyTermAndLinkTx(ctx context.Context, arg Crea
 		result.TaxonomyTerm, err = q.CreateTaxonomyTerm(ctx, arg.CreateTaxonomyTermParams)
 		if err != nil {
 			return fmt.Errorf("failed to create taxonomy term: %w", err)
+		}
+
+		// A new category replaces the post's category (#331: one per post).
+		if _, err := q.RemovePostCategoriesExcept(ctx, RemovePostCategoriesExceptParams{PostID: arg.PostID, KeepTermID: result.TaxonomyTerm.ID}); err != nil {
+			return fmt.Errorf("failed to replace the post's category: %w", err)
 		}
 
 		// link the term to the post

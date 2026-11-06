@@ -21,13 +21,6 @@ import (
 // #331: redirects (redirects.go), category rules, merges and post URLs, on the mock
 // store. taxonomies_redirects_db_test.go runs the flows against the real database.
 
-func asMock(t *testing.T, server *Server, caller db.User, method, path string, body any) *httptest.ResponseRecorder {
-	t.Helper()
-	return doJSON(t, server, method, path, body, func(r *http.Request) {
-		addAuthorization(t, r, server.tokenMaker, authorizationTypeBearer, caller.ID, caller.Username, time.Minute)
-	})
-}
-
 func mockCaller(t *testing.T, role string) (*mockdb.MockStore, *Server, db.User) {
 	t.Helper()
 	store := mockdb.NewMockStore(gomock.NewController(t))
@@ -102,7 +95,7 @@ func TestCreateRedirectAPI(t *testing.T) {
 			FromPath: "/old", ToPath: "/new", StatusCode: 302, Source: db.RedirectSourceManual, CreatedBy: admin.ID,
 		}).Return(created, nil)
 
-		recorder := asMock(t, server, admin, http.MethodPost, "/api/v1/redirects", gin.H{"from_path": "/old/", "to_path": "/new", "status_code": 302})
+		recorder := as(t, server, admin, http.MethodPost, "/api/v1/redirects", gin.H{"from_path": "/old/", "to_path": "/new", "status_code": 302})
 		requireStatus(t, recorder, http.StatusCreated)
 		var body struct {
 			Redirect RedirectResponse `json:"redirect"`
@@ -121,7 +114,7 @@ func TestCreateRedirectAPI(t *testing.T) {
 			require.EqualValues(t, 301, arg.StatusCode)
 			return db.Redirect{ID: 1, FromPath: arg.FromPath, ToPath: arg.ToPath, StatusCode: arg.StatusCode, Source: arg.Source}, nil
 		})
-		requireStatus(t, asMock(t, server, admin, http.MethodPost, "/api/v1/redirects", gin.H{"from_path": "/launch", "to_path": "https://golive.dev/launch"}), http.StatusCreated)
+		requireStatus(t, as(t, server, admin, http.MethodPost, "/api/v1/redirects", gin.H{"from_path": "/launch", "to_path": "https://golive.dev/launch"}), http.StatusCreated)
 	})
 
 	for _, tc := range []struct {
@@ -139,7 +132,7 @@ func TestCreateRedirectAPI(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			store, server, admin := mockCaller(t, RoleAdmin)
 			store.EXPECT().AddRedirectTx(gomock.Any(), gomock.Any()).Times(0)
-			recorder := asMock(t, server, admin, http.MethodPost, "/api/v1/redirects", tc.body)
+			recorder := as(t, server, admin, http.MethodPost, "/api/v1/redirects", tc.body)
 			requireStatus(t, recorder, http.StatusBadRequest)
 			if tc.code != "" {
 				require.Equal(t, tc.code, responseCode(t, recorder))
@@ -159,7 +152,7 @@ func TestCreateRedirectAPI(t *testing.T) {
 		t.Run("Store "+tc.err.Error(), func(t *testing.T) {
 			store, server, admin := mockCaller(t, RoleAdmin)
 			store.EXPECT().AddRedirectTx(gomock.Any(), gomock.Any()).Return(db.Redirect{}, tc.err)
-			recorder := asMock(t, server, admin, http.MethodPost, "/api/v1/redirects", gin.H{"from_path": "/a", "to_path": "/b"})
+			recorder := as(t, server, admin, http.MethodPost, "/api/v1/redirects", gin.H{"from_path": "/a", "to_path": "/b"})
 			requireStatus(t, recorder, tc.status)
 			if tc.code != "" {
 				require.Equal(t, tc.code, responseCode(t, recorder))
@@ -171,9 +164,9 @@ func TestCreateRedirectAPI(t *testing.T) {
 		store, server, editor := mockCaller(t, RoleEditor)
 		store.EXPECT().AddRedirectTx(gomock.Any(), gomock.Any()).Times(0)
 		store.EXPECT().ListRedirects(gomock.Any(), gomock.Any()).Times(0)
-		requireStatus(t, asMock(t, server, editor, http.MethodPost, "/api/v1/redirects", gin.H{"from_path": "/a", "to_path": "/b"}), http.StatusForbidden)
-		requireStatus(t, asMock(t, server, editor, http.MethodGet, "/api/v1/redirects", nil), http.StatusForbidden)
-		requireStatus(t, asMock(t, server, editor, http.MethodDelete, "/api/v1/redirects/3", nil), http.StatusForbidden)
+		requireStatus(t, as(t, server, editor, http.MethodPost, "/api/v1/redirects", gin.H{"from_path": "/a", "to_path": "/b"}), http.StatusForbidden)
+		requireStatus(t, as(t, server, editor, http.MethodGet, "/api/v1/redirects", nil), http.StatusForbidden)
+		requireStatus(t, as(t, server, editor, http.MethodDelete, "/api/v1/redirects/3", nil), http.StatusForbidden)
 	})
 }
 
@@ -188,7 +181,7 @@ func TestListAndDeleteRedirectsAPI(t *testing.T) {
 		}, nil)
 		store.EXPECT().CountRedirects(gomock.Any(), "%photo\\_s%").Return(int64(42), nil)
 
-		recorder := asMock(t, server, admin, http.MethodGet, "/api/v1/redirects?q=photo_s&limit=20&offset=40", nil)
+		recorder := as(t, server, admin, http.MethodGet, "/api/v1/redirects?q=photo_s&limit=20&offset=40", nil)
 		requireStatus(t, recorder, http.StatusOK)
 		var body struct {
 			Redirects []RedirectResponse `json:"redirects"`
@@ -205,17 +198,17 @@ func TestListAndDeleteRedirectsAPI(t *testing.T) {
 
 	t.Run("BadPaging", func(t *testing.T) {
 		_, server, admin := mockCaller(t, RoleAdmin)
-		requireStatus(t, asMock(t, server, admin, http.MethodGet, "/api/v1/redirects?limit=500", nil), http.StatusBadRequest)
-		requireStatus(t, asMock(t, server, admin, http.MethodGet, "/api/v1/redirects?offset=-1", nil), http.StatusBadRequest)
+		requireStatus(t, as(t, server, admin, http.MethodGet, "/api/v1/redirects?limit=500", nil), http.StatusBadRequest)
+		requireStatus(t, as(t, server, admin, http.MethodGet, "/api/v1/redirects?offset=-1", nil), http.StatusBadRequest)
 	})
 
 	t.Run("Delete", func(t *testing.T) {
 		store, server, admin := mockCaller(t, RoleAdmin)
 		store.EXPECT().DeleteRedirect(gomock.Any(), int64(3)).Return(db.Redirect{ID: 3, StatusCode: 301, Source: "manual"}, nil)
 		store.EXPECT().DeleteRedirect(gomock.Any(), int64(4)).Return(db.Redirect{}, sql.ErrNoRows)
-		requireStatus(t, asMock(t, server, admin, http.MethodDelete, "/api/v1/redirects/3", nil), http.StatusNoContent)
-		requireStatus(t, asMock(t, server, admin, http.MethodDelete, "/api/v1/redirects/4", nil), http.StatusNotFound)
-		requireStatus(t, asMock(t, server, admin, http.MethodDelete, "/api/v1/redirects/x", nil), http.StatusBadRequest)
+		requireStatus(t, as(t, server, admin, http.MethodDelete, "/api/v1/redirects/3", nil), http.StatusNoContent)
+		requireStatus(t, as(t, server, admin, http.MethodDelete, "/api/v1/redirects/4", nil), http.StatusNotFound)
+		requireStatus(t, as(t, server, admin, http.MethodDelete, "/api/v1/redirects/x", nil), http.StatusBadRequest)
 		require.Equal(t, []string{db.ActivityRedirectDeleted + " redirect:3"}, activityOf(t, server).verbs())
 	})
 }
@@ -255,7 +248,7 @@ func TestCategoryTermRules(t *testing.T) {
 		store, server, editor := mockCaller(t, RoleEditor)
 		stub(store)
 		store.EXPECT().CreateTaxonomyTerm(gomock.Any(), gomock.Any()).Times(0)
-		recorder := asMock(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms", gin.H{"name": "Deep", "taxonomy_type_id": 1, "parent_id": 11})
+		recorder := as(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms", gin.H{"name": "Deep", "taxonomy_type_id": 1, "parent_id": 11})
 		requireStatus(t, recorder, http.StatusBadRequest)
 		require.Equal(t, "nesting_too_deep", responseCode(t, recorder))
 	})
@@ -265,7 +258,7 @@ func TestCategoryTermRules(t *testing.T) {
 		stub(store)
 		store.EXPECT().CountTermChildren(gomock.Any(), sql.NullInt64{Int64: 10, Valid: true}).Return(int64(1), nil)
 		store.EXPECT().UpdateTaxonomyTerm(gomock.Any(), gomock.Any()).Times(0)
-		recorder := asMock(t, server, editor, http.MethodPut, "/api/v1/taxonomy/terms/10", gin.H{"parent_id": 12})
+		recorder := as(t, server, editor, http.MethodPut, "/api/v1/taxonomy/terms/10", gin.H{"parent_id": 12})
 		requireStatus(t, recorder, http.StatusBadRequest)
 		require.Equal(t, "nesting_too_deep", responseCode(t, recorder))
 	})
@@ -275,10 +268,10 @@ func TestCategoryTermRules(t *testing.T) {
 		stub(store)
 		store.EXPECT().IsPostTypeOrTaxonomyName(gomock.Any(), "tag").Return(true, nil)
 		store.EXPECT().CreateTaxonomyTerm(gomock.Any(), gomock.Any()).Times(0)
-		recorder := asMock(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms", gin.H{"name": "Tag", "taxonomy_type_id": 1})
+		recorder := as(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms", gin.H{"name": "Tag", "taxonomy_type_id": 1})
 		requireStatus(t, recorder, http.StatusBadRequest)
 		require.Equal(t, "slug_reserved", responseCode(t, recorder))
-		recorder = asMock(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms", gin.H{"name": "Search", "taxonomy_type_id": 1})
+		recorder = as(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms", gin.H{"name": "Search", "taxonomy_type_id": 1})
 		require.Equal(t, "slug_reserved", responseCode(t, recorder))
 	})
 
@@ -292,7 +285,7 @@ func TestCategoryTermRules(t *testing.T) {
 				Source: db.RedirectSourceTerm, CreatedBy: editor.ID}, arg.Redirect)
 			return db.TaxonomyTerm{ID: 10, Name: "Guides", Slug: "tutorials", TaxonomyTypeID: 1}, nil
 		})
-		requireStatus(t, asMock(t, server, editor, http.MethodPut, "/api/v1/taxonomy/terms/10", gin.H{"slug": "tutorials"}), http.StatusOK)
+		requireStatus(t, as(t, server, editor, http.MethodPut, "/api/v1/taxonomy/terms/10", gin.H{"slug": "tutorials"}), http.StatusOK)
 	})
 
 	t.Run("DeleteDefault", func(t *testing.T) {
@@ -300,7 +293,7 @@ func TestCategoryTermRules(t *testing.T) {
 		store.EXPECT().GetTaxonomyTerm(gomock.Any(), int64(99)).Return(db.TaxonomyTerm{ID: 99, TaxonomyTypeID: 1}, nil)
 		store.EXPECT().CountPostsByTaxonomyTerm(gomock.Any(), int64(99)).Return(int64(0), nil)
 		store.EXPECT().DeleteTaxonomyTermTx(gomock.Any(), int64(99)).Return(db.ErrDefaultTerm)
-		recorder := asMock(t, server, editor, http.MethodDelete, "/api/v1/taxonomy/terms/99", nil)
+		recorder := as(t, server, editor, http.MethodDelete, "/api/v1/taxonomy/terms/99", nil)
 		requireStatus(t, recorder, http.StatusConflict)
 		require.Equal(t, "default_term", responseCode(t, recorder))
 	})
@@ -338,7 +331,7 @@ func TestMergeTaxonomyTermsAPI(t *testing.T) {
 			return db.MergeTaxonomyTermsTxResult{Target: images, MergedIDs: []int64{21}, MovedPosts: 3,
 				Redirects: []db.Redirect{{ID: 1, FromPath: "/tag/photos", ToPath: "/tag/images", StatusCode: 301, Source: db.RedirectSourceMerge}}}, nil
 		})
-		recorder := asMock(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms/20/merge", gin.H{"source_ids": []int64{21, 21}})
+		recorder := as(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms/20/merge", gin.H{"source_ids": []int64{21, 21}})
 		requireStatus(t, recorder, http.StatusOK)
 		var body struct {
 			MergedIDs  []int64            `json:"merged_ids"`
@@ -370,7 +363,7 @@ func TestMergeTaxonomyTermsAPI(t *testing.T) {
 			store, server, editor := mockCaller(t, RoleEditor)
 			stub(store)
 			store.EXPECT().MergeTaxonomyTermsTx(gomock.Any(), gomock.Any()).Times(0)
-			recorder := asMock(t, server, editor, http.MethodPost, tc.path, tc.body)
+			recorder := as(t, server, editor, http.MethodPost, tc.path, tc.body)
 			requireStatus(t, recorder, tc.status)
 			if tc.code != "" {
 				require.Equal(t, tc.code, responseCode(t, recorder))
@@ -382,7 +375,7 @@ func TestMergeTaxonomyTermsAPI(t *testing.T) {
 		store, server, editor := mockCaller(t, RoleEditor)
 		stub(store)
 		store.EXPECT().MergeTaxonomyTermsTx(gomock.Any(), gomock.Any()).Return(db.MergeTaxonomyTermsTxResult{}, db.ErrDefaultTerm)
-		recorder := asMock(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms/20/merge", gin.H{"source_ids": []int64{21}})
+		recorder := as(t, server, editor, http.MethodPost, "/api/v1/taxonomy/terms/20/merge", gin.H{"source_ids": []int64{21}})
 		requireStatus(t, recorder, http.StatusConflict)
 		require.Equal(t, "default_term", responseCode(t, recorder))
 	})
@@ -390,7 +383,7 @@ func TestMergeTaxonomyTermsAPI(t *testing.T) {
 	t.Run("ContributorForbidden", func(t *testing.T) {
 		store, server, contributor := mockCaller(t, RoleContributor)
 		store.EXPECT().MergeTaxonomyTermsTx(gomock.Any(), gomock.Any()).Times(0)
-		requireStatus(t, asMock(t, server, contributor, http.MethodPost, "/api/v1/taxonomy/terms/20/merge", gin.H{"source_ids": []int64{21}}), http.StatusForbidden)
+		requireStatus(t, as(t, server, contributor, http.MethodPost, "/api/v1/taxonomy/terms/20/merge", gin.H{"source_ids": []int64{21}}), http.StatusForbidden)
 	})
 }
 
@@ -398,7 +391,7 @@ func TestCreatePostRefusesTwoCategories(t *testing.T) {
 	store, server, editor := mockCaller(t, RoleEditor)
 	store.EXPECT().CountCategoryTerms(gomock.Any(), []int64{1, 2, 3}).Return(int64(2), nil)
 	store.EXPECT().CreatePostWithTaxonomyTermsTx(gomock.Any(), gomock.Any()).Times(0)
-	recorder := asMock(t, server, editor, http.MethodPost, "/api/v1/posts", gin.H{
+	recorder := as(t, server, editor, http.MethodPost, "/api/v1/posts", gin.H{
 		"title": "Two categories", "url": "https://example.test/x", "author_ids": []int64{editor.ID}, "taxonomy_ids": []int64{1, 2, 3},
 	})
 	requireStatus(t, recorder, http.StatusBadRequest)

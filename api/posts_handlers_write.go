@@ -386,7 +386,7 @@ func (server *Server) updatePost(c *gin.Context) {
 	if newSlug != "" && newSlug != existingPost.Slug {
 		// A published post's old URL redirects to the new one (#331), in the same
 		// transaction.
-		redirect, redirectErr := server.postSlugRedirect(c.Request.Context(), existingPost, newSlug, getAuthPayload(c).UserID)
+		redirect, redirectErr := server.postSlugRedirect(c.Request.Context(), existingPost, updateParams.PostStatus, newSlug, getAuthPayload(c).UserID)
 		if redirectErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post"})
 			return
@@ -425,6 +425,13 @@ func (server *Server) updatePost(c *gin.Context) {
 			TaxonomyTermIDs: req.TaxonomyIDs,
 		})
 		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post taxonomies"})
+			return
+		}
+	}
+	// A page (or another type) turned into a post gets the default category (#331).
+	if req.TaxonomyIDs == nil && updatedPost.PostType == "post" && existingPost.PostType != "post" {
+		if _, err := server.store.EnsureDefaultCategory(c.Request.Context(), []int64{id}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post taxonomies"})
 			return
 		}

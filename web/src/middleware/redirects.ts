@@ -16,8 +16,30 @@ export interface RedirectTarget {
 // Not the public site's pages: the admin, the API proxy and the files the web serves.
 const SKIPPED_PREFIXES = ["/gl-admin", "/api/", "/uploads/", "/themes/", "/_astro/"]
 
-export function lookupRedirect(path: string): Promise<RedirectTarget | null> {
-  return getPublic<RedirectTarget>(`/redirects?path=${encodeURIComponent(path)}`)
+// Each lookup is an API call from this server's IP, which shares the API's per-IP limit
+// with every page render (#190). Crawlers and scanners hit the same missing paths over
+// and over, so answers (found or not) are kept for a minute, at most CACHE_MAX paths. A
+// redirect added or deleted in Settings takes up to a minute to apply.
+const CACHE_TTL_MS = 60_000
+const CACHE_MAX = 2000
+const cache = new Map<string, { target: Promise<RedirectTarget | null>; expires: number }>()
+
+export function lookupRedirect(path: string, now = Date.now()): Promise<RedirectTarget | null> {
+  const hit = cache.get(path)
+  if (hit && hit.expires > now) return hit.target
+  const target = getPublic<RedirectTarget>(`/redirects?path=${encodeURIComponent(path)}`)
+  if (cache.size >= CACHE_MAX) cache.clear()
+  const entry = { target, expires: now + CACHE_TTL_MS }
+  cache.set(path, entry)
+  // Don't keep a failure: the next request retries.
+  target.catch(() => {
+    if (cache.get(path) === entry) cache.delete(path)
+  })
+  return target
+}
+
+export function clearRedirectCache(): void {
+  cache.clear()
 }
 
 // The Location for target: a site path keeps the request's query (and gets its

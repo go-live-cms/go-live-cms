@@ -13,6 +13,9 @@
 import { getPublicPost, type PublicPost } from "./api"
 import { postPath, type UrlStructure } from "./seo"
 
+// normalizePostSlug's output (api/posts_utils.go).
+const POST_SLUG = /^[\p{L}\p{N}\p{M}]+(?:-[\p{L}\p{N}\p{M}]+)*$/u
+
 export type CategoryRoute =
   | { kind: "post"; published: PublicPost }
   | { kind: "redirect"; location: string }
@@ -24,8 +27,10 @@ export async function resolveCategoryRoute(
   structure: UrlStructure,
   getPost: (slug: string) => Promise<PublicPost | null> = getPublicPost,
 ): Promise<CategoryRoute> {
-  // An id is only ever /{type}/{id}; a slug is never all digits (the API's rule).
-  if (!slug || /^\d+$/.test(slug)) return { kind: "none" }
+  // An id is only ever /{type}/{id}; a slug is never all digits (the API's rule). Post
+  // slugs are letters, digits and single hyphens, so a probe like /wp/login.php costs
+  // no API call (they share the API's per-IP limit with page renders, #190).
+  if (!slug || /^\d+$/.test(slug) || !POST_SLUG.test(slug)) return { kind: "none" }
   const published = await getPost(slug)
   const post = published?.post
   if (!post || post.post_status !== "published" || post.post_type !== "post" || post.slug !== slug) return { kind: "none" }

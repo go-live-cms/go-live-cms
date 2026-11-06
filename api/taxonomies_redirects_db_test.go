@@ -232,3 +232,31 @@ func TestMergeTagsDB(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, state.HasUnpublishedChanges)
 }
+
+// Review follow-ups: a rename in the same request that unpublishes adds no redirect
+// (both URLs are gone), and a page turned into a post gets the default category.
+func TestPostUpdateEdgeCasesDB(t *testing.T) {
+	_, store := scheduleTestDB(t)
+	ctx := context.Background()
+	editor := scheduleUser(t, store, RoleEditor)
+	server := scheduleServer(t, store, newStubCollab(t, 0))
+	setURLStructure(t, store, urlStructureSlug)
+	s := uniqueSuffix()
+
+	post := publishForTest(t, store, scheduleDraft(t, store, editor, "edge"), editor)
+	requireStatus(t, as(t, server, editor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", post.ID), gin.H{"slug": "gone-" + s, "post_status": "draft"}), http.StatusOK)
+	require.Empty(t, publicRedirect(t, server, "/post/"+post.Slug))
+
+	page := scheduleDraft(t, store, editor, "edge")
+	_, err := store.UpdatePost(ctx, db.UpdatePostParams{ID: page.ID, Title: page.Title, Description: page.Description,
+		UserID: page.UserID, Username: page.Username, Url: page.Url, PostType: "page", PostStatus: page.PostStatus})
+	require.NoError(t, err)
+	require.NoError(t, store.RemoveAllPostTaxonomies(ctx, page.ID))
+	requireStatus(t, as(t, server, editor, http.MethodPut, fmt.Sprintf("/api/v1/posts/%d", page.ID), gin.H{"post_type": "post"}), http.StatusOK)
+	category, err := store.GetTaxonomyType(ctx, db.CategoryTaxonomy)
+	require.NoError(t, err)
+	terms, err := store.GetPostTaxonomyTerms(ctx, page.ID)
+	require.NoError(t, err)
+	require.Len(t, terms, 1)
+	require.Equal(t, category.DefaultTermID.Int64, terms[0].ID)
+}

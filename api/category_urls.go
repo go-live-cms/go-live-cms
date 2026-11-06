@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -57,9 +58,11 @@ func termSitePath(taxonomy, slug string) string {
 
 // postSlugRedirect is the redirect a slug change of a published post needs: its old
 // public URL to the new one, under the site's URL structure. nil when the URL doesn't
-// change (URLs by id) or the post has no public page.
-func (server *Server) postSlugRedirect(ctx context.Context, post db.Post, newSlug string, createdBy int64) (*db.AddRedirectParams, error) {
-	if post.PostStatus != publishedStatus || post.Slug == newSlug {
+// change (URLs by id) or the post has no public page before or after the update
+// (newStatus: the status the same request sets; a post unpublished with its rename
+// leaves both URLs 404).
+func (server *Server) postSlugRedirect(ctx context.Context, post db.Post, newStatus, newSlug string, createdBy int64) (*db.AddRedirectParams, error) {
+	if post.PostStatus != publishedStatus || !strings.EqualFold(newStatus, publishedStatus) || post.Slug == newSlug {
 		return nil, nil
 	}
 	settings, err := server.store.GetSettings(ctx)

@@ -21,6 +21,12 @@ describe("resolveCategoryRoute (#331)", () => {
   })
 
   it("leaves everything else to the route", async () => {
+    // Not a post slug: no API call at all.
+    const never = vi.fn()
+    expect(await resolveCategoryRoute("wp", "login.php", "category", never)).toEqual({ kind: "none" })
+    expect(await resolveCategoryRoute("x", "a_b", "category", never)).toEqual({ kind: "none" })
+    expect(never).not.toHaveBeenCalled()
+    expect((await resolveCategoryRoute("old", "olá", "category", async () => published({ slug: "olá" }))).kind).toBe("redirect")
     expect(await resolveCategoryRoute("guides", "42", "category", vi.fn())).toEqual({ kind: "none" })
     expect(await resolveCategoryRoute("guides", "nope", "category", async () => null)).toEqual({ kind: "none" })
     expect(await resolveCategoryRoute("guides", "about", "category", async () => published({ slug: "about", post_type: "page" }))).toEqual({ kind: "none" })
