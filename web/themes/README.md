@@ -918,6 +918,9 @@ The `BlockComponentProps` interface gives every block:
 | `renderContent`   | `(content: PMNode[]) => ReactNode`  | Render ProseMirror inline content with marks    |
 | `getBlockContent` | `(block: Block) => ReactNode`       | Get block content from PM data or fallback text |
 | `renderBlock`     | `(blockId: string) => ReactElement` | Render a child block by ID (for nested blocks)  |
+| `anchorId`        | `string \| undefined`               | `b-<block id>` for a top-level block: put it on your root element as its `id` |
+
+**Put `anchorId` on your root element** (`<div id={anchorId} …>`): the editor's "Copy link to block" (#356) links to `/<post url>#b-<block id>`, and that id is how the link finds your block. It is set for top-level blocks only.
 
 Read attrs through `themeBlockAttrs`: it applies defaults and ignores invalid values. A block can render under any active theme (it stays installed), so either style it inline, as the example does, or make sure your class names degrade gracefully without your stylesheet.
 
@@ -946,6 +949,28 @@ These are always available and don't need registration:
 ## Design Tokens & Dark Mode
 
 The full config format supports design tokens for colors, typography, and layout. These are declared in `theme.config.ts` and can be used in your SCSS/CSS.
+
+### Block colours (required)
+
+The editor's block menu tints a paragraph, heading, quote or list with one of a fixed
+palette of tokens (#356, Block Spec `BLOCK_COLORS`: `gray`, `brown`, `orange`, `yellow`,
+`green`, `blue`, `purple`, `pink`, `red`), as tinted text or as a tinted block, never both.
+The public page renders it as a class on the block: `gl-color-<token>` (text) or
+`gl-color-<token>-background` (a fill). **Every theme styles all eighteen classes, for
+light and for dark**, from `--block-<token>` / `--block-<token>-background` custom
+properties it defines (`themes/blockColors.test.ts` fails otherwise):
+
+```css
+:root { --block-red: #ce2c31; --block-red-background: #feebec; /* … */ }
+[data-theme="dark"] { --block-red: #ff9592; --block-red-background: #3b1219; /* … */ }
+.gl-color-red { color: var(--block-red); }
+.gl-color-red-background { background: var(--block-red-background); color: var(--your-text); padding: 0.125em 0.5em; border-radius: 4px; }
+```
+
+Pick each text colour so it passes 4.5:1 on your page backgrounds, and each fill so your
+body text passes 4.5:1 on it. The default theme keeps them in `theme.config.ts`
+(`blockColors`), checked by its `tokens.test.ts`. A block keeps its `b-<block id>` id
+for "Copy link to block"; give `[id^="b-"]` a `scroll-margin-top` if your header is sticky.
 
 ### Colors
 

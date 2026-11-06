@@ -222,7 +222,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   }, [mode, initialData?.id])
   const dateSettings = useSiteDateSettings()
 
-  const { status: collabStatus, users: collabUsers, unsynced } = useCollabPresence(initialData?.id, collabEnabled)
+  const { status: collabStatus, users: collabUsers, unsynced, unsyncedCount } = useCollabPresence(initialData?.id, collabEnabled)
   const connection = useConnectionView(collabStatus, collabEnabled)
   // Nothing is stored on the device (rule 0): while edits are unsynced or the connection
   // is down, this tab holds the only copy of them.
@@ -1066,6 +1066,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         connection={connection}
         live={collabStatus === "connected"}
         collabUsers={collabUsers}
+        // Click a collaborator's avatar: scroll to their caret (#356).
+        onJumpToCursor={collabEnabled ? (clientIds) => editorRef.current?.jumpToCollaborator(clientIds) ?? false : undefined}
+        unsyncedCount={unsyncedCount}
         me={signedIn ? { id: signedIn.id, name: signedIn.full_name || signedIn.username, src: signedIn.avatar } : undefined}
         viewOnly={contentReadOnly}
         canPublish={canPublish}
@@ -1330,6 +1333,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               }}
               placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
               postId={initialData?.id}
+              // The block menu's "Copy link to block" (#356): the post's public URL.
+              postUrl={liveUrl}
               enableCollaboration={collabEnabled} // Edit mode, for users who may edit this post
               // Block Spec v1 persistence callbacks
               onSaveStart={() => {

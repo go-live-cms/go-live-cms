@@ -5,7 +5,7 @@
  * always gives the same ids, on every render. Tested in headingAnchors.test.ts.
  */
 import { createContext } from "react"
-import type { Block, BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { blockAnchorId, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 
 // Block id → element id for the doc being rendered; BlockRenderer provides it and
 // HeadingBlock reads it. Empty outside a BlockRenderer (no ids).
@@ -89,6 +89,12 @@ export function headingAnchors(doc: BlockDocV1 | null | undefined, reserved: Ite
   const used = new Set<string>()
   const patterns: RegExp[] = []
   for (const r of reserved) typeof r === "string" ? used.add(r) : patterns.push(r)
+  // The block anchors (#356, `b-<block id>` on every top-level block) are taken too, so a
+  // heading whose text slugs to one never shares its id.
+  for (const blockId of doc.blocks_order) {
+    const anchor = blockAnchorId(blockId)
+    if (anchor) used.add(anchor)
+  }
   const reservedByPattern = (id: string) => patterns.some((p) => p.test(id))
   const taken = (id: string) => used.has(id) || reservedByPattern(id)
   // "nav-sub-2", "nav-sub-3", … all match /^nav-sub-\d+$/, so a numbered suffix that

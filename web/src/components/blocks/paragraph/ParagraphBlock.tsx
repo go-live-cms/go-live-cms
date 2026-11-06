@@ -1,8 +1,9 @@
 import React from "react"
 import type { BlockComponentProps } from "../types"
 import { isBlankParagraph } from "../utils/contentRenderer"
+import { blockColorClassOf } from "../utils/blockColor"
 
-const ParagraphBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent }) => {
+const ParagraphBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent, anchorId }) => {
   const content = getBlockContent(block)
   const attrs = block.attrs as Record<string, unknown>
   const pm = attrs?.pm as { attrs?: { textAlign?: string } } | undefined
@@ -16,7 +17,7 @@ const ParagraphBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent 
   // (zero height), erased that spacing (#306). Blank paragraphs at the very end of the
   // document are trimmed by BlockRenderer instead.
   return (
-    <p key={block.id} style={style}>
+    <p key={block.id} id={anchorId} className={blockColorClassOf(attrs)} style={style}>
       {isBlankParagraph(block) ? <br /> : content}
     </p>
   )

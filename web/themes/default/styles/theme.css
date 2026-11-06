@@ -1724,3 +1724,26 @@ body {
 .error-page .search-form {
   max-width: 520px;
 }
+
+/* Block colours (#356): the editor's block menu palette (Block Spec BLOCK_COLORS), as
+   .gl-color-<token> (text) and .gl-color-<token>-background (a tinted block). */
+.gl-color-gray { color: var(--block-gray); }
+.gl-color-brown { color: var(--block-brown); }
+.gl-color-orange { color: var(--block-orange); }
+.gl-color-yellow { color: var(--block-yellow); }
+.gl-color-green { color: var(--block-green); }
+.gl-color-blue { color: var(--block-blue); }
+.gl-color-purple { color: var(--block-purple); }
+.gl-color-pink { color: var(--block-pink); }
+.gl-color-red { color: var(--block-red); }
+.gl-color-gray-background { background: var(--block-gray-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-color-brown-background { background: var(--block-brown-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-color-orange-background { background: var(--block-orange-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-color-yellow-background { background: var(--block-yellow-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-color-green-background { background: var(--block-green-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-color-blue-background { background: var(--block-blue-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-color-purple-background { background: var(--block-purple-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-color-pink-background { background: var(--block-pink-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-color-red-background { background: var(--block-red-background); color: var(--color-text); padding: 0.125em var(--space-2); border-radius: var(--radius-sm); }
+.gl-block-anchor { scroll-margin-top: calc(var(--header-height) + var(--space-5)); }
+[id^="b-"] { scroll-margin-top: calc(var(--header-height) + var(--space-5)); }

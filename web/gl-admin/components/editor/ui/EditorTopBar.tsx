@@ -1,11 +1,13 @@
-import { useState, type ReactNode } from "react"
+import { useState, type CSSProperties, type ReactNode } from "react"
 import { Link } from "react-router-dom"
 import Button, { IconButton } from "@gl-admin/components/ui/Button"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
 import Modal from "@gl-admin/components/ui/Modal"
 import Pill from "@gl-admin/components/ui/Pill"
 import { PostStatusPill } from "@gl-admin/components/ui/PostStatus"
-import { AvatarStack, type AvatarUser } from "@gl-admin/components/ui/Avatar"
+import Avatar, { type AvatarUser } from "@gl-admin/components/ui/Avatar"
+import Tooltip from "@gl-admin/components/ui/Tooltip"
+import { toast } from "@gl-admin/components/ui/Toast"
 import { CheckIcon, ChevronDownIcon, ClockIcon, DangerIcon, LockIcon } from "@gl-admin/components/ui/icons"
 import type { CollabUser } from "@gl-admin/components/editor/utils/useCollabPresence"
 import type { ConnectionView } from "@gl-admin/components/editor/utils/connectionState"
@@ -14,9 +16,9 @@ import "@gl-admin/assets/styles/components/editor/editor-top-bar.scss"
 // The editor's top bar (#341, "Post editor" on the redesign canvas): breadcrumb and
 // status, what is happening to your edits, who's here, settings, view, and the publish
 // button with its menu. Everything it does was there before the redesign; features in
-// the design without a backend yet (Comments, Move to trash, "N edits
-// waiting", click an avatar to jump to its cursor) stay out until their issues land
-// (table on #341). Schedule… (#147) and Schedule update… (#335) open ScheduleDialog,
+// the design without a backend yet (Comments, Move to trash) stay out until their issues
+// land (table on #341). Clicking a collaborator's avatar scrolls to their caret, and
+// offline the status counts the edits waiting in this tab (#356). Schedule… (#147) and Schedule update… (#335) open ScheduleDialog,
 // which PostForm owns.
 
 type SaveStatus = "saved" | "saving" | "error" | null
@@ -34,6 +36,12 @@ type EditorTopBarProps = {
   live: boolean
   // Other people in the post (the presence avatars).
   collabUsers: CollabUser[]
+  // Jump to a person's cursor (#356): their awareness client ids (one per tab). Returns
+  // false when none of them has a caret in the text. Absent: the avatars aren't buttons.
+  onJumpToCursor?: (clientIds: number[]) => boolean
+  // Local edits the collab server hasn't acknowledged yet (the provider's unsynced count):
+  // "Offline · 4 edits waiting".
+  unsyncedCount?: number
   me?: AvatarUser
   viewOnly: boolean
   canPublish: boolean
@@ -118,7 +126,8 @@ export function SaveState({
   viewOnly,
   settingsPending,
   contentPending,
-}: Pick<EditorTopBarProps, "mode" | "saveStatus" | "connection" | "viewOnly" | "settingsPending" | "contentPending">) {
+  unsyncedCount = 0,
+}: Pick<EditorTopBarProps, "mode" | "saveStatus" | "connection" | "viewOnly" | "settingsPending" | "contentPending" | "unsyncedCount">) {
   let content: ReactNode = null
   let tone = ""
   // The session-ended dialog says what happened; nothing here is waiting to be sent.
@@ -143,7 +152,7 @@ export function SaveState({
     content = (
       <>
         <OfflineIcon />
-        {viewOnly ? "Offline" : "Offline · edits wait in this tab"}
+        {offlineLabel(viewOnly, unsyncedCount)}
       </>
     )
   } else if (viewOnly) {
@@ -182,6 +191,70 @@ export function SaveState({
   )
 }
 
+// "Offline · 4 edits waiting" (#356, "Editor connection states" 3): the edits typed here
+// that the server hasn't acknowledged. Nothing waiting yet: whatever is typed now waits.
+export function offlineLabel(viewOnly: boolean, unsynced: number): string {
+  if (viewOnly) return "Offline"
+  if (unsynced > 0) return `Offline · ${unsynced} edit${unsynced === 1 ? "" : "s"} waiting`
+  return "Offline · edits wait in this tab"
+}
+
+type Person = AvatarUser & { clientIds: number[]; self: boolean }
+
+// Who's here (the design's "Presence & permissions"): one avatar per person, others first.
+// Another person's avatar is a button that scrolls to their caret ("Editing · Click to
+// jump to cursor"); yours isn't. Past `max`, the rest collapse into "+n".
+function PresenceAvatars({
+  people,
+  max,
+  paused,
+  onJump,
+}: {
+  people: Person[]
+  max: number
+  paused: boolean
+  onJump?: (person: Person) => void
+}) {
+  const shown = people.length > max ? people.slice(0, max - 1) : people
+  const rest = people.length - shown.length
+  return (
+    <div
+      role="group"
+      aria-label={`${people.length} ${people.length === 1 ? "person" : "people"} in this post`}
+      className={`editor-top-bar__people editor-presence${paused ? " is-paused" : ""}`}
+    >
+      {shown.map((person) =>
+        person.self || !onJump ? (
+          <span key={person.id} className="editor-presence__person">
+            <Avatar user={person} size={28} />
+          </span>
+        ) : (
+          <Tooltip key={person.id} content={person.name} detail="Editing · Click to jump to cursor" placement="bottom">
+            <button
+              type="button"
+              className="editor-presence__person editor-presence__person--jump"
+              aria-label={`Jump to ${person.name}'s cursor`}
+              onClick={() => onJump(person)}
+            >
+              <Avatar user={person} size={28} decorative />
+            </button>
+          </Tooltip>
+        )
+      )}
+      {rest > 0 && (
+        <span
+          className="gl-avatar gl-avatar--more editor-presence__more"
+          style={{ "--avatar-size": "28px" } as CSSProperties}
+          role="img"
+          aria-label={`and ${rest} more`}
+        >
+          +{rest}
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default function EditorTopBar({
   listLabel,
   listHref,
@@ -192,6 +265,8 @@ export default function EditorTopBar({
   connection,
   live,
   collabUsers,
+  onJumpToCursor,
+  unsyncedCount = 0,
   me,
   viewOnly,
   canPublish,
@@ -230,13 +305,21 @@ export default function EditorTopBar({
   const publishDisabled = viewOnly || isSaving || isPublishing || busy || !connected
 
   // One avatar per person (two tabs are one person), others first, then you.
-  const people: AvatarUser[] = []
+  const people: Person[] = []
   for (const u of collabUsers) {
     const id = u.id ?? -u.clientId
-    if (people.some((p) => p.id === id) || (me && id === me.id)) continue
-    people.push({ id, name: u.name ?? "Guest", src: u.avatar })
+    if (me && id === me.id) continue
+    const known = people.find((p) => p.id === id)
+    if (known) known.clientIds.push(u.clientId)
+    else people.push({ id, name: u.name ?? "Guest", src: u.avatar, clientIds: [u.clientId], self: false })
   }
-  if (me && mode === "edit") people.push({ ...me, name: `${me.name} (you)` })
+  if (me && mode === "edit") people.push({ ...me, name: `${me.name} (you)`, clientIds: [], self: true })
+
+  const jump = onJumpToCursor
+    ? (person: Person) => {
+        if (!onJumpToCursor(person.clientIds)) toast.info(`${person.name} isn't in the text right now`)
+      }
+    : undefined
 
   const run = async (action?: () => Promise<void>) => {
     if (!action) return
@@ -312,17 +395,10 @@ export default function EditorTopBar({
               viewOnly={viewOnly}
               settingsPending={published && settingsPending}
               contentPending={published && contentPending}
+              unsyncedCount={unsyncedCount}
             />
 
-            {people.length > 0 && (
-              <AvatarStack
-                users={people}
-                max={4}
-                size={28}
-                label={`${people.length} ${people.length === 1 ? "person" : "people"} in this post`}
-                className={`editor-top-bar__people${connection === "online" ? "" : " is-paused"}`}
-              />
-            )}
+            {people.length > 0 && <PresenceAvatars people={people} max={4} paused={connection !== "online"} onJump={jump} />}
 
             <IconButton
               aria-label="Post settings"

@@ -19,6 +19,8 @@ export function useCollabPresence(postId?: number, enabled = true) {
   // Local edits the server hasn't acknowledged yet (the provider's own count): this tab
   // holds the only copy of them (#341, the unload warning).
   const [unsynced, setUnsynced] = useState(false)
+  // How many (#356, "Offline · 4 edits waiting"): updates sent or queued and not yet acked.
+  const [unsyncedCount, setUnsyncedCount] = useState(0)
 
   useEffect(() => {
     if (!postId || !enabled) {
@@ -26,14 +28,22 @@ export function useCollabPresence(postId?: number, enabled = true) {
       setStatus("disconnected")
       setUsers([])
       setUnsynced(false)
+      setUnsyncedCount(0)
       return
     }
     const instance = acquirePostCollab(postId)
     setCollab(instance)
     const awareness = instance.provider.awareness
-    const onUnsynced = () => setUnsynced(instance.provider.hasUnsyncedChanges)
+    // The count is shown only while the connection is down; online it moves on every
+    // keystroke and its ack, and each change would re-render the whole post form.
+    const syncCount = () => setUnsyncedCount(Math.max(0, Number(instance.provider.unsyncedChanges) || 0))
+    const onUnsynced = () => {
+      setUnsynced(instance.provider.hasUnsyncedChanges)
+      if (instance.getStatus() !== "connected" || !instance.provider.hasUnsyncedChanges) syncCount()
+    }
     let raf = 0
-    const onStatus = (s = instance.getStatus()) =>
+    const onStatus = (s = instance.getStatus()) => {
+      syncCount()
       setStatus(
         s === "connected"
           ? "connected"
@@ -43,6 +53,7 @@ export function useCollabPresence(postId?: number, enabled = true) {
               ? "ended"
               : "disconnected"
       )
+    }
     const onUsers = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {
@@ -73,5 +84,5 @@ export function useCollabPresence(postId?: number, enabled = true) {
   }, [postId, enabled, generation])
 
   const clientId = collab?.provider.awareness?.clientID
-  return { status, unsynced, users: clientId != null ? users.filter((u) => u.clientId !== clientId) : users }
+  return { status, unsynced, unsyncedCount, users: clientId != null ? users.filter((u) => u.clientId !== clientId) : users }
 }

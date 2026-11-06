@@ -197,3 +197,39 @@
     transform: rotate(360deg);
   }
 }
+
+// The presence avatars (#356): overlapping by 6px with a ring of the page, like
+// gl-avatar-stack; a collaborator's is a button that jumps to their caret.
+.editor-presence {
+  align-items: center;
+  display: inline-flex;
+
+  > * + * {
+    margin-left: -6px;
+  }
+
+  .gl-avatar {
+    box-shadow: 0 0 0 2px var(--background);
+  }
+
+  &__person {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    padding: 0;
+  }
+
+  &__person--jump {
+    cursor: pointer;
+
+    &:hover .gl-avatar {
+      box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--border-strong);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+  }
+}

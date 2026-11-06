@@ -8,6 +8,7 @@ import { Schema, type MarkSpec, type NodeSpec } from "prosemirror-model"
 import { ImageWithMediaId } from "../../components/editor/extensions/ImageWithMediaId"
 import { BlockIdExtension } from "../../components/editor/extensions/BlockIdExtension"
 import { QuoteCitation } from "../../components/editor/extensions/QuoteCitation"
+import { BlockColor } from "../../components/editor/extensions/BlockColor"
 
 const lowlight = createLowlight(common)
 
@@ -55,6 +56,8 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     }),
     textAlign: TextAlign.configure({ types: ["heading", "paragraph"] }),
     quoteCitation: QuoteCitation,
+    // #356: the block menu's Colour (a palette token, never a free colour).
+    blockColor: BlockColor,
     blockId: BlockIdExtension,
   }
 }

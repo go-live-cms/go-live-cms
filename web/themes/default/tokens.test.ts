@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import themeConfig, { type ThemeColors } from "./theme.config"
 import { cssName, themeCssVariables } from "./tokens"
 import { AVATAR_COLORS } from "./lib/avatar"
+import { BLOCK_COLOR_TOKENS } from "@gl-admin/lib/blocks-spec"
 
 // The default theme's colours (#345) must keep the WCAG AA contrast the Foundations
 // board promises, in both themes. Same check as gl-admin/assets/styles/tokens.test.ts
@@ -61,6 +62,33 @@ describe.each(["light", "dark"] as const)("%s colours", (theme) => {
     expect(colors[fg], fg).toBeDefined()
     expect(colors[bg], bg).toBeDefined()
     expect(contrast(colors[fg]!, colors[bg]!)).toBeGreaterThanOrEqual(min)
+  })
+})
+
+// Block colours (#356): every palette token, in both palettes; tinted text on every page
+// surface, the page's text on every tinted block.
+describe.each(["light", "dark"] as const)("%s block colours", (theme) => {
+  const palette = themeConfig.blockColors![theme]
+  const colors = themeConfig.colors[theme]
+
+  it("defines every token, as #rrggbb", () => {
+    expect(Object.keys(palette).sort()).toEqual([...BLOCK_COLOR_TOKENS].sort())
+    for (const { text, background } of Object.values(palette)) {
+      expect(text).toMatch(/^#[0-9a-f]{6}$/)
+      expect(background).toMatch(/^#[0-9a-f]{6}$/)
+    }
+  })
+
+  it.each(BLOCK_COLOR_TOKENS)("%s meets 4.5:1 as text and as a fill", (token) => {
+    const { text, background } = palette[token]
+    for (const surface of [colors.background, colors.surface, colors.surface2!]) expect(contrast(text, surface)).toBeGreaterThanOrEqual(TEXT)
+    expect(contrast(colors.text, background)).toBeGreaterThanOrEqual(TEXT)
+  })
+
+  it("becomes --block-* custom properties", () => {
+    const css = themeCssVariables(themeConfig)
+    expect(css).toContain(`--block-red:${palette.red.text};`)
+    expect(css).toContain(`--block-red-background:${palette.red.background};`)
   })
 })
 

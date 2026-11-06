@@ -25,6 +25,14 @@ export interface ThemeColors {
   focus?: string
 }
 
+/**
+ * Block colours (#356): the editor's block menu palette (Block Spec `BLOCK_COLOR_TOKENS`),
+ * each a text colour (on `background`/`surface`) and a block fill (under `text`). They
+ * become `--block-<token>` and `--block-<token>-background` (tokens.ts), read by the
+ * `.gl-color-*` rules in styles/theme.css.
+ */
+export type BlockColorPalette = Record<string, { text: string; background: string }>
+
 export interface ThemeTypography {
   fontFamily: {
     base: string
@@ -110,6 +118,11 @@ export interface ThemeConfig {
     dark: ThemeColors
   }
 
+  blockColors?: {
+    light: BlockColorPalette
+    dark: BlockColorPalette
+  }
+
   typography: ThemeTypography
 
   layout: ThemeLayout
@@ -193,6 +206,33 @@ export const themeConfig: ThemeConfig = {
       borderStrong: "#6f6d66",
       highlight: "#4a3a10",
       focus: "#1fd8a4",
+    },
+  },
+
+  // Block colours (#356): Radix step 11 for text (a shade darker for orange, yellow,
+  // green and blue, so they pass 4.5:1 on surface2 too) and step 3 for fills.
+  blockColors: {
+    light: {
+      gray: { text: "#60646c", background: "#f0f0f3" },
+      brown: { text: "#815e46", background: "#f6eee7" },
+      orange: { text: "#b84a00", background: "#ffefd6" },
+      yellow: { text: "#9e5d00", background: "#fff7c2" },
+      green: { text: "#1e7a52", background: "#e6f6eb" },
+      blue: { text: "#0c6cbf", background: "#e6f4fe" },
+      purple: { text: "#6550b9", background: "#f4f0fe" },
+      pink: { text: "#c2298a", background: "#fee9f5" },
+      red: { text: "#ce2c31", background: "#feebec" },
+    },
+    dark: {
+      gray: { text: "#b0b4ba", background: "#212225" },
+      brown: { text: "#dbb594", background: "#2e201a" },
+      orange: { text: "#ffa057", background: "#331e0b" },
+      yellow: { text: "#ffca16", background: "#302008" },
+      green: { text: "#3dd68c", background: "#132d21" },
+      blue: { text: "#70b8ff", background: "#0d2847" },
+      purple: { text: "#baa7ff", background: "#291f43" },
+      pink: { text: "#ff8dcc", background: "#37172f" },
+      red: { text: "#ff9592", background: "#3b1219" },
     },
   },
 

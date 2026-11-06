@@ -4,7 +4,7 @@ import type { BlockComponentProps } from "../types"
 import { renderContent } from "../utils/contentRenderer"
 import { blockMediaFor, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
 
-const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
+const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc, anchorId }) => {
   const attrs = block.attrs as Record<string, unknown>
   const title = attrs?.title as string | undefined
   const sizes = useContext(ImageSizesContext)
@@ -21,9 +21,17 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
   // don't make it wait for lazy loading.
   const eager = isFirstImageBlock(doc, block.id)
 
+  // Caption and width (#346). An image with neither stays a bare <img>, as before, and then
+  // carries the block anchor (#356) itself. Only text runs and caption marks (the API
+  // sanitizer strips the rest too).
+  const caption = captionRuns(attrs?.caption)
+  const align = isImageAlign(attrs?.align) && attrs.align !== "inline" ? attrs.align : null
+  const bare = caption.length === 0 && !align
+
   const img = (
     <img
       key={block.id}
+      id={bare ? anchorId : undefined}
       src={image.src}
       srcSet={image.srcSet}
       sizes={image.sizes}
@@ -37,14 +45,10 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
     />
   )
 
-  // Caption and width (#346). An image with neither stays a bare <img>, as before.
-  // Only text runs and caption marks (the API sanitizer strips the rest too).
-  const caption = captionRuns(attrs?.caption)
-  const align = isImageAlign(attrs?.align) && attrs.align !== "inline" ? attrs.align : null
-  if (caption.length === 0 && !align) return img
+  if (bare) return img
 
   return (
-    <figure key={block.id} className={align ? `align-${align}` : undefined}>
+    <figure key={block.id} id={anchorId} className={align ? `align-${align}` : undefined}>
       {img}
       {caption.length > 0 && <figcaption>{renderContent(caption)}</figcaption>}
     </figure>

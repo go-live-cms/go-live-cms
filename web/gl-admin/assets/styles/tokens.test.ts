@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 import { PRESENCE_COLORS } from "@gl-admin/lib/collaboration/postCollab"
+import { BLOCK_COLOR_TOKENS } from "@gl-admin/lib/blocks-spec"
 
 // The design tokens (#337) must keep the WCAG AA contrast the Foundations board
 // promises, in both themes. Reads _tokens.scss as text: each theme is a mixin of
@@ -59,6 +60,12 @@ const PAIRS: [string, string, number][] = [
   ["text-primary", "code-block-background", TEXT],
   ["control-border", "background", UI],
   ["focus-ring", "background", UI],
+  // Block colours (#356): tinted text on the page, and the page's text on a tinted block.
+  ...BLOCK_COLOR_TOKENS.flatMap((token): [string, string, number][] => [
+    [`block-${token}`, "background", TEXT],
+    [`block-${token}`, "background-subtle", TEXT],
+    ["text-primary", `block-${token}-background`, TEXT],
+  ]),
 ]
 
 describe.each(["light", "dark"])("%s theme tokens", (theme) => {

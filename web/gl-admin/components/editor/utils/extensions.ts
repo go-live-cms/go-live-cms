@@ -10,6 +10,7 @@ import { getSlashCommandItems } from "../blocks"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
+import { BlockActions } from "./blockActions"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
@@ -54,8 +55,11 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.image,
       schema.textAlign,
       schema.quoteCitation,
+      schema.blockColor,
       schema.blockId,
       BlockNodeViews,
+      // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
+      BlockActions,
       PasteSanitizer,
       Placeholder.configure({
         includeChildren: true,
