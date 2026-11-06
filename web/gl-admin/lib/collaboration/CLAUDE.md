@@ -280,9 +280,10 @@ kept so references in code stay valid.
     the same checks; `blocks-spec/nestingVectors.json` pins both.
   - **Paste:** the containers are `data-pm-slice` contexts (attrs reset to null) and a group's
     `<div data-type="group" data-style data-align>` survives the sanitizer with valid values only.
-  - **Stale clients:** an editor bundle from before #414 has no `group` type: y-tiptap deletes a
-    group a newer peer inserts (rule 10's uncovered case) until #416's schema fingerprint guard
-    refuses such tabs. Reload open admin tabs after deploying this.
+  - **Stale clients:** an editor bundle from before #414 has no `group` type (and a `block+`
+    doc), so y-tiptap would delete a group a newer peer inserts. The schema fingerprint guard
+    (#416, rule 10) refuses such a tab with `schema-mismatch` before it syncs, and it reloads;
+    `schemaFingerprint.test.ts` pins that Group changes the fingerprint.
   - Tests: `blocks-spec/nesting.test.ts` (vectors, table), `blockBridge.nesting.test.ts` (round
     trips, drops, synthesized ids, cycles, the store's per-child fallback),
     `components/editor/extensions/GroupBlock.test.ts` (commands, view, split/duplicate/paste ids)
