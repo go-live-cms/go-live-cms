@@ -4,7 +4,9 @@ import {
   captionRuns,
   IMAGE_BLOCK_VERSION,
   isImageAlign,
+  normalizeBlockColor,
   normalizeCite,
+  type BlockColor,
   type BlockDocV1,
   type Block,
   type BlockID,
@@ -112,8 +114,9 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         type: "paragraph",
         version: 1,
         attrs: {
-          pm: node.toJSON(),
+          pm: pmJSON(node, "blockColor"),
           text: node.textContent || undefined,
+          ...blockColorOf(node),
         },
       }
 
@@ -124,24 +127,25 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         version: 1,
         attrs: {
           level: node.attrs.level as 1 | 2 | 3 | 4 | 5 | 6,
-          pm: node.toJSON(),
+          pm: pmJSON(node, "blockColor"),
           text: node.textContent || undefined,
+          ...blockColorOf(node),
         },
       }
 
     case "blockquote": {
       // `cite` is the block's attr, not the pm node's: the stored pm stays what it was
-      // before #346, and a pm `cite` can't disagree with it.
-      const pm = node.toJSON()
-      const { cite, ...pmAttrs } = pm.attrs ?? {}
+      // before #346, and a pm `cite` can't disagree with it. Same for `blockColor` (#356).
+      const pm = pmJSON(node, "cite", "blockColor")
       return {
         id,
         type: "blockquote",
         version: BLOCKQUOTE_BLOCK_VERSION,
         attrs: {
-          pm: { ...pm, attrs: pmAttrs },
+          pm,
           text: node.textContent || undefined,
-          cite: normalizeCite(cite) ?? undefined,
+          cite: normalizeCite(node.attrs.cite) ?? undefined,
+          ...blockColorOf(node),
         },
       }
     }
@@ -187,7 +191,7 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         id,
         type: "bullet_list",
         version: 1,
-        attrs: {},
+        attrs: { ...blockColorOf(node) },
         // children will be set by caller
       }
 
@@ -196,7 +200,7 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         id,
         type: "ordered_list",
         version: 1,
-        attrs: {},
+        attrs: { ...blockColorOf(node) },
         // children will be set by caller
       }
 
@@ -206,7 +210,7 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         type: "list_item",
         version: 1,
         attrs: {
-          pm: node.toJSON(),
+          pm: pmJSON(node),
           text: node.textContent || undefined,
         },
       }
@@ -218,7 +222,7 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
         type: node.type.name,
         version: 1,
         attrs: {
-          pm: node.toJSON(),
+          pm: pmJSON(node),
           text: node.textContent || undefined,
           // Preserve custom attributes (variant, message, etc.)
           ...Object.fromEntries(Object.entries(node.attrs).filter(([key]) => key !== "data-block-id")),
@@ -228,12 +232,46 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
 }
 
 /**
+ * Block colour (#356) is the block's attr, canonical in `attrs.blockColor` like a quote's
+ * `cite`, never in its `pm`: left out when the node has none or one outside the palette
+ * (a peer's bad update costs the colour, never the store).
+ */
+function blockColorOf(node: PMNode): { blockColor?: BlockColor } {
+  const color = normalizeBlockColor(node.attrs.blockColor)
+  return color ? { blockColor: color } : {}
+}
+
+/**
+ * A node's JSON for a block's `pm`, without the named top-level attrs (canonical on the
+ * block), and with `blockColor` left out of every node that has none or one outside the
+ * palette. `toJSON` keeps every attr, null ones included: without this, every paragraph
+ * inside a list item, a quote or a theme block would gain `"blockColor": null`, and every
+ * stored post would change (its `block_revision`, "Changes not published") on its first
+ * store after #356. A nested colour (pasted from the editor's own HTML) stays, and renders.
+ */
+function pmJSON(node: PMNode, ...topLevel: string[]): any {
+  const clean = (json: any, root: boolean): any => {
+    if (!json || typeof json !== "object") return json
+    let out = json
+    if (json.attrs && typeof json.attrs === "object") {
+      const attrs = { ...json.attrs }
+      if (root) for (const name of topLevel) delete attrs[name]
+      if ("blockColor" in attrs && normalizeBlockColor(attrs.blockColor) === null) delete attrs.blockColor
+      out = { ...json, attrs }
+    }
+    if (Array.isArray(json.content)) out = { ...out, content: json.content.map((child: any) => clean(child, false)) }
+    return out
+  }
+  return clean(node.toJSON(), true)
+}
+
+/**
  * An installed theme block (#376). Its declared attrs are canonical in the block's
  * `attrs`, like a quote's `cite`, and never in its `pm`, which keeps only the content: the
  * API validates `attrs` against the manifest, and nothing can disagree with them.
  */
 function themeNodeToBlock(node: PMNode, id: BlockID, spec: ThemeBlockSpec): Block {
-  const json = node.toJSON() as { type: string; content?: unknown[] }
+  const json = pmJSON(node) as { type: string; content?: unknown[] }
   return {
     id,
     type: spec.type,
@@ -464,6 +502,22 @@ export function setEditorBlockDoc(editor: Editor, doc: BlockDocV1 | PMNode): boo
 }
 
 /**
+ * The block's colour as node attrs (#356): the block's `attrs.blockColor`, never its pm's,
+ * and only a palette token. Set only when there is one, so a schema without BlockColor
+ * still builds every untinted block.
+ */
+function colorAttrs(block: Block): { blockColor?: string } {
+  const color = normalizeBlockColor((block.attrs as { blockColor?: unknown }).blockColor)
+  return color ? { blockColor: color } : {}
+}
+
+function pmAttrsWithout(pm: any, ...names: string[]): Record<string, unknown> {
+  const attrs = { ...(pm?.attrs ?? {}) }
+  for (const name of names) delete attrs[name]
+  return attrs
+}
+
+/**
  * Convert individual Block to ProseMirror node JSON
  */
 function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: ConvertContext): any {
@@ -476,12 +530,12 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       if (block.attrs.pm) {
         return {
           ...block.attrs.pm,
-          attrs: { ...block.attrs.pm.attrs, ...baseAttrs },
+          attrs: { ...pmAttrsWithout(block.attrs.pm, "blockColor"), ...baseAttrs, ...colorAttrs(block) },
         }
       }
       return {
         type: "paragraph",
-        attrs: baseAttrs,
+        attrs: { ...baseAttrs, ...colorAttrs(block) },
         content: block.attrs.text ? [{ type: "text", text: block.attrs.text }] : [],
       }
 
@@ -490,15 +544,16 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
         return {
           ...block.attrs.pm,
           attrs: {
-            ...block.attrs.pm.attrs,
+            ...pmAttrsWithout(block.attrs.pm, "blockColor"),
             ...baseAttrs,
             level: block.attrs.level,
+            ...colorAttrs(block),
           },
         }
       }
       return {
         type: "heading",
-        attrs: { ...baseAttrs, level: block.attrs.level },
+        attrs: { ...baseAttrs, level: block.attrs.level, ...colorAttrs(block) },
         content: block.attrs.text ? [{ type: "text", text: block.attrs.text }] : [],
       }
 
@@ -508,15 +563,14 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
       const cite = normalizeCite(block.attrs.cite)
       const citeAttrs = cite ? { cite } : {}
       if (block.attrs.pm) {
-        const { cite: _pmCite, ...pmAttrs } = block.attrs.pm.attrs ?? {}
         return {
           ...block.attrs.pm,
-          attrs: { ...pmAttrs, ...baseAttrs, ...citeAttrs },
+          attrs: { ...pmAttrsWithout(block.attrs.pm, "cite", "blockColor"), ...baseAttrs, ...citeAttrs, ...colorAttrs(block) },
         }
       }
       return {
         type: "blockquote",
-        attrs: { ...baseAttrs, ...citeAttrs },
+        attrs: { ...baseAttrs, ...citeAttrs, ...colorAttrs(block) },
         content: [
           {
             type: "paragraph",
@@ -563,14 +617,14 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
     case "bullet_list":
       return {
         type: "bulletList",
-        attrs: baseAttrs,
+        attrs: { ...baseAttrs, ...colorAttrs(block) },
         content: listItemsToPM(block.id, block.children, allBlocks, ctx),
       }
 
     case "ordered_list":
       return {
         type: "orderedList",
-        attrs: baseAttrs,
+        attrs: { ...baseAttrs, ...colorAttrs(block) },
         content: listItemsToPM(block.id, block.children, allBlocks, ctx),
       }
 

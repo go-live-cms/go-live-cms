@@ -4,7 +4,7 @@ import type { BlockComponentProps } from "../types"
 import { renderContent } from "../utils/contentRenderer"
 import { blockMediaFor, ImageSizesContext, isFirstImageBlock, responsiveImageAttrs } from "../utils/responsiveImage"
 
-const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
+const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc, anchorId }) => {
   const attrs = block.attrs as Record<string, unknown>
   const title = attrs?.title as string | undefined
   const sizes = useContext(ImageSizesContext)
@@ -41,10 +41,10 @@ const ImageBlock: React.FC<BlockComponentProps> = ({ block, doc }) => {
   // Only text runs and caption marks (the API sanitizer strips the rest too).
   const caption = captionRuns(attrs?.caption)
   const align = isImageAlign(attrs?.align) && attrs.align !== "inline" ? attrs.align : null
-  if (caption.length === 0 && !align) return img
+  if (caption.length === 0 && !align) return anchorId ? React.cloneElement(img, { id: anchorId }) : img
 
   return (
-    <figure key={block.id} className={align ? `align-${align}` : undefined}>
+    <figure key={block.id} id={anchorId} className={align ? `align-${align}` : undefined}>
       {img}
       {caption.length > 0 && <figcaption>{renderContent(caption)}</figcaption>}
     </figure>

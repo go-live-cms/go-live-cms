@@ -201,6 +201,18 @@ are the most fragile part of the codebase. **Before editing anything under
   warns on unload while the provider has unsynced changes or the connection is down. Editor
   styles use the design tokens only (never `prefers-color-scheme`). Features in the design
   without a backend stay hidden (comments at the top of each file; table on #341).
+- **Block menu, jump to cursor, offline count (#356):** the drag handle is a button that
+  opens `components/editor/ui/BlockMenu.tsx` (a portal: the drag-handle plugin moves the
+  handle into the editor DOM): Colour ›, Duplicate (Ctrl D), Copy link to block, Move to
+  (Ctrl Shift P, `MoveToDialog.tsx`), Delete. The actions are `utils/blockActions.ts` (one
+  transaction each, blocks found by id, ids never copied); rules in
+  `gl-admin/lib/collaboration/CLAUDE.md`. Colour is a palette token (`BLOCK_COLORS`), never
+  a free colour: the admin styles it from `--block-*` (`_tokens.scss`), every public theme
+  from its own `--block-*` as `.gl-color-<value>` (`themes/README.md`). Copy link copies the
+  public URL + `#b-<block id>`, the id `BlockRenderer` puts on every top-level block. The top
+  bar's collaborator avatars are buttons (Tooltip "Editing · Click to jump to cursor") that
+  scroll to their caret, and offline it says "Offline · N edits waiting" (the provider's
+  `unsyncedChanges`).
 - **History "Highlight changes" (#355):** the History panel's switch (`lib/history/highlightChanges.ts`,
   in memory only: rule 0 rules out sessionStorage too, it survives a reload; on by default)
   makes `VersionPreview` compare the version with the working copy **as the collab server

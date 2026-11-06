@@ -379,3 +379,44 @@ func TestSanitize_BlockquoteCite(t *testing.T) {
 		require.Equal(t, map[string]interface{}{"text": "q"}, attrsOf(doc))
 	})
 }
+
+// Block colour (#356): only a palette token survives, on the block and in its pm.
+func TestSanitize_BlockColor(t *testing.T) {
+	t.Run("keeps every palette token on the colourable types", func(t *testing.T) {
+		for _, blockType := range []string{"paragraph", "heading", "blockquote", "bullet_list", "ordered_list"} {
+			for _, color := range []string{"red", "gray", "brown", "blue-background", "pink-background"} {
+				doc := singleBlock(blockType, map[string]interface{}{"blockColor": color})
+				doc.sanitize()
+				require.Equal(t, color, attrsOf(doc)["blockColor"], "%s %s", blockType, color)
+			}
+		}
+	})
+
+	t.Run("drops anything outside the palette", func(t *testing.T) {
+		for _, color := range []interface{}{"#ff0000", "rgb(1,2,3)", "Red", "red; background:url(x)", "background", "-background", "", 3, nil, []interface{}{"red"}} {
+			doc := singleBlock("paragraph", map[string]interface{}{"text": "x", "blockColor": color})
+			doc.sanitize()
+			require.NotContains(t, attrsOf(doc), "blockColor", "color %v", color)
+			require.Equal(t, "x", attrsOf(doc)["text"], "the block stays")
+		}
+	})
+
+	t.Run("drops an unknown colour inside the pm, keeps a valid one", func(t *testing.T) {
+		doc := singleBlock("list_item", map[string]interface{}{
+			"pm": map[string]interface{}{"type": "listItem", "content": []interface{}{
+				map[string]interface{}{"type": "paragraph", "attrs": map[string]interface{}{"blockColor": "javascript:alert(1)"}},
+				map[string]interface{}{"type": "paragraph", "attrs": map[string]interface{}{"blockColor": "green"}},
+			}},
+		})
+		doc.sanitize()
+		content := attrsOf(doc)["pm"].(map[string]interface{})["content"].([]interface{})
+		require.NotContains(t, content[0].(map[string]interface{})["attrs"], "blockColor")
+		require.Equal(t, "green", content[1].(map[string]interface{})["attrs"].(map[string]interface{})["blockColor"])
+	})
+
+	t.Run("leaves a theme block's own attr of that name alone", func(t *testing.T) {
+		doc := singleBlock("theme:example/alert", map[string]interface{}{"blockColor": "anything"})
+		doc.sanitize()
+		require.Equal(t, "anything", attrsOf(doc)["blockColor"], "theme blocks are checked against their manifest")
+	})
+}

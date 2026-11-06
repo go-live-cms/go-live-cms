@@ -1,6 +1,7 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
 import DOMPurify from "dompurify"
+import { normalizeBlockColor } from "@gl-admin/lib/blocks-spec"
 
 const pasteSanitizerPluginKey = new PluginKey("pasteSanitizer")
 
@@ -48,6 +49,12 @@ const ALLOWED_URI_REGEXP = /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+
 
 const CODE_LANGUAGE_CLASS = /(?:^|\s)(language-[\w-]+)(?:\s|$)/
 
+// Block colour (#356): the editor's own clipboard carries `data-block-color` on the blocks
+// that take one (BlockColor.ts). Kept only there and only with a palette token: any other
+// value, any other element, and every inline `color`/`background` style (stripped with
+// the style attribute) is dropped, so a paste can never bring in a free colour.
+const BLOCK_COLOR_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "UL", "OL"])
+
 let purifier: ReturnType<typeof DOMPurify> | null = null
 
 // A private DOMPurify instance, so our hooks and config don't leak into any other caller.
@@ -56,7 +63,7 @@ function getPurifier() {
   purifier = DOMPurify(window)
   purifier.setConfig({
     ALLOWED_TAGS,
-    ALLOWED_ATTR: ["href", "class", "data-pm-slice"],
+    ALLOWED_ATTR: ["href", "class", "data-pm-slice", "data-block-color"],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
     ALLOWED_URI_REGEXP,
@@ -69,6 +76,10 @@ function getPurifier() {
       const match = node.nodeName === "CODE" ? CODE_LANGUAGE_CLASS.exec(data.attrValue) : null
       if (match) data.attrValue = match[1]
       else data.keepAttr = false
+    } else if (data.attrName === "data-block-color") {
+      const color = BLOCK_COLOR_TAGS.has(node.nodeName) ? normalizeBlockColor(data.attrValue) : null
+      if (color === null) data.keepAttr = false
+      else data.attrValue = color
     } else if (data.attrName === "data-pm-slice") {
       const value = sanitizeSliceContext(data.attrValue)
       if (value === null) data.keepAttr = false

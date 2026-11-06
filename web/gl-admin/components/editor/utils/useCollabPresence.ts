@@ -19,6 +19,8 @@ export function useCollabPresence(postId?: number, enabled = true) {
   // Local edits the server hasn't acknowledged yet (the provider's own count): this tab
   // holds the only copy of them (#341, the unload warning).
   const [unsynced, setUnsynced] = useState(false)
+  // How many (#356, "Offline · 4 edits waiting"): updates sent or queued and not yet acked.
+  const [unsyncedCount, setUnsyncedCount] = useState(0)
 
   useEffect(() => {
     if (!postId || !enabled) {
@@ -26,12 +28,16 @@ export function useCollabPresence(postId?: number, enabled = true) {
       setStatus("disconnected")
       setUsers([])
       setUnsynced(false)
+      setUnsyncedCount(0)
       return
     }
     const instance = acquirePostCollab(postId)
     setCollab(instance)
     const awareness = instance.provider.awareness
-    const onUnsynced = () => setUnsynced(instance.provider.hasUnsyncedChanges)
+    const onUnsynced = () => {
+      setUnsynced(instance.provider.hasUnsyncedChanges)
+      setUnsyncedCount(Math.max(0, Number(instance.provider.unsyncedChanges) || 0))
+    }
     let raf = 0
     const onStatus = (s = instance.getStatus()) =>
       setStatus(
@@ -73,5 +79,5 @@ export function useCollabPresence(postId?: number, enabled = true) {
   }, [postId, enabled, generation])
 
   const clientId = collab?.provider.awareness?.clientID
-  return { status, unsynced, users: clientId != null ? users.filter((u) => u.clientId !== clientId) : users }
+  return { status, unsynced, unsyncedCount, users: clientId != null ? users.filter((u) => u.clientId !== clientId) : users }
 }

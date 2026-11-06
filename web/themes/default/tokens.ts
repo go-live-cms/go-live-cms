@@ -7,7 +7,7 @@
  * unless the page says data-theme="light", so a reader without JavaScript still gets
  * their system's theme.
  */
-import type { ThemeColors, ThemeConfig } from "./theme.config"
+import type { BlockColorPalette, ThemeColors, ThemeConfig } from "./theme.config"
 
 // primaryHover -> --color-primary-hover, surface2 -> --color-surface-2
 export function cssName(key: string): string {
@@ -23,6 +23,16 @@ function colorDeclarations(colors: ThemeColors): string {
     Object.entries(colors)
       .filter(([, value]) => value !== undefined)
       .map(([key, value]) => [`color-${cssName(key)}`, value as string]),
+  )
+}
+
+// Block colours (#356): `--block-red`, `--block-red-background`.
+function blockColorDeclarations(palette: BlockColorPalette | undefined): string {
+  return declarations(
+    Object.entries(palette ?? {}).flatMap(([token, { text, background }]): [string, string][] => [
+      [`block-${token}`, text],
+      [`block-${token}-background`, background],
+    ]),
   )
 }
 
@@ -47,8 +57,8 @@ export function staticTokens(config: ThemeConfig): [string, string | number][] {
 }
 
 export function themeCssVariables(config: ThemeConfig): string {
-  const light = colorDeclarations(config.colors.light)
-  const dark = colorDeclarations(config.colors.dark)
+  const light = colorDeclarations(config.colors.light) + blockColorDeclarations(config.blockColors?.light)
+  const dark = colorDeclarations(config.colors.dark) + blockColorDeclarations(config.blockColors?.dark)
   return [
     `:root{color-scheme:light;${light}${declarations(staticTokens(config))}}`,
     `@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark;${dark}}}`,

@@ -28,6 +28,11 @@ export interface BlockComponentProps {
   getBlockContent: (block: Block) => React.ReactNode
   /** Function to render a child block by ID */
   renderBlock: (blockId: string) => React.ReactElement | null
+  /**
+   * The element id of a top-level block (#356): `b-<block id>`, for "Copy link to block".
+   * Put it on the block's root element. Undefined for list children and nested blocks.
+   */
+  anchorId?: string
 }
 
 /**

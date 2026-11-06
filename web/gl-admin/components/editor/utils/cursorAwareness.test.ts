@@ -2,8 +2,12 @@
 // so these pin the structure that caused it instead of measuring.
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { describe, expect, it } from "vitest"
-import { createCaretElement } from "./cursorAwareness"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import * as Y from "yjs"
+import { Awareness } from "y-protocols/awareness"
+import { Editor } from "@tiptap/core"
+import StarterKit from "@tiptap/starter-kit"
+import { createCaretElement, CursorAwareness, scrollToCollaborator } from "./cursorAwareness"
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8")
 
@@ -46,5 +50,62 @@ describe("TipTap base CSS ships with the editor styles (#305)", () => {
 
   it("the editor turns off TipTap's injection (a destroyed editor removes the shared tag)", () => {
     expect(read("../Editor.tsx")).toMatch(/injectCSS:\s*false/)
+  })
+})
+
+// Presence "jump to cursor" (#356): the caret carries its awareness client id, and
+// scrollToCollaborator scrolls to it.
+describe("jump to a collaborator's caret (#356)", () => {
+  const editors: Editor[] = []
+  afterEach(() => {
+    while (editors.length) editors.pop()!.destroy()
+    vi.restoreAllMocks()
+  })
+
+  it("tags each caret with its awareness client id", () => {
+    expect(createCaretElement("Ana", "#2a7e3b", 2, 42).dataset.clientId).toBe("42")
+    expect(createCaretElement("Ana", "#2a7e3b").dataset.clientId).toBeUndefined()
+  })
+
+  function setup() {
+    const awareness = new Awareness(new Y.Doc())
+    const editor = new Editor({
+      element: document.createElement("div"),
+      extensions: [StarterKit, CursorAwareness.configure({ awareness })],
+      content: "<p>first line</p><p>second line</p>",
+    })
+    editors.push(editor)
+    const remote = (clientId: number, selection: { anchor: number; head: number } | null) => {
+      awareness.states.set(clientId, { user: { name: `User ${clientId}`, color: "#2a7e3b" }, selection })
+      awareness.emit("change", [{ added: [clientId], updated: [], removed: [] }, "remote"])
+    }
+    const scrolled: Element[] = []
+    vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this)
+    })
+    return { awareness, editor, remote, scrolled }
+  }
+
+  it("scrolls to the first of the person's tabs that has a caret", () => {
+    // jsdom has no scrollIntoView; give it one to watch.
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {}
+    const { awareness, editor, remote, scrolled } = setup()
+    remote(7, null) // a tab whose window lost focus: no caret
+    remote(8, { anchor: 15, head: 15 })
+    expect(scrollToCollaborator(editor.view, awareness, [7, 8])).toBe(true)
+    expect(scrolled).toHaveLength(1)
+    expect((scrolled[0] as HTMLElement).dataset.clientId).toBe("8")
+    // In the second paragraph (the caret's label is inline in its text).
+    expect(scrolled[0].closest("p")?.textContent).toContain("cond line")
+  })
+
+  it("is false when none of them has a caret, and leaves this user's selection alone", () => {
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {}
+    const { awareness, editor, remote, scrolled } = setup()
+    remote(7, null)
+    editor.commands.setTextSelection(3)
+    expect(scrollToCollaborator(editor.view, awareness, [7, 99])).toBe(false)
+    expect(scrolled).toHaveLength(0)
+    expect(editor.state.selection.from).toBe(3)
   })
 })

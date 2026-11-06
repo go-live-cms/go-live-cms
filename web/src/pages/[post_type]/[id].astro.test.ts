@@ -92,6 +92,45 @@ describe("[post_type]/[id] route", () => {
     expect(urls.some((url) => url.startsWith(`${SERVER_API_URL}/posts/7`))).toBe(false)
   })
 
+  // #356: "Copy link to block" copies /<post url>#b-<block id>; the page must have that id,
+  // once, on the block, for every top-level block (the heading keeps its #351 slug).
+  it("gives every top-level block its b-<id> anchor, once on the page", async () => {
+    const ids = {
+      heading: "6f1c2a90-8a51-4f7e-9b1e-0d3c2b1a0f01",
+      paragraph: "6f1c2a90-8a51-4f7e-9b1e-0d3c2b1a0f02",
+      list: "6f1c2a90-8a51-4f7e-9b1e-0d3c2b1a0f03",
+      item: "6f1c2a90-8a51-4f7e-9b1e-0d3c2b1a0f04",
+      quote: "6f1c2a90-8a51-4f7e-9b1e-0d3c2b1a0f05",
+    }
+    const pm = (type: string, text: string, attrs: object = {}) => ({ type, attrs, content: [{ type: "text", text }] })
+    const anchored = {
+      doc_version: 1,
+      blocks_order: [ids.heading, ids.paragraph, ids.list, ids.quote],
+      blocks: {
+        [ids.heading]: { id: ids.heading, type: "heading", version: 1, attrs: { level: 2, pm: pm("heading", "How it works", { level: 2 }), text: "How it works" } },
+        [ids.paragraph]: { id: ids.paragraph, type: "paragraph", version: 1, attrs: { pm: pm("paragraph", "Body"), text: "Body", blockColor: "blue-background" } },
+        [ids.list]: { id: ids.list, type: "bullet_list", version: 1, attrs: {}, children: [ids.item] },
+        [ids.item]: { id: ids.item, type: "list_item", version: 1, attrs: { pm: { type: "listItem", content: [pm("paragraph", "Item")] }, text: "Item" } },
+        [ids.quote]: {
+          id: ids.quote,
+          type: "blockquote",
+          version: 2,
+          attrs: { pm: { type: "blockquote", content: [pm("paragraph", "Quoted")] }, text: "Quoted" },
+        },
+      },
+    }
+    stubApi(json(200, { ...publishedView, post: { ...publishedView.post, published_blocks: anchored } }))
+    const response = await render()
+    expect(response.status).toBe(200)
+    const html = await response.text()
+    const count = (id: string) => html.split(`id="${id}"`).length - 1
+    for (const id of [ids.heading, ids.paragraph, ids.list, ids.quote]) expect(count(`b-${id}`), id).toBe(1)
+    // List items aren't top-level blocks.
+    expect(count(`b-${ids.item}`)).toBe(0)
+    expect(count("how-it-works")).toBe(1)
+    expect(html).toContain(`<p id="b-${ids.paragraph}" class="gl-color-blue-background">`)
+  })
+
   // #357: the published SEO, never the working one (the admin's GET /posts/:id).
   it("builds the head from the published SEO", async () => {
     process.env.SITE_URL = "https://example.org"

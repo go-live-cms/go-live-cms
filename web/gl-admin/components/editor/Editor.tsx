@@ -26,6 +26,7 @@ import DragHandle from "./ui/DragHandle"
 import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
+import { scrollToCollaborator } from "./utils/cursorAwareness"
 import Notice from "@gl-admin/components/ui/Notice"
 import Modal from "@gl-admin/components/ui/Modal"
 import Button from "@gl-admin/components/ui/Button"
@@ -84,6 +85,8 @@ export type EditorProps = {
    * Read-only: it only listens to the messages CollabSaveStatus already gets.
    */
   onStored?: () => void
+  /** The post's public URL, for the block menu's "Copy link to block" (#356). */
+  postUrl?: string | null
 }
 
 export interface EditorRef {
@@ -103,6 +106,12 @@ export interface EditorRef {
    */
   getBlockDoc: () => BlockDocV1 | null
   getSaveStatus: () => { isSaving: boolean; isPublishing: boolean; saveStatus: "saved" | "saving" | "error" | null }
+  /**
+   * Presence "jump to cursor" (#356): scrolls to the caret of the first of these awareness
+   * clients (one person's tabs) that has one in the text. False when none has (they're
+   * elsewhere, or their window lost focus, which clears a caret).
+   */
+  jumpToCollaborator: (clientIds: number[]) => boolean
 }
 
 type InnerProps = EditorProps & {
@@ -130,6 +139,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     onPublishSuccess,
     onPublishError,
     onStored,
+    postUrl,
     collab,
     unbuildable,
     autoFocus = true,
@@ -319,6 +329,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
         return pmToBlockDoc(editor.state.doc)
       },
       getSaveStatus: () => ({ isSaving: saveState === "saving", isPublishing, saveStatus: saveState }),
+      jumpToCollaborator: (clientIds) =>
+        editor && !editor.isDestroyed && collab ? scrollToCollaborator(editor.view, collab.provider.awareness, clientIds) : false,
     }),
     [collab, saveStatus, editor, postId, readOnly, isPublishing, saveState, onPublishStart, onPublishSuccess, onPublishError, unbuildable]
   )
@@ -365,7 +377,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       {!readOnly && <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />}
       {!readOnly && <BlockTypeToolbar editor={editor} />}
       {!readOnly && <ImageToolbar editor={editor} />}
-      {!readOnly && <DragHandle editor={editor} />}
+      {!readOnly && <DragHandle editor={editor} postUrl={postUrl} />}
       {!readOnly && <MediaSelector editor={editor} postId={postId} />}
 
       <div className="editor-wrapper">

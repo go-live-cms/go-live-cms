@@ -67,6 +67,43 @@ export function normalizeCite(value: unknown): string | null {
 }
 
 /**
+ * Block colour (#356): a fixed palette of theme tokens, never a free colour. A block is
+ * either tinted text (`"red"`) or a tinted background (`"red-background"`), not both:
+ * every theme only has to make each token readable on its own page background (text) and
+ * with its own text colour (background), so no pair a writer picks can fail contrast.
+ * Every theme in `themes/` styles `.gl-color-<value>` in light and dark; the editor uses
+ * the admin's `--block-*` tokens.
+ */
+export const BLOCK_COLOR_TOKENS = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"] as const
+export type BlockColorToken = (typeof BLOCK_COLOR_TOKENS)[number]
+export const BLOCK_COLORS = [
+  ...BLOCK_COLOR_TOKENS,
+  ...BLOCK_COLOR_TOKENS.map((token) => `${token}-background` as const),
+] as const
+export type BlockColor = (typeof BLOCK_COLORS)[number]
+/** The block types that take a colour: their `attrs.blockColor`. */
+export const COLORABLE_BLOCK_TYPES = ["paragraph", "heading", "blockquote", "bullet_list", "ordered_list"] as const
+
+export function isBlockColor(value: unknown): value is BlockColor {
+  return typeof value === "string" && (BLOCK_COLORS as readonly string[]).includes(value)
+}
+
+/** A stored or pasted colour as the palette has it; anything else (a hex, an unknown token) is null. */
+export function normalizeBlockColor(value: unknown): BlockColor | null {
+  return isBlockColor(value) ? value : null
+}
+
+/**
+ * The public element id of a top-level block (#356, "Copy link to block"): `b-<id>`, on
+ * every top-level block the public renderer outputs. Null for an id that isn't safe in
+ * an HTML id and a URL fragment as is (stored ids are UUIDs; anything else gets no
+ * anchor rather than a broken one). Heading ids (#351) never take one of these.
+ */
+export function blockAnchorId(blockId: unknown): string | null {
+  return typeof blockId === "string" && /^[A-Za-z0-9_-]{10,128}$/.test(blockId) ? `b-${blockId}` : null
+}
+
+/**
  * A caption's runs as they may be shown or stored: non-empty text runs with only the
  * caption marks. Used by the bridge and the public renderer.
  */
@@ -96,6 +133,8 @@ export type ParagraphBlock = BaseBlock<
   {
     pm?: any
     text?: string
+    /** #356. Absent: the theme's text colour. */
+    blockColor?: BlockColor
   }
 >
 
@@ -107,6 +146,7 @@ export type HeadingBlock = BaseBlock<
     level: 1 | 2 | 3 | 4 | 5 | 6
     pm?: any
     text?: string
+    blockColor?: BlockColor
   }
 >
 
@@ -117,6 +157,7 @@ export type BlockquoteBlock = BaseBlock<
     text?: string
     /** Plain-text attribution, rendered as `<cite>`. Absent: none. */
     cite?: string
+    blockColor?: BlockColor
   },
   1 | 2
 >
@@ -146,9 +187,9 @@ export type ImageBlock = BaseBlock<
   1 | 2
 >
 
-export type BulletListBlock = BaseBlock<"bullet_list", {}>
+export type BulletListBlock = BaseBlock<"bullet_list", { blockColor?: BlockColor }>
 
-export type OrderedListBlock = BaseBlock<"ordered_list", {}>
+export type OrderedListBlock = BaseBlock<"ordered_list", { blockColor?: BlockColor }>
 
 export type ListItemBlock = BaseBlock<
   "list_item",
@@ -193,6 +234,10 @@ export interface BlockDocV1 {
 
 export const zBlockID = z.string().min(10) // ULID/UUID
 
+// The bridge and the API's sanitizer leave an unknown colour out, so a stored one is
+// always in the palette.
+const zBlockColor = z.enum(BLOCK_COLORS).optional()
+
 const zBase = z.object({
   id: zBlockID,
   version: z.literal(1),
@@ -203,6 +248,7 @@ export const zParagraph = zBase.extend({
   attrs: z.object({
     pm: z.any().optional(),
     text: z.string().optional(),
+    blockColor: zBlockColor,
   }),
 })
 
@@ -212,6 +258,7 @@ export const zHeading = zBase.extend({
     level: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5), z.literal(6)]),
     pm: z.any().optional(),
     text: z.string().optional(),
+    blockColor: zBlockColor,
   }),
 })
 
@@ -228,6 +275,7 @@ export const zBlockquote = zBase.extend({
       .string()
       .refine((cite) => [...cite].length <= CITE_MAX_LENGTH, `at most ${CITE_MAX_LENGTH} characters`)
       .optional(),
+    blockColor: zBlockColor,
   }),
 })
 
@@ -273,13 +321,13 @@ export const zImage = zBase.extend({
 
 export const zBulletList = zBase.extend({
   type: z.literal("bullet_list"),
-  attrs: z.object({}),
+  attrs: z.object({ blockColor: zBlockColor }),
   children: z.array(zBlockID).optional(),
 })
 
 export const zOrderedList = zBase.extend({
   type: z.literal("ordered_list"),
-  attrs: z.object({}),
+  attrs: z.object({ blockColor: zBlockColor }),
   children: z.array(zBlockID).optional(),
 })
 

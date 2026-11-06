@@ -1,5 +1,5 @@
 import React from "react"
-import type { BlockDocV1, Block } from "@gl-admin/lib/blocks-spec"
+import { blockAnchorId, type BlockDocV1, type Block } from "@gl-admin/lib/blocks-spec"
 import { blockRegistry } from "./blocks/registry"
 import { isThemeBlockType } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { renderContent, getBlockContent, isBlankParagraph } from "./blocks/utils/contentRenderer"
@@ -29,7 +29,7 @@ interface BlockRendererProps {
  */
 export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, headings }: BlockRendererProps) {
   const headingIds = new Map((headings ?? headingAnchors(doc)).map((h) => [h.blockId, h.id]))
-  const renderBlock = blockRendererFor(doc)
+  const renderBlock = blockRendererFor(doc, { anchors: true })
 
   // Deduplicate blocks_order to prevent duplicate rendering
   const uniqueBlockIds = Array.from(new Set(doc.blocks_order))
@@ -53,10 +53,15 @@ export default function BlockRenderer({ doc, imageSizes = BLOCK_IMAGE_SIZES, hea
 /**
  * Renders one block of `doc` by id, as BlockRenderer does (children through the same
  * function); null for a block nothing in this build renders. The admin's History
- * comparison (#355) renders blocks one at a time with it.
+ * comparison (#355) renders blocks one at a time with it. With `anchors`, the block it
+ * returns renders with its `b-<id>` element id (#356, "Copy link to block"): the public
+ * page's top-level blocks; their children (rendered through `renderBlock`) get none.
  */
-export function blockRendererFor(doc: BlockDocV1): (blockId: string) => React.ReactElement | null {
-  const renderBlock = (blockId: string): React.ReactElement | null => {
+export function blockRendererFor(
+  doc: BlockDocV1,
+  { anchors = false }: { anchors?: boolean } = {},
+): (blockId: string) => React.ReactElement | null {
+  const render = (blockId: string, topLevel: boolean): React.ReactElement | null => {
     const block = doc.blocks[blockId] as Block
     if (!block) return null
 
@@ -89,8 +94,10 @@ export function blockRendererFor(doc: BlockDocV1): (blockId: string) => React.Re
         renderContent={renderContent}
         getBlockContent={getBlockContent}
         renderBlock={renderBlock}
+        anchorId={topLevel ? (blockAnchorId(block.id) ?? undefined) : undefined}
       />
     )
   }
-  return renderBlock
+  const renderBlock = (blockId: string) => render(blockId, false)
+  return anchors ? (blockId: string) => render(blockId, true) : renderBlock
 }

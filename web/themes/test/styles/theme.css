@@ -533,3 +533,64 @@ pre code {
     font-size: 2.5rem;
   }
 }
+
+/* Block colours (#356): the editor's block menu palette (Block Spec BLOCK_COLORS), as
+   .gl-color-<token> (text) and .gl-color-<token>-background (a tinted block). */
+:root {
+  --block-gray: #60646c;
+  --block-gray-background: #f0f0f3;
+  --block-brown: #815e46;
+  --block-brown-background: #f6eee7;
+  --block-orange: #b84a00;
+  --block-orange-background: #ffefd6;
+  --block-yellow: #9e5d00;
+  --block-yellow-background: #fff7c2;
+  --block-green: #1e7a52;
+  --block-green-background: #e6f6eb;
+  --block-blue: #0c6cbf;
+  --block-blue-background: #e6f4fe;
+  --block-purple: #6550b9;
+  --block-purple-background: #f4f0fe;
+  --block-pink: #c2298a;
+  --block-pink-background: #fee9f5;
+  --block-red: #ce2c31;
+  --block-red-background: #feebec;
+}
+[data-theme=dark] {
+  --block-gray: #b0b4ba;
+  --block-gray-background: #212225;
+  --block-brown: #dbb594;
+  --block-brown-background: #2e201a;
+  --block-orange: #ffa057;
+  --block-orange-background: #331e0b;
+  --block-yellow: #ffca16;
+  --block-yellow-background: #302008;
+  --block-green: #3dd68c;
+  --block-green-background: #132d21;
+  --block-blue: #70b8ff;
+  --block-blue-background: #0d2847;
+  --block-purple: #baa7ff;
+  --block-purple-background: #291f43;
+  --block-pink: #ff8dcc;
+  --block-pink-background: #37172f;
+  --block-red: #ff9592;
+  --block-red-background: #3b1219;
+}
+.gl-color-gray { color: var(--block-gray); }
+.gl-color-brown { color: var(--block-brown); }
+.gl-color-orange { color: var(--block-orange); }
+.gl-color-yellow { color: var(--block-yellow); }
+.gl-color-green { color: var(--block-green); }
+.gl-color-blue { color: var(--block-blue); }
+.gl-color-purple { color: var(--block-purple); }
+.gl-color-pink { color: var(--block-pink); }
+.gl-color-red { color: var(--block-red); }
+.gl-color-gray-background { background: var(--block-gray-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }
+.gl-color-brown-background { background: var(--block-brown-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }
+.gl-color-orange-background { background: var(--block-orange-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }
+.gl-color-yellow-background { background: var(--block-yellow-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }
+.gl-color-green-background { background: var(--block-green-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }
+.gl-color-blue-background { background: var(--block-blue-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }
+.gl-color-purple-background { background: var(--block-purple-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }
+.gl-color-pink-background { background: var(--block-pink-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }
+.gl-color-red-background { background: var(--block-red-background); color: var(--text-primary); padding: 0.125em 0.5em; border-radius: 4px; }

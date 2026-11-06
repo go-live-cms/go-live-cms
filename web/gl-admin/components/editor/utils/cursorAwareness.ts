@@ -1,6 +1,6 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
-import { Decoration, DecorationSet } from "prosemirror-view"
+import { Decoration, DecorationSet, type EditorView } from "prosemirror-view"
 
 type CursorAwarenessOpts = {
   awareness: any
@@ -21,9 +21,11 @@ const key = new PluginKey("cursorAwareness")
  * the line box; the label resets typography it would otherwise inherit from a heading or
  * an emphasized run.)
  */
-export function createCaretElement(label: string, color: string, caretWidth = 2): HTMLSpanElement {
+export function createCaretElement(label: string, color: string, caretWidth = 2, clientId?: number): HTMLSpanElement {
   const caret = document.createElement("span")
   caret.className = "collab-caret"
+  // Presence "jump to cursor" (#356) scrolls to the caret of this awareness client.
+  if (clientId !== undefined) caret.dataset.clientId = String(clientId)
   caret.style.cssText = `
     position:relative; border-left:${caretWidth}px solid ${color};
     margin-left:-${caretWidth / 2}px; margin-right:-${caretWidth / 2}px;
@@ -45,6 +47,39 @@ export function createCaretElement(label: string, color: string, caretWidth = 2)
   `
   caret.appendChild(labelEl)
   return caret
+}
+
+/**
+ * Presence "jump to cursor" (#356): scrolls to the caret this extension drew for the first
+ * of `clientIds` (one person's tabs) that has one, else to the position its awareness
+ * state names. Read-only: it moves the page, never this user's selection. False when none
+ * of them has a caret in the text (a window that lost focus clears its caret).
+ */
+export function scrollToCollaborator(view: EditorView, awareness: any, clientIds: number[]): boolean {
+  const smooth = typeof window.matchMedia === "function" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  const options: ScrollIntoViewOptions = { block: "center", behavior: smooth ? "smooth" : "auto" }
+  for (const id of clientIds) {
+    const caret = view.dom.querySelector<HTMLElement>(`.collab-caret[data-client-id="${Number(id)}"]`)
+    if (caret) {
+      caret.scrollIntoView?.(options)
+      return true
+    }
+  }
+  const states = awareness?.getStates?.() as Map<number, any> | undefined
+  for (const id of clientIds) {
+    const head = states?.get(id)?.selection?.head
+    if (typeof head !== "number") continue
+    try {
+      const { node } = view.domAtPos(Math.max(0, Math.min(head, view.state.doc.content.size)))
+      const element = node instanceof Element ? node : node.parentElement
+      if (!element) continue
+      element.scrollIntoView?.(options)
+      return true
+    } catch {
+      // A stale position (the doc changed under it): no caret to go to.
+    }
+  }
+  return false
 }
 
 export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
@@ -111,7 +146,7 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
                 )
               }
 
-              const caret = createCaretElement(label, color, caretWidth)
+              const caret = createCaretElement(label, color, caretWidth, clientId)
               decos.push(Decoration.widget(h, caret, { key: `caret-${clientId}`, side: 10 }))
             }
 

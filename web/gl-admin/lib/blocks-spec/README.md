@@ -52,6 +52,14 @@ interface Block {
 }
 ```
 
+- **Block colour (#356):** paragraph, heading, blockquote, bullet_list and ordered_list
+  may have `attrs.blockColor`, one of `BLOCK_COLORS` (a theme token for tinted text, or
+  `<token>-background` for a tinted block). Never a free colour, never in `pm`, absent when
+  untinted; the bridge, the validator and the API sanitizer drop anything else. Rules:
+  `../collaboration/CLAUDE.md` (blockBridge notes).
+- **Block anchors (#356):** the public page gives every top-level block the element id
+  `blockAnchorId(id)` = `b-<id>` (only for ids of 10–128 letters, digits, `-`, `_`), the
+  target of the editor's "Copy link to block".
 - Every block keeps both its ProseMirror JSON (`pm`) and plain text (`text`).
 - IDs survive content transforms (heading → paragraph, etc.).
 - Lists are containers: the list block holds its items' ids in order.

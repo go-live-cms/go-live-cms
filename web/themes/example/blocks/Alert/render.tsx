@@ -5,12 +5,14 @@ import alert from "./index"
 import { ALERT_STYLES, type AlertVariant } from "./styles"
 
 // The alert block on the public site (server-rendered by BlockRenderer).
-const AlertBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent }) => {
+const AlertBlock: React.FC<BlockComponentProps> = ({ block, getBlockContent, anchorId }) => {
   const variant = themeBlockAttrs(alert, block.attrs).variant as AlertVariant
   const style = ALERT_STYLES[variant]
 
   return (
     <div
+      // The block's link target on the page (#356, Copy link to block).
+      id={anchorId}
       className={`gl-alert gl-alert--${variant}`}
       role="note"
       style={{

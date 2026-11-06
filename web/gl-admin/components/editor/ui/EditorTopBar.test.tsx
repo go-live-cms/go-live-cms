@@ -194,3 +194,52 @@ describe("EditorTopBar scheduled update", () => {
     expect(statusPill()).toBe("Draft")
   })
 })
+
+// #356: "Offline · 4 edits waiting" from the provider's unsynced count, and clicking a
+// collaborator's avatar scrolls to their caret.
+describe("offline count and jump to cursor (#356)", () => {
+  it("counts the edits waiting in this tab while offline", () => {
+    expect(renderBar("draft", false, false, { connection: "offline", unsyncedCount: 4 })).toContain("Offline · 4 edits waiting")
+    expect(renderBar("draft", false, false, { connection: "offline", unsyncedCount: 1 })).toContain("Offline · 1 edit waiting")
+    expect(renderBar("draft", false, false, { connection: "offline", unsyncedCount: 0 })).toContain("Offline · edits wait in this tab")
+    expect(renderBar("draft", false, false, { connection: "offline", unsyncedCount: 3, viewOnly: true })).toBe("Offline")
+    // Online, the count isn't shown: the save state says what's happening.
+    expect(renderBar("draft", false, false, { unsyncedCount: 3 })).not.toContain("waiting")
+  })
+
+  const people = {
+    me: { id: 1, name: "Luan" },
+    collabUsers: [
+      { clientId: 11, id: 2, name: "Ana Costa" },
+      { clientId: 12, id: 2, name: "Ana Costa" },
+      { clientId: 13, id: 3, name: "Marco Ruiz" },
+    ],
+  }
+
+  it("makes each collaborator's avatar a button that jumps to their tabs' carets", async () => {
+    const onJumpToCursor = vi.fn(() => true)
+    renderBar("draft", false, false, { ...people, onJumpToCursor })
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>(".editor-presence button"))
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual(["Jump to Ana Costa's cursor", "Jump to Marco Ruiz's cursor"])
+    act(() => buttons[0].click())
+    expect(onJumpToCursor).toHaveBeenCalledWith([11, 12])
+    // Your own avatar isn't a button.
+    expect(container.querySelector(".editor-presence")?.textContent).toContain("L")
+    expect(container.querySelectorAll(".editor-presence button")).toHaveLength(2)
+  })
+
+  it("says so when the person has no caret in the text", async () => {
+    const { toast } = await import("@gl-admin/components/ui/Toast")
+    const info = vi.spyOn(toast, "info").mockReturnValue("t")
+    renderBar("draft", false, false, { ...people, onJumpToCursor: () => false })
+    act(() => container.querySelector<HTMLButtonElement>(".editor-presence button")!.click())
+    expect(info).toHaveBeenCalledWith("Ana Costa isn't in the text right now")
+    info.mockRestore()
+  })
+
+  it("without a jump handler (create mode), the avatars are plain", () => {
+    renderBar("draft", false, false, people)
+    expect(container.querySelectorAll(".editor-presence button")).toHaveLength(0)
+    expect(container.querySelector('[role="group"]')?.getAttribute("aria-label")).toBe("3 people in this post")
+  })
+})

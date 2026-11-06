@@ -296,6 +296,45 @@ kept so references in code stay valid.
     `components/editor/extensions/captionCite.collab.test.ts` (commands, keys, views, two
     users on the relay + stored `block_doc`); API side `TestSanitize_Image*` /
     `TestSanitize_BlockquoteCite`.
+- **Block colour (#356): a palette token, never a free colour.** `blockColor` is a global
+  attribute (`components/editor/extensions/BlockColor.ts`, in `schemaExtensions`, so the
+  collab server's schema has it) on paragraph, heading, blockquote and both lists:
+  `BLOCK_COLORS` (`blocks-spec`), a token for tinted text (`"red"`) or the same token with
+  `-background` for a tinted block, **one or the other** (every theme only has to make each
+  token readable as text on its page and under its own text as a fill; `tokens.test.ts` and
+  `themes/default/tokens.test.ts` check 4.5:1). Canonical in the block's
+  **`attrs.blockColor`** like a quote's `cite`, **never in its `pm`** (stripped on the way
+  out, ignored on the way in), absent when untinted. `pmJSON` also leaves
+  `"blockColor": null` out of every nested node: `toJSON` keeps null attrs, and without that
+  every paragraph inside a list item, quote or theme block would change, so every stored
+  post would change on its first store after #356 (pinned by
+  `blockBridge.blockColor.test.tsx`). A nested colour (pasted from the editor's own HTML)
+  stays in the pm and renders. A value outside the palette is dropped everywhere: HTML parse
+  (`data-block-color` only, via `normalizeBlockColor`), the paste sanitizer (#128: kept only on
+  block tags, only a palette value; inline styles never become a colour), the bridge, the
+  validator (`z.enum`, never reached by the bridge's output), the API sanitizer
+  (`sanitizeBlockColor`, any depth of the pm) and the renderer (`gl-color-<value>` classes,
+  `blockColor.ts`). No block version bump: an older renderer ignores the attr. **Stale
+  clients:** an editor bundle from before #356 has no `blockColor` attr; y-tiptap drops it
+  when it rewrites that node. Reload open admin tabs after deploying this.
+- **Block menu (#356, `components/editor/utils/blockActions.ts`, `ui/BlockMenu.tsx`,
+  `ui/MoveToDialog.tsx`):** Duplicate (Ctrl D), Move to (Ctrl Shift P), Copy link to block,
+  Colour, Delete, from the drag handle. Each is **one ProseMirror transaction, so one Yjs
+  transaction** (collaborators see one move), and none is an appendTransaction (rule 7
+  doesn't apply). Blocks are found **by block id when the action runs**, not by the position
+  the menu opened at. **Ids are never copied:** Duplicate strips every `data-block-id` in the
+  copy (`withoutBlockIds`) and BlockIdExtension stamps fresh ones (top-level and list items,
+  #238) in the same transaction; Move (delete + insert) keeps the block's own id. Pinned by
+  `blockActions.test.ts` and `blockActions.collab.test.ts` (two editors on the relay, ids
+  unique in both and in the stored doc, one Yjs transaction, quiet afterwards). Copy link
+  copies `<public post URL>#b-<block id>`: the public renderer puts `id="b-<id>"`
+  (`blockAnchorId`) on every top-level block; a heading keeps its #351 slug and carries the
+  anchor on an empty span, and `headingAnchors` never gives a heading a `b-<id>` slug.
+- **Presence (#356):** clicking a collaborator's avatar calls `EditorRef.jumpToCollaborator`
+  (`scrollToCollaborator` in `utils/cursorAwareness.ts`): it scrolls to the caret drawn for
+  their awareness client (`data-client-id`), else to their awareness selection; it never
+  moves this user's selection. The offline status says "Offline · N edits waiting" from the
+  provider's `unsyncedChanges` (`useCollabPresence`'s `unsyncedCount`): memory only, rule 0.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema; keep them in sync). The server's store runs `validateBlockDoc` (#214)
   before writing `block_doc`. A **known** block type must match its own Zod schema; only

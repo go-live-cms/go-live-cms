@@ -205,8 +205,19 @@ interface BlockComponentProps {
   renderContent: (content: PMNode[] | undefined) => React.ReactNode
   getBlockContent: (block: Block) => React.ReactNode
   renderBlock: (blockId: string) => React.ReactElement | null
+  anchorId?: string // `b-<block id>` on top-level blocks (#356): the root element's id
 }
 ```
+
+- **`anchorId`** (#356, "Copy link to block"): every top-level block's root element gets
+  it as its `id`, so `/<post url>#b-<block id>` lands on it. A heading keeps its slug id
+  (#351) and puts the anchor on an empty `<span class="gl-block-anchor">` at its start.
+  List items and nested blocks get none.
+- **Block colour** (#356): `attrs.blockColor`, a palette token, renders as the class
+  `gl-color-<value>` (`utils/blockColor.ts`: anything outside the palette renders no
+  class). Paragraph, heading, blockquote and both lists read it; a tinted paragraph inside
+  a list item or quote renders as a `<span>` with the class. Themes style the classes
+  (`themes/README.md`, "Block colours").
 
 ## Registry API
 

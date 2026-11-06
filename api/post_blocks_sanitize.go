@@ -78,6 +78,40 @@ func sanitizeBlock(block map[string]interface{}) {
 	case "blockquote":
 		sanitizeBlockquoteAttrs(attrs)
 	}
+
+	// Block colour (#356): a palette token on the core blocks that take one.
+	if colorableBlockTypes[stringOf(block["type"])] {
+		sanitizeBlockColor(attrs)
+	}
+}
+
+// Block colours (Block Spec `BLOCK_COLORS`): a theme token for tinted text, or the same
+// token with `-background` for a tinted block. Never a free colour: the public renderer
+// turns the value into a class name.
+var blockColorTokens = []string{"gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"}
+
+var blockColors = func() map[string]bool {
+	m := make(map[string]bool, 2*len(blockColorTokens))
+	for _, t := range blockColorTokens {
+		m[t] = true
+		m[t+"-background"] = true
+	}
+	return m
+}()
+
+// The core block types with a `blockColor` (Block Spec `COLORABLE_BLOCK_TYPES`).
+var colorableBlockTypes = map[string]bool{
+	"paragraph": true, "heading": true, "blockquote": true, "bullet_list": true, "ordered_list": true,
+}
+
+// sanitizeBlockColor drops a `blockColor` that isn't in the palette (the block renders
+// with the theme's colours), like an unknown image width.
+func sanitizeBlockColor(attrs map[string]interface{}) {
+	if raw, present := attrs["blockColor"]; present {
+		if s, ok := raw.(string); !ok || !blockColors[s] {
+			delete(attrs, "blockColor")
+		}
+	}
 }
 
 // Image widths (Block Spec `IMAGE_ALIGNS`). Absent means "inline".
@@ -182,6 +216,8 @@ func stringOf(v interface{}) string {
 func sanitizePMNode(node map[string]interface{}) {
 	if nattrs, ok := node["attrs"].(map[string]interface{}); ok {
 		stripOnAttrs(nattrs)
+		// A nested node's colour (a tinted paragraph inside a list item) renders too.
+		sanitizeBlockColor(nattrs)
 	}
 
 	if marks, ok := node["marks"].([]interface{}); ok {

@@ -2,6 +2,7 @@ import React from "react"
 import type { PMNode } from "../types"
 import type { Block } from "@gl-admin/lib/blocks-spec"
 import { safeHref, safeCssColor } from "./safeUrl"
+import { blockColorClass } from "./blockColor"
 
 /**
  * Render a single text node with its marks (bold, italic, link, code, etc.)
@@ -100,10 +101,12 @@ export function renderContent(content: PMNode[] | undefined): React.ReactNode {
     if (node.type === "paragraph") {
       const separator = paragraphsSeen++ > 0 ? <br key={`${index}-br`} /> : null
       const inner = isBlankInline(node.content) ? null : renderContent(node.content)
+      // A tinted paragraph inside a list item or quote (#356) keeps its colour.
+      const color = blockColorClass(node.attrs?.blockColor)
       return (
         <React.Fragment key={index}>
           {separator}
-          {inner}
+          {color && inner ? <span className={color}>{inner}</span> : inner}
         </React.Fragment>
       )
     }

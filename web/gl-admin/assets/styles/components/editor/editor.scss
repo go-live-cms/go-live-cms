@@ -683,3 +683,224 @@
   transition: opacity var(--duration-moderate) var(--ease-out);
   z-index: var(--z-raised);
 }
+
+// Block colours (#356): the block menu's Colour, a palette token on the block
+// (BlockColor.ts), never a free colour. The public themes style the same values as
+// .gl-color-<value>. A tinted block keeps --text-primary on its fill (4.5:1, tokens.test.ts).
+.gl-content-editor [data-block-color],
+.editor-block-menu__swatch {
+  &[data-block-color="gray"] {
+    color: var(--block-gray);
+  }
+
+  &[data-block-color="brown"] {
+    color: var(--block-brown);
+  }
+
+  &[data-block-color="orange"] {
+    color: var(--block-orange);
+  }
+
+  &[data-block-color="yellow"] {
+    color: var(--block-yellow);
+  }
+
+  &[data-block-color="green"] {
+    color: var(--block-green);
+  }
+
+  &[data-block-color="blue"] {
+    color: var(--block-blue);
+  }
+
+  &[data-block-color="purple"] {
+    color: var(--block-purple);
+  }
+
+  &[data-block-color="pink"] {
+    color: var(--block-pink);
+  }
+
+  &[data-block-color="red"] {
+    color: var(--block-red);
+  }
+
+  &[data-block-color="gray-background"] {
+    background: var(--block-gray-background);
+  }
+
+  &[data-block-color="brown-background"] {
+    background: var(--block-brown-background);
+  }
+
+  &[data-block-color="orange-background"] {
+    background: var(--block-orange-background);
+  }
+
+  &[data-block-color="yellow-background"] {
+    background: var(--block-yellow-background);
+  }
+
+  &[data-block-color="green-background"] {
+    background: var(--block-green-background);
+  }
+
+  &[data-block-color="blue-background"] {
+    background: var(--block-blue-background);
+  }
+
+  &[data-block-color="purple-background"] {
+    background: var(--block-purple-background);
+  }
+
+  &[data-block-color="pink-background"] {
+    background: var(--block-pink-background);
+  }
+
+  &[data-block-color="red-background"] {
+    background: var(--block-red-background);
+  }
+}
+
+.gl-content-editor [data-block-color$="-background"] {
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 2px var(--space-2);
+}
+
+.editor-drag-handle.is-open {
+  background: var(--background-active);
+  color: var(--text-primary);
+}
+
+// The block menu (ui/BlockMenu.tsx): gl-menu rows with a shortcut hint on the right.
+.editor-block-menu {
+  min-width: 240px;
+
+  &__item {
+    gap: var(--space-2);
+  }
+
+  &__hint {
+    color: var(--text-secondary);
+    display: inline-flex;
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    margin-left: auto;
+    padding-left: var(--space-4);
+    white-space: nowrap;
+  }
+
+  &--colors {
+    max-height: min(560px, calc(100vh - 16px));
+    overflow-y: auto;
+  }
+
+  &__group {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    font-weight: 500;
+    line-height: var(--type-footnote-lh);
+    padding: var(--space-1) var(--space-2);
+  }
+
+  &__swatch {
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+    display: inline-flex;
+    flex: none;
+    font-size: var(--type-label);
+    font-weight: 600;
+    height: 22px;
+    justify-content: center;
+    width: 22px;
+  }
+
+  &__check {
+    color: var(--text-selected);
+    flex: none;
+    margin-left: auto;
+  }
+}
+
+// Move to (ui/MoveToDialog.tsx): a search field over the post's headings.
+.editor-move-to {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+
+  &__search input {
+    background: var(--background);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-md);
+    box-sizing: border-box;
+    color: var(--text-primary);
+    font: inherit;
+    height: 36px;
+    padding: 0 var(--space-3);
+    width: 100%;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    list-style: none;
+    margin: 0;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  &__option {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: var(--space-2);
+    min-height: 36px;
+    padding: var(--space-1) var(--space-2);
+    text-align: left;
+    width: 100%;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--background-hover);
+      outline: none;
+    }
+  }
+
+  &__level {
+    color: var(--text-secondary);
+    flex: none;
+    font-size: var(--type-footnote);
+    font-weight: 600;
+    width: 24px;
+  }
+
+  &__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__empty {
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  &__sr {
+    @include mixins.visually-hidden;
+  }
+}
