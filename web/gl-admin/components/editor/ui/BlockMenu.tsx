@@ -249,7 +249,9 @@ export default function BlockMenu({ editor, target, anchor, postUrl, onClose, on
           Delete
         </Item>
         {lastEdited && (
-          <div id={lastEditedId} className="editor-block-menu__meta">
+          // Not a menu item (a menu owns only items, groups and separators): role none,
+          // and the menu's description (aria-describedby) reads it.
+          <div id={lastEditedId} role="none" className="editor-block-menu__meta">
             {lastEdited}
           </div>
         )}

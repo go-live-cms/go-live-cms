@@ -123,15 +123,22 @@ describe("blockEditsFor", () => {
   })
   const p = (text: string) => ({ type: "paragraph", version: 1, attrs: { text } })
 
-  it("attributes only new or changed blocks, from the tracker, else the fallback", () => {
+  it("attributes only new or changed blocks, from the tracker, else (new blocks only) the fallback", () => {
     const previous = doc({ a: p("a"), b: p("b"), c: p("c") })
     const next = doc({ a: p("a!"), b: p("b"), c: p("c?"), d: p("d") })
     const edits = blockEditsFor(next, previous, capture({ a: { userId: "1", at: 0 } }, ["a", "b", "c", "d"]), { userId: "9", at: 60_000 })
     expect(edits).toEqual([
       { block_id: "a", user_id: 1, edited_at: "1970-01-01T00:00:00.000Z" },
-      { block_id: "c", user_id: 9, edited_at: "1970-01-01T00:01:00.000Z" },
       { block_id: "d", user_id: 9, edited_at: "1970-01-01T00:01:00.000Z" },
     ])
+  })
+
+  it("never gives a changed existing block nobody touched to the last editor (a bridge or sanitizer change)", () => {
+    // A deploy changed what the bridge writes for every block: one user typed in `a`.
+    const previous = doc({ a: p("a"), b: { ...p("b"), attrs: { text: "b", blockColor: null } } })
+    const next = doc({ a: p("a!"), b: p("b") })
+    const edits = blockEditsFor(next, previous, capture({ a: { userId: "1", at: 0 } }, ["a", "b"]), { userId: "1", at: 0 })
+    expect(edits.map((e) => e.block_id)).toEqual(["a"])
   })
 
   it("compares canonically (jsonb reorders keys), and leaves out blocks not from the fragment", () => {

@@ -412,6 +412,10 @@ Edge cases:
 
 - An edit of a block the stored `block_doc` doesn't have is **left out** (logged), not a 400:
   a refused attribution would make the collab server retry the whole content store forever.
+- Step 3's fallback to `lastEditorId` applies to **new** blocks only. An existing block that
+  changed with no tracker entry changed on the server's side (a deploy whose bridge
+  normalizes differently, a stored doc the API sanitized), and the fallback would have given
+  every such block in the post to whoever typed first.
 - Nested blocks (#414): the tracker attributes the nearest block at any depth through the
   shared `isBlockNode` predicate; a new block's whole subtree (a pasted group) is touched.
 - The editor reads the GET when it binds **and after every reconnect** (the `stored`

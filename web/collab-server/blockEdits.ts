@@ -162,10 +162,12 @@ export class BlockChangeTracker {
 /**
  * The attribution a store that writes `blockDoc` sends: every block that came from the
  * fragment (not one `restoreDroppedBlocks` or the unconvertible fallback copied in) and
- * whose JSON is new or differs from `previous`, attributed to its tracker entry, else to
- * `fallback` (the last editor, when a client edited the doc), so a gap in the tracker
- * never drops attribution. A move, or an edit undone before the store, changes no
- * block's JSON and attributes nothing.
+ * whose JSON is new or differs from `previous`, attributed to its tracker entry. A new
+ * block without one goes to `fallback` (the last editor, when a client edited the doc),
+ * so a gap in the tracker never drops a new block's attribution; an existing block
+ * without one is left alone (its change was the server's: bridge normalization, the
+ * API's sanitizing). A move, or an edit undone before the store, changes no block's
+ * JSON and attributes nothing.
  */
 export function blockEditsFor(
   blockDoc: BlockDocV1,
@@ -178,7 +180,11 @@ export function blockEditsFor(
     if (!capture.fragmentIds.has(id)) continue
     const before = previous?.blocks?.[id]
     if (before !== undefined && canonicalJSON(before) === canonicalJSON(block)) continue
-    const touch = capture.byId.get(id) ?? fallback
+    // The fallback only for a block that is new here. An existing block that changed
+    // with no tracker entry changed on the server's side (a deploy whose bridge
+    // normalizes differently, a stored doc the API sanitized): nobody edited it, and
+    // the fallback would give every such block to whoever typed first.
+    const touch = capture.byId.get(id) ?? (before === undefined ? fallback : null)
     if (!touch) continue
     const userId = Number(touch.userId)
     if (!Number.isSafeInteger(userId) || userId <= 0) continue

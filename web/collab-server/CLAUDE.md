@@ -217,8 +217,10 @@ cleanup, stamping) has no context and is ignored. Never the Yjs `clientID`.
 - **Store:** only when the decision is `write`, after `stampFragmentBlockIds`: `capture()`
   resolves element → id, and `blockEditsFor` attributes the blocks that came from the
   fragment (not ones `restoreDroppedBlocks` or the unconvertible fallback copied in) whose
-  `canonicalJSON` is new or differs from `previous`, to their entry, else to
-  `lastEditorId` when `clientEdited`. Sent as `block_edits: [{block_id, user_id,
+  `canonicalJSON` is new or differs from `previous`, to their entry; a **new** block
+  without one goes to `lastEditorId` when `clientEdited`, an existing one without one to
+  nobody (its change was the server's: a bridge that normalizes differently after a deploy,
+  a doc the API sanitized). Sent as `block_edits: [{block_id, user_id,
   edited_at}]` with the PUT; the API writes them in `StorePostCollabTx`. A move, or an edit
   undone before the store, attributes nothing. A tracker exception logs
   `collab_block_edits_failed` and the store goes on without attribution.
