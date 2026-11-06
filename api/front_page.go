@@ -40,15 +40,39 @@ func (req UpdateSettingsRequest) frontPageUpdate() (set bool, id *int64, err err
 	return true, &value, nil
 }
 
-// checkFrontPage answers 400 (or 500) itself unless id is a published page.
+// checkFrontPage answers 400 (or 500) itself unless id is a published page of an
+// active, public page type: what GET /public/front-page shows. Otherwise the save
+// would succeed and / would still list the latest posts.
 func (server *Server) checkFrontPage(c *gin.Context, id int64) bool {
-	post, err := server.store.GetPost(c.Request.Context(), id)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+	ctx := c.Request.Context()
+	invalid := func() bool {
+		msg := "the front page must be a published page"
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "invalid_front_page", "fields": gin.H{"front_page_id": msg}})
+		return false
+	}
+	failed := func() bool {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get the front page"})
 		return false
 	}
-	if err != nil || post.PostType != "page" || post.PostStatus != publishedStatus {
-		msg := "the front page must be a published page"
+	post, err := server.store.GetPost(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return invalid()
+		}
+		return failed()
+	}
+	if post.PostType != "page" || post.PostStatus != publishedStatus {
+		return invalid()
+	}
+	pageType, err := server.store.GetPostType(ctx, post.PostType)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return invalid()
+		}
+		return failed()
+	}
+	if !pageType.Public || !pageType.IsActive {
+		msg := "pages are switched off or not public, so the site can't show one at /"
 		c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "invalid_front_page", "fields": gin.H{"front_page_id": msg}})
 		return false
 	}

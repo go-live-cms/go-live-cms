@@ -52,15 +52,21 @@ export function frontPageWarning(action: FrontPageAction, title: string): { titl
   }
 }
 
-// Settings › General's choices: the latest posts, then the published pages by title. A
-// chosen page that isn't published any more stays listed, marked, so the field shows
-// what is saved.
+// Settings › General's choices: the latest posts, then the published pages by title. The
+// chosen page is always listed, so the field shows what is saved: as it is when it is
+// published but not among `publishedPages` (the field loads 100), marked and not
+// choosable when it isn't published any more.
 export function frontPageOptions(publishedPages: Pick<Post, "id" | "title">[], current: Pick<Post, "id" | "title" | "post_status"> | null): SelectOption[] {
   const options: SelectOption[] = [{ value: LATEST_POSTS, label: "Your latest posts" }]
   const pages = [...publishedPages].sort((a, b) => (a.title || "").localeCompare(b.title || "") || a.id - b.id)
   for (const page of pages) options.push({ value: String(page.id), label: page.title || "Untitled" })
   if (current && !pages.some((p) => p.id === current.id)) {
-    options.push({ value: String(current.id), label: `${current.title || "Untitled"} (not published)`, disabled: true })
+    const title = current.title || "Untitled"
+    options.push(
+      current.post_status === "published"
+        ? { value: String(current.id), label: title }
+        : { value: String(current.id), label: `${title} (not published)`, disabled: true }
+    )
   }
   return options
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { Select } from "@gl-admin/components/ui/Select"
+import Button from "@gl-admin/components/ui/Button"
 import { getPostById, setPageTemplate } from "@gl-admin/lib/api/posts"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { usePageTemplates } from "@gl-admin/lib/hooks/usePageTemplates"
@@ -23,7 +24,7 @@ export default function PageTemplateField({
   settingsKey?: number
   onSaved?: () => void
 }) {
-  const templates = usePageTemplates()
+  const { templates, failed, retry } = usePageTemplates()
   const [stored, setStored] = useState(initial ?? "")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,14 +61,21 @@ export default function PageTemplateField({
   const shown = describeTemplate(templates, stored)
   const hint = shown.missing ? missingTemplateNote(templateValue(stored), shown.label) : shown.description ?? "The layout your theme gives this page."
   return (
-    <Select
-      label="Template"
-      options={templates ? templateOptions(templates, stored) : [{ value: templateValue(stored), label: shown.label }]}
-      value={templateValue(stored)}
-      onChange={(value) => void pick(value)}
-      disabled={readOnly || saving || !templates}
-      hint={hint}
-      error={error}
-    />
+    <div>
+      <Select
+        label="Template"
+        options={templates ? templateOptions(templates, stored) : [{ value: templateValue(stored), label: shown.label }]}
+        value={templateValue(stored)}
+        onChange={(value) => void pick(value)}
+        disabled={readOnly || saving || !templates}
+        hint={failed ? "Couldn't load the theme's templates." : hint}
+        error={error}
+      />
+      {failed && (
+        <Button variant="ghost" size="sm" onClick={retry}>
+          Try again
+        </Button>
+      )}
+    </div>
   )
 }

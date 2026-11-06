@@ -60,6 +60,7 @@ func TestUpdateSettingsFrontPage(t *testing.T) {
 	admin := db.User{ID: 31, Username: "front_admin", Role: RoleAdmin}
 	editor := db.User{ID: 32, Username: "front_editor", Role: RoleEditor}
 	publishedPage := db.Post{ID: 12, PostType: "page", PostStatus: "published"}
+	pagesOn := db.PostType{Name: "page", Public: true, IsActive: true}
 	updated := func(front sql.NullInt64) db.Setting {
 		s := randomSetting()
 		s.FrontPageID = front
@@ -76,6 +77,7 @@ func TestUpdateSettingsFrontPage(t *testing.T) {
 	}{
 		{"SetsPublishedPage", admin, `{"front_page_id": 12}`, func(store *mockdb.MockStore) {
 			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(publishedPage, nil)
+			store.EXPECT().GetPostType(gomock.Any(), "page").Return(pagesOn, nil)
 			store.EXPECT().UpdateSettings(gomock.Any(), gomock.Any()).Times(1).
 				DoAndReturn(func(_ any, arg db.UpdateSettingsParams) (db.Setting, error) {
 					require.True(t, arg.SetFrontPage)
@@ -114,6 +116,24 @@ func TestUpdateSettingsFrontPage(t *testing.T) {
 		}, http.StatusBadRequest, nil},
 		{"LookupError", admin, `{"front_page_id": 12}`, func(store *mockdb.MockStore) {
 			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(db.Post{}, fmt.Errorf("db down"))
+		}, http.StatusInternalServerError, nil},
+		// The site couldn't show it: /public/front-page wants an active, public type.
+		{"PagesSwitchedOff", admin, `{"front_page_id": 12}`, func(store *mockdb.MockStore) {
+			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(publishedPage, nil)
+			store.EXPECT().GetPostType(gomock.Any(), "page").Return(db.PostType{Name: "page", Public: true, IsActive: false}, nil)
+			store.EXPECT().UpdateSettings(gomock.Any(), gomock.Any()).Times(0)
+		}, http.StatusBadRequest, func(t *testing.T, body string) { require.Contains(t, body, "switched off or not public") }},
+		{"PagesNotPublic", admin, `{"front_page_id": 12}`, func(store *mockdb.MockStore) {
+			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(publishedPage, nil)
+			store.EXPECT().GetPostType(gomock.Any(), "page").Return(db.PostType{Name: "page", Public: false, IsActive: true}, nil)
+		}, http.StatusBadRequest, nil},
+		{"PageTypeMissing", admin, `{"front_page_id": 12}`, func(store *mockdb.MockStore) {
+			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(publishedPage, nil)
+			store.EXPECT().GetPostType(gomock.Any(), "page").Return(db.PostType{}, sql.ErrNoRows)
+		}, http.StatusBadRequest, nil},
+		{"PageTypeError", admin, `{"front_page_id": 12}`, func(store *mockdb.MockStore) {
+			store.EXPECT().GetPost(gomock.Any(), int64(12)).Return(publishedPage, nil)
+			store.EXPECT().GetPostType(gomock.Any(), "page").Return(db.PostType{}, fmt.Errorf("db down"))
 		}, http.StatusInternalServerError, nil},
 		{"NotAnID", admin, `{"front_page_id": "about"}`, func(store *mockdb.MockStore) {
 			store.EXPECT().UpdateSettings(gomock.Any(), gomock.Any()).Times(0)

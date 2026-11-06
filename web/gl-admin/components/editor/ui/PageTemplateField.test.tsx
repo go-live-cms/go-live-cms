@@ -7,19 +7,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const api = vi.hoisted(() => ({ setPageTemplate: vi.fn(), getPostById: vi.fn() }))
 vi.mock("@gl-admin/lib/api/posts", () => api)
-vi.mock("@gl-admin/lib/api/themes", () => ({
-  getActiveTheme: () =>
-    Promise.resolve({
-      config: {
-        page_templates: [
-          { name: "default", label: "Default", description: "One reading column" },
-          { name: "fullwidth", label: "Full width", description: "A title band across the page" },
-        ],
-      },
-    }),
-}))
+const THEME = {
+  config: {
+    page_templates: [
+      { name: "default", label: "Default", description: "One reading column" },
+      { name: "fullwidth", label: "Full width", description: "A title band across the page" },
+    ],
+  },
+}
+const themes = vi.hoisted(() => ({ getActiveTheme: vi.fn() }))
+vi.mock("@gl-admin/lib/api/themes", () => themes)
 
 import PageTemplateField from "./PageTemplateField"
+import { resetPageTemplates } from "@gl-admin/lib/hooks/usePageTemplates"
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -55,6 +55,8 @@ beforeEach(() => {
   root = createRoot(container)
   api.setPageTemplate.mockReset().mockResolvedValue({ post: { id: 7 } })
   api.getPostById.mockReset()
+  themes.getActiveTheme.mockReset().mockResolvedValue(THEME)
+  resetPageTemplates()
 })
 afterEach(() => {
   act(() => root.unmount())
@@ -92,6 +94,20 @@ describe("PageTemplateField", () => {
     expect(trigger().textContent).toContain("Full width")
     expect(container.textContent).toContain("the active theme has no page template with this name")
     expect(onSaved).not.toHaveBeenCalled()
+  })
+
+  it("says so when the theme's templates can't load, and tries again", async () => {
+    themes.getActiveTheme.mockRejectedValueOnce(new Error("timeout"))
+    await render()
+    expect(trigger().disabled).toBe(true)
+    expect(hint()).toContain("Couldn't load the theme's templates.")
+
+    const again = [...container.querySelectorAll("button")].find((b) => b.textContent === "Try again")!
+    await act(async () => again.click())
+    await settle()
+    expect(trigger().disabled).toBe(false)
+    expect(hint()).toContain("One reading column")
+    expect(container.textContent).not.toContain("Try again")
   })
 
   it("is read-only for someone who can't change the page's settings", async () => {

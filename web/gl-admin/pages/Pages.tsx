@@ -83,7 +83,7 @@ export default function Pages({ typeName, postType }: PagesProps) {
   // The front page (#336): the saved setting, then what "Set as front page" chose here.
   const [chosenFrontPage, setChosenFrontPage] = useState<number | null | undefined>(undefined)
   const frontPageId = chosenFrontPage !== undefined ? chosenFrontPage : (siteSettings?.front_page_id ?? null)
-  const templates = usePageTemplates()
+  const { templates } = usePageTemplates()
   const pageType = typeName === "page"
   const [params, setParam] = useListParams()
   const tab = findTab(TABS, params.get("view"))

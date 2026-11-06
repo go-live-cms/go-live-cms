@@ -71,6 +71,8 @@ type copySource struct {
 	SlugBase string
 	// URL is the copy's url (before generateUniqueURL) for its final slug.
 	URL func(slug string) string
+	// PageTemplate is the copy's template (#336): a duplicated page keeps its own.
+	PageTemplate string
 	// Check runs the regenerated block_doc through prepareForStore, the checks
 	// any new post's body gets (POST /posts). A template's content is checked
 	// again when it is used, since the installed theme blocks may have changed
@@ -122,17 +124,18 @@ func (server *Server) newPostCopy(ctx context.Context, src copySource, opts post
 	}
 
 	return db.CreatePostsParams{
-		Title:       opts.Title,
-		Description: src.Description,
-		UserID:      opts.Owner.ID,
-		Username:    opts.Owner.Username,
-		Url:         url,
-		PostType:    src.PostType,
-		PostStatus:  "draft",
-		PostParent:  opts.Parent,
-		MenuOrder:   src.MenuOrder,
-		Slug:        slug,
-		BlockDoc:    blockDoc,
+		Title:        opts.Title,
+		Description:  src.Description,
+		UserID:       opts.Owner.ID,
+		Username:     opts.Owner.Username,
+		Url:          url,
+		PostType:     src.PostType,
+		PostStatus:   "draft",
+		PostParent:   opts.Parent,
+		MenuOrder:    src.MenuOrder,
+		Slug:         slug,
+		BlockDoc:     blockDoc,
+		PageTemplate: src.PageTemplate,
 	}, parsed.contentMediaUses(), nil
 }
 
@@ -140,12 +143,13 @@ func (server *Server) newPostCopy(ctx context.Context, src copySource, opts post
 // copied) in one transaction (DuplicatePostTx).
 func (server *Server) copyPost(ctx context.Context, source db.Post, opts postCopy) (db.Post, error) {
 	params, media, err := server.newPostCopy(ctx, copySource{
-		BlockDoc:    source.BlockDoc,
-		PostType:    source.PostType,
-		Description: source.Description,
-		MenuOrder:   source.MenuOrder,
-		SlugBase:    copySlug(source.Slug),
-		URL:         func(slug string) string { return copyURL(source.Url, source.Slug, slug) },
+		BlockDoc:     source.BlockDoc,
+		PostType:     source.PostType,
+		Description:  source.Description,
+		MenuOrder:    source.MenuOrder,
+		SlugBase:     copySlug(source.Slug),
+		URL:          func(slug string) string { return copyURL(source.Url, source.Slug, slug) },
+		PageTemplate: source.PageTemplate,
 	}, opts)
 	if err != nil {
 		return db.Post{}, err

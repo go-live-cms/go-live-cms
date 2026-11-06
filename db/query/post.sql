@@ -10,9 +10,11 @@ INSERT INTO posts (
     post_parent,
     menu_order,
     slug,
-    block_doc
+    block_doc,
+    -- A page's template (#336): '' unless a duplicate copies it.
+    page_template
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 ) RETURNING *;
 
 -- name: CreateUserPost :one

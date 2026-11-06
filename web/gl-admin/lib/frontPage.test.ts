@@ -79,6 +79,8 @@ describe("Settings' Front page field", () => {
     expect(options.at(-1)).toEqual({ value: "12", label: "Home (not published)", disabled: true })
     // Listed once when it is published.
     expect(frontPageOptions(pages, { id: 2, title: "About", post_status: "published" })).toHaveLength(4)
+    // Published but past the field's first 100 pages: listed as it is, choosable.
+    expect(frontPageOptions(pages, { id: 140, title: "Zoo", post_status: "published" }).at(-1)).toEqual({ value: "140", label: "Zoo" })
   })
 
   it("says what the home page shows", () => {

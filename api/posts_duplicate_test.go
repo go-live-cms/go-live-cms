@@ -267,6 +267,7 @@ func TestDuplicatePostAPI(t *testing.T) {
 		BlockRevision:      9,
 		PublishedVersionID: sql.NullInt64{Int64: 5, Valid: true},
 		Slug:               "my-post",
+		PageTemplate:       "fullwidth",
 	}
 	created := func(arg db.DuplicatePostTxParams) db.Post {
 		return db.Post{ID: 500, Title: arg.Title, Description: arg.Description, UserID: arg.UserID, Username: arg.Username,
@@ -319,6 +320,8 @@ func TestDuplicatePostAPI(t *testing.T) {
 				require.Equal(t, "page", got.PostType)
 				require.Equal(t, source.PostParent, got.PostParent, "a moderator keeps the parent")
 				require.Equal(t, source.MenuOrder, got.MenuOrder)
+				// A page keeps its template (#336).
+				require.Equal(t, "fullwidth", got.PageTemplate)
 				require.Equal(t, "my-post-copy", got.Slug)
 				require.Equal(t, "https://site.test/post/my-post-copy", got.Url)
 				requireContentMediaIDs(t, []int64{42}, got.ContentMedia)

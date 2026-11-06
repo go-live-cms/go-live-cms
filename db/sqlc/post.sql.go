@@ -281,24 +281,27 @@ INSERT INTO posts (
     post_parent,
     menu_order,
     slug,
-    block_doc
+    block_doc,
+    -- A page's template (#336): '' unless a duplicate copies it.
+    page_template
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 ) RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template
 `
 
 type CreatePostsParams struct {
-	Title       string          `json:"title"`
-	Description string          `json:"description"`
-	UserID      int64           `json:"user_id"`
-	Username    string          `json:"username"`
-	Url         string          `json:"url"`
-	PostType    string          `json:"post_type"`
-	PostStatus  string          `json:"post_status"`
-	PostParent  sql.NullInt64   `json:"post_parent"`
-	MenuOrder   int32           `json:"menu_order"`
-	Slug        string          `json:"slug"`
-	BlockDoc    json.RawMessage `json:"block_doc"`
+	Title        string          `json:"title"`
+	Description  string          `json:"description"`
+	UserID       int64           `json:"user_id"`
+	Username     string          `json:"username"`
+	Url          string          `json:"url"`
+	PostType     string          `json:"post_type"`
+	PostStatus   string          `json:"post_status"`
+	PostParent   sql.NullInt64   `json:"post_parent"`
+	MenuOrder    int32           `json:"menu_order"`
+	Slug         string          `json:"slug"`
+	BlockDoc     json.RawMessage `json:"block_doc"`
+	PageTemplate string          `json:"page_template"`
 }
 
 func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post, error) {
@@ -314,6 +317,7 @@ func (q *Queries) CreatePosts(ctx context.Context, arg CreatePostsParams) (Post,
 		arg.MenuOrder,
 		arg.Slug,
 		arg.BlockDoc,
+		arg.PageTemplate,
 	)
 	var i Post
 	err := row.Scan(
