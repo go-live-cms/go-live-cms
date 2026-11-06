@@ -21,6 +21,11 @@ export interface CommentsSnapshot {
   loading: boolean
   /** The doc's blocks, in order (set by the editor; [] until it has bound). */
   blocks: CommentBlock[]
+  /**
+   * Whether `blocks` comes from a bound editor. Until then (connecting, the static
+   * read-only view) nobody knows which threads are orphans, so none is called one.
+   */
+  blocksKnown: boolean
   /** Block ids the editor can't show but the post keeps (meta.dropped, #213). */
   hiddenIds: ReadonlySet<string>
   /** The block the user asked to comment on or to see, most recent first. */
@@ -36,7 +41,7 @@ type Api = Pick<
 
 export class PostCommentsStore {
   readonly postId: number
-  private snapshot: CommentsSnapshot = { data: null, error: null, loading: false, blocks: [], hiddenIds: new Set(), focus: null, activeBlockId: null }
+  private snapshot: CommentsSnapshot = { data: null, error: null, loading: false, blocks: [], blocksKnown: false, hiddenIds: new Set(), focus: null, activeBlockId: null }
   private readonly listeners = new Set<() => void>()
   private seq = 0
   private shownSeq = 0
@@ -119,9 +124,21 @@ export class PostCommentsStore {
   /** The editor's blocks now (after every doc change). */
   setBlocks(blocks: CommentBlock[]) {
     const current = this.snapshot.blocks
+    if (!this.snapshot.blocksKnown) {
+      this.set({ blocks, blocksKnown: true })
+      return
+    }
     if (current.length === blocks.length && current.every((b, i) => b.id === blocks[i].id && b.type === blocks[i].type && b.text === blocks[i].text)) return
     this.set({ blocks })
   }
+
+  /** The bound editor went away (remount, static view): the blocks aren't known now. */
+  forgetBlocks() {
+    if (this.snapshot.blocksKnown) this.set({ blocks: [], blocksKnown: false })
+  }
+
+  /** Open threads (the top bar's count). */
+  openCount = (): number => this.snapshot.data?.threads.filter((t) => t.resolved_at === null).length ?? 0
 
   setHiddenIds(ids: Iterable<string>) {
     const next = new Set(ids)

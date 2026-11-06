@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import type { Transaction } from "prosemirror-state"
-import { commentCountLabel, docBlocks, isCommentableBlockId, openThreadCounts } from "@gl-admin/lib/comments"
+import { blockIdSelector, commentCountLabel, docBlocks, isCommentableBlockId, openThreadCounts } from "@gl-admin/lib/comments"
 import type { PostCommentsStore } from "@gl-admin/lib/commentsStore"
 import { CommentIcon } from "./EditorTopBar"
 
@@ -12,14 +12,16 @@ import { CommentIcon } from "./EditorTopBar"
 //
 // It only reads the editor: no plugin, no transaction, no attribute on the doc (rule 7
 // and the #315 design: threads aren't in the Yjs doc). The markers are an overlay placed
-// from the blocks' DOM (`data-block-id`), re-measured after every doc change, remote ones
-// included, and on resize.
+// from the blocks' DOM (`data-block-id`), re-measured after doc changes (remote ones
+// included) and whenever the content box changes size (a panel opening, images loading).
+// Doc changes are coalesced (REPORT_MS): typing doesn't walk the doc on every keystroke.
 
 type Marker = { blockId: string; top: number; count: number }
 type Rect = { blockId: string; top: number; height: number }
 
 const BLOCK_SELECTOR = "[data-block-id]"
-const attrSelector = (id: string) => `[data-block-id="${id.replace(/["\\]/g, "\\$&")}"]`
+/** How long doc changes are collected before the blocks are reported and re-measured. */
+export const REPORT_MS = 150
 
 export default function BlockComments({ editor, store, children }: { editor: TiptapEditor; store: PostCommentsStore; children: ReactNode }) {
   const layerRef = useRef<HTMLDivElement>(null)
@@ -30,20 +32,30 @@ export default function BlockComments({ editor, store, children }: { editor: Tip
   const [hovered, setHovered] = useState<Rect | null>(null)
   const canComment = !!snapshot.data?.can_comment
 
-  // The doc's blocks, for the panel, after every change (anyone's).
+  // The doc's blocks, for the panel, after changes (anyone's), and a re-measure when the
+  // content box changes size.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
     const report = () => {
-      if (!editor.isDestroyed) store.setBlocks(docBlocks(editor.state.doc))
+      timer = null
+      if (editor.isDestroyed) return
+      store.setBlocks(docBlocks(editor.state.doc))
+      setDocVersion((v) => v + 1)
     }
     report()
     const onTransaction = ({ transaction }: { transaction: Transaction }) => {
-      if (!transaction.docChanged) return
-      report()
-      setDocVersion((v) => v + 1)
+      if (transaction.docChanged && !timer) timer = setTimeout(report, REPORT_MS)
     }
     editor.on("transaction", onTransaction)
+    const resized = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => setDocVersion((v) => v + 1)) : null
+    resized?.observe(editor.view.dom)
     return () => {
       editor.off("transaction", onTransaction)
+      if (timer) clearTimeout(timer)
+      resized?.disconnect()
+      // Remounting (an access change) or gone: the panel mustn't take an empty doc for one
+      // whose blocks were all deleted.
+      store.forgetBlocks()
     }
   }, [editor, store])
 
@@ -51,7 +63,7 @@ export default function BlockComments({ editor, store, children }: { editor: Tip
     (id: string): Rect | null => {
       const layer = layerRef.current
       if (!layer || editor.isDestroyed) return null
-      const el = editor.view.dom.querySelector<HTMLElement>(attrSelector(id))
+      const el = editor.view.dom.querySelector<HTMLElement>(blockIdSelector(id))
       if (!el) return null
       const base = layer.getBoundingClientRect()
       const box = el.getBoundingClientRect()

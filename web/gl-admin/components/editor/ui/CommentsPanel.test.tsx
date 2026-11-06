@@ -206,6 +206,21 @@ describe("CommentsPanel (#192)", () => {
     expect(groups()[1].textContent).toContain("From Kenji")
   })
 
+  it("before the editor has bound, lists threads without calling them orphans", async () => {
+    store.forgetBlocks()
+    await act(async () => store.refresh())
+    expect(text()).not.toContain("On deleted blocks")
+    expect(text()).toContain("They show on their blocks once the post has loaded.")
+    expect(container.querySelectorAll(".post-comments__thread")).toHaveLength(4)
+  })
+
+  it("keeps a new comment being written when another block's threads are shown", async () => {
+    await act(async () => store.focusBlock("blk-second-0001", true))
+    await act(async () => vi.waitFor(() => expect(container.querySelector("textarea")).not.toBeNull()))
+    await act(async () => store.focusBlock("blk-first-00001", false))
+    expect(container.querySelector(".post-comments__composer")).not.toBeNull()
+  })
+
   it("says when there's nothing open", async () => {
     state.threads = []
     await act(async () => store.refresh())

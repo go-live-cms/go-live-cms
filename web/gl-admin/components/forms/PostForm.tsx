@@ -23,7 +23,7 @@ import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import EditorTopBar, { ArchiveIcon, OfflineIcon } from "@gl-admin/components/editor/ui/EditorTopBar"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
 import CommentsPanel from "@gl-admin/components/editor/ui/CommentsPanel"
-import { PostCommentsStore, type CommentsSnapshot } from "@gl-admin/lib/commentsStore"
+import { PostCommentsStore } from "@gl-admin/lib/commentsStore"
 import ScheduleDialog from "@gl-admin/components/editor/ui/ScheduleDialog"
 import { useSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import {
@@ -482,8 +482,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [commentsPostId])
   const [commentsOpen, setCommentsOpen] = useState(false)
-  const commentsSnapshot = useSyncExternalStore(comments?.subscribe ?? noSubscribe, comments?.getSnapshot ?? noSnapshot)
-  const openComments = commentsSnapshot?.data?.threads.filter((t) => t.resolved_at === null).length ?? 0
+  // Only the count: the store changes on every keystroke (the blocks), the count doesn't.
+  const openComments = useSyncExternalStore(comments?.subscribe ?? noSubscribe, comments?.openCount ?? noCount)
 
   // TODO: these are basically the same, fix it
   const getContentTypeName = (type?: string) => {
@@ -1572,4 +1572,4 @@ function listNames(names: string[]): string {
 
 // useSyncExternalStore before the comments store exists (create mode, role not verified).
 const noSubscribe = () => () => {}
-const noSnapshot = (): CommentsSnapshot | null => null
+const noCount = () => 0

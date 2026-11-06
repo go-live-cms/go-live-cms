@@ -123,6 +123,12 @@ describe("BlockComments (#192)", () => {
       const end = editor.state.doc.content.size
       editor.view.dispatch(editor.state.tr.delete(editor.state.doc.child(0).nodeSize, end))
     })
-    expect(store.getSnapshot().blocks.map((b) => b.id)).toEqual([A])
+    await vi.waitFor(() => expect(store.getSnapshot().blocks.map((b) => b.id)).toEqual([A]))
+  })
+
+  it("forgets the blocks when it unmounts, so nothing is taken for an orphan meanwhile", async () => {
+    expect(store.getSnapshot().blocksKnown).toBe(true)
+    act(() => root.render(<div />))
+    expect(store.getSnapshot()).toMatchObject({ blocks: [], blocksKnown: false })
   })
 })

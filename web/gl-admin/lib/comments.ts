@@ -16,6 +16,9 @@ export const COMMENT_BODY_MAX = 4000
 /** The API's block id format (000048's CHECK, `commentBlockIDPattern`). */
 const BLOCK_ID_FORMAT = /^[!-~]{10,128}$/
 
+/** A CSS selector for the element of the block with this id (ids are printable ASCII). */
+export const blockIdSelector = (id: string) => `[data-block-id="${id.replace(/["\\]/g, "\\$&")}"]`
+
 export const isCommentableBlockId = (id: unknown): id is string => typeof id === "string" && BLOCK_ID_FORMAT.test(id)
 
 /** A block the panel can name: its id, its type and the start of its text. */

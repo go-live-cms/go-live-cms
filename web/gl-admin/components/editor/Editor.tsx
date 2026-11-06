@@ -368,15 +368,19 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [editor, readOnly, openLinkModalWithEditor])
 
-  // Block comments (#192): refetch on the server's nudge and after every (re)sync (a nudge
-  // may have been missed while disconnected); the blocks the editor can't show (#213).
+  // Block comments (#192): refetch on the server's nudge, after every (re)sync (a nudge may
+  // have been missed while disconnected) and on an access change; the blocks the editor
+  // can't show (#213).
   useEffect(() => {
     if (!collab || !comments) return
     const offNudge = collab.onComments(() => void comments.refresh())
     const offSynced = collab.onSynced(() => void comments.refresh())
+    // What the caller may do with comments follows their access (a #321 grant, a demotion).
+    const offAccess = collab.onAccess(() => void comments.refresh())
     return () => {
       offNudge()
       offSynced()
+      offAccess()
     }
   }, [collab, comments])
   useEffect(() => {

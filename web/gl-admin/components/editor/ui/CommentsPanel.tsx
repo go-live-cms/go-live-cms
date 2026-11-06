@@ -9,6 +9,7 @@ import Textarea from "@gl-admin/components/ui/Textarea"
 import { CloseIcon, MoreIcon } from "@gl-admin/components/ui/icons"
 import type { BlockComment, CommentThread, CommentPerson } from "@gl-admin/lib/api/comments"
 import {
+  blockIdSelector,
   blockLabel,
   COMMENT_BODY_MAX,
   commentBodyError,
@@ -46,7 +47,7 @@ interface Props {
 const personName = (person: CommentPerson | null) => (person ? person.full_name || person.username : "Removed member")
 
 function scrollToBlock(blockId: string) {
-  const el = document.querySelector<HTMLElement>(`.gl-content-editor [data-block-id="${blockId.replace(/["\\]/g, "\\$&")}"]`)
+  const el = document.querySelector<HTMLElement>(`.gl-content-editor ${blockIdSelector(blockId)}`)
   el?.scrollIntoView?.({ block: "center", behavior: "smooth" })
 }
 
@@ -55,9 +56,15 @@ export default function CommentsPanel({ store, isVisible, onClose, sidebarWidth 
   const [filter, setFilter] = useState<Filter>("open")
   const [composeFor, setComposeFor] = useState<string | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const { data, error, loading, blocks, hiddenIds, focus } = snapshot
+  const { data, error, loading, blocks, blocksKnown, hiddenIds, focus } = snapshot
 
-  const groups = useMemo(() => groupThreads(data?.threads ?? [], blocks, hiddenIds), [data, blocks, hiddenIds])
+  // Before the editor has bound, nobody knows which blocks exist: list the threads without
+  // placing them, rather than calling every one an orphan.
+  const groups = useMemo(
+    () => (blocksKnown ? groupThreads(data?.threads ?? [], blocks, hiddenIds) : { anchored: [], hidden: [], orphaned: [] }),
+    [data, blocks, blocksKnown, hiddenIds]
+  )
+  const unplaced = blocksKnown ? [] : (data?.threads ?? []).filter((t) => (filter === "open" ? isOpen(t) : !isOpen(t)))
   const shown = useMemo(() => filterThreads(groups, filter), [groups, filter])
   const openCount = data?.threads.filter(isOpen).length ?? 0
   const resolvedCount = (data?.threads.length ?? 0) - openCount
@@ -66,7 +73,8 @@ export default function CommentsPanel({ store, isVisible, onClose, sidebarWidth 
   useEffect(() => {
     if (!focus) return
     setFilter("open")
-    setComposeFor(focus.compose ? focus.blockId : null)
+    // Showing a block's threads keeps a new comment being written elsewhere.
+    if (focus.compose) setComposeFor(focus.blockId)
     // After the render that shows it.
     const timer = setTimeout(() => {
       const group = contentRef.current?.querySelector<HTMLElement>(`[data-comment-block="${focus.blockId.replace(/["\\]/g, "\\$&")}"]`)
@@ -152,6 +160,15 @@ export default function CommentsPanel({ store, isVisible, onClose, sidebarWidth 
               </section>
             ))}
 
+            {unplaced.length > 0 && (
+              <section className="post-comments__group" aria-label="Comments">
+                <p className="post-comments__hint">They show on their blocks once the post has loaded.</p>
+                {unplaced.map((thread) => (
+                  <Thread key={thread.id} thread={thread} store={store} canComment={canComment} />
+                ))}
+              </section>
+            )}
+
             {shown.hidden.length > 0 && (
               <section className="post-comments__group post-comments__group--detached" aria-label="On hidden blocks">
                 <h3 className="post-comments__section-title">On hidden blocks</h3>
@@ -174,7 +191,7 @@ export default function CommentsPanel({ store, isVisible, onClose, sidebarWidth 
               </section>
             )}
 
-            {!composeFor && shown.anchored.length === 0 && shown.hidden.length === 0 && shown.orphaned.length === 0 && (
+            {!composeFor && unplaced.length === 0 && shown.anchored.length === 0 && shown.hidden.length === 0 && shown.orphaned.length === 0 && (
               <div className="post-comments__empty">
                 <p className="post-comments__empty-title">{filter === "open" ? "No open comments" : "No resolved comments"}</p>
                 {filter === "open" && canComment && (

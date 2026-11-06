@@ -39,6 +39,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	db "github.com/go-live-cms/go-live-cms/db/sqlc"
@@ -125,7 +126,7 @@ func normalizeCommentBody(body string) (string, error) {
 		return "", errors.New("body must not be empty")
 	case strings.ContainsRune(body, 0):
 		return "", errors.New("body must not contain NUL characters")
-	case len([]rune(body)) > commentBodyMax:
+	case utf8.RuneCountInString(body) > commentBodyMax:
 		return "", fmt.Errorf("body must be at most %d characters", commentBodyMax)
 	}
 	return body, nil
