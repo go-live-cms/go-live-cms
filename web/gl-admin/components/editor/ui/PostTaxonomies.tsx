@@ -12,11 +12,15 @@ import {
 } from "@gl-admin/lib/api/taxonomies"
 import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
 import { findTermByName, flattenTermTree, parseTagNames, slugify } from "@gl-admin/lib/taxonomy/terms"
+import { isCategoryType } from "@gl-admin/lib/taxonomyAdmin"
 import Button from "@gl-admin/components/ui/Button"
 
 interface PostTaxonomiesProps {
   postId: number
   readOnly: boolean
+  // The post's type: a `post` always has a category (#331: the API puts the default one
+  // back), so only other types get a "None" choice. Unknown = no "None".
+  postType?: string
   // After a term was added or removed (the editor re-checks what waits for Update, #358)
   onChange?: () => void
 }
@@ -47,7 +51,9 @@ async function findOrCreateTerm(type: TaxonomyType, name: string): Promise<Taxon
 // (PUT/DELETE /posts/:id/taxonomy-terms/:term_id), independent of the editor's
 // block autosave, so editors changing different terms don't overwrite each
 // other. Read-only users see the assigned terms but can't change them.
-export default function PostTaxonomies({ postId, readOnly, onChange }: PostTaxonomiesProps) {
+// Categories (#331) are one per post: a radio group, where picking one replaces the
+// post's category (the API's PUT does), and posts of type `post` have no "None".
+export default function PostTaxonomies({ postId, readOnly, postType, onChange }: PostTaxonomiesProps) {
   const [types, setTypes] = useState<TaxonomyType[]>([])
   // Every term of the hierarchical types (the tree needs them all). Flat types
   // can have thousands of terms, so they only get search suggestions.
@@ -97,6 +103,45 @@ export default function PostTaxonomies({ postId, readOnly, onChange }: PostTaxon
       onChange?.()
     } catch (error) {
       setAssigned((prev) => (on ? without(prev) : [...without(prev), term]))
+      setSaveError(errorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // One category per post (#331): the API's PUT replaces the post's category.
+  const setCategory = async (type: TaxonomyType, term: TaxonomyTerm) => {
+    const previous = assigned
+    setAssigned((prev) => [...prev.filter((t) => t.taxonomy_type_id !== type.id), term])
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await addPostTaxonomyTerm(postId, term.id)
+      onChange?.()
+    } catch (error) {
+      setAssigned(previous)
+      setSaveError(errorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // "None" (not for `post`s): removes the category; the API may put the default back.
+  const clearCategory = async (type: TaxonomyType) => {
+    const previous = assigned
+    const current = assigned.filter((t) => t.taxonomy_type_id === type.id)
+    if (current.length === 0) return
+    setAssigned((prev) => prev.filter((t) => t.taxonomy_type_id !== type.id))
+    setSaving(true)
+    setSaveError(null)
+    try {
+      let fallback: number | null = null
+      for (const term of current) fallback = (await removePostTaxonomyTerm(postId, term.id)).default_term_id ?? fallback
+      const back = fallback ? (treeTerms[type.name] ?? []).find((t) => t.id === fallback) : undefined
+      if (back) setAssigned((prev) => [...prev.filter((t) => t.taxonomy_type_id !== type.id), back])
+      onChange?.()
+    } catch (error) {
+      setAssigned(previous)
       setSaveError(errorMessage(error))
     } finally {
       setSaving(false)
@@ -169,6 +214,50 @@ export default function PostTaxonomies({ postId, readOnly, onChange }: PostTaxon
     <>
       {types.map((type) => {
         const inputId = `post-terms-${type.name}`
+
+        if (type.hierarchical && isCategoryType(type)) {
+          const terms = treeTerms[type.name] ?? []
+          const groupName = `post-${postId}-${type.name}`
+          const labelId = `${inputId}-label`
+          const allowNone = postType !== undefined && postType !== "post"
+          const none = !assigned.some((t) => t.taxonomy_type_id === type.id)
+          return (
+            <div className="post-settings__field" key={type.name}>
+              <label id={labelId}>{type.label}</label>
+              {terms.length === 0 ? (
+                <small className="post-settings__field-description">
+                  None yet. Add them under <a href="/gl-admin/taxonomies?type=category">Taxonomies</a>.
+                </small>
+              ) : (
+                <ul className="post-settings__term-tree" role="radiogroup" aria-labelledby={labelId}>
+                  {allowNone && (
+                    <li>
+                      <label className="post-settings__checkbox">
+                        <input type="radio" name={groupName} value="" checked={none} disabled={disabled} onChange={() => clearCategory(type)} />
+                        None
+                      </label>
+                    </li>
+                  )}
+                  {flattenTermTree(terms).map(({ term, depth }) => (
+                    <li key={term.id} style={{ paddingLeft: `${depth * 1.25}rem` }}>
+                      <label className="post-settings__checkbox">
+                        <input
+                          type="radio"
+                          name={groupName}
+                          value={term.id}
+                          checked={isAssigned(term.id)}
+                          disabled={disabled}
+                          onChange={() => setCategory(type, term)}
+                        />
+                        {term.name}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        }
 
         if (type.hierarchical) {
           const terms = treeTerms[type.name] ?? []

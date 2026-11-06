@@ -175,7 +175,9 @@ SELECT
         WHERE pm.post_id = p.id
     ) as meta,
     -- The published byline (#319): what the site credits until the next Update.
-    golive_post_published_byline(p.id)::jsonb as authors
+    golive_post_published_byline(p.id)::jsonb as authors,
+    -- The published category in the post's URL (#331).
+    coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
 FROM posts p
 JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'
@@ -219,6 +221,7 @@ type ListPublishedPostsByTermRow struct {
 	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
+	CategorySlug          string                `json:"category_slug"`
 }
 
 // One page of the archive, newest first. Same columns as ListPostsWithMeta so rows
@@ -255,6 +258,7 @@ func (q *Queries) ListPublishedPostsByTerm(ctx context.Context, arg ListPublishe
 			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
+			&i.CategorySlug,
 		); err != nil {
 			return nil, err
 		}

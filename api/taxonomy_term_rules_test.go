@@ -24,7 +24,9 @@ import (
 // parent_id 0 moves a term to the top level, a blank slug is refused, and a
 // duplicate slug answers 409 with code "slug_taken".
 func TestTaxonomyTermParentAndSlugRules(t *testing.T) {
-	category := db.TaxonomyType{ID: 1, Name: "category", Label: "Categories", Hierarchical: true}
+	// A hierarchical taxonomy other than "category", which nests one level only (#331,
+	// taxonomy_categories_test.go).
+	category := db.TaxonomyType{ID: 1, Name: "section", Label: "Sections", Hierarchical: true}
 	tag := db.TaxonomyType{ID: 2, Name: "tag", Label: "Tags", Hierarchical: false}
 
 	// news (10) > world (11) > europe (12); sport (13) is a root
@@ -295,8 +297,7 @@ func TestTaxonomyTermParentAndSlugRules(t *testing.T) {
 func TestPostTaxonomyTermAssignment(t *testing.T) {
 	post := db.Post{ID: 251, Title: "A post"}
 	term := db.TaxonomyTerm{ID: 7, Name: "News", Slug: "news", TaxonomyTypeID: 1}
-	duplicate := errors.New(`pq: duplicate key value violates unique constraint "unique_post_taxonomy_term"`)
-	link := db.AddPostToTaxonomyTermParams{PostID: post.ID, TaxonomyTermID: term.ID}
+	link := db.SetPostTermTxParams{PostID: post.ID, TermID: term.ID}
 
 	testCases := []struct {
 		name       string
@@ -313,18 +314,19 @@ func TestPostTaxonomyTermAssignment(t *testing.T) {
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil)
 				store.EXPECT().GetTaxonomyTerm(gomock.Any(), term.ID).Return(term, nil)
-				store.EXPECT().AddPostToTaxonomyTerm(gomock.Any(), link).Return(db.PostTaxonomyRelationship{}, nil)
+				store.EXPECT().SetPostTermTx(gomock.Any(), link).Return(db.SetPostTermTxResult{ReplacedTermIDs: []int64{}}, nil)
 			},
 			wantStatus: http.StatusOK,
 		},
 		{
-			name:   "AddAlreadyAssigned",
+			// A category replaces the post's category (#331): the Tx says which.
+			name:   "AddReplacesCategory",
 			method: http.MethodPut,
 			path:   "/api/v1/posts/251/taxonomy-terms/7",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil)
 				store.EXPECT().GetTaxonomyTerm(gomock.Any(), term.ID).Return(term, nil)
-				store.EXPECT().AddPostToTaxonomyTerm(gomock.Any(), link).Return(db.PostTaxonomyRelationship{}, duplicate)
+				store.EXPECT().SetPostTermTx(gomock.Any(), link).Return(db.SetPostTermTxResult{ReplacedTermIDs: []int64{3}}, nil)
 			},
 			wantStatus: http.StatusOK,
 		},
@@ -360,7 +362,7 @@ func TestPostTaxonomyTermAssignment(t *testing.T) {
 			path:   "/api/v1/posts/251/taxonomy-terms/7",
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().GetPost(gomock.Any(), post.ID).Return(post, nil)
-				store.EXPECT().RemovePostFromTaxonomyTerm(gomock.Any(), db.RemovePostFromTaxonomyTermParams(link)).Return(nil)
+				store.EXPECT().RemovePostTermTx(gomock.Any(), link).Return(int64(0), nil)
 			},
 			wantStatus: http.StatusOK,
 		},

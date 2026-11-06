@@ -23,6 +23,8 @@ type PublicSearchResult struct {
 	ChangedAt   time.Time `json:"changed_at"`
 	TitleHTML   string    `json:"title_html"`
 	ExcerptHTML string    `json:"excerpt_html"`
+	// The published category, for /:category/:slug URLs (#331); omitted when none.
+	CategorySlug string `json:"category_slug,omitempty"`
 }
 
 // searchCounts are the matches per type chip (All / Posts / Pages).
@@ -103,14 +105,15 @@ func (server *Server) getPublicSearch(c *gin.Context) {
 		}
 		for _, row := range rows {
 			results = append(results, PublicSearchResult{
-				ID:          row.ID,
-				Title:       row.Title,
-				Slug:        row.Slug,
-				PostType:    row.PostType,
-				CreatedAt:   row.CreatedAt,
-				ChangedAt:   row.ChangedAt,
-				TitleHTML:   highlightHTML(row.TitleHighlight),
-				ExcerptHTML: excerptHTML(row),
+				ID:           row.ID,
+				Title:        row.Title,
+				Slug:         row.Slug,
+				PostType:     row.PostType,
+				CreatedAt:    row.CreatedAt,
+				ChangedAt:    row.ChangedAt,
+				TitleHTML:    highlightHTML(row.TitleHighlight),
+				ExcerptHTML:  excerptHTML(row),
+				CategorySlug: row.CategorySlug,
 			})
 		}
 	}

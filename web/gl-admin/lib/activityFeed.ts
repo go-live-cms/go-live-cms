@@ -127,6 +127,17 @@ function objectPart(event: ActivityEvent): { verb: string; what: string; href: s
     }
     case "settings":
       return { verb: "updated", what: "the site settings", href: "/settings" }
+    // #331. The feed has no title for terms and redirects, so these read generically.
+    case "term": {
+      if (event.verb !== "terms_merged") return { verb: fallbackVerb, what: "a term", href: null }
+      const taxonomy = typeof event.payload.taxonomy === "string" ? event.payload.taxonomy : ""
+      const href = taxonomy ? `/taxonomies?type=${encodeURIComponent(taxonomy)}` : "/taxonomies"
+      return { verb: "merged", what: taxonomy === "tag" ? "tags" : taxonomy === "category" ? "categories" : "terms", href }
+    }
+    case "redirect":
+      if (event.verb === "redirect_created") return { verb: "added", what: "a redirect", href: "/settings#gl-settings-urls" }
+      if (event.verb === "redirect_deleted") return { verb: "deleted", what: "a redirect", href: "/settings#gl-settings-urls" }
+      return { verb: fallbackVerb, what: "a redirect", href: "/settings#gl-settings-urls" }
     default:
       return { verb: fallbackVerb, what: "", href: null }
   }

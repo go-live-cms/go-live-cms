@@ -2,9 +2,13 @@ import { apiCall } from "../api-core"
 
 import type { DateFormat, SiteLanguage } from "@/lib/siteDates"
 
+// How post URLs read: /post/42, /post/my-first-post, or (#331) /guides/my-first-post for
+// posts of type `post` (other types keep /{type}/{slug}).
+export type PostUrlStructure = "id" | "slug" | "category"
+
 export interface Settings {
   id: number
-  post_url_structure: "id" | "slug"
+  post_url_structure: PostUrlStructure
   site_title: string
   posts_per_page: number
   // #330: General
@@ -29,7 +33,7 @@ export interface Settings {
 }
 
 export interface UpdateSettingsRequest {
-  post_url_structure?: "id" | "slug"
+  post_url_structure?: PostUrlStructure
   site_title?: string
   posts_per_page?: number
   site_tagline?: string

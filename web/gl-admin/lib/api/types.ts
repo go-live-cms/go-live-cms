@@ -165,6 +165,9 @@ export interface Post {
   // default. The working one in admin responses (not with_meta rows), the published one
   // from /public.
   page_template?: string
+  // The post's category slug (#331), for /{category}/{slug} URLs (post_url_structure
+  // "category"): admin with_meta list rows and /public. Absent without a category.
+  category_slug?: string
 }
 
 // A published post's pending update (#335): its content was frozen at scheduled_at.
@@ -250,6 +253,9 @@ export interface TaxonomyType {
   show_ui: boolean
   show_in_menu: boolean
   created_at: string
+  // The term a post of type `post` falls back to (#331): the category type's
+  // "Uncategorized". It can't be deleted or merged away. null for the other types.
+  default_term_id?: number | null
 }
 
 export interface TaxonomyTerm {

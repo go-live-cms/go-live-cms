@@ -6,8 +6,10 @@ import { getContainerRenderer as reactRenderer } from "@astrojs/react"
 import { loadRenderers } from "astro:container"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
+// The URL structure, which the category URL tests (#331) change.
+const site = vi.hoisted(() => ({ urlStructure: "id" }))
 vi.mock("@/lib/siteSettings", () => ({
-  getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 10, urlStructure: "id" }),
+  getSiteSettings: async () => ({ title: "Field Notes", postsPerPage: 10, urlStructure: site.urlStructure }),
 }))
 vi.mock("@/lib/menus", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/menus")>()),
@@ -67,7 +69,10 @@ let container: AstroContainer
 beforeEach(async () => {
   container = await AstroContainer.create({ renderers: await loadRenderers([reactRenderer()]) })
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  site.urlStructure = "id"
+})
 
 const render = () =>
   container.renderToResponse(PostRoute, {
@@ -189,5 +194,53 @@ describe("[post_type]/[id] route", () => {
     stubApi(json(404, { error: "post not found" }))
     const response = await render()
     expect(response.status).toBe(404)
+  })
+})
+
+// #331: /{category}/{post-slug} under the category structure, and a 301 to the post's
+// URL from any other /{x}/{post-slug} (a renamed category, another structure).
+describe("[post_type]/[id] category URLs", () => {
+  const view = { ...publishedView, post: { ...publishedView.post, category_slug: "guides" } }
+  function stubCategoryApi() {
+    const fetchMock = stubApi(json(200, view))
+    const base = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
+      String(input) === `${SERVER_MEDIA_URL}/public/posts/slug/the-post` ? json(200, view) : base(input),
+    )
+    return fetchMock
+  }
+  const renderAt = (first: string, second: string) =>
+    container.renderToResponse(PostRoute, {
+      params: { post_type: first, id: second },
+      request: new Request(`http://web:4321/${first}/${second}`),
+    })
+
+  it("renders a post at /{its category}/{slug}, canonical there", async () => {
+    site.urlStructure = "category"
+    stubCategoryApi()
+    const response = await renderAt("guides", "the-post")
+    expect(response.status).toBe(200)
+    const html = await response.text()
+    expect(html).toContain("Published title")
+    expect(html).toMatch(/rel="canonical" href="[^"]*\/guides\/the-post"/)
+  })
+
+  it("answers 301 with the post's URL from another first segment", async () => {
+    site.urlStructure = "category"
+    stubCategoryApi()
+    const response = await renderAt("old-guides", "the-post")
+    expect(response.status).toBe(301)
+    expect(response.headers.get("location")).toBe("/guides/the-post")
+
+    site.urlStructure = "slug"
+    const back = await renderAt("guides", "the-post")
+    expect(back.status).toBe(301)
+    expect(back.headers.get("location")).toBe("/post/the-post")
+  })
+
+  it("is a 404 when no published post has the slug", async () => {
+    site.urlStructure = "category"
+    stubCategoryApi()
+    expect((await renderAt("guides", "missing")).status).toBe(404)
   })
 })

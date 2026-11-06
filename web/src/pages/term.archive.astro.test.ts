@@ -59,4 +59,13 @@ describe("term.archive route", () => {
     expect(html).toContain('<h1 class="title">Guides</h1>')
     expect(html).toContain('<a href="/post/first-guide">First guide</a>')
   })
+
+  // #331: the term's description reaches the theme: the page shows it, and it is the
+  // meta description.
+  it("passes the term's description to the theme", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(200, { term, posts: [row], pagination: { page: 1, per_page: 10, total: 1, total_pages: 1 } })))
+    const html = await (await render({ termArchive: { taxonomy: "category", slug: "guides" } })).text()
+    expect(html).toMatch(/<p class="dek"[^>]*>How-tos\.<\/p>/)
+    expect(html).toMatch(/<meta name="description" content="How-tos\."/)
+  })
 })

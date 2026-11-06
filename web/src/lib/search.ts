@@ -33,6 +33,8 @@ export interface SearchHit {
   id: number
   title: string
   slug: string
+  // The published category, for /:category/:slug URLs (#331); absent when none.
+  category_slug?: string
   post_type: string
   created_at: string
   changed_at: string
@@ -169,7 +171,7 @@ export function resultLabels(
 export function toSearchResult(hit: SearchHit, structure: UrlStructure, settings: DateSettings = DEFAULT_DATE_SETTINGS): SearchResult {
   return {
     hit,
-    href: postPath({ id: hit.id, slug: hit.slug, post_type: hit.post_type }, structure),
+    href: postPath({ id: hit.id, slug: hit.slug, post_type: hit.post_type, category_slug: hit.category_slug }, structure),
     ...resultLabels(hit, settings),
     titleHtml: safeHighlight(hit.title_html),
     excerptHtml: safeHighlight(hit.excerpt_html),

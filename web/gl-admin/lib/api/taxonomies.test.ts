@@ -9,6 +9,7 @@ import {
   getAllTaxonomyTerms,
   getPostTaxonomyTerms,
   getTaxonomyTypes,
+  mergeTaxonomyTerms,
   removePostTaxonomyTerm,
   updateTaxonomyTerm,
 } from "./taxonomies"
@@ -60,6 +61,19 @@ describe("taxonomies API client", () => {
       ["/taxonomy/terms/7", { method: "PUT", body: { name: "News", parent_id: 0 }, token: undefined }],
       ["/taxonomy/terms/7?force=true", { method: "DELETE", token: undefined }],
     ])
+  })
+
+  it("merges tags into the kept one (#331)", async () => {
+    mockedApiCall.mockResolvedValue({ taxonomy_term: { id: 5 }, merged_ids: [2, 3], moved_posts: 4, redirects: [{ id: 1 }] })
+    const result = await mergeTaxonomyTerms(5, [2, 3])
+    expect(mockedApiCall).toHaveBeenCalledWith("/taxonomy/terms/5/merge", { method: "POST", body: { source_ids: [2, 3] } })
+    expect(result).toEqual({ taxonomy_term: { id: 5 }, merged_ids: [2, 3], moved_posts: 4, redirects: [{ id: 1 }] })
+  })
+
+  it("passes on what a category assignment replaced and the default put back (#331)", async () => {
+    mockedApiCall.mockResolvedValueOnce({ message: "ok", replaced_term_ids: [3] }).mockResolvedValueOnce({ message: "ok", default_term_id: 1 })
+    expect(await addPostTaxonomyTerm(42, 7)).toEqual({ replaced_term_ids: [3] })
+    expect(await removePostTaxonomyTerm(42, 7)).toEqual({ default_term_id: 1 })
   })
 
   it("reads a post's terms and changes them one at a time", async () => {

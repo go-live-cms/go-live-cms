@@ -7,11 +7,13 @@ import {
   cacheControl,
   collectSitemapEntries,
   metaDescription,
+  normalizeUrlStructure,
   postPath,
   publicImageUrl,
   resolveSiteUrl,
   shouldNoindex,
   type SitemapSource,
+  type UrlStructure,
 } from "./seo"
 
 function post(overrides: Partial<Post>): Post {
@@ -75,6 +77,22 @@ describe("postPath", () => {
 
   it("encodes the slug as one path segment", () => {
     expect(postPath(post({ slug: "são-paulo" , post_type: "page" }), "slug")).toBe("/page/s%C3%A3o-paulo")
+  })
+
+  // #331: /{category}/{slug} for posts of type "post" with a category.
+  it("puts a post's category first under the category structure", () => {
+    expect(postPath({ ...post({ id: 7, slug: "hello" }), category_slug: "guides" }, "category")).toBe("/guides/hello")
+    expect(postPath({ ...post({ id: 7, slug: "hello" }), category_slug: "são" }, "category")).toBe("/s%C3%A3o/hello")
+    expect(postPath(post({ id: 7, slug: "hello" }), "category")).toBe("/post/hello")
+    expect(postPath({ ...post({ id: 7, slug: "about", post_type: "page" }), category_slug: "guides" }, "category")).toBe("/page/about")
+    expect(postPath({ ...post({ id: 7, slug: "2026" }), category_slug: "guides" }, "category")).toBe("/post/7")
+    expect(postPath({ ...post({ id: 7, slug: "hello" }), category_slug: "guides" }, "slug")).toBe("/post/hello")
+  })
+
+  it("reads the setting's three structures", () => {
+    expect(normalizeUrlStructure("category")).toBe("category")
+    expect(normalizeUrlStructure("slug")).toBe("slug")
+    expect(normalizeUrlStructure("date")).toBe("id")
   })
 })
 
@@ -183,7 +201,7 @@ describe("buildSitemapXml", () => {
   })
 })
 
-function source(postsByType: Record<string, Post[]>, structure: "id" | "slug" = "id"): SitemapSource & { calls: string[] } {
+function source(postsByType: Record<string, Post[]>, structure: UrlStructure = "id"): SitemapSource & { calls: string[] } {
   const calls: string[] = []
   return {
     calls,
@@ -197,6 +215,14 @@ function source(postsByType: Record<string, Post[]>, structure: "id" | "slug" = 
 }
 
 describe("collectSitemapEntries", () => {
+  it("lists posts at their category URLs under the category structure (#331)", async () => {
+    const entries = await collectSitemapEntries(
+      "https://example.org",
+      source({ post: [{ ...post({ id: 1, slug: "hello" }), category_slug: "guides" } as Post] }, "category"),
+    )
+    expect(entries.map((e) => e.loc)).toContain("https://example.org/guides/hello")
+  })
+
   it("lists published posts with lastmod from changed_at, plus home and archives", async () => {
     const entries = await collectSitemapEntries(
       "https://example.org",

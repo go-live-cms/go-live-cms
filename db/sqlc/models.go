@@ -253,6 +253,16 @@ type PostYdocState struct {
 	UpdatedAt     time.Time     `json:"updated_at"`
 }
 
+type Redirect struct {
+	ID         int64         `json:"id"`
+	FromPath   string        `json:"from_path"`
+	ToPath     string        `json:"to_path"`
+	StatusCode int32         `json:"status_code"`
+	Source     string        `json:"source"`
+	CreatedBy  sql.NullInt64 `json:"created_by"`
+	CreatedAt  time.Time     `json:"created_at"`
+}
+
 type ReviewRequest struct {
 	ID             int64         `json:"id"`
 	PostID         int64         `json:"post_id"`
@@ -323,15 +333,16 @@ type TaxonomyTerm struct {
 }
 
 type TaxonomyType struct {
-	ID           int64          `json:"id"`
-	Name         string         `json:"name"`
-	Label        string         `json:"label"`
-	Description  sql.NullString `json:"description"`
-	Hierarchical bool           `json:"hierarchical"`
-	Public       bool           `json:"public"`
-	ShowUi       bool           `json:"show_ui"`
-	ShowInMenu   bool           `json:"show_in_menu"`
-	CreatedAt    time.Time      `json:"created_at"`
+	ID            int64          `json:"id"`
+	Name          string         `json:"name"`
+	Label         string         `json:"label"`
+	Description   sql.NullString `json:"description"`
+	Hierarchical  bool           `json:"hierarchical"`
+	Public        bool           `json:"public"`
+	ShowUi        bool           `json:"show_ui"`
+	ShowInMenu    bool           `json:"show_in_menu"`
+	CreatedAt     time.Time      `json:"created_at"`
+	DefaultTermID sql.NullInt64  `json:"default_term_id"`
 }
 
 type Theme struct {

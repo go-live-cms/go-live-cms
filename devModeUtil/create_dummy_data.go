@@ -786,16 +786,15 @@ func createDummyPosts(store db.Store, users []db.User, taxonomyTerms []db.Taxono
 				}
 				usedTerms[termID] = true
 
-				linkParams := db.AddPostToTaxonomyTermParams{
-					PostID:         createdPost.ID,
-					TaxonomyTermID: termID,
-				}
-
-				_, err := store.AddPostToTaxonomyTerm(context.TODO(), linkParams)
+				// A second category replaces the first: a post has one (#331).
+				_, err := store.SetPostTermTx(context.TODO(), db.SetPostTermTxParams{PostID: createdPost.ID, TermID: termID})
 				if err != nil {
 					log.Printf("❌ Failed to link post %s to taxonomy term: %v", title, err)
 				}
 			}
+		}
+		if _, err := store.EnsureDefaultCategory(context.TODO(), []int64{createdPost.ID}); err != nil {
+			log.Printf("❌ Failed to give post %s the default category: %v", title, err)
 		}
 
 		posts = append(posts, createdPost)

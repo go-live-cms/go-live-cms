@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"unicode"
 
@@ -52,15 +51,10 @@ func validMenuURL(raw string) bool {
 }
 
 // menuPostPath is a post's public path, the same rule as the web's postPath
-// (web/src/lib/seo.ts): /{type}/{slug} when the site uses slug URLs and the
-// post has a slug that isn't all digits (it would read as an id), else
-// /{type}/{id}.
-func menuPostPath(postType, slug string, id int64, urlStructure string) string {
-	segment := strconv.FormatInt(id, 10)
-	if urlStructure == "slug" && slug != "" && !allDigits(slug) {
-		segment = slug
-	}
-	return "/" + url.PathEscape(postType) + "/" + url.PathEscape(segment)
+// (web/src/lib/seo.ts), with its published category under the category structure
+// (#331): see category_urls.go.
+func menuPostPath(postType, slug string, id int64, urlStructure, categorySlug string) string {
+	return postHref(postType, slug, id, urlStructure, categorySlug)
 }
 
 func allDigits(s string) bool {
@@ -96,7 +90,7 @@ func resolveMenuItem(row db.ListMenuItemsWithTargetsRow, urlStructure string) re
 		}
 		// The title the site shows (#358): the published one, if any.
 		fallback, _ = publicTitleAndDescription(row.PostTitle.String, "", row.PostPublishedSettings)
-		item.URL = menuPostPath(row.PostPostType.String, row.PostSlug.String, row.PostID.Int64, urlStructure)
+		item.URL = menuPostPath(row.PostPostType.String, row.PostSlug.String, row.PostID.Int64, urlStructure, row.PostCategorySlug)
 		switch {
 		case !row.PostTypePublic.Bool || !row.PostTypeActive.Bool:
 			item.Status = menuItemNotPublic

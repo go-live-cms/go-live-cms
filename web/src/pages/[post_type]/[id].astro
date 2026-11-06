@@ -1,8 +1,10 @@
 ---
 import { getPublishedPosts, getPublicPost, getSettings, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
 import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
-import { type PostSeo } from '../../lib/seo'
+import { normalizeUrlStructure, type PostSeo } from '../../lib/seo'
 import { isTermRoute, termPath, TERM_ARCHIVE_ROUTE } from '../../lib/termPage'
+import { resolveCategoryRoute } from '../../lib/categoryUrls'
+import { getSiteSettings } from '../../lib/siteSettings'
 import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import { log } from '../../lib/log'
 import PostPage from '../../components/PostPage.astro'
@@ -104,7 +106,19 @@ if (await isTermRoute(postType, publicTypes)) {
   Astro.locals.listPageNumber = request.page
   return Astro.rewrite(TERM_ARCHIVE_ROUTE)
 }
-if (!typeIsPublic) {
+// Category URLs (#331, lib/categoryUrls.ts): /{category}/{post-slug}, and a 301 to the
+// post's URL from any other /{x}/{post-slug} that isn't a post type's.
+let renderType = postType
+if (!publicTypes?.includes(postType)) {
+  const site = await getSiteSettings(Astro.locals)
+  const route = await resolveCategoryRoute(postType, id, normalizeUrlStructure(site.urlStructure))
+  if (route.kind === 'redirect') return Astro.redirect(route.location, 301)
+  if (route.kind === 'post') {
+    pageCheck = route.published
+    renderType = route.published.post.post_type
+  }
+}
+if (!typeIsPublic && renderType === postType) {
   return new Response(null, { status: 404 })
 }
 
@@ -153,7 +167,7 @@ if (!fullPost || !fullPost.title) {
 // Only published posts are public (the public endpoint already refuses the rest; this
 // also covers props from getStaticPaths). A post requested under another type's URL
 // (/page/12 for a post) is a 404 too. A null-body 404 renders src/pages/404.astro.
-if (fullPost.post_status !== 'published' || (fullPost.post_type && fullPost.post_type !== postType)) {
+if (fullPost.post_status !== 'published' || (fullPost.post_type && fullPost.post_type !== renderType)) {
   return new Response(null, { status: 404 })
 }
 
@@ -163,7 +177,7 @@ if (fullPost.post_status !== 'published' || (fullPost.post_type && fullPost.post
 
 <PostPage
   post={fullPost}
-  postType={postType}
+  postType={renderType}
   publishedImage={publishedImage}
   publishedTerms={publishedTerms}
   publishedSeo={publishedSeo}

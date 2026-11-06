@@ -359,15 +359,16 @@ func TestPostListFiltersCombined(t *testing.T) {
 	coauthor := scheduleUser(t, store, RoleContributor)
 	server := scheduleServer(t, store, newStubCollab(t, 0))
 
-	category, err := store.GetTaxonomyType(ctx, "category")
-	require.NoError(t, err)
-	newTerm := func(name string) db.TaxonomyTerm {
+	// A category and a tag: a post has one category (#331), and b has both terms.
+	newTerm := func(name, taxonomy string) db.TaxonomyTerm {
+		type_, err := store.GetTaxonomyType(ctx, taxonomy)
+		require.NoError(t, err)
 		suffix := strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
-		term, err := store.CreateTaxonomyTerm(ctx, db.CreateTaxonomyTermParams{Name: name + suffix, Slug: name + "-" + suffix, TaxonomyTypeID: category.ID})
+		term, err := store.CreateTaxonomyTerm(ctx, db.CreateTaxonomyTermParams{Name: name + suffix, Slug: name + "-" + suffix, TaxonomyTypeID: type_.ID})
 		require.NoError(t, err)
 		return term
 	}
-	guides, news := newTerm("Guides"), newTerm("News")
+	guides, news := newTerm("Guides", "category"), newTerm("News", "tag")
 
 	word := scheduleWord()
 	mk := func(title string, owner db.User, coauthors []db.User, terms ...db.TaxonomyTerm) db.Post {
@@ -380,7 +381,8 @@ func TestPostListFiltersCombined(t *testing.T) {
 			require.NoError(t, err)
 		}
 		for _, term := range terms {
-			_, err := store.AddPostToTaxonomyTerm(ctx, db.AddPostToTaxonomyTermParams{PostID: post.ID, TaxonomyTermID: term.ID})
+			// The category replaces the default one the draft started with (#331).
+			_, err := store.SetPostTermTx(ctx, db.SetPostTermTxParams{PostID: post.ID, TermID: term.ID})
 			require.NoError(t, err)
 		}
 		return reloadPost(t, store, post.ID)
@@ -391,7 +393,7 @@ func TestPostListFiltersCombined(t *testing.T) {
 	c := mk("Charlie", author, []db.User{coauthor}, guides)
 	d := mk("Delta", coauthor, nil, news)
 	b = publishForTest(t, store, b, editor)
-	_, err = store.TrashPost(ctx, d.ID)
+	_, err := store.TrashPost(ctx, d.ID)
 	require.NoError(t, err)
 
 	q := func(params string) []int64 {

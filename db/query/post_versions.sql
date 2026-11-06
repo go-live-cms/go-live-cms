@@ -124,11 +124,16 @@ ORDER BY ttype.name, tt.name;
 
 -- name: AddExistingTermsToPost :exec
 -- Restoring a version's settings (#358), after RemoveAllPostTaxonomies: link the
--- given terms that still exist. Deleted terms are skipped, not an error.
+-- given terms that still exist. Deleted terms are skipped, not an error. A version
+-- from before #331 may have several categories: one is kept (golive_keep_one_category,
+-- 000047: the lowest non-default id), and EnsureDefaultCategory fills in none.
 INSERT INTO post_taxonomy_relationships (post_id, taxonomy_term_id)
 SELECT sqlc.arg(post_id)::bigint, tt.id
 FROM taxonomy_terms tt
-WHERE tt.id = ANY(sqlc.arg(term_ids)::bigint[]);
+WHERE tt.id IN (
+  SELECT k.value::bigint
+  FROM jsonb_array_elements_text(golive_keep_one_category(to_jsonb(sqlc.arg(term_ids)::bigint[]), NULL)) AS k(value)
+);
 
 -- name: RestorePostTitleAndDescription :one
 -- Restoring a version's settings (#358): the working title and excerpt. Only the

@@ -15,7 +15,9 @@ type Querier interface {
 	// Then activate the specified theme
 	ActivateTheme(ctx context.Context, id int64) (Theme, error)
 	// Restoring a version's settings (#358), after RemoveAllPostTaxonomies: link the
-	// given terms that still exist. Deleted terms are skipped, not an error.
+	// given terms that still exist. Deleted terms are skipped, not an error. A version
+	// from before #331 may have several categories: one is kept (golive_keep_one_category,
+	// 000047: the lowest non-default id), and EnsureDefaultCategory fills in none.
 	AddExistingTermsToPost(ctx context.Context, arg AddExistingTermsToPostParams) error
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
@@ -71,6 +73,8 @@ type Querier interface {
 	CopyPostTaxonomyTerms(ctx context.Context, arg CopyPostTaxonomyTermsParams) error
 	// A post made from a template gets its saved category.
 	CopyTemplateTermsToPost(ctx context.Context, arg CopyTemplateTermsToPostParams) error
+	// How many of the given terms are categories (POST/PUT /posts allow one).
+	CountCategoryTerms(ctx context.Context, termIds []int64) (int64, error)
 	CountEmailChangeTokensSince(ctx context.Context, arg CountEmailChangeTokensSinceParams) (int64, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
 	// The total for GET /media: the rows ListMedia pages through, same filters.
@@ -94,10 +98,12 @@ type Querier interface {
 	CountPublicSearchResults(ctx context.Context, query string) ([]CountPublicSearchResultsRow, error)
 	// The archive's total, with the same filters as ListPublishedPostsByTerm.
 	CountPublishedPostsByTerm(ctx context.Context, termID int64) (int64, error)
+	CountRedirects(ctx context.Context, query string) (int64, error)
 	// SearchPostsWithMeta's total, with the same filters.
 	CountSearchPosts(ctx context.Context, arg CountSearchPostsParams) (int64, error)
 	// Counting functions
 	CountTaxonomyTerms(ctx context.Context, name string) (int64, error)
+	CountTermChildren(ctx context.Context, parentID sql.NullInt64) (int64, error)
 	CountTotalPosts(ctx context.Context) (int64, error)
 	CountTotalSessions(ctx context.Context) (int64, error)
 	CountTotalUsers(ctx context.Context) (int64, error)
@@ -179,6 +185,8 @@ type Querier interface {
 	DeletePostMeta(ctx context.Context, arg DeletePostMetaParams) error
 	DeletePostTemplate(ctx context.Context, id int64) (int64, error)
 	DeletePostType(ctx context.Context, name string) error
+	DeleteRedirect(ctx context.Context, id int64) (Redirect, error)
+	DeleteRedirectFromPath(ctx context.Context, fromPath string) (int64, error)
 	// A newer signup for the address, or its account being created, ends every
 	// other pending link for it.
 	DeleteSignupRequestsByEmail(ctx context.Context, email string) error
@@ -194,6 +202,9 @@ type Querier interface {
 	DeleteUserBylines(ctx context.Context, userID int64) ([]int64, error)
 	DeleteUserPost(ctx context.Context, postID int64) error
 	DeleteUserSessions(ctx context.Context, id int64) error
+	// A post of type "post" without a category gets the default one (Uncategorized). The
+	// other types may have none. Called by every writer of a post's terms.
+	EnsureDefaultCategory(ctx context.Context, postIds []int64) (int64, error)
 	GetActiveTheme(ctx context.Context) (Theme, error)
 	// Get active theme with its settings
 	GetActiveThemeWithSettings(ctx context.Context) (GetActiveThemeWithSettingsRow, error)
@@ -226,6 +237,8 @@ type Querier interface {
 	GetPostAccessRequest(ctx context.Context, id int64) (PostAccessRequest, error)
 	GetPostBlocks(ctx context.Context, id int64) (GetPostBlocksRow, error)
 	GetPostBySlug(ctx context.Context, slug string) (Post, error)
+	// The category slug in one post's URL (golive_post_category_slug, 000047); '' = none.
+	GetPostCategorySlug(ctx context.Context, arg GetPostCategorySlugParams) (string, error)
 	GetPostChildren(ctx context.Context, postParent sql.NullInt64) ([]Post, error)
 	// Collaboration server persistence (#206 / #280). The collab server reaches
 	// these through the API's internal listener (GET/PUT /internal/posts/:id/collab);
@@ -296,6 +309,8 @@ type Querier interface {
 	// The terms a published post shows on the site (#358): its published set, in the
 	// shape of GetPostTaxonomyTerms.
 	GetPublishedPostTaxonomyTerms(ctx context.Context, postID int64) ([]GetPublishedPostTaxonomyTermsRow, error)
+	GetRedirect(ctx context.Context, id int64) (Redirect, error)
+	GetRedirectByFromPath(ctx context.Context, fromPath string) (Redirect, error)
 	GetReviewRequest(ctx context.Context, id int64) (ReviewRequest, error)
 	// One request with GetCurrentReviewRequest's columns (the response after a write).
 	GetReviewRequestDetail(ctx context.Context, id int64) (GetReviewRequestDetailRow, error)
@@ -339,6 +354,8 @@ type Querier interface {
 	// The scheduled update's version: its frozen body and settings, credited to whoever
 	// scheduled it. Never the working copy (#335: later edits aren't included).
 	InsertPublishedVersionFromScheduledUpdate(ctx context.Context, arg InsertPublishedVersionFromScheduledUpdateParams) (InsertPublishedVersionFromScheduledUpdateRow, error)
+	// A manual redirect: a path that already redirects is a conflict (unique violation).
+	InsertRedirect(ctx context.Context, arg InsertRedirectParams) (Redirect, error)
 	// A newer request, a confirmed change or a password change/reset ends every
 	// other pending link.
 	InvalidateEmailChangeTokensForUser(ctx context.Context, userID int64) error
@@ -346,6 +363,11 @@ type Querier interface {
 	// Edit access requests and per-post grants (#321, 000042). Who may do what is
 	// decided in api/auth_posts.go; these queries only read and write the rows.
 	IsPostCollaborator(ctx context.Context, arg IsPostCollaboratorParams) (bool, error)
+	// A category slug can't be a post type's or taxonomy's name: /{name}/... is that
+	// type's or taxonomy's URL, so /:category/:slug would never reach the post (#331).
+	IsPostTypeOrTaxonomyName(ctx context.Context, name string) (bool, error)
+	// Idempotent link (inside a transaction a unique violation would abort it).
+	LinkPostTerm(ctx context.Context, arg LinkPostTermParams) error
 	// Who is emailed about a new request: every admin and editor, and the post's
 	// owner if they are a contributor (canReviewPostAccess). The requester is left
 	// out.
@@ -492,6 +514,8 @@ type Querier interface {
 	// One page of the archive, newest first. Same columns as ListPostsWithMeta so rows
 	// share its presenter. A post in both a parent and its child is listed once.
 	ListPublishedPostsByTerm(ctx context.Context, arg ListPublishedPostsByTermParams) ([]ListPublishedPostsByTermRow, error)
+	// Settings › URLs & redirects, newest first, with who made each (public fields).
+	ListRedirects(ctx context.Context, arg ListRedirectsParams) ([]ListRedirectsRow, error)
 	// Up to @limit_count published posts of @post_type ranked by the terms they share
 	// with @post_id: shared categories first, then shared terms of every other taxonomy
 	// (tags), then newest first (id breaks ties). @taxonomy limits which of the current
@@ -524,6 +548,7 @@ type Querier interface {
 	ListSessionsByUsername(ctx context.Context, username string) ([]Session, error)
 	ListTaxonomyTermsByType(ctx context.Context, arg ListTaxonomyTermsByTypeParams) ([]ListTaxonomyTermsByTypeRow, error)
 	ListTaxonomyTypes(ctx context.Context) ([]TaxonomyType, error)
+	ListTermPostIDs(ctx context.Context, taxonomyTermID int64) ([]int64, error)
 	ListThemeSettings(ctx context.Context, themeID int64) ([]ThemeSetting, error)
 	ListThemes(ctx context.Context) ([]Theme, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
@@ -542,6 +567,10 @@ type Querier interface {
 	// one post queue on this lock instead of racing for the same version_no.
 	// The status is checked under the lock: a trashed post (#327) is never published.
 	LockPostForPublish(ctx context.Context, id int64) (LockPostForPublishRow, error)
+	// One category per post, the default category, merges (#331, 000047).
+	// Taken first by every write that replaces a post's category, so two writers of one
+	// post can't both pass the one-category check (000047's trigger is the backstop).
+	LockPostForTerms(ctx context.Context, id int64) (LockPostForTermsRow, error)
 	// The post being transferred (#353), locked: its current owner and status are read
 	// under the lock, so two transfers queue instead of both reading the same owner.
 	LockPostOwner(ctx context.Context, id int64) (LockPostOwnerRow, error)
@@ -550,6 +579,10 @@ type Querier interface {
 	// ScheduleUpdateTx's first step: lock the post (as LockPostForPublish) and read
 	// its status under the lock.
 	LockPostStatusForUpdate(ctx context.Context, id int64) (string, error)
+	// Redirects (#331, 000047). One row per old site path; see redirects_tx.go for how
+	// chains are kept collapsed and loops refused.
+	// Serializes redirect writes (rare), so two can't build a chain or loop between them.
+	LockRedirects(ctx context.Context) error
 	// Inside PublishScheduledPostTx: the post, locked, if it is still scheduled under
 	// this claim. No row: it was cancelled, rescheduled, published by hand, deleted
 	// or claimed again after this claim's lease ran out; nothing is published.
@@ -588,6 +621,9 @@ type Querier interface {
 	// owner. Working and published bylines get the same rule, so a post that had no
 	// pending change has none after. post_published_authors follows by trigger.
 	ReassignPublishedBylines(ctx context.Context, arg ReassignPublishedBylinesParams) error
+	// A merge (#331): the source's posts get the target, unless they have it already (the
+	// leftover links go with the source term).
+	ReassignTermPosts(ctx context.Context, arg ReassignTermPostsParams) (int64, error)
 	// A failed attempt under this claim: the reason the editor shows, and the next try
 	// after the backoff. 0 rows: the schedule changed meanwhile, nothing to record.
 	RecordScheduledPublishFailure(ctx context.Context, arg RecordScheduledPublishFailureParams) (int64, error)
@@ -599,6 +635,8 @@ type Querier interface {
 	RefreshPublishedSettings(ctx context.Context, ids []int64) error
 	RemoveAllPostTaxonomies(ctx context.Context, postID int64) error
 	RemoveAllPostTaxonomiesByTerm(ctx context.Context, taxonomyTermID int64) error
+	// Assigning a category replaces the post's other one(s).
+	RemovePostCategoriesExcept(ctx context.Context, arg RemovePostCategoriesExceptParams) ([]int64, error)
 	RemovePostFromTaxonomyTerm(ctx context.Context, arg RemovePostFromTaxonomyTermParams) error
 	RenamePostTemplate(ctx context.Context, arg RenamePostTemplateParams) (PostTemplate, error)
 	// Resend: a new token (the old link stops working) and a new expiry.
@@ -608,6 +646,13 @@ type Querier interface {
 	// name, description, alt and the focal point alone, so a concurrent metadata
 	// edit is never overwritten by a stale read.
 	ReplaceMediaFile(ctx context.Context, arg ReplaceMediaFileParams) (Medium, error)
+	// A merge, or a deleted category's posts moving to the default: the published sets
+	// (what the site shows) follow at once, like the working ones, so no published post
+	// shows a pending change for a taxonomy operation. Sorted and without repeats, like
+	// golive_post_settings(). The published-terms trigger mirrors it.
+	ReplaceTermInPublishedSettings(ctx context.Context, arg ReplaceTermInPublishedSettingsParams) (int64, error)
+	// The same for pending scheduled updates (#335), which would publish their snapshot.
+	ReplaceTermInScheduledUpdates(ctx context.Context, arg ReplaceTermInScheduledUpdatesParams) (int64, error)
 	// Dismiss or request changes (the API checks who may). Only an open request:
 	// sql.ErrNoRows when it was resolved meanwhile (published, dismissed, ...).
 	ResolveReviewRequest(ctx context.Context, arg ResolveReviewRequestParams) (ReviewRequest, error)
@@ -623,6 +668,8 @@ type Querier interface {
 	// Restoring a version's settings (#358): the working title and excerpt. Only the
 	// working copy changes; the published settings stay until Update.
 	RestorePostTitleAndDescription(ctx context.Context, arg RestorePostTitleAndDescriptionParams) (Post, error)
+	// Chain collapse: what pointed at old_to now points at new_to (A→B, then B→C: A→C).
+	RetargetRedirects(ctx context.Context, arg RetargetRedirectsParams) (int64, error)
 	// Answers an open request (claims it: a request already answered returns no
 	// row). Run by ReviewPostAccessRequestTx under the request's row lock.
 	ReviewPostAccessRequest(ctx context.Context, arg ReviewPostAccessRequestParams) (PostAccessRequest, error)
@@ -762,6 +809,8 @@ type Querier interface {
 	// A last_editor_id that no longer exists is stored as NULL rather than
 	// failing the whole store on the foreign key.
 	UpsertPostYdocState(ctx context.Context, arg UpsertPostYdocStateParams) error
+	// An automatic redirect replaces an older one from the same path.
+	UpsertRedirect(ctx context.Context, arg UpsertRedirectParams) (Redirect, error)
 	// Inside ScheduleUpdateTx, with the post locked: freeze the working copy as it is
 	// stored now (after the handler's collab flush), body and settings from the same
 	// row, as InsertPublishedVersionFromPost reads them. A new schedule replaces the old

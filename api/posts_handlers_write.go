@@ -95,6 +95,9 @@ func (server *Server) createPost(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
+	if !server.checkOneCategory(c, req.TaxonomyIDs) {
+		return
+	}
 
 	if len(req.AuthorIDs) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one author is required"})
@@ -290,6 +293,9 @@ func (server *Server) updatePost(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
+	if !server.checkOneCategory(c, req.TaxonomyIDs) {
+		return
+	}
 
 	existingPost, err := server.store.GetPost(c.Request.Context(), id)
 	if err != nil {
@@ -378,9 +384,17 @@ func (server *Server) updatePost(c *gin.Context) {
 	// losing a race for the slug (unique index) rolls the whole update back.
 	var updatedPost db.Post
 	if newSlug != "" && newSlug != existingPost.Slug {
+		// A published post's old URL redirects to the new one (#331), in the same
+		// transaction.
+		redirect, redirectErr := server.postSlugRedirect(c.Request.Context(), existingPost, updateParams.PostStatus, newSlug, getAuthPayload(c).UserID)
+		if redirectErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post"})
+			return
+		}
 		updatedPost, err = server.store.UpdatePostWithSlugTx(c.Request.Context(), db.UpdatePostWithSlugTxParams{
 			UpdatePostParams: updateParams,
 			Slug:             newSlug,
+			Redirect:         redirect,
 		})
 	} else {
 		updatedPost, err = server.store.UpdatePost(c.Request.Context(), updateParams)
@@ -411,6 +425,13 @@ func (server *Server) updatePost(c *gin.Context) {
 			TaxonomyTermIDs: req.TaxonomyIDs,
 		})
 		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post taxonomies"})
+			return
+		}
+	}
+	// A page (or another type) turned into a post gets the default category (#331).
+	if req.TaxonomyIDs == nil && updatedPost.PostType == "post" && existingPost.PostType != "post" {
+		if _, err := server.store.EnsureDefaultCategory(c.Request.Context(), []int64{id}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update post taxonomies"})
 			return
 		}
