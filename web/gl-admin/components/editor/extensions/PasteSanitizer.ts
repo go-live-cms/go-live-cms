@@ -283,7 +283,10 @@ function moveCaptionOut(caption: Element) {
     table.replaceWith(figure)
     figure.append(table)
   }
-  if (!figure.querySelector(":scope > figcaption")) figure.append(figcaption)
+  // A figure with a caption of its own keeps both texts, the table's first.
+  const existing = figure.querySelector(":scope > figcaption")
+  if (existing) existing.prepend(...Array.from(figcaption.childNodes), doc.createTextNode(" "))
+  else figure.append(figcaption)
 }
 
 /**
@@ -342,7 +345,7 @@ function parseStyle(style: string): Record<string, string> {
 // default attrs, and a table's parts (#420), so cells copied from a table paste as cells.
 const SLICE_CONTEXT_TYPES = new Set([
   "bulletList", "orderedList", "listItem", "blockquote", ...CONTAINER_NODE_NAMES,
-  "tableBlock", "table", "tableRow", "tableCell", "tableHeader",
+  "tableBlock", "table", "tableRow", "tableCell",
 ])
 
 /**

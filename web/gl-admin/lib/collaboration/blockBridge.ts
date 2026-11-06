@@ -458,7 +458,7 @@ function tableNodeToBlock(node: PMNode, id: BlockID): Block {
     lines.push(texts.join(" ").trim())
   })
   const text = lines.join("\n").trim()
-  const headerRow = grid?.type.name === "table" && grid.firstChild ? everyChild(grid.firstChild, (cell) => cell.type.name === "tableHeader") : false
+  const headerRow = grid?.type.name === "table" && grid.attrs.headerRow === true
   return {
     id,
     type: "table",
@@ -472,18 +472,12 @@ function tableNodeToBlock(node: PMNode, id: BlockID): Block {
   }
 }
 
-function everyChild(node: PMNode, test: (child: PMNode) => boolean): boolean {
-  if (node.childCount === 0) return false
-  for (let i = 0; i < node.childCount; i++) if (!test(node.child(i))) return false
-  return true
-}
-
 /**
  * A stored table as `tableBlock` JSON (#420): its rows from `attrs.pm` (`tableRows`: only
- * rows, cells and their paragraphs, spans clamped), the first row's cells header cells
- * when `attrs.headerRow`, every other cell a plain one (whatever the pm says), and the
- * caption from `attrs.caption`. A table with no rows can't be built: it throws, so the
- * block is dropped (hidden, kept) like any other block the editor can't show (#213).
+ * rows, cells and their paragraphs, spans clamped), every cell a `tableCell` (a stored
+ * `tableHeader` too), the grid's `headerRow` from `attrs.headerRow`, and the caption from
+ * `attrs.caption`. A table with no rows can't be built: it throws, so the block is
+ * dropped (hidden, kept) like any other block the editor can't show (#213).
  */
 function tableBlockToPM(block: Block, baseAttrs: Record<string, unknown>, schema: Schema): any {
   const attrs = block.attrs as { pm?: unknown; headerRow?: unknown; caption?: unknown }
@@ -496,10 +490,11 @@ function tableBlockToPM(block: Block, baseAttrs: Record<string, unknown>, schema
     content: [
       {
         type: "table",
-        content: rows.map((cells, rowIndex) => ({
+        attrs: { headerRow },
+        content: rows.map((cells) => ({
           type: "tableRow",
           content: cells.map((cell) => ({
-            type: rowIndex === 0 && headerRow ? "tableHeader" : "tableCell",
+            type: "tableCell",
             attrs: { colspan: cell.colspan, rowspan: cell.rowspan },
             content: cell.content,
           })),

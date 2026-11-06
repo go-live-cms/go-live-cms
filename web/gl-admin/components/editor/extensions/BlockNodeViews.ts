@@ -15,12 +15,34 @@ import {
 } from "@gl-admin/lib/blocks-spec"
 
 import { TableView } from "@tiptap/extension-table"
-import { hasHeaderRow, normalizeHeaderCells } from "./TableBlock"
+import { hasHeaderRow } from "./TableBlock"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
 
 /** The grid's narrowest column, in px (TipTap's `cellMinWidth`). */
 const TABLE_CELL_MIN_WIDTH = 25
+
+/**
+ * TipTap's table view (the grid in a scrolling `tableWrapper`), plus `data-header-row` on
+ * the <table>, so the editor styles the header row (#420: the grid's `headerRow` attr; the
+ * cells are plain cells).
+ */
+class GridView extends TableView {
+  constructor(node: PMNode, cellMinWidth: number) {
+    super(node, cellMinWidth)
+    this.mark()
+  }
+
+  update(node: PMNode) {
+    if (!super.update(node)) return false
+    this.mark()
+    return true
+  }
+
+  private mark() {
+    this.table.dataset.headerRow = String(hasHeaderRow(this.node))
+  }
+}
 
 /**
  * The editor's views of the image (figure, width, caption), quote (citation input) and
@@ -46,7 +68,7 @@ export const BlockNodeViews = Extension.create({
             group: (node, view, getPos) => new GroupView(node, view, getPos as () => number | undefined),
             // #420: the table block (its toolbar) and the grid, which scrolls in its own box.
             tableBlock: (node, view, getPos) => new TableBlockView(node, view, getPos as () => number | undefined, editor),
-            table: (node) => new TableView(node, TABLE_CELL_MIN_WIDTH),
+            table: (node) => new GridView(node, TABLE_CELL_MIN_WIDTH),
           },
           // Marks the quote the cursor is in, so its empty citation field shows, and the
           // group or table it is in (or that is selected), so its settings show.
@@ -492,8 +514,12 @@ class TableBlockView implements NodeView {
     }
     list.addEventListener("keydown", (event) => this.onMenuKey(event))
     button.setAttribute("aria-expanded", "true")
+    // Under its own button (the toolbar is the positioned box).
+    list.style.left = `${button.offsetLeft}px`
     button.after(list)
     this.menu = { button, list }
+    // A click anywhere else closes it (the caret leaving the table hides the toolbar).
+    doc.addEventListener("mousedown", this.onOutsideDown, true)
     if (focusFirst) list.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus()
   }
 
@@ -501,9 +527,15 @@ class TableBlockView implements NodeView {
     if (!this.menu) return
     const { button, list } = this.menu
     this.menu = null
+    this.dom.ownerDocument.removeEventListener("mousedown", this.onOutsideDown, true)
     list.remove()
     button.setAttribute("aria-expanded", "false")
     if (refocusButton) button.focus()
+  }
+
+  private onOutsideDown = (event: MouseEvent) => {
+    const target = event.target as globalThis.Node | null
+    if (this.menu && target && !this.menu.list.contains(target) && !this.menu.button.contains(target)) this.closeMenu(false)
   }
 
   private onMenuKey(event: KeyboardEvent) {
@@ -546,12 +578,13 @@ class TableBlockView implements NodeView {
     const current = pos === undefined ? null : this.view.state.doc.nodeAt(pos)
     const table = current?.firstChild
     if (pos === undefined || !current || current.type.name !== "tableBlock" || table?.type.name !== "table") return
-    this.view.dispatch(normalizeHeaderCells(this.view.state.tr, pos + 1, !hasHeaderRow(table)))
+    // One attribute (last writer wins), never the cells.
+    this.view.dispatch(this.view.state.tr.setNodeAttribute(pos + 1, "headerRow", !hasHeaderRow(table)))
   }
 
   private render() {
     const table = this.node.firstChild
-    this.headerSwitch.setAttribute("aria-checked", String(!!table && table.type.name === "table" && hasHeaderRow(table)))
+    this.headerSwitch.setAttribute("aria-checked", String(table?.type.name === "table" && hasHeaderRow(table)))
     setBlockId(this.dom, this.node)
     // Not hidden or disabled here: `editable` changes without an update (#313). The
     // editor's `[contenteditable="false"]` style hides the toolbar of a read-only view.

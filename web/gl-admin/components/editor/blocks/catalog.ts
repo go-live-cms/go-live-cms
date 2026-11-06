@@ -3,6 +3,7 @@ import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlo
 import { acceptsChild, containerOfNode, containerRule, isContainerType, isStandaloneFlowType } from "@gl-admin/lib/blocks-spec/nesting"
 import { createImagePlaceholder } from "./mediaBlocks"
 import { openTableSizePicker } from "../ui/TableSizePicker"
+import { TABLE_ICON } from "../extensions/TableBlock"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
@@ -85,7 +86,7 @@ export const ICONS = {
   divider: "M3 12h18M8 6h8M8 18h8",
   html: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",
   group: "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h8v8H8z",
-  table: "M3 5h18v14H3zM3 10h18M3 15h18M9 5v14",
+  table: TABLE_ICON,
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)

@@ -174,3 +174,15 @@ func TestTableNesting(t *testing.T) {
 		require.Error(t, doc.prepareForStore(ThemeBlockManifest{}))
 	})
 }
+
+func TestSanitize_TableGridOnlyInTableBlocks(t *testing.T) {
+	// A node of the same name in another block's pm (a pre-#376 custom block) keeps its
+	// attrs: the allowlist is the table block's.
+	pm := map[string]interface{}{"type": "callout", "content": []interface{}{
+		map[string]interface{}{"type": "tableCell", "attrs": map[string]interface{}{"align": "right"}},
+	}}
+	doc := singleBlock("callout", map[string]interface{}{"pm": pm})
+	doc.sanitize()
+	cell := attrsOf(doc)["pm"].(map[string]interface{})["content"].([]interface{})[0].(map[string]interface{})
+	require.Equal(t, map[string]interface{}{"align": "right"}, cell["attrs"])
+}

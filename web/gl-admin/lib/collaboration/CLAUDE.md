@@ -298,28 +298,35 @@ kept so references in code stay valid.
   `block` group** (`STANDALONE_FLOW_NODE_NAMES` in `nesting.ts`): the doc and flow containers
   name it, so a table is never part of a quote's, a list item's or a theme block's `pm` (paste
   lifts it out; `slotAcceptsAt` doesn't offer it there).
-  - **Block Spec `table` v1:** `attrs.pm` = the `table` node's JSON with **every cell a
-    `tableCell`** (spans only when not 1), `attrs.headerRow` (`true` or absent) **canonical**:
-    on load the first row's cells become `tableHeader` when it's set and every other cell a
-    `tableCell`, whatever the pm says (`tableRows` keeps only rows, cells and paragraphs, spans
-    clamped to `TABLE_MAX_SPAN`); `attrs.caption` runs like an image's; `attrs.text` the cell
-    texts. A table with no rows can't be built: dropped and kept (#213). No `children`.
+  - **The header row is the grid's `headerRow` attr, never a cell type.** There is no
+    `tableHeader` node: every cell is a `tableCell`. Toggling the header row is one attribute
+    (last writer wins); a cell whose node type changed would be a new Yjs element, and a peer
+    typing in it would lose those keys (`TableBlock.collab.test.ts` pins it). The editor
+    styles the row from `data-header-row` (`GridView`); the public page renders `<thead>`.
+  - **Block Spec `table` v1:** `attrs.pm` = the `table` node's rows (no attrs; every cell a
+    `tableCell`, spans only when not 1; a row may be empty when a rowspan covers it),
+    `attrs.headerRow` (`true` or absent) from the grid's attr, `attrs.caption` runs like an
+    image's, `attrs.text` the cell texts. On load `tableRows` keeps only rows, cells and
+    paragraphs (a stored `tableHeader` is read as a cell), spans clamped to `TABLE_MAX_SPAN`. A
+    table with no rows can't be built: dropped and kept (#213). No `children`.
   - **Rule 7:** prosemirror-tables' `tableEditing` plugin has an `appendTransaction`
     (`fixTables` pads short rows). `GlTable` wraps it to skip collaboration-sync transactions,
     or every peer would pad a table two people reshaped at once and each padding would sync;
     only a local change fixes a table (`TableBlock.collab.test.ts` fails without the guard).
-  - **One transaction each:** `insertTableBlock`, `addTableRow`/`addTableColumn`,
-    `deleteTableRow`/`deleteTableColumn` (never the last one), `toggleTableHeaderRow`, and the
-    row/column ones put the cell types back in order (`normalizeHeaderCells`) in the same
-    transaction, so the editor shows what a reload would.
+  - **One transaction each:** `insertTableBlock` (after a selected block, or for the caret's
+    line), `addTableRow`/`addTableColumn`, `deleteTableRow`/`deleteTableColumn` (never the last
+    one: prosemirror-tables only refuses that when dispatching, so `can()` is checked first),
+    `toggleTableHeaderRow`.
   - **Keys** (`TableKeyboard`, editor only, priority 200): Tab / ⇧Tab between cells, Tab in the
     last cell adds a row, ⌥F10 focuses the toolbar, Backspace with every cell selected deletes the
     table block. **Only while the caret is in a cell**; anywhere else they return false, so lists,
     the gutter's Tab and #417's keys run as before.
   - **Paste:** `PasteSanitizer` keeps `td`/`th` (with clamped `colspan`/`rowspan`), turns each
     cell's content into paragraphs (`flattenCell`: a heading, a list item or a nested table's
-    cell ends a line), and moves a `<caption>` into the figure's `figcaption`. A `<th>` is a
-    header cell only in a header row (`isHeaderRowCell`).
+    cell ends a line), and moves a `<caption>` into the figure's `figcaption`. A pasted table
+    has a header row when its first row is all `<th>` (`hasHeaderRowHTML`); any `<th>` is a
+    plain cell. A table pasted with the caret in a cell fills cells from there
+    (`pastedIntoCell`, `TableKeyboard`'s `transformPasted`) instead of splitting the table.
   - **Stale clients:** a bundle from before #420 has no table nodes (and a narrower doc), so
     y-tiptap would delete a table a newer peer inserts; the fingerprint guard (#416) refuses
     such a tab (`schemaFingerprint.test.ts` pins that the table changed it).

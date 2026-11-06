@@ -112,7 +112,7 @@ describe("Table with two users on the relay (#420)", () => {
     const b = makeEditor(pb.doc)
     await waitFor(() => b.getText().includes("Editor"), { what: "b to load" })
     expect(a.state.doc.child(0).type.name).toBe("tableBlock")
-    expect(a.state.doc.child(0).child(0).child(0).child(0).type.name).toBe("tableHeader")
+    expect(grid(a).attrs.headerRow).toBe(true)
 
     // At the same time: A in the Admin row, B in the Editor row and in the caption.
     a.chain().setTextSelection(endOfText(a, "Admin")).insertContent(" (all)").run()
@@ -146,6 +146,25 @@ describe("Table with two users on the relay (#420)", () => {
     const c = makeEditor(pc.doc)
     await waitFor(() => c.getText().includes("ask an editor"), { what: "c to load" })
     expect(c.state.doc.toJSON()).toEqual(a.state.doc.toJSON())
+  })
+
+  it("turning the header row off while someone types in a header cell keeps their typing (#420)", async () => {
+    const pa = relay.client("1")
+    const pb = relay.client("2")
+    await Promise.all([pa.whenSynced(), pb.whenSynced()])
+    const a = makeEditor(pa.doc)
+    const b = makeEditor(pb.doc)
+    await waitFor(() => b.getText().includes("Editor"), { what: "b to load" })
+
+    // At the same time: A types in the header cell "Publish", B turns the header row off.
+    a.chain().setTextSelection(endOfText(a, "Publish")).insertContent(" now").run()
+    b.chain().setTextSelection(endOfText(b, "Editor")).toggleTableHeaderRow().run()
+
+    await waitFor(() => same(a, b) && b.getText().includes("Publish now") && grid(a).attrs.headerRow === false, { what: "convergence" })
+    await waitFor(() => (stored().blocks[TABLE]?.attrs as any)?.headerRow === undefined && JSON.stringify(cellTexts(storedRows())).includes("Publish now"), {
+      what: "the store",
+    })
+    expect(cellTexts(storedRows())[0]).toEqual(["Role", "Write", "Publish now"])
   })
 
   it("a column and a row added at once merge without any peer padding the table on a sync (rule 7)", async () => {

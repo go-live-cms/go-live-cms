@@ -1,7 +1,7 @@
 import { Extension, mergeAttributes, Node, type Editor } from "@tiptap/core"
-import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table"
+import { Table, TableCell, TableRow } from "@tiptap/extension-table"
 import { isChangeOrigin } from "@tiptap/extension-collaboration"
-import type { Node as PMNode, NodeType, Schema } from "@tiptap/pm/model"
+import { Fragment, Slice, type Node as PMNode, type Schema } from "@tiptap/pm/model"
 import { NodeSelection, Plugin, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state"
 import {
   addColumnAfter,
@@ -20,13 +20,16 @@ import { acceptsChild, CAPTION_MARKS, clampTableSpan, containerOfNode, TABLE_MAX
 /** Rows and columns the size picker starts with, as on the canvas ("Columns 3, Rows 2"). */
 export const DEFAULT_TABLE_SIZE = { rows: 2, cols: 3 } as const
 
+/** The table's icon (the canvas's, 24×24 stroke): the catalog's entry and the size picker. */
+export const TABLE_ICON = "M3 5h18v14H3zM3 10h18M3 15h18M9 5v14"
+
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     tableBlock: {
       /**
        * Insert a table (#420) for the line the selection is on: an empty paragraph is
-       * replaced, anything else gets the table after its block. The caret lands in the
-       * first cell. `rows` counts the header row.
+       * replaced, anything else gets the table after its block (after a selected block).
+       * The caret lands in the first cell. `rows` counts the header row.
        */
       insertTableBlock: (options?: { rows?: number; cols?: number; headerRow?: boolean }) => ReturnType
       /** Delete the table the selection is in (or on), caption and all. */
@@ -58,15 +61,15 @@ const SPAN_ATTRS = {
 }
 
 /**
- * Whether a pasted `<th>` is in a header row: its row is the first of its table and every
- * cell of that row is a `<th>`. Only that row becomes header cells; any other `<th>` (a
- * header column, a stray one) is pasted as a plain cell, since Block Spec has a header
- * row and nothing else (`headerRow`).
+ * Whether a pasted `<table>` has a header row: its own first row holds only `<th>`s (a
+ * `<thead>` row, or a first `<tbody>` row of `<th>`s), or it's the editor's own clipboard
+ * (`data-header-row`). Any other `<th>` (a header column, a stray one) is a plain cell:
+ * Block Spec has a header row and nothing else (`headerRow`).
  */
-export function isHeaderRowCell(element: HTMLElement): boolean {
-  const row = element.closest("tr")
-  const table = row?.closest("table")
-  if (!row || !table || table.querySelector("tr") !== row) return false
+export function hasHeaderRowHTML(table: HTMLElement): boolean {
+  if (table.getAttribute("data-header-row") === "true") return true
+  const row = table.querySelector("tr")
+  if (!row || row.closest("table") !== table || row.children.length === 0) return false
   return Array.from(row.children).every((cell) => cell.tagName === "TH")
 }
 
@@ -74,7 +77,9 @@ export function isHeaderRowCell(element: HTMLElement): boolean {
  * A table's cells (#420): **paragraphs only** (`paragraph+`), so the table is one flow
  * block and never a container: no list, heading or image in a cell. The spans are the
  * only attrs (no `colwidth`: there is no column resizing, and the API keeps nothing
- * else).
+ * else). There is no header cell node: the header row is the grid's `headerRow`, so
+ * turning it on or off changes one attribute, never the cells (a cell whose node type
+ * changed would be a new Yjs element, and a peer typing in it would lose those keys).
  */
 export const GlTableCell = TableCell.extend({
   content: "paragraph+",
@@ -82,27 +87,20 @@ export const GlTableCell = TableCell.extend({
     return SPAN_ATTRS
   },
   parseHTML() {
-    // A <th> outside a header row is a plain cell (GlTableHeader takes the others first).
     return [{ tag: "td" }, { tag: "th" }]
   },
 })
 
-export const GlTableHeader = TableHeader.extend({
-  content: "paragraph+",
-  addAttributes() {
-    return SPAN_ATTRS
-  },
-  parseHTML() {
-    return [{ tag: "th", priority: 60, getAttrs: (element) => (isHeaderRowCell(element as HTMLElement) ? null : false) }]
-  },
-})
-
-export const GlTableRow = TableRow
+// Cells only (TipTap's names `tableHeader` too). May be empty: a row every cell of which
+// is covered by a rowspan from above has no cells of its own.
+export const GlTableRow = TableRow.extend({ content: "tableCell*" })
 
 /**
  * TipTap's `table` (prosemirror-tables' roles and commands), as the grid inside the table
  * block. **Not in any group**: only `tableBlock` holds it, so the caption has a place
- * (prosemirror-tables reads every child of `table` as a row).
+ * (prosemirror-tables reads every child of `table` as a row). `headerRow`: its first row
+ * is a header row (Block Spec's `attrs.headerRow`; the editor styles that row, the public
+ * page renders it as `<thead>`).
  *
  * **Rule 7:** prosemirror-tables' `tableEditing` plugin has an `appendTransaction`
  * (`fixTables`, which pads short rows with new cells, plus a selection fix). Run on a
@@ -115,6 +113,15 @@ export const GlTableRow = TableRow
  */
 export const GlTable = Table.extend({
   group: "",
+  addAttributes() {
+    return {
+      headerRow: {
+        default: false,
+        parseHTML: (element) => hasHeaderRowHTML(element),
+        renderHTML: (attributes) => (attributes.headerRow === true ? { "data-header-row": "true" } : {}),
+      },
+    }
+  },
   addKeyboardShortcuts() {
     return {}
   },
@@ -183,40 +190,18 @@ export function findTableBlock(state: EditorState): { pos: number; node: PMNode 
   return null
 }
 
-/** Whether the first row of `table` is a header row (every one of its cells is a header cell). */
+/** Whether the grid's first row is a header row. */
 export function hasHeaderRow(table: PMNode): boolean {
-  const first = table.firstChild
-  return !!first && first.childCount > 0 && Array.from({ length: first.childCount }, (_, i) => first.child(i)).every((cell) => cell.type.name === "tableHeader")
+  return table.attrs.headerRow === true
 }
 
-/**
- * Makes the cell types of the table at `tablePos` in `tr.doc` say what Block Spec stores:
- * the first row's cells are header cells when `headerRow`, plain cells otherwise, and
- * every other row's cells are plain. prosemirror-tables copies a neighbour's type into a
- * new row or column, which can put header cells anywhere; this keeps the editor showing
- * what a reload would.
- */
-export function normalizeHeaderCells(tr: Transaction, tablePos: number, headerRow: boolean): Transaction {
-  const table = tr.doc.nodeAt(tablePos)
-  if (!table || table.type.name !== "table") return tr
-  const { tableCell, tableHeader } = tr.doc.type.schema.nodes
-  table.forEach((row, rowOffset, rowIndex) => {
-    row.forEach((cell, cellOffset) => {
-      const want = rowIndex === 0 && headerRow ? tableHeader : tableCell
-      if (cell.type !== want) tr.setNodeMarkup(tablePos + 1 + rowOffset + 1 + cellOffset, want, cell.attrs)
-    })
-  })
-  return tr
-}
-
-/** A new table block: `rows` × `cols` empty cells (the first row header cells when `headerRow`) and an empty caption. */
+/** A new table block: `rows` × `cols` empty cells, the first row a header row when `headerRow`, and an empty caption. */
 export function createTableBlock(schema: Schema, rows: number, cols: number, headerRow: boolean): PMNode {
-  const { tableBlock, table, tableRow, tableCell, tableHeader, tableCaption, paragraph } = schema.nodes
-  const cell = (type: NodeType) => type.create(null, paragraph.create())
-  const rowNodes = Array.from({ length: rows }, (_, index) =>
-    tableRow.create(null, Array.from({ length: cols }, () => cell(index === 0 && headerRow ? tableHeader : tableCell))),
+  const { tableBlock, table, tableRow, tableCell, tableCaption, paragraph } = schema.nodes
+  const rowNodes = Array.from({ length: rows }, () =>
+    tableRow.create(null, Array.from({ length: cols }, () => tableCell.create(null, paragraph.create()))),
   )
-  return tableBlock.create(null, [table.create(null, rowNodes), tableCaption.create()])
+  return tableBlock.create(null, [table.create({ headerRow }, rowNodes), tableCaption.create()])
 }
 
 const clampSize = (value: unknown, max: number, fallback: number) => {
@@ -231,6 +216,13 @@ function tableIn(doc: PMNode, blockPos: number): { pos: number; node: PMNode } |
   return block?.type.name === "tableBlock" && table?.type.name === "table" ? { pos: blockPos + 1, node: table } : null
 }
 
+/** Whether `parent` holds table blocks: the doc, or a container whose nesting rule takes a table. */
+function holdsTables(parent: PMNode): boolean {
+  if (parent.type.name === "doc") return true
+  const container = containerOfNode(parent.type.name)
+  return !!container && acceptsChild(container.type, "table")
+}
+
 type PMCommand = (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean
 
 /** `command`, refused when the selected cells cover every row (or every column). */
@@ -242,27 +234,10 @@ function unlessAll(axis: "rows" | "columns", command: PMCommand): PMCommand {
   }
 }
 
-/**
- * Runs a prosemirror-tables command and puts the cell types back in order
- * (`normalizeHeaderCells`) in the same transaction, so a row or column change is one
- * Yjs update.
- */
+/** A prosemirror-tables command, only for a caret (or cell selection) in a table block's grid. */
 function tableCommand(command: PMCommand) {
-  return ({ state, dispatch }: { state: EditorState; dispatch?: (tr: Transaction) => void }) => {
-    const block = findTableBlock(state)
-    const table = block && tableIn(state.doc, block.pos)
-    if (!block || !table || !isInTable(state)) return false
-    if (!dispatch) return command(state)
-    // In a chain `state.tr` is the chain's transaction, which may already have steps:
-    // `table.pos` is a position after them, so only this command's steps map it.
-    const start = state.tr.steps.length
-    let result: Transaction | null = null
-    const ok = command(state, (tr) => (result = tr))
-    if (!ok || !result) return false
-    const tr = result as Transaction
-    dispatch(normalizeHeaderCells(tr, tr.mapping.slice(start).map(table.pos), hasHeaderRow(table.node)))
-    return true
-  }
+  return ({ state, dispatch }: { state: EditorState; dispatch?: (tr: Transaction) => void }) =>
+    isInTable(state) && findTableBlock(state) !== null && command(state, dispatch)
 }
 
 /**
@@ -273,7 +248,7 @@ function tableCommand(command: PMCommand) {
  * **Not in the `block` group** (`STANDALONE_FLOW_NODE_NAMES`): a table can be a block of
  * the doc or of a group, never part of a quote, a list item or a theme block. Schema
  * plus commands, no DOM code: the collab server builds it too. The editor's view and
- * toolbar are in `BlockNodeViews.ts`, the keys in `TableKeyboard`.
+ * toolbar are in `BlockNodeViews.ts`, the keys and paste in `TableKeyboard`.
  */
 export const TableBlock = Node.create({
   name: "tableBlock",
@@ -282,7 +257,7 @@ export const TableBlock = Node.create({
   defining: true,
 
   addExtensions() {
-    return [GlTable, GlTableRow, GlTableHeader, GlTableCell, TableCaption]
+    return [GlTable, GlTableRow, GlTableCell, TableCaption]
   },
 
   parseHTML() {
@@ -307,19 +282,27 @@ export const TableBlock = Node.create({
             clampSize(cols, TABLE_MAX_COLUMNS, DEFAULT_TABLE_SIZE.cols),
             headerRow,
           )
-          // The block the caret is in, or the nearest one around it whose parent (the doc
-          // or a container that holds flow) may hold a table: never inside a quote, a
-          // list item or another table.
-          const { $from } = state.selection
-          let depth = $from.depth
-          while (depth > 0 && !holdsTables($from.node(depth - 1))) depth--
-          if (depth === 0) return false
-          const target = $from.node(depth)
-          const replace = target.type.name === "paragraph" && target.content.size === 0
-          const from = $from.before(depth)
-          const at = replace ? from : $from.after(depth)
+          const { selection } = state
+          let at: number
+          let replace: { from: number; to: number } | null = null
+          if (selection instanceof NodeSelection && holdsTables(selection.$from.parent)) {
+            // A selected block (an image, a table): the table goes after it.
+            at = selection.to
+          } else {
+            // The block the caret is in, or the nearest one around it whose parent (the doc
+            // or a container that holds flow) may hold a table: never inside a quote, a
+            // list item or another table.
+            const { $from } = selection
+            let depth = $from.depth
+            while (depth > 0 && !holdsTables($from.node(depth - 1))) depth--
+            if (depth === 0) return false
+            const target = $from.node(depth)
+            const from = $from.before(depth)
+            if (target.type.name === "paragraph" && target.content.size === 0) replace = { from, to: from + target.nodeSize }
+            at = replace ? from : $from.after(depth)
+          }
           if (dispatch) {
-            if (replace) tr.replaceWith(from, from + target.nodeSize, node)
+            if (replace) tr.replaceWith(replace.from, replace.to, node)
             else tr.insert(at, node)
             // tableBlock › table › row › cell › paragraph
             tr.setSelection(TextSelection.create(tr.doc, at + 5)).scrollIntoView()
@@ -343,7 +326,8 @@ export const TableBlock = Node.create({
           const block = findTableBlock(state)
           const table = block && tableIn(state.doc, block.pos)
           if (!table) return false
-          if (dispatch) normalizeHeaderCells(tr, table.pos, !hasHeaderRow(table.node))
+          // One attribute (last writer wins), never the cells.
+          if (dispatch) tr.setNodeAttribute(table.pos, "headerRow", !hasHeaderRow(table.node))
           return true
         },
       addTableRow: (side) => tableCommand(side === "before" ? addRowBefore : addRowAfter),
@@ -356,13 +340,6 @@ export const TableBlock = Node.create({
   },
 })
 
-/** Whether `parent` holds table blocks: the doc, or a container whose nesting rule takes a table. */
-function holdsTables(parent: PMNode): boolean {
-  if (parent.type.name === "doc") return true
-  const container = containerOfNode(parent.type.name)
-  return !!container && acceptsChild(container.type, "table")
-}
-
 /** Whether the selection is in a table cell (not the caption). */
 export function inTableCell(state: EditorState): boolean {
   return state.selection instanceof CellSelection || (isInTable(state) && findTableBlock(state) !== null)
@@ -374,10 +351,22 @@ function allCellsSelected(state: EditorState): boolean {
   if (!(selection instanceof CellSelection)) return false
   let cells = 0
   selection.$anchorCell.node(-1).descendants((node) => {
-    if (node.type.spec.tableRole === "cell" || node.type.spec.tableRole === "header_cell") cells++
-    return node.type.spec.tableRole !== "cell" && node.type.spec.tableRole !== "header_cell"
+    const isCell = node.type.spec.tableRole === "cell" || node.type.spec.tableRole === "header_cell"
+    if (isCell) cells++
+    return !isCell
   })
   return cells === selection.ranges.length
+}
+
+/**
+ * A pasted table block, while the caret is in a cell, as its grid alone: prosemirror-tables
+ * then pastes its cells into the table (from the caret's cell, growing the table as
+ * needed) instead of a table block being fitted into the cell, which would split the table.
+ */
+export function pastedIntoCell(slice: Slice, state: EditorState): Slice {
+  const only = slice.content.childCount === 1 ? slice.content.firstChild : null
+  if (!only || only.type.name !== "tableBlock" || !inTableCell(state) || only.firstChild?.type.name !== "table") return slice
+  return new Slice(Fragment.from(only.firstChild), 0, 0)
 }
 
 /**
@@ -385,13 +374,19 @@ function allCellsSelected(state: EditorState): boolean {
  * editor only. **Only while the caret is in a table cell** (`inTableCell`): anywhere else
  * these return false and the other keymaps (lists, the gutter's Tab, #417's nested
  * editing) run as before. Tab in the last cell adds a row; ⇧Tab in the first cell stays
- * there. Backspace/Delete with every cell selected delete the whole table block.
+ * there. Backspace/Delete with every cell selected delete the whole table block. Also
+ * `pastedIntoCell` for a table pasted into a table (`transformPasted`, local pastes only;
+ * no appendTransaction).
  *
  * Priority above the gutter's (50) and the lists' (100) Tab, so it wins inside a cell.
  */
 export const TableKeyboard = Extension.create({
   name: "tableKeyboard",
   priority: 200,
+
+  addProseMirrorPlugins() {
+    return [new Plugin({ props: { transformPasted: (slice, view) => pastedIntoCell(slice, view.state) } })]
+  },
 
   addKeyboardShortcuts() {
     const editor = this.editor as Editor

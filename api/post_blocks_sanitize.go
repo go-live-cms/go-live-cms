@@ -202,8 +202,8 @@ var tableBlockAttrs = map[string]bool{"pm": true, "text": true, "headerRow": tru
 
 // sanitizeTableAttrs is an allowlist: `headerRow` is `true` or absent, the caption is
 // reduced like an image's, `text` is a string, and a `pm` that isn't a table node is
-// dropped (the block then renders nothing). The grid's node attrs are handled by
-// sanitizePMNode, at any depth.
+// dropped (the block then renders nothing). The grid's node attrs go through
+// sanitizeTableGrid, at any depth of the pm (only a table block's).
 func sanitizeTableAttrs(attrs map[string]interface{}) {
 	for name := range attrs {
 		if !tableBlockAttrs[name] {
@@ -219,8 +219,24 @@ func sanitizeTableAttrs(attrs map[string]interface{}) {
 		}
 	}
 	sanitizeCaption(attrs)
-	if pm, ok := attrs["pm"].(map[string]interface{}); !ok || pm["type"] != "table" {
+	pm, ok := attrs["pm"].(map[string]interface{})
+	if !ok || pm["type"] != "table" {
 		delete(attrs, "pm")
+		return
+	}
+	sanitizeTableGrid(pm)
+}
+
+// sanitizeTableGrid applies sanitizeTableNodeAttrs to a table block's pm and every node
+// under it. Only a table block's: another block's node of the same name keeps its attrs.
+func sanitizeTableGrid(node map[string]interface{}) {
+	sanitizeTableNodeAttrs(node)
+	if content, ok := node["content"].([]interface{}); ok {
+		for _, child := range content {
+			if childMap, ok := child.(map[string]interface{}); ok {
+				sanitizeTableGrid(childMap)
+			}
+		}
 	}
 }
 
@@ -309,9 +325,6 @@ func stringOf(v interface{}) string {
 
 // sanitizePMNode recursively sanitises a ProseMirror node map in place.
 func sanitizePMNode(node map[string]interface{}) {
-	// A table's grid (#420): an allowlist, wherever the node is.
-	sanitizeTableNodeAttrs(node)
-
 	if nattrs, ok := node["attrs"].(map[string]interface{}); ok {
 		stripOnAttrs(nattrs)
 		// A nested node's colour (a tinted paragraph inside a list item) renders too. Only

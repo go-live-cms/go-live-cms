@@ -9,7 +9,7 @@ import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 import { TABLE_MAX_COLUMNS, validateBlockDoc } from "@gl-admin/lib/blocks-spec"
 import { BlockNodeViews } from "./BlockNodeViews"
 import { PasteSanitizer, sanitizePastedHTML } from "./PasteSanitizer"
-import { isHeaderRowCell, TableKeyboard } from "./TableBlock"
+import { hasHeaderRowHTML, TableKeyboard } from "./TableBlock"
 import { CORE_BLOCKS, slotAcceptsAt } from "../blocks/catalog"
 import { currentTableSizePicker, openTableSizePicker, parseTableSize } from "../ui/TableSizePicker"
 
@@ -60,7 +60,16 @@ const gridOf = (ed: Editor): PMNode => {
   return grid
 }
 const rowsOf = (grid: PMNode) => Array.from({ length: grid.childCount }, (_, r) => grid.child(r))
-const cellTypes = (ed: Editor) => rowsOf(gridOf(ed)).map((row) => Array.from({ length: row.childCount }, (_, c) => (row.child(c).type.name === "tableHeader" ? "th" : "td")))
+/** "th" for a cell of the header row (the grid's `headerRow`), "td" for the others; every cell node is a tableCell. */
+const cellTypes = (ed: Editor) => {
+  const grid = gridOf(ed)
+  return rowsOf(grid).map((row, r) =>
+    Array.from({ length: row.childCount }, (_, c) => {
+      expect(row.child(c).type.name).toBe("tableCell")
+      return r === 0 && grid.attrs.headerRow === true ? "th" : "td"
+    }),
+  )
+}
 const cellTexts = (ed: Editor) => rowsOf(gridOf(ed)).map((row) => Array.from({ length: row.childCount }, (_, c) => row.child(c).textContent))
 
 /** The position inside the first paragraph (or caption) whose text is `text`, at its end. */
@@ -98,7 +107,10 @@ const TABLE_HTML =
 describe("the schema (#420)", () => {
   it("puts a table only in the doc or a container, never in a quote, a list item or a cell", () => {
     const ed = makeEditor("<p>x</p>")
-    const { tableBlock, doc, group, blockquote, listItem, tableCell } = ed.schema.nodes
+    const { tableBlock, doc, group, blockquote, listItem, tableCell, tableHeader } = ed.schema.nodes
+    // The header row is the grid's attr: there is no header cell node to change into.
+    expect(tableHeader).toBeUndefined()
+    expect(ed.schema.nodes.table.spec.attrs).toHaveProperty("headerRow")
     expect(doc.contentMatch.matchType(tableBlock)).not.toBeNull()
     expect(group.contentMatch.matchType(tableBlock)).not.toBeNull()
     expect(blockquote.contentMatch.matchType(tableBlock)).toBeNull()
@@ -129,7 +141,7 @@ describe("insert, rows, columns and the header row (#420)", () => {
     expect(ed.commands.insertTableBlock({ rows: 3, cols: 2 })).toBe(true)
     expect(types(ed)).toEqual(["paragraph", "tableBlock", "paragraph"])
     expect(cellTypes(ed)).toEqual([["th", "th"], ["td", "td"], ["td", "td"]])
-    expect(ed.state.selection.$from.node(-1).type.name).toBe("tableHeader")
+    expect(gridOf(ed).attrs.headerRow).toBe(true)
     expect(gridOf(ed).child(0).child(0).eq(ed.state.selection.$from.node(-1))).toBe(true)
   })
 
@@ -143,7 +155,7 @@ describe("insert, rows, columns and the header row (#420)", () => {
     ed.commands.insertTableBlock({ headerRow: false })
     const group = ed.state.doc.child(2)
     expect(group.child(1).type.name).toBe("tableBlock")
-    expect(group.child(1).child(0).child(0).child(0).type.name).toBe("tableCell")
+    expect(group.child(1).child(0).attrs.headerRow).toBe(false)
   })
 
   it("never puts the table inside a quote or a list item: it goes after that block", () => {
@@ -190,11 +202,14 @@ describe("insert, rows, columns and the header row (#420)", () => {
     expect(cellTexts(ed)[1]).toEqual(["Role", "Write", "Publish"])
   })
 
-  it("toggles the header row in one transaction, from a cell or the caption", () => {
+  it("toggles the header row as one attribute, from a cell or the caption, never changing the cells", () => {
     const ed = makeEditor(TABLE_HTML)
     ed.commands.setTextSelection(endOfText(ed, "Who can do what"))
     const before = JSON.stringify(gridOf(ed).toJSON())
+    const cells = rowsOf(gridOf(ed))[0]
     expect(ed.commands.toggleTableHeaderRow()).toBe(true)
+    // The same cell nodes (a changed node type would be a new Yjs element, #420).
+    expect(rowsOf(gridOf(ed))[0].child(0).eq(cells.child(0))).toBe(true)
     expect(cellTypes(ed)[0]).toEqual(["td", "td", "td"])
     expect(cellTexts(ed)[0]).toEqual(["Role", "Write", "Publish"])
     ed.commands.toggleTableHeaderRow()
@@ -286,7 +301,7 @@ describe("the size picker (#420)", () => {
     expect(currentTableSizePicker()).toBeNull()
     expect(types(ed)).toEqual(["paragraph", "tableBlock", "paragraph"])
     expect(cellTypes(ed)).toEqual([["th", "th", "th", "th"], ["td", "td", "td", "td"], ["td", "td", "td", "td"]])
-    expect(ed.state.selection.$from.node(-1).type.name).toBe("tableHeader")
+    expect(ed.state.selection.$from.node(-2).eq(gridOf(ed).child(0))).toBe(true)
   })
 
   it("keeps focus in its first field after the editor's deferred focus (a focus() run just before)", async () => {
@@ -298,6 +313,13 @@ describe("the size picker (#420)", () => {
     const input = currentTableSizePicker()!.element.querySelector("input")!
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(document.activeElement).toBe(input)
+  })
+
+  it("Create table with a block selected puts the table after it", () => {
+    const ed = makeEditor("<p>first</p><hr><p>last</p>")
+    ed.commands.setNodeSelection(ed.state.doc.firstChild!.nodeSize)
+    expect(ed.commands.insertTableBlock()).toBe(true)
+    expect(types(ed)).toEqual(["paragraph", "horizontalRule", "tableBlock", "paragraph"])
   })
 
   it("Esc closes it without inserting anything; sizes are clamped", () => {
@@ -367,6 +389,18 @@ describe("the toolbar (#420)", () => {
     toolbarOf(ed).querySelector<HTMLButtonElement>(":scope > button")!.click()
     const disabled = Array.from(toolbarOf(ed).querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).map((i) => i.disabled)
     expect(disabled).toEqual([true, true, true])
+  })
+
+  it("a menu closes on a click outside it, and opens under its own button", () => {
+    const ed = makeEditor(TABLE_HTML)
+    ed.commands.setTextSelection(endOfText(ed, "Admin"))
+    const columnButton = toolbarOf(ed).querySelectorAll<HTMLButtonElement>(":scope > button")[1]
+    columnButton.click()
+    const menu = toolbarOf(ed).querySelector<HTMLElement>('[role="menu"]')!
+    expect(menu.style.left).toBe(`${columnButton.offsetLeft}px`)
+    ed.view.dom.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    expect(toolbarOf(ed).querySelector('[role="menu"]')).toBeNull()
+    expect(columnButton.getAttribute("aria-expanded")).toBe("false")
   })
 
   it("⌥F10 in a cell focuses the toolbar; ← → move between its buttons, Esc goes back to the text", () => {
@@ -449,11 +483,34 @@ describe("paste (#420)", () => {
     expect(out).toBe('<figure><table><tbody><tr><td colspan="3"><p>a</p><p>b</p></td><td><p>c</p></td></tr></tbody></table><figcaption>Cap</figcaption></figure>')
   })
 
-  it("reads a <th> as a header cell only in a header row", () => {
+  it("reads a header row only from a first row of <th>s (or the editor's own data-header-row)", () => {
     const doc = new DOMParser().parseFromString(
-      "<table><tr><th>a</th><th>b</th></tr><tr><th>c</th><td>d</td></tr></table><table><tr><th>e</th><td>f</td></tr></table>",
+      "<table><tr><th>a</th><th>b</th></tr><tr><th>c</th><td>d</td></tr></table>" +
+        "<table><tr><th>e</th><td>f</td></tr></table>" +
+        '<table data-header-row="true"><tr><td>g</td></tr></table>' +
+        "<table><tr><td><table><tr><th>nested</th></tr></table></td></tr></table>",
       "text/html",
     )
-    expect(Array.from(doc.querySelectorAll("th")).map((th) => isHeaderRowCell(th as HTMLElement))).toEqual([true, true, false, false])
+    const tables = Array.from(doc.querySelectorAll("body > table")) as HTMLElement[]
+    expect(tables.map(hasHeaderRowHTML)).toEqual([true, false, true, false])
+  })
+
+  it("a table pasted while the caret is in a cell fills cells from there instead of splitting the table", () => {
+    const ed = makeEditor(TABLE_HTML)
+    ed.commands.setTextSelection(endOfText(ed, "Admin"))
+    paste(ed, "<table><tr><td>Owner</td><td>Always</td></tr></table>")
+    expect(types(ed)).toEqual(["tableBlock", "paragraph"])
+    expect(cellTexts(ed)).toEqual([
+      ["Role", "Write", "Publish"],
+      ["Owner", "Always", "Yes"],
+      ["Editor", "Yes", "No"],
+    ])
+    ed.state.doc.check()
+  })
+
+  it("keeps both captions when a pasted figure has a caption and its table one too", () => {
+    expect(sanitizePastedHTML("<figure><table><caption>Plans</caption><tr><td>a</td></tr></table><figcaption>Source: X</figcaption></figure>")).toBe(
+      "<figure><table><tbody><tr><td><p>a</p></td></tr></tbody></table><figcaption>Plans Source: X</figcaption></figure>",
+    )
   })
 })

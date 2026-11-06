@@ -81,7 +81,7 @@ export function isGroupAlign(value: unknown): value is GroupAlign {
 export const TABLE_MAX_SPAN = 64
 export const TABLE_MAX_COLUMNS = 20
 export const TABLE_MAX_ROWS = 100
-/** The cell node types a stored table may name (header cells are read as cells). */
+/** The cell node types a stored table's pm may name; a `tableHeader` is read as a plain cell (the header row is `headerRow`). */
 export const TABLE_CELL_TYPES = ["tableCell", "tableHeader"] as const
 
 /** A cell span as stored: an integer in 1..TABLE_MAX_SPAN (a non-number is 1). */
@@ -103,7 +103,8 @@ export interface TableCellView {
  * A stored table's rows as the public renderer and the history read them: every row that
  * is a `tableRow`, every cell of a cell type, its spans clamped and its paragraphs (only
  * paragraphs: anything else a bad write put there is left out). A cell with none keeps one
- * empty paragraph; a row with no cells and a table with no rows are left out.
+ * empty paragraph. A row with no cells stays (a rowspan above covers it); a table with no
+ * rows is left out.
  */
 export function tableRows(pm: unknown): TableCellView[][] {
   const rows = (pm as { type?: unknown; content?: unknown } | null)?.type === "table" ? (pm as { content?: unknown }).content : null
@@ -123,7 +124,6 @@ export function tableRows(pm: unknown): TableCellView[][] {
           }
         }),
     )
-    .filter((cells) => cells.length > 0)
 }
 
 /** The marks a caption may carry, here and in the API sanitizer (`captionMarks`). */
@@ -467,9 +467,10 @@ const zTableCell = z.object({
   attrs: z.object({ colspan: zTableSpan.optional(), rowspan: zTableSpan.optional() }).strict().optional(),
   content: z.array(z.object({ type: z.literal("paragraph") }).passthrough()).min(1),
 })
+// A row may have no cells of its own (every one covered by a rowspan from above).
 const zTableRow = z.object({
   type: z.literal("tableRow"),
-  content: z.array(zTableCell).min(1),
+  content: z.array(zTableCell),
 })
 
 export const zTable = zBase.extend({

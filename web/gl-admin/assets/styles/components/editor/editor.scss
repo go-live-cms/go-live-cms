@@ -558,7 +558,8 @@
     }
   }
 
-  .editor-table th {
+  // The header row is the grid's `headerRow` attr (`GridView`); its cells are plain cells.
+  .editor-table table[data-header-row="true"] > tbody > tr:first-child > td {
     background: var(--background-subtle);
     font-weight: 600;
   }

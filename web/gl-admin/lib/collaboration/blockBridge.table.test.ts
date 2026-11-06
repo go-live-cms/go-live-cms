@@ -80,9 +80,11 @@ describe("table through the bridge (#420)", () => {
     expect(caption.type.name).toBe("tableCaption")
     expect(caption.textContent).toBe("Who can do what")
     expect(caption.child(1).marks.map((m) => m.type.name)).toEqual(["italic"])
+    // The header row is the grid's attr; every cell is a tableCell.
+    expect(grid.attrs.headerRow).toBe(true)
     const types = Array.from({ length: grid.childCount }, (_, r) => Array.from({ length: grid.child(r).childCount }, (_, c) => grid.child(r).child(c).type.name))
     expect(types).toEqual([
-      ["tableHeader", "tableHeader", "tableHeader"],
+      ["tableCell", "tableCell", "tableCell"],
       ["tableCell", "tableCell"],
       ["tableCell", "tableCell", "tableCell"],
     ])
@@ -102,7 +104,8 @@ describe("table through the bridge (#420)", () => {
     expect(attrs.headerRow).toBe(true)
     expect(attrs.caption).toEqual([t("Who can "), t("do", "italic"), t(" what")])
     expect(attrs.text).toBe("Role Write Publish\nAdmin Everything\nContributor Their own drafts")
-    // Every stored cell is a tableCell: the header row is `headerRow`, canonical.
+    // Every stored cell is a tableCell, and the pm has no attrs: the header row is `headerRow`, canonical.
+    expect(attrs.pm.attrs).toBeUndefined()
     const cells = attrs.pm.content.flatMap((r: any) => r.content)
     expect(new Set(cells.map((c: any) => c.type))).toEqual(new Set(["tableCell"]))
     expect(attrs.pm.content[1].content[1].attrs).toEqual({ colspan: 2 })
@@ -131,7 +134,7 @@ describe("table through the bridge (#420)", () => {
     expect("headerRow" in out).toBe(false)
     expect("caption" in out).toBe(false)
     const grid = blockDocToPMWithReport(once, schema).node.child(0).child(0)
-    expect(grid.child(0).child(0).type.name).toBe("tableCell")
+    expect(grid.attrs.headerRow).toBe(false)
     // An empty caption node is still there to type in.
     expect(blockDocToPMWithReport(once, schema).node.child(0).child(1).type.name).toBe("tableCaption")
   })
@@ -189,8 +192,9 @@ describe("Block Spec validation of a table (#420)", () => {
     return doc
   }
 
-  it("accepts what the bridge writes", () => {
+  it("accepts what the bridge writes, and a row a rowspan covers entirely (no cells of its own)", () => {
     expect(() => validateBlockDoc(valid())).not.toThrow()
+    expect(() => validateBlockDoc(withAttrs((a) => (a.pm.content[2].content = [])))).not.toThrow()
   })
 
   it.each([
@@ -198,7 +202,8 @@ describe("Block Spec validation of a table (#420)", () => {
     ["headerRow: false (absent is the default)", (a: any) => (a.headerRow = false)],
     ["a pm that isn't a table", (a: any) => (a.pm = { type: "paragraph" })],
     ["no rows", (a: any) => (a.pm.content = [])],
-    ["a row with no cells", (a: any) => (a.pm.content[0].content = [])],
+    ["a row that isn't a tableRow", (a: any) => (a.pm.content[0] = { type: "paragraph", content: [] })],
+    ["a header cell type in a pm the bridge didn't write", (a: any) => (a.pm.content[0].content[0].type = "tableData")],
     ["a heading in a cell", (a: any) => (a.pm.content[0].content[0].content = [{ type: "heading", attrs: { level: 2 } }])],
     ["a cell with no paragraph", (a: any) => (a.pm.content[0].content[0].content = [])],
     ["a span of 1 stored", (a: any) => (a.pm.content[0].content[0].attrs = { colspan: 1 })],

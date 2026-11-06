@@ -173,7 +173,7 @@ describe("schemaFingerprint (#416)", () => {
       const OldGroup = Group.extend({ content: "block+" })
       const before = getSchema([OldDocument, ...Object.values({ ...rest, group: OldGroup })])
       expect(before.nodes.tableBlock).toBeUndefined()
-      for (const name of ["tableBlock", "table", "tableRow", "tableCell", "tableHeader", "tableCaption"]) {
+      for (const name of ["tableBlock", "table", "tableRow", "tableCell", "tableCaption"]) {
         expect(getCoreSchema().nodes[name], name).toBeDefined()
       }
       expect(schemaFingerprint(before)).not.toBe(core)

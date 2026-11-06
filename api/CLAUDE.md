@@ -1219,9 +1219,11 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **Table (#420, `post_blocks_table_test.go`):** a flow type (`flowBlockTypes`), rows in its
   pm, no `children`. `sanitizeTableAttrs` is an allowlist (`pm` that is a `table` node, `text`
   string, `headerRow` only `true`, `caption` reduced like an image's by `sanitizeCaption`), and
-  `sanitizePMNode` keeps no attrs on `table`/`tableRow` and only `colspan`/`rowspan` on a cell,
-  clamped to 1..`tableMaxSpan` (64, the web's `TABLE_MAX_SPAN`) and left out when 1, at any
-  depth. The bridge's output passes through unchanged (a test pins it).
+  `sanitizeTableGrid` keeps no attrs on `table`/`tableRow` and only `colspan`/`rowspan` on a
+  cell, clamped to 1..`tableMaxSpan` (64, the web's `TABLE_MAX_SPAN`) and left out when 1, at
+  any depth of a table block's pm (another block's node of the same name is left alone). The
+  header row is the block's `headerRow`, never in the pm. The bridge's output passes through
+  unchanged (a test pins it).
 - **`contentMediaUses` walks the tree** (`walkBlocks`: blocks_order, then children depth
   first, each once), so an image in a group is in `post_media` and "Used in".
   `blockDocMediaIDs` (the public `media` map) already walks the flat map. `regenerateBlockIDs`

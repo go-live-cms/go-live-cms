@@ -1,7 +1,6 @@
 import type { Editor } from "@tiptap/core"
 import { TABLE_MAX_COLUMNS, TABLE_MAX_ROWS } from "@gl-admin/lib/blocks-spec"
-import { DEFAULT_TABLE_SIZE } from "../extensions/TableBlock"
-import { ICONS } from "../blocks/catalog"
+import { DEFAULT_TABLE_SIZE, TABLE_ICON } from "../extensions/TableBlock"
 
 /**
  * The table's size picker (#420, the canvas's "Editor · table, …" board): a small dialog
@@ -49,7 +48,7 @@ function tableIcon(doc: Document): SVGSVGElement {
   svg.setAttribute("stroke-linejoin", "round")
   svg.setAttribute("aria-hidden", "true")
   const path = doc.createElementNS(SVG_NS, "path")
-  path.setAttribute("d", ICONS.table)
+  path.setAttribute("d", TABLE_ICON)
   svg.append(path)
   return svg
 }
