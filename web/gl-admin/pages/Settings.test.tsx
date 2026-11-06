@@ -21,6 +21,9 @@ vi.mock("@gl-admin/lib/api/settings", () => ({
 const posts = vi.hoisted(() => ({ getPosts: vi.fn(), getPostById: vi.fn() }))
 vi.mock("@gl-admin/lib/api/posts", () => posts)
 const editorSettings = vi.hoisted(() => ({ setEditorSettings: vi.fn() }))
+// URLs & redirects (#331).
+const redirects = vi.hoisted(() => ({ listRedirects: vi.fn(), createRedirect: vi.fn(), deleteRedirect: vi.fn() }))
+vi.mock("@gl-admin/lib/api/redirects", () => redirects)
 vi.mock("@gl-admin/lib/editorSettings", () => editorSettings)
 
 import Settings from "./Settings"
@@ -87,6 +90,9 @@ beforeEach(() => {
     meta: { total: 2 },
   })
   posts.getPostById.mockReset()
+  redirects.listRedirects.mockReset().mockResolvedValue({ redirects: [], total: 0 })
+  redirects.createRedirect.mockReset()
+  redirects.deleteRedirect.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -240,6 +246,7 @@ describe("General and Editor (#330)", () => {
       ["General", "#gl-settings-general"],
       ["Editor", "#gl-settings-editor"],
       ["Accounts", "#gl-settings-accounts"],
+      ["URLs & redirects", "#gl-settings-urls"],
     ])
   })
 
@@ -302,10 +309,10 @@ describe("General and Editor (#330)", () => {
   })
 })
 
-it("hides the settings that have no backend yet (#352, #331)", async () => {
+it("hides the settings that have no backend yet (#352)", async () => {
   await render()
   const text = container.textContent ?? ""
-  for (const hidden of ["Allowed embeds", "URLs & redirects", "Media", "Email"]) {
+  for (const hidden of ["Allowed embeds", "Media", "Email"]) {
     expect(text).not.toContain(hidden)
   }
 })
@@ -330,5 +337,144 @@ describe("Accounts (#191)", () => {
     await settle()
     expect(api.updateSettings).toHaveBeenCalledWith(expect.objectContaining({ allow_signup: true }), "token")
     expect(bar()).toBeNull()
+  })
+})
+
+describe("URLs & redirects (#331)", () => {
+  const ROW = {
+    id: 3,
+    from_path: "/blog/collab-preview",
+    to_path: "/blog/collaboration",
+    status_code: 301,
+    source: "manual",
+    external: false,
+    created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    created_by: { id: 2, username: "ana", full_name: "Ana Costa", avatar: null },
+  }
+  const section = () => container.querySelector<HTMLElement>("#gl-settings-urls")!
+  const rfield = (name: "from" | "to") => container.querySelector<HTMLInputElement>(`#gl-redirect-${name}`)!
+  const rows = () => Array.from(section().querySelectorAll("tbody tr"))
+  const submitAdd = async () => {
+    await act(async () => section().querySelector<HTMLFormElement>("form[aria-label='Add a redirect']")!.requestSubmit())
+    await settle()
+  }
+
+  it("offers the category URL structure and links the hint to the section", async () => {
+    await render()
+    const byCategory = container.querySelector<HTMLInputElement>("input[type='radio'][value='category']")!
+    expect(byCategory.closest("label")?.textContent).toContain("By category")
+    expect(byCategory.closest("label")?.textContent).toContain("/guides/my-first-post")
+    await act(async () => byCategory.click())
+    expect(bar()?.textContent).toContain("You changed the post URL structure")
+
+    const link = Array.from(container.querySelectorAll("a")).find((a) => a.closest(".gl-workspace-field__hint") && a.textContent === "URLs & redirects")!
+    expect(link.getAttribute("href")).toBe("#gl-settings-urls")
+  })
+
+  it("is its own form, outside the settings form", async () => {
+    await render()
+    expect(section().closest("form")).toBeNull()
+    expect(section().querySelector("h2")?.textContent).toBe("URLs & redirects")
+    expect(section().textContent).toContain("Send an old address to a new one, so saved links and search results keep working.")
+  })
+
+  it("shows the empty state, then the list with who added each and when", async () => {
+    await render()
+    expect(section().textContent).toContain("No redirects yet")
+
+    redirects.listRedirects.mockResolvedValue({
+      redirects: [
+        ROW,
+        { ...ROW, id: 2, from_path: "/old", to_path: "https://example.com/x", external: true, status_code: 302, source: "manual" },
+        { ...ROW, id: 1, from_path: "/tag/photos", to_path: "/tag/images", source: "merge", created_by: null },
+      ],
+      total: 3,
+    })
+    act(() => root.unmount())
+    root = createRoot(container)
+    await render()
+    expect(redirects.listRedirects).toHaveBeenCalledWith({ limit: 20, offset: 0 })
+    expect(section().querySelector("h3")?.textContent).toBe("3 redirects")
+    const [first, second, third] = rows()
+    expect(first.textContent).toContain("/blog/collab-preview")
+    expect(first.textContent).toContain("Ana Costa")
+    expect(first.textContent).toContain("5 minutes ago")
+    expect(first.querySelector(".gl-avatar")).not.toBeNull()
+    expect(second.textContent).toContain("External")
+    expect(second.textContent).toContain("302")
+    expect(third.textContent).toContain("Automatic")
+    expect(section().querySelector("button[aria-label='Delete redirect from /old']")).not.toBeNull()
+    expect(button("Show more")).toBeUndefined()
+  })
+
+  it("adds a redirect at once, without the unsaved-changes bar, and Enter there doesn't save settings", async () => {
+    redirects.createRedirect.mockResolvedValue({ ...ROW, id: 10, from_path: "/old-page", to_path: "/new-page", status_code: 302 })
+    await render()
+    await type(rfield("from"), "/old-page/")
+    await type(rfield("to"), "/new-page")
+    await act(async () => section().querySelector<HTMLInputElement>("input[type='radio'][value='302']")!.click())
+    expect(bar()).toBeNull()
+
+    // Enter in the From field: the settings form's handler must not run.
+    await act(async () => {
+      rfield("from").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    })
+    expect(api.updateSettings).not.toHaveBeenCalled()
+
+    await submitAdd()
+    expect(redirects.createRedirect).toHaveBeenCalledWith({ from_path: "/old-page", to_path: "/new-page", status_code: 302 })
+    expect(rows()[0].textContent).toContain("/old-page")
+    expect(section().querySelector("h3")?.textContent).toBe("1 redirect")
+    expect(rfield("from").value).toBe("")
+    expect(api.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it("checks the addresses before sending, and shows the API's codes on their field", async () => {
+    await render()
+    await type(rfield("from"), "/gl-admin/x")
+    await type(rfield("to"), "new")
+    await submitAdd()
+    expect(redirects.createRedirect).not.toHaveBeenCalled()
+    expect(section().textContent).toContain("Addresses under /gl-admin can’t be redirected.")
+    expect(section().textContent).toContain("Start with / for a page on this site")
+
+    const { ApiError } = await import("@gl-admin/lib/api/errors")
+    redirects.createRedirect.mockRejectedValue(new ApiError("exists", 409, null, "redirect_exists"))
+    await type(rfield("from"), "/taken")
+    await type(rfield("to"), "/new")
+    await submitAdd()
+    expect(rfield("from").getAttribute("aria-invalid")).toBe("true")
+    expect(section().textContent).toContain("/taken already redirects somewhere.")
+  })
+
+  it("deletes after a confirmation", async () => {
+    redirects.listRedirects.mockResolvedValue({ redirects: [ROW], total: 1 })
+    await render()
+    await act(async () => section().querySelector<HTMLButtonElement>("button[aria-label='Delete redirect from /blog/collab-preview']")!.click())
+    const dialog = container.querySelector("[role='alertdialog']")!
+    expect(dialog.textContent).toContain("/blog/collab-preview will stop sending visitors to /blog/collaboration")
+    await act(async () => button("Delete redirect").click())
+    await settle()
+    expect(redirects.deleteRedirect).toHaveBeenCalledWith(3)
+    expect(container.querySelector("[role='alertdialog']")).toBeNull()
+    expect(section().textContent).toContain("No redirects yet")
+  })
+
+  it("shows a load error with Try again, and Show more past the first page", async () => {
+    redirects.listRedirects.mockRejectedValueOnce(new Error("Server unavailable"))
+    await render()
+    expect(section().textContent).toContain("Couldn't load redirects")
+
+    redirects.listRedirects
+      .mockResolvedValueOnce({ redirects: [ROW], total: 2 })
+      .mockResolvedValueOnce({ redirects: [{ ...ROW, id: 1, from_path: "/older" }], total: 2 })
+    await act(async () => button("Try again").click())
+    await settle()
+    expect(rows()).toHaveLength(1)
+    await act(async () => button("Show more").click())
+    await settle()
+    expect(redirects.listRedirects).toHaveBeenLastCalledWith({ limit: 20, offset: 1 })
+    expect(rows()).toHaveLength(2)
+    expect(button("Show more")).toBeUndefined()
   })
 })

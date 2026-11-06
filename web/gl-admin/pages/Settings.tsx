@@ -15,12 +15,14 @@ import Button from "@gl-admin/components/ui/Button"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import UnsavedChangesBar from "@gl-admin/components/ui/UnsavedChangesBar"
 import FrontPageField from "@gl-admin/components/settings/FrontPageField"
+import RedirectsSection from "@gl-admin/components/settings/RedirectsSection"
 import { CheckIcon, ExternalIcon, WarningIcon } from "@gl-admin/components/ui/icons"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import {
   LANGUAGE_OPTIONS,
   POSTS_PER_PAGE_MAX,
   SITE_TAGLINE_MAX,
+  URL_STRUCTURES,
   changedFields,
   dateFormatOptions,
   siteAddressInfo,
@@ -40,9 +42,11 @@ import "@gl-admin/assets/styles/pages/workspace.scss"
 // sticky unsaved-changes bar until saved or discarded. Admins only (the route's
 // AdminOnly; the API's requireSiteAdmin).
 //
+// URLs & redirects (#331, RedirectsSection) sits outside the settings form: it saves each
+// redirect at once, never through the unsaved-changes bar.
+//
 // Hidden until their issues land: "Allowed embeds" (#352: there's no embed block yet;
-// the API stores and checks the list), the "URLs & redirects" section and the link to
-// it from the post URL structure (#331), and the Media (#325) and Email sections.
+// the API stores and checks the list), and the Media (#325) and Email sections.
 
 // The domain is deploy config, not a setting: "Change domain" opens the runbook.
 const CHANGE_DOMAIN_URL = "https://github.com/go-live-cms/go-live-cms/blob/main/docs/operations/deploy.md#change-the-domain"
@@ -51,20 +55,14 @@ const SECTIONS = [
   { id: "general", label: "General" },
   { id: "editor", label: "Editor" },
   { id: "accounts", label: "Accounts" },
+  { id: "urls", label: "URLs & redirects" },
 ]
 
-const URL_OPTIONS = [
-  {
-    value: "slug",
-    label: "By slug",
-    description: <span className="gl-workspace__mono">/post/my-first-post</span>,
-  },
-  {
-    value: "id",
-    label: "By ID",
-    description: <span className="gl-workspace__mono">/post/42</span>,
-  },
-]
+const URL_OPTIONS = URL_STRUCTURES.map((s) => ({
+  value: s.value,
+  label: s.label,
+  description: <span className="gl-workspace__mono">{s.example}</span>,
+}))
 
 const inputValue = (e: any): string => e.currentTarget?.value ?? e.target?.value ?? ""
 
@@ -228,171 +226,183 @@ const SettingsPage: React.FC = () => {
             ))}
           </nav>
 
-          <form
-            className="gl-settings__content"
-            onSubmit={handleSave}
-            // Enter in a field saves, as before; the bar's buttons are outside the form.
-            onKeyDown={(e) => {
-              const target = e.target as HTMLElement
-              if (e.key === "Enter" && target.tagName === "INPUT" && target.getAttribute("role") !== "combobox") {
-                e.preventDefault()
-                handleSave()
-              }
-            }}
-            noValidate
-          >
-            <section className="gl-workspace__section" id="gl-settings-general" aria-labelledby="gl-settings-general-h">
-              <div>
-                <h2 className="gl-workspace__section-title" id="gl-settings-general-h">
-                  General
-                </h2>
-                <p className="gl-workspace__section-intro">How your site is named, how dates appear and how posts are listed.</p>
-              </div>
-              <div className="gl-workspace__fields">
-                <Input
-                  title="Site title"
-                  type="text"
-                  unmasked
-                  name="site_title"
-                  hint="Appears in browser tabs and search results."
-                  maxLength={200}
-                  value={draft.site_title}
-                  onChange={(e: any) => update({ site_title: inputValue(e) })}
-                />
-                <Input
-                  title="Tagline"
-                  type="text"
-                  unmasked
-                  name="site_tagline"
-                  hint="A line about your site. Themes show it, and search results use it when a page has no description."
-                  maxLength={SITE_TAGLINE_MAX}
-                  value={draft.site_tagline}
-                  onChange={(e: any) => update({ site_tagline: inputValue(e) })}
-                />
+          <div className="gl-settings__content">
+            <form
+              className="gl-settings__form"
+              onSubmit={handleSave}
+              // Enter in a field saves, as before; the bar's buttons are outside the form.
+              onKeyDown={(e) => {
+                const target = e.target as HTMLElement
+                if (e.key === "Enter" && target.tagName === "INPUT" && target.getAttribute("role") !== "combobox") {
+                  e.preventDefault()
+                  handleSave()
+                }
+              }}
+              noValidate
+            >
+              <section className="gl-workspace__section" id="gl-settings-general" aria-labelledby="gl-settings-general-h">
+                <div>
+                  <h2 className="gl-workspace__section-title" id="gl-settings-general-h">
+                    General
+                  </h2>
+                  <p className="gl-workspace__section-intro">How your site is named, how dates appear and how posts are listed.</p>
+                </div>
+                <div className="gl-workspace__fields">
+                  <Input
+                    title="Site title"
+                    type="text"
+                    unmasked
+                    name="site_title"
+                    hint="Appears in browser tabs and search results."
+                    maxLength={200}
+                    value={draft.site_title}
+                    onChange={(e: any) => update({ site_title: inputValue(e) })}
+                  />
+                  <Input
+                    title="Tagline"
+                    type="text"
+                    unmasked
+                    name="site_tagline"
+                    hint="A line about your site. Themes show it, and search results use it when a page has no description."
+                    maxLength={SITE_TAGLINE_MAX}
+                    value={draft.site_tagline}
+                    onChange={(e: any) => update({ site_tagline: inputValue(e) })}
+                  />
 
-                <div className="is-wide gl-settings__address-field">
-                  <span className="gl-settings__label" id="gl-settings-address-label">
-                    Site address
-                  </span>
-                  <div className="gl-settings__address" aria-labelledby="gl-settings-address-label" role="group">
-                    <span className="gl-settings__address-url">{address?.address ?? "Not configured"}</span>
-                    {address &&
-                      (address.https ? (
-                        <span className="gl-settings__https is-on">
-                          <CheckIcon size={12} aria-hidden="true" />
-                          HTTPS on
-                        </span>
-                      ) : (
-                        <span className="gl-settings__https is-off">
-                          <WarningIcon size={12} aria-hidden="true" />
-                          No HTTPS
-                        </span>
-                      ))}
-                    <Button
-                      as="a"
-                      variant="ghost"
-                      size="sm"
-                      href={CHANGE_DOMAIN_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      icon={<ExternalIcon size={14} aria-hidden="true" />}
-                    >
-                      Change domain
-                    </Button>
+                  <div className="is-wide gl-settings__address-field">
+                    <span className="gl-settings__label" id="gl-settings-address-label">
+                      Site address
+                    </span>
+                    <div className="gl-settings__address" aria-labelledby="gl-settings-address-label" role="group">
+                      <span className="gl-settings__address-url">{address?.address ?? "Not configured"}</span>
+                      {address &&
+                        (address.https ? (
+                          <span className="gl-settings__https is-on">
+                            <CheckIcon size={12} aria-hidden="true" />
+                            HTTPS on
+                          </span>
+                        ) : (
+                          <span className="gl-settings__https is-off">
+                            <WarningIcon size={12} aria-hidden="true" />
+                            No HTTPS
+                          </span>
+                        ))}
+                      <Button
+                        as="a"
+                        variant="ghost"
+                        size="sm"
+                        href={CHANGE_DOMAIN_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        icon={<ExternalIcon size={14} aria-hidden="true" />}
+                      >
+                        Change domain
+                      </Button>
+                    </div>
+                    <span className="gl-workspace-field__hint">Set when the site is deployed (PUBLIC_BASE_URL).</span>
                   </div>
-                  <span className="gl-workspace-field__hint">Set when the site is deployed (PUBLIC_BASE_URL).</span>
+
+                  <Select
+                    label="Language"
+                    options={LANGUAGE_OPTIONS}
+                    value={draft.site_language}
+                    onChange={(value) => update({ site_language: value as SettingsDraft["site_language"] })}
+                    hint="The language of your site: month names and the page's language for browsers and screen readers."
+                  />
+                  <Combobox
+                    label="Time zone"
+                    options={timeZones}
+                    value={draft.site_timezone || null}
+                    onChange={(value) => update({ site_timezone: value ?? "" })}
+                    placeholder="Search time zones"
+                    hint="Dates on your site are shown in this time zone."
+                  />
+
+                  <div className="is-wide">
+                    <RadioGroup
+                      legend="Date format"
+                      className="gl-settings__date-format"
+                      options={dateFormatOptions(draft, sample)}
+                      value={draft.date_format}
+                      onChange={(value) => update({ date_format: value as SettingsDraft["date_format"] })}
+                    />
+                  </div>
+
+                  <FrontPageField value={draft.front_page_id} onChange={(id) => update({ front_page_id: id })} />
+                  <Input
+                    title="Posts per page"
+                    unmasked
+                    name="posts_per_page"
+                    inputMode="numeric"
+                    hint={`On the blog home and archive pages, 1 to ${POSTS_PER_PAGE_MAX}.`}
+                    value={Number.isNaN(draft.posts_per_page) ? "" : String(draft.posts_per_page)}
+                    onChange={(e: any) => update({ posts_per_page: parseInt(inputValue(e), 10) })}
+                  />
+                  <div className="is-wide">
+                    <RadioGroup
+                      legend="Post URL structure"
+                      variant="card"
+                      className="gl-settings__url"
+                      options={URL_OPTIONS}
+                      value={draft.post_url_structure}
+                      onChange={(value) => update({ post_url_structure: value as SettingsDraft["post_url_structure"] })}
+                    />
+                    <span className="gl-workspace-field__hint">
+                      Applies to every post. A post without a slug keeps its ID in the address
+                      {draft.post_url_structure === "category" ? ", and other content types keep /type/slug" : ""}. To send an
+                      old address somewhere new, add a redirect in{" "}
+                      <a href="#gl-settings-urls" onClick={() => setSection("urls")}>
+                        URLs &amp; redirects
+                      </a>
+                      .
+                    </span>
+                  </div>
                 </div>
+              </section>
 
-                <Select
-                  label="Language"
-                  options={LANGUAGE_OPTIONS}
-                  value={draft.site_language}
-                  onChange={(value) => update({ site_language: value as SettingsDraft["site_language"] })}
-                  hint="The language of your site: month names and the page's language for browsers and screen readers."
-                />
-                <Combobox
-                  label="Time zone"
-                  options={timeZones}
-                  value={draft.site_timezone || null}
-                  onChange={(value) => update({ site_timezone: value ?? "" })}
-                  placeholder="Search time zones"
-                  hint="Dates on your site are shown in this time zone."
-                />
+              <hr className="gl-workspace__rule" />
 
-                <div className="is-wide">
-                  <RadioGroup
-                    legend="Date format"
-                    className="gl-settings__date-format"
-                    options={dateFormatOptions(draft, sample)}
-                    value={draft.date_format}
-                    onChange={(value) => update({ date_format: value as SettingsDraft["date_format"] })}
+              <section className="gl-workspace__section" id="gl-settings-editor" aria-labelledby="gl-settings-editor-h">
+                <div>
+                  <h2 className="gl-workspace__section-title" id="gl-settings-editor-h">
+                    Editor
+                  </h2>
+                  <p className="gl-workspace__section-intro">Applies to everyone in this workspace.</p>
+                </div>
+                <div className="gl-settings__card">
+                  <Switch
+                    label="Markdown shortcuts"
+                    description="Typing #, - or > at the start of a line turns it into a heading, list or quote. Applies to posts opened after you save."
+                    checked={draft.editor_markdown_shortcuts}
+                    onChange={(checked) => update({ editor_markdown_shortcuts: checked })}
                   />
                 </div>
+              </section>
 
-                <FrontPageField value={draft.front_page_id} onChange={(id) => update({ front_page_id: id })} />
-                <Input
-                  title="Posts per page"
-                  unmasked
-                  name="posts_per_page"
-                  inputMode="numeric"
-                  hint={`On the blog home and archive pages, 1 to ${POSTS_PER_PAGE_MAX}.`}
-                  value={Number.isNaN(draft.posts_per_page) ? "" : String(draft.posts_per_page)}
-                  onChange={(e: any) => update({ posts_per_page: parseInt(inputValue(e), 10) })}
-                />
-                <div className="is-wide">
-                  <RadioGroup
-                    legend="Post URL structure"
-                    variant="card"
-                    className="gl-settings__url"
-                    options={URL_OPTIONS}
-                    value={draft.post_url_structure}
-                    onChange={(value) => update({ post_url_structure: value as SettingsDraft["post_url_structure"] })}
-                  />
-                  <span className="gl-workspace-field__hint">
-                    Applies to every post. A post without a slug keeps its ID in the address.
-                  </span>
+              <hr className="gl-workspace__rule" />
+
+              <section className="gl-workspace__section" id="gl-settings-accounts" aria-labelledby="gl-settings-accounts-h">
+                <div>
+                  <h2 className="gl-workspace__section-title" id="gl-settings-accounts-h">
+                    Accounts
+                  </h2>
+                  <p className="gl-workspace__section-intro">Who can get an account on this site.</p>
                 </div>
-              </div>
-            </section>
+                <div className="gl-settings__card">
+                  <Switch
+                    label="Allow anyone to sign up"
+                    description="Adds “Create an account” to the sign-in page. New accounts are contributors and can sign in once they confirm their email address. When it's off, people join only by invitation."
+                    checked={draft.allow_signup}
+                    onChange={(checked) => update({ allow_signup: checked })}
+                  />
+                </div>
+              </section>
+            </form>
 
             <hr className="gl-workspace__rule" />
 
-            <section className="gl-workspace__section" id="gl-settings-editor" aria-labelledby="gl-settings-editor-h">
-              <div>
-                <h2 className="gl-workspace__section-title" id="gl-settings-editor-h">
-                  Editor
-                </h2>
-                <p className="gl-workspace__section-intro">Applies to everyone in this workspace.</p>
-              </div>
-              <div className="gl-settings__card">
-                <Switch
-                  label="Markdown shortcuts"
-                  description="Typing #, - or > at the start of a line turns it into a heading, list or quote. Applies to posts opened after you save."
-                  checked={draft.editor_markdown_shortcuts}
-                  onChange={(checked) => update({ editor_markdown_shortcuts: checked })}
-                />
-              </div>
-            </section>
-
-            <hr className="gl-workspace__rule" />
-
-            <section className="gl-workspace__section" id="gl-settings-accounts" aria-labelledby="gl-settings-accounts-h">
-              <div>
-                <h2 className="gl-workspace__section-title" id="gl-settings-accounts-h">
-                  Accounts
-                </h2>
-                <p className="gl-workspace__section-intro">Who can get an account on this site.</p>
-              </div>
-              <div className="gl-settings__card">
-                <Switch
-                  label="Allow anyone to sign up"
-                  description="Adds “Create an account” to the sign-in page. New accounts are contributors and can sign in once they confirm their email address. When it's off, people join only by invitation."
-                  checked={draft.allow_signup}
-                  onChange={(checked) => update({ allow_signup: checked })}
-                />
-              </div>
-            </section>
-          </form>
+            <RedirectsSection />
+          </div>
         </div>
       </div>
 

@@ -493,6 +493,38 @@ are the most fragile part of the codebase. **Before editing anything under
   unreadable): "Create an account" shows only while it's on, and `/register` renders just the
   "Sign-up is closed" panel otherwise. Success is one "Check your email" panel whatever the
   address (the API doesn't say), then `/login?reason=signup-confirmed`.
+- **Taxonomies and redirects (#331):** admin: one category per post. The editor sidebar's
+  `PostTaxonomies` shows the `category` taxonomy as a radio group (picking one calls the PUT,
+  which replaces the category; `post`-type posts have no "None", the API puts the default
+  back; pass `postType`); other hierarchical types keep checkboxes. Taxonomies: categories
+  nest one level (`termParentOptions`: top-level only, none for a category with children),
+  the type's `default_term_id` gets a "Default" badge and no Delete (deleting another category
+  moves its posts there), the slug shows its address prefix (`/` under the "category" URL
+  structure, else `/{taxonomy}/`) and "Changing it updates N post URLs. Old links redirect."
+  (the API adds the 301). Tags are selectable: a bulk bar ("2 selected", `aria-live` count),
+  **Merge…** opens `components/taxonomies/MergeTagsPanel.tsx` (`POST
+  /taxonomy/terms/:keep/merge`, the board's sentence) and Delete deletes them one by one after
+  one confirmation (`DeleteTermModal` takes a list). Rules and wording: `lib/taxonomyAdmin.ts`
+  (tested). Settings: a third URL structure "By category" (`URL_STRUCTURES` in
+  `lib/settingsForm.ts`, checked against the Go binding) and **URLs & redirects**
+  (`components/settings/RedirectsSection.tsx`, `lib/api/redirects.ts`, rules in
+  `lib/redirects.ts`): outside the settings `<form>`, so it saves at once (never through the
+  unsaved-changes bar) and Enter there adds a redirect; From/To checked like the API, 301/302,
+  "External"/"302" badges, Created by with `Avatar`, delete asks first, Show more. The feed
+  reads `terms_merged`, `redirect_created`, `redirect_deleted` generically.
+  Public site: `postPath` (`src/lib/seo.ts`) takes the rows' `category_slug` (the
+  **published** category on `/public` rows, the API's `golive_post_category_slug`) and gives
+  `/{category}/{slug}` for posts of type `post` under the "category" structure (other types,
+  and posts without a category or slug, as for slugs); lists, RSS, search, related posts and
+  the sitemap follow it. `[post_type]/[id].astro` asks `src/lib/categoryUrls.ts` only when no
+  public post type has the first segment and no public taxonomy does: `/{its category}/{slug}`
+  renders the post, any other `/{x}/{post slug}` answers **301** to the post's URL (a renamed
+  or changed category, a structure switch: no redirect rows needed for those). Redirect rows
+  are answered by `src/middleware/redirects.ts` (`redirectOn404`, the last thing the middleware
+  does): only a **404** for a GET/HEAD outside `/gl-admin`, `/api/`, `/uploads/`, `/themes/`
+  asks `GET /public/redirects?path=`, so a redirect never hides a live page; 301 (cached an
+  hour) or 302 (`no-cache`), the request's query kept for a site path. A failed lookup keeps
+  the 404.
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

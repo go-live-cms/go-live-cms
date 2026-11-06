@@ -71,11 +71,14 @@ export function childCount(terms: TaxonomyTerm[], id: number): number {
 
 // What deleting a term will do, for the confirmation dialog. Post assignments
 // are removed with the term; child terms move to the top level (the parent_id
-// foreign key is ON DELETE SET NULL).
-export function deleteConsequences(term: TaxonomyTerm, children: number): string[] {
+// foreign key is ON DELETE SET NULL). A category's posts move to the default
+// category instead (#331): pass its name as `movesTo`.
+export function deleteConsequences(term: TaxonomyTerm, children: number, movesTo?: string): string[] {
   const lines: string[] = []
   const posts = term.post_count ?? 0
-  if (posts > 0) {
+  if (posts > 0 && movesTo) {
+    lines.push(`It is assigned to ${plural(posts, "post", "posts")}. ${posts === 1 ? "That post moves" : "They move"} to “${movesTo}”.`)
+  } else if (posts > 0) {
     lines.push(`It is assigned to ${plural(posts, "post", "posts")}. Deleting it removes it from ${posts === 1 ? "that post" : "those posts"}.`)
   }
   if (children > 0) {
@@ -83,6 +86,17 @@ export function deleteConsequences(term: TaxonomyTerm, children: number): string
   }
   if (lines.length === 0) lines.push("No posts use it.")
   return lines
+}
+
+// Deleting several terms at once (the tags list's bulk Delete, #331): flat terms, so no
+// children. Each one is removed from its posts.
+export function bulkDeleteConsequences(terms: TaxonomyTerm[]): string[] {
+  const inUse = terms.filter((t) => (t.post_count ?? 0) > 0).length
+  if (inUse === 0) return ["No posts use them."]
+  if (inUse === terms.length) {
+    return [`${terms.length === 2 ? "Both are" : "All of them are"} assigned to posts. Deleting them removes them from those posts.`]
+  }
+  return [`${plural(inUse, "of them is", "of them are")} assigned to posts. Deleting removes ${inUse === 1 ? "it" : "them"} from those posts.`]
 }
 
 export function findTermByName(terms: TaxonomyTerm[], name: string): TaxonomyTerm | undefined {

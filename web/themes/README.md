@@ -393,7 +393,7 @@ interface Post {
 
 ### SEO tags
 
-Render `src/components/SeoHead.astro` in your `<head>` instead of your own `<title>` and description meta, and pass it the `seo` prop the post route gives every layout. It adds the canonical URL (on `SITE_URL`, following the id/slug URL setting), `og:*`/`twitter:*` tags with the featured image, and `robots: noindex` when `seo.noindex` is set (use that in `layouts/error/*.astro`). Error responses and `/gl-admin` also get an `X-Robots-Tag: noindex` header from the middleware, whatever the layout emits. `/robots.txt` and `/sitemap.xml` are built by the core, not by themes.
+Render `src/components/SeoHead.astro` in your `<head>` instead of your own `<title>` and description meta, and pass it the `seo` prop the post route gives every layout. It adds the canonical URL (on `SITE_URL`, following the id/slug/category URL setting), `og:*`/`twitter:*` tags with the featured image, and `robots: noindex` when `seo.noindex` is set (use that in `layouts/error/*.astro`). Error responses and `/gl-admin` also get an `X-Robots-Tag: noindex` header from the middleware, whatever the layout emits. `/robots.txt` and `/sitemap.xml` are built by the core, not by themes.
 
 ### Layout Variants
 
@@ -441,6 +441,12 @@ layouts: {
 - **Switching themes:** a page whose template the new theme doesn't have renders with the new theme's `default` page layout. Its choice is kept, so switching back brings it back.
 
 The site's **front page** (Settings › General) is a page too: `/` renders it with its template, and its canonical address is `/`.
+
+### Term Archives and Descriptions
+
+A category or tag page (`/{taxonomy}/{slug}`, e.g. `/category/guides`) renders the theme's `layouts/term/default.astro` (the default theme's when yours has none). It gets `term` (`name`, `slug`, `description`, `taxonomy`, `taxonomy_label`, `hierarchical`), `postCount` and `list` (the posts, pagination and site title), plus `title`, `description` and `seo`. **`term.description`** is the text editors write in Taxonomies (#331: "Shown on the category page if your theme supports it"): show it when it isn't empty, as plain text (it is never HTML). The page's meta description already uses it. A post's terms (`publishedTerms` on the post page, linked by `linkTerms`) carry their `description` too.
+
+Each post has **one category** (#331), "Uncategorized" when none is chosen; categories nest one level. With Settings › General's "By category" URL structure a post's address is `/{category}/{slug}`: always build post links with `postPath` (`@/lib/seo`), which reads the post's `category_slug`, never by hand.
 
 ### Base Layouts
 

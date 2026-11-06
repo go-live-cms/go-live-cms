@@ -16,7 +16,7 @@ import { firstParagraphFromHtml, sameSeo, seoFromPost, seoPayload, seoSaveable }
 import { firstParagraphText, postPath } from "@/lib/seo"
 import { authManager } from "@gl-admin/lib/auth"
 import { blockAPIClient, type PostVersion } from "@gl-admin/lib/api/blockAPI"
-import { getSettings } from "@gl-admin/lib/api/settings"
+import { getSettings, type PostUrlStructure } from "@gl-admin/lib/api/settings"
 import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
 import { CollabStoreError } from "@gl-admin/lib/collaboration/CollabSaveStatus"
 import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
@@ -247,7 +247,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [confirmRestore, setConfirmRestore] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
 
-  const [urlStructure, setUrlStructure] = useState<"id" | "slug">("id")
+  const [urlStructure, setUrlStructure] = useState<PostUrlStructure>("id")
   // For the SEO tab's previews (#357).
   const [site, setSite] = useState({ title: "", address: "" })
   // The front page (#336): unpublishing or archiving it asks first (the home page falls
@@ -1058,7 +1058,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const postType = contentType || initialData?.post_type || "post"
   const liveUrl =
     mode === "edit" && initialData?.id
-      ? `${window.location.origin}/${postType}/${urlStructure === "slug" && formData.slug ? formData.slug : initialData.id}`
+      ? `${window.location.origin}/${postType}/${urlStructure !== "id" && formData.slug ? formData.slug : initialData.id}`
       : null
   const signedIn = authManager.getState().user
   const others = Array.from(new Map(collabUsers.filter((u) => u.id !== signedIn?.id).map((u) => [u.id ?? -u.clientId, u])).values())
