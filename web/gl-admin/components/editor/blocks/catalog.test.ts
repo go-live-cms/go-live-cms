@@ -240,6 +240,22 @@ describe("turn into (turnInto.ts reads the catalog)", () => {
     expect(computeTurnIntoFromSelection(ed)).toBe("numbered-list")
   })
 
+  it("turns a numbered list nested in a bulleted one into a bulleted list (the nearest list counts)", () => {
+    const ed = makeEditor("<ul><li><p>outer</p><ol><li><p>inner</p></li></ol></li></ul>")
+    let inner = 0
+    ed.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === "inner") inner = pos + 1
+    })
+    ed.commands.setTextSelection(inner)
+    expect(computeTurnIntoFromSelection(ed)).toBe("numbered-list")
+    applyTurnInto(ed, "bullet-list")
+    const lists: string[] = []
+    ed.state.doc.descendants((node) => {
+      if (node.type.name.endsWith("List")) lists.push(node.type.name)
+    })
+    expect(lists).toEqual(["bulletList", "bulletList"])
+  })
+
   it("refuses an entry without Turn into, or an unknown one", () => {
     const ed = makeEditor("<p>hello</p>")
     expect(applyTurnInto(ed, "divider")).toBe(false)

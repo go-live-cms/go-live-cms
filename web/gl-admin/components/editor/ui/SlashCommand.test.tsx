@@ -177,6 +177,23 @@ describe("the slash menu", () => {
     expect(root).toBeNull() // closed
   })
 
+  it("keeps the highlight when the doc changes elsewhere (a collaborator typing)", () => {
+    makeEditor()
+    type("/")
+    press("ArrowDown")
+    press("ArrowDown")
+    expect(active()!.textContent).toBe("H2Heading 2##")
+    // Text added to the first paragraph: the menu is updated with the same query.
+    act(() => {
+      editor!.view.dispatch(editor!.state.tr.insertText("!", 2))
+    })
+    expect(root).not.toBeNull()
+    expect(active()!.textContent).toBe("H2Heading 2##")
+    // A new query starts at its first result.
+    type("h")
+    expect(active()!.textContent).toBe("H1Heading 1#")
+  })
+
   it.each(flattenSections(searchCatalog(CORE_BLOCKS, "")).map((m, i) => [m.entry.name, i] as const))(
     "inserts %s from the keyboard alone",
     (_name, index) => {

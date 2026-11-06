@@ -86,6 +86,16 @@ export const ICONS = {
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
 
+/** The type of the list nearest the selection ("bulletList", "orderedList"), or null. */
+function closestList(editor: Editor): string | null {
+  const { $from } = editor.state.selection
+  for (let depth = $from.depth; depth > 0; depth--) {
+    const name = $from.node(depth).type.name
+    if (name === "bulletList" || name === "orderedList") return name
+  }
+  return null
+}
+
 const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const
 
 export const CORE_BLOCKS: readonly CatalogEntry[] = [
@@ -123,7 +133,7 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     icon: { path: ICONS.ul },
     insert: (editor, range) => chain(editor, range).toggleBulletList().run(),
     // Toggling again would take an existing bulleted list apart.
-    turnInto: (editor) => void (!editor.isActive("bulletList") && editor.chain().focus().toggleBulletList().run()),
+    turnInto: (editor) => void (closestList(editor) !== "bulletList" && editor.chain().focus().toggleBulletList().run()),
   },
   {
     id: "numbered-list",
@@ -134,7 +144,7 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     markdown: "1.",
     icon: { path: ICONS.ol },
     insert: (editor, range) => chain(editor, range).toggleOrderedList().run(),
-    turnInto: (editor) => void (!editor.isActive("orderedList") && editor.chain().focus().toggleOrderedList().run()),
+    turnInto: (editor) => void (closestList(editor) !== "orderedList" && editor.chain().focus().toggleOrderedList().run()),
   },
   {
     id: "quote",

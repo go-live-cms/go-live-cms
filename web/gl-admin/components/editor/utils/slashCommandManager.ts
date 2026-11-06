@@ -185,6 +185,12 @@ class SlashCommandManager {
       this.cleanup()
       return true
     }
+    // Tab leaves the text (to the gutter's +, BlockGutterKeys): close the menu, keep the
+    // text, and let Tab do its job.
+    if (props.event.key === "Tab") {
+      this.cleanup()
+      return false
+    }
 
     const componentRef = this.component.ref as SlashCommandListRef | null
 

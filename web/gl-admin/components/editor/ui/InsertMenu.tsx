@@ -24,8 +24,9 @@ export function useInsertMenu(entries: readonly CatalogEntry[], query: string): 
   const sections = useMemo(() => searchCatalog(entries, query), [entries, query])
   const options = useMemo(() => flattenSections(sections), [sections])
   const [active, setActive] = useState(0)
-  // A new query starts at its first result.
-  useEffect(() => setActive(0), [options])
+  // A new query starts at its first result. Only the query: the slash menu is updated on
+  // every transaction (a collaborator typing elsewhere), which mustn't move the highlight.
+  useEffect(() => setActive(0), [query])
   const index = options.length === 0 ? -1 : Math.min(active, options.length - 1)
 
   const move = (key: string, withHomeEnd = false) => {

@@ -35,7 +35,9 @@ type Storage = Record<string, { openMoveTo?: ((ref: BlockRef) => void) | null; f
 
 export default function DragHandle({ editor, postUrl }: { editor: TiptapEditor; postUrl?: string | null }) {
   const [showDrag, setShowDrag] = useState(false)
-  const hovered = useRef<{ node: PMNode; pos: number } | null>(null)
+  // The hovered block by id (its position as a fallback), so an edit by anyone between
+  // showing the gutter and pressing + or the handle never retargets it.
+  const hovered = useRef<BlockRef | null>(null)
   const gutterRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const addRef = useRef<HTMLButtonElement>(null)
@@ -44,7 +46,8 @@ export default function DragHandle({ editor, postUrl }: { editor: TiptapEditor; 
   const [moveFor, setMoveFor] = useState<BlockRef | null>(null)
 
   const onDragHandleNodeChange = useCallback((data: { node: PMNode | null; editor: TiptapEditor; pos: number }) => {
-    hovered.current = data.node ? { node: data.node, pos: data.pos } : null
+    const block = data.node ? topLevelBlockAt(data.editor.state.doc, data.pos) : null
+    hovered.current = block ? refOf(block) : null
     // Every block but an empty line: images and dividers have a menu too. An empty line
     // has + only (the design's "An empty line between blocks").
     setShowDrag(!!data.node && !(data.node.isTextblock && data.node.content.size === 0))
@@ -71,7 +74,7 @@ export default function DragHandle({ editor, postUrl }: { editor: TiptapEditor; 
       const block = resolveBlock(editor.state.doc, ref)
       const dom = block && editor.view.nodeDOM(block.pos)
       if (!handle || !block || !(dom instanceof HTMLElement)) return false
-      hovered.current = { node: block.node, pos: block.pos }
+      hovered.current = refOf(block)
       setShowDrag(!(block.node.isTextblock && block.node.content.size === 0))
       // What the plugin does on hover: show the element and place it beside the block.
       handle.style.visibility = ""
@@ -91,7 +94,7 @@ export default function DragHandle({ editor, postUrl }: { editor: TiptapEditor; 
   const currentBlock = () => {
     const current = hovered.current
     if (!current || editor.isDestroyed) return null
-    return topLevelBlockAt(editor.state.doc, current.pos)
+    return resolveBlock(editor.state.doc, current)
   }
 
   const openMenu = () => {
