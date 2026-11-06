@@ -2,14 +2,14 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
-	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
@@ -23,6 +23,12 @@ import (
 //
 // settings is a singleton every test shares: only this file changes front_page_id,
 // and it puts the old value back.
+//
+// No admin user here: PUT /settings is admins' only, but go test runs the db/sqlc
+// package alongside this one against the same database, and its last-admin tests
+// (TestChangeUserRoleTxConcurrentDemotions) count every admin. The front page is set
+// through the store; the handler's rules run through checkFrontPage, and its role
+// and request matrix is front_page_test.go's.
 
 func createTestPage(t *testing.T, store db.Store, owner db.User, title, slug string) db.Post {
 	t.Helper()
@@ -49,8 +55,8 @@ func TestFrontPageFallback(t *testing.T) {
 	server := authFlowServer(t, store, nil)
 	ctx := context.Background()
 	suffix := lettersOnly(uuid.NewString())[:12]
-	admin := postReadUser(t, store, "frontadmin"+suffix, RoleAdmin)
-	page := createTestPage(t, store, admin, "Home "+suffix, "home-"+suffix)
+	owner := postReadUser(t, store, "frontowner"+suffix, RoleEditor)
+	page := createTestPage(t, store, owner, "Home "+suffix, "home-"+suffix)
 
 	before, err := store.GetSettings(ctx)
 	require.NoError(t, err)
@@ -59,20 +65,29 @@ func TestFrontPageFallback(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	serve := func(method, path, body string, caller *db.User) *httptest.ResponseRecorder {
-		request := httptest.NewRequest(method, path, strings.NewReader(body))
-		request.Header.Set("Content-Type", "application/json")
-		if caller != nil {
-			addAuthorization(t, request, server.tokenMaker, authorizationTypeBearer, caller.ID, caller.Username, time.Minute)
-		}
+	// What PUT /settings does with the id: checkFrontPage, then the update.
+	choose := func(id *int64) *httptest.ResponseRecorder {
+		t.Helper()
 		recorder := httptest.NewRecorder()
-		server.router.ServeHTTP(recorder, request)
+		c, _ := gin.CreateTestContext(recorder)
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/settings", nil)
+		if id != nil && !server.checkFrontPage(c, *id) {
+			return recorder
+		}
+		params := db.UpdateSettingsParams{SetFrontPage: true}
+		if id != nil {
+			params.FrontPageID = sql.NullInt64{Int64: *id, Valid: true}
+		}
+		_, err := store.UpdateSettings(ctx, params)
+		require.NoError(t, err)
+		recorder.Code = http.StatusOK
 		return recorder
 	}
-	choose := func() *httptest.ResponseRecorder {
-		return serve(http.MethodPut, "/api/v1/settings", fmt.Sprintf(`{"front_page_id": %d}`, page.ID), &admin)
+	front := func() *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		server.router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/public/front-page", nil))
+		return recorder
 	}
-	front := func() *httptest.ResponseRecorder { return serve(http.MethodGet, "/public/front-page", "", nil) }
 	requireFront := func(shown bool, when string) {
 		t.Helper()
 		recorder := front()
@@ -92,15 +107,15 @@ func TestFrontPageFallback(t *testing.T) {
 	}
 
 	// Only a published page can be chosen.
-	recorder := choose()
+	recorder := choose(&page.ID)
 	require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
 	require.Contains(t, recorder.Body.String(), "invalid_front_page")
 
 	_, err = store.PublishPostTx(ctx, db.PublishPostTxParams{PostID: page.ID})
 	require.NoError(t, err)
-	recorder = choose()
+	recorder = choose(&page.ID)
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-	require.Contains(t, recorder.Body.String(), fmt.Sprintf(`"front_page_id":%d`, page.ID))
+	require.Equal(t, page.ID, storedFrontPage())
 	requireFront(true, "published")
 
 	// Unpublished: / shows the latest posts; the setting stays, so publishing
@@ -122,10 +137,9 @@ func TestFrontPageFallback(t *testing.T) {
 	requireFront(true, "restored from the trash")
 
 	// null: the latest posts.
-	recorder = serve(http.MethodPut, "/api/v1/settings", `{"front_page_id": null}`, &admin)
-	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Equal(t, http.StatusOK, choose(nil).Code)
 	requireFront(false, "cleared")
-	require.Equal(t, http.StatusOK, choose().Code)
+	require.Equal(t, http.StatusOK, choose(&page.ID).Code)
 
 	// Deleted for good: the setting is cleared with it.
 	_, err = store.TrashPost(ctx, page.ID)
