@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
-import { getSchema } from "@tiptap/core"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { authManager } from "@gl-admin/lib/auth"
 import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
@@ -28,6 +27,7 @@ import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
 import { scrollToCollaborator } from "./utils/cursorAwareness"
 import { reloadPage } from "./utils/reloadPage"
+import { editorSchema } from "./utils/editorSchema"
 import Notice from "@gl-admin/components/ui/Notice"
 import Modal from "@gl-admin/components/ui/Modal"
 import Button from "@gl-admin/components/ui/Button"
@@ -564,9 +564,9 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
     })
     collab.whenSynced().then(() => {
       if (cancelled || collab.stale) return
-      // The extensions the editor computes (theme ones from the registry, registered by
-      // now); Collaboration adds no node or mark types.
-      const schema = getSchema(getExtensions({ collabProvider: null })())
+      // The schema the editor computes (theme ones from the registry, registered by now),
+      // the same one its schema fingerprint describes (#416).
+      const schema = editorSchema()
       const unbuildable = findUnbuildableTypes(collab.doc.getXmlFragment(EDITOR_FRAGMENT), schema)
       if (unbuildable) {
         console.error(

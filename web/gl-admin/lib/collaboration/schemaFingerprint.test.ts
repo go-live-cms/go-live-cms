@@ -76,6 +76,7 @@ describe("schemaFingerprint (#416)", () => {
       ["a mark attr is added", (s) => void (s.marks.link.attrs!.target = { default: null })],
       ["an attr default changes", (s) => void (s.nodes.heading.attrs!.level = { default: 2 })],
       ["a nested attr default changes", (s) => void (s.nodes.heading.attrs!.meta = { default: { a: 1, b: [2, 1] } })],
+      ["an attr default goes from null to undefined", (s) => void (s.nodes.paragraph.attrs!.align = { default: undefined })],
       ["an attr becomes required", (s) => void (s.nodes.heading.attrs!.level = {})],
       ["an attr gets a validate rule", (s) => void (s.nodes.paragraph.attrs!.align = { default: null, validate: "string|null" })],
       ["a content expression changes", (s) => void (s.nodes.doc.content = "block*")],

@@ -32,8 +32,8 @@ const FORMAT = "golive-schema/1"
  * - every mark type, **in schema order** (that order is the mark rank: it decides how marks
  *   on a text node are sorted): its name, the marks it excludes (resolved), and its
  *   attributes;
- * - an attribute is its name, its default (canonical JSON) or that it has none (required),
- *   and its `validate` string if it has one.
+ * - an attribute is its name, its default (canonical JSON; `undefined` apart from `null`)
+ *   or that it has none (required), and its `validate` string if it has one.
  *
  * What doesn't (ProseMirror treats these as equal, or they only change editing, parsing or
  * rendering, not which documents can be built):
@@ -134,8 +134,16 @@ const names = (types: readonly (MarkType | NodeType)[]): string[] => types.map((
 /** "_" for every mark; else the allowed marks' names (groups resolved). */
 const allowedMarks = (type: NodeType): string | string[] => (type.markSet === null ? "_" : names(type.markSet))
 
-/** The marks this one excludes (itself, by default), groups resolved. */
-const excludedMarks = (type: MarkType): string[] => names((type as unknown as { excluded: MarkType[] }).excluded ?? [])
+/**
+ * The marks this one excludes (itself, by default), groups resolved. `excluded` is
+ * ProseMirror's resolved list (not in its public types); fail loudly if it ever goes, or
+ * every excludes change would stop counting.
+ */
+function excludedMarks(type: MarkType): string[] {
+  const excluded = (type as unknown as { excluded?: unknown }).excluded
+  if (!Array.isArray(excluded)) throw new Error(`schemaFingerprint: MarkType.excluded is missing on "${type.name}" (prosemirror-model changed)`)
+  return names(excluded as MarkType[])
+}
 
 type AttrSpecs = Record<string, { default?: unknown; validate?: unknown }> | undefined
 
@@ -144,9 +152,13 @@ function attributes(specs: AttrSpecs) {
     .sort()
     .map((name) => {
       const spec = specs![name] ?? {}
-      const attr: Record<string, unknown> = Object.prototype.hasOwnProperty.call(spec, "default")
-        ? { default: spec.default === undefined ? null : spec.default }
-        : { required: true }
+      // JSON has no undefined; `default: undefined` is a default of its own (the attr's
+      // value is undefined, not null), so it gets its own marker.
+      const attr: Record<string, unknown> = !Object.prototype.hasOwnProperty.call(spec, "default")
+        ? { required: true }
+        : spec.default === undefined
+          ? { defaultUndefined: true }
+          : { default: spec.default }
       if (typeof spec.validate === "string") attr.validate = spec.validate
       return [name, attr]
     })

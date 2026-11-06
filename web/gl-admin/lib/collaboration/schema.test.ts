@@ -4,7 +4,7 @@ import type { Schema } from "prosemirror-model"
 import { getExtensions } from "@gl-admin/components/editor/utils/extensions"
 import { getCoreSchema, schemaExtensions, schemaWithStandIns } from "./schema"
 import { schemaFingerprint } from "./schemaFingerprint"
-import { editorSchemaFingerprint } from "./postCollab"
+import { editorSchemaFingerprint } from "@gl-admin/components/editor/utils/editorSchema"
 import { getInstalledCollabSchema } from "../theme-blocks/collabSchema"
 import { installedThemeBlocks } from "../theme-blocks/installed"
 
@@ -45,7 +45,7 @@ describe("collab schema parity (#206)", () => {
   it("the editor's schema fingerprint is exactly the collab server's", () => {
     const serverFingerprint = schemaFingerprint(getInstalledCollabSchema())
     expect(schemaFingerprint(getSchema(getExtensions({ collabProvider: null })()))).toBe(serverFingerprint)
-    // What the admin sends (postCollab.ts), built the way the editor builds its schema.
+    // What the admin sends (postCollab.ts): the editor's own schema (editorSchema.ts).
     expect(editorSchemaFingerprint()).toBe(serverFingerprint)
     // Collaborating or not (StarterKit's undo/redo registers no schema).
     const solo = getSchema(Object.values(schemaExtensions({ collaborating: false })))
