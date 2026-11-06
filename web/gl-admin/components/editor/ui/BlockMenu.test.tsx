@@ -127,6 +127,16 @@ describe("BlockMenu (#356)", () => {
     expect(onMoveTo).toHaveBeenCalledWith(at(1))
   })
 
+  it("Del (the hint next to Delete) deletes the block from the menu", () => {
+    open(at(1))
+    act(() => {
+      menu().dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }))
+    })
+    const texts: string[] = []
+    editor.state.doc.forEach((n) => texts.push(n.textContent))
+    expect(texts).toEqual(["Intro", "Usage", "", "end"])
+  })
+
   it("Escape closes and returns focus to the handle", () => {
     const { onClose } = open(at(1))
     act(() => {

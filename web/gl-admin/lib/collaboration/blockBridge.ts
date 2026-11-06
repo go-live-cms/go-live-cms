@@ -14,6 +14,7 @@ import {
 } from "../blocks-spec"
 import { attrProblem, isThemeBlockType, themeBlockSpecOf, type ThemeBlockSpec } from "../blocks-spec/themeBlocks"
 import type { Editor } from "@tiptap/core"
+import { BLOCK_COLOR_NODE_TYPES } from "../../components/editor/extensions/BlockColor"
 
 // Simple block id generator
 let idCounter = 0
@@ -249,6 +250,8 @@ function blockColorOf(node: PMNode): { blockColor?: BlockColor } {
  * stored post would change (its `block_revision`, "Changes not published") on its first
  * store after #356. A nested colour (pasted from the editor's own HTML) stays, and renders.
  */
+const COLOR_NODE_TYPES = new Set<string>(BLOCK_COLOR_NODE_TYPES)
+
 function pmJSON(node: PMNode, ...topLevel: string[]): any {
   const clean = (json: any, root: boolean): any => {
     if (!json || typeof json !== "object") return json
@@ -256,7 +259,11 @@ function pmJSON(node: PMNode, ...topLevel: string[]): any {
     if (json.attrs && typeof json.attrs === "object") {
       const attrs = { ...json.attrs }
       if (root) for (const name of topLevel) delete attrs[name]
-      if ("blockColor" in attrs && normalizeBlockColor(attrs.blockColor) === null) delete attrs.blockColor
+      // Only the node types BlockColor gives the attribute: a custom or theme node may have
+      // its own attr of that name, with its own values.
+      if (COLOR_NODE_TYPES.has(json.type) && "blockColor" in attrs && normalizeBlockColor(attrs.blockColor) === null) {
+        delete attrs.blockColor
+      }
       out = { ...json, attrs }
     }
     if (Array.isArray(json.content)) out = { ...out, content: json.content.map((child: any) => clean(child, false)) }

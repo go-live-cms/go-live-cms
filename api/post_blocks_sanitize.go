@@ -104,6 +104,11 @@ var colorableBlockTypes = map[string]bool{
 	"paragraph": true, "heading": true, "blockquote": true, "bullet_list": true, "ordered_list": true,
 }
 
+// The ProseMirror node types with a `blockColor` (the editor's BlockColor extension).
+var colorablePMTypes = map[string]bool{
+	"paragraph": true, "heading": true, "blockquote": true, "bulletList": true, "orderedList": true,
+}
+
 // sanitizeBlockColor drops a `blockColor` that isn't in the palette (the block renders
 // with the theme's colours), like an unknown image width.
 func sanitizeBlockColor(attrs map[string]interface{}) {
@@ -216,8 +221,11 @@ func stringOf(v interface{}) string {
 func sanitizePMNode(node map[string]interface{}) {
 	if nattrs, ok := node["attrs"].(map[string]interface{}); ok {
 		stripOnAttrs(nattrs)
-		// A nested node's colour (a tinted paragraph inside a list item) renders too.
-		sanitizeBlockColor(nattrs)
+		// A nested node's colour (a tinted paragraph inside a list item) renders too. Only
+		// the node types that carry one: a custom node may use the name for its own attr.
+		if colorablePMTypes[stringOf(node["type"])] {
+			sanitizeBlockColor(nattrs)
+		}
 	}
 
 	if marks, ok := node["marks"].([]interface{}); ok {

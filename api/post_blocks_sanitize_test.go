@@ -414,6 +414,15 @@ func TestSanitize_BlockColor(t *testing.T) {
 		require.Equal(t, "green", content[1].(map[string]interface{})["attrs"].(map[string]interface{})["blockColor"])
 	})
 
+	t.Run("leaves a custom pm node's own attr of that name alone", func(t *testing.T) {
+		doc := singleBlock("alert", map[string]interface{}{
+			"pm": map[string]interface{}{"type": "alert", "attrs": map[string]interface{}{"blockColor": "#ff0000"}},
+		})
+		doc.sanitize()
+		pmAttrs := attrsOf(doc)["pm"].(map[string]interface{})["attrs"].(map[string]interface{})
+		require.Equal(t, "#ff0000", pmAttrs["blockColor"], "not a BlockColor node")
+	})
+
 	t.Run("leaves a theme block's own attr of that name alone", func(t *testing.T) {
 		doc := singleBlock("theme:example/alert", map[string]interface{}{"blockColor": "anything"})
 		doc.sanitize()

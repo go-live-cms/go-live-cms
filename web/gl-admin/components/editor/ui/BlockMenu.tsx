@@ -96,7 +96,8 @@ export default function BlockMenu({ editor, target, anchor, postUrl, onClose, on
     if (!link) return
     try {
       await navigator.clipboard.writeText(link)
-      toast.success("Link to block copied", { duration: 3000 })
+      // The anchor is on the public page: the link reaches the block once it's published.
+      toast.success("Link copied. It opens this block on the live post once it's published.", { duration: 4000 })
     } catch {
       toast.error("Couldn't copy the link")
     }
@@ -116,6 +117,14 @@ export default function BlockMenu({ editor, target, anchor, postUrl, onClose, on
     }
     if (e.key === "Tab") {
       onClose(false)
+      return
+    }
+    // The "Del" the menu shows next to Delete.
+    if (!isSub && (e.key === "Delete" || e.key === "Backspace")) {
+      e.preventDefault()
+      run(() => {
+        if (!deleteBlock(editor, target)) gone()
+      })
       return
     }
     if (!isSub && e.key === "ArrowRight" && document.activeElement === colorRef.current) {

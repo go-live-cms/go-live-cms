@@ -58,7 +58,12 @@ describe("TipTap base CSS ships with the editor styles (#305)", () => {
 describe("jump to a collaborator's caret (#356)", () => {
   const editors: Editor[] = []
   afterEach(() => {
-    while (editors.length) editors.pop()!.destroy()
+    while (editors.length) {
+      const editor = editors.pop()!
+      const element = editor.options.element as HTMLElement | undefined
+      editor.destroy()
+      element?.remove()
+    }
     vi.restoreAllMocks()
   })
 
@@ -69,8 +74,10 @@ describe("jump to a collaborator's caret (#356)", () => {
 
   function setup() {
     const awareness = new Awareness(new Y.Doc())
+    const element = document.createElement("div")
+    document.body.appendChild(element)
     const editor = new Editor({
-      element: document.createElement("div"),
+      element,
       extensions: [StarterKit, CursorAwareness.configure({ awareness })],
       content: "<p>first line</p><p>second line</p>",
     })
@@ -83,7 +90,7 @@ describe("jump to a collaborator's caret (#356)", () => {
     vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
       scrolled.push(this)
     })
-    return { awareness, editor, remote, scrolled }
+    return { awareness, editor, remote, scrolled, element }
   }
 
   it("scrolls to the first of the person's tabs that has a caret", () => {
@@ -97,6 +104,19 @@ describe("jump to a collaborator's caret (#356)", () => {
     expect((scrolled[0] as HTMLElement).dataset.clientId).toBe("8")
     // In the second paragraph (the caret's label is inline in its text).
     expect(scrolled[0].closest("p")?.textContent).toContain("cond line")
+  })
+
+  it("is false while the editor is hidden (History shows a version over it)", () => {
+    if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {}
+    const { awareness, editor, remote, scrolled, element } = setup()
+    const host = document.createElement("div")
+    host.hidden = true
+    document.body.appendChild(host)
+    host.appendChild(element)
+    remote(8, { anchor: 3, head: 3 })
+    expect(scrollToCollaborator(editor.view, awareness, [8])).toBe(false)
+    expect(scrolled).toHaveLength(0)
+    host.remove()
   })
 
   it("is false when none of them has a caret, and leaves this user's selection alone", () => {

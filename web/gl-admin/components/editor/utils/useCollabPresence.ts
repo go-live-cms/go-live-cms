@@ -34,12 +34,16 @@ export function useCollabPresence(postId?: number, enabled = true) {
     const instance = acquirePostCollab(postId)
     setCollab(instance)
     const awareness = instance.provider.awareness
+    // The count is shown only while the connection is down; online it moves on every
+    // keystroke and its ack, and each change would re-render the whole post form.
+    const syncCount = () => setUnsyncedCount(Math.max(0, Number(instance.provider.unsyncedChanges) || 0))
     const onUnsynced = () => {
       setUnsynced(instance.provider.hasUnsyncedChanges)
-      setUnsyncedCount(Math.max(0, Number(instance.provider.unsyncedChanges) || 0))
+      if (instance.getStatus() !== "connected" || !instance.provider.hasUnsyncedChanges) syncCount()
     }
     let raf = 0
-    const onStatus = (s = instance.getStatus()) =>
+    const onStatus = (s = instance.getStatus()) => {
+      syncCount()
       setStatus(
         s === "connected"
           ? "connected"
@@ -49,6 +53,7 @@ export function useCollabPresence(postId?: number, enabled = true) {
               ? "ended"
               : "disconnected"
       )
+    }
     const onUsers = () => {
       cancelAnimationFrame(raf)
       raf = requestAnimationFrame(() => {

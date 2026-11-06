@@ -56,6 +56,9 @@ export function createCaretElement(label: string, color: string, caretWidth = 2,
  * of them has a caret in the text (a window that lost focus clears its caret).
  */
 export function scrollToCollaborator(view: EditorView, awareness: any, clientIds: number[]): boolean {
+  // The editor isn't on screen (History shows a version over it, the bound editor stays
+  // mounted but hidden): there's nothing to scroll to.
+  if (!view.dom.isConnected || view.dom.closest("[hidden]")) return false
   const smooth = typeof window.matchMedia === "function" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
   const options: ScrollIntoViewOptions = { block: "center", behavior: smooth ? "smooth" : "auto" }
   for (const id of clientIds) {

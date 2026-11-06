@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { Editor } from "@tiptap/core"
 import { BLOCK_COLORS, normalizeBlockColor, validateBlockDoc, type BlockDocV1 } from "../blocks-spec"
 import { blockDocToPM, pmToBlockDoc } from "./blockBridge"
-import { getCoreSchema, schemaExtensions } from "./schema"
+import { getCoreSchema, schemaExtensions, schemaWithStandIns } from "./schema"
 import { sanitizePastedHTML, PasteSanitizer } from "../../components/editor/extensions/PasteSanitizer"
 import BlockRenderer from "../../../src/components/BlockRenderer"
 
@@ -122,6 +122,24 @@ describe("block colour in Block Spec (#356)", () => {
     const stored = pmToBlockDoc(TINTED)
     ;(stored.blocks[ID(1)].attrs as any).blockColor = "url(javascript:alert(1))"
     expect(blockDocToPM(stored, schema).child(0).attrs.blockColor).toBeNull()
+  })
+
+  it("leaves an attr of that name on other node types alone (a custom node's own value)", () => {
+    const custom: BlockDocV1 = {
+      doc_version: 1,
+      blocks_order: [ID(9)],
+      blocks: {
+        [ID(9)]: {
+          id: ID(9),
+          type: "callout",
+          version: 1,
+          attrs: { pm: { type: "callout", attrs: { blockColor: "#ff0000", "data-block-id": ID(9) }, content: text("c") }, text: "c" },
+        } as any,
+      },
+    }
+    const withStandIn = schemaWithStandIns(schema, [(custom.blocks[ID(9)].attrs as any).pm])
+    const out = pmToBlockDoc(blockDocToPM(custom, withStandIn))
+    expect((out.blocks[ID(9)].attrs as any).pm.attrs.blockColor).toBe("#ff0000")
   })
 
   it("the validator refuses a colour outside the palette (the store never writes one)", () => {
