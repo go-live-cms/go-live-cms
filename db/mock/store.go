@@ -478,6 +478,21 @@ func (mr *MockStoreMockRecorder) CountFilteredPosts(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountFilteredPosts", reflect.TypeOf((*MockStore)(nil).CountFilteredPosts), arg0, arg1)
 }
 
+// CountLivePostComments mocks base method.
+func (m *MockStore) CountLivePostComments(arg0 context.Context, arg1 int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountLivePostComments", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountLivePostComments indicates an expected call of CountLivePostComments.
+func (mr *MockStoreMockRecorder) CountLivePostComments(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountLivePostComments", reflect.TypeOf((*MockStore)(nil).CountLivePostComments), arg0, arg1)
+}
+
 // CountMedia mocks base method.
 func (m *MockStore) CountMedia(arg0 context.Context, arg1 db.CountMediaParams) (int64, error) {
 	m.ctrl.T.Helper()
@@ -866,6 +881,51 @@ func (m *MockStore) CreatePostAccessRequest(arg0 context.Context, arg1 db.Create
 func (mr *MockStoreMockRecorder) CreatePostAccessRequest(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostAccessRequest", reflect.TypeOf((*MockStore)(nil).CreatePostAccessRequest), arg0, arg1)
+}
+
+// CreatePostComment mocks base method.
+func (m *MockStore) CreatePostComment(arg0 context.Context, arg1 db.CreatePostCommentParams) (db.PostComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePostComment", arg0, arg1)
+	ret0, _ := ret[0].(db.PostComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePostComment indicates an expected call of CreatePostComment.
+func (mr *MockStoreMockRecorder) CreatePostComment(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostComment", reflect.TypeOf((*MockStore)(nil).CreatePostComment), arg0, arg1)
+}
+
+// CreatePostCommentThread mocks base method.
+func (m *MockStore) CreatePostCommentThread(arg0 context.Context, arg1 db.CreatePostCommentThreadParams) (db.PostCommentThread, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePostCommentThread", arg0, arg1)
+	ret0, _ := ret[0].(db.PostCommentThread)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePostCommentThread indicates an expected call of CreatePostCommentThread.
+func (mr *MockStoreMockRecorder) CreatePostCommentThread(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostCommentThread", reflect.TypeOf((*MockStore)(nil).CreatePostCommentThread), arg0, arg1)
+}
+
+// CreatePostCommentThreadTx mocks base method.
+func (m *MockStore) CreatePostCommentThreadTx(arg0 context.Context, arg1 db.CreatePostCommentThreadTxParams) (db.CreatePostCommentThreadTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreatePostCommentThreadTx", arg0, arg1)
+	ret0, _ := ret[0].(db.CreatePostCommentThreadTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreatePostCommentThreadTx indicates an expected call of CreatePostCommentThreadTx.
+func (mr *MockStoreMockRecorder) CreatePostCommentThreadTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreatePostCommentThreadTx", reflect.TypeOf((*MockStore)(nil).CreatePostCommentThreadTx), arg0, arg1)
 }
 
 // CreatePostFromTemplateTx mocks base method.
@@ -1408,6 +1468,35 @@ func (m *MockStore) DeletePostCollaborator(arg0 context.Context, arg1 db.DeleteP
 func (mr *MockStoreMockRecorder) DeletePostCollaborator(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostCollaborator", reflect.TypeOf((*MockStore)(nil).DeletePostCollaborator), arg0, arg1)
+}
+
+// DeletePostCommentThread mocks base method.
+func (m *MockStore) DeletePostCommentThread(arg0 context.Context, arg1 int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePostCommentThread", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeletePostCommentThread indicates an expected call of DeletePostCommentThread.
+func (mr *MockStoreMockRecorder) DeletePostCommentThread(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostCommentThread", reflect.TypeOf((*MockStore)(nil).DeletePostCommentThread), arg0, arg1)
+}
+
+// DeletePostCommentTx mocks base method.
+func (m *MockStore) DeletePostCommentTx(arg0 context.Context, arg1, arg2 int64) (db.DeletePostCommentTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeletePostCommentTx", arg0, arg1, arg2)
+	ret0, _ := ret[0].(db.DeletePostCommentTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeletePostCommentTx indicates an expected call of DeletePostCommentTx.
+func (mr *MockStoreMockRecorder) DeletePostCommentTx(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostCommentTx", reflect.TypeOf((*MockStore)(nil).DeletePostCommentTx), arg0, arg1, arg2)
 }
 
 // DeletePostMedia mocks base method.
@@ -2171,6 +2260,36 @@ func (m *MockStore) GetPostCollab(arg0 context.Context, arg1 int64) (db.GetPostC
 func (mr *MockStoreMockRecorder) GetPostCollab(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostCollab", reflect.TypeOf((*MockStore)(nil).GetPostCollab), arg0, arg1)
+}
+
+// GetPostComment mocks base method.
+func (m *MockStore) GetPostComment(arg0 context.Context, arg1 int64) (db.GetPostCommentRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostComment", arg0, arg1)
+	ret0, _ := ret[0].(db.GetPostCommentRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostComment indicates an expected call of GetPostComment.
+func (mr *MockStoreMockRecorder) GetPostComment(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostComment", reflect.TypeOf((*MockStore)(nil).GetPostComment), arg0, arg1)
+}
+
+// GetPostCommentThread mocks base method.
+func (m *MockStore) GetPostCommentThread(arg0 context.Context, arg1 int64) (db.PostCommentThread, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostCommentThread", arg0, arg1)
+	ret0, _ := ret[0].(db.PostCommentThread)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostCommentThread indicates an expected call of GetPostCommentThread.
+func (mr *MockStoreMockRecorder) GetPostCommentThread(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostCommentThread", reflect.TypeOf((*MockStore)(nil).GetPostCommentThread), arg0, arg1)
 }
 
 // GetPostHasUnpublishedChanges mocks base method.
@@ -3488,6 +3607,36 @@ func (mr *MockStoreMockRecorder) ListPostCollaborators(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostCollaborators", reflect.TypeOf((*MockStore)(nil).ListPostCollaborators), arg0, arg1)
 }
 
+// ListPostCommentThreads mocks base method.
+func (m *MockStore) ListPostCommentThreads(arg0 context.Context, arg1 int64) ([]db.ListPostCommentThreadsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostCommentThreads", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostCommentThreadsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostCommentThreads indicates an expected call of ListPostCommentThreads.
+func (mr *MockStoreMockRecorder) ListPostCommentThreads(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostCommentThreads", reflect.TypeOf((*MockStore)(nil).ListPostCommentThreads), arg0, arg1)
+}
+
+// ListPostComments mocks base method.
+func (m *MockStore) ListPostComments(arg0 context.Context, arg1 int64) ([]db.ListPostCommentsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostComments", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostCommentsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostComments indicates an expected call of ListPostComments.
+func (mr *MockStoreMockRecorder) ListPostComments(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostComments", reflect.TypeOf((*MockStore)(nil).ListPostComments), arg0, arg1)
+}
+
 // ListPostTemplates mocks base method.
 func (m *MockStore) ListPostTemplates(arg0 context.Context, arg1 db.ListPostTemplatesParams) ([]db.ListPostTemplatesRow, error) {
 	m.ctrl.T.Helper()
@@ -3876,6 +4025,21 @@ func (m *MockStore) LockNewPostOwner(arg0 context.Context, arg1 int64) (db.LockN
 func (mr *MockStoreMockRecorder) LockNewPostOwner(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockNewPostOwner", reflect.TypeOf((*MockStore)(nil).LockNewPostOwner), arg0, arg1)
+}
+
+// LockPostCommentThread mocks base method.
+func (m *MockStore) LockPostCommentThread(arg0 context.Context, arg1 int64) (db.PostCommentThread, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostCommentThread", arg0, arg1)
+	ret0, _ := ret[0].(db.PostCommentThread)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostCommentThread indicates an expected call of LockPostCommentThread.
+func (mr *MockStoreMockRecorder) LockPostCommentThread(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostCommentThread", reflect.TypeOf((*MockStore)(nil).LockPostCommentThread), arg0, arg1)
 }
 
 // LockPostForCollabStore mocks base method.
@@ -4468,6 +4632,21 @@ func (mr *MockStoreMockRecorder) ResetPasswordTx(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetPasswordTx", reflect.TypeOf((*MockStore)(nil).ResetPasswordTx), arg0, arg1)
 }
 
+// ResolvePostCommentThread mocks base method.
+func (m *MockStore) ResolvePostCommentThread(arg0 context.Context, arg1 db.ResolvePostCommentThreadParams) (db.PostCommentThread, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResolvePostCommentThread", arg0, arg1)
+	ret0, _ := ret[0].(db.PostCommentThread)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResolvePostCommentThread indicates an expected call of ResolvePostCommentThread.
+func (mr *MockStoreMockRecorder) ResolvePostCommentThread(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolvePostCommentThread", reflect.TypeOf((*MockStore)(nil).ResolvePostCommentThread), arg0, arg1)
+}
+
 // ResolveReviewRequest mocks base method.
 func (m *MockStore) ResolveReviewRequest(arg0 context.Context, arg1 db.ResolveReviewRequestParams) (db.ReviewRequest, error) {
 	m.ctrl.T.Helper()
@@ -4927,6 +5106,21 @@ func (mr *MockStoreMockRecorder) SignOutOtherSessionsTx(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SignOutOtherSessionsTx", reflect.TypeOf((*MockStore)(nil).SignOutOtherSessionsTx), arg0, arg1)
 }
 
+// SoftDeletePostComment mocks base method.
+func (m *MockStore) SoftDeletePostComment(arg0 context.Context, arg1 int64) (db.PostComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SoftDeletePostComment", arg0, arg1)
+	ret0, _ := ret[0].(db.PostComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SoftDeletePostComment indicates an expected call of SoftDeletePostComment.
+func (mr *MockStoreMockRecorder) SoftDeletePostComment(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SoftDeletePostComment", reflect.TypeOf((*MockStore)(nil).SoftDeletePostComment), arg0, arg1)
+}
+
 // StorePostCollabTx mocks base method.
 func (m *MockStore) StorePostCollabTx(arg0 context.Context, arg1 db.StorePostCollabTxParams) (db.StorePostCollabTxResult, error) {
 	m.ctrl.T.Helper()
@@ -5073,6 +5267,21 @@ func (mr *MockStoreMockRecorder) UnpublishPost(arg0, arg1 interface{}) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnpublishPost", reflect.TypeOf((*MockStore)(nil).UnpublishPost), arg0, arg1)
 }
 
+// UnresolvePostCommentThread mocks base method.
+func (m *MockStore) UnresolvePostCommentThread(arg0 context.Context, arg1 int64) (db.PostCommentThread, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UnresolvePostCommentThread", arg0, arg1)
+	ret0, _ := ret[0].(db.PostCommentThread)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UnresolvePostCommentThread indicates an expected call of UnresolvePostCommentThread.
+func (mr *MockStoreMockRecorder) UnresolvePostCommentThread(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnresolvePostCommentThread", reflect.TypeOf((*MockStore)(nil).UnresolvePostCommentThread), arg0, arg1)
+}
+
 // UpdateMedia mocks base method.
 func (m *MockStore) UpdateMedia(arg0 context.Context, arg1 db.UpdateMediaParams) (db.Medium, error) {
 	m.ctrl.T.Helper()
@@ -5146,6 +5355,21 @@ func (m *MockStore) UpdatePostBlockDocFromCollab(arg0 context.Context, arg1 db.U
 func (mr *MockStoreMockRecorder) UpdatePostBlockDocFromCollab(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostBlockDocFromCollab", reflect.TypeOf((*MockStore)(nil).UpdatePostBlockDocFromCollab), arg0, arg1)
+}
+
+// UpdatePostCommentBody mocks base method.
+func (m *MockStore) UpdatePostCommentBody(arg0 context.Context, arg1 db.UpdatePostCommentBodyParams) (db.PostComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostCommentBody", arg0, arg1)
+	ret0, _ := ret[0].(db.PostComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostCommentBody indicates an expected call of UpdatePostCommentBody.
+func (mr *MockStoreMockRecorder) UpdatePostCommentBody(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostCommentBody", reflect.TypeOf((*MockStore)(nil).UpdatePostCommentBody), arg0, arg1)
 }
 
 // UpdatePostMediaTx mocks base method.

@@ -207,6 +207,11 @@ Own port (`INTERNAL_PORT`, default 1236), **never published**.
   ${COLLAB_INTERNAL_SECRET}` (constant-time): runs the store now under the doc's
   `saveMutex` and waits. 200 `{flushed}` (also when the doc isn't loaded: nothing
   unsaved), 400 bad name, 401, **503 if the store failed** (publish must not go ahead).
+- `POST /internal/documents/:doc/comments` (same secret, #192): `notifyComments` broadcasts a
+  stateless `{"type":"comments"}` to the loaded doc's connections (read-only ones too) so open
+  editors refetch the post's comments from the API. It never loads a doc and never touches its
+  content. 200 `{connections: n}` (0: not loaded), 400 bad name, 401. Logs
+  `collab_comments_nudge` / `collab_comments_denied`.
 
 ## Logging
 

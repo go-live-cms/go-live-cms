@@ -514,6 +514,23 @@ are the most fragile part of the codebase. **Before editing anything under
   unreadable): "Create an account" shows only while it's on, and `/register` renders just the
   "Sign-up is closed" panel otherwise. Success is one "Check your email" panel whatever the
   address (the API doesn't say), then `/login?reason=signup-confirmed`.
+- **Block comments (#192):** threads anchored by the block's `data-block-id`, kept by the API
+  (`lib/api/comments.ts`; `api/CLAUDE.md`), never in the Yjs doc. `PostForm` owns one
+  `PostCommentsStore` per open post (`lib/commentsStore.ts`, memory only): read on open, on the
+  collab server's `{"type":"comments"}` nudge (`HocuspocusCollaboration.onComments`, which `Editor`
+  wires with a refetch on every resync), when the tab is shown again, and from every write's answer
+  (numbered, so an older read never undoes a write). In the editor `ui/BlockComments.tsx` (an
+  overlay, no plugin or doc change) puts a marker with the open count beside each block with open
+  threads and a hover "Comment" button (view-only readers too), and reports the doc's blocks; the
+  block menu's **Comment** (Ctrl M, `BlockActions` `openComment`) opens a new thread. The top bar's
+  Comments button opens `ui/CommentsPanel.tsx` (in place of the settings panel): Open · Resolved,
+  threads by block in document order, "On hidden blocks" (#213) and "On deleted blocks" (orphans:
+  their block id isn't in the doc; back on their block if a restore brings it back). The canvas
+  draws no panel, so it's built from the settings panel's shell and the #338 components. Rules and
+  wording: `lib/comments.ts` (tested, limits checked against the Go). Anchoring through move,
+  split, Enter at the start (the thread stays on the new empty block above), join, paste, turn-into,
+  restore and reseed, and for blocks inside a Group (#414: moving the group or the block out of
+  it, a restart, a reseed): `lib/collaboration/comments.hocuspocus.test.ts`.
 - **Nested blocks and the Group block (#414):** containers hold their blocks by id
   (`gl-admin/lib/blocks-spec/nesting.ts` is the table; rules in
   `gl-admin/lib/collaboration/CLAUDE.md`, "Containers"). Group: a Layout entry in the block

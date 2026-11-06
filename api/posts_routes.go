@@ -124,5 +124,16 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.POST("/:id/access-requests/:request_id/decline", auth, author, server.declinePostAccess)
 		posts.DELETE("/:id/collaborators/:user_id", auth, author, server.revokePostAccess)
 
+		// Block comments (#192, post_comments.go): read and written by anyone who may
+		// read the post; resolving, editing and deleting are decided per thread and
+		// comment in the handler (auth_posts.go)
+		posts.GET("/:id/comments", auth, author, server.listPostComments)
+		posts.POST("/:id/comments", auth, author, server.createCommentThread)
+		posts.PUT("/:id/comments/:comment_id", auth, author, server.editComment)
+		posts.DELETE("/:id/comments/:comment_id", auth, author, server.deleteComment)
+		posts.POST("/:id/comment-threads/:thread_id/replies", auth, author, server.replyToCommentThread)
+		posts.POST("/:id/comment-threads/:thread_id/resolve", auth, author, server.resolveCommentThread(true))
+		posts.POST("/:id/comment-threads/:thread_id/unresolve", auth, author, server.resolveCommentThread(false))
+
 	}
 }

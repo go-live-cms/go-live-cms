@@ -41,6 +41,11 @@ describe("describeActivity", () => {
     expect(line({ verb: "restored" })).toBe("Ana Costa restored October changelog from the trash")
     // #353: ids only in the payload, so no names.
     expect(line({ verb: "transferred", payload: { previous_owner_id: 3, owner_id: 4 } })).toBe("Ana Costa transferred October changelog")
+    // #192: the canvas's "commented on"; ids only in the payload.
+    expect(line({ verb: "commented", payload: { thread_id: 1, comment_id: 2, reply: false } })).toBe("Ana Costa commented on October changelog")
+    expect(line({ verb: "comment_resolved", payload: { thread_id: 1 } })).toBe("Ana Costa resolved a comment on October changelog")
+    expect(line({ verb: "comment_reopened" })).toBe("Ana Costa reopened a comment on October changelog")
+    expect(line({ verb: "comment_deleted" })).toBe("Ana Costa deleted a comment on October changelog")
   })
 
   it("says You for the viewer and Someone without an actor", () => {

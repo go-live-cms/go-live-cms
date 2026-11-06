@@ -43,6 +43,9 @@ export type StoreMessage =
   | { type: "stored"; revision: number | null; block_doc: "written" | "kept-invalid" | "kept-empty" | "unchanged" }
   | { type: "store_failed" }
 
+/** Sent to every client of a doc when the API says its comments changed (#192). */
+export type CommentsMessage = { type: "comments" }
+
 export type StoreResult = { ok: true; skipped: boolean } | { ok: false; error: string }
 
 interface Session {
@@ -402,6 +405,23 @@ export function createCollabServer(options: CollabServerOptions) {
     recheckUser: (userId: string) => recheck.checkUser(userId),
     /** Re-checks a document's open connections now (internal listener; trash, #327). */
     recheckDoc: (docName: string) => recheck.checkDoc(docName),
+    /**
+     * Tells a loaded doc's connections that its comments changed (#192): a stateless
+     * {"type":"comments"}, read-only connections included, so open editors refetch them
+     * from the API. Never loads a doc and never touches its content. Returns how many
+     * connections it reached (0 when the doc isn't loaded: nobody to tell).
+     */
+    notifyComments(docName: string): number {
+      const document = hocuspocus.documents.get(docName)
+      if (!document) return 0
+      const message: CommentsMessage = { type: "comments" }
+      try {
+        document.broadcastStateless(JSON.stringify(message))
+      } catch {
+        return 0
+      }
+      return document.getConnectionsCount()
+    },
     /** Open connections the access re-check is tracking. */
     get recheckedConnections(): number {
       return recheck.size

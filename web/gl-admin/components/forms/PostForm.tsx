@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   cancelPostSchedule,
@@ -22,6 +22,8 @@ import { CollabStoreError } from "@gl-admin/lib/collaboration/CollabSaveStatus"
 import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import EditorTopBar, { ArchiveIcon, OfflineIcon } from "@gl-admin/components/editor/ui/EditorTopBar"
 import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
+import CommentsPanel from "@gl-admin/components/editor/ui/CommentsPanel"
+import { PostCommentsStore } from "@gl-admin/lib/commentsStore"
 import ScheduleDialog from "@gl-admin/components/editor/ui/ScheduleDialog"
 import { useSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import {
@@ -452,6 +454,36 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   useEffect(() => {
     localStorage.setItem("postSettingsSidebarState", sidebarVisible.toString())
   }, [sidebarVisible])
+
+  // Block comments (#192): one store per open post, shared by the editor (markers, the
+  // block menu's Comment, Ctrl M, the nudge) and the panel. In memory only.
+  const commentsPostId = mode === "edit" && roleVerified ? initialData?.id : undefined
+  const [comments, setComments] = useState<PostCommentsStore | null>(null)
+  useEffect(() => {
+    if (!commentsPostId) return
+    const store = new PostCommentsStore(commentsPostId)
+    setComments(store)
+    void store.refresh()
+    const offVisible = store.watchVisibility()
+    // A block asked for (marker, hover button, block menu, Ctrl M): open the panel.
+    let lastFocus = 0
+    const offFocus = store.subscribe(() => {
+      const focus = store.getSnapshot().focus
+      if (focus && focus.seq !== lastFocus) {
+        lastFocus = focus.seq
+        setCommentsOpen(true)
+      }
+    })
+    return () => {
+      offVisible()
+      offFocus()
+      store.destroy()
+      setComments(null)
+    }
+  }, [commentsPostId])
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  // Only the count: the store changes on every keystroke (the blocks), the count doesn't.
+  const openComments = useSyncExternalStore(comments?.subscribe ?? noSubscribe, comments?.openCount ?? noCount)
 
   // TODO: these are basically the same, fix it
   const getContentTypeName = (type?: string) => {
@@ -1086,8 +1118,17 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         canPublish={canPublish}
         isPublishing={isSubmitting}
         isSaving={isSaving}
-        settingsOpen={sidebarVisible}
-        onSettingsToggle={() => setSidebarVisible(!sidebarVisible)}
+        settingsOpen={sidebarVisible && !commentsOpen}
+        onSettingsToggle={() => {
+          // One panel beside the canvas at a time.
+          if (commentsOpen) {
+            setCommentsOpen(false)
+            setSidebarVisible(true)
+          } else setSidebarVisible(!sidebarVisible)
+        }}
+        commentsOpen={commentsOpen}
+        onCommentsToggle={comments ? () => setCommentsOpen((open) => !open) : undefined}
+        openComments={openComments}
         onSave={handleSave}
         onPublish={handlePublish}
         onUnpublish={collabEnabled && canPublish ? askUnpublish : undefined}
@@ -1347,6 +1388,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               postId={initialData?.id}
               // The block menu's "Copy link to block" (#356): the post's public URL.
               postUrl={liveUrl}
+              // Block comments (#192)
+              comments={comments}
               enableCollaboration={collabEnabled} // Edit mode, for users who may edit this post
               // Block Spec v1 persistence callbacks
               onSaveStart={() => {
@@ -1403,10 +1446,18 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           </div>
         </main>
 
+        {comments && (
+          <CommentsPanel
+            store={comments}
+            isVisible={commentsOpen}
+            onClose={() => setCommentsOpen(false)}
+            sidebarWidth={sidebarWidth}
+          />
+        )}
         <PostSidebar
           post={currentPost}
           onUpdate={handlePostUpdate}
-          isVisible={sidebarVisible}
+          isVisible={sidebarVisible && !commentsOpen}
           onToggle={() => setSidebarVisible(!sidebarVisible)}
           sidebarWidth={sidebarWidth}
           onResize={handleSidebarResize}
@@ -1518,3 +1569,7 @@ function listNames(names: string[]): string {
   if (names.length === 2) return `${names[0]} and ${names[1]}`
   return `${names[0]}, ${names[1]} and ${names.length - 2} other${names.length === 3 ? "" : "s"}`
 }
+
+// useSyncExternalStore before the comments store exists (create mode, role not verified).
+const noSubscribe = () => () => {}
+const noCount = () => 0

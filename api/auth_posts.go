@@ -286,6 +286,53 @@ func canDismissReviewRequest(user db.User, request db.ReviewRequest) bool {
 	return canReview(user) || (request.RequestedBy.Valid && request.RequestedBy.Int64 == user.ID)
 }
 
+// Block comments (#192, post_comments.go). Comments are feedback on the working
+// copy, so they follow who may read it, not who may change it:
+//
+//   - Reading and writing comments (start a thread, reply) is canReadPost: admins
+//     and editors on any post; a contributor on their own posts, and view-only on
+//     someone else's published post (#135), with or without an edit access grant
+//     (#321). Nobody comments on a post in the trash (#327; 409).
+//   - Resolving and reopening a thread is for whoever acts on the feedback: anyone
+//     who may edit the working copy (canEditWorkingCopy: moderators, the
+//     contributor owner, a granted collaborator), plus the thread's starter. So a
+//     contributor whose post is under review (#323) resolves the reviewer's
+//     threads, and a view-only contributor only resolves their own.
+//   - Editing a comment is its author's only, admins included.
+//   - Deleting: its author, or a moderator (admins and editors, like
+//     canModerateMedia for others' uploads).
+
+// canCommentOnPost reports whether the user may start threads and reply on the
+// post: anyone who may read its working copy, while it isn't in the trash.
+func canCommentOnPost(user db.User, post db.Post) bool {
+	return !isTrashed(post) && canReadPost(user, post)
+}
+
+// canResolveCommentThread reports whether the user may resolve or reopen the
+// thread: canCommentOnPost, and the thread's starter or canEditWorkingCopy
+// (canEdit, which the caller looked up).
+func canResolveCommentThread(user db.User, post db.Post, createdBy sql.NullInt64, canEdit bool) bool {
+	if !canCommentOnPost(user, post) {
+		return false
+	}
+	return canEdit || (createdBy.Valid && createdBy.Int64 == user.ID)
+}
+
+// canEditComment reports whether the user may change the comment's text: its
+// author only, while they may comment on the post.
+func canEditComment(user db.User, post db.Post, authorID sql.NullInt64) bool {
+	return canCommentOnPost(user, post) && authorID.Valid && authorID.Int64 == user.ID
+}
+
+// canDeleteComment reports whether the user may delete the comment: its author,
+// or a moderator.
+func canDeleteComment(user db.User, post db.Post, authorID sql.NullInt64) bool {
+	if !canCommentOnPost(user, post) {
+		return false
+	}
+	return canModeratePosts(user) || (authorID.Valid && authorID.Int64 == user.ID)
+}
+
 // authorizePost checks a per-post permission for the caller and writes the
 // error response when it fails. Moderators pass without loading the post
 // (the handler reports a missing post itself, as before #135); anyone else

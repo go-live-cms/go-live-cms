@@ -145,6 +145,8 @@ var postReadRouteTemplates = []string{
 	"/api/v1/posts/:id/access",
 	// The owner (#353).
 	"/api/v1/posts/:id/owner",
+	// Block comments (#192).
+	"/api/v1/posts/:id/comments",
 }
 
 // moderatorPostRoutes are per-post GET routes for editors and admins only

@@ -98,6 +98,7 @@ const internal = createInternalServer({
   flush: (docName) => collab.flush(docName),
   recheckUser: (userId) => collab.recheckUser(userId),
   recheckDoc: (docName) => collab.recheckDoc(docName),
+  notifyComments: (docName) => collab.notifyComments(docName),
 })
 
 const port = await collab.listen()

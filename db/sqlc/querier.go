@@ -77,6 +77,7 @@ type Querier interface {
 	CountCategoryTerms(ctx context.Context, termIds []int64) (int64, error)
 	CountEmailChangeTokensSince(ctx context.Context, arg CountEmailChangeTokensSinceParams) (int64, error)
 	CountFilteredPosts(ctx context.Context, arg CountFilteredPostsParams) (int64, error)
+	CountLivePostComments(ctx context.Context, threadID int64) (int64, error)
 	// The total for GET /media: the rows ListMedia pages through, same filters.
 	CountMedia(ctx context.Context, arg CountMediaParams) (int64, error)
 	// ListMembers' filters, for its total.
@@ -129,6 +130,8 @@ type Querier interface {
 	// declined less than cooldown_seconds ago. A second open request breaks the
 	// post_access_requests_one_open index (a unique violation).
 	CreatePostAccessRequest(ctx context.Context, arg CreatePostAccessRequestParams) (PostAccessRequest, error)
+	CreatePostComment(ctx context.Context, arg CreatePostCommentParams) (PostComment, error)
+	CreatePostCommentThread(ctx context.Context, arg CreatePostCommentThreadParams) (PostCommentThread, error)
 	CreatePostMedia(ctx context.Context, arg CreatePostMediaParams) (PostMedium, error)
 	CreatePostMeta(ctx context.Context, arg CreatePostMetaParams) (PostMetum, error)
 	// Post templates (#322, 000043). A template is not a post: nothing in post.sql
@@ -179,6 +182,7 @@ type Querier interface {
 	// each of those posts still credits the new owner.
 	DeletePostBylineCredits(ctx context.Context, arg DeletePostBylineCreditsParams) error
 	DeletePostCollaborator(ctx context.Context, arg DeletePostCollaboratorParams) (int64, error)
+	DeletePostCommentThread(ctx context.Context, id int64) error
 	DeletePostMedia(ctx context.Context, arg DeletePostMediaParams) error
 	DeletePostMediaByOrder(ctx context.Context, arg DeletePostMediaByOrderParams) error
 	DeletePostMedias(ctx context.Context, postID int64) error
@@ -244,6 +248,9 @@ type Querier interface {
 	// these through the API's internal listener (GET/PUT /internal/posts/:id/collab);
 	// the writes run together in StorePostCollabTx.
 	GetPostCollab(ctx context.Context, id int64) (GetPostCollabRow, error)
+	// One comment with its thread's post (the handlers check both).
+	GetPostComment(ctx context.Context, id int64) (GetPostCommentRow, error)
+	GetPostCommentThread(ctx context.Context, id int64) (PostCommentThread, error)
 	// GET /posts/:id and /posts/slug/:slug (#326): ListPosts' has_unpublished_changes
 	// for one post.
 	GetPostHasUnpublishedChanges(ctx context.Context, id int64) (bool, error)
@@ -474,6 +481,14 @@ type Querier interface {
 	ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error)
 	// The members granted edit access to a post, earliest grant first.
 	ListPostCollaborators(ctx context.Context, postID int64) ([]ListPostCollaboratorsRow, error)
+	// Block comments (#192, 000048). Who may do what is the API's (auth_posts.go);
+	// these only read and write.
+	// A post's threads, oldest first, with the starter's and resolver's current names
+	// (NULL for a member removed since).
+	ListPostCommentThreads(ctx context.Context, postID int64) ([]ListPostCommentThreadsRow, error)
+	// Every comment of a post's threads (deleted ones too, without a body), in thread
+	// order, with the author's current name.
+	ListPostComments(ctx context.Context, postID int64) ([]ListPostCommentsRow, error)
 	// Without block_doc (the chooser doesn't need it), with the saved category's
 	// names and who saved it. With id, that one template (the create and rename
 	// responses).
@@ -562,6 +577,8 @@ type Querier interface {
 	// which deletes the row FOR UPDATE) waits for the transfer, or wins and the transfer
 	// finds no row. Taken before the post's lock, RemoveUserTx's order (users, then posts).
 	LockNewPostOwner(ctx context.Context, id int64) (LockNewPostOwnerRow, error)
+	// The thread row FOR UPDATE: deleting its comments serializes on it.
+	LockPostCommentThread(ctx context.Context, id int64) (PostCommentThread, error)
 	LockPostForCollabStore(ctx context.Context, id int64) (LockPostForCollabStoreRow, error)
 	// Publish runs in one transaction from here (PublishPostTx): two publishes of
 	// one post queue on this lock instead of racing for the same version_no.
@@ -653,6 +670,8 @@ type Querier interface {
 	ReplaceTermInPublishedSettings(ctx context.Context, arg ReplaceTermInPublishedSettingsParams) (int64, error)
 	// The same for pending scheduled updates (#335), which would publish their snapshot.
 	ReplaceTermInScheduledUpdates(ctx context.Context, arg ReplaceTermInScheduledUpdatesParams) (int64, error)
+	// Idempotent: a thread resolved already keeps its resolver and time.
+	ResolvePostCommentThread(ctx context.Context, arg ResolvePostCommentThreadParams) (PostCommentThread, error)
 	// Dismiss or request changes (the API checks who may). Only an open request:
 	// sql.ErrNoRows when it was resolved meanwhile (published, dismissed, ...).
 	ResolveReviewRequest(ctx context.Context, arg ResolveReviewRequestParams) (ReviewRequest, error)
@@ -731,6 +750,8 @@ type Querier interface {
 	SetUserInvitationAcceptedUser(ctx context.Context, arg SetUserInvitationAcceptedUserParams) error
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) (User, error)
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) (User, error)
+	// Keeps the row so replies keep their place; the body goes.
+	SoftDeletePostComment(ctx context.Context, id int64) (PostComment, error)
 	// Makes the post's content image links (order > 0) match the doc's media
 	// blocks, in document order (the collab store, publish and duplicate). The
 	// three arrays are parallel, one entry per block: media_ids[i] is shown by
@@ -770,6 +791,7 @@ type Querier interface {
 	// Back to draft and drop the public snapshot (#136), settings included (#358).
 	// The snapshot stays in post_versions, so it can still be viewed and restored.
 	UnpublishPost(ctx context.Context, id int64) (Post, error)
+	UnresolvePostCommentThread(ctx context.Context, id int64) (PostCommentThread, error)
 	UpdateMedia(ctx context.Context, arg UpdateMediaParams) (Medium, error)
 	// Metadata-only update used by PUT /media/:id. The file columns (media_path,
 	// file_size, mime_type, dimensions, original_filename) are set on upload and
@@ -783,6 +805,8 @@ type Querier interface {
 	// collab server sends one only when the derived doc changed, so state-only
 	// stores (the seed, unchanged or invalid docs) leave it alone (#307).
 	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
+	// An edit by the author. sql.ErrNoRows when it was deleted meanwhile.
+	UpdatePostCommentBody(ctx context.Context, arg UpdatePostCommentBodyParams) (PostComment, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
 	// PUT /posts/:id/template (#336): the page's working template ('' = the theme's
 	// default). On a published page it reaches the site on Update (golive_post_settings,

@@ -12,8 +12,8 @@ import { refOf, resolveBlock, topLevelBlockAt, type BlockRef } from "../utils/bl
 // The gutter beside the hovered block ("Post editor"; "Inserting blocks"): + opens the
 // block catalog with its own search field (#415, AddBlockMenu), the drag handle drags to
 // move, and clicking it (or Enter/Space on it) opens the block menu (#356): Colour,
-// Duplicate, Copy link to block, Move to, Delete. Turn into, Comment (#192) and "Last
-// edited by" aren't built here.
+// Duplicate, Copy link to block, Move to, Delete, and Comment (#192) when the post has
+// comments. Turn into and "Last edited by" aren't built here.
 //
 // The gutter follows the pointer (TipTap's drag-handle plugin). From the keyboard, Tab in
 // the text shows it at the caret's block and focuses + (BlockGutterKeys); Tab again
@@ -33,7 +33,15 @@ export function setHandleLock(editor: TiptapEditor, locked: boolean) {
 
 type Storage = Record<string, { openMoveTo?: ((ref: BlockRef) => void) | null; focusAddButton?: ((ref: BlockRef) => boolean) | null }>
 
-export default function DragHandle({ editor, postUrl }: { editor: TiptapEditor; postUrl?: string | null }) {
+export default function DragHandle({
+  editor,
+  postUrl,
+  onComment,
+}: {
+  editor: TiptapEditor
+  postUrl?: string | null
+  onComment?: (ref: BlockRef) => void
+}) {
   const [showDrag, setShowDrag] = useState(false)
   // The hovered block by id (its position as a fallback), so an edit by anyone between
   // showing the gutter and pressing + or the handle never retargets it.
@@ -180,6 +188,7 @@ export default function DragHandle({ editor, postUrl }: { editor: TiptapEditor; 
           postUrl={postUrl}
           onClose={closeMenu}
           onMoveTo={(ref) => setMoveFor(ref)}
+          onComment={onComment}
         />
       )}
       {addFor && <AddBlockMenu editor={editor} target={addFor} anchor={addRef} onClose={closeAdd} />}

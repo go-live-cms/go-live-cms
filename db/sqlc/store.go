@@ -89,6 +89,9 @@ type Store interface {
 	SetPostAuthorsTx(ctx context.Context, arg SetPostAuthorsTxParams) (SetPostAuthorsTxResult, error)
 	// edit access requests (#321)
 	ReviewPostAccessRequestTx(ctx context.Context, arg ReviewPostAccessRequestTxParams) (PostAccessRequest, error)
+	// block comments (#192)
+	CreatePostCommentThreadTx(ctx context.Context, arg CreatePostCommentThreadTxParams) (CreatePostCommentThreadTxResult, error)
+	DeletePostCommentTx(ctx context.Context, commentID, threadID int64) (DeletePostCommentTxResult, error)
 	TransferPostOwnerTx(ctx context.Context, arg TransferPostOwnerTxParams) (TransferPostOwnerTxResult, error)
 
 	SaveMenuTx(ctx context.Context, arg SaveMenuTxParams) (Menu, error)

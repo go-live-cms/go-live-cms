@@ -9,12 +9,13 @@ let base: string
 const flush = vi.fn(async (_doc: string): Promise<FlushResult> => ({ ok: true, skipped: false, loaded: true }))
 const recheckUser = vi.fn((_userId: string) => 2)
 const recheckDoc = vi.fn((_docName: string) => 3)
+const notifyComments = vi.fn((_docName: string) => 4)
 
 beforeAll(async () => {
   vi.spyOn(console, "log").mockImplementation(() => {})
   vi.spyOn(console, "warn").mockImplementation(() => {})
   vi.spyOn(console, "error").mockImplementation(() => {})
-  server = createInternalServer({ secret: SECRET, flush, recheckUser, recheckDoc })
+  server = createInternalServer({ secret: SECRET, flush, recheckUser, recheckDoc, notifyComments })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()))
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
 })
@@ -27,6 +28,20 @@ const post = (path: string, auth?: string) =>
   fetch(`${base}${path}`, { method: "POST", headers: auth ? { Authorization: auth } : {} })
 
 describe("internal listener", () => {
+  it("comments: the nudge needs the secret and a doc name (#192)", async () => {
+    expect((await post("/internal/documents/post-7/comments")).status).toBe(401)
+    expect((await post("/internal/documents/post-7/comments", "Bearer wrong")).status).toBe(401)
+    expect((await post("/internal/documents/nope/comments", `Bearer ${SECRET}`)).status).toBe(400)
+    expect((await post("/internal/documents/%E0%A4%A/comments", `Bearer ${SECRET}`)).status).toBe(400)
+    expect((await fetch(`${base}/internal/documents/post-7/comments`, { headers: { Authorization: `Bearer ${SECRET}` } })).status).toBe(405)
+    expect(notifyComments).not.toHaveBeenCalled()
+
+    const res = await post("/internal/documents/post-7/comments", `Bearer ${SECRET}`)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ connections: 4 })
+    expect(notifyComments).toHaveBeenCalledWith("post-7")
+  })
+
   it("bearerMatches is exact and refuses an empty secret", () => {
     expect(bearerMatches(`Bearer ${SECRET}`, SECRET)).toBe(true)
     expect(bearerMatches(` Bearer ${SECRET} `, SECRET)).toBe(true)

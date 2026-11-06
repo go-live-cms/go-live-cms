@@ -15,6 +15,7 @@ import alert from "../../../themes/example/blocks/Alert/index"
 import { RECHECK_MS, startRelay, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 import { acquireHocuspocus, releaseHocuspocus } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
 import { tiptapExtensionRegistry } from "./utils/extensionRegistry"
+import { PostCommentsStore } from "@gl-admin/lib/commentsStore"
 import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 
 // The editor (#206 P3, #283), mounted for real against the in-process collab
@@ -207,6 +208,30 @@ describe("Editor", () => {
     const { appendParagraph } = await import("../../../collab-server/testkit")
     appendParagraph(editor.doc, "typed by an editor", "blk-live-edit-01")
     await until(() => !!pm()?.textContent?.includes("typed by an editor"), "the live edit")
+  })
+
+  it("block comments (#192): a read-only viewer's editor refetches on the server's nudge and marks the block", async () => {
+    tiptapExtensionRegistry.register(Callout)
+    state.user = "3"
+    const threads: any[] = []
+    const getPostComments = vi.fn(async () => ({ post_id: POST, can_comment: true, threads: structuredClone(threads) }))
+    const store = new PostCommentsStore(POST, { getPostComments } as any)
+    await mount({ readOnly: true, comments: store })
+    await until(() => !!pm()?.textContent?.includes("Careful"), "the live view")
+    await until(() => store.getSnapshot().blocksKnown, "the blocks reported")
+    expect(store.getSnapshot().blocks.map((b) => b.id)).toContain("intro-block-0001")
+    const readsBefore = getPostComments.mock.calls.length
+
+    // Another editor commented; the API asks the collab server to tell everyone.
+    threads.push({
+      id: 1, post_id: POST, block_id: "intro-block-0001", created_by: null, created_at: new Date().toISOString(),
+      resolved_at: null, resolved_by: null, can_resolve: false, comments: [],
+    })
+    expect(relay.server.notifyComments(`post-${POST}`)).toBeGreaterThan(0)
+    await until(() => getPostComments.mock.calls.length > readsBefore, "the refetch")
+    await until(() => !!container.querySelector(".editor-comment-marker"), "the marker")
+    expect(container.querySelector(".editor-comment-marker")!.getAttribute("aria-label")).toBe("1 comment open on this block")
+    store.destroy()
   })
 
   it("reports Saving → Saved under StrictMode (effects mount, clean up, mount again)", async () => {

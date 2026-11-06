@@ -56,6 +56,11 @@ const POST_VERBS: Record<string, string> = {
 
   // Ownership (#353). The payload has ids only (no names), so the line names the post.
   transferred: "transferred",
+  // Block comments (#192): ids only, never the text.
+  commented: "commented on",
+  comment_resolved: "resolved a comment on",
+  comment_reopened: "reopened a comment on",
+  comment_deleted: "deleted a comment on",
 }
 
 // Edit access (#321): "Kenji asked for edit access to X", "Ana gave Kenji edit access to

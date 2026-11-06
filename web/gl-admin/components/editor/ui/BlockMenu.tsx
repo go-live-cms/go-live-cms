@@ -18,7 +18,8 @@ import {
 import "@gl-admin/assets/styles/components/ui/menu.scss"
 
 // The block menu (#356, "Editor menus & states" › Block menu): opened from the drag
-// handle. Colour ›, Duplicate, Copy link to block, Move to, Delete. Every action finds the
+// handle. Colour ›, Comment (#192, when the post has comments), Duplicate, Copy link to
+// block, Move to, Delete. Every action finds the
 // block by its id when it runs (blockActions.ts), so a collaborator's edit while the menu
 // is open never makes it act on another block.
 
@@ -36,6 +37,7 @@ export const COLOR_LABELS: Record<BlockColorToken, string> = {
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
 export const SHORTCUTS = {
+  comment: isMac ? "⌘M" : "Ctrl M",
   duplicate: isMac ? "⌘D" : "Ctrl D",
   moveTo: isMac ? "⇧⌘P" : "Ctrl Shift P",
   delete: "Del",
@@ -51,9 +53,11 @@ type Props = {
   postUrl?: string | null
   onClose: (refocus: boolean) => void
   onMoveTo: (ref: BlockRef) => void
+  // Opens a new comment thread on the block (#192); absent when comments aren't available.
+  onComment?: (ref: BlockRef) => void
 }
 
-export default function BlockMenu({ editor, target, anchor, postUrl, onClose, onMoveTo }: Props) {
+export default function BlockMenu({ editor, target, anchor, postUrl, onClose, onMoveTo, onComment }: Props) {
   const menuRef = useRef<HTMLDivElement>(null)
   const colorRef = useRef<HTMLButtonElement>(null)
   const subRef = useRef<HTMLDivElement>(null)
@@ -170,6 +174,21 @@ export default function BlockMenu({ editor, target, anchor, postUrl, onClose, on
             </Item>
             <div role="separator" className="gl-menu__separator" />
           </>
+        )}
+        {onComment && (
+          <Item
+            hint={SHORTCUTS.comment}
+            disabled={!blockId}
+            description={!blockId ? "Wait a moment: the block is being saved" : undefined}
+            onHover={() => setColorsOpen(false)}
+            onSelect={() => {
+              onClose(false)
+              if (block) onComment(target)
+              else gone()
+            }}
+          >
+            Comment
+          </Item>
         )}
         <Item
           hint={SHORTCUTS.duplicate}

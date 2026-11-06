@@ -149,6 +149,26 @@ type PostCollaborator struct {
 	CreatedAt time.Time     `json:"created_at"`
 }
 
+type PostComment struct {
+	ID        int64         `json:"id"`
+	ThreadID  int64         `json:"thread_id"`
+	AuthorID  sql.NullInt64 `json:"author_id"`
+	Body      string        `json:"body"`
+	CreatedAt time.Time     `json:"created_at"`
+	EditedAt  sql.NullTime  `json:"edited_at"`
+	DeletedAt sql.NullTime  `json:"deleted_at"`
+}
+
+type PostCommentThread struct {
+	ID         int64         `json:"id"`
+	PostID     int64         `json:"post_id"`
+	BlockID    string        `json:"block_id"`
+	CreatedBy  sql.NullInt64 `json:"created_by"`
+	CreatedAt  time.Time     `json:"created_at"`
+	ResolvedAt sql.NullTime  `json:"resolved_at"`
+	ResolvedBy sql.NullInt64 `json:"resolved_by"`
+}
+
 type PostMedium struct {
 	PostID  int64           `json:"post_id"`
 	MediaID int64           `json:"media_id"`

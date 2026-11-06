@@ -39,7 +39,9 @@ every server boot — **read process logs from the very top**.
   server's `stored` / `store_failed` messages. No `resyncInterval`. **Access changes
   while connected (#313):** the server's re-check sends `{type:"access", mode, reason}`
   (`demoted` / `unverified` / `restored`) or closes the doc with `access-revoked`;
-  `onAccess` / `getAccess()` / `readOnly` follow it. A revoke sets status `revoked`,
+  `onAccess` / `getAccess()` / `readOnly` follow it. `onComments` (#192): the server's
+  `{"type":"comments"}` nudge (the API wrote a comment on the post), read-only connections too;
+  carries nothing, listeners refetch from the API. A revoke sets status `revoked`,
   disconnects for good (never handed out again by `acquireHocuspocus`) and **keeps the
   Y.Doc**; the next authentication (a reconnect) replaces any earlier access message. A post
   moved to the trash (#327) closes (or refuses at connect) with `post-trashed`: handled as a
@@ -488,6 +490,7 @@ is a real block type for the editor, the collab server, the API and the public p
 
 - Server-side restore through `openDirectConnection` (#286).
 - Block-keyed features: decided in `docs/design/block-map-yjs-schema.md` (#315). The
-  `"default"` fragment stays the only source of content; no block-map binding. Per-block
-  attribution (#328) and block comments (#192), neither built yet, are to be kept in
-  Postgres, keyed by block id, not in Yjs root maps.
+  `"default"` fragment stays the only source of content; no block-map binding. Block comments
+  (#192) are built that way: Postgres rows keyed by block id, and the only collab part is the
+  stateless `{"type":"comments"}` nudge (`onComments`; nothing in the doc). Per-block attribution
+  (#328) isn't built yet and goes the same way.
