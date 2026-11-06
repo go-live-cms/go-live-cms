@@ -135,7 +135,9 @@ SELECT
         WHERE pm.post_id = p.id
     ) as meta,
     -- The working byline (#319): the admin list's avatars.
-    golive_post_byline(p.id)::jsonb as authors
+    golive_post_byline(p.id)::jsonb as authors,
+    -- The working category in the post's URL (#331), as ListPostsWithMeta.
+    coalesce(golive_post_category_slug(p.id, false), '')::text AS category_slug
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
 LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
@@ -209,6 +211,7 @@ type SearchPostsWithMetaRow struct {
 	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
+	CategorySlug          string                `json:"category_slug"`
 }
 
 // The admin posts list's search: the list's filters (type, status, owner) plus
@@ -263,6 +266,7 @@ func (q *Queries) SearchPostsWithMeta(ctx context.Context, arg SearchPostsWithMe
 			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
+			&i.CategorySlug,
 		); err != nil {
 			return nil, err
 		}
@@ -306,7 +310,9 @@ SELECT h.id, h.title, h.description, h.slug, h.post_type, h.created_at, h.change
            'HighlightAll=true, StartSel=' || chr(57344) || ', StopSel=' || chr(57345))::text AS title_highlight,
        x.excerpt::text AS excerpt_highlight,
        (left(x.plain, 24) = left(x.source, 24))::boolean AS excerpt_at_start,
-       (right(x.plain, 24) = right(x.source, 24))::boolean AS excerpt_at_end
+       (right(x.plain, 24) = right(x.source, 24))::boolean AS excerpt_at_end,
+       -- The published category in the hit's URL (#331).
+       coalesce(golive_post_category_slug(h.id, true), '')::text AS category_slug
 FROM hits h
 CROSS JOIN q
 CROSS JOIN LATERAL (
@@ -350,6 +356,7 @@ type SearchPublicPostsRow struct {
 	ExcerptHighlight string    `json:"excerpt_highlight"`
 	ExcerptAtStart   bool      `json:"excerpt_at_start"`
 	ExcerptAtEnd     bool      `json:"excerpt_at_end"`
+	CategorySlug     string    `json:"category_slug"`
 }
 
 // Full-text search (#145) over post_search (000024_post_search). The query text
@@ -395,6 +402,7 @@ func (q *Queries) SearchPublicPosts(ctx context.Context, arg SearchPublicPostsPa
 			&i.ExcerptHighlight,
 			&i.ExcerptAtStart,
 			&i.ExcerptAtEnd,
+			&i.CategorySlug,
 		); err != nil {
 			return nil, err
 		}

@@ -1,0 +1,170 @@
+// Settings › URLs & redirects (#331). Layout tokens only; the table is #338's .gl-table.
+
+// The settings form and this section share the content column: the section is outside
+// the form, so it saves on its own and Enter here never saves the settings.
+.gl-settings__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+
+  > section {
+    scroll-margin-top: var(--space-4);
+  }
+}
+
+.gl-redirects {
+  scroll-margin-top: var(--space-4);
+
+  // The add form, in a bordered box as on the board: From → To, Add redirect.
+  &__add {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  &__fields {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  &__field {
+    flex: 1 1 200px;
+
+    .gl-input__field {
+      font-family: var(--font-mono);
+      font-size: var(--type-footnote);
+    }
+  }
+
+  // Lines up with the 36px inputs under their labels.
+  &__arrow {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    height: 36px;
+    margin-top: calc(var(--type-label-lh) + 6px);
+  }
+
+  &__submit {
+    margin-top: calc(var(--type-label-lh) + 6px);
+  }
+
+  &__status {
+    display: flex;
+    flex-flow: row wrap;
+    gap: var(--space-2) var(--space-5);
+
+    legend {
+      margin-bottom: 6px;
+      width: 100%;
+    }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  &__count {
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__table {
+    min-width: 620px;
+  }
+
+  &__by-col {
+    width: 190px;
+  }
+
+  &__action-col {
+    width: 48px;
+  }
+
+  &__path {
+    font-family: var(--font-mono);
+    font-size: var(--type-footnote);
+    overflow-wrap: anywhere;
+  }
+
+  &__to {
+    align-items: center;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    .gl-workspace__badge {
+      font-family: var(--font-sans);
+    }
+  }
+
+  &__to-path {
+    overflow-wrap: anywhere;
+  }
+
+  &__by {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  &__no-avatar {
+    background: var(--background-active);
+    border-radius: 50%;
+    flex: none;
+    height: 24px;
+    width: 24px;
+  }
+
+  &__by-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  &__when {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__action {
+    padding-right: var(--space-2);
+    text-align: right;
+  }
+
+  &__delete {
+    color: var(--danger-text);
+  }
+
+  &__more {
+    align-self: flex-start;
+  }
+
+  &__confirm {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__dialog-footer {
+    display: flex;
+    gap: var(--space-2);
+    justify-content: flex-end;
+    width: 100%;
+  }
+}

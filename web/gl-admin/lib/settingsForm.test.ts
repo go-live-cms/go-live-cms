@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest"
 import {
   EMBED_PROVIDERS,
   SITE_TAGLINE_MAX,
+  URL_STRUCTURES,
   changedFields,
   dateFormatOptions,
   siteAddressInfo,
@@ -169,6 +170,12 @@ describe("the API's limits", () => {
     const list = go.match(/var embedProviders = \[\]string\{([^}]*)\}/)?.[1] ?? ""
     expect([...list.matchAll(/"([^"]+)"/g)].map((m) => m[1])).toEqual(EMBED_PROVIDERS.map((p) => p.id))
     expect(Number(go.match(/const SiteTaglineMax = (\d+)/)?.[1])).toBe(SITE_TAGLINE_MAX)
+  })
+
+  it.skipIf(!existsSync(SETTINGS_BINDINGS))("the URL structures are the binding's oneof (#331)", () => {
+    const go = readFileSync(SETTINGS_BINDINGS, "utf8")
+    const oneof = go.match(/json:"post_url_structure" binding:"omitempty,oneof=([^"]+)"/)?.[1] ?? ""
+    expect(URL_STRUCTURES.map((s) => s.value).sort()).toEqual(oneof.split(" ").sort())
   })
 
   it.skipIf(!existsSync(SETTINGS_BINDINGS))("the tagline binding uses the same max", () => {

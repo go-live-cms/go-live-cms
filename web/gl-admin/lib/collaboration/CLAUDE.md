@@ -44,7 +44,8 @@ every server boot — **read process logs from the very top**.
   Y.Doc**; the next authentication (a reconnect) replaces any earlier access message. A post
   moved to the trash (#327) closes (or refuses at connect) with `post-trashed`: handled as a
   revoke with `trashed: true` in `getAccess()`, so `AccessNotice` says so and nobody is sent
-  to sign in again. **A
+  to sign in again. `schema-mismatch` (#416, rule 10) ends it too, with `outdated: true`:
+  never retried, the editor asks for a reload. **A
   promotion with unsynced changes reconnects:** updates sent while read-only were dropped
   by the server (acked as not applied, so still counted as unsynced) and Yjs never resends
   them, so every later update would wait on the server for them and never be stored; the
@@ -101,6 +102,10 @@ every server boot — **read process logs from the very top**.
   node or mark type in the JSON that `base` doesn't know, keeping its attrs. A stand-in
   checks nothing.
 - `schemaGuard.ts`: `findUnbuildableTypes` for rule 10.
+- `schemaFingerprint.ts` (#416): `schemaFingerprint(schema)` (SHA-256 of
+  `describeSchemaForFingerprint`, plain JS, the same in the browser and the server) and the
+  auth token (`encodeCollabAuthToken` / `decodeCollabAuthToken`: the ticket plus the
+  fingerprint, as JSON). Rule 10 says what it guards.
 - `debug.ts`: gated logging. Browser: `localStorage.setItem("GL_DEBUG_COLLAB","1")`.
   Server: `COLLAB_DEBUG=1`. Both timestamped (`t=…`) so client and server logs align.
 
@@ -172,9 +177,27 @@ kept so references in code stay valid.
    fragment against `getSchema(getExtensions(...))`, and only then binds. If anything
    can't be built it binds **nothing** and shows a static read-only view from
    `GET /posts/:id/blocks` with a notice naming the types; save, publish and restore
-   throw. **Not covered:** a peer inserting an unknown type *after* this editor bound (a
-   newer theme on another client) is still deleted by y-tiptap. Pinned by
-   `schemaGuard.test.ts` (the deletion itself + detection) and `Editor.test.tsx`.
+   throw. Pinned by `schemaGuard.test.ts` (the deletion itself + detection) and
+   `Editor.test.tsx`.
+   **A peer inserting a new type after this editor bound** (a tab still on the bundle from
+   before a deploy) is covered by the **schema fingerprint guard (#416)**:
+   `schemaFingerprint.ts` hashes what decides which docs a schema builds (node and mark
+   names in schema order, content expressions, groups, allowed and excluded marks, attrs
+   with defaults; not attr or key order, nor editing/rendering options: the full list is
+   on `describeSchemaForFingerprint`). The client sends it with its ticket in the auth
+   message (`encodeCollabAuthToken`, never the URL; `postCollab.ts` fingerprints the
+   editor's own extension list, `schema.test.ts` proves it equals the server's), and the
+   server refuses any other value, or none (a client from before #416), with
+   **`schema-mismatch`**, before the access lookup and before the doc loads, so a refused
+   client causes no write. The client never retries: `outdated` in `getAccess()`, status
+   `outdated`, never handed out again by `acquireHocuspocus`; the editor shows "The editor
+   was updated. Reload to keep editing." with Reload, over a static REST view (refused at
+   connect) or the bound doc kept read-only (refused on a reconnect). A connection already
+   open keeps going until it reconnects; a deploy's collab restart forces that, so a stale
+   tab never syncs a type it can't build. **Every bundle from one commit must agree**: the
+   editor, collab and api images come from the same commit (Theme blocks, below). Pinned
+   by `schemaFingerprint.test.ts`, `schemaMismatch.hocuspocus.test.ts`, `Editor.test.tsx`,
+   `collab-server/auth.test.ts` and the bundle's fingerprint in `process.test.ts`.
 
 11. **Only the server seeds, and nothing writes `block_doc` around the collab server.**
    `onLoadDocument` is the only place a doc is seeded, and only when no stored Yjs state
@@ -329,9 +352,10 @@ kept so references in code stay valid.
     `nodeViews` prop, so the schema extensions stay DOM-free); the view selects the image
     on mousedown (it isn't a leaf any more, so ProseMirror wouldn't).
   - **Stale clients:** an editor bundle from before #346 has no `imageCaption` type and
-    no `align`/`cite` attrs: y-tiptap deletes the caption element (rule 10's uncovered
-    case) and drops the attrs when it rewrites that node. Reload open admin tabs after
-    deploying this.
+    no `align`/`cite` attrs: y-tiptap deletes the caption element (the case #416's
+    fingerprint guard now covers) and drops the attrs when it rewrites that node. Before
+    #416 that meant reloading open admin tabs after the deploy; now the stale tabs are
+    refused at their reconnect.
   - Tests: `blockBridge.captionCite.test.ts`, `blocks-spec/captionCite.test.ts`,
     `components/editor/extensions/captionCite.collab.test.ts` (commands, keys, views, two
     users on the relay + stored `block_doc`); API side `TestSanitize_Image*` /
@@ -356,7 +380,8 @@ kept so references in code stay valid.
   (`sanitizeBlockColor`, any depth of the pm) and the renderer (`gl-color-<value>` classes,
   `blockColor.ts`). No block version bump: an older renderer ignores the attr. **Stale
   clients:** an editor bundle from before #356 has no `blockColor` attr; y-tiptap drops it
-  when it rewrites that node. Reload open admin tabs after deploying this.
+  when it rewrites that node (reload open tabs after deploying; since #416 the guard refuses
+  such tabs at their reconnect).
 - **Block menu (#356, `components/editor/utils/blockActions.ts`, `ui/BlockMenu.tsx`,
   `ui/MoveToDialog.tsx`):** Duplicate (Ctrl D), Move to (Ctrl Shift P), Copy link to block,
   Colour, Delete, from the drag handle. Each is **one ProseMirror transaction, so one Yjs

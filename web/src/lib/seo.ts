@@ -7,7 +7,9 @@ import type { BlockDocV1 } from "../../gl-admin/lib/blocks-spec"
 // The table only (no Zod): seo.ts stays a light import.
 import { blocksInReadingOrder } from "../../gl-admin/lib/blocks-spec/nesting"
 
-export type UrlStructure = "id" | "slug"
+// Settings › General's post URL structure (api/settings_bindings.go). "category" (#331) is
+// /{category-slug}/{post-slug} for posts of type "post".
+export type UrlStructure = "id" | "slug" | "category"
 
 // What a page hands SeoHead.astro (and theme base layouts) beyond title/description.
 export interface SeoMeta {
@@ -81,18 +83,24 @@ export function cacheControl(maxAgeSeconds: number, env: Env = processEnv()): st
 }
 
 export function normalizeUrlStructure(value: unknown): UrlStructure {
-  return value === "slug" ? "slug" : "id"
+  return value === "slug" || value === "category" ? value : "id"
 }
 
-// Public path of a post, matching src/pages/[post_type]/[id].astro: the slug
-// when the site uses slug URLs and the post has one, else the id. An all-digit
-// slug (older rows; the API no longer makes them) would be read as an id there,
-// so it falls back to the id too.
-export function postPath(post: Pick<Post, "id" | "slug" | "post_type">, structure: UrlStructure): string {
+// Public path of a post, matching src/pages/[post_type]/[id].astro (and the API's
+// postHref, api/category_urls.go): the slug when the site uses slug URLs and the post
+// has one, else the id. An all-digit slug (older rows; the API no longer makes them)
+// would be read as an id there, so it falls back to the id too. Under the category
+// structure (#331) a post of type "post" with a category (the API's category_slug: the
+// published one on /public rows) is /{category}/{slug}; anything else is as for slugs.
+export function postPath(
+  post: Pick<Post, "id" | "slug" | "post_type"> & { category_slug?: string },
+  structure: UrlStructure,
+): string {
   const type = post.post_type || "post"
-  const useSlug = structure === "slug" && !!post.slug && !/^\d+$/.test(post.slug)
+  const useSlug = structure !== "id" && !!post.slug && !/^\d+$/.test(post.slug)
   const segment = useSlug ? post.slug! : String(post.id)
-  return `/${encodeURIComponent(type)}/${encodeURIComponent(segment)}`
+  const first = structure === "category" && useSlug && type === "post" && post.category_slug ? post.category_slug : type
+  return `/${encodeURIComponent(first)}/${encodeURIComponent(segment)}`
 }
 
 export function absoluteUrl(siteUrl: string, path: string): string {

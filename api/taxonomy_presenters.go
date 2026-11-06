@@ -59,6 +59,9 @@ type TaxonomyTypeResponse struct {
 	ShowUI       bool   `json:"show_ui"`
 	ShowInMenu   bool   `json:"show_in_menu"`
 	CreatedAt    string `json:"created_at"`
+	// DefaultTermID is the term a post gets when it has none of this taxonomy (#331:
+	// the category type's Uncategorized), or null. It can't be deleted.
+	DefaultTermID *int64 `json:"default_term_id"`
 }
 
 // TaxonomyTermResponse represents a taxonomy term for API consumption.
@@ -81,15 +84,16 @@ type TaxonomyTermResponse struct {
 // Handles nullable description field and formats timestamp for API consistency.
 func toTaxonomyTypeResponse(taxonomyType db.TaxonomyType) TaxonomyTypeResponse {
 	return TaxonomyTypeResponse{
-		ID:           taxonomyType.ID,
-		Name:         taxonomyType.Name,
-		Label:        taxonomyType.Label,
-		Description:  taxonomyType.Description.String, // Handle sql.NullString
-		Hierarchical: taxonomyType.Hierarchical,
-		Public:       taxonomyType.Public,
-		ShowUI:       taxonomyType.ShowUi,
-		ShowInMenu:   taxonomyType.ShowInMenu,
-		CreatedAt:    taxonomyType.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		ID:            taxonomyType.ID,
+		Name:          taxonomyType.Name,
+		Label:         taxonomyType.Label,
+		Description:   taxonomyType.Description.String, // Handle sql.NullString
+		Hierarchical:  taxonomyType.Hierarchical,
+		Public:        taxonomyType.Public,
+		ShowUI:        taxonomyType.ShowUi,
+		ShowInMenu:    taxonomyType.ShowInMenu,
+		CreatedAt:     taxonomyType.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		DefaultTermID: nullInt64Ptr(taxonomyType.DefaultTermID),
 	}
 }
 

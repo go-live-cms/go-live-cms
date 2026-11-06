@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
-import { getSchema } from "@tiptap/core"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { authManager } from "@gl-admin/lib/auth"
 import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
@@ -27,6 +26,8 @@ import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
 import { scrollToCollaborator } from "./utils/cursorAwareness"
+import { reloadPage } from "./utils/reloadPage"
+import { editorSchema } from "./utils/editorSchema"
 import Notice from "@gl-admin/components/ui/Notice"
 import Modal from "@gl-admin/components/ui/Modal"
 import Button from "@gl-admin/components/ui/Button"
@@ -53,6 +54,11 @@ import "@gl-admin/assets/styles/components/editor/editor.scss"
 //     the theme, and the schema gate (rule 10) checks the synced fragment against the
 //     schema the editor will have. Unbuildable types → no binding at all (y-tiptap would
 //     delete them for everyone), a static view from REST instead.
+//   - A different schema on the server (#416, a deploy since this page loaded): refused at
+//     connect with `schema-mismatch`, never retried. "The editor was updated. Reload to keep
+//     editing." with a Reload button; nothing is bound (a static view from REST), or, if it
+//     was refused on a reconnect, the bound doc stays on screen read-only and gets nothing
+//     more from the server.
 //   - Markdown shortcuts (#330, a workspace setting) only switch TipTap's input and paste
 //     rules (editor options; lib/editorSettings.ts). The editor mounts once they're known;
 //     connecting doesn't wait for them.
@@ -419,10 +425,33 @@ type Gate = { collab: HocuspocusCollaboration; unbuildable: UnbuildableTypes | n
 
 const signInAgain = () => void authManager.logout("session-expired")
 
+const OUTDATED_EDITOR_MESSAGE = "The editor was updated. Reload to keep editing."
+
+// The collab server runs a different editor schema (#416): only a reload brings it.
+function OutdatedNotice() {
+  return (
+    <Notice
+      tone="warning"
+      live="alert"
+      inline
+      className="editor-notice editor-notice--banner editor-notice--outdated"
+      actions={
+        <Button variant="primary" size="sm" onClick={() => reloadPage()}>
+          Reload
+        </Button>
+      }
+    >
+      {OUTDATED_EDITOR_MESSAGE}
+    </Notice>
+  )
+}
+
 // What the server's access re-check changed while the editor was open (#313).
 function AccessNotice({ access }: { access: CollabAccess }) {
   // Dismissed per change: the next access message is a new object.
   const [dismissed, setDismissed] = useState<CollabAccess | null>(null)
+  if (access.outdated) return <OutdatedNotice />
+
   // The post went to the trash (#327): the session is fine, the post isn't editable.
   if (access.trashed) {
     return (
@@ -535,9 +564,9 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
     })
     collab.whenSynced().then(() => {
       if (cancelled || collab.stale) return
-      // The extensions the editor computes (theme ones from the registry, registered by
-      // now); Collaboration adds no node or mark types.
-      const schema = getSchema(getExtensions({ collabProvider: null })())
+      // The schema the editor computes (theme ones from the registry, registered by now),
+      // the same one its schema fingerprint describes (#416).
+      const schema = editorSchema()
       const unbuildable = findUnbuildableTypes(collab.doc.getXmlFragment(EDITOR_FRAGMENT), schema)
       if (unbuildable) {
         console.error(
@@ -563,6 +592,16 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
   // Refused at connect because the post is in the trash (#327): it never syncs, so say why
   // instead of "Connecting…" forever.
   if (!gate && access?.trashed) return <AccessNotice access={access} />
+  // Refused at connect because the server's schema isn't this editor's (#416): bind
+  // nothing, show the stored working copy read-only (REST) under the reload notice.
+  if (!gate && access?.outdated) {
+    return (
+      <>
+        <AccessNotice access={access} />
+        <EditorInner ref={ref} {...props} readOnly collab={null} markdownShortcuts={markdownShortcuts} />
+      </>
+    )
+  }
   if (!gate || gate.collab.postId !== postId || gate.collab.stale) return <Placeholder text="Connecting…" />
   if (!gate.unbuildable) {
     const viewOnly = readOnly || (access?.readOnly ?? gate.collab.readOnly)
@@ -592,7 +631,7 @@ const LiveGate = forwardRef<EditorRef, EditorProps>(function LiveGate(props, ref
         that provides them failed to load or is no longer active. Editing here would delete them for everyone, so editing
         is off until that theme is available. Those blocks are hidden below but kept in the post.
       </Notice>
-      {access?.revoked && <AccessNotice access={access} />}
+      {(access?.revoked || access?.outdated) && <AccessNotice access={access} />}
       <EditorInner ref={ref} {...props} readOnly collab={null} unbuildable={gate.unbuildable} markdownShortcuts={markdownShortcuts} />
     </>
   )

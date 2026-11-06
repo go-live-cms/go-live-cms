@@ -16,7 +16,7 @@ import { firstParagraphFromHtml, sameSeo, seoFromPost, seoPayload, seoSaveable }
 import { firstParagraphText, postPath } from "@/lib/seo"
 import { authManager } from "@gl-admin/lib/auth"
 import { blockAPIClient, type PostVersion } from "@gl-admin/lib/api/blockAPI"
-import { getSettings } from "@gl-admin/lib/api/settings"
+import { getSettings, type PostUrlStructure } from "@gl-admin/lib/api/settings"
 import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
 import { CollabStoreError } from "@gl-admin/lib/collaboration/CollabSaveStatus"
 import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
@@ -247,7 +247,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [confirmRestore, setConfirmRestore] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
 
-  const [urlStructure, setUrlStructure] = useState<"id" | "slug">("id")
+  const [urlStructure, setUrlStructure] = useState<PostUrlStructure>("id")
   // For the SEO tab's previews (#357).
   const [site, setSite] = useState({ title: "", address: "" })
   // The front page (#336): unpublishing or archiving it asks first (the home page falls
@@ -1058,7 +1058,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const postType = contentType || initialData?.post_type || "post"
   const liveUrl =
     mode === "edit" && initialData?.id
-      ? `${window.location.origin}/${postType}/${urlStructure === "slug" && formData.slug ? formData.slug : initialData.id}`
+      ? `${window.location.origin}/${postType}/${urlStructure !== "id" && formData.slug ? formData.slug : initialData.id}`
       : null
   const signedIn = authManager.getState().user
   const others = Array.from(new Map(collabUsers.filter((u) => u.id !== signedIn?.id).map((u) => [u.id ?? -u.clientId, u])).values())
@@ -1320,10 +1320,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               readOnly={contentReadOnly}
               // The server re-checked access and it changed (#313): the role cached here is
               // stale. Not after a revoke (the editor shows "sign in again"), nor when the
-              // server just couldn't confirm access (the API is struggling; no role change).
+              // server just couldn't confirm access (the API is struggling; no role change),
+              // nor when it refused this editor's schema (#416: only a reload helps).
               // A grant or a revoke (#321) changes the access too: re-read it with the role.
               onAccessChange={(change) => {
-                if (change.revoked || change.reason === "unverified") return
+                if (change.revoked || change.outdated || change.reason === "unverified") return
                 void authManager.refreshUser().then((user) => setMe(user ?? undefined))
                 void reloadAccess()
                 // Or the post changed owner (#353): a contributor who lost it keeps

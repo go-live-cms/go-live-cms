@@ -47,7 +47,9 @@ SELECT
         WHERE pm.post_id = p.id
     )::jsonb as meta,
     -- The published byline (#319): what the site credits until the next Update.
-    golive_post_published_byline(p.id)::jsonb as authors
+    golive_post_published_byline(p.id)::jsonb as authors,
+    -- The published category in the post's URL (#331).
+    coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
 FROM adjacent a
 JOIN posts p ON p.id = a.id
 `
@@ -76,6 +78,7 @@ type ListAdjacentPostsRow struct {
 	PublishedSettings pqtype.NullRawMessage `json:"published_settings"`
 	Meta              json.RawMessage       `json:"meta"`
 	Authors           json.RawMessage       `json:"authors"`
+	CategorySlug      string                `json:"category_slug"`
 }
 
 // Older/newer and related posts for the public post page (#351).
@@ -110,6 +113,7 @@ func (q *Queries) ListAdjacentPosts(ctx context.Context, arg ListAdjacentPostsPa
 			&i.PublishedSettings,
 			&i.Meta,
 			&i.Authors,
+			&i.CategorySlug,
 		); err != nil {
 			return nil, err
 		}
@@ -133,6 +137,9 @@ WITH current_terms AS (
     WHERE ptr.post_id = $2::bigint
         AND ($4::text = '' OR ty.name = $4::text)
         AND ($5::bigint = 0 OR ptr.taxonomy_term_id = $5::bigint)
+        -- The default category (#331, Uncategorized) means no particular category: it
+        -- makes no post related, unless it is the term asked for.
+        AND ($5::bigint <> 0 OR tt.id IS DISTINCT FROM ty.default_term_id)
 ),
 shared AS (
     SELECT
@@ -165,7 +172,9 @@ SELECT
         WHERE pm.post_id = p.id
     )::jsonb as meta,
     -- The published byline (#319): what the site credits until the next Update.
-    golive_post_published_byline(p.id)::jsonb as authors
+    golive_post_published_byline(p.id)::jsonb as authors,
+    -- The published category in the post's URL (#331).
+    coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
 FROM posts p
 LEFT JOIN shared s ON s.post_id = p.id
 WHERE p.id IN (SELECT shared.post_id FROM shared UNION SELECT latest.id FROM latest)
@@ -204,6 +213,7 @@ type ListRelatedPostsRow struct {
 	SharedTags        int32                 `json:"shared_tags"`
 	Meta              json.RawMessage       `json:"meta"`
 	Authors           json.RawMessage       `json:"authors"`
+	CategorySlug      string                `json:"category_slug"`
 }
 
 // Up to @limit_count published posts of @post_type ranked by the terms they share
@@ -255,6 +265,7 @@ func (q *Queries) ListRelatedPosts(ctx context.Context, arg ListRelatedPostsPara
 			&i.SharedTags,
 			&i.Meta,
 			&i.Authors,
+			&i.CategorySlug,
 		); err != nil {
 			return nil, err
 		}

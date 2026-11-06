@@ -1,11 +1,13 @@
 import { authManager } from "../auth"
 import { createCollabTicket } from "../api/collab"
+import { editorSchemaFingerprint } from "../../components/editor/utils/editorSchema"
 import { hocuspocusUrl } from "./backend"
 import { acquireHocuspocus, HocuspocusCollaboration, releaseHocuspocus } from "./HocuspocusCollaboration"
 
 // The app's Hocuspocus connection for a post: the server URL for this page, tickets from
-// POST /collab/tickets, the signed-in user's cursor label. HocuspocusCollaboration itself
-// takes these as options so tests can point it at an in-process server.
+// POST /collab/tickets, the signed-in user's cursor label, and the fingerprint of the
+// schema the editor binds with (#416). HocuspocusCollaboration itself takes these as
+// options so tests can point it at an in-process server.
 
 // The design's presence colours (--presence-1..8 in assets/styles/_tokens.scss,
 // Radix step 11): white name labels pass 4.5:1 on each. Hex, not var(), because the
@@ -19,6 +21,8 @@ export function acquirePostCollab(postId: number): HocuspocusCollaboration {
     return new HocuspocusCollaboration(postId, {
       url: hocuspocusUrl(window.location),
       getTicket: async (docName) => (await createCollabTicket(docName)).ticket,
+      // The editor's schema as it is at each (re)connect (editorSchema.ts, #416).
+      schemaFingerprint: editorSchemaFingerprint,
       user: {
         name: user?.full_name || user?.username || "Anonymous",
         color: PRESENCE_COLORS[(user?.id || 0) % PRESENCE_COLORS.length],

@@ -19,7 +19,10 @@ const addExistingTermsToPost = `-- name: AddExistingTermsToPost :exec
 INSERT INTO post_taxonomy_relationships (post_id, taxonomy_term_id)
 SELECT $1::bigint, tt.id
 FROM taxonomy_terms tt
-WHERE tt.id = ANY($2::bigint[])
+WHERE tt.id IN (
+  SELECT k.value::bigint
+  FROM jsonb_array_elements_text(golive_keep_one_category(to_jsonb($2::bigint[]), NULL)) AS k(value)
+)
 `
 
 type AddExistingTermsToPostParams struct {
@@ -28,7 +31,9 @@ type AddExistingTermsToPostParams struct {
 }
 
 // Restoring a version's settings (#358), after RemoveAllPostTaxonomies: link the
-// given terms that still exist. Deleted terms are skipped, not an error.
+// given terms that still exist. Deleted terms are skipped, not an error. A version
+// from before #331 may have several categories: one is kept (golive_keep_one_category,
+// 000047: the lowest non-default id), and EnsureDefaultCategory fills in none.
 func (q *Queries) AddExistingTermsToPost(ctx context.Context, arg AddExistingTermsToPostParams) error {
 	_, err := q.db.ExecContext(ctx, addExistingTermsToPost, arg.PostID, pq.Array(arg.TermIds))
 	return err

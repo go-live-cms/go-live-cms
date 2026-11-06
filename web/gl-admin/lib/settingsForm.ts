@@ -1,4 +1,4 @@
-import type { Settings } from "@gl-admin/lib/api/settings"
+import type { PostUrlStructure, Settings } from "@gl-admin/lib/api/settings"
 import { DATE_FORMATS, SITE_LANGUAGES, formatSiteDate, type DateFormat } from "@/lib/siteDates"
 
 // The Settings form (#343, #330): what the page edits, which fields differ from the
@@ -53,7 +53,15 @@ export const EMBED_PROVIDERS = [
   { id: "x", label: "X (Twitter)" },
 ] as const
 
-export const LANGUAGE_OPTIONS = SITE_LANGUAGES.map((l) => ({ value: l.tag, label: l.label }))
+// The post URL structures, in the order the radio cards show them. "category" (#331)
+// applies to posts of type `post`; other types keep /{type}/{slug}.
+export const URL_STRUCTURES: { value: PostUrlStructure; label: string; example: string }[] = [
+  { value: "slug", label: "By slug", example: "/post/my-first-post" },
+  { value: "id", label: "By ID", example: "/post/42" },
+  { value: "category", label: "By category", example: "/guides/my-first-post" },
+]
+
+export const LANGUAGE_OPTIONS =SITE_LANGUAGES.map((l) => ({ value: l.tag, label: l.label }))
 
 export function toDraft(settings: Settings): SettingsDraft {
   return {

@@ -39,7 +39,9 @@ SELECT
         FROM post_meta pm
         WHERE pm.post_id = p.id
     ) as meta,
-    golive_post_published_byline(p.id)::jsonb as authors
+    golive_post_published_byline(p.id)::jsonb as authors,
+    -- The published category in the post's URL (#331).
+    coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
 FROM posts p
 JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'

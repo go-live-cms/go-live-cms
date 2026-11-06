@@ -660,6 +660,65 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   an active one of theirs (else 409 `session_not_active`), then `BlockOtherSessionsForUser`. Other
   devices' access tokens live out `ACCESS_TOKEN_DURATION`, as after a logout.
 
+## Categories, merges and redirects (#331, #146, `000047`)
+
+- **One category per post** (taxonomy `category`, `db.CategoryTaxonomy`): `PUT
+  /posts/:id/taxonomy-terms/:term_id` with a category **replaces** the post's category
+  (`SetPostTermTx`: the post row `FOR UPDATE`, `RemovePostCategoriesExcept`, `LinkPostTerm`;
+  `replaced_term_ids`); `POST`/`PUT /posts` with two categories in `taxonomy_ids` → 400
+  `one_category` (`checkOneCategory`). 000047's trigger `post_one_category` refuses a second
+  category from any other writer (SQLSTATE 23505, which `db.IsUniqueViolation` now reads).
+  Pages and other types may have none; only type `post` gets the default.
+- **Default category:** `taxonomy_types.default_term_id` (the category type's
+  "Uncategorized", made or adopted by 000047; FK without cascade, so it can't be deleted:
+  409 `default_term`). `EnsureDefaultCategory(post_ids)` gives a `post` without a category the
+  default; every writer of a post's terms calls it in its transaction (create Tx's,
+  `UpdatePostTaxonomyTermsTx`, `RemovePostTermTx` (whose `default_term_id` says it did),
+  duplicate, from-template, restore-settings, a category's delete). Deleting a category moves
+  its posts to the default, **published sets too** (`ReplaceTermInPublishedSettings` /
+  `...ScheduledUpdates`), so no post shows a pending change for it. The default never makes
+  posts "related" (`ListRelatedPosts`) unless it is the term asked for.
+- **Nesting:** categories nest one level (`checkTermParent`: parent must be top level, a
+  category with children can't get one; 400 `nesting_too_deep`). Other hierarchical
+  taxonomies are unchanged. A category slug can't be a post type's or taxonomy's name or a
+  fixed route's first segment (`reservedCategorySlugs`; 400 `slug_reserved`).
+- **000047's data fix** (deterministic): a post with several categories keeps the one it was
+  given first (`post_taxonomy_relationships.created_at`), then the lowest term id, never the
+  default when it has another; deeper categories move under their top-level ancestor (one in
+  a loop becomes top level); published sets and pending scheduled updates keep the working
+  copy's category (`golive_keep_one_category`), templates the lowest non-default one; a
+  version with several is cut down when restored. Every `post` without a category (working
+  and published) gets the default. The down migration doesn't restore what was removed.
+- **Category URLs:** `post_url_structure` `category` = `/{category-slug}/{post-slug}` for type
+  `post` (`category_urls.go`, the web's `postPath`). Responses carry `category_slug`
+  (`golive_post_category_slug(post, published)`: the published category on `/public` rows,
+  `ListPosts`' `published_category`, search hits, menus; the working one in admin lists). The
+  web router 301s any other `/{x}/{post slug}` to the post's URL, so category renames need no
+  rows.
+- **Merge:** `POST /taxonomy/terms/:id/merge {source_ids}` (editors+admins; flat taxonomies
+  only, else 400 `merge_not_supported`; `merge_into_itself`, `merge_type_mismatch`, 409
+  `default_term`) → `MergeTaxonomyTermsTx`: posts get `:id` (working, published, scheduled
+  updates), sources deleted, `/{taxonomy}/{source}` → `/{taxonomy}/{kept}` redirects. Activity
+  `terms_merged` (object `term`).
+- **Redirects** (`redirects.go`, `db/sqlc/redirects_tx.go`): `redirects` (from_path unique,
+  to_path a site path or http(s) URL, 301|302, source manual|post|term|merge, created_by SET
+  NULL). Paths are stored **decoded**, no query/fragment/trailing slash (`normalizeSitePath`;
+  never under `/gl-admin`, `/api`, `/uploads`, `/themes`). Automatic ones: a **published**
+  post's slug change (old → new URL under the current structure, in `UpdatePostWithSlugTx`), a
+  public term's slug change (`UpdateTaxonomyTermTx`), a merge. `addRedirect` keeps the table
+  collapsed under an advisory lock: rows pointing at the new from_path are retargeted (A→B,
+  B→C ⇒ A→C), an automatic redirect drops a row from its (now live) target, a manual one to a
+  path that redirects takes that path's target, and a loop is `ErrRedirectLoop` (400
+  `redirect_loop`). Admin routes (`requireSiteAdmin`, like settings): `GET /redirects?q=&limit=
+  &offset=`, `POST /redirects` (409 `redirect_exists`), `DELETE /redirects/:id`; activity
+  `redirect_created`/`redirect_deleted` (object `redirect`, admin-only in the feed). Public:
+  `GET /public/redirects?path=` → `{to_path, status_code}` or 404; the web asks only for a page
+  it would answer 404.
+- Tests: `db/sqlc/taxonomy_tx_test.go` (real DB: replace, trigger, default, delete, merge,
+  chain collapse), `api/redirects_test.go` (mock: routes, validation, codes, roles),
+  `api/taxonomies_redirects_db_test.go` (real DB: slug changes answer the public lookup,
+  category URLs, the rules through the routes, merge).
+
 ## Public term archives (#348)
 
 - `GET /public/taxonomies/:taxonomy/terms/:slug/posts?page=N` (`terms_public_handlers_read.go`)

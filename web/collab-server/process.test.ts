@@ -14,7 +14,18 @@ import { promisify } from "node:util"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import type { Server } from "node:http"
 import { DENY } from "./auth"
-import { appendParagraph, connect, FakeCollabApi, paragraphDoc, paragraphs, serveFakeApi, ticketKeys, waitFor, type Client } from "./testkit"
+import {
+  appendParagraph,
+  connect,
+  FakeCollabApi,
+  paragraphDoc,
+  paragraphs,
+  SCHEMA_FINGERPRINT,
+  serveFakeApi,
+  ticketKeys,
+  waitFor,
+  type Client,
+} from "./testkit"
 import { canonical } from "../gl-admin/lib/collaboration/fragmentBridge.fixtures"
 import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
 import { installedThemeBlocks } from "../gl-admin/lib/theme-blocks/installed"
@@ -56,8 +67,8 @@ async function startBundle(env: Record<string, string>): Promise<{ port: number;
 
 const ticket = (userId: string, doc = "post-12") => sign({ user_id: userId, doc, iat: new Date().toISOString() })
 
-function open(userId: string, opts: { doc?: string; token?: () => Promise<string> | string } = {}) {
-  const client = connect(wsUrl, opts.doc ?? "post-12", opts.token ?? (() => ticket(userId, opts.doc)))
+function open(userId: string, opts: { doc?: string; token?: () => Promise<string> | string; schema?: string | null } = {}) {
+  const client = connect(wsUrl, opts.doc ?? "post-12", opts.token ?? (() => ticket(userId, opts.doc)), { schema: opts.schema })
   clients.push(client)
   return client
 }
@@ -143,6 +154,24 @@ describe("the bundled server process", () => {
     } finally {
       api.failAccess = false
     }
+  })
+
+  it("refuses another editor schema and a client that sends none, with schema-mismatch (#416)", async () => {
+    const puts = api.puts.length
+    expect(await open("2", { schema: "0".repeat(64) }).outcome).toEqual({ synced: false, reason: DENY.schemaMismatch })
+    expect(await open("2", { schema: null }).outcome).toEqual({ synced: false, reason: DENY.schemaMismatch })
+    expect(api.puts.length).toBe(puts)
+    const denies = () => (stdout + stderr).split("\n").filter((l) => l.includes('"ws_deny"') && l.includes("schema-mismatch"))
+    await waitFor(() => denies().length === 2, { what: "the ws_deny lines" })
+    expect(denies().map((l) => JSON.parse(l).client_schema)).toEqual(["000000000000", "missing"])
+  })
+
+  it("has the admin bundle's schema fingerprint, built from the same commit (#416)", () => {
+    // The admin computes its fingerprint from the editor's schema, which schema.test.ts
+    // proves equal to getInstalledCollabSchema(); SCHEMA_FINGERPRINT is that schema's.
+    const listening = JSON.parse(stdout.split("\n").find((l) => l.includes('"collab_listening"'))!)
+    expect(listening.schema_fingerprint).toBe(SCHEMA_FINGERPRINT)
+    expect(listening.schema_fingerprint).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it("was built with every installed theme block (#376)", () => {

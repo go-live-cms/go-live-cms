@@ -20,13 +20,16 @@ import (
 
 // PostResponse provides the standard post data structure for API responses
 type PostResponse struct {
-	ID              int64                  `json:"id"`
-	Title           string                 `json:"title"`
-	Description     string                 `json:"description"`
-	UserID          int64                  `json:"user_id"`
-	Username        string                 `json:"username"`
-	Url             string                 `json:"url"`
-	Slug            string                 `json:"slug"`
+	ID          int64  `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	UserID      int64  `json:"user_id"`
+	Username    string `json:"username"`
+	Url         string `json:"url"`
+	Slug        string `json:"slug"`
+	// CategorySlug (#331, /:category/:slug URLs): /public/posts/:id sets the
+	// published category's; omitted elsewhere.
+	CategorySlug    string                 `json:"category_slug,omitempty"`
 	PostType        string                 `json:"post_type"`
 	PostStatus      string                 `json:"post_status"`
 	PostParent      *int64                 `json:"post_parent"`
@@ -76,13 +79,17 @@ type ScheduleFailureResponse struct {
 
 // PostWithMetaResponse includes post-specific meta data
 type PostWithMetaResponse struct {
-	ID              int64                  `json:"id"`
-	Title           string                 `json:"title"`
-	Description     string                 `json:"description"`
-	UserID          int64                  `json:"user_id"`
-	Username        string                 `json:"username"`
-	Url             string                 `json:"url"`
-	Slug            string                 `json:"slug"`
+	ID          int64  `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	UserID      int64  `json:"user_id"`
+	Username    string `json:"username"`
+	Url         string `json:"url"`
+	Slug        string `json:"slug"`
+	// CategorySlug is the post's category for /:category/:slug URLs (#331): the
+	// published one in /public rows, the working one in the admin lists. Omitted when
+	// it has none.
+	CategorySlug    string                 `json:"category_slug,omitempty"`
 	PostType        string                 `json:"post_type"`
 	PostStatus      string                 `json:"post_status"`
 	PostParent      *int64                 `json:"post_parent"`
@@ -209,6 +216,7 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 		Username:              post.Username,
 		Url:                   post.Url,
 		Slug:                  post.Slug,
+		CategorySlug:          post.CategorySlug,
 		PostType:              post.PostType,
 		PostStatus:            post.PostStatus,
 		PostParent:            postParent,
@@ -267,6 +275,7 @@ func toPostWithMetaResponse(post db.ListPostsWithMetaRow) PostWithMetaResponse {
 		Authors:           decodePostAuthors(post.Authors),
 
 		HasUnpublishedChanges: post.HasUnpublishedChanges,
+		CategorySlug:          post.CategorySlug,
 	}
 }
 

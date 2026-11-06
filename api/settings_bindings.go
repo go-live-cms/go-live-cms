@@ -7,7 +7,7 @@ import (
 
 // UpdateSettingsRequest represents the request body for updating settings
 type UpdateSettingsRequest struct {
-	PostURLStructure *string `json:"post_url_structure" binding:"omitempty,oneof=id slug"`
+	PostURLStructure *string `json:"post_url_structure" binding:"omitempty,oneof=id slug category"`
 	SiteTitle        *string `json:"site_title" binding:"omitempty,min=1,max=200"`
 	PostsPerPage     *int32  `json:"posts_per_page" binding:"omitempty,min=1,max=100"`
 	// #330. Absent keeps the stored value; "" clears the tagline.

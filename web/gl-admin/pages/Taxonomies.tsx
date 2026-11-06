@@ -1,22 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
-import Button from "@gl-admin/components/ui/Button"
+import Button, { IconButton } from "@gl-admin/components/ui/Button"
 import Input from "@gl-admin/components/ui/Input"
 import FilterSelect from "@gl-admin/components/ui/FilterSelect"
 import Notice from "@gl-admin/components/ui/Notice"
 import Skeleton from "@gl-admin/components/ui/Skeleton"
 import Table, { type TableColumnWithRender } from "@gl-admin/components/ui/Table"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
-import { PlusIcon } from "@gl-admin/components/ui/icons"
+import { toast } from "@gl-admin/components/ui/Toast"
+import { CloseIcon, PlusIcon } from "@gl-admin/components/ui/icons"
 import TermForm, { singular } from "@gl-admin/components/taxonomies/TermForm"
 import DeleteTermModal from "@gl-admin/components/taxonomies/DeleteTermModal"
+import MergeTagsPanel from "@gl-admin/components/taxonomies/MergeTagsPanel"
 import { createTaxonomyTerm, getAllTaxonomyTerms, getTaxonomyTypes } from "@gl-admin/lib/api/taxonomies"
 import type { TaxonomyTerm, TaxonomyType } from "@gl-admin/lib/api/types"
-import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
+import { errorMessage } from "@gl-admin/lib/api/errors"
 import { isContentModerator } from "@gl-admin/lib/roles"
 import { useCurrentRole } from "@gl-admin/lib/hooks/useCurrentRole"
+import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { childCount, findTermByName, flattenTermTree } from "@gl-admin/lib/taxonomy/terms"
+import { isCategoryType, isDefaultTerm, taxonomyIntro, termErrorMessage } from "@gl-admin/lib/taxonomyAdmin"
+import { plural } from "@gl-admin/utils/formatting"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/taxonomies.scss"
 
@@ -26,17 +31,20 @@ type TermRow = TaxonomyTerm & { depth: number; parent_name: string }
 // more gets a dropdown.
 const SEGMENTED_MAX = 4
 
+// "tags" from "Tags".
+const pluralNoun = (type: TaxonomyType) => type.label.trim().toLowerCase() || type.name
+
 // Categories, tags and other taxonomy types with their terms (#167, restyled in #343:
 // the "Taxonomies · categories" and "· tags" boards). Everyone with admin access can
 // look; only editors and admins can change terms (requireContentEditor in the API).
 // Hierarchical types list their terms as a tree, children indented under their parent.
-//
-// Hidden until #331: "one category per post", category URLs (the /blog/ slug prefix
-// and the "Changing it updates n post URLs" note), the Default badge, and selecting
-// tags to merge them, with the merge panel and its redirects.
+// Since #331: one category per post, categories nest one level and (under the category
+// URL structure) start post URLs, the default category has a badge and no Delete, and
+// flat types (tags) are selectable to merge or delete several at once.
 const Taxonomies: React.FC = () => {
   const { baseTitle } = useGoLive()
   const canEdit = isContentModerator(useCurrentRole())
+  const structure = useSiteSettings()?.post_url_structure
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [types, setTypes] = useState<TaxonomyType[]>([])
@@ -48,7 +56,10 @@ const Taxonomies: React.FC = () => {
   const [termsError, setTermsError] = useState<unknown>(null)
 
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
+  // The terms the delete dialog is about: one from the panel, or the selected tags.
+  const [deletingIds, setDeletingIds] = useState<number[]>([])
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [merging, setMerging] = useState(false)
 
   const visibleTypes = useMemo(() => types.filter((t) => t.show_ui), [types])
   const selectedType = visibleTypes.find((t) => t.name === searchParams.get("type")) ?? visibleTypes[0]
@@ -78,7 +89,12 @@ const Taxonomies: React.FC = () => {
     setTermsError(null)
     try {
       const result = await getAllTaxonomyTerms(typeName)
-      if (request === termsRequest.current) setTerms(result)
+      if (request === termsRequest.current) {
+        setTerms(result)
+        // Deleted or merged terms leave the selection.
+        const ids = new Set(result.map((t) => t.id))
+        setSelectedIds((prev) => prev.filter((id) => ids.has(id)))
+      }
     } catch (error) {
       if (request === termsRequest.current) setTermsError(error)
     } finally {
@@ -92,6 +108,8 @@ const Taxonomies: React.FC = () => {
 
   useEffect(() => {
     setEditingId(null)
+    setSelectedIds([])
+    setMerging(false)
     if (selectedType) loadTerms(selectedType.name)
     else setTerms([])
   }, [selectedType?.name, loadTerms])
@@ -106,13 +124,23 @@ const Taxonomies: React.FC = () => {
   }, [terms])
 
   const editingTerm = terms.find((t) => t.id === editingId)
-  const deletingTerm = terms.find((t) => t.id === deletingId) ?? null
+  const deletingTerms = terms.filter((t) => deletingIds.includes(t.id))
+  const selectedTerms = terms.filter((t) => selectedIds.includes(t.id))
   const reloadTerms = () => selectedType && loadTerms(selectedType.name)
+  const defaultTerm = selectedType?.default_term_id ? terms.find((t) => t.id === selectedType.default_term_id) : undefined
+  // Only flat types merge (the API refuses hierarchical ones).
+  const selectable = canEdit && !!selectedType && !selectedType.hierarchical
+  const showMerge = merging && selectable && selectedTerms.length >= 2
+
+  const openEditor = (id: number) => {
+    setMerging(false)
+    setEditingId(id)
+  }
 
   const columns: TableColumnWithRender<TermRow>[] = [
     {
       key: "name",
-      name: "Name",
+      name: selectedType && !selectedType.hierarchical ? singular(selectedType).replace(/^./, (c) => c.toUpperCase()) : "Name",
       render: (_, row) =>
         row ? (
           <span className="gl-term-name" data-depth={row.depth} style={{ "--depth": row.depth } as React.CSSProperties}>
@@ -127,7 +155,7 @@ const Taxonomies: React.FC = () => {
                 className="gl-row-link"
                 aria-label={`Edit ${row.name}`}
                 aria-current={row.id === editingId ? "true" : undefined}
-                onClick={() => setEditingId(row.id)}
+                onClick={() => openEditor(row.id)}
               >
                 {row.name}
               </button>
@@ -135,6 +163,7 @@ const Taxonomies: React.FC = () => {
               <span className="gl-term-name__text">{row.name}</span>
             )}
             {row.parent_name && <span className="gl-workspace__sr">, in {row.parent_name}</span>}
+            {selectedType && isDefaultTerm(selectedType, row) && <span className="gl-workspace__badge">Default</span>}
           </span>
         ) : (
           <Skeleton shape="text" width={140} />
@@ -158,6 +187,7 @@ const Taxonomies: React.FC = () => {
 
   const typeLabel = selectedType?.label ?? "Taxonomies"
   const noun = selectedType ? singular(selectedType) : "term"
+  const nouns = selectedType ? pluralNoun(selectedType) : "terms"
   const loading = typesLoading || termsLoading
 
   const renderList = () => {
@@ -197,7 +227,90 @@ const Taxonomies: React.FC = () => {
         loading={loading}
         aria-label={typeLabel}
         rowClassName={(row) => (row.id === editingId ? "is-current" : undefined)}
-        onRowDoubleClick={canEdit ? (row) => setEditingId(row.id) : undefined}
+        onRowDoubleClick={canEdit ? (row) => openEditor(row.id) : undefined}
+        selectable={selectable}
+        selectedKeys={selectedIds}
+        onSelectionChange={(keys) => setSelectedIds(keys.map(Number))}
+        rowLabel={(row) => row.name}
+      />
+    )
+  }
+
+  const renderBulkBar = () => {
+    if (!selectable || selectedTerms.length === 0) return null
+    return (
+      <div role="region" aria-label="Bulk actions" className="gl-taxonomies__bulk">
+        <span className="gl-taxonomies__bulk-count" aria-hidden="true">
+          {selectedTerms.length} selected
+        </span>
+        <div className="gl-taxonomies__bulk-actions">
+          {selectedTerms.length >= 2 && (
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-pressed={showMerge}
+              onClick={() => {
+                setEditingId(null)
+                setMerging(true)
+              }}
+            >
+              Merge…
+            </Button>
+          )}
+          <Button size="sm" variant="danger" onClick={() => setDeletingIds(selectedTerms.map((t) => t.id))}>
+            Delete
+          </Button>
+        </div>
+        <IconButton
+          size="sm"
+          variant="ghost"
+          aria-label="Clear selection"
+          icon={<CloseIcon />}
+          onClick={() => {
+            setSelectedIds([])
+            setMerging(false)
+          }}
+        />
+      </div>
+    )
+  }
+
+  const renderPanel = () => {
+    if (!canEdit || !selectedType) return null
+    if (showMerge) {
+      return (
+        <MergeTagsPanel
+          key={`merge-${selectedType.name}`}
+          type={selectedType}
+          terms={selectedTerms}
+          noun={noun}
+          nouns={nouns}
+          onCancel={() => setMerging(false)}
+          onMerged={(result, keep) => {
+            toast.success(`Merged into “${result.taxonomy_term?.name ?? keep.name}”`)
+            setMerging(false)
+            setSelectedIds([])
+            reloadTerms()
+          }}
+        />
+      )
+    }
+    // Hierarchical types create in the panel (they need a parent); flat ones, like
+    // tags, by name above the list, and open the panel only to edit.
+    if (!selectedType.hierarchical && !editingTerm) return null
+    return (
+      <TermForm
+        key={`${selectedType.name}-${editingTerm?.id ?? "new"}`}
+        type={selectedType}
+        terms={terms}
+        term={editingTerm}
+        structure={structure}
+        onCancel={() => setEditingId(null)}
+        onSaved={() => {
+          setEditingId(null)
+          reloadTerms()
+        }}
+        onDelete={(term) => setDeletingIds([term.id])}
       />
     )
   }
@@ -224,13 +337,11 @@ const Taxonomies: React.FC = () => {
       )
     }
 
-    // Hierarchical types create in the panel (they need a parent); flat ones, like
-    // tags, by name above the list, and open the panel only to edit.
-    const showPanel = canEdit && selectedType && (selectedType.hierarchical || editingTerm)
+    const intro = selectedType ? taxonomyIntro(selectedType, structure) : ""
     return (
       <div className="gl-workspace__split">
         <div className="gl-workspace__main">
-          {selectedType?.description && <p className="gl-workspace__section-intro">{selectedType.description}</p>}
+          {intro && <p className="gl-workspace__section-intro">{intro}</p>}
           {!canEdit && (
             <Notice tone="info" live="none">
               View only: editors and administrators can change {typeLabel.toLowerCase()}.
@@ -239,6 +350,13 @@ const Taxonomies: React.FC = () => {
           {canEdit && selectedType && !selectedType.hierarchical && (
             <QuickAdd type={selectedType} terms={terms} onAdded={reloadTerms} />
           )}
+          {/* Always in the page, so the count is announced as it changes. */}
+          {selectable && (
+            <span className="gl-workspace__sr" aria-live="polite">
+              {selectedTerms.length > 0 ? `${plural(selectedTerms.length, `${noun} selected`, `${nouns} selected`)}` : ""}
+            </span>
+          )}
+          {renderBulkBar()}
           {renderList()}
           {canEdit && selectedType?.hierarchical && editingTerm && (
             <Button variant="ghost" icon={<PlusIcon />} className="gl-taxonomies__new" onClick={() => setEditingId(null)}>
@@ -246,20 +364,7 @@ const Taxonomies: React.FC = () => {
             </Button>
           )}
         </div>
-        {showPanel && selectedType && (
-          <TermForm
-            key={`${selectedType.name}-${editingTerm?.id ?? "new"}`}
-            type={selectedType}
-            terms={terms}
-            term={editingTerm}
-            onCancel={() => setEditingId(null)}
-            onSaved={() => {
-              setEditingId(null)
-              reloadTerms()
-            }}
-            onDelete={(term) => setDeletingId(term.id)}
-          />
-        )}
+        {renderPanel()}
       </div>
     )
   }
@@ -299,12 +404,17 @@ const Taxonomies: React.FC = () => {
 
       {canEdit && (
         <DeleteTermModal
-          term={deletingTerm}
-          childCount={deletingTerm ? childCount(terms, deletingTerm.id) : 0}
-          onClose={() => setDeletingId(null)}
+          terms={deletingTerms}
+          childCount={(id) => childCount(terms, id)}
+          movesTo={selectedType && isCategoryType(selectedType) ? defaultTerm?.name : undefined}
+          noun={noun}
+          nouns={nouns}
+          onClose={() => setDeletingIds([])}
           onDeleted={() => {
-            setDeletingId(null)
+            const many = deletingIds.length > 1
+            setDeletingIds([])
             setEditingId(null)
+            if (many) toast.success(`${plural(deletingIds.length, noun, nouns)} deleted`)
             reloadTerms()
           }}
           onStale={reloadTerms}
@@ -339,11 +449,7 @@ function QuickAdd({ type, terms, onAdded }: { type: TaxonomyType; terms: Taxonom
       setName("")
       onAdded()
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.code === "slug_taken"
-          ? "Another term already uses this name's slug. Slugs are unique across all taxonomies."
-          : errorMessage(err)
-      )
+      setError(termErrorMessage(err).message)
     } finally {
       setSaving(false)
     }

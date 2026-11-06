@@ -43,4 +43,7 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 
 	// Full-text search of published posts and pages (#145, search_handlers_read.go)
 	rg.GET("/search", server.getPublicSearch)
+
+	// Where an address the site would answer 404 for goes (#331, redirects.go)
+	rg.GET("/redirects", server.getPublicRedirect)
 }

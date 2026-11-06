@@ -393,6 +393,10 @@ func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePos
 				return fmt.Errorf("restore terms: %w", err)
 			}
 		}
+		// A version without a category (or whose category is gone): the default (#331).
+		if _, err := q.EnsureDefaultCategory(ctx, []int64{arg.PostID}); err != nil {
+			return fmt.Errorf("default category: %w", err)
+		}
 		return nil
 	})
 	return post, err

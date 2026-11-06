@@ -964,6 +964,12 @@ func TestUpdateTaxonomyTermAPI(t *testing.T) {
 					Times(1).
 					Return(taxonomyTerm, nil)
 
+				// The new name makes a new slug: the type decides the redirect (#331; none
+				// for a taxonomy without public pages).
+				store.EXPECT().
+					GetTaxonomyTypeByID(gomock.Any(), taxonomyTerm.TaxonomyTypeID).
+					Return(db.TaxonomyType{ID: taxonomyTerm.TaxonomyTypeID, Name: "tag"}, nil)
+
 				updatedTerm := taxonomyTerm
 				updatedTerm.Name = "Updated Name"
 				updatedTerm.Description = sql.NullString{String: "Updated description", Valid: true}

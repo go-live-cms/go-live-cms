@@ -119,6 +119,8 @@ func TestDuplicatePostTx(t *testing.T) {
 	for _, term := range terms {
 		termIDs = append(termIDs, term.ID)
 	}
+	// The source (a post) also had the default category (#331), which the copy keeps.
+	termIDs = withoutDefaultCategory(t, termIDs)
 	require.ElementsMatch(t, []int64{term1.ID, term2.ID}, termIDs)
 
 	// The featured image and the copy's own content image, not the source's.

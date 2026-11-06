@@ -1,18 +1,28 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { TicketReplayGuard, verifyTicket, type DocAccess, type TicketClaims } from "./access"
 import { AuthRejection, createAuthenticate, DENY, type AuthDeps, type AuthPayload } from "./auth"
+import { encodeCollabAuthToken } from "../gl-admin/lib/collaboration/schemaFingerprint"
 import { ISSUER, ticketKeys } from "./testkit"
 
 const { publicKey, sign } = await ticketKeys()
 
-function payload(overrides: Partial<AuthPayload> = {}): AuthPayload {
+/** The server's schema fingerprint in these tests (#416). */
+const FINGERPRINT = "5ca1ab1e".repeat(8)
+
+/**
+ * An auth payload whose `token` is the ticket, sent the way the editor sends it: with
+ * `schema` (default: the server's fingerprint), or bare when `schema` is null (a client
+ * from before #416).
+ */
+function payload(overrides: Partial<AuthPayload> & { schema?: string | null } = {}): AuthPayload {
+  const { schema = FINGERPRINT, token = "", ...rest } = overrides
   return {
-    token: "",
+    token: schema === null ? token : encodeCollabAuthToken(token, schema),
     documentName: "post-12",
     requestHeaders: { "x-request-id": "req-abcdef12", origin: "http://localhost:4321" },
     requestParameters: new URLSearchParams(),
     connectionConfig: { readOnly: false },
-    ...overrides,
+    ...rest,
   }
 }
 
@@ -28,6 +38,7 @@ function deps(access: DocAccess | null | Error, overrides: Partial<AuthDeps> = {
     consumeTicket: (claims: TicketClaims) => guard.consume(claims),
     fetchAccess,
     currentEpoch: async () => "epoch-1",
+    schemaFingerprint: FINGERPRINT,
     ...overrides,
   }
   return { all, fetchAccess, guard }
@@ -161,6 +172,78 @@ describe("onAuthenticate", () => {
     const deny = JSON.parse(logs[0])
     expect(deny).toMatchObject({ event: "ws_deny", request_id: "req-abcdef12", doc: "post-12", user_id: "7" })
     expect(deny.client).toContain('origin="http://localhost:4321"')
+  })
+
+  describe("schema fingerprint (#416)", () => {
+    const withEpoch = { requestParameters: new URLSearchParams({ epoch: "epoch-1" }) }
+
+    it("refuses another schema with schema-mismatch, before the access lookup and the doc load", async () => {
+      const currentEpoch = vi.fn(async () => "epoch-1")
+      const { all, fetchAccess, guard } = deps({ role: "editor", canEdit: true }, { currentEpoch })
+      const error = await rejection(createAuthenticate(all)(payload({ token: await sign(iat), schema: "01d5c4e3".repeat(8), ...withEpoch })))
+      expect(error.reason).toBe(DENY.schemaMismatch)
+      expect(error.reason).toBe("schema-mismatch")
+      expect(fetchAccess).not.toHaveBeenCalled()
+      // The epoch check loads the doc (a load may seed and store): never reached.
+      expect(currentEpoch).not.toHaveBeenCalled()
+      // The ticket was valid, so it is spent like any other.
+      expect(guard.size).toBe(1)
+    })
+
+    it("counts a bare ticket (no fingerprint, a client from before #416) as a mismatch", async () => {
+      const { all, fetchAccess } = deps({ role: "editor", canEdit: true })
+      const error = await rejection(createAuthenticate(all)(payload({ token: await sign(iat), schema: null })))
+      expect(error.reason).toBe(DENY.schemaMismatch)
+      expect(error.message).toMatch(/No editor schema fingerprint/)
+      expect(fetchAccess).not.toHaveBeenCalled()
+    })
+
+    it("counts an empty or non-string fingerprint as missing", async () => {
+      const { all } = deps({ role: "editor", canEdit: true })
+      const auth = createAuthenticate(all)
+      for (const token of [
+        JSON.stringify({ ticket: await sign(iat), schema: "" }),
+        JSON.stringify({ ticket: await sign(iat), schema: 42 }),
+        JSON.stringify({ ticket: await sign(iat) }),
+      ]) {
+        expect((await rejection(auth(payload({ token, schema: null })))).reason).toBe(DENY.schemaMismatch)
+      }
+    })
+
+    it("checks the ticket first: a bad ticket is permission-denied whatever the schema", async () => {
+      const { all } = deps({ role: "editor", canEdit: true })
+      const auth = createAuthenticate(all)
+      expect((await rejection(auth(payload({ token: "v4.public.junk", schema: "01d5c4e3".repeat(8) })))).reason).toBe(DENY.forbidden)
+      expect((await rejection(auth(payload({ token: "", schema: null })))).reason).toBe(DENY.forbidden)
+      // Malformed JSON carries no ticket.
+      expect((await rejection(auth(payload({ token: '{"ticket":', schema: null })))).reason).toBe(DENY.forbidden)
+    })
+
+    it("connects with the server's fingerprint, sent next to the ticket", async () => {
+      const { all, fetchAccess } = deps({ role: "editor", canEdit: true })
+      const context = await createAuthenticate(all)(payload({ token: await sign(iat), ...withEpoch }))
+      expect(context.readOnly).toBe(false)
+      expect(fetchAccess).toHaveBeenCalledTimes(1)
+    })
+
+    it("logs ws_deny with both fingerprints shortened, never the ticket or what the client sent beyond that", async () => {
+      const { all } = deps({ role: "editor", canEdit: true })
+      const auth = createAuthenticate(all)
+      const ticket = await sign(iat)
+      await rejection(auth(payload({ token: ticket, schema: "01d5c4e3".repeat(8) })))
+      await rejection(auth(payload({ token: await sign(iat), schema: null })))
+      await rejection(auth(payload({ token: await sign(iat), schema: '"><script>alert(1)</script>' })))
+      const denies = logs.map((line) => JSON.parse(line))
+      expect(denies).toEqual([
+        expect.objectContaining({ event: "ws_deny", sent: "schema-mismatch", user_id: "7", client_schema: "01d5c4e301d5", server_schema: "5ca1ab1e5ca1" }),
+        expect.objectContaining({ event: "ws_deny", sent: "schema-mismatch", client_schema: "missing" }),
+        expect.objectContaining({ event: "ws_deny", sent: "schema-mismatch", client_schema: "invalid" }),
+      ])
+      for (const line of logs) {
+        expect(line).not.toContain(ticket.slice(10, 60))
+        expect(line).not.toContain("script")
+      }
+    })
   })
 
   it("spies are installed", () => expect(spies).toHaveLength(3))
