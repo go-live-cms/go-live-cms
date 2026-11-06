@@ -11,6 +11,10 @@ collab server (`web/collab-server/`) converts between the two. See
 - `index.ts`: the TypeScript types (`BlockDocV1`, `Block`, the per-type attrs) and the Zod
   validators (`validateBlockDoc`), which the collab server's store runs before writing
   `block_doc` (#214).
+- `nesting.ts` (#414): **the nesting table** (which types are containers and what each holds),
+  the shared block predicate `isBlockNode`, the content expressions, `dedupeBlockRefs`,
+  `nestingIssues` (the structural checks `validateBlockDoc` runs) and `blocksInReadingOrder`.
+  `nestingVectors.json` is shared with the API's tests.
 - `../collaboration/blockBridge.ts`: `pmToBlockDoc` / `blockDocToPM(WithReport)`, the
   ProseMirror ⇄ Block Spec conversion, with dropped-block reporting (#213).
 - `../collaboration/fragmentBridge.ts`: the same conversion straight to and from the Yjs
@@ -35,8 +39,11 @@ posts.block_doc → publish → post_versions → public site (SSR)
 - **code_block**: code with a language
 - **divider**: horizontal rule
 - **image**: media library image (`mediaId` is a number)
-- **bullet_list** / **ordered_list**: containers whose `children` are list item ids
+- **bullet_list** / **ordered_list**: lists whose `children` are list item ids
 - **list_item**
+- **group** (#414): a container: `children` are its blocks (flow only: no group, no list
+  item), `attrs.style` `tinted` (absent: none) and `attrs.align` `wide`/`full` (absent:
+  content)
 - Theme blocks: unknown types keep their ProseMirror JSON in `attrs.pm` and round-trip
   unchanged.
 
@@ -48,9 +55,16 @@ interface Block {
   type: BlockType // One of the supported types
   version: 1 // For future migration support
   attrs: BlockAttrs // Type-specific attributes
-  children?: BlockID[] // For containers (lists)
+  children?: BlockID[] // For lists (their items) and containers (their blocks)
 }
 ```
+
+- **Nesting (#414):** a container's children are full blocks in the flat `blocks` map,
+  referenced by id. Each block is referenced at most once (by `blocks_order` or one
+  `children`), never in a cycle, and only with the types and counts the table in
+  `nesting.ts` allows. A core block that is neither a list nor a container has no
+  `children`. Repeats within one list are removed before the checks (`dedupeBlockRefs`, the
+  API's `deduplicateBlocks`). An unreferenced block is allowed (restores pass through it).
 
 - **Block colour (#356):** paragraph, heading, blockquote, bullet_list and ordered_list
   may have `attrs.blockColor`, one of `BLOCK_COLORS` (a theme token for tinted text, or

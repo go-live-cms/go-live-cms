@@ -1,6 +1,7 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
 import { isChangeOrigin } from "@tiptap/extension-collaboration"
+import { CONTAINER_NODE_NAMES, isBlockNode } from "@gl-admin/lib/blocks-spec/nesting"
 
 const blockIdPluginKey = new PluginKey("blockId")
 
@@ -19,8 +20,10 @@ function generateBlockId(): string {
 }
 
 /**
- * TipTap extension that ensures all top-level nodes, and every listItem of a
- * bulletList/orderedList, have stable, unique block IDs
+ * TipTap extension that ensures every node that is a block has a stable, unique block
+ * ID: top-level nodes, every listItem of a bulletList/orderedList, and every child of a
+ * container (#414). Which nodes are blocks is the shared predicate `isBlockNode`
+ * (blocks-spec/nesting.ts), the same one `stampFragmentBlockIds` and `pmToBlockDoc` use.
  */
 export const BlockIdExtension = Extension.create({
   name: "blockId",
@@ -60,20 +63,20 @@ export const BlockIdExtension = Extension.create({
           // fights itself. The old guard (`!currentId || length < 10`) never caught this.
           const seenIds = new Set<string>()
 
-          // Stamp top-level nodes AND list items (#238). pmToBlockDoc stores every
+          // Stamp top-level nodes, list items (#238) and container children (#414),
+          // by the shared predicate. pmToBlockDoc stores every
           // listItem of a list as its own block, so an item without a stable id (a new
           // item from Enter, paste, or toggling a list has none, or a duplicate copied
           // on split) got a freshly minted id on EVERY save, so every save rewrote the
           // item and the list's children (before #206 that also churned the Yjs mirror).
           // Ids are deduped across the whole doc, in document order, like pmToBlockDoc.
           // setNodeMarkup doesn't change node sizes, so newState positions stay valid.
+          // Duplicating or pasting a container copies every descendant's id (or none), and
+          // splitting a block inside one copies its id: all are regenerated here, at any depth.
           newState.doc.descendants((node, pos, parent) => {
-            const topLevel = parent === newState.doc
-            const listItem =
-              node.type.name === "listItem" &&
-              (parent?.type.name === "bulletList" || parent?.type.name === "orderedList")
+            const parentName = !parent || parent === newState.doc ? null : parent.type.name
 
-            if (topLevel || listItem) {
+            if (isBlockNode(node.type.name, parentName)) {
               const currentId = node.attrs["data-block-id"]
               const invalid = !currentId || typeof currentId !== "string" || currentId.length < 10
               const duplicate = !invalid && seenIds.has(currentId as string)
@@ -116,6 +119,7 @@ export const BlockIdExtension = Extension.create({
           "bulletList",
           "orderedList",
           "listItem",
+          ...CONTAINER_NODE_NAMES,
         ],
         attributes: {
           "data-block-id": {

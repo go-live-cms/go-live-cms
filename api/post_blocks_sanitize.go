@@ -70,13 +70,16 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizePMNode(pm)
 	}
 
-	// Attrs of the core blocks' v2 (#346). Theme blocks may use the same names
-	// for other things, so only these types are touched.
+	// Attrs of the core blocks' v2 (#346) and of the containers (#414, an allowlist).
+	// Theme blocks may use the same names for other things, so only these types are
+	// touched. `children` is checked by checkBlockNesting (prepareForStore).
 	switch block["type"] {
 	case "image":
 		sanitizeImageAttrs(attrs)
 	case "blockquote":
 		sanitizeBlockquoteAttrs(attrs)
+	case "group":
+		sanitizeGroupAttrs(attrs)
 	}
 
 	// Block colour (#356): a palette token on the core blocks that take one.

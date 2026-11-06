@@ -1,6 +1,6 @@
 # Block library (#352): nesting, shared plumbing, build order
 
-Status: design, no code yet. Parent issue: #352. Design canvas: "GoLive Blocks",
+Status: design; the foundation (section 2, with the Group block) is built in #414. Parent issue: #352. Design canvas: "GoLive Blocks",
 <https://claude.ai/artifact/F2x5Yx7DKiPs64VFsUwEpi> (board titles are quoted below as
 "Board name").
 
@@ -166,9 +166,14 @@ happening in practice (2.5): it never produces a doc that breaks these rules.
   `cover`, `mediaText`, `details`, `gallery`, `footnotes`, `footnote`); Block Spec types
   are snake_case. The mapping lives next to the nesting table.
 - Content expressions are generated from the table: `group` → `(flow | details | columns
-  | mediaText)+`, `columns` → `column{2,4}`, `column` → `(flow | details)+`, and so on,
-  with `flow` a TipTap node group. Containers are `isolating` (Backspace at the start of
-  a column doesn't merge it into the previous one) and `defining`.
+  | mediaText)+`, `columns` → `column{2,4}`, `column` → `(flow | details)+`, and so on.
+  As built (#414), `flow` is TipTap's existing `block` group: **no container is in it**, so
+  `block` holds exactly the nodes that hold no blocks (core flow nodes, theme blocks,
+  stand-ins), and a quote, a list item or a theme block (which name `block`) can never hold a
+  container. The doc's content is generated too (`(block | group | …)+`, `GroupDocument`, in
+  place of StarterKit's `block+`). No StarterKit node had to be re-declared for a new group.
+  Containers are `isolating` (Backspace at the start of a column doesn't merge it into the
+  previous one) and `defining`.
 - **Parts of a block that aren't blocks are child nodes without ids**, the pattern
   #346 set with `imageCaption`: the details summary (`detailsSummary`, rich text, first
   child of `details`), the gallery caption, the embed caption. A child node so two people
@@ -377,7 +382,10 @@ Constraints this puts on #315, and on this design until #315 decides:
 
 If #315 lands first and changes the id rules or how containers are bound, the foundation
 issue updates 2.5–2.6 before it starts; the Block Spec shape above does not change either
-way.
+way. (#315 decided **Option C**, adopt partially: the `"default"` fragment stays the only
+content, ids are the anchor, and the "is this node a block" rule becomes one shared
+predicate. That is 2.6 as written, so 2.5–2.6 needed no change; the predicate is
+`isBlockNode` in `blocks-spec/nesting.ts`.)
 
 ---
 

@@ -2,13 +2,23 @@ import { Extension, type Editor } from "@tiptap/core"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import { NodeSelection, Plugin, PluginKey, TextSelection } from "@tiptap/pm/state"
 import { Decoration, DecorationSet, type EditorView, type NodeView } from "@tiptap/pm/view"
-import { CITE_MAX_LENGTH, capCite, isImageAlign } from "@gl-admin/lib/blocks-spec"
+import {
+  CITE_MAX_LENGTH,
+  capCite,
+  GROUP_ALIGNS,
+  GROUP_STYLES,
+  isGroupAlign,
+  isGroupStyle,
+  isImageAlign,
+  type GroupAlign,
+  type GroupStyle,
+} from "@gl-admin/lib/blocks-spec"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
 
 /**
- * The editor's views of the image (figure, width, caption) and quote (citation input)
- * nodes (#346). Editor only: the schema (ImageWithMediaId, QuoteCitation) has no DOM
+ * The editor's views of the image (figure, width, caption), quote (citation input) and
+ * group (width and background, #414) nodes (#346). Editor only: the schema (ImageWithMediaId, QuoteCitation) has no DOM
  * code, so the collab server can build it. The views come from a plugin's `nodeViews`
  * prop, which ProseMirror merges with TipTap's own, so the schema extensions stay as
  * configured in `lib/collaboration/schema.ts`.
@@ -27,20 +37,27 @@ export const BlockNodeViews = Extension.create({
           nodeViews: {
             image: (node, view, getPos) => new ImageView(node, view, getPos as () => number | undefined, editor),
             blockquote: (node, view, getPos) => new QuoteView(node, view, getPos as () => number | undefined),
+            group: (node, view, getPos) => new GroupView(node, view, getPos as () => number | undefined),
           },
-          // Marks the quote the cursor is in, so its empty citation field shows.
+          // Marks the quote the cursor is in, so its empty citation field shows, and the
+          // group it is in (or that is selected), so its settings show.
           decorations: (state) => {
             if (!editor.isEditable) return null
-            const { $from } = state.selection
-            for (let depth = $from.depth; depth > 0; depth--) {
-              if ($from.node(depth).type.name === "blockquote") {
-                const pos = $from.before(depth)
-                return DecorationSet.create(state.doc, [
-                  Decoration.node(pos, pos + $from.node(depth).nodeSize, { class: "has-selection" }),
-                ])
-              }
+            const { selection } = state
+            const { $from } = selection
+            const marked: Decoration[] = []
+            const seen = new Set<string>()
+            const mark = (pos: number, node: PMNode) => {
+              if (seen.has(node.type.name)) return
+              seen.add(node.type.name)
+              marked.push(Decoration.node(pos, pos + node.nodeSize, { class: "has-selection" }))
             }
-            return null
+            if (selection instanceof NodeSelection && selection.node.type.name === "group") mark(selection.from, selection.node)
+            for (let depth = $from.depth; depth > 0; depth--) {
+              const name = $from.node(depth).type.name
+              if (name === "blockquote" || name === "group") mark($from.before(depth), $from.node(depth))
+            }
+            return marked.length > 0 ? DecorationSet.create(state.doc, marked) : null
           },
         },
       }),
@@ -217,6 +234,109 @@ class QuoteView implements NodeView {
   stopEvent(event: Event) {
     const target = event.target as globalThis.Node | null
     return Boolean(target && this.citeWrap.contains(target))
+  }
+
+  ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {
+    if (mutation.type === "selection") return false
+    return !this.contentDOM.contains(mutation.target)
+  }
+}
+
+const GROUP_WIDTH_LABELS: Record<GroupAlign, string> = { content: "Content", wide: "Wide", full: "Full" }
+const GROUP_STYLE_LABELS: Record<GroupStyle, string> = { none: "None", tinted: "Tinted" }
+
+/**
+ * A group (#414): its blocks, plus its settings while the cursor is in it (or it is
+ * selected): Width (Content, Wide, Full) and Background (None, Tinted), as on the
+ * canvas's "Editor · columns, group" board. Each button is one `setNodeMarkup`, so one
+ * Yjs update; last writer wins, like any node attribute.
+ */
+class GroupView implements NodeView {
+  dom: HTMLElement
+  contentDOM: HTMLElement
+  private settings: HTMLElement
+  private buttons = new Map<string, HTMLButtonElement>()
+
+  constructor(
+    private node: PMNode,
+    private view: EditorView,
+    private getPos: () => number | undefined,
+  ) {
+    this.dom = document.createElement("div")
+    this.dom.className = "editor-group"
+    this.dom.dataset.type = "group"
+    this.settings = document.createElement("div")
+    this.settings.className = "editor-group__settings"
+    this.settings.contentEditable = "false"
+    this.settings.append(
+      this.segment("Width", "align", GROUP_ALIGNS, GROUP_WIDTH_LABELS),
+      this.segment("Background", "style", GROUP_STYLES, GROUP_STYLE_LABELS),
+    )
+    this.contentDOM = document.createElement("div")
+    this.contentDOM.className = "editor-group__content"
+    this.dom.append(this.settings, this.contentDOM)
+    this.render()
+  }
+
+  private segment<T extends string>(label: string, attr: "align" | "style", values: readonly T[], labels: Record<T, string>) {
+    const field = document.createElement("div")
+    field.className = "editor-group__field"
+    field.setAttribute("role", "group")
+    field.setAttribute("aria-label", `Group ${label.toLowerCase()}`)
+    const name = document.createElement("span")
+    name.className = "editor-group__label"
+    name.textContent = label
+    name.setAttribute("aria-hidden", "true")
+    field.append(name)
+    for (const value of values) {
+      const button = document.createElement("button")
+      button.type = "button"
+      button.className = "editor-group__option"
+      button.textContent = labels[value]
+      button.dataset.attr = attr
+      button.dataset.value = value
+      // Keep the cursor where it is.
+      button.addEventListener("mousedown", (event) => event.preventDefault())
+      button.addEventListener("click", () => this.set(attr, value))
+      this.buttons.set(`${attr}:${value}`, button)
+      field.append(button)
+    }
+    return field
+  }
+
+  private set(attr: "align" | "style", value: string) {
+    // `editable` can change without an update (a demotion, #313).
+    if (!this.view.editable) return
+    const pos = this.getPos()
+    const current = pos === undefined ? null : this.view.state.doc.nodeAt(pos)
+    if (pos === undefined || !current || current.type.name !== "group" || current.attrs[attr] === value) return
+    this.view.dispatch(this.view.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, [attr]: value }))
+  }
+
+  private render() {
+    const style = isGroupStyle(this.node.attrs.style) ? this.node.attrs.style : "none"
+    const align = isGroupAlign(this.node.attrs.align) ? this.node.attrs.align : "content"
+    this.dom.dataset.style = style
+    this.dom.dataset.align = align
+    setBlockId(this.dom, this.node)
+    for (const [key, button] of this.buttons) {
+      const [attr, value] = key.split(":")
+      button.setAttribute("aria-pressed", String((attr === "align" ? align : style) === value))
+      button.disabled = !this.view.editable
+    }
+    this.settings.hidden = !this.view.editable
+  }
+
+  update(node: PMNode) {
+    if (node.type !== this.node.type) return false
+    this.node = node
+    this.render()
+    return true
+  }
+
+  stopEvent(event: Event) {
+    const target = event.target as globalThis.Node | null
+    return Boolean(target && this.settings.contains(target))
   }
 
   ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {

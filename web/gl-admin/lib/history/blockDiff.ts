@@ -8,12 +8,15 @@
 // inside matched blocks is diffed word by word (wordDiff.ts); attributes (heading level,
 // image width/caption, a quote's citation, a theme block's declared attrs, ...) are
 // compared on their own, so an attribute-only change still shows. List items, nested
-// lists included, are matched by their own ids the same way.
+// lists included, are matched by their own ids the same way, and so are a container's
+// children (#414), at any depth.
 //
 // The result holds ids, not blocks: the renderer reads the blocks from the docs it already
 // has, so the worker sends back little.
 
 import type { Block, BlockDocV1 } from "../blocks-spec"
+// The nesting table only: pure, no imports of its own, so the worker stays small.
+import { isContainerType } from "../blocks-spec/nesting"
 import {
   contentTokens,
   diffTokens,
@@ -69,6 +72,8 @@ export interface BlockDiffEntry {
   caption?: Segment[]
   /** "changed" list: its items. */
   list?: ListDiff
+  /** A container in both (#414): its children, matched by id like the top level. */
+  children?: BlockDiffEntry[]
   attrs: AttrChange[]
 }
 
@@ -220,6 +225,7 @@ const TYPE_LABELS: Record<string, string> = {
   bullet_list: "Bulleted list",
   ordered_list: "Numbered list",
   list_item: "List item",
+  group: "Group",
 }
 
 /** "Heading", "Bulleted list", or a theme block's name ("theme:example/alert" → "Alert"). */
@@ -232,6 +238,8 @@ export function blockTypeLabel(type: string): string {
 
 const ALIGN_LABELS: Record<string, string> = { left: "Left", center: "Center", right: "Right", justify: "Justify" }
 const WIDTH_LABELS: Record<string, string> = { inline: "Inline", wide: "Wide", full: "Full width" }
+const GROUP_WIDTH_LABELS: Record<string, string> = { content: "Content", wide: "Wide", full: "Full width" }
+const GROUP_STYLE_LABELS: Record<string, string> = { none: "None", tinted: "Tinted" }
 
 function display(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return null
@@ -287,6 +295,13 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       add("title", "Title", display(va.title), display(wa.title))
       const width = (a: Record<string, unknown>) => WIDTH_LABELS[String(a.align ?? "inline")] ?? WIDTH_LABELS.inline
       add("align", "Width", width(va), width(wa))
+      break
+    }
+    case "group": {
+      const width = (a: Record<string, unknown>) => GROUP_WIDTH_LABELS[String(a.align ?? "content")] ?? GROUP_WIDTH_LABELS.content
+      const style = (a: Record<string, unknown>) => GROUP_STYLE_LABELS[String(a.style ?? "none")] ?? GROUP_STYLE_LABELS.none
+      add("align", "Width", width(va), width(wa))
+      add("style", "Background", style(va), style(wa))
       break
     }
     case "divider":
@@ -433,6 +448,14 @@ function diffBlock(id: string, v: Block, w: Block, vDoc: Doc, wDoc: Doc, moved: 
     }
   }
 
+  if (isContainerType(v.type)) {
+    // Same container type: its attributes, and its children by id at any depth.
+    const attrs = attrChanges(v, w)
+    const children = diffEntries(childIds(v, vDoc), childIds(w, wDoc), vDoc, wDoc)
+    const changed = attrs.length > 0 || children.some((child) => child.status !== "same" || child.moved)
+    return { id, status: changed ? "changed" : "same", moved, children, attrs }
+  }
+
   const attrs = attrChanges(v, w)
   const text = v.type === "image" || v.type === "divider" ? undefined : diffTokens(blockTokens(w), blockTokens(v))
   const caption = v.type === "image" ? diffTokens(captionTokens(w), captionTokens(v)) : undefined
@@ -480,6 +503,21 @@ function orderOf(doc: Doc | null | undefined): string[] {
 
 const EMPTY: Doc = { blocks_order: [], blocks: {} }
 
+/** A container's children worth comparing: each once, existing. */
+function childIds(block: Block, doc: Doc): string[] {
+  return [...new Set(block.children ?? [])].filter((id) => !!doc.blocks[id])
+}
+
+/** One entry per id of either side, aligned as at the top level. */
+function entryFor(a: Aligned<string>, vDoc: Doc, wDoc: Doc): BlockDiffEntry {
+  if (a.version && a.working) return diffBlock(a.key, vDoc.blocks[a.key], wDoc.blocks[a.key], vDoc, wDoc, a.moved)
+  return { id: a.key, status: a.version ? "version" : "working", moved: false, attrs: [] }
+}
+
+function diffEntries(vIds: string[], wIds: string[], vDoc: Doc, wDoc: Doc): BlockDiffEntry[] {
+  return align(vIds, wIds, (id) => id).map((a) => entryFor(a, vDoc, wDoc))
+}
+
 /**
  * The diff, one step per block: a generator so the main-thread fallback can yield between
  * slices (diffBlockDocsAsync). `diffBlockDocs` runs it to the end.
@@ -494,12 +532,7 @@ export function* diffBlockDocsSteps(
   const entries: BlockDiffEntry[] = []
   const summary: DiffSummary = { changed: 0, versionOnly: 0, workingOnly: 0, moved: 0, same: 0 }
   for (const a of aligned) {
-    let entry: BlockDiffEntry
-    if (a.version && a.working) {
-      entry = diffBlock(a.key, vDoc.blocks[a.key], wDoc.blocks[a.key], vDoc, wDoc, a.moved)
-    } else {
-      entry = { id: a.key, status: a.version ? "version" : "working", moved: false, attrs: [] }
-    }
+    const entry = entryFor(a, vDoc, wDoc)
     entries.push(entry)
     if (entry.status === "changed") summary.changed++
     else if (entry.status === "version") summary.versionOnly++

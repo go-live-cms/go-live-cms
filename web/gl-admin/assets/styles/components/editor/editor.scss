@@ -307,12 +307,108 @@
     display: block;
   }
 
+  // A group (#414): its blocks, on the surface colour when tinted, and its settings
+  // (Width, Background) while the cursor is in it. Wide and full reach into the canvas
+  // padding like an image's; the theme decides the real widths.
+  .editor-group {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    margin: 12px 0;
+    padding: var(--space-3) var(--space-4);
+    position: relative;
+
+    &[data-style="tinted"] {
+      background: var(--background-subtle);
+      border-color: var(--border-color);
+      border-style: solid;
+    }
+
+    &[data-align="wide"] {
+      margin-inline: -24px;
+    }
+
+    &[data-align="full"] {
+      border-radius: 0;
+      margin-inline: -48px;
+    }
+
+    @media (width <= 768px) {
+      &[data-align="wide"],
+      &[data-align="full"] {
+        margin-inline: calc(-1 * var(--space-4));
+      }
+    }
+  }
+
+  .editor-group__content > :first-child {
+    margin-top: 0;
+  }
+
+  .editor-group__content > :last-child {
+    margin-bottom: 0;
+  }
+
+  .editor-group__settings {
+    align-items: center;
+    display: none;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin-bottom: var(--space-2);
+    user-select: none;
+  }
+
+  .editor-group.has-selection > .editor-group__settings:not([hidden]) {
+    display: flex;
+  }
+
+  .editor-group__field {
+    align-items: center;
+    display: inline-flex;
+    gap: 2px;
+  }
+
+  .editor-group__label {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    margin-right: var(--space-1);
+  }
+
+  .editor-group__option {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--type-footnote);
+    line-height: 1;
+    min-height: 28px;
+    padding: var(--space-1) var(--space-2);
+
+    &:hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+
+    &[aria-pressed="true"] {
+      background: var(--accent-subtle);
+      border-color: var(--accent-border);
+      color: var(--text-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
   // Nothing to add in a read-only editor. Also covers a demotion (#313), which changes
   // `contenteditable` without re-rendering the node views, and beats the display rules
   // above, which would otherwise override the views' [hidden].
   // stylelint-disable-next-line selector-class-pattern
   &[contenteditable="false"] .ProseMirror-selectednode > .editor-image__add-caption,
-  &[contenteditable="false"] blockquote > .editor-quote__cite.is-empty {
+  &[contenteditable="false"] blockquote > .editor-quote__cite.is-empty,
+  &[contenteditable="false"] .editor-group > .editor-group__settings {
     display: none;
   }
 

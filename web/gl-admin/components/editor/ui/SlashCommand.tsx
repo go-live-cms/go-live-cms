@@ -11,11 +11,11 @@ export interface SlashCommandItem {
   command: ({ editor, range }: any) => void
   aliases?: string[]
   hint?: string
-  group?: "media"
+  group?: "media" | "layout"
 }
 
-const GROUPS = ["basic", "media"] as const
-const GROUP_LABELS = { basic: "Basic blocks", media: "Media" } as const
+const GROUPS = ["basic", "media", "layout"] as const
+const GROUP_LABELS = { basic: "Basic blocks", media: "Media", layout: "Layout" } as const
 
 export const SlashCommandList = forwardRef<
   any,

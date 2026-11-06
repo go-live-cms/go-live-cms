@@ -67,14 +67,21 @@ func (doc *BlockDocV1) prepareForStore(themeBlocks ThemeBlockManifest) error {
 		return err
 	}
 
-	// Deduplicate blocks_order to prevent duplicate rendering
-	doc.deduplicateBlocksOrder()
+	// Repeats within blocks_order and within each children list are removed (#414):
+	// such docs exist, so they never start failing their stores.
+	doc.deduplicateBlocks()
 
 	// Sanitize the block tree before it is persisted (stored-XSS defence, #188).
 	// Neutralises dangerous link/image URL schemes, on* handler attrs, disallowed
 	// node types, and unsafe highlight colors. Best-effort, never rejects the save.
 	// publishPost reads this already-sanitized working copy, so it's covered too.
 	doc.sanitize()
+
+	// How blocks nest (#414, design 2.3): references, one parent each, no cycles, what
+	// each container holds. The collab server checks the same (nestingVectors.json).
+	if err := doc.checkBlockNesting(); err != nil {
+		return err
+	}
 
 	// Installed theme blocks (#376): undeclared attrs stripped, invalid values refused.
 	if err := doc.applyThemeBlocks(themeBlocks); err != nil {
@@ -96,45 +103,29 @@ func (doc *BlockDocV1) prepareForStore(themeBlocks ThemeBlockManifest) error {
 }
 
 // contentMediaUses lists the document's image blocks with a mediaId, in
-// document order, for the post_media sync (#176): each block is one use, so a
+// document order at any depth (blocks_order, then children depth first: an image in a
+// group counts, #414), for the post_media sync (#176): each block is one use, so a
 // media shown twice gives two.
 func (doc *BlockDocV1) contentMediaUses() []db.ContentMediaUse {
 	uses := make([]db.ContentMediaUse, 0)
 
-	for _, blockID := range doc.BlocksOrder {
-		block, exists := doc.Blocks[blockID]
-		if !exists {
-			continue
-		}
-
-		// Type assert to map[string]interface{}
-		blockMap, ok := block.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		// Check if it's an image block
+	doc.walkBlocks(func(blockID string, blockMap map[string]interface{}) {
 		blockType, ok := blockMap["type"].(string)
 		if !ok || blockType != "image" {
-			continue
+			return
 		}
-
-		// Extract attrs.mediaId
 		attrs, ok := blockMap["attrs"].(map[string]interface{})
 		if !ok {
-			continue
+			return
 		}
-
 		mediaIDFloat, ok := attrs["mediaId"].(float64)
 		if !ok {
-			continue
+			return
 		}
-
-		mediaID := int64(mediaIDFloat)
-		if mediaID > 0 {
+		if mediaID := int64(mediaIDFloat); mediaID > 0 {
 			uses = append(uses, db.ContentMediaUse{MediaID: mediaID, BlockID: blockID, BlockType: blockType})
 		}
-	}
+	})
 
 	return uses
 }

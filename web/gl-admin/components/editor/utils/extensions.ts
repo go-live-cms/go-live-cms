@@ -38,6 +38,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
     // conflict; non-collab editors keep it as their only undo stack.
     const schema = schemaExtensions({ collaborating: Boolean(collabProvider) })
     const baseExtensions = [
+      schema.document,
       schema.starterKit,
       schema.codeBlock,
       Typography,
@@ -56,6 +57,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.textAlign,
       schema.quoteCitation,
       schema.blockColor,
+      schema.group,
       schema.blockId,
       BlockNodeViews,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.

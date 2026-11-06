@@ -212,8 +212,8 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
     under a new epoch.
   - `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?, base_revision?}`
     → `{block_revision, epoch}`. 16 MiB body (`collabStoreBodyLimit`), `block_doc` itself
-    ≤ 4 MiB, and `prepareForStore` (limits, dedupe `blocks_order`, sanitize, v1 + order
-    integrity). `block_doc` omitted/null = store the Yjs state only (server-side
+    ≤ 4 MiB, and `prepareForStore` (limits, dedupe `blocks_order` and every `children`,
+    sanitize, the nesting checks of #414, v1 + order integrity). `block_doc` omitted/null = store the Yjs state only (server-side
     validation failed), revision unchanged; that **requires `base_revision`** (400
     otherwise), or a stale state could be stamped with the current revision and pass the
     guard. `base_revision` behind → 409. 404 for a missing post.
@@ -1112,3 +1112,22 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - **The excerpt is optional** (`description`: `max=500`, no minimum; on PUT absent keeps,
   `""` clears).
 </content>
+
+## Nested blocks (#414, `post_blocks_nesting.go`)
+
+- Containers (Group today) hold their child blocks **by id** in `children`, each a full block
+  in the flat `blocks` map, like a list's items. The table (`blockContainers`, `flowBlockTypes`)
+  mirrors the web's `blocks-spec/nesting.ts`; `TestNestingVectors` reads the web's
+  `nestingVectors.json`, which the collab store's tests read too, so both refuse the same docs.
+- `prepareForStore`: `deduplicateBlocks` (repeats within `blocks_order` and within each
+  `children`, first kept: such docs exist and must keep storing), then after the sanitizer
+  `checkBlockNesting` (every referenced id exists, each block referenced at most once, no
+  cycles, a container's children of the table's types and count, `children` an array of
+  strings, no `children` on a core block that isn't a list or a container) → 400.
+- The sanitizer still walks the flat map, so a nested block gets its type's rules.
+  `sanitizeGroupAttrs` is an allowlist (`style` none/tinted, `align` content/wide/full; anything
+  else deleted).
+- **`contentMediaUses` walks the tree** (`walkBlocks`: blocks_order, then children depth
+  first, each once), so an image in a group is in `post_media` and "Used in".
+  `blockDocMediaIDs` (the public `media` map) already walks the flat map. `regenerateBlockIDs`
+  needed no change (`TestRegenerateBlockIDsNested`).

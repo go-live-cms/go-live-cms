@@ -13,6 +13,17 @@ import {
   type CaptionText,
 } from "../blocks-spec"
 import { attrProblem, isThemeBlockType, themeBlockSpecOf, type ThemeBlockSpec } from "../blocks-spec/themeBlocks"
+import {
+  acceptsChild,
+  BLOCK_NODE_NAMES,
+  containerOfNode,
+  containerRule,
+  isBlockNode,
+  isGroupAlign,
+  isGroupStyle,
+  synthesizedChildId,
+  type ContainerRule,
+} from "../blocks-spec"
 import type { Editor } from "@tiptap/core"
 import { BLOCK_COLOR_NODE_TYPES } from "../../components/editor/extensions/BlockColor"
 
@@ -52,23 +63,26 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
   const blocksOrder: BlockID[] = []
   const seenIds = new Set<BlockID>() // Track IDs to detect duplicates
 
-  // Iterate through top-level nodes
-  for (let i = 0; i < pmDoc.content.childCount; i++) {
-    const node = pmDoc.content.child(i)
-    const isList = node.type.name === "bulletList" || node.type.name === "orderedList"
+  // One block per node that is a block (`isBlockNode`), in document order, at any depth
+  // (#414): a container becomes its block plus one block per child, with `children` set.
+  // Duplicate and invalid ids are regenerated across the whole doc.
+  const convert = (node: PMNode): BlockID | null => {
+    const isList = LIST_NODE_NAMES.has(node.type.name)
+    const container = containerOfNode(node.type.name)
+    const childNodes = container ? containerChildNodes(node) : []
 
-    // A list with no items can only come from an already schema-invalid PM node
-    // (the schema requires `listItem+`; nodeFromJSON doesn't enforce it). It holds
-    // no content, so skip it rather than persist a childless list block (#213).
-    if (isList && node.childCount === 0) continue
+    // A list with no items, or a container with no blocks, can only come from an already
+    // schema-invalid PM node (nodeFromJSON doesn't enforce content). It holds no content,
+    // so skip it rather than persist a childless list or container block (#213).
+    if (isList && node.childCount === 0) return null
+    if (container && childNodes.length === 0) return null
 
     const block = pmNodeToBlock(node, blocks, seenIds)
-    if (!block) continue
+    if (!block) return null
+    // Before the children, so none of them can take the parent's id.
+    seenIds.add(block.id)
 
     if (isList) {
-      blocksOrder.push(block.id)
-      seenIds.add(block.id)
-
       const children: BlockID[] = []
       for (let j = 0; j < node.childCount; j++) {
         const listItemBlock = pmNodeToBlock(node.child(j), blocks, seenIds)
@@ -79,12 +93,18 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
         }
       }
       blocks[block.id] = { ...block, children }
-      continue
+    } else if (container) {
+      const children = childNodes.map(convert).filter((id): id is BlockID => id !== null)
+      blocks[block.id] = { ...block, children }
+    } else {
+      blocks[block.id] = block
     }
+    return block.id
+  }
 
-    blocks[block.id] = block
-    blocksOrder.push(block.id)
-    seenIds.add(block.id)
+  for (let i = 0; i < pmDoc.content.childCount; i++) {
+    const id = convert(pmDoc.content.child(i))
+    if (id !== null) blocksOrder.push(id)
   }
 
   return {
@@ -92,6 +112,26 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
     blocks_order: blocksOrder,
     blocks,
   }
+}
+
+const LIST_NODE_NAMES = new Set(["bulletList", "orderedList"])
+
+/**
+ * A container node's child blocks, in order: its children that are blocks, and a slot's
+ * (an id-less wrapper, design 2.4) flattened in. Parts (a summary, a caption) are left
+ * out: they are attrs of the container's block.
+ */
+function containerChildNodes(node: PMNode): PMNode[] {
+  const out: PMNode[] = []
+  node.forEach((child) => {
+    if (isBlockNode(child.type.name, node.type.name)) out.push(child)
+    else if (containerOfNode(node.type.name)?.slot === child.type.name) {
+      child.forEach((grandchild) => {
+        if (isBlockNode(grandchild.type.name, child.type.name)) out.push(grandchild)
+      })
+    }
+  })
+  return out
 }
 
 /**
@@ -214,6 +254,19 @@ function pmNodeToBlock(node: PMNode, allBlocks: Record<BlockID, Block>, seenIds:
           pm: pmJSON(node),
           text: node.textContent || undefined,
         },
+      }
+
+    case "group":
+      // Defaults left out, so an untouched group stores only its children.
+      return {
+        id,
+        type: "group",
+        version: 1,
+        attrs: {
+          ...(isGroupStyle(node.attrs.style) && node.attrs.style !== "none" ? { style: node.attrs.style } : {}),
+          ...(isGroupAlign(node.attrs.align) && node.attrs.align !== "content" ? { align: node.attrs.align } : {}),
+        },
+        // children are set by the caller
       }
 
     default:
@@ -367,7 +420,7 @@ function captionToPM(caption: unknown, schema: Schema): any[] {
 }
 
 /**
- * Calls `visit` for `rootId` and each block under it (list children, any depth) in
+ * Calls `visit` for `rootId` and each block under it (list and container children, any depth) in
  * `source`, each at most once, so a list that contains itself can't loop. Returning
  * false from `visit` skips that block's children. Missing ids are skipped.
  */
@@ -389,7 +442,7 @@ export function walkBlockTree(source: BlockDocV1, rootId: BlockID, visit: (block
  */
 export interface DroppedBlock {
   id: BlockID
-  /** The list a dropped list child belonged to; null for a top-level block. */
+  /** The list or container a dropped child belonged to; null for a top-level block. */
   parentId: BlockID | null
   /** The preceding sibling in the source doc (dropped or not); null if it was first. */
   afterId: BlockID | null
@@ -398,8 +451,18 @@ export interface DroppedBlock {
 interface ConvertContext {
   schema: Schema
   dropped: DroppedBlock[]
-  /** Lists currently being converted, to catch a list that (transitively) contains itself. */
-  listsInProgress: Set<BlockID>
+  /**
+   * Lists and containers currently being converted, to catch one that (transitively)
+   * contains itself.
+   */
+  containersInProgress: Set<BlockID>
+  /**
+   * Every child already referenced (#414): a block listed under two parents is converted
+   * at its first reference only and dropped at the others, so the PM doc never holds two
+   * copies of one block (BlockIdExtension would give the second a new id, and the next
+   * store would keep both).
+   */
+  referenced: Set<BlockID>
 }
 
 /**
@@ -422,7 +485,7 @@ export function blockDocToPM(doc: BlockDocV1, schema: Schema): PMNode {
  * The doc-level `block+` rule is not checked: an empty block doc stays an empty PM doc.
  */
 export function blockDocToPMWithReport(doc: BlockDocV1, schema: Schema): { node: PMNode; dropped: DroppedBlock[] } {
-  const ctx: ConvertContext = { schema, dropped: [], listsInProgress: new Set() }
+  const ctx: ConvertContext = { schema, dropped: [], containersInProgress: new Set(), referenced: new Set() }
   const nodes: PMNode[] = []
   let afterId: BlockID | null = null
 
@@ -433,6 +496,8 @@ export function blockDocToPMWithReport(doc: BlockDocV1, schema: Schema): { node:
       continue
     }
     try {
+      if (ctx.referenced.has(blockId)) throw new Error(`block ${blockId} is already in the document`)
+      ctx.referenced.add(blockId)
       const json = blockToPMNode(block, doc.blocks, ctx)
       if (!json) throw new Error(`no PM representation for block type ${block.type}`)
       const node = schema.nodeFromJSON(json)
@@ -452,8 +517,8 @@ export function blockDocToPMWithReport(doc: BlockDocV1, schema: Schema): { node:
  * Merge the blocks blockDocToPM dropped (taken from `source`, the doc they were loaded
  * from) back into `current`, the doc mirrored from the editor, so a save never deletes
  * content the editor couldn't show. Each block goes back after its original preceding
- * sibling, or at the end if that sibling is gone; a dropped list child whose list was
- * deleted is not restored. Blocks already in `current` are left alone.
+ * sibling, or at the end if that sibling is gone; a dropped child whose list or container
+ * was deleted is not restored. Blocks already in `current` are left alone.
  */
 export function restoreDroppedBlocks(current: BlockDocV1, source: BlockDocV1, dropped: DroppedBlock[]): BlockDocV1 {
   if (dropped.length === 0) return current
@@ -461,12 +526,21 @@ export function restoreDroppedBlocks(current: BlockDocV1, source: BlockDocV1, dr
   const blocks = { ...current.blocks }
   let order = current.blocks_order
 
-  // A block already in `current` is left alone, and so is everything under it.
-  const copyTree = (id: BlockID) =>
-    walkBlockTree(source, id, (block) => {
-      if (blocks[block.id]) return false
-      blocks[block.id] = block
-    })
+  // Copies a block and everything under it from `source`. A block already in `current`
+  // (it moved there since) is left alone, and so is everything under it, and a copied
+  // parent doesn't reference it: two parents sharing a child would make the doc invalid
+  // (#414, design 2.3), and so would a child that `source` lists but doesn't have. A cycle
+  // in `source` ends at the block that closes it, for the same reason.
+  const copyTree = (id: BlockID): boolean => {
+    const block = source.blocks[id]
+    if (!block || blocks[id]) return false
+    blocks[id] = block
+    if (Array.isArray(block.children)) {
+      const kept = block.children.filter(copyTree)
+      if (kept.length !== block.children.length) blocks[id] = { ...block, children: kept }
+    }
+    return true
+  }
   const insertAfter = (siblings: BlockID[], afterId: BlockID | null, id: BlockID) => {
     const anchor = afterId === null ? -1 : siblings.indexOf(afterId)
     const at = afterId === null ? 0 : anchor === -1 ? siblings.length : anchor + 1
@@ -635,6 +709,20 @@ function blockToPMNode(block: Block, allBlocks: Record<BlockID, Block>, ctx: Con
         content: listItemsToPM(block.id, block.children, allBlocks, ctx),
       }
 
+    case "group": {
+      const attrs = block.attrs as { style?: unknown; align?: unknown }
+      return {
+        type: "group",
+        attrs: {
+          ...baseAttrs,
+          // Left to the schema's defaults unless valid.
+          ...(isGroupStyle(attrs.style) ? { style: attrs.style } : {}),
+          ...(isGroupAlign(attrs.align) ? { align: attrs.align } : {}),
+        },
+        content: containerChildrenToPM(block, allBlocks, ctx),
+      }
+    }
+
     case "list_item":
       if (block.attrs.pm) {
         return {
@@ -689,12 +777,12 @@ function listItemsToPM(
   allBlocks: Record<BlockID, Block>,
   ctx: ConvertContext,
 ): any[] {
-  if (ctx.listsInProgress.has(listId)) throw new Error(`list ${listId} contains itself`)
-  ctx.listsInProgress.add(listId)
+  if (ctx.containersInProgress.has(listId)) throw new Error(`list ${listId} contains itself`)
+  ctx.containersInProgress.add(listId)
   try {
     return convertListChildren(listId, children, allBlocks, ctx)
   } finally {
-    ctx.listsInProgress.delete(listId)
+    ctx.containersInProgress.delete(listId)
   }
 }
 
@@ -714,6 +802,8 @@ function convertListChildren(
       continue
     }
     try {
+      if (ctx.referenced.has(childId)) throw new Error(`block ${childId} is already in the document`)
+      ctx.referenced.add(childId)
       let json = blockToPMNode(childBlock, allBlocks, ctx)
       if (json?.type === "paragraph") {
         json = {
@@ -737,6 +827,57 @@ function convertListChildren(
 }
 
 /**
+ * A container's children as PM node JSON (#414, design 2.5), the generalization of
+ * `listItemsToPM`. Each child is built and `check()`ed on its own, and must be a type the
+ * nesting table lets the container hold; one that can't be is **dropped and reported**
+ * (`parentId` = the container, `afterId` = its previous sibling), and the container keeps
+ * the others. `restoreDroppedBlocks` puts it back at that place on the next store.
+ * A container left with fewer children than the table's minimum gets synthesized ones
+ * with deterministic ids (`synthesizedChildId`), so the same doc builds the same nodes on
+ * every load and the store sees no change. A container that (transitively) contains
+ * itself throws, so the child that closes the cycle is dropped.
+ */
+function containerChildrenToPM(block: Block, allBlocks: Record<BlockID, Block>, ctx: ConvertContext): any[] {
+  const rule = containerRule(block.type) as ContainerRule
+  if (ctx.containersInProgress.has(block.id)) throw new Error(`${block.type} ${block.id} contains itself`)
+  ctx.containersInProgress.add(block.id)
+  try {
+    const nodeType = ctx.schema.nodes[rule.node]
+    const items: any[] = []
+    let afterId: BlockID | null = null
+    for (const childId of block.children ?? []) {
+      const child = allBlocks[childId]
+      if (!child) {
+        console.warn(`Child block ${childId} of ${block.type} ${block.id} not found`)
+        continue
+      }
+      try {
+        if (ctx.referenced.has(childId)) throw new Error(`block ${childId} is already in the document`)
+        ctx.referenced.add(childId)
+        if (!acceptsChild(block.type, child.type)) throw new Error(`a ${block.type} can't hold a ${child.type} block`)
+        const json = blockToPMNode(child, allBlocks, ctx)
+        if (!json) throw new Error(`no PM representation for block type ${child.type}`)
+        const node = ctx.schema.nodeFromJSON(json)
+        node.check()
+        if (nodeType && !nodeType.contentMatch.matchType(node.type)) throw new Error(`a ${rule.node} can't hold a ${node.type.name}`)
+        items.push(json)
+      } catch (error) {
+        console.warn(`Dropping child ${childId} (${child.type}) of ${block.type} ${block.id}:`, error)
+        ctx.dropped.push({ id: childId, parentId: block.id, afterId })
+      }
+      afterId = childId
+    }
+    for (let index = items.length; index < rule.min; index++) {
+      const role = index === 0 ? rule.synthesize.role : `${rule.synthesize.role}-${index + 1}`
+      items.push({ type: BLOCK_NODE_NAMES[rule.synthesize.type], attrs: { "data-block-id": synthesizedChildId(block.id, role) } })
+    }
+    return items
+  } finally {
+    ctx.containersInProgress.delete(block.id)
+  }
+}
+
+/**
  * Id for the listItem synthesized into an empty list. Derived from the list id, NOT
  * random: BlockIdExtension only stamps top-level nodes, so an item without an id would
  * be re-minted by pmToBlockDoc on every store, and the stored block_doc would change
@@ -748,31 +889,35 @@ export function synthesizedItemId(listId: BlockID): BlockID {
 }
 
 /**
- * Update ProseMirror nodes with stable block IDs
- * This mutates the document to add data-block-id attrs where missing
+ * A copy of `node` in which every node that is a block (`isBlockNode`, any depth) has a
+ * valid, unique `data-block-id`: missing, shorter than 10 characters, or a duplicate of an
+ * earlier one (document order) gets a new one. `node` itself is returned when nothing
+ * changes. The same rule as BlockIdExtension and `stampFragmentBlockIds`.
  */
-export function stampBlockIds(node: PMNode, schema: Schema): PMNode {
-  let hasChanges = false
-  const newContent: PMNode[] = []
-
-  node.content.forEach((child, offset, index) => {
-    const currentId = child.attrs["data-block-id"]
-
-    if (!currentId || typeof currentId !== "string" || currentId.length < 10) {
-      // Need to add block ID
-      const newId = generateId()
-      const newAttrs = { ...child.attrs, "data-block-id": newId }
-      const newChild = child.type.create(newAttrs, child.content, child.marks)
-      newContent.push(newChild)
-      hasChanges = true
-    } else {
-      newContent.push(child)
-    }
-  })
-
-  if (hasChanges) {
-    return node.type.create(node.attrs, newContent, node.marks)
+export function stampBlockIds(node: PMNode, _schema?: Schema): PMNode {
+  const used = new Set<BlockID>()
+  const stamp = (parent: PMNode, parentName: string | null): PMNode => {
+    if (parent.isTextblock) return parent
+    let changed = false
+    const children: PMNode[] = []
+    parent.forEach((child) => {
+      let next = child
+      if (isBlockNode(child.type.name, parentName)) {
+        const id = child.attrs["data-block-id"]
+        if (typeof id === "string" && id.length >= 10 && !used.has(id)) used.add(id)
+        else if (child.type.spec.attrs && "data-block-id" in child.type.spec.attrs) {
+          let fresh = generateId()
+          while (used.has(fresh)) fresh = generateId()
+          used.add(fresh)
+          next = child.type.create({ ...child.attrs, "data-block-id": fresh }, child.content, child.marks)
+        }
+      }
+      const inner = stamp(next, next.type.name)
+      if (inner !== next) next = inner
+      if (next !== child) changed = true
+      children.push(next)
+    })
+    return changed ? parent.type.create(parent.attrs, children, parent.marks) : parent
   }
-
-  return node
+  return stamp(node, null)
 }

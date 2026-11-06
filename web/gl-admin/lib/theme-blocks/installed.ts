@@ -26,13 +26,33 @@ export function blockPathParts(path: string): { slug: string; dir: string } | nu
   return match ? { slug: match[1], dir: match[2] } : null
 }
 
+/**
+ * The node types and groups a theme block's content expression may name (#414, design
+ * 2.11). A theme block stays one node with its content in its `pm`, so anything that holds
+ * blocks or media would hide them there, without ids, from the sanitizer's per-type rules,
+ * media sync and "Used in": `block` (it includes images), lists and quotes (they hold
+ * `block`), images and every container are refused. Text and text blocks only.
+ */
+export const THEME_BLOCK_CONTENT_NAMES = ["inline", "text", "hardBreak", "paragraph", "heading", "codeBlock", "horizontalRule"] as const
+
+/** Why a theme block's content expression isn't allowed, or null. */
+export function themeBlockContentProblem(content: unknown): string | null {
+  if (typeof content !== "string") return "content must be a content expression"
+  const allowed = new Set<string>(THEME_BLOCK_CONTENT_NAMES)
+  const names = content.match(/[A-Za-z_][\w-]*/g) ?? []
+  const refused = names.filter((name) => !allowed.has(name))
+  if (refused.length === 0) return null
+  return `content "${content}" names ${[...new Set(refused)].join(", ")}; a theme block may only hold ${THEME_BLOCK_CONTENT_NAMES.join(", ")}`
+}
+
 const isDefinition = (value: unknown): value is ThemeBlockDefinition =>
   !!value && typeof value === "object" && typeof (value as ThemeBlockDefinition).type === "string" && !!(value as ThemeBlockDefinition).node
 
 /**
  * The definitions in `modules` (a glob of the blocks' index.ts), sorted by type. Throws on
  * a module without a `defineThemeBlock` default export, a type outside its theme's
- * namespace (`theme:<slug>/…`) or a type declared twice: a build must not ship a block
+ * namespace (`theme:<slug>/…`), a type declared twice or a content expression that could
+ * hold blocks or media (`themeBlockContentProblem`, #414): a build must not ship a block
  * the server, editor and API would disagree about. themeBlocks.loadable.test.ts runs this
  * over the repository's themes.
  */
@@ -47,6 +67,8 @@ export function collectThemeBlocks(modules: BlockModules): InstalledThemeBlock[]
       throw new Error(`theme block ${path}: type "${definition.type}" must be theme:${parts.slug}/<block>`)
     }
     if (byType.has(definition.type)) throw new Error(`theme block ${path}: type "${definition.type}" is declared twice`)
+    const contentProblem = themeBlockContentProblem(definition.content)
+    if (contentProblem) throw new Error(`theme block ${path}: ${contentProblem}`)
     byType.set(definition.type, { ...definition, dir: `${parts.slug}/${parts.dir}` })
   }
   return [...byType.values()].sort((a, b) => (a.type < b.type ? -1 : 1))

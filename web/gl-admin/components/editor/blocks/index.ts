@@ -4,6 +4,7 @@ import { headingBlocks } from "./headingBlocks"
 import { listBlocks } from "./listBlocks"
 import { textBlocks } from "./textBlocks"
 import { createMediaBlocks } from "./mediaBlocks"
+import { layoutBlocks } from "./layoutBlocks"
 
 export type Block = {
   title: string
@@ -12,7 +13,7 @@ export type Block = {
   // Markdown shortcut shown in the slash menu ("##", "-").
   hint?: string
   // The slash menu's section; basic blocks by default.
-  group?: "media"
+  group?: "media" | "layout"
   aliases: string[]
   command: ({ editor, range }: any) => void
   turnInto?: ({ editor }: any) => void
@@ -29,7 +30,7 @@ class EditorBlockRegistry {
   initialize() {
     if (this.initialized) return
     // Register system blocks
-    this.blocks = [...headingBlocks, ...listBlocks, ...textBlocks, ...createMediaBlocks()]
+    this.blocks = [...headingBlocks, ...listBlocks, ...textBlocks, ...createMediaBlocks(), ...layoutBlocks]
     this.initialized = true
     console.log(`[Editor Block Registry] Initialized with ${this.blocks.length} system blocks`)
   }
@@ -93,4 +94,4 @@ export const getTurnIntoCommandOptions = (): CommandSelectOption[] => {
 }
 
 // Export individual block groups for potential future use
-export { headingBlocks, listBlocks, textBlocks, createMediaBlocks }
+export { headingBlocks, listBlocks, textBlocks, createMediaBlocks, layoutBlocks }

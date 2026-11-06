@@ -493,6 +493,16 @@ are the most fragile part of the codebase. **Before editing anything under
   unreadable): "Create an account" shows only while it's on, and `/register` renders just the
   "Sign-up is closed" panel otherwise. Success is one "Check your email" panel whatever the
   address (the API doesn't say), then `/login?reason=signup-confirmed`.
+- **Nested blocks and the Group block (#414):** containers hold their blocks by id
+  (`gl-admin/lib/blocks-spec/nesting.ts` is the table; rules in
+  `gl-admin/lib/collaboration/CLAUDE.md`, "Containers"). Group: the slash menu's Layout section
+  (`components/editor/blocks/layoutBlocks.ts`; #415's catalog takes it over), the node
+  `extensions/GroupBlock.ts` (schema, commands) with its view in `BlockNodeViews.ts` (Width:
+  Content/Wide/Full, Background: None/Tinted, shown while the cursor is in the group), the public
+  `src/components/blocks/group/` (`div.group`, `is-tinted`, `alignwide`/`alignfull`) and the
+  default theme's styles in `themes/default/styles/theme.css`. History's diff compares a
+  container's children by id (`blockDiff.ts`, `VersionDiff`'s `version-diff__container`).
+  Theme blocks may hold text only since then (`THEME_BLOCK_CONTENT_NAMES`).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

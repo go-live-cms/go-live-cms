@@ -1,7 +1,7 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
 import DOMPurify from "dompurify"
-import { normalizeBlockColor } from "@gl-admin/lib/blocks-spec"
+import { CONTAINER_NODE_NAMES, isGroupAlign, isGroupStyle, normalizeBlockColor } from "@gl-admin/lib/blocks-spec"
 
 const pasteSanitizerPluginKey = new PluginKey("pasteSanitizer")
 
@@ -55,6 +55,13 @@ const CODE_LANGUAGE_CLASS = /(?:^|\s)(language-[\w-]+)(?:\s|$)/
 // the style attribute) is dropped, so a paste can never bring in a free colour.
 const BLOCK_COLOR_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "UL", "OL"])
 
+// Containers (#414): the editor's own clipboard renders a group as
+// `<div data-type="group" data-style data-align>` (GroupBlock.ts). Kept only on a <div>,
+// only that type and only valid values, so a pasted group is a group again (with fresh
+// ids: `data-block-id` is never kept) and no other markup can claim to be one.
+const CONTAINER_DIV_TYPES = new Set(["group"])
+const isGroupDiv = (node: Element) => node.nodeName === "DIV" && node.getAttribute("data-type") === "group"
+
 let purifier: ReturnType<typeof DOMPurify> | null = null
 
 // A private DOMPurify instance, so our hooks and config don't leak into any other caller.
@@ -63,7 +70,7 @@ function getPurifier() {
   purifier = DOMPurify(window)
   purifier.setConfig({
     ALLOWED_TAGS,
-    ALLOWED_ATTR: ["href", "class", "data-pm-slice", "data-block-color"],
+    ALLOWED_ATTR: ["href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align"],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
     ALLOWED_URI_REGEXP,
@@ -80,6 +87,12 @@ function getPurifier() {
       const color = BLOCK_COLOR_TAGS.has(node.nodeName) ? normalizeBlockColor(data.attrValue) : null
       if (color === null) data.keepAttr = false
       else data.attrValue = color
+    } else if (data.attrName === "data-type") {
+      if (node.nodeName !== "DIV" || !CONTAINER_DIV_TYPES.has(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "data-style") {
+      if (!isGroupDiv(node) || !isGroupStyle(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "data-align") {
+      if (!isGroupDiv(node) || !isGroupAlign(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-pm-slice") {
       const value = sanitizeSliceContext(data.attrValue)
       if (value === null) data.keepAttr = false
@@ -262,16 +275,19 @@ function parseStyle(style: string): Record<string, string> {
   return out
 }
 
-// Wrapper node types a pasted slice context may recreate.
-const SLICE_CONTEXT_TYPES = new Set(["bulletList", "orderedList", "listItem", "blockquote"])
+// Wrapper node types a pasted slice context may recreate: lists, quotes and the
+// containers (#414), so a slice copied from inside a group pastes into a new group with
+// default attrs.
+const SLICE_CONTEXT_TYPES = new Set(["bulletList", "orderedList", "listItem", "blockquote", ...CONTAINER_NODE_NAMES])
 
 /**
  * ProseMirror's own clipboard HTML carries `data-pm-slice="<openStart> <openEnd>
  * <context JSON>"`, where the context is a flat [typeName, attrs, …] list of the
  * wrapper nodes the slice was cut from. ProseMirror recreates those nodes with
  * `type.create(attrs)`, which validates nothing, and any web page can set the
- * attribute. So keep it only when every wrapper is a list/quote type, with attrs reset
- * to defaults (null), which also drops copied block ids. Returns null to remove it.
+ * attribute. So keep it only when every wrapper is a list, quote or container type, with
+ * attrs reset to defaults (null), which also drops copied block ids. Returns null to
+ * remove it.
  */
 function sanitizeSliceContext(value: string): string | null {
   const match = /^(\d+ \d+(?: -\d+)?) (.*)$/s.exec(value)

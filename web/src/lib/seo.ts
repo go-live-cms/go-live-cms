@@ -4,6 +4,8 @@
 
 import type { Post } from "../../gl-admin/lib/api/types"
 import type { BlockDocV1 } from "../../gl-admin/lib/blocks-spec"
+// The table only (no Zod): seo.ts stays a light import.
+import { blocksInReadingOrder } from "../../gl-admin/lib/blocks-spec/nesting"
 
 export type UrlStructure = "id" | "slug"
 
@@ -173,11 +175,12 @@ function pmText(node: unknown): string {
   return Array.isArray(content) ? content.map(pmText).join("") : ""
 }
 
-// The text of a post's first non-empty top-level paragraph, what themes show
+// The text of a post's first non-empty paragraph (in reading order, #414), what themes show
 // when the post has no excerpt (#357). "" when it has none.
 export function firstParagraphText(doc: BlockDocV1 | null | undefined): string {
   if (!doc?.blocks || !Array.isArray(doc.blocks_order)) return ""
-  for (const id of doc.blocks_order) {
+  // Reading order at any depth: a post that opens with a group finds its paragraph (#414).
+  for (const id of blocksInReadingOrder(doc)) {
     const block = doc.blocks[id]
     if (block?.type !== "paragraph") continue
     const attrs = (block.attrs || {}) as { text?: unknown; pm?: unknown }

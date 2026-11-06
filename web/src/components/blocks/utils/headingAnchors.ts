@@ -5,7 +5,7 @@
  * always gives the same ids, on every render. Tested in headingAnchors.test.ts.
  */
 import { createContext } from "react"
-import { blockAnchorId, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { blockAnchorId, blocksInReadingOrder, type Block, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 
 // Block id → element id for the doc being rendered; BlockRenderer provides it and
 // HeadingBlock reads it. Empty outside a BlockRenderer (no ids).
@@ -101,8 +101,9 @@ export function headingAnchors(doc: BlockDocV1 | null | undefined, reserved: Ite
   // hits a pattern becomes "-h2" instead (or the loop below would never end).
   const suffixed = (base: string, n: number) => (reservedByPattern(`${base}-${n}`) ? `${base}-h${n}` : `${base}-${n}`)
   const anchors: HeadingAnchor[] = []
-  // The same order BlockRenderer renders: blocks_order, each id once.
-  for (const blockId of new Set(doc.blocks_order)) {
+  // The order BlockRenderer renders: blocks_order and each container's children (a
+  // heading in a group gets an anchor too, #414), each id once.
+  for (const blockId of blocksInReadingOrder(doc)) {
     const block = doc.blocks[blockId] as Block | undefined
     if (!block || block.type !== "heading") continue
     const text = headingText(block)
