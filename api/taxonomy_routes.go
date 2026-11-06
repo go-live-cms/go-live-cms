@@ -106,6 +106,8 @@ func (server *Server) RegisterTaxonomyRoutes(v1 *gin.RouterGroup) {
 	terms.POST("", server.requireAuth(), requireContentEditor(server), server.createTaxonomyTerm)       // POST /api/v1/taxonomy/terms
 	terms.PUT("/:id", server.requireAuth(), requireContentEditor(server), server.updateTaxonomyTerm)    // PUT /api/v1/taxonomy/terms/:id
 	terms.DELETE("/:id", server.requireAuth(), requireContentEditor(server), server.deleteTaxonomyTerm) // DELETE /api/v1/taxonomy/terms/:id
+	// Merge terms into :id, with redirects (#331)
+	terms.POST("/:id/merge", server.requireAuth(), requireContentEditor(server), server.mergeTaxonomyTerms) // POST /api/v1/taxonomy/terms/:id/merge
 
 	// Cross-Module Integration
 	// Post-taxonomy term associations for bidirectional relationships

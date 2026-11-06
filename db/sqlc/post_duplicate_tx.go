@@ -35,6 +35,10 @@ func (store *SQLStore) DuplicatePostTx(ctx context.Context, arg DuplicatePostTxP
 		if err := q.CopyPostTaxonomyTerms(ctx, copyArgs); err != nil {
 			return err
 		}
+		// A source without a category (another type, then changed): the default (#331).
+		if _, err := q.EnsureDefaultCategory(ctx, []int64{post.ID}); err != nil {
+			return err
+		}
 		if err := q.CopyPostFeaturedImage(ctx, CopyPostFeaturedImageParams(copyArgs)); err != nil {
 			return err
 		}

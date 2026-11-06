@@ -136,6 +136,8 @@ func TestPostTaxonomyRelationship(t *testing.T) {
 
 	postTerms, err := testQueries.GetPostTaxonomyTerms(context.Background(), post.Post.ID)
 	require.NoError(t, err)
+	// Posts of type "post" also get the default category (#331): only this test's taxonomy.
+	postTerms = termsOfType(postTerms, taxonomyType.ID)
 	require.Len(t, postTerms, 1)
 	require.Equal(t, term.ID, postTerms[0].ID)
 
@@ -158,6 +160,7 @@ func TestPostTaxonomyRelationship(t *testing.T) {
 
 	postTerms, err = testQueries.GetPostTaxonomyTerms(context.Background(), post.Post.ID)
 	require.NoError(t, err)
+	postTerms = termsOfType(postTerms, taxonomyType.ID)
 	require.Len(t, postTerms, 0)
 }
 
@@ -202,6 +205,8 @@ func TestCreatePostWithTaxonomyTermsTx(t *testing.T) {
 
 	postTerms, err := testQueries.GetPostTaxonomyTerms(context.Background(), result.Post.ID)
 	require.NoError(t, err)
+	// Posts of type "post" also get the default category (#331): only this test's taxonomy.
+	postTerms = termsOfType(postTerms, taxonomyType.ID)
 	require.Len(t, postTerms, 2)
 }
 
@@ -228,6 +233,8 @@ func TestDeleteTaxonomyTermTx(t *testing.T) {
 
 	postTerms, err := testQueries.GetPostTaxonomyTerms(context.Background(), post.Post.ID)
 	require.NoError(t, err)
+	// Posts of type "post" also get the default category (#331): only this test's taxonomy.
+	postTerms = termsOfType(postTerms, taxonomyType.ID)
 	require.Len(t, postTerms, 0)
 }
 
@@ -260,6 +267,8 @@ func TestUpdatePostTaxonomyTermsTx(t *testing.T) {
 
 	postTerms, err := testQueries.GetPostTaxonomyTerms(context.Background(), post.Post.ID)
 	require.NoError(t, err)
+	// Posts of type "post" also get the default category (#331): only this test's taxonomy.
+	postTerms = termsOfType(postTerms, taxonomyType.ID)
 	require.Len(t, postTerms, 2)
 
 	termIDs := make([]int64, len(postTerms))
@@ -302,6 +311,8 @@ func TestCreateTaxonomyTermAndLinkTx(t *testing.T) {
 
 	postTerms, err := testQueries.GetPostTaxonomyTerms(context.Background(), post.Post.ID)
 	require.NoError(t, err)
+	// Posts of type "post" also get the default category (#331): only this test's taxonomy.
+	postTerms = termsOfType(postTerms, taxonomyType.ID)
 	require.Len(t, postTerms, 1)
 	require.Equal(t, result.TaxonomyTerm.ID, postTerms[0].ID)
 }
@@ -580,4 +591,16 @@ func createTaxonomyTermWithName(t *testing.T, taxonomyTypeID int64, name, descri
 	require.Equal(t, description, term.Description.String)
 
 	return term
+}
+
+// termsOfType keeps the terms of one taxonomy type: test posts are of type "post",
+// so they also have the default category (#331).
+func termsOfType(terms []GetPostTaxonomyTermsRow, typeID int64) []GetPostTaxonomyTermsRow {
+	kept := []GetPostTaxonomyTermsRow{}
+	for _, term := range terms {
+		if term.TaxonomyTypeID == typeID {
+			kept = append(kept, term)
+		}
+	}
+	return kept
 }

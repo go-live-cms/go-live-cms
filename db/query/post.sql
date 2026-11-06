@@ -75,7 +75,10 @@ SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, 
     su.update_at,
     -- The page's template (#336, 000045): the Pages list's Template column. The
     -- public list answers the published one instead.
-    p.page_template
+    p.page_template,
+    -- The category in the post's URL (#331, /:category/:slug): the published one for
+    -- /public/posts (the sitemap, feeds), the working one for the admin.
+    coalesce(golive_post_category_slug(p.id, @published_category::boolean), '')::text AS category_slug
 FROM posts p
 -- One row at most per post (the primary key). The ORDER BY below names every column
 -- with p.: su has a created_at too, and may gain others.
@@ -253,7 +256,10 @@ SELECT
     (CASE WHEN @published_byline::boolean
         THEN golive_post_published_byline(p.id)
         ELSE golive_post_byline(p.id)
-    END)::jsonb as authors
+    END)::jsonb as authors,
+    -- The category in the post's URL (#331, /:category/:slug): the published one for
+    -- the site, the working one for the admin.
+    coalesce(golive_post_category_slug(p.id, @published_byline::boolean), '')::text AS category_slug
 FROM posts p
 -- The scheduled update (#335): one row at most per post, as in ListPosts.
 LEFT JOIN post_scheduled_updates su ON su.post_id = p.id

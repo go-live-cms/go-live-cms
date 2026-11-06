@@ -183,7 +183,9 @@ SELECT
         FROM post_meta pm
         WHERE pm.post_id = p.id
     ) as meta,
-    golive_post_published_byline(p.id)::jsonb as authors
+    golive_post_published_byline(p.id)::jsonb as authors,
+    -- The published category in the post's URL (#331).
+    coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
 FROM posts p
 JOIN post_types pt ON pt.name = p.post_type
 WHERE p.post_status = 'published'
@@ -223,6 +225,7 @@ type ListPublishedPostsByAuthorRow struct {
 	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
+	CategorySlug          string                `json:"category_slug"`
 }
 
 // The author page's list, newest first. Same columns as ListPostsWithMeta so
@@ -259,6 +262,7 @@ func (q *Queries) ListPublishedPostsByAuthor(ctx context.Context, arg ListPublis
 			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
+			&i.CategorySlug,
 		); err != nil {
 			return nil, err
 		}

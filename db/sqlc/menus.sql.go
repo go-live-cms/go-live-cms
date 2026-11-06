@@ -184,6 +184,8 @@ SELECT
   mi.post_id, mi.term_id, mi.post_type, mi.url,
   p.published_settings AS post_published_settings,
   p.title AS post_title, p.slug AS post_slug, p.post_type AS post_post_type, p.post_status AS post_status,
+  -- The post's published category, for /:category/:slug URLs (#331).
+  coalesce(golive_post_category_slug(p.id, true), '')::text AS post_category_slug,
   ppt.public AS post_type_public, ppt.is_active AS post_type_active,
   t.name AS term_name, t.slug AS term_slug, tt.name AS taxonomy_name, tt.public AS taxonomy_public,
   apt.label AS archive_label, apt.public AS archive_public, apt.is_active AS archive_active
@@ -213,6 +215,7 @@ type ListMenuItemsWithTargetsRow struct {
 	PostSlug              sql.NullString        `json:"post_slug"`
 	PostPostType          sql.NullString        `json:"post_post_type"`
 	PostStatus            sql.NullString        `json:"post_status"`
+	PostCategorySlug      string                `json:"post_category_slug"`
 	PostTypePublic        sql.NullBool          `json:"post_type_public"`
 	PostTypeActive        sql.NullBool          `json:"post_type_active"`
 	TermName              sql.NullString        `json:"term_name"`
@@ -253,6 +256,7 @@ func (q *Queries) ListMenuItemsWithTargets(ctx context.Context, menuID int64) ([
 			&i.PostSlug,
 			&i.PostPostType,
 			&i.PostStatus,
+			&i.PostCategorySlug,
 			&i.PostTypePublic,
 			&i.PostTypeActive,
 			&i.TermName,

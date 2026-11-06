@@ -799,45 +799,49 @@ SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, 
     su.update_at,
     -- The page's template (#336, 000045): the Pages list's Template column. The
     -- public list answers the published one instead.
-    p.page_template
+    p.page_template,
+    -- The category in the post's URL (#331, /:category/:slug): the published one for
+    -- /public/posts (the sitemap, feeds), the working one for the admin.
+    coalesce(golive_post_category_slug(p.id, $1::boolean), '')::text AS category_slug
 FROM posts p
 LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
 WHERE
-    ($1::text = '' OR p.post_type = $1)
+    ($2::text = '' OR p.post_type = $2)
     -- status: one status or a comma list; none = every status but the trash (#327).
-    AND (CASE WHEN $2::text = '' THEN p.post_status <> 'trash'
-              ELSE p.post_status = ANY(string_to_array(replace($2::text, ' ', ''), ',')) END)
+    AND (CASE WHEN $3::text = '' THEN p.post_status <> 'trash'
+              ELSE p.post_status = ANY(string_to_array(replace($3::text, ' ', ''), ',')) END)
     -- Filters (#327): credited in the byline (user_posts), and linked to every term given.
-    AND ($3::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = $3::bigint))
+    AND ($4::bigint = 0 OR EXISTS (SELECT 1 FROM user_posts fa WHERE fa.post_id = p.id AND fa.user_id = $4::bigint))
     AND NOT EXISTS (
-        SELECT 1 FROM unnest($4::bigint[]) AS ft(id)
+        SELECT 1 FROM unnest($5::bigint[]) AS ft(id)
         WHERE NOT EXISTS (SELECT 1 FROM post_taxonomy_relationships fr WHERE fr.post_id = p.id AND fr.taxonomy_term_id = ft.id)
     )
-    AND ($5::bigint = 0 OR p.user_id = $5)  -- Add user filter
+    AND ($6::bigint = 0 OR p.user_id = $6)  -- Add user filter
     -- What the caller may read (#393): 0 = everything (moderators, /public); a
     -- contributor's id = their own posts plus published ones (canReadPost).
-    AND ($6::bigint = 0 OR p.user_id = $6 OR p.post_status = 'published')
-    AND (NOT $7::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
+    AND ($7::bigint = 0 OR p.user_id = $7 OR p.post_status = 'published')
+    AND (NOT $8::boolean OR golive_post_has_unpublished_changes(p.id, p.post_status, p.block_doc_hash, p.published_block_hash, p.published_settings))
     -- Review requested (#323): an open review request; for a contributor only on
     -- their own posts (they don't see others' requests).
-    AND (NOT $8::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($6::bigint = 0 OR p.user_id = $6)))
+    AND (NOT $9::boolean OR (EXISTS (SELECT 1 FROM review_requests rr WHERE rr.post_id = p.id AND rr.status = 'open') AND ($7::bigint = 0 OR p.user_id = $7)))
 ORDER BY
-    CASE WHEN $9::text = 'created_at' AND $10::text = 'asc' THEN p.created_at END ASC,
-    CASE WHEN $9::text = 'created_at' AND $10::text = 'desc' THEN p.created_at END DESC,
-    CASE WHEN $9::text = 'changed_at' AND $10::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
-    CASE WHEN $9::text = 'changed_at' AND $10::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
-    CASE WHEN $9::text = 'title' AND $10::text = 'asc' THEN p.title END ASC,
-    CASE WHEN $9::text = 'title' AND $10::text = 'desc' THEN p.title END DESC,
-    CASE WHEN $9::text = 'menu_order' AND $10::text = 'asc' THEN p.menu_order END ASC,
-    CASE WHEN $9::text = 'menu_order' AND $10::text = 'desc' THEN p.menu_order END DESC,
+    CASE WHEN $10::text = 'created_at' AND $11::text = 'asc' THEN p.created_at END ASC,
+    CASE WHEN $10::text = 'created_at' AND $11::text = 'desc' THEN p.created_at END DESC,
+    CASE WHEN $10::text = 'changed_at' AND $11::text = 'asc' THEN GREATEST(p.changed_at, p.created_at) END ASC,
+    CASE WHEN $10::text = 'changed_at' AND $11::text = 'desc' THEN GREATEST(p.changed_at, p.created_at) END DESC,
+    CASE WHEN $10::text = 'title' AND $11::text = 'asc' THEN p.title END ASC,
+    CASE WHEN $10::text = 'title' AND $11::text = 'desc' THEN p.title END DESC,
+    CASE WHEN $10::text = 'menu_order' AND $11::text = 'asc' THEN p.menu_order END ASC,
+    CASE WHEN $10::text = 'menu_order' AND $11::text = 'desc' THEN p.menu_order END DESC,
     -- Stable tiebreaker in the requested direction (also serves sort=id).
-    CASE WHEN $10::text = 'asc' THEN p.id END ASC,
+    CASE WHEN $11::text = 'asc' THEN p.id END ASC,
     p.id DESC
-LIMIT $12
-OFFSET $11
+LIMIT $13
+OFFSET $12
 `
 
 type ListPostsParams struct {
+	PublishedCategory  bool    `json:"published_category"`
 	PostType           string  `json:"post_type"`
 	PostStatus         string  `json:"post_status"`
 	AuthorID           int64   `json:"author_id"`
@@ -874,6 +878,7 @@ type ListPostsRow struct {
 	TrashedFromStatus     sql.NullString        `json:"trashed_from_status"`
 	UpdateAt              sql.NullTime          `json:"update_at"`
 	PageTemplate          string                `json:"page_template"`
+	CategorySlug          string                `json:"category_slug"`
 }
 
 // One row at most per post (the primary key). The ORDER BY below names every column
@@ -884,6 +889,7 @@ type ListPostsRow struct {
 // keep the 0001-01-01 sentinel and rank by creation time instead.
 func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPostsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPosts,
+		arg.PublishedCategory,
 		arg.PostType,
 		arg.PostStatus,
 		arg.AuthorID,
@@ -926,6 +932,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]ListPos
 			&i.TrashedFromStatus,
 			&i.UpdateAt,
 			&i.PageTemplate,
+			&i.CategorySlug,
 		); err != nil {
 			return nil, err
 		}
@@ -1131,7 +1138,10 @@ SELECT
     (CASE WHEN $2::boolean
         THEN golive_post_published_byline(p.id)
         ELSE golive_post_byline(p.id)
-    END)::jsonb as authors
+    END)::jsonb as authors,
+    -- The category in the post's URL (#331, /:category/:slug): the published one for
+    -- the site, the working one for the admin.
+    coalesce(golive_post_category_slug(p.id, $2::boolean), '')::text AS category_slug
 FROM posts p
 LEFT JOIN post_scheduled_updates su ON su.post_id = p.id
 WHERE
@@ -1209,6 +1219,7 @@ type ListPostsWithMetaRow struct {
 	UpdateAt              sql.NullTime          `json:"update_at"`
 	Meta                  interface{}           `json:"meta"`
 	Authors               json.RawMessage       `json:"authors"`
+	CategorySlug          string                `json:"category_slug"`
 }
 
 // The scheduled update (#335): one row at most per post, as in ListPosts.
@@ -1263,6 +1274,7 @@ func (q *Queries) ListPostsWithMeta(ctx context.Context, arg ListPostsWithMetaPa
 			&i.UpdateAt,
 			&i.Meta,
 			&i.Authors,
+			&i.CategorySlug,
 		); err != nil {
 			return nil, err
 		}

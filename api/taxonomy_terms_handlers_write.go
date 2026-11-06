@@ -69,6 +69,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -136,6 +137,9 @@ func (server *Server) createTaxonomyTerm(c *gin.Context) {
 	}
 	if slug == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "slug can't be empty"})
+		return
+	}
+	if !server.checkCategorySlug(c, taxonomyType, slug) {
 		return
 	}
 
@@ -273,19 +277,30 @@ func (server *Server) updateTaxonomyTerm(c *gin.Context) {
 		updateParams.Description = sql.NullString{String: *req.Description, Valid: true}
 	}
 
-	// parent_id 0 moves the term to the top level
-	if req.ParentID != nil && *req.ParentID == 0 {
-		updateParams.ParentID = sql.NullInt64{}
-	} else if req.ParentID != nil && (!existingTerm.ParentID.Valid || existingTerm.ParentID.Int64 != *req.ParentID) {
-		taxonomyType, err := server.store.GetTaxonomyTypeByID(c.Request.Context(), existingTerm.TaxonomyTypeID)
+	parentChanges := req.ParentID != nil && *req.ParentID != 0 &&
+		(!existingTerm.ParentID.Valid || existingTerm.ParentID.Int64 != *req.ParentID)
+	slugChanges := updateParams.Slug != existingTerm.Slug
+	// The type decides the parent rules, the category rules and the redirect (#331).
+	var taxonomyType db.TaxonomyType
+	if parentChanges || slugChanges {
+		taxonomyType, err = server.store.GetTaxonomyTypeByID(c.Request.Context(), existingTerm.TaxonomyTypeID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate taxonomy type"})
 			return
 		}
+	}
+
+	// parent_id 0 moves the term to the top level
+	if req.ParentID != nil && *req.ParentID == 0 {
+		updateParams.ParentID = sql.NullInt64{}
+	} else if parentChanges {
 		if !server.checkTermParent(c, taxonomyType, *req.ParentID, id) {
 			return
 		}
 		updateParams.ParentID = sql.NullInt64{Int64: *req.ParentID, Valid: true}
+	}
+	if slugChanges && !server.checkCategorySlug(c, taxonomyType, updateParams.Slug) {
+		return
 	}
 
 	if req.SortOrder != nil {
@@ -302,8 +317,23 @@ func (server *Server) updateTaxonomyTerm(c *gin.Context) {
 		updateParams.Meta = pqtype.NullRawMessage{RawMessage: metaBytes, Valid: true}
 	}
 
-	// Execute update in database
-	updatedTerm, err := server.store.UpdateTaxonomyTerm(c.Request.Context(), updateParams)
+	// Execute update in database. A new slug of a term with a public archive also
+	// redirects its old URL (#331), in the same transaction.
+	var updatedTerm db.TaxonomyTerm
+	if slugChanges && taxonomyType.Public {
+		updatedTerm, err = server.store.UpdateTaxonomyTermTx(c.Request.Context(), db.UpdateTaxonomyTermTxParams{
+			UpdateTaxonomyTermParams: updateParams,
+			Redirect: &db.AddRedirectParams{
+				FromPath:   termSitePath(taxonomyType.Name, existingTerm.Slug),
+				ToPath:     termSitePath(taxonomyType.Name, updateParams.Slug),
+				StatusCode: http.StatusMovedPermanently,
+				Source:     db.RedirectSourceTerm,
+				CreatedBy:  getAuthPayload(c).UserID,
+			},
+		})
+	} else {
+		updatedTerm, err = server.store.UpdateTaxonomyTerm(c.Request.Context(), updateParams)
+	}
 	if err != nil {
 		// Handle unique constraint violations (slug conflicts)
 		if isUniqueViolation(err) {
@@ -386,8 +416,13 @@ func (server *Server) deleteTaxonomyTerm(c *gin.Context) {
 		return
 	}
 
-	// Execute transactional deletion with cascade
+	// Execute transactional deletion with cascade. A category's posts move to the
+	// default category; the default itself can't go (#331).
 	err = server.store.DeleteTaxonomyTermTx(c.Request.Context(), id)
+	if errors.Is(err, db.ErrDefaultTerm) {
+		c.JSON(http.StatusConflict, defaultTermResponse)
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete taxonomy term"})
 		return
@@ -401,7 +436,9 @@ func (server *Server) deleteTaxonomyTerm(c *gin.Context) {
 // addPostTaxonomyTerm handles PUT /posts/:id/taxonomy-terms/:term_id: assigns
 // one term to a post. It's idempotent and leaves the post's other terms alone,
 // so editors changing different terms at the same time don't overwrite each
-// other (PUT /posts/:id with taxonomy_ids replaces the whole set).
+// other (PUT /posts/:id with taxonomy_ids replaces the whole set). A category
+// replaces the post's category: a post has one (#331); replaced_term_ids says
+// which it replaced.
 func (server *Server) addPostTaxonomyTerm(c *gin.Context) {
 	postID, termID, ok := server.postTermParams(c)
 	if !ok {
@@ -416,34 +453,33 @@ func (server *Server) addPostTaxonomyTerm(c *gin.Context) {
 		return
 	}
 
-	_, err := server.store.AddPostToTaxonomyTerm(c.Request.Context(), db.AddPostToTaxonomyTermParams{
-		PostID:         postID,
-		TaxonomyTermID: termID,
-	})
-	// Already assigned is fine: the request asks for an end state
-	if err != nil && !isUniqueViolation(err) {
+	result, err := server.store.SetPostTermTx(c.Request.Context(), db.SetPostTermTxParams{PostID: postID, TermID: termID})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to assign taxonomy term"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "taxonomy term assigned"})
+	c.JSON(http.StatusOK, gin.H{"message": "taxonomy term assigned", "replaced_term_ids": result.ReplacedTermIDs})
 }
 
 // removePostTaxonomyTerm handles DELETE /posts/:id/taxonomy-terms/:term_id.
-// Idempotent: removing a term the post doesn't have succeeds.
+// Idempotent: removing a term the post doesn't have succeeds. A post of type "post"
+// left without a category gets the default one back (#331): default_term_id is set
+// when it did.
 func (server *Server) removePostTaxonomyTerm(c *gin.Context) {
 	postID, termID, ok := server.postTermParams(c)
 	if !ok {
 		return
 	}
-	err := server.store.RemovePostFromTaxonomyTerm(c.Request.Context(), db.RemovePostFromTaxonomyTermParams{
-		PostID:         postID,
-		TaxonomyTermID: termID,
-	})
+	defaultID, err := server.store.RemovePostTermTx(c.Request.Context(), db.SetPostTermTxParams{PostID: postID, TermID: termID})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove taxonomy term"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "taxonomy term removed"})
+	var restored *int64
+	if defaultID != 0 {
+		restored = &defaultID
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "taxonomy term removed", "default_term_id": restored})
 }
 
 // postTermParams parses :id and :term_id and checks that the post exists,
@@ -504,6 +540,25 @@ func (server *Server) checkTermParent(c *gin.Context, taxonomyType db.TaxonomyTy
 		c.JSON(http.StatusBadRequest, gin.H{"error": "parent term must belong to the same taxonomy type"})
 		return false
 	}
+	// Categories nest one level (#331): under a top-level category only, and a
+	// category with children stays top level.
+	if taxonomyType.Name == db.CategoryTaxonomy {
+		if parent.ParentID.Valid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "categories nest one level: the parent must be a top-level category", "code": "nesting_too_deep"})
+			return false
+		}
+		if termID != 0 {
+			children, err := server.store.CountTermChildren(c.Request.Context(), sql.NullInt64{Int64: termID, Valid: true})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate parent term"})
+				return false
+			}
+			if children > 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "categories nest one level: a category with subcategories can't have a parent", "code": "nesting_too_deep"})
+				return false
+			}
+		}
+	}
 	if termID == 0 {
 		return true
 	}
@@ -525,4 +580,168 @@ func (server *Server) checkTermParent(c *gin.Context, taxonomyType db.TaxonomyTy
 		}
 	}
 	return true
+}
+
+// defaultTermResponse is the 409 for deleting or merging away a taxonomy's default
+// term (#331: the category type's Uncategorized).
+var defaultTermResponse = gin.H{"error": "the default category can't be deleted", "code": "default_term"}
+
+// reservedCategorySlugs are first path segments the public site already uses: a
+// category with one of these slugs would never be reached by /:category/:slug (#331).
+// Post type and taxonomy names are checked against the database.
+var reservedCategorySlugs = map[string]bool{
+	"gl-admin": true, "api": true, "uploads": true, "themes": true, "_astro": true,
+	"author": true, "search": true, "page": true, "feeds": true, "rss.xml": true,
+	"sitemap.xml": true, "robots.txt": true, "login": true, "register": true,
+	"forgot-password": true, "reset-password": true, "accept-invite": true,
+	"confirm-email": true, "verify-email": true, "taxonomies": true, "users": true,
+	"about": true, "test-theme": true, "404": true, "500": true,
+}
+
+// checkCategorySlug refuses (400 slug_reserved) a category slug that is another
+// public route's first segment. Other taxonomies' slugs are only the second segment
+// of /{taxonomy}/{slug}, so anything goes there.
+func (server *Server) checkCategorySlug(c *gin.Context, taxonomyType db.TaxonomyType, slug string) bool {
+	if taxonomyType.Name != db.CategoryTaxonomy {
+		return true
+	}
+	reserved := reservedCategorySlugs[slug]
+	if !reserved {
+		taken, err := server.store.IsPostTypeOrTaxonomyName(c.Request.Context(), slug)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to validate slug"})
+			return false
+		}
+		reserved = taken
+	}
+	if reserved {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":  "this slug is used by another part of the site: category URLs would never reach their posts",
+			"code":   "slug_reserved",
+			"fields": gin.H{"slug": "is used by another part of the site"},
+		})
+		return false
+	}
+	return true
+}
+
+// MergeTaxonomyTermsRequest is POST /taxonomy/terms/:id/merge: the terms merged into
+// :id, the one kept.
+type MergeTaxonomyTermsRequest struct {
+	SourceIDs []int64 `json:"source_ids" binding:"required,min=1,max=100,dive,gt=0"`
+}
+
+// mergeTaxonomyTerms handles POST /taxonomy/terms/:id/merge (#331; editors and
+// admins): every post with a source term gets :id instead (the published sets too,
+// so the site follows at once), the sources are deleted, and each source's archive
+// URL redirects to the kept term's. Flat taxonomies only (tags): a category tree's
+// children and the one-category rule make a category merge a different operation.
+func (server *Server) mergeTaxonomyTerms(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid taxonomy term ID"})
+		return
+	}
+	var req MergeTaxonomyTermsRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	ctx := c.Request.Context()
+	target, err := server.store.GetTaxonomyTerm(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "taxonomy term not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get taxonomy term"})
+		return
+	}
+	taxonomyType, err := server.store.GetTaxonomyTypeByID(ctx, target.TaxonomyTypeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get taxonomy type"})
+		return
+	}
+	if taxonomyType.Hierarchical {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "only terms of a flat taxonomy, such as tags, can be merged", "code": "merge_not_supported"})
+		return
+	}
+
+	var sources []db.TaxonomyTerm
+	seen := map[int64]bool{}
+	for _, sourceID := range req.SourceIDs {
+		if sourceID == id {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "a term can't be merged into itself", "code": "merge_into_itself"})
+			return
+		}
+		if seen[sourceID] {
+			continue
+		}
+		seen[sourceID] = true
+		source, err := server.store.GetTaxonomyTerm(ctx, sourceID)
+		if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "taxonomy term not found", "term_id": sourceID})
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get taxonomy term"})
+			return
+		}
+		if source.TaxonomyTypeID != target.TaxonomyTypeID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "terms of different taxonomies can't be merged", "code": "merge_type_mismatch"})
+			return
+		}
+		sources = append(sources, source)
+	}
+
+	caller := getAuthPayload(c).UserID
+	arg := db.MergeTaxonomyTermsTxParams{TargetID: target.ID}
+	for _, source := range sources {
+		arg.SourceIDs = append(arg.SourceIDs, source.ID)
+		if taxonomyType.Public {
+			arg.Redirects = append(arg.Redirects, &db.AddRedirectParams{
+				FromPath:   termSitePath(taxonomyType.Name, source.Slug),
+				ToPath:     termSitePath(taxonomyType.Name, target.Slug),
+				StatusCode: http.StatusMovedPermanently,
+				Source:     db.RedirectSourceMerge,
+				CreatedBy:  caller,
+			})
+		}
+	}
+	result, err := server.store.MergeTaxonomyTermsTx(ctx, arg)
+	switch {
+	case errors.Is(err, db.ErrDefaultTerm):
+		c.JSON(http.StatusConflict, gin.H{"error": "the default term can't be merged away", "code": "default_term"})
+		return
+	case errors.Is(err, db.ErrMergeSource):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "terms of different taxonomies can't be merged", "code": "merge_type_mismatch"})
+		return
+	case errors.Is(err, sql.ErrNoRows):
+		c.JSON(http.StatusNotFound, gin.H{"error": "taxonomy term not found"})
+		return
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to merge taxonomy terms"})
+		return
+	}
+
+	server.recordRequestActivity(c, activityEvent{
+		Verb:       db.ActivityTermsMerged,
+		ObjectType: db.ActivityObjectTerm,
+		ObjectID:   target.ID,
+		Payload:    map[string]any{"source_ids": result.MergedIDs, "moved_posts": result.MovedPosts, "taxonomy": taxonomyType.Name},
+	})
+	redirects := make([]RedirectResponse, len(result.Redirects))
+	author := server.redirectAuthor(c, caller)
+	for i, r := range result.Redirects {
+		redirects[i] = toRedirectResponse(r, author)
+	}
+	mergedIDs := result.MergedIDs
+	if mergedIDs == nil {
+		mergedIDs = []int64{}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"taxonomy_term": toTaxonomyTermResponse(result.Target),
+		"merged_ids":    mergedIDs,
+		"moved_posts":   result.MovedPosts,
+		"redirects":     redirects,
+	})
 }

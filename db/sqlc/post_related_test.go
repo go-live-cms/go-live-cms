@@ -241,14 +241,14 @@ func TestListRelatedPosts(t *testing.T) {
 	})
 
 	t.Run("term_id counts only that term", func(t *testing.T) {
-		// current has one category; a second one shared only by twoTags must not
-		// put twoTags in the first category's list.
-		tagPost(t, current, otherCat)
-		t.Cleanup(func() {
-			require.NoError(t, testQueries.RemovePostFromTaxonomyTerm(ctx, RemovePostFromTaxonomyTermParams{PostID: current.ID, TaxonomyTermID: otherCat.ID}))
-		})
+		// A tag current shares only with twoTags and unrelated must not put them in its
+		// category's list. (A post has one category since #331, so the second term is a tag.)
+		tag3 := relatedTestTerm(t, "tag")
+		for _, p := range []Post{current, twoTags, unrelated} {
+			tagPost(t, p, tag3)
+		}
 		require.Equal(t, []int64{catAndTag.ID, catOnly.ID}, relatedIDs(relatedIn(current, 10, "", cat.ID, false)))
-		require.Equal(t, []int64{unrelated.ID, twoTags.ID}, relatedIDs(relatedIn(current, 10, "", otherCat.ID, false)))
+		require.Equal(t, []int64{unrelated.ID, twoTags.ID}, relatedIDs(relatedIn(current, 10, "", tag3.ID, false)))
 	})
 
 	t.Run("falls back to the latest posts when nothing shares a term", func(t *testing.T) {
