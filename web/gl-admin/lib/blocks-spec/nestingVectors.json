@@ -149,6 +149,18 @@
       }
     },
     {
+      "name": "a group holding a block that isn't an object",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["odd-000001"] },
+          "odd-000001": "paragraph"
+        }
+      }
+    },
+    {
       "name": "children on a paragraph",
       "valid": false,
       "doc": {

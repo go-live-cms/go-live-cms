@@ -239,5 +239,9 @@ describe("the group's view (#414)", () => {
     const dom = ed.view.dom.querySelector(".editor-group") as HTMLElement
     ;(dom.querySelector('button[data-attr="align"][data-value="full"]') as HTMLButtonElement).click()
     expect(ed.state.doc.child(0).attrs.align).toBe("content")
+    // Promoted back (no node update in between): the same buttons work again.
+    ed.setEditable(true)
+    ;(dom.querySelector('button[data-attr="align"][data-value="full"]') as HTMLButtonElement).click()
+    expect(ed.state.doc.child(0).attrs.align).toBe("full")
   })
 })

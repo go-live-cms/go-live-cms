@@ -88,7 +88,9 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
 const CORE_TYPES = new Set(Object.keys(BLOCK_NODE_NAMES))
 const FLOW = new Set<string>(FLOW_TYPES)
 const LISTS = new Set<string>(LIST_TYPES)
-const LIST_NODES = new Set(LIST_TYPES.map((type) => BLOCK_NODE_NAMES[type]))
+/** The ProseMirror node names of the list types. */
+export const LIST_NODE_NAMES: ReadonlySet<string> = new Set(LIST_TYPES.map((type) => BLOCK_NODE_NAMES[type]))
+const LIST_NODES = LIST_NODE_NAMES
 const CONTAINER_RULES: Readonly<Record<string, ContainerRule>> = CONTAINERS
 const CONTAINER_BY_NODE = new Map(Object.entries(CONTAINER_RULES).map(([type, rule]) => [rule.node, { type, ...rule }]))
 const SLOTS = new Map(
@@ -124,7 +126,7 @@ export function isCoreBlockType(type: unknown): boolean {
  * type from a newer build kept by a stand-in), which is one node holding no blocks.
  */
 export function isFlowType(type: unknown): boolean {
-  return typeof type === "string" && (FLOW.has(type) || !CORE_TYPES.has(type))
+  return typeof type === "string" && type !== "" && (FLOW.has(type) || !CORE_TYPES.has(type))
 }
 
 /** Whether a `containerType` block may have a child of `childType`. */

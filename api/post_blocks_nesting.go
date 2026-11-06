@@ -46,7 +46,8 @@ func isCoreBlockType(t string) bool {
 // isFlowBlockType: a core flow type, or any type that isn't core (a theme block, a type
 // from a newer build), which is one node holding no blocks.
 func isFlowBlockType(t string) bool {
-	return flowBlockTypes[t] || !isCoreBlockType(t)
+	// "" is no type (a block that isn't an object has none): never flow, as in nesting.ts.
+	return t != "" && (flowBlockTypes[t] || !isCoreBlockType(t))
 }
 
 // containerAccepts reports whether a containerType block may hold a childType block.

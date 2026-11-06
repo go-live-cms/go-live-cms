@@ -322,9 +322,10 @@ class GroupView implements NodeView {
     for (const [key, button] of this.buttons) {
       const [attr, value] = key.split(":")
       button.setAttribute("aria-pressed", String((attr === "align" ? align : style) === value))
-      button.disabled = !this.view.editable
     }
-    this.settings.hidden = !this.view.editable
+    // Not hidden or disabled here: `editable` changes without an update (a demotion or a
+    // promotion, #313). The editor's `[contenteditable="false"]` style hides the settings,
+    // and `set` checks `editable` when a button is used.
   }
 
   update(node: PMNode) {

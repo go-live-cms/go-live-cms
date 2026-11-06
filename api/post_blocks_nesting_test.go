@@ -105,6 +105,7 @@ func TestNestingTable(t *testing.T) {
 			require.False(t, containerAccepts("group", childType), childType)
 		}
 		require.False(t, containerAccepts("paragraph", "paragraph"))
+		require.False(t, containerAccepts("group", ""))
 	})
 }
 

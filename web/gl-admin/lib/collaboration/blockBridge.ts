@@ -21,6 +21,7 @@ import {
   isBlockNode,
   isGroupAlign,
   isGroupStyle,
+  LIST_NODE_NAMES,
   synthesizedChildId,
   type ContainerRule,
 } from "../blocks-spec"
@@ -114,7 +115,6 @@ export function pmToBlockDoc(pmDoc: PMNode): BlockDocV1 {
   }
 }
 
-const LIST_NODE_NAMES = new Set(["bulletList", "orderedList"])
 
 /**
  * A container node's child blocks, in order: its children that are blocks, and a slot's
@@ -912,8 +912,7 @@ export function stampBlockIds(node: PMNode, _schema?: Schema): PMNode {
           next = child.type.create({ ...child.attrs, "data-block-id": fresh }, child.content, child.marks)
         }
       }
-      const inner = stamp(next, next.type.name)
-      if (inner !== next) next = inner
+      next = stamp(next, next.type.name)
       if (next !== child) changed = true
       children.push(next)
     })

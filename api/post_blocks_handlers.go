@@ -88,16 +88,9 @@ func (doc *BlockDocV1) prepareForStore(themeBlocks ThemeBlockManifest) error {
 		return err
 	}
 
-	// Validate Block Spec v1
+	// Validate Block Spec v1. (blocks_order integrity is checkBlockNesting's rule 1.)
 	if doc.DocVersion != 1 {
 		return fmt.Errorf("unsupported doc_version: %d", doc.DocVersion)
-	}
-
-	// Validate blocks_order integrity
-	for _, blockID := range doc.BlocksOrder {
-		if _, exists := doc.Blocks[blockID]; !exists {
-			return fmt.Errorf("block_id %s in blocks_order not found in blocks", blockID)
-		}
 	}
 	return nil
 }

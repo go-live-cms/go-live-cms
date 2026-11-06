@@ -113,6 +113,8 @@ describe("the nesting table", () => {
     expect(acceptsChild("group", "group")).toBe(false)
     expect(acceptsChild("group", "list_item")).toBe(false)
     expect(acceptsChild("paragraph", "paragraph")).toBe(false)
+    expect(acceptsChild("group", "")).toBe(false)
+    expect(acceptsChild("group", undefined)).toBe(false)
   })
 })
 
