@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/mock/gomock"
@@ -248,6 +249,9 @@ func TestPutInternalPostCollab(t *testing.T) {
 						require.NoError(t, json.Unmarshal(arg.BlockDoc, &doc))
 						require.Equal(t, []string{"a", "img"}, doc.BlocksOrder)
 						require.NotContains(t, string(arg.BlockDoc), "javascript:")
+						// #328: every block id for the prune, no attribution sent.
+						require.Equal(t, []string{"a", "img"}, arg.BlockIDs)
+						require.Empty(t, arg.BlockEdits)
 						return db.StorePostCollabTxResult{BlockRevision: 5}, nil
 					})
 			},
@@ -273,6 +277,69 @@ func TestPutInternalPostCollab(t *testing.T) {
 			},
 			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
 				require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			},
+		},
+		{
+			// #328: the edits of blocks in block_doc go to the transaction, one per
+			// block (the last wins); one of a block the doc doesn't have is left
+			// out, never refused (attribution must not cost a store).
+			name: "BlockEdits",
+			body: collabStoreBody(t, map[string]any{"block_edits": []map[string]any{
+				{"block_id": "a", "user_id": 3, "edited_at": "2026-11-06T10:00:00Z"},
+				{"block_id": "ghost", "user_id": 3, "edited_at": "2026-11-06T10:00:01Z"},
+				{"block_id": "a", "user_id": 5, "edited_at": "2026-11-06T10:00:02Z"},
+				{"block_id": "img", "user_id": 4, "edited_at": "2026-11-06T10:00:03.5+01:00"},
+			}}),
+			authorization: auth,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().StorePostCollabTx(gomock.Any(), gomock.Any()).Times(1).
+					DoAndReturn(func(_ any, arg db.StorePostCollabTxParams) (db.StorePostCollabTxResult, error) {
+						require.Equal(t, []string{"a", "img"}, arg.BlockIDs)
+						require.Len(t, arg.BlockEdits, 2)
+						require.Equal(t, "a", arg.BlockEdits[0].BlockID)
+						require.Equal(t, int64(5), arg.BlockEdits[0].UserID)
+						require.True(t, time.Date(2026, 11, 6, 10, 0, 2, 0, time.UTC).Equal(arg.BlockEdits[0].EditedAt))
+						require.Equal(t, "img", arg.BlockEdits[1].BlockID)
+						require.Equal(t, int64(4), arg.BlockEdits[1].UserID)
+						require.True(t, time.Date(2026, 11, 6, 9, 0, 3, 500_000_000, time.UTC).Equal(arg.BlockEdits[1].EditedAt))
+						return db.StorePostCollabTxResult{BlockRevision: 5}, nil
+					})
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			},
+		},
+		{
+			// A state-only store never touches attribution, whatever it carries.
+			name: "StateOnlyIgnoresBlockEdits",
+			body: collabStoreBody(t, map[string]any{"block_doc": nil, "block_edits": []map[string]any{
+				{"block_id": "a", "user_id": 3, "edited_at": "2026-11-06T10:00:00Z"},
+			}}),
+			authorization: auth,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().StorePostCollabTx(gomock.Any(), gomock.Any()).Times(1).
+					DoAndReturn(func(_ any, arg db.StorePostCollabTxParams) (db.StorePostCollabTxResult, error) {
+						require.Nil(t, arg.BlockDoc)
+						require.Nil(t, arg.BlockIDs)
+						require.Nil(t, arg.BlockEdits)
+						return db.StorePostCollabTxResult{BlockRevision: 4}, nil
+					})
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			},
+		},
+		{
+			name: "BlockEditWithoutUser",
+			body: collabStoreBody(t, map[string]any{"block_edits": []map[string]any{
+				{"block_id": "a", "user_id": 0, "edited_at": "2026-11-06T10:00:00Z"},
+			}}),
+			authorization: auth,
+			buildStubs: func(store *mockdb.MockStore) {
+				store.EXPECT().StorePostCollabTx(gomock.Any(), gomock.Any()).Times(0)
+			},
+			checkResponse: func(t *testing.T, recorder *httptest.ResponseRecorder) {
+				require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
 			},
 		},
 		{

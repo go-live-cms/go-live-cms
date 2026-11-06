@@ -20,8 +20,11 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
     if (node.type.name === "horizontalRule") return "divider"
     if (node.type.name === "codeBlock") return "code-block"
     if (node.type.name === "blockquote") return "quote"
+    if (node.type.name === "pullQuote") return "pull-quote"
+    if (node.type.name === "callout") return "callout"
     if (node.type.name === "orderedList") return "numbered-list"
     if (node.type.name === "bulletList") return "bullet-list"
+    if (node.type.name === "taskList") return "todo-list"
     if (node.type.name === "heading") {
       const lvl = (node.attrs?.level ?? 1) as number
       return `heading-${Math.min(Math.max(lvl, 1), 6)}`
@@ -30,7 +33,10 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
   }
 
   if (editor.isActive("codeBlock")) return "code-block"
+  if (editor.isActive("pullQuote")) return "pull-quote"
+  if (editor.isActive("callout")) return "callout"
   if (editor.isActive("blockquote")) return "quote"
+  if (editor.isActive("taskList")) return "todo-list"
   if (editor.isActive("orderedList")) return "numbered-list"
   if (editor.isActive("bulletList")) return "bullet-list"
 

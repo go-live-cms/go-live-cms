@@ -131,9 +131,9 @@ describe("block colour in Block Spec (#356)", () => {
       blocks: {
         [ID(9)]: {
           id: ID(9),
-          type: "callout",
+          type: "sidenote",
           version: 1,
-          attrs: { pm: { type: "callout", attrs: { blockColor: "#ff0000", "data-block-id": ID(9) }, content: text("c") }, text: "c" },
+          attrs: { pm: { type: "sidenote", attrs: { blockColor: "#ff0000", "data-block-id": ID(9) }, content: text("c") }, text: "c" },
         } as any,
       },
     }

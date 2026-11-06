@@ -32,15 +32,21 @@ var blockContainers = map[string]blockContainer{
 var flowBlockTypes = map[string]bool{
 	"paragraph": true, "heading": true, "blockquote": true, "code_block": true,
 	"divider": true, "image": true, "bullet_list": true, "ordered_list": true,
+	// #419
+	"callout": true, "pull_quote": true, "todo_list": true,
 }
 
-// listBlockTypes have their items as children.
-var listBlockTypes = map[string]bool{"bullet_list": true, "ordered_list": true}
+// listBlockTypes have their items as children (Block Spec `LIST_ITEMS`): list_item for
+// the bulleted and numbered lists, todo_item for the to-do list (#419).
+var listBlockTypes = map[string]bool{"bullet_list": true, "ordered_list": true, "todo_list": true}
 
-// isCoreBlockType: a type this build knows (flow, list_item, the containers).
+// listItemBlockTypes are the lists' items: blocks with ids that only live in their list.
+var listItemBlockTypes = map[string]bool{"list_item": true, "todo_item": true}
+
+// isCoreBlockType: a type this build knows (flow, the list items, the containers).
 func isCoreBlockType(t string) bool {
 	_, container := blockContainers[t]
-	return flowBlockTypes[t] || t == "list_item" || container
+	return flowBlockTypes[t] || listItemBlockTypes[t] || container
 }
 
 // isFlowBlockType: a core flow type, or any type that isn't core (a theme block, a type

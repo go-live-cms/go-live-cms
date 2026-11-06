@@ -14,8 +14,8 @@ import type { EditorBlock } from "../utils/blockTree"
 // (#417): + opens the block catalog with its own search field (#415, AddBlockMenu), the drag
 // handle drags to move (into or out of a group, by the nesting table), and clicking it (or
 // Enter/Space on it) opens the block menu (#356): Colour, Duplicate, Copy link to block,
-// Move to, Delete, and Comment (#192) when the post has comments. Turn into and "Last
-// edited by" aren't built here.
+// Move to, Delete, and Comment (#192) when the post has comments. Turn into isn't built
+// here; "Last edited by" (#328) is BlockMenu's own.
 //
 // The gutter follows the pointer (utils/gutterPlugin.ts). From the keyboard, Tab in the
 // text or on a selected block shows it at that block and focuses + (BlockGutterKeys); Tab

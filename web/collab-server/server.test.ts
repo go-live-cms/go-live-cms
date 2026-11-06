@@ -97,7 +97,10 @@ describe("collab server (in-process Hocuspocus)", () => {
     expect(post.block_revision).toBe(6)
     expect(api.puts.at(-1)!.body.last_editor_id).toBeGreaterThan(0)
     await waitFor(() => a.stateless.some((m) => (m as { type: string }).type === "stored"), { what: "a stored message" })
-    expect(a.stateless).toContainEqual({ type: "stored", revision: 6, block_doc: "written" })
+    // Each new block is attributed to the connection that added it (#328), in the store
+    // and in the `stored` message.
+    expect(a.stateless).toContainEqual({ type: "stored", revision: 6, block_doc: "written", edits: expect.any(Array) })
+    expect(api.editorsOf("12")).toEqual({ "blk-from-a-0001": 1, "blk-from-b-0001": 2 })
   })
 
   it("seeds only when no state exists; a restart restores the stored state without duplication", async () => {

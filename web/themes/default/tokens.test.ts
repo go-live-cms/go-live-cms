@@ -47,6 +47,23 @@ const PAIRS: [Key, Key, number][] = [
   ["borderStrong", "background", UI], // outline buttons
   ["focus", "background", UI],
   ["focus", "surface", UI],
+  // Callouts (#419): the page's text on each fill, links in it, and the tone's icon (a
+  // graphic, so 3:1) on its fill.
+  ["text", "infoBg", TEXT],
+  ["text", "successBg", TEXT],
+  ["text", "warningBg", TEXT],
+  ["text", "dangerBg", TEXT],
+  ["primary", "infoBg", TEXT],
+  ["primary", "successBg", TEXT],
+  ["primary", "warningBg", TEXT],
+  ["primary", "dangerBg", TEXT],
+  ["info", "infoBg", UI],
+  ["success", "successBg", UI],
+  ["warning", "warningBg", UI],
+  ["danger", "dangerBg", UI],
+  // To-do checkboxes (#419): the box edge on the page, the tick on a checked box.
+  ["borderStrong", "surface", UI],
+  ["onPrimary", "primary", UI],
 ]
 
 describe.each(["light", "dark"] as const)("%s colours", (theme) => {

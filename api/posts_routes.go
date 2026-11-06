@@ -135,5 +135,9 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 		posts.POST("/:id/comment-threads/:thread_id/resolve", auth, author, server.resolveCommentThread(true))
 		posts.POST("/:id/comment-threads/:thread_id/unresolve", auth, author, server.resolveCommentThread(false))
 
+		// Per-block "Last edited by" (#328, post_block_edits.go): read by anyone who may
+		// read the post; written only by the collab server's store
+		posts.GET("/:id/block-edits", auth, author, server.listPostBlockEdits)
+
 	}
 }

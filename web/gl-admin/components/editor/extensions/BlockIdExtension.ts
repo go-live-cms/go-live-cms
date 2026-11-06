@@ -119,6 +119,11 @@ export const BlockIdExtension = Extension.create({
           "bulletList",
           "orderedList",
           "listItem",
+          // #419
+          "callout",
+          "pullQuote",
+          "taskList",
+          "taskItem",
           ...CONTAINER_NODE_NAMES,
         ],
         attributes: {

@@ -81,29 +81,29 @@ import { authManager } from "@gl-admin/lib/auth"
 import { reloadPage } from "./utils/reloadPage"
 import Editor, { type EditorProps, type EditorRef } from "./Editor"
 
-const Callout = Node.create({
-  name: "callout",
+const Sidenote = Node.create({
+  name: "sidenote",
   group: "block",
   content: "inline*",
   addAttributes() {
     return { "data-block-id": { default: null }, variant: { default: "info" } }
   },
-  parseHTML: () => [{ tag: "div[data-type=callout]" }],
-  renderHTML: () => ["div", { "data-type": "callout" }, 0],
+  parseHTML: () => [{ tag: "div[data-type=sidenote]" }],
+  renderHTML: () => ["div", { "data-type": "sidenote" }, 0],
 })
 
 const POST = 12
 const doc: BlockDocV1 = {
   doc_version: 1,
-  blocks_order: ["intro-block-0001", "callout-block-01"],
+  blocks_order: ["intro-block-0001", "sidenote-block-01"],
   blocks: {
     "intro-block-0001": { id: "intro-block-0001", type: "paragraph", version: 1, attrs: { text: "Intro" } },
-    "callout-block-01": {
-      id: "callout-block-01",
-      type: "callout",
+    "sidenote-block-01": {
+      id: "sidenote-block-01",
+      type: "sidenote",
       version: 1,
       attrs: {
-        pm: { type: "callout", attrs: { "data-block-id": "callout-block-01", variant: "info" }, content: [{ type: "text", text: "Careful" }] },
+        pm: { type: "sidenote", attrs: { "data-block-id": "sidenote-block-01", variant: "info" }, content: [{ type: "text", text: "Careful" }] },
       },
     },
   },
@@ -175,29 +175,29 @@ describe("Editor", () => {
   })
 
   it("binds once the theme's extensions are registered, shows the server's doc and seeds nothing", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
     expect(pm()!.getAttribute("contenteditable")).toBe("true")
     expect(container.querySelector(".editor-notice")).toBeNull()
     // The server's fragment still has exactly the seeded blocks (no client seed on top).
-    expect(serverFragment().toArray().slice(0, 2).map((el) => (el as Y.XmlElement).nodeName)).toEqual(["paragraph", "callout"])
+    expect(serverFragment().toArray().slice(0, 2).map((el) => (el as Y.XmlElement).nodeName)).toEqual(["paragraph", "sidenote"])
   })
 
-  it("without the theme extension: doesn't bind (the callout survives), shows REST read-only, and refuses writes", async () => {
+  it("without the theme extension: doesn't bind (the sidenote survives), shows REST read-only, and refuses writes", async () => {
     const ref = await mount()
     await until(() => !!container.querySelector(".editor-notice"), "the blocked notice")
-    expect(container.querySelector(".editor-notice")!.textContent).toContain("callout")
+    expect(container.querySelector(".editor-notice")!.textContent).toContain("sidenote")
     expect(pm()!.getAttribute("contenteditable")).toBe("false")
     await until(() => !!pm()?.textContent?.includes("Intro"), "the REST copy")
-    expect(serverFragment().toArray().map((el) => (el as Y.XmlElement).nodeName)).toContain("callout")
-    await expect(ref.current!.publish()).rejects.toThrow(/callout/)
-    await expect(ref.current!.restoreVersion(doc)).rejects.toThrow(/callout/)
+    expect(serverFragment().toArray().map((el) => (el as Y.XmlElement).nodeName)).toContain("sidenote")
+    await expect(ref.current!.publish()).rejects.toThrow(/sidenote/)
+    await expect(ref.current!.restoreVersion(doc)).rejects.toThrow(/sidenote/)
     expect(blockAPIClient.publishPost).not.toHaveBeenCalled()
   })
 
   it("a contributor on someone else's post gets a live read-only view", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     state.user = "3"
     await mount({ readOnly: true })
     await until(() => !!pm()?.textContent?.includes("Careful"), "the live view")
@@ -211,7 +211,7 @@ describe("Editor", () => {
   })
 
   it("block comments (#192): a read-only viewer's editor refetches on the server's nudge and marks the block", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     state.user = "3"
     const threads: any[] = []
     const getPostComments = vi.fn(async () => ({ post_id: POST, can_comment: true, threads: structuredClone(threads) }))
@@ -235,7 +235,7 @@ describe("Editor", () => {
   })
 
   it("reports Saving → Saved under StrictMode (effects mount, clean up, mount again)", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     const ref = createRef<EditorRef>()
     const saves: number[] = []
     await act(async () => {
@@ -255,7 +255,7 @@ describe("Editor", () => {
   })
 
   it("publishes without a client save: waits for the server to have the edits, then calls publish", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     const ref = await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
     const result = await act(async () => ref.current!.publish())
@@ -264,7 +264,7 @@ describe("Editor", () => {
   })
 
   it("turns view-only with a notice when the user is demoted while editing, keeping what's on screen", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     state.user = "2"
     const onAccessChange = vi.fn()
     const ref = await mount({ onAccessChange })
@@ -291,7 +291,7 @@ describe("Editor", () => {
   })
 
   it("shows 'session ended, sign in again' when the server revokes the session", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     state.user = "2"
     await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
@@ -322,7 +322,7 @@ describe("Editor", () => {
   // #327: moving the post to the trash closes its document with post-trashed. The editor
   // turns view-only and says so; the session is fine, so nobody is asked to sign in.
   it("says the post was moved to the trash, without ending the session", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     state.user = "2"
     await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
@@ -353,7 +353,7 @@ describe("Editor", () => {
   })
 
   it("remounts on a fresh doc after stale-epoch (block_doc was written around the server)", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
     await act(async () =>
@@ -402,9 +402,9 @@ describe("a new post's body (#384)", () => {
     const link = (pmOf(paragraph) as PMJson).content!.find((run) => run.text === "a link")!.marks![0]
     expect(link.attrs).toMatchObject({ href: "https://example.com/x" })
     expect(ofType(doc, "list_item").flatMap((item) => marked(pmOf(item)))).toEqual(["italic:two", "bold:three"])
-    const [callout] = ofType(doc, alert.type)
-    expect(callout.attrs).toMatchObject({ variant: "warning" })
-    expect(marked(pmOf(callout))).toEqual(["bold:this"])
+    const [sidenote] = ofType(doc, alert.type)
+    expect(sidenote.attrs).toMatchObject({ variant: "warning" })
+    expect(marked(pmOf(sidenote))).toEqual(["bold:this"])
     // A number, or the public page loses srcset and the file's "Used in" misses the post (#342).
     expect(ofType(doc, "image")[0].attrs).toMatchObject({ mediaId: 321, src: "/uploads/media/a.png", alt: "A house" })
   }
@@ -439,7 +439,7 @@ describe("a new post's body (#384)", () => {
     await until(() => !!pm(), "the new-post editor")
     expect(ref.current!.getBlockDoc()).toBeNull()
 
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     await act(async () => root.unmount())
     root = createRoot(container)
     const bound = await mount()
@@ -453,7 +453,7 @@ describe("Editor on a different schema than the collab server (#416)", () => {
   const notice = () => container.querySelector(".editor-notice--outdated")
 
   it("refused at connect: binds nothing, shows the reload notice over the stored copy, writes nothing", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     // A tab whose bundle predates the server's: another schema fingerprint.
     state.schemaFingerprint = "0".repeat(64)
     const ref = await mount()
@@ -480,15 +480,15 @@ describe("Editor on a different schema than the collab server (#416)", () => {
   })
 
   it("refused on a reconnect after a deploy: the bound doc stays on screen, read-only, under the reload notice", async () => {
-    tiptapExtensionRegistry.register(Callout)
+    tiptapExtensionRegistry.register(Sidenote)
     await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
     expect(pm()!.getAttribute("contenteditable")).toBe("true")
     expect(notice()).toBeNull()
 
     // The deploy: the collab server comes back with a schema that has a new block.
-    const PullQuote = Node.create({ name: "pullQuote", group: "block", content: "inline*", addAttributes: () => ({ "data-block-id": { default: null } }) })
-    await act(async () => relay.restart(undefined, { schema: getCollabSchema([...installedThemeBlocks.map((block) => block.node), PullQuote]) }))
+    const MarginNote = Node.create({ name: "marginNote", group: "block", content: "inline*", addAttributes: () => ({ "data-block-id": { default: null } }) })
+    await act(async () => relay.restart(undefined, { schema: getCollabSchema([...installedThemeBlocks.map((block) => block.node), MarginNote]) }))
     await until(() => !!notice(), "the reload notice")
     expect(notice()!.textContent).toContain(RELOAD_MESSAGE)
     await until(() => pm()?.getAttribute("contenteditable") === "false", "the read-only editor")

@@ -95,18 +95,18 @@ describe("theme blocks on the server (#206)", () => {
   // would drop every theme block and the editors would never see them.
   it("seeds a theme block into the fragment with its attributes", () => {
     const { fragment, dropped } = seeded(richDoc())
-    expect(dropped.entries.map((d) => d.id)).not.toContain(ids.callout)
-    const element = fragment.toArray().find((n) => n instanceof Y.XmlElement && n.nodeName === "callout") as Y.XmlElement
+    expect(dropped.entries.map((d) => d.id)).not.toContain(ids.sidenote)
+    const element = fragment.toArray().find((n) => n instanceof Y.XmlElement && n.nodeName === "sidenote") as Y.XmlElement
     expect(element).toBeDefined()
     expect(element.getAttribute("variant")).toBe("warn")
-    expect(element.getAttribute("data-block-id")).toBe(ids.callout)
+    expect(element.getAttribute("data-block-id")).toBe(ids.sidenote)
   })
 
   it("stores the theme block back unchanged", () => {
     const doc = canonical(richDoc())
     const out = fragmentToBlockDoc(seeded(doc).fragment, base)
-    expect(out.blocks[ids.callout]).toEqual(doc.blocks[ids.callout])
-    expect(out.blocks[ids.callout].attrs).toMatchObject({ variant: "warn", text: "Theme block" })
+    expect(out.blocks[ids.sidenote]).toEqual(doc.blocks[ids.sidenote])
+    expect(out.blocks[ids.sidenote].attrs).toMatchObject({ variant: "warn", text: "Theme block" })
   })
 
   it("stores a theme block that only exists in the live doc (added in the editor)", () => {

@@ -476,6 +476,8 @@ type Querier interface {
 	// order. Empty unless the post is one the public site serves, so it never shows
 	// who wrote a draft, and every author it returns has a page.
 	ListPostAuthorProfiles(ctx context.Context, postID int64) ([]ListPostAuthorProfilesRow, error)
+	// A post's rows with the editor's current name (NULL for a member removed since).
+	ListPostBlockEdits(ctx context.Context, postID int64) ([]ListPostBlockEditsRow, error)
 	// A post's working byline (#319), in credit order: GET/PUT /posts/:id/authors,
 	// the Authors field. Public fields only (the avatar, #334, included).
 	ListPostBylineAuthors(ctx context.Context, postID int64) ([]ListPostBylineAuthorsRow, error)
@@ -623,6 +625,9 @@ type Querier interface {
 	// Row-locks the given users in id order (RemoveUserTx: the member and the one who
 	// receives their posts), so two removals that name each other can't deadlock.
 	LockUsersForUpdate(ctx context.Context, ids []int64) ([]LockUsersForUpdateRow, error)
+	// Deletes the rows of blocks that aren't in the post's new block_doc (keep_ids: every
+	// key of its "blocks", hidden blocks included).
+	PrunePostBlockEdits(ctx context.Context, arg PrunePostBlockEditsParams) error
 	// The old owner's byline (user_posts, #319) on the posts that just moved goes to the
 	// new owner, unless they are already credited there (then DeletePostBylineCredits drops
 	// it). Used by a removal (#333) and by a transfer that replaces the old owner (#353).
@@ -828,6 +833,12 @@ type Querier interface {
 	UpdateTheme(ctx context.Context, arg UpdateThemeParams) (Theme, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpsertExtensionSetting(ctx context.Context, arg UpsertExtensionSettingParams) (ExtensionSetting, error)
+	// Per-block "Last edited by" (#328, 000049). Written only inside StorePostCollabTx,
+	// with a block_doc write; read by GET /posts/:id/block-edits.
+	// The three arrays are parallel, one entry per changed block (edited_ats as RFC 3339
+	// text). A user that no longer exists is stored as NULL rather than failing the store
+	// on the foreign key (as post_ydoc_state.last_editor_id).
+	UpsertPostBlockEdits(ctx context.Context, arg UpsertPostBlockEditsParams) error
 	UpsertPostMeta(ctx context.Context, arg UpsertPostMetaParams) (PostMetum, error)
 	UpsertPostType(ctx context.Context, arg UpsertPostTypeParams) (PostType, error)
 	// A last_editor_id that no longer exists is stored as NULL rather than

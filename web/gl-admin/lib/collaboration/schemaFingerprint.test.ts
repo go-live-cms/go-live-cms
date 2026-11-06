@@ -66,7 +66,7 @@ describe("schemaFingerprint (#416)", () => {
 
   describe("changes when the documents the schema builds change", () => {
     const cases: [string, (spec: Spec) => void][] = [
-      ["a node is added", (s) => void (s.nodes.callout = { group: "block", content: "inline*" })],
+      ["a node is added", (s) => void (s.nodes.sidenote = { group: "block", content: "inline*" })],
       ["a node is removed", (s) => void delete s.nodes.heading],
       ["a node is renamed", (s) => ((s.nodes.title = s.nodes.heading), delete s.nodes.heading)],
       ["a mark is added", (s) => void (s.marks.highlight = { attrs: { color: { default: "yellow" } } })],
@@ -133,8 +133,8 @@ describe("schemaFingerprint (#416)", () => {
       schemaFingerprint(getSchema([...Object.values(schemaExtensions({ collaborating: true })), ...extra]))
 
     it("a new node type (a new block) changes it", () => {
-      const Callout = Node.create({ name: "callout", group: "block", content: "inline*", addAttributes: () => ({ "data-block-id": { default: null } }) })
-      expect(withExtra(Callout)).not.toBe(core)
+      const Sidenote = Node.create({ name: "sidenote", group: "block", content: "inline*", addAttributes: () => ({ "data-block-id": { default: null } }) })
+      expect(withExtra(Sidenote)).not.toBe(core)
     })
 
     it("a new mark (highlight, superscript…) changes it", () => {
@@ -161,6 +161,27 @@ describe("schemaFingerprint (#416)", () => {
       const onlyGroup = getSchema([OldDocument, ...Object.values({ ...rest, group: _group })])
       expect(schemaFingerprint(onlyGroup)).not.toBe(schemaFingerprint(before))
       expect(schemaFingerprint(onlyGroup)).not.toBe(core)
+    })
+
+    it("the callout, pull quote and to-do list (#419) changed it, each on its own", () => {
+      // The schema as it was before #419: none of the four node types.
+      const { callout, pullQuote, todoList, todoItem, ...rest } = schemaExtensions({ collaborating: true })
+      const before = getSchema(Object.values(rest))
+      for (const name of ["callout", "pullQuote", "taskList", "taskItem"]) {
+        expect(before.nodes[name], name).toBeUndefined()
+        expect(getCoreSchema().nodes[name], name).toBeDefined()
+      }
+      const old = schemaFingerprint(before)
+      expect(old).not.toBe(core)
+      // A stale tab with any one of them (or the to-do pair) still differs from both.
+      for (const added of [{ callout }, { pullQuote }, { todoList, todoItem }]) {
+        const one = schemaFingerprint(getSchema(Object.values({ ...rest, ...added })))
+        expect(one, Object.keys(added).join("+")).not.toBe(old)
+        expect(one, Object.keys(added).join("+")).not.toBe(core)
+      }
+      // The attrs the store reads are in it: a tab whose callout has no tone is refused too.
+      const toneless = getSchema(Object.values({ ...rest, callout: callout.extend({ addAttributes: () => ({}) }), pullQuote, todoList, todoItem }))
+      expect(schemaFingerprint(toneless)).not.toBe(core)
     })
 
     it("an extension without schema doesn't", () => {

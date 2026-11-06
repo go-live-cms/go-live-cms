@@ -6,6 +6,8 @@ import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 import BlockMenu from "./BlockMenu"
 import MoveToDialog, { filterHeadings } from "./MoveToDialog"
 import { BlockActions, listHeadings, refOf, topLevelBlockAt, type BlockRef } from "../utils/blockActions"
+import { PostBlockEditsStore } from "@gl-admin/lib/blockEditsStore"
+import { BlockEditsContext } from "../blockEditsContext"
 
 // The block menu (#356): what it offers, its keyboard, and that each item runs its
 // action on the block it opened for. The actions themselves: blockActions*.test.ts.
@@ -72,6 +74,50 @@ const item = (label: string) =>
     b.querySelector(".gl-menu__label")?.textContent === label
   )!
 const labels = () => Array.from(menu().querySelectorAll(".gl-menu__label")).map((l) => l.textContent)
+
+describe("BlockMenu: Last edited by (#328)", () => {
+  function openWithEdits(target: BlockRef, store: PostBlockEditsStore) {
+    const ref = createRef<HTMLElement>() as { current: HTMLElement | null }
+    ref.current = anchor
+    act(() =>
+      root.render(
+        <BlockEditsContext.Provider value={store}>
+          <BlockMenu editor={editor} target={target} anchor={ref} onClose={vi.fn()} onMoveTo={vi.fn()} />
+        </BlockEditsContext.Provider>
+      )
+    )
+  }
+  const footer = () => menu().querySelector(".editor-block-menu__meta")
+
+  it("shows the block's last editor under the items, describes the menu with it, and follows the server's stored messages", async () => {
+    const edited = new Date(Date.now() - 2 * 60 * 60 * 1000 - 1000).toISOString()
+    const store = new PostBlockEditsStore(1, {
+      getPostBlockEdits: async () => ({
+        [ID(2)]: { user: { id: 8, username: "ana", full_name: "Ana Costa", avatar: null }, edited_at: edited },
+      }),
+    })
+    await store.refresh()
+    openWithEdits(at(1), store)
+    expect(footer()?.textContent).toBe("Last edited by Ana Costa · 2 hours ago")
+    expect(menu().getAttribute("aria-describedby")).toBe(footer()!.id)
+    // After the items: the footer isn't one of them.
+    expect(menu().lastElementChild).toBe(footer())
+
+    // Someone already known edits it again: the `stored` message's row replaces it.
+    act(() => store.applyStored([{ block_id: ID(2), user_id: 8, edited_at: new Date().toISOString() }]))
+    expect(footer()?.textContent).toBe("Last edited by Ana Costa · just now")
+  })
+
+  it("shows no line for a block without attribution, nor without the store", async () => {
+    const store = new PostBlockEditsStore(1, { getPostBlockEdits: async () => ({}) })
+    await store.refresh()
+    openWithEdits(at(1), store)
+    expect(footer()).toBeNull()
+    expect(menu().hasAttribute("aria-describedby")).toBe(false)
+    open(at(1))
+    expect(footer()).toBeNull()
+  })
+})
 
 describe("BlockMenu: Comment (#192)", () => {
   it("offers Comment (Ctrl M) after Colour when the post has comments, and opens it for that block", () => {

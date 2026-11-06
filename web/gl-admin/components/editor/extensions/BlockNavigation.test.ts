@@ -88,6 +88,18 @@ describe("Esc, ↵ and ↑↓ (#417)", () => {
     expect(selected()).toBe(LIST)
   })
 
+  it("Esc in a to-do item selects the whole to-do list, like any list (#419)", () => {
+    const TODO = "blk-0417-todo-0000001"
+    mount(`<ul data-type="taskList" data-block-id="${TODO}"><li data-type="taskItem" data-checked="false"><p>buy milk</p></li></ul><p>end</p>`)
+    let inItem = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (inItem === -1 && node.isText && node.text === "buy milk") inItem = pos + 2
+    })
+    editor.commands.setTextSelection(inItem)
+    press("Escape")
+    expect(selected()).toBe(TODO)
+  })
+
   it("↵ on a selected container steps into its first block; ↵ again edits it (caret at its end)", () => {
     mount()
     editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, posOf(GROUP))))

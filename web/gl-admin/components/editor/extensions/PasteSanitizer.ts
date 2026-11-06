@@ -1,7 +1,14 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
 import DOMPurify from "dompurify"
-import { CONTAINER_NODE_NAMES, isGroupAlign, isGroupStyle, normalizeBlockColor } from "@gl-admin/lib/blocks-spec"
+import {
+  CONTAINER_NODE_NAMES,
+  isCalloutTone,
+  isGroupAlign,
+  isGroupStyle,
+  normalizeBlockColor,
+  normalizeCite,
+} from "@gl-admin/lib/blocks-spec"
 
 const pasteSanitizerPluginKey = new PluginKey("pasteSanitizer")
 
@@ -62,6 +69,20 @@ const BLOCK_COLOR_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOC
 const CONTAINER_DIV_TYPES = new Set(["group"])
 const isGroupDiv = (node: Element) => node.nodeName === "DIV" && node.getAttribute("data-type") === "group"
 
+// The #419 blocks, from the editor's own clipboard: a callout `<div data-type="callout"
+// data-tone>` (Callout.ts), a pull quote `<figure data-type="pull-quote" data-cite>`
+// (PullQuote.ts) and a to-do list `<ul data-type="taskList"><li data-type="taskItem"
+// data-checked>` (TipTap's TaskList/TaskItem; its checkbox `<input>` is unwrapped like any
+// form control). Each `data-type` only on its own element, each value checked, so no other
+// markup can claim to be one, and an unknown tone or a citation over the cap never gets in.
+const BLOCK_DATA_TYPES: Readonly<Record<string, ReadonlySet<string>>> = {
+  DIV: new Set([...CONTAINER_DIV_TYPES, "callout"]),
+  FIGURE: new Set(["pull-quote"]),
+  UL: new Set(["taskList"]),
+  LI: new Set(["taskItem"]),
+}
+const isTyped = (node: Element, tag: string, type: string) => node.nodeName === tag && node.getAttribute("data-type") === type
+
 let purifier: ReturnType<typeof DOMPurify> | null = null
 
 // A private DOMPurify instance, so our hooks and config don't leak into any other caller.
@@ -70,7 +91,10 @@ function getPurifier() {
   purifier = DOMPurify(window)
   purifier.setConfig({
     ALLOWED_TAGS,
-    ALLOWED_ATTR: ["href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align"],
+    ALLOWED_ATTR: [
+      "href", "class", "data-pm-slice", "data-block-color", "data-type", "data-style", "data-align",
+      "data-tone", "data-cite", "data-checked",
+    ],
     ALLOW_DATA_ATTR: false,
     ALLOW_ARIA_ATTR: false,
     ALLOWED_URI_REGEXP,
@@ -88,7 +112,15 @@ function getPurifier() {
       if (color === null) data.keepAttr = false
       else data.attrValue = color
     } else if (data.attrName === "data-type") {
-      if (node.nodeName !== "DIV" || !CONTAINER_DIV_TYPES.has(data.attrValue)) data.keepAttr = false
+      if (!BLOCK_DATA_TYPES[node.nodeName]?.has(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "data-tone") {
+      if (!isTyped(node, "DIV", "callout") || !isCalloutTone(data.attrValue)) data.keepAttr = false
+    } else if (data.attrName === "data-cite") {
+      const cite = isTyped(node, "FIGURE", "pull-quote") ? normalizeCite(data.attrValue) : null
+      if (cite === null) data.keepAttr = false
+      else data.attrValue = cite
+    } else if (data.attrName === "data-checked") {
+      if (!isTyped(node, "LI", "taskItem") || (data.attrValue !== "true" && data.attrValue !== "false")) data.keepAttr = false
     } else if (data.attrName === "data-style") {
       if (!isGroupDiv(node) || !isGroupStyle(data.attrValue)) data.keepAttr = false
     } else if (data.attrName === "data-align") {
@@ -278,7 +310,10 @@ function parseStyle(style: string): Record<string, string> {
 // Wrapper node types a pasted slice context may recreate: lists, quotes and the
 // containers (#414), so a slice copied from inside a group pastes into a new group with
 // default attrs.
-const SLICE_CONTEXT_TYPES = new Set(["bulletList", "orderedList", "listItem", "blockquote", ...CONTAINER_NODE_NAMES])
+// The to-do list and the callout (#419) wrap their content the same way.
+const SLICE_CONTEXT_TYPES = new Set([
+  "bulletList", "orderedList", "listItem", "blockquote", "taskList", "taskItem", "callout", ...CONTAINER_NODE_NAMES,
+])
 
 /**
  * ProseMirror's own clipboard HTML carries `data-pm-slice="<openStart> <openEnd>

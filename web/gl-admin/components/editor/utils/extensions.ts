@@ -67,6 +67,10 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.quoteCitation,
       schema.blockColor,
       schema.group,
+      schema.callout,
+      schema.pullQuote,
+      schema.todoList,
+      schema.todoItem,
       schema.blockId,
       BlockNodeViews,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
@@ -90,6 +94,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               return ""
             case "imageCaption":
               return "Write a caption…"
+            case "pullQuote":
+              return "Pull quote"
             case "heading":
               return headingLabel(node.attrs?.level)
             case "listItem":
@@ -97,6 +103,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
             case "paragraph":
             default: {
               if (editor.isActive("codeBlock")) return "Write code…"
+              if (editor.isActive("callout")) return "Type a note"
+              if (editor.isActive("taskList")) return "To-do"
               if (editor.isActive("blockquote")) return "Write a quote…"
               if (editor.isActive("orderedList")) return "List item…"
               if (editor.isActive("bulletList")) return "List item…"

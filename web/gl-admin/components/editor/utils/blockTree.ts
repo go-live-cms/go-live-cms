@@ -7,6 +7,7 @@ import {
   containerRule,
   isBlockNode,
   isContainerType,
+  LIST_ITEM_NODE_NAMES,
 } from "@gl-admin/lib/blocks-spec/nesting"
 
 // The blocks the editor works on at any depth (#417, design `docs/design/block-library.md`
@@ -52,7 +53,7 @@ export function holdsBlocks(nodeName: string): boolean {
 
 /** Whether `node`, a child of `parent`, is an editor block (a block, not a list item). */
 export function isEditorBlock(node: PMNode, parent: PMNode): boolean {
-  return node.type.name !== "listItem" && isBlockNode(node.type.name, parent.type.name)
+  return !LIST_ITEM_NODE_NAMES.has(node.type.name) && isBlockNode(node.type.name, parent.type.name)
 }
 
 function blockAtResolved(doc: PMNode, pos: number): EditorBlock | null {

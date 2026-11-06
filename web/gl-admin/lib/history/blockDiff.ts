@@ -14,7 +14,7 @@
 // The result holds ids, not blocks: the renderer reads the blocks from the docs it already
 // has, so the worker sends back little.
 
-import type { Block, BlockDocV1 } from "../blocks-spec"
+import { CALLOUT_TONE_LABELS, type Block, type BlockDocV1 } from "../blocks-spec"
 // The nesting table only: pure, no imports of its own, so the worker stays small.
 import { isContainerType } from "../blocks-spec/nesting"
 import {
@@ -51,6 +51,8 @@ export interface ItemDiff {
   /** The item's own text (its nested lists are in `lists`). */
   text: Segment[]
   lists: ListDiff[]
+  /** A to-do item ticked or unticked (#419): its "Done" change. Absent when none. */
+  attrs?: AttrChange[]
 }
 
 export interface ListDiff {
@@ -226,6 +228,11 @@ const TYPE_LABELS: Record<string, string> = {
   ordered_list: "Numbered list",
   list_item: "List item",
   group: "Group",
+  // #419
+  callout: "Callout",
+  pull_quote: "Pull quote",
+  todo_list: "To-do list",
+  todo_item: "To-do",
 }
 
 /** "Heading", "Bulleted list", or a theme block's name ("theme:example/alert" → "Alert"). */
@@ -304,8 +311,19 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
       add("style", "Background", style(va), style(wa))
       break
     }
+    // #419: a missing or unknown tone reads as info, as the editor and the page show it.
+    case "callout": {
+      const tone = (a: Record<string, unknown>) => (CALLOUT_TONE_LABELS as Record<string, string>)[String(a.tone)] ?? CALLOUT_TONE_LABELS.info
+      add("tone", "Type", tone(va), tone(wa))
+      break
+    }
+    case "pull_quote":
+      add("cite", "Citation", display(va.cite), display(wa.cite))
+      break
     case "divider":
     case "list_item":
+    case "todo_list":
+    case "todo_item":
       break
     default: {
       // Theme blocks (#376) keep their declared attrs on `attrs`; older custom blocks keep
@@ -327,12 +345,19 @@ interface ItemNode {
   id: string | null
   tokens: Token[]
   lists: ListNode[]
+  /** A to-do item's state (#419); undefined for a bulleted or numbered list's item. */
+  checked?: boolean
 }
 
 interface ListNode {
   ordered: boolean
+  /** A to-do list (#419): its items have a `checked`. Rendered as a bulleted list. */
+  todo?: boolean
   items: ItemNode[]
 }
+
+const LIST_KIND_LABELS = { bullet: "Bulleted", ordered: "Numbered", todo: "To-do" } as const
+const listKind = (list: ListNode) => LIST_KIND_LABELS[list.todo ? "todo" : list.ordered ? "ordered" : "bullet"]
 
 const isListNode = (node: PMJson) => node.type === "bulletList" || node.type === "orderedList"
 
@@ -360,18 +385,22 @@ function listFromPM(pm: PMJson): ListNode {
 }
 
 function listFromBlock(block: Block, doc: Doc): ListNode {
+  const todo = block.type === "todo_list"
   return {
     ordered: block.type === "ordered_list",
+    ...(todo ? { todo } : {}),
     items: (block.children ?? [])
       .map((childId) => doc.blocks[childId])
       .filter((child): child is Block => !!child)
-      .map((child) =>
+      .map((child) => {
         // A paragraph child is shown as an item (the bridge wraps it); without its pm, its
         // plain text.
-        child.type === "paragraph"
-          ? itemFromPM(pmOf(child) ? { content: [pmOf(child)!] } : undefined, child.id, attrsOf(child).text)
-          : itemFromPM(pmOf(child), child.id, attrsOf(child).text)
-      ),
+        const item =
+          child.type === "paragraph"
+            ? itemFromPM(pmOf(child) ? { content: [pmOf(child)!] } : undefined, child.id, attrsOf(child).text)
+            : itemFromPM(pmOf(child), child.id, attrsOf(child).text)
+        return todo ? { ...item, checked: attrsOf(child).checked === true } : item
+      }),
   }
 }
 
@@ -399,8 +428,14 @@ function diffItem(v: ItemNode, w: ItemNode, moved: boolean): ItemDiff {
     const wl = w.lists[i]
     lists.push(vl && wl ? diffList(vl, wl) : vl ? oneSidedList(vl, "version") : oneSidedList(wl, "working"))
   }
-  const changed = hasChanges(text) || lists.some((l) => l.status !== "same")
-  return { id: v.id, status: changed ? "changed" : "same", moved, text, lists }
+  // A to-do ticked or unticked (#419) is a change of the item, said as "Done: Yes / No".
+  const done = (checked: boolean) => (checked ? "Yes" : "No")
+  const attrs: AttrChange[] =
+    v.checked !== undefined && w.checked !== undefined && v.checked !== w.checked
+      ? [{ key: "checked", label: "Done", version: done(v.checked), working: done(w.checked) }]
+      : []
+  const changed = hasChanges(text) || lists.some((l) => l.status !== "same") || attrs.length > 0
+  return { id: v.id, status: changed ? "changed" : "same", moved, text, lists, ...(attrs.length > 0 ? { attrs } : {}) }
 }
 
 function diffList(v: ListNode, w: ListNode): ListDiff {
@@ -412,13 +447,8 @@ function diffList(v: ListNode, w: ListNode): ListDiff {
     return a.version ? oneSidedItem(a.version.item, "version") : oneSidedItem(a.working!.item, "working")
   })
   const attrs: AttrChange[] = []
-  if (v.ordered !== w.ordered) {
-    attrs.push({
-      key: "listType",
-      label: "List type",
-      version: v.ordered ? "Numbered" : "Bulleted",
-      working: w.ordered ? "Numbered" : "Bulleted",
-    })
+  if (listKind(v) !== listKind(w)) {
+    attrs.push({ key: "listType", label: "List type", version: listKind(v), working: listKind(w) })
   }
   const changed = attrs.length > 0 || items.some((i) => i.status !== "same" || i.moved)
   return { ordered: v.ordered, status: changed ? "changed" : "same", attrs, items }
@@ -427,7 +457,7 @@ function diffList(v: ListNode, w: ListNode): ListDiff {
 // ---------------------------------------------------------------------------------------
 // Blocks
 
-const isList = (block: Block) => block.type === "bullet_list" || block.type === "ordered_list"
+const isList = (block: Block) => block.type === "bullet_list" || block.type === "ordered_list" || block.type === "todo_list"
 
 function diffBlock(id: string, v: Block, w: Block, vDoc: Doc, wDoc: Doc, moved: boolean): BlockDiffEntry {
   if (isList(v) && isList(w)) {

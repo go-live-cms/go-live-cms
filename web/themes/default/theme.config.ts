@@ -23,6 +23,15 @@ export interface ThemeColors {
   borderStrong?: string
   highlight?: string
   focus?: string
+  // Callout tones (#419): the icon colour and the fill (`--color-info`, `--color-info-bg`, …).
+  info?: string
+  infoBg?: string
+  success?: string
+  successBg?: string
+  warning?: string
+  warningBg?: string
+  danger?: string
+  dangerBg?: string
 }
 
 /**
@@ -189,6 +198,15 @@ export const themeConfig: ThemeConfig = {
       borderStrong: "#8d8d86",
       highlight: "#ffe7b3",
       focus: "#1b7760",
+      // Callouts (#419, the blocks canvas): Radix blue, grass, amber, tomato, step 11 / 3.
+      info: "#0d74ce",
+      infoBg: "#e6f4fe",
+      success: "#2a7e3b",
+      successBg: "#e9f6e9",
+      warning: "#ab6400",
+      warningBg: "#fff7c2",
+      danger: "#d13415",
+      dangerBg: "#feebe7",
     },
     dark: {
       primary: "#1fd8a4",
@@ -206,6 +224,14 @@ export const themeConfig: ThemeConfig = {
       borderStrong: "#6f6d66",
       highlight: "#4a3a10",
       focus: "#1fd8a4",
+      info: "#70b8ff",
+      infoBg: "#0d2847",
+      success: "#71d083",
+      successBg: "#1b2a1e",
+      warning: "#ffca16",
+      warningBg: "#302008",
+      danger: "#ff977d",
+      dangerBg: "#391714",
     },
   },
 

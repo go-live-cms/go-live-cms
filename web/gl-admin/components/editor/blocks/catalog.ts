@@ -84,16 +84,20 @@ export const ICONS = {
   divider: "M3 12h18M8 6h8M8 18h8",
   html: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",
   group: "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h8v8H8z",
+  // #419 (the blocks canvas's "Editor · table, details, pull quote, callout" board)
+  todo: "m3 7 2 2 4-4M3 17l2 2 4-4M13 7h8M13 17h8",
+  pullQuote: "M4 3h16M4 21h16M7 15c2 0 3-1 3-4V8H6v3h3M14 15c2 0 3-1 3-4V8h-4v3h3",
+  callout: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 16v-4M12 8h.01",
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
 
-/** The type of the list nearest the selection ("bulletList", "orderedList"), or null. */
+/** The type of the list nearest the selection ("bulletList", "orderedList", "taskList"), or null. */
 function closestList(editor: Editor): string | null {
   const { $from } = editor.state.selection
   for (let depth = $from.depth; depth > 0; depth--) {
     const name = $from.node(depth).type.name
-    if (name === "bulletList" || name === "orderedList") return name
+    if (name === "bulletList" || name === "orderedList" || name === "taskList") return name
   }
   return null
 }
@@ -148,6 +152,18 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     insert: (editor, range) => chain(editor, range).toggleOrderedList().run(),
     turnInto: (editor) => void (closestList(editor) !== "orderedList" && editor.chain().focus().toggleOrderedList().run()),
   },
+  // #419: TipTap's TaskList; `[] ` is TaskItem's own input rule.
+  {
+    id: "todo-list",
+    type: "todo_list",
+    name: "To-do list",
+    group: "text",
+    keywords: ["todo", "checklist", "checkbox", "task", "list"],
+    markdown: "[]",
+    icon: { path: ICONS.todo },
+    insert: (editor, range) => chain(editor, range).toggleTaskList().run(),
+    turnInto: (editor) => void (closestList(editor) !== "taskList" && editor.chain().focus().toggleTaskList().run()),
+  },
   {
     id: "quote",
     type: "blockquote",
@@ -158,6 +174,28 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     icon: { path: ICONS.quote },
     insert: (editor, range) => chain(editor, range).setBlockquote().run(),
     turnInto: (editor) => editor.chain().focus().setBlockquote().run(),
+  },
+  // #419. The canvas's slash name is "/pull".
+  {
+    id: "pull-quote",
+    type: "pull_quote",
+    name: "Pull quote",
+    group: "text",
+    keywords: ["pullquote", "quote", "emphasis", "excerpt"],
+    icon: { path: ICONS.pullQuote },
+    insert: (editor, range) => chain(editor, range).setPullQuote().run(),
+    turnInto: (editor) => editor.chain().focus().setPullQuote().run(),
+  },
+  // #419: the line becomes the callout's first paragraph.
+  {
+    id: "callout",
+    type: "callout",
+    name: "Callout",
+    group: "text",
+    keywords: ["note", "info", "tip", "warning", "danger", "success", "alert", "admonition", "notice"],
+    icon: { path: ICONS.callout },
+    insert: (editor, range) => chain(editor, range).setParagraph().setCallout().run(),
+    turnInto: (editor) => void (!editor.isActive("callout") && editor.chain().focus().setParagraph().setCallout().run()),
   },
   {
     id: "code-block",
@@ -250,11 +288,16 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
  * What the slot holding the selection accepts (#414's nesting table), for `MenuContext.accepts`:
  * the block the caret is in sits at the top level (every container allowed there), in a
  * container (only what it may hold: no group in a group), or inside another block's own
- * content (a list item, a quote, a theme block), where no container can go.
+ * content (a list item, a quote, a theme block), where no container can go, or in one that
+ * holds paragraphs only (a callout, a to-do item), where only a paragraph can.
  */
 export function slotAcceptsAt(editor: Editor): (entry: CatalogEntry) => boolean {
   const { $from } = editor.state.selection
-  const holder = $from.depth > 1 ? $from.node($from.depth - 1).type.name : "doc"
+  const parent = $from.depth > 1 ? $from.node($from.depth - 1) : null
+  // A block that holds paragraphs only (a callout, a to-do item, #419): any other entry
+  // would delete the typed /query and then fail to make its block there.
+  if (parent && parent.type.spec.content === "paragraph+") return (entry) => entry.type === "paragraph"
+  const holder = parent?.type.name ?? "doc"
   return (entry) => holderAcceptsType(holder, entry.type)
 }
 

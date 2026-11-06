@@ -117,6 +117,42 @@ func TestCommentRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+// blockEditRoutes are the per-block "Last edited by" routes (#328), every method:
+// attribution never reaches the public site, and the collab server's store is its only
+// writer, so a write route here would be a bug. TestBlockEditRoutesRequireAuth fails
+// when one is added without being listed (so its rule gets a look), answers an
+// anonymous request, or is public.
+var blockEditRoutes = map[string]string{
+	"GET /api/v1/posts/:id/block-edits": "canReadPost",
+}
+
+func TestBlockEditRoutesRequireAuth(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server := newTestServer(t, store)
+
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		if !strings.Contains(route.Path, "block-edit") {
+			continue
+		}
+		key := route.Method + " " + route.Path
+		registered[key] = true
+		_, listed := blockEditRoutes[key]
+		require.True(t, listed, "%s is a block edit route missing from blockEditRoutes", key)
+		require.False(t, strings.HasPrefix(route.Path, "/public"), "attribution never reaches the public site: %s", key)
+		require.Equal(t, http.MethodGet, route.Method, "only the collab store writes attribution: %s", key)
+
+		t.Run(key, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, httptest.NewRequest(route.Method, routeExample(route.Path), nil))
+			require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers without a token", key)
+		})
+	}
+	for key := range blockEditRoutes {
+		require.True(t, registered[key], "blockEditRoutes lists %s, which is no longer a route", key)
+	}
+}
+
 // routeExample fills a route template's parameters: /posts/:id/meta becomes
 // /posts/1/meta.
 func routeExample(path string) string {
