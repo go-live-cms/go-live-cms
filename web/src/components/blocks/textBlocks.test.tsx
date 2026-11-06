@@ -94,6 +94,62 @@ describe("pull quote (#419)", () => {
   })
 })
 
+describe("nested in a quote or a list item (#419)", () => {
+  it("renders with the same markup from the parent's pm, not dropped", () => {
+    const QUOTE = "blk-quote-000001"
+    const LIST = "blk-list-0000001"
+    const ITEM = "blk-item-0000001"
+    const nested = {
+      doc_version: 1,
+      blocks_order: [QUOTE, LIST],
+      blocks: {
+        [QUOTE]: {
+          id: QUOTE,
+          type: "blockquote",
+          version: 2,
+          attrs: {
+            pm: {
+              type: "blockquote",
+              content: [
+                { type: "paragraph", content: [text("Said once")] },
+                { type: "callout", attrs: { tone: "success" }, content: [{ type: "paragraph", content: [text("Nested note")] }] },
+                { type: "pullQuote", attrs: { cite: "Ana" }, content: [text("Nested pull")] },
+              ],
+            },
+          },
+        },
+        [LIST]: { id: LIST, type: "bullet_list", version: 1, attrs: {}, children: [ITEM] },
+        [ITEM]: {
+          id: ITEM,
+          type: "list_item",
+          version: 1,
+          attrs: {
+            pm: {
+              type: "listItem",
+              content: [
+                { type: "paragraph", content: [text("Steps")] },
+                {
+                  type: "taskList",
+                  content: [
+                    { type: "taskItem", attrs: { checked: true }, content: [{ type: "paragraph", content: [text("Wri"), text("te", [{ type: "bold" }])] }] },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+      },
+    } as unknown as BlockDocV1
+    const html = render(nested)
+    expect(html).toContain('<div class="callout is-success" role="note">')
+    expect(html).toContain('<span class="sr-only">Success: </span>Nested note')
+    expect(html).toContain('<figure class="pullquote"><blockquote><p>Nested pull</p></blockquote><figcaption>Ana</figcaption></figure>')
+    expect(html).toContain(
+      '<ul class="todo-list"><li class="todo-item is-checked"><input type="checkbox" disabled="" readOnly="" aria-label="Write" checked=""/><span class="todo-item__text">Wri<strong>te</strong></span></li></ul>',
+    )
+  })
+})
+
 describe("to-do list (#419)", () => {
   it("is ul.todo-list with a read-only checkbox per item, labelled by its text", () => {
     const html = render(doc())

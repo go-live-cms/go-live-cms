@@ -1,45 +1,34 @@
 import React from "react"
-import type { Block } from "@gl-admin/lib/blocks-spec"
-import type { BlockComponentProps } from "../types"
-
-// An item's text element id, for its checkbox's `aria-labelledby`: only from an id that
-// is safe in HTML as is (stored ids are UUIDs), else the checkbox gets an `aria-label`.
-const SAFE_ID = /^[A-Za-z0-9_-]{10,128}$/
+import { isSafeBlockId, type Block } from "@gl-admin/lib/blocks-spec"
+import type { BlockComponentProps, PMNode } from "../types"
+import { plainText, todoListMarkup, type TodoItemMarkup } from "../utils/textBlockMarkup"
 
 /**
  * A to-do list (#419): `ul.todo-list`, one `li` per item (`is-checked` when done) with a
  * **read-only** checkbox: `disabled`, so readers can't toggle it and it isn't a tab stop,
- * and labelled by the item's text, so a screen reader says "To do, checkbox, checked".
+ * and labelled by the item's text (`aria-labelledby` = `todo-<item id>`, or an `aria-label`
+ * for an id that isn't safe in HTML), so a screen reader says "Write it, checkbox, checked".
  * The blocks canvas has no published board for it yet; the default theme styles it from
- * its tokens.
+ * its tokens. The markup is shared with a to-do list nested in a list item
+ * (`textBlockMarkup.tsx`).
  */
 const TodoListBlock: React.FC<BlockComponentProps> = ({ block, doc, getBlockContent, anchorId }) => {
-  return (
-    <ul id={anchorId} className="todo-list">
-      {(block.children ?? []).map((childId) => {
-        const child = doc.blocks[childId] as Block | undefined
-        if (!child) return null
-        const attrs = (child.attrs ?? {}) as { checked?: unknown; text?: unknown }
-        const checked = attrs.checked === true
-        const textId = SAFE_ID.test(childId) ? `todo-${childId}` : undefined
-        const fallbackLabel = typeof attrs.text === "string" && attrs.text.trim() ? attrs.text : "To-do"
-        return (
-          <li key={childId} className={checked ? "todo-item is-checked" : "todo-item"}>
-            <input
-              type="checkbox"
-              checked={checked}
-              disabled
-              readOnly
-              {...(textId ? { "aria-labelledby": textId } : { "aria-label": fallbackLabel })}
-            />
-            <span className="todo-item__text" id={textId}>
-              {getBlockContent(child)}
-            </span>
-          </li>
-        )
-      })}
-    </ul>
-  )
+  const items = (block.children ?? []).flatMap((childId): TodoItemMarkup[] => {
+    const child = doc.blocks[childId] as Block | undefined
+    if (!child) return []
+    const attrs = (child.attrs ?? {}) as { checked?: unknown; text?: unknown; pm?: { content?: PMNode[] } }
+    const text = typeof attrs.text === "string" ? attrs.text : plainText(attrs.pm?.content)
+    return [
+      {
+        key: childId,
+        checked: attrs.checked === true,
+        content: getBlockContent(child),
+        labelId: isSafeBlockId(childId) ? `todo-${childId}` : undefined,
+        label: text.trim() || "To-do",
+      },
+    ]
+  })
+  return todoListMarkup({ items, id: anchorId })
 }
 
 export default TodoListBlock

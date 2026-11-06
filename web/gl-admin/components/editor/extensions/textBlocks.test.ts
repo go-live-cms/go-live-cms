@@ -7,7 +7,7 @@ import { pmToBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
 import { isBlockNode, validateBlockDoc } from "@gl-admin/lib/blocks-spec"
 import { BlockNodeViews } from "./BlockNodeViews"
 import { PasteSanitizer, sanitizePastedHTML } from "./PasteSanitizer"
-import { CORE_BLOCKS } from "../blocks/catalog"
+import { CORE_BLOCKS, slotAcceptsAt } from "../blocks/catalog"
 
 // The callout, pull quote and to-do list in the editor (#419): their commands, views and
 // settings, read-only editors, block ids for to-do items (#238), and paste (#128).
@@ -127,6 +127,20 @@ describe("inserting (#419)", () => {
     expect(list.child(1).textContent).toBe("new")
     expectUniqueValidIds(ed.state.doc)
     expect(list.child(0).attrs["data-block-id"]).toBe(T1)
+  })
+})
+
+describe("the menus inside a callout or a to-do item (#419)", () => {
+  it("offer only Paragraph: nothing else can go in a block that holds paragraphs only", () => {
+    const ed = makeEditor(doc())
+    for (const id of [CALLOUT, T1]) {
+      ed.commands.setTextSelection(inside(ed, id))
+      const accepts = slotAcceptsAt(ed)
+      expect(CORE_BLOCKS.filter(accepts).map((e) => e.id), id).toEqual(["paragraph"])
+    }
+    // At the top level, everything is offered as before.
+    ed.commands.setTextSelection(ed.state.doc.content.size - 2)
+    expect(CORE_BLOCKS.filter(slotAcceptsAt(ed)).length).toBe(CORE_BLOCKS.length)
   })
 })
 

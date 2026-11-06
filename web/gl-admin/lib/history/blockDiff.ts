@@ -247,7 +247,6 @@ const ALIGN_LABELS: Record<string, string> = { left: "Left", center: "Center", r
 const WIDTH_LABELS: Record<string, string> = { inline: "Inline", wide: "Wide", full: "Full width" }
 const GROUP_WIDTH_LABELS: Record<string, string> = { content: "Content", wide: "Wide", full: "Full width" }
 const GROUP_STYLE_LABELS: Record<string, string> = { none: "None", tinted: "Tinted" }
-const CALLOUT_TYPE_LABELS: Record<string, string> = CALLOUT_TONE_LABELS
 
 function display(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return null
@@ -314,7 +313,7 @@ function attrChanges(v: Block, w: Block): AttrChange[] {
     }
     // #419: a missing or unknown tone reads as info, as the editor and the page show it.
     case "callout": {
-      const tone = (a: Record<string, unknown>) => CALLOUT_TYPE_LABELS[String(a.tone)] ?? CALLOUT_TYPE_LABELS.info
+      const tone = (a: Record<string, unknown>) => (CALLOUT_TONE_LABELS as Record<string, string>)[String(a.tone)] ?? CALLOUT_TONE_LABELS.info
       add("tone", "Type", tone(va), tone(wa))
       break
     }

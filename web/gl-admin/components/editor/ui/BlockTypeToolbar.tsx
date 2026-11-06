@@ -133,6 +133,9 @@ const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
               label="Callout type"
               disabled={!editor.isEditable}
               onChange={(option: CommandSelectOption) => {
+                // `editable` can change while the picker is open (a demotion, #313): a
+                // read-only connection's edit would be dropped by the server.
+                if (!editor.isEditable) return
                 const tone = normalizeCalloutTone(option.value)
                 setCalloutTone(tone)
                 editor.chain().focus().setCalloutTone(tone).run()

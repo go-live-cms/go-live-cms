@@ -288,7 +288,8 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
  * What the slot holding the selection accepts (#414's nesting table), for `MenuContext.accepts`:
  * the block the caret is in sits at the top level (every container allowed there), in a
  * container (only what it may hold: no group in a group), or inside another block's own
- * content (a list item, a quote, a theme block), where no container can go.
+ * content (a list item, a quote, a theme block), where no container can go, or in one that
+ * holds paragraphs only (a callout, a to-do item), where only a paragraph can.
  */
 export function slotAcceptsAt(editor: Editor): (entry: CatalogEntry) => boolean {
   const { $from } = editor.state.selection
@@ -296,6 +297,9 @@ export function slotAcceptsAt(editor: Editor): (entry: CatalogEntry) => boolean 
   if (!parent || parent.type.name === "doc") return (entry) => !isContainerType(entry.type) || !!containerRule(entry.type)?.topLevel
   const container = containerOfNode(parent.type.name)
   if (container) return (entry) => acceptsChild(container.type, entry.type)
+  // A block that holds paragraphs only (a callout, a to-do item, #419): any other entry
+  // would delete the typed /query and then fail to make its block there.
+  if (parent.type.spec.content === "paragraph+") return (entry) => entry.type === "paragraph"
   return (entry) => !isContainerType(entry.type)
 }
 

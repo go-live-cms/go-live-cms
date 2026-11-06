@@ -163,7 +163,12 @@ export function normalizeBlockColor(value: unknown): BlockColor | null {
  * anchor rather than a broken one). Heading ids (#351) never take one of these.
  */
 export function blockAnchorId(blockId: unknown): string | null {
-  return typeof blockId === "string" && /^[A-Za-z0-9_-]{10,128}$/.test(blockId) ? `b-${blockId}` : null
+  return isSafeBlockId(blockId) ? `b-${blockId}` : null
+}
+
+/** A block id that is safe in an HTML id and a URL fragment as is: 10–128 letters, digits, `-`, `_`. */
+export function isSafeBlockId(blockId: unknown): blockId is string {
+  return typeof blockId === "string" && /^[A-Za-z0-9_-]{10,128}$/.test(blockId)
 }
 
 /**
