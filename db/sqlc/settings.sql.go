@@ -55,8 +55,60 @@ func (q *Queries) GetExtensionSetting(ctx context.Context, key string) (Extensio
 	return i, err
 }
 
+const getPublicFrontPage = `-- name: GetPublicFrontPage :one
+SELECT id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template FROM posts
+WHERE id = (SELECT s.front_page_id FROM settings s WHERE s.id = 1)
+  AND post_type = 'page'
+  AND post_status = 'published'
+  AND EXISTS (SELECT 1 FROM post_types pt WHERE pt.name = 'page' AND pt.public AND pt.is_active)
+`
+
+// The page the public site renders at / (#336): the settings' front page while it is
+// a published page of an active, public type. No row: / shows the latest posts.
+func (q *Queries) GetPublicFrontPage(ctx context.Context) (Post, error) {
+	row := q.db.QueryRowContext(ctx, getPublicFrontPage)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.UserID,
+		&i.Username,
+		&i.Url,
+		&i.PostType,
+		&i.PostStatus,
+		&i.PostParent,
+		&i.MenuOrder,
+		&i.CreatedAt,
+		&i.ChangedAt,
+		&i.BlockDoc,
+		&i.BlockRevision,
+		&i.PublishedVersionID,
+		&i.PublishedBlockDoc,
+		&i.Slug,
+		&i.PublishedSettings,
+		&i.BlockDocHash,
+		&i.PublishedBlockHash,
+		&i.SeoTitle,
+		&i.SeoDescription,
+		&i.SocialImageID,
+		&i.Noindex,
+		&i.CanonicalUrl,
+		&i.PublishAt,
+		&i.PublishScheduledBy,
+		&i.PublishAttempts,
+		&i.PublishNextAttemptAt,
+		&i.PublishFailedAt,
+		&i.PublishError,
+		&i.DeletedAt,
+		&i.TrashedFromStatus,
+		&i.PageTemplate,
+	)
+	return i, err
+}
+
 const getSettings = `-- name: GetSettings :one
-SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup FROM settings WHERE id = 1
+SELECT id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id FROM settings WHERE id = 1
 `
 
 func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
@@ -76,6 +128,7 @@ func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
 		&i.EditorMarkdownShortcuts,
 		pq.Array(&i.EditorAllowedEmbeds),
 		&i.AllowSignup,
+		&i.FrontPageID,
 	)
 	return i, err
 }
@@ -170,9 +223,12 @@ SET
   allow_signup = COALESCE($9, allow_signup),
   -- A nil slice is NULL (keep); an empty one clears the list.
   editor_allowed_embeds = COALESCE($10::text[], editor_allowed_embeds),
+  -- The front page (#336): set_front_page says whether the request names one;
+  -- front_page_id NULL then means "the latest posts".
+  front_page_id = CASE WHEN $11::boolean THEN $12::bigint ELSE front_page_id END,
   changed_at = now()
 WHERE id = 1
-RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup
+RETURNING id, post_url_structure, site_title, posts_per_page, created_at, changed_at, site_tagline, site_language, site_timezone, date_format, editor_markdown_shortcuts, editor_allowed_embeds, allow_signup, front_page_id
 `
 
 type UpdateSettingsParams struct {
@@ -186,6 +242,8 @@ type UpdateSettingsParams struct {
 	EditorMarkdownShortcuts sql.NullBool   `json:"editor_markdown_shortcuts"`
 	AllowSignup             sql.NullBool   `json:"allow_signup"`
 	EditorAllowedEmbeds     []string       `json:"editor_allowed_embeds"`
+	SetFrontPage            bool           `json:"set_front_page"`
+	FrontPageID             sql.NullInt64  `json:"front_page_id"`
 }
 
 func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) (Setting, error) {
@@ -200,6 +258,8 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		arg.EditorMarkdownShortcuts,
 		arg.AllowSignup,
 		pq.Array(arg.EditorAllowedEmbeds),
+		arg.SetFrontPage,
+		arg.FrontPageID,
 	)
 	var i Setting
 	err := row.Scan(
@@ -216,6 +276,7 @@ func (q *Queries) UpdateSettings(ctx context.Context, arg UpdateSettingsParams) 
 		&i.EditorMarkdownShortcuts,
 		pq.Array(&i.EditorAllowedEmbeds),
 		&i.AllowSignup,
+		&i.FrontPageID,
 	)
 	return i, err
 }

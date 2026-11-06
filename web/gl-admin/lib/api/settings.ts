@@ -19,6 +19,9 @@ export interface Settings {
   editor_allowed_embeds: string[]
   // #191: "Allow anyone to sign up" (off by default). Public: the sign-in page reads it.
   allow_signup: boolean
+  // The page the site shows at / (#336), null for the latest posts. As stored: it may be
+  // a page that was unpublished or trashed since, which / then doesn't show.
+  front_page_id: number | null
   // PUBLIC_BASE_URL, read-only ("" when not configured): the domain is deploy config.
   site_address: string
   created_at: string
@@ -36,6 +39,8 @@ export interface UpdateSettingsRequest {
   editor_markdown_shortcuts?: boolean
   editor_allowed_embeds?: string[]
   allow_signup?: boolean
+  // A published page's id, or null for the latest posts (#336). Admins only.
+  front_page_id?: number | null
 }
 
 export interface ExtensionSetting {

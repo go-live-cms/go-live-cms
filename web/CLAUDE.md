@@ -443,6 +443,24 @@ are the most fragile part of the codebase. **Before editing anything under
   filter (`?review=pending`, `ListFilters.review`); Home lists the requests ("Kenji asked for a
   review", `attentionItems`). The canvas draws only Home's item; the dialogs and notices use the #338
   components. Not on the Pages tree yet.
+- **Front page and page templates (#336):** `/` (`src/pages/index.astro`) asks
+  `getPublicFrontPage()` (`/public/front-page`): a page → rendered by
+  `src/components/PostPage.astro` (the post route's render half, shared with
+  `[post_type]/[id].astro`), canonical `/` (also at the page's own URL: `SiteSettings.frontPageId`),
+  and `/page/N/` is a 404; a 404 → the latest posts as before; any other failure throws (never the
+  list in its place). A page renders with its **published** template (`post.page_template` from
+  `/public`) through `lib/themeLayout.ts` `pageLayoutVariant`: its `layouts/page/<name>.astro` if the
+  active theme has it in this build, else the type's `layout_variants` variant if that's a page layout,
+  else `default` (a theme switch never loses the stored name). Admin: Settings › General's **Front
+  page** (`components/settings/FrontPageField.tsx`: latest posts or a published page; a saved one that
+  was unpublished stays listed, with the warning; `toUpdateRequest` sends `front_page_id` only when it
+  changed), the Pages list's **Front page** badge, **Template** column (moderators; with_meta rows
+  don't carry it) and row menu **Set as front page** (admins, published pages); unpublishing,
+  archiving or trashing the front page asks first (`FrontPageConfirm`, in `PostActions` and the
+  editor's Publish menu). The page's **Template** field is `components/editor/ui/PageTemplateField.tsx`
+  (saved at once, `PUT /posts/:id/template`; "Settings changed" until Update). Templates come from the
+  API's theme scan (`usePageTemplates`, the active theme's `config.page_templates`). Rules and wording:
+  `lib/frontPage.ts`, `lib/pageTemplates.ts` (tested).
 - **Edit access requests (#321):** the editor's view-only notice (`components/editor/ui/
   PostEditAccess.tsx` `ViewOnlyNotice`) has **Request access** (a dialog, optional message ≤500)
   for a contributor watching someone else's published post, then "Request sent", or "declined,

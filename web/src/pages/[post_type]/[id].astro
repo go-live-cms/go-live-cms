@@ -1,18 +1,11 @@
 ---
-import { getPublishedPosts, getPublicPost, getSettings, getActiveTheme, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
-import { getPostLayoutVariant } from '../../lib/theme-loader'
-import { loadThemeLayout, postLayoutCandidates } from '../../lib/themeLayout'
+import { getPublishedPosts, getPublicPost, getSettings, getPostTypes, getPublicPostTypeNames } from '../../lib/api'
 import { parsePageSegment, resolveListRequest } from '../../lib/pagination'
-import { absoluteUrl, articleJsonLd, authorPath, normalizeUrlStructure, pageTitle, postCanonical, postDescription, postLastmod, postPath, publicImageUrl, resolveSiteUrl, toW3cDate, type PostSeo, type SeoMeta } from '../../lib/seo'
-import { getPostAuthors } from '../../lib/authorPage'
-import { getSiteSettings } from '../../lib/siteSettings'
-import { getCachedTaxonomyTypes, isTermRoute, linkTerms, termPath, TERM_ARCHIVE_ROUTE } from '../../lib/termPage'
-import type { AuthorProfile, Post, TaxonomyTerm, TaxonomyType } from '@gl-admin/lib/api/types'
+import { type PostSeo } from '../../lib/seo'
+import { isTermRoute, termPath, TERM_ARCHIVE_ROUTE } from '../../lib/termPage'
+import type { Post, TaxonomyTerm } from '@gl-admin/lib/api/types'
 import { log } from '../../lib/log'
-
-// WordPress-style: Auto-discover all theme layouts using glob imports
-// This allows dropping in new themes without modifying code
-const allLayouts = import.meta.glob('../../../themes/*/layouts/**/*.astro')
+import PostPage from '../../components/PostPage.astro'
 
 // Disable static pre-rendering to allow dynamic theme loading
 export const prerender = false
@@ -164,119 +157,14 @@ if (fullPost.post_status !== 'published' || (fullPost.post_type && fullPost.post
   return new Response(null, { status: 404 })
 }
 
-// Phase 2: Apply theme content filter if available
-if (Astro.locals.themeFunctions?.filterContent && (fullPost as any).content) {
-  try {
-    const filtered = await Astro.locals.themeFunctions.filterContent(
-      (fullPost as any).content,
-      fullPost,
-      Astro.locals.themeContext!
-    )
-    if (filtered && typeof filtered === 'string') {
-      (fullPost as any).content = filtered
-    }
-  } catch (error) {
-    log.error('theme_function_failed', { function: 'filterContent', post_id: fullPost.id, error })
-    // Continue with unfiltered content
-  }
-}
-
-// Categories/tags (#167): the published ones, from the post fetch above (#358). Layouts
-// that don't take `terms` ignore them. Terms of public taxonomies carry their archive's
-// `href` (#348); without the taxonomy list they render unlinked. The byline and "Written
-// by" cards (#350) come with them: credited authors with their bios. A failed lookup
-// renders the post with its owner in the byline and no cards.
-const [taxonomyTypes, authors] = await Promise.all([
-  getCachedTaxonomyTypes().catch((error): TaxonomyType[] => {
-    log.warn('taxonomy_types_fetch_failed', { error })
-    return []
-  }),
-  getPostAuthors(fullPost.id).catch((error): AuthorProfile[] => {
-    log.warn('post_authors_fetch_failed', { post_id: fullPost.id, error })
-    return []
-  }),
-])
-const terms = linkTerms(publishedTerms, taxonomyTypes)
-
-// Get layout variant for this post
-const layoutVariant = await getPostLayoutVariant(fullPost, postType)
-
-// Get active theme for dynamic layout loading
-const activeTheme = await getActiveTheme()
-const themeSlug = activeTheme.slug
-
-// Layout fallback chain (lib/themeLayout.ts): the type's own layouts/{postType}/{variant}
-// (never home/archive/error, which hold page layouts), the theme's layouts/post ones, then
-// the default theme's.
-const LayoutComponent = await loadThemeLayout(
-  allLayouts,
-  postLayoutCandidates("../../../themes", themeSlug, postType, layoutVariant),
-)
-
-if (!LayoutComponent) {
-  log.error('post_layout_not_found', { theme: themeSlug, post_type: postType, variant: layoutVariant })
-  return new Response(null, {
-    status: 500,
-    statusText: 'Layout Not Found'
-  })
-}
-
-// SEO (#137): the canonical URL follows the site's id/slug setting, so the
-// same post reached by id and by slug points crawlers at one URL.
-// The same per-request lookup the layout, SeoHead and bylines use (#330); it never
-// rejects (defaults when the API is down).
-const site = await getSiteSettings(Astro.locals)
-// The published featured image (#358); a getStaticPaths prop may carry its own.
-const featuredImage = fullPost.featured_image || publishedImage
-const urlStructure = normalizeUrlStructure(site.urlStructure)
-
-// The post's published SEO (#357): "<SEO title or title> · <site>", the SEO
-// description (else the excerpt, else the first paragraph), its canonical URL (else
-// its own), the social image (else the featured image; the API resolves both, as the
-// 1200 x 630 crop), and robots noindex when it's hidden from search engines.
-const siteUrl = resolveSiteUrl(Astro.url)
-const ownPath = postPath({ ...fullPost, post_type: postType }, urlStructure)
-const headline = publishedSeo?.title?.trim() || fullPost.title
-const title = pageTitle(headline, site.title)
-const description = postDescription(fullPost, publishedSeo) || `Read ${fullPost.title}`
-const socialImage = publishedSeo ? publishedSeo.image : null
-const image = socialImage?.url || featuredImage
-const imageUrl = publicImageUrl(siteUrl, image)
-const canonical = postCanonical(ownPath, publishedSeo)
-const seo: SeoMeta = {
-  canonical,
-  image,
-  imageWidth: socialImage?.width || undefined,
-  imageHeight: socialImage?.height || undefined,
-  imageAlt: socialImage?.alt || undefined,
-  type: 'article',
-  hideFromSearch: publishedSeo?.noindex === true,
-  siteName: site.title,
-  publishedTime: toW3cDate(fullPost.created_at),
-  modifiedTime: postLastmod(fullPost),
-  jsonLd: articleJsonLd({
-    headline,
-    description,
-    url: absoluteUrl(siteUrl, canonical),
-    image: imageUrl,
-    datePublished: toW3cDate(fullPost.created_at),
-    dateModified: postLastmod(fullPost),
-    authors: authors.length > 0
-      ? authors.map((a) => ({ name: a.full_name || a.username, url: absoluteUrl(siteUrl, authorPath(a.username)) }))
-      : [{ name: fullPost.username }],
-    publisher: site.title,
-  }),
-}
+// The rest (layout, byline, terms, head) is the post page component, shared with the
+// front page at / (#336).
 ---
 
-<LayoutComponent
+<PostPage
   post={fullPost}
-  title={title}
-  description={description}
-  seo={seo}
-  terms={terms}
-  authors={authors}
-  featuredImage={publicImageUrl(resolveSiteUrl(Astro.url), featuredImage) ?? null}
-  siteTitle={site.title}
-  urlStructure={urlStructure}
+  postType={postType}
+  publishedImage={publishedImage}
+  publishedTerms={publishedTerms}
+  publishedSeo={publishedSeo}
 />

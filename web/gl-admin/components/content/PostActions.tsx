@@ -11,6 +11,8 @@ import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import { authManager } from "@gl-admin/lib/auth"
 import { DUPLICATED_MESSAGE, type RowAction } from "@gl-admin/lib/contentList"
+import { frontPageSetMessage, takesFrontPageOffSite, type FrontPageAction } from "@gl-admin/lib/frontPage"
+import FrontPageConfirm from "@gl-admin/components/content/FrontPageConfirm"
 import type { Post } from "@gl-admin/lib/api/types"
 
 // The Posts and Pages rows' actions menu (#340): edit and duplicate (#354), then
@@ -79,12 +81,23 @@ type PostActionsProps = {
   onChanged: () => void
   // "post" or "page", in the confirmation.
   noun?: string
+  // The front page (#336), from the Pages list: `isFront` asks before unpublishing,
+  // archiving or trashing it (the home page falls back to the latest posts); `onSet`
+  // (admins, on a published page that isn't it) adds "Set as front page".
+  frontPage?: FrontPageRow
 }
 
-export default function PostActions({ post, actions, editLabel, onEdit, onChanged, noun = "post" }: PostActionsProps) {
+export type FrontPageRow = {
+  isFront: boolean
+  onSet?: () => Promise<void>
+}
+
+export default function PostActions({ post, actions, editLabel, onEdit, onChanged, noun = "post", frontPage }: PostActionsProps) {
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // The action waiting for "yes" because it takes the front page off the site.
+  const [confirmFront, setConfirmFront] = useState<FrontPageAction | null>(null)
   const [savingTemplate, setSavingTemplate] = useState(false)
   const title = post.title || "Untitled"
 
@@ -100,12 +113,35 @@ export default function PostActions({ post, actions, editLabel, onEdit, onChange
     }
   }
 
+  // Unpublish, archive and trash ask first on the front page.
+  const choose = (action: ListAction) => {
+    if (frontPage?.isFront && takesFrontPageOffSite(action)) {
+      setConfirmFront(action)
+      return
+    }
+    void run(action)
+  }
+
+  const setAsFrontPage = async () => {
+    if (!frontPage?.onSet) return
+    setBusy(true)
+    try {
+      await frontPage.onSet()
+      toast.success(frontPageSetMessage(title))
+    } catch (e) {
+      toast.error(errorMessage(e, `Couldn't make “${title}” the front page`))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const run = async (action: ListAction) => {
     setBusy(true)
     try {
       await perform(action, post)
       toast.success(`“${title}” ${DONE[action]}`)
       setConfirmDelete(false)
+      setConfirmFront(null)
       onChanged()
     } catch (e) {
       toast.error(errorMessage(e, `Couldn't ${LABELS[action].toLowerCase()} “${title}”`))
@@ -137,16 +173,21 @@ export default function PostActions({ post, actions, editLabel, onEdit, onChange
             Save as template…
           </MenuItem>
         )}
+        {frontPage?.onSet && (
+          <MenuItem description="Show this page at your site's home address" onSelect={setAsFrontPage}>
+            Set as front page
+          </MenuItem>
+        )}
         {statusActions.length > 0 && <MenuSeparator />}
         {statusActions.map((a) => (
-          <MenuItem key={a} description={DESCRIPTIONS[a]} onSelect={() => run(a)}>
+          <MenuItem key={a} description={DESCRIPTIONS[a]} onSelect={() => choose(a)}>
             {LABELS[a]}
           </MenuItem>
         ))}
         {actions.includes("trash") && (
           <>
             <MenuSeparator />
-            <MenuItem description={DESCRIPTIONS.trash} onSelect={() => run("trash")}>
+            <MenuItem description={DESCRIPTIONS.trash} onSelect={() => choose("trash")}>
               {LABELS.trash}
             </MenuItem>
           </>
@@ -161,6 +202,15 @@ export default function PostActions({ post, actions, editLabel, onEdit, onChange
         )}
       </Menu>
       <SaveTemplateDialog isOpen={savingTemplate} post={post} noun={noun} onClose={() => setSavingTemplate(false)} />
+      {confirmFront && (
+        <FrontPageConfirm
+          action={confirmFront}
+          title={title}
+          busy={busy}
+          onCancel={() => setConfirmFront(null)}
+          onConfirm={() => run(confirmFront)}
+        />
+      )}
       <Modal
         isOpen={confirmDelete}
         onClose={() => !busy && setConfirmDelete(false)}

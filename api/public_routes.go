@@ -23,6 +23,9 @@ func (server *Server) registerPublicRoutes(rg *gin.RouterGroup) {
 		posts.GET("/:id/authors", server.listPublicPostAuthors)
 	}
 
+	// The page shown at / (#336, front_page.go); 404 = the latest posts
+	rg.GET("/front-page", server.getPublicFrontPage)
+
 	// Author pages (#350, authors_handlers_read.go)
 	authors := rg.Group("/authors")
 	{

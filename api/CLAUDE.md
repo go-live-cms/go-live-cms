@@ -993,6 +993,34 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - Tests: `posts_access_test.go` (real DB: the flow, permissions, cooldown, rate limit, the race,
   emails, Needs attention, feed visibility, the collab lookup) and `internal_test.go`.
 
+## Front page and page templates (#336, `000045`, `front_page.go`, `page_templates.go`)
+
+- **Front page:** `settings.front_page_id` (FK posts, `ON DELETE SET NULL`; NULL = the latest
+  posts). `PUT /settings {front_page_id: <id> | null}` (admins, like every setting; absent keeps):
+  only a **published page**, else 400 `invalid_front_page`. The id stays when the page is later
+  unpublished, archived or trashed: `GET /public/front-page` (the `publicPostView` of
+  `/public/posts/:id`) answers **404 `no_front_page`** unless `GetPublicFrontPage` finds it
+  published, type `page`, and that type public and active, and the site's `/` shows the latest
+  posts until it is published again. `GET /settings` returns the id as stored (an id is not
+  content). Only `front_page_db_test.go` touches it in tests (a shared singleton; it restores it).
+- **Templates:** `posts.page_template` (`''` = the theme's default; CHECK `[A-Za-z0-9_-]{0,64}`).
+  **In the snapshot (decision):** `golive_post_settings()` has `page_template`, so a template
+  change on a published page waits for Update like every other setting (#358), `golive_post_settings_changed`
+  sees it, versions record it and restore-settings brings it back (`RestorePostSEO` takes it; a
+  version without one keeps the working one). 000045 gave every stored snapshot (versions, published,
+  #335's scheduled updates) `""`. `/public` answers the published one as `post.page_template`
+  (`publishedPageTemplate`); `ListPosts` rows carry the working one (the Pages list), the with_meta
+  lists don't.
+- `PUT /posts/:id/template {page_template}` (content roles + `canEditPostDetails`, trashed → 409,
+  pages only → 400 `template_pages_only`). `"default"` is stored as `""`; any other name must be in
+  the active theme's `config.page_templates` (400 `unknown_template`, also with no active theme).
+- **The list is the theme scan's** (`scanPageTemplates`): every `layouts/page/*.astro` (valid names
+  only), `default` first, then theme.config.ts's `layouts.page` order (`{ file, label, description }`
+  entries; the simple `variants` form names none), then undeclared files by name, labelled from the
+  name. A declared layout without its file is left out. Stored as `config.page_templates`; the admin
+  lists it, the web resolves names against its own build (`pageLayoutVariant`). A stored template the
+  active theme lacks (theme switch) is kept and renders as the default.
+
 ## Theme blocks (#376)
 
 - Themes' custom blocks (`theme:<slug>/<block>`) are declared in TypeScript, so the web

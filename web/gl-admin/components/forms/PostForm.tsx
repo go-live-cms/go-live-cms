@@ -46,6 +46,8 @@ import { VersionPreview, versionTime } from "@gl-admin/components/editor/ui/Revi
 import Notice from "@gl-admin/components/ui/Notice"
 import Button from "@gl-admin/components/ui/Button"
 import Modal from "@gl-admin/components/ui/Modal"
+import FrontPageConfirm from "@gl-admin/components/content/FrontPageConfirm"
+import { isFrontPage } from "@gl-admin/lib/frontPage"
 import { AvatarStack } from "@gl-admin/components/ui/Avatar"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { ToastContainer, useToast } from "@gl-admin/components/Toast"
@@ -131,6 +133,7 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     menu_order: initialData?.menu_order || 0,
     created_at: initialData?.created_at || new Date().toISOString(),
     changed_at: initialData?.changed_at || new Date().toISOString(),
+    page_template: initialData?.page_template,
   }
 
   // Per-post permissions (#135, mirroring api/auth_posts.go): admins and editors may edit
@@ -247,11 +250,16 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
   const [urlStructure, setUrlStructure] = useState<"id" | "slug">("id")
   // For the SEO tab's previews (#357).
   const [site, setSite] = useState({ title: "", address: "" })
+  // The front page (#336): unpublishing or archiving it asks first (the home page falls
+  // back to the latest posts).
+  const [frontPageId, setFrontPageId] = useState<number | null>(null)
+  const [confirmFront, setConfirmFront] = useState<"unpublish" | "archive" | null>(null)
   useEffect(() => {
     getSettings()
       .then((settings) => {
         setUrlStructure(settings.post_url_structure)
         setSite({ title: settings.site_title || "", address: settings.site_address || window.location.origin })
+        setFrontPageId(settings.front_page_id ?? null)
       })
       .catch((error) => console.error("Failed to fetch settings:", error))
   }, [])
@@ -619,6 +627,10 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }
   const handleArchive = () => setStatus("archived", "Post archived", "Couldn't archive the post")
+  // The Publish menu's Unpublish and Archive, asking first on the front page (#336).
+  const isFront = isFrontPage(initialData?.id ? { id: initialData.id, post_type: currentPost.post_type } : null, frontPageId)
+  const askUnpublish = async () => (isFront ? setConfirmFront("unpublish") : handleUnpublish())
+  const askArchive = async () => (isFront ? setConfirmFront("archive") : handleArchive())
   const handleRestoreToDrafts = () => setStatus("draft", "Restored to drafts", "Couldn't restore the post to drafts")
 
   // Schedule or reschedule (#147): `local` is the dialog's time in the site's zone. A
@@ -1075,8 +1087,8 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
         onSettingsToggle={() => setSidebarVisible(!sidebarVisible)}
         onSave={handleSave}
         onPublish={handlePublish}
-        onUnpublish={collabEnabled && canPublish ? handleUnpublish : undefined}
-        onArchive={collabEnabled && canPublish ? handleArchive : undefined}
+        onUnpublish={collabEnabled && canPublish ? askUnpublish : undefined}
+        onArchive={collabEnabled && canPublish ? askArchive : undefined}
         onRestoreToDrafts={collabEnabled && canPublish ? handleRestoreToDrafts : undefined}
         liveUrl={liveUrl}
         settingsPending={settingsPending}
@@ -1446,6 +1458,18 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
       </div>
 
       {/* History · 2: confirm before replacing everyone's working copy. */}
+      {confirmFront && (
+        <FrontPageConfirm
+          action={confirmFront}
+          title={formData.title}
+          onCancel={() => setConfirmFront(null)}
+          onConfirm={() => {
+            const action = confirmFront
+            setConfirmFront(null)
+            void (action === "unpublish" ? handleUnpublish() : handleArchive())
+          }}
+        />
+      )}
       <Modal
         isOpen={confirmRestore && !!viewingVersion}
         onClose={() => !isRestoring && setConfirmRestore(false)}

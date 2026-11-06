@@ -148,7 +148,9 @@ SET seo_title = sqlc.arg(seo_title),
     seo_description = sqlc.arg(seo_description),
     social_image_id = (SELECT m.id FROM media m WHERE m.id = sqlc.narg(social_image_id)::bigint),
     noindex = sqlc.arg(noindex),
-    canonical_url = sqlc.arg(canonical_url)
+    canonical_url = sqlc.arg(canonical_url),
+    -- The template (#336): NULL keeps the working one (a version without it).
+    page_template = COALESCE(sqlc.narg(page_template)::text, page_template)
 WHERE posts.id = sqlc.arg(post_id)::bigint;
 
 -- name: GetLatestPublishedVersion :one

@@ -5,8 +5,8 @@
 // (posts.published_settings). The database builds the snapshot
 // (golive_post_settings, migration 000027), so the shape lives in one place:
 // title, excerpt (description), featured image, term ids and the SEO fields
-// (#357, 000031; posts_seo.go) and the byline's author ids (#319, 000034;
-// posts_authors.go).
+// (#357, 000031; posts_seo.go), the byline's author ids (#319, 000034;
+// posts_authors.go) and a page's template (#336, 000045; page_templates.go).
 //
 // The public site and its feeds show the published settings; the admin edits
 // the working ones (the post row, its featured image meta and term links). The
@@ -39,6 +39,23 @@ type PostSettings struct {
 	// AuthorIDs is the byline (#319), user ids in credit order. nil (left out of
 	// the JSON): a snapshot from before 000034 that wasn't the current version.
 	AuthorIDs []int64 `json:"author_ids,omitempty"`
+
+	// PageTemplate is the page's template (#336, 000045; "" = the theme's default).
+	// nil: a snapshot without one (000045 gave every stored snapshot "").
+	PageTemplate *string `json:"page_template,omitempty"`
+}
+
+// publishedPageTemplate is the template the site renders a post with: the
+// published one when it has a snapshot, else the row's own (a post published
+// without one keeps showing its live settings, as everywhere else).
+func publishedPageTemplate(settings *PostSettings, working string) string {
+	if settings == nil {
+		return working
+	}
+	if settings.PageTemplate == nil {
+		return ""
+	}
+	return *settings.PageTemplate
 }
 
 // PostSettingsFeaturedImage is the featured image as the post's meta records it

@@ -77,7 +77,8 @@ func TestScanThemesDirectory(t *testing.T) {
 	bare := bySlug["bare"]
 	require.Equal(t, "bare", bare.Name)
 	require.Equal(t, "1.0.0", bare.Version)
-	require.Nil(t, bare.Config)
+	// All a bare config gets is its page layout files (#336).
+	require.Equal(t, map[string]interface{}{"page_templates": []PageTemplate{{Name: "default", Label: "Default"}}}, bare.Config)
 	require.Empty(t, bare.PostTypes)
 
 	_, err = ScanThemesDirectory(filepath.Join(root, "does-not-exist"))

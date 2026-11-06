@@ -17,6 +17,9 @@ vi.mock("@gl-admin/lib/api/settings", () => ({
   getSettings: api.getSettings,
   updateSettings: api.updateSettings,
 }))
+// The Front page field's pages (#336).
+const posts = vi.hoisted(() => ({ getPosts: vi.fn(), getPostById: vi.fn() }))
+vi.mock("@gl-admin/lib/api/posts", () => posts)
 const editorSettings = vi.hoisted(() => ({ setEditorSettings: vi.fn() }))
 vi.mock("@gl-admin/lib/editorSettings", () => editorSettings)
 
@@ -76,6 +79,14 @@ beforeEach(() => {
   api.getSettings.mockReset().mockResolvedValue({ ...SAVED })
   api.updateSettings.mockReset()
   editorSettings.setEditorSettings.mockReset()
+  posts.getPosts.mockReset().mockResolvedValue({
+    data: [
+      { id: 12, title: "Home", post_type: "page", post_status: "published" },
+      { id: 4, title: "About", post_type: "page", post_status: "published" },
+    ],
+    meta: { total: 2 },
+  })
+  posts.getPostById.mockReset()
 })
 
 afterEach(() => {
@@ -165,6 +176,54 @@ describe("the unsaved-changes bar", () => {
     await settle()
     expect(api.updateSettings).not.toHaveBeenCalled()
     expect(bar()?.textContent).toContain("Enter a site title.")
+  })
+})
+
+describe("Front page (#336)", () => {
+  const frontField = () =>
+    [...container.querySelectorAll<HTMLButtonElement>("button[role='combobox']")].find(
+      (b) => container.querySelector(`label[for='${b.id}']`)?.textContent === "Front page"
+    )!
+  const hintOf = (b: HTMLButtonElement) =>
+    (b.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .map((id) => document.getElementById(id)?.textContent ?? "")
+      .join(" ")
+
+  it("lists the latest posts and the published pages, and saves the pick", async () => {
+    api.updateSettings.mockImplementation(async (body) => ({ ...SAVED, front_page_id: null, ...body }))
+    await render()
+    expect(posts.getPosts).toHaveBeenCalledWith(expect.objectContaining({ type: "page", status: "published" }))
+    const trigger = frontField()
+    expect(trigger.textContent).toContain("Your latest posts")
+    expect(hintOf(trigger)).toContain("Your home page lists your latest posts.")
+
+    await act(async () => trigger.click())
+    const options = [...document.querySelectorAll<HTMLElement>("[role='option']")]
+    expect(options.map((o) => o.textContent)).toEqual(["Your latest posts", "About", "Home"])
+    await act(async () => options[2].click())
+    await settle()
+    expect(bar()?.textContent).toContain("You changed the front page")
+
+    await act(async () => button("Save changes").click())
+    await settle()
+    expect(api.updateSettings).toHaveBeenCalledWith(expect.objectContaining({ front_page_id: 12 }), "token")
+    expect(hintOf(frontField())).toContain("Your home page shows this page")
+  })
+
+  it("warns when the saved front page isn't published, and saves other fields without it", async () => {
+    api.getSettings.mockResolvedValue({ ...SAVED, front_page_id: 30 })
+    posts.getPostById.mockResolvedValue({ post: { id: 30, title: "Old home", post_type: "page", post_status: "draft" } })
+    api.updateSettings.mockImplementation(async (body) => ({ ...SAVED, front_page_id: 30, ...body }))
+    await render()
+    const trigger = frontField()
+    expect(trigger.textContent).toContain("Old home (not published)")
+    expect(hintOf(trigger)).toContain("“Old home” isn’t published, so your home page shows your latest posts until it is.")
+
+    await type(field("site_title"), "GoLive Notes")
+    await act(async () => button("Save changes").click())
+    await settle()
+    expect(api.updateSettings.mock.calls[0][0]).not.toHaveProperty("front_page_id")
   })
 })
 

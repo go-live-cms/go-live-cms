@@ -292,12 +292,16 @@ type RestoredPostSettings struct {
 	// since are skipped; nil (a version from before #319), or none left, keeps the
 	// working byline as it is.
 	AuthorIDs []int64
+
+	// PageTemplate is the version's template (#336); nil (a version without one)
+	// keeps the working template.
+	PageTemplate *string
 }
 
 // RestorePostSettingsTx puts a version's settings back into the post's working
 // copy (#358): title, excerpt, featured image (post_media order 0 and the
 // _thumbnail_* meta, as POST /posts/:id/featured-image writes them), term
-// links, the SEO fields (#357) and the byline (#319). The published settings stay as they are until
+// links, the SEO fields (#357), the byline (#319) and the template (#336). The published settings stay as they are until
 // Update. A featured or social image whose media was deleted since is dropped,
 // and so are deleted terms.
 func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePostSettingsTxParams) (Post, error) {
@@ -324,6 +328,9 @@ func (store *SQLStore) RestorePostSettingsTx(ctx context.Context, arg RestorePos
 		}
 		if id := arg.Settings.SocialImageID; id != nil {
 			seo.SocialImageID = sql.NullInt64{Int64: *id, Valid: true}
+		}
+		if template := arg.Settings.PageTemplate; template != nil {
+			seo.PageTemplate = sql.NullString{String: *template, Valid: true}
 		}
 		if err := q.RestorePostSEO(ctx, seo); err != nil {
 			return fmt.Errorf("restore SEO: %w", err)

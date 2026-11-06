@@ -18,10 +18,20 @@ export interface Theme {
         variants: string[]
       }
     }
+    // The page layouts the API's theme scan found (#336): layouts/page/*.astro, named
+    // and described by theme.config.ts. "default" first.
+    page_templates?: PageTemplate[]
   }
   active: boolean
   created_at: string
   changed_at: string
+}
+
+// A page template (#336): a page layout of a theme.
+export interface PageTemplate {
+  name: string
+  label: string
+  description?: string
 }
 
 export interface ActiveThemeWithSettings extends Theme {

@@ -279,6 +279,9 @@ type Querier interface {
 	// The author's public fields and how many of those posts credit them. A user
 	// with none gets post_count 0, which the API answers like an unknown username.
 	GetPublicAuthor(ctx context.Context, username string) (GetPublicAuthorRow, error)
+	// The page the public site renders at / (#336): the settings' front page while it is
+	// a published page of an active, public type. No row: / shows the latest posts.
+	GetPublicFrontPage(ctx context.Context) (Post, error)
 	// Public term archives (#348): /{taxonomy}/{slug}, e.g. /category/guides. A term
 	// has a page when its taxonomy type is public; its list is the published posts of
 	// public, active post types tagged with the term or, for a hierarchical taxonomy,
@@ -734,6 +737,10 @@ type Querier interface {
 	// stores (the seed, unchanged or invalid docs) leave it alone (#307).
 	UpdatePostBlockDocFromCollab(ctx context.Context, arg UpdatePostBlockDocFromCollabParams) (int64, error)
 	UpdatePostMeta(ctx context.Context, arg UpdatePostMetaParams) (PostMetum, error)
+	// PUT /posts/:id/template (#336): the page's working template ('' = the theme's
+	// default). On a published page it reaches the site on Update (golive_post_settings,
+	// 000045).
+	UpdatePostPageTemplate(ctx context.Context, arg UpdatePostPageTemplateParams) (Post, error)
 	// PUT /posts/:id/seo (#357): the post's working SEO settings, replaced as a whole.
 	// On a published post they reach the site on Update (golive_post_settings, 000031).
 	UpdatePostSEO(ctx context.Context, arg UpdatePostSEOParams) (Post, error)

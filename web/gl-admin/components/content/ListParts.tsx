@@ -4,7 +4,7 @@ import Skeleton from "@gl-admin/components/ui/Skeleton"
 import Notice from "@gl-admin/components/ui/Notice"
 import Menu, { MenuItem, MenuSeparator } from "@gl-admin/components/ui/Menu"
 import { CheckIcon, ChevronDownIcon, CloseIcon, LockIcon, PencilIcon, SortIcon } from "@gl-admin/components/ui/icons"
-import PostActions from "@gl-admin/components/content/PostActions"
+import PostActions, { type FrontPageRow } from "@gl-admin/components/content/PostActions"
 import {
   BULK_LABELS,
   SORT_OPTIONS,
@@ -180,11 +180,13 @@ type RowActionsCellProps = {
   onOpen: (post: Post) => void
   onChanged: () => void
   noun: string
+  // The Pages list's front page actions (#336, PostActions).
+  frontPage?: FrontPageRow
 }
 
 // The last column. Contributors see Edit (their own) or Open (view-only) as a button,
 // as in the design, plus the menu when they may delete; moderators get the menu.
-export function RowActionsCell({ post, user, onOpen, onChanged, noun }: RowActionsCellProps) {
+export function RowActionsCell({ post, user, onOpen, onChanged, noun, frontPage }: RowActionsCellProps) {
   const moderator = isContentModerator(user?.role)
   const actions = rowActions(user, post)
   const editLabel = postAccess(user, post).canEdit ? "Edit" : "Open"
@@ -198,7 +200,15 @@ export function RowActionsCell({ post, user, onOpen, onChanged, noun }: RowActio
         </Button>
       )}
       {(moderator ? !trashed || actions.length > 0 : actions.length > 0) && (
-        <PostActions post={post} actions={actions} editLabel={editLabel} onEdit={trashed ? undefined : () => onOpen(post)} onChanged={onChanged} noun={noun} />
+        <PostActions
+          post={post}
+          actions={actions}
+          editLabel={editLabel}
+          onEdit={trashed ? undefined : () => onOpen(post)}
+          onChanged={onChanged}
+          noun={noun}
+          frontPage={frontPage}
+        />
       )}
     </div>
   )

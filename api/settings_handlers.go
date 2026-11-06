@@ -62,6 +62,18 @@ func (server *Server) updateSettings(c *gin.Context) {
 		// Non-nil even when empty: [] clears the list, absent keeps it.
 		params.EditorAllowedEmbeds = normalizeEmbeds(*req.EditorAllowedEmbeds)
 	}
+	setFrontPage, frontPageID, err := req.frontPageUpdate()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error(), "code": "invalid_front_page", "fields": gin.H{"front_page_id": err.Error()}})
+		return
+	}
+	if frontPageID != nil && !server.checkFrontPage(c, *frontPageID) {
+		return
+	}
+	params.SetFrontPage = setFrontPage
+	if frontPageID != nil {
+		params.FrontPageID = sql.NullInt64{Int64: *frontPageID, Valid: true}
+	}
 
 	settings, err := server.store.UpdateSettings(c, params)
 	if err != nil {

@@ -15,9 +15,21 @@ SET
   allow_signup = COALESCE(sqlc.narg('allow_signup'), allow_signup),
   -- A nil slice is NULL (keep); an empty one clears the list.
   editor_allowed_embeds = COALESCE(sqlc.narg('editor_allowed_embeds')::text[], editor_allowed_embeds),
+  -- The front page (#336): set_front_page says whether the request names one;
+  -- front_page_id NULL then means "the latest posts".
+  front_page_id = CASE WHEN sqlc.arg('set_front_page')::boolean THEN sqlc.narg('front_page_id')::bigint ELSE front_page_id END,
   changed_at = now()
 WHERE id = 1
 RETURNING *;
+
+-- name: GetPublicFrontPage :one
+-- The page the public site renders at / (#336): the settings' front page while it is
+-- a published page of an active, public type. No row: / shows the latest posts.
+SELECT * FROM posts
+WHERE id = (SELECT s.front_page_id FROM settings s WHERE s.id = 1)
+  AND post_type = 'page'
+  AND post_status = 'published'
+  AND EXISTS (SELECT 1 FROM post_types pt WHERE pt.name = 'page' AND pt.public AND pt.is_active);
 
 -- name: GetExtensionSetting :one
 SELECT * FROM extension_settings WHERE key = $1;

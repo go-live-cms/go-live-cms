@@ -29,6 +29,7 @@ const saved: SettingsDraft = {
   post_url_structure: "slug",
   editor_markdown_shortcuts: true,
   allow_signup: false,
+  front_page_id: null,
 }
 
 describe("changedFields", () => {
@@ -46,6 +47,7 @@ describe("changedFields", () => {
     ).toEqual(["tagline", "time zone", "Markdown shortcuts"])
     expect(changedFields(saved, { ...saved, site_language: "pt-BR", date_format: "iso" })).toEqual(["language", "date format"])
     expect(changedFields(saved, { ...saved, allow_signup: true })).toEqual(["sign-up setting"])
+    expect(changedFields(saved, { ...saved, posts_per_page: 5, front_page_id: 12 })).toEqual(["front page", "posts per page"])
   })
 
   it("is empty before the settings have loaded", () => {
@@ -103,6 +105,16 @@ it("toDraft keeps only the edited fields", () => {
 
 it("toUpdateRequest trims the tagline", () => {
   expect(toUpdateRequest({ ...saved, site_tagline: "  Hi  " }).site_tagline).toBe("Hi")
+})
+
+// #336: the API checks a chosen front page is published. A saved one may have been
+// unpublished since; it mustn't block saving the other fields.
+it("toUpdateRequest sends the front page only when it changed", () => {
+  const withFront = { ...saved, front_page_id: 12 }
+  expect(toUpdateRequest({ ...withFront, site_title: "New" }, withFront)).not.toHaveProperty("front_page_id")
+  expect(toUpdateRequest({ ...withFront, front_page_id: null }, withFront)).toMatchObject({ front_page_id: null })
+  expect(toUpdateRequest(withFront, saved)).toMatchObject({ front_page_id: 12 })
+  expect(toUpdateRequest(withFront)).toMatchObject({ front_page_id: 12 })
 })
 
 describe("time zones", () => {

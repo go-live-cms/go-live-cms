@@ -18,6 +18,7 @@ import Skeleton from "@gl-admin/components/ui/Skeleton"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import { ExternalIcon } from "@gl-admin/components/ui/icons"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import { resetPageTemplates } from "@gl-admin/lib/hooks/usePageTemplates"
 import { plural } from "@gl-admin/utils/formatting"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 import "@gl-admin/assets/styles/pages/themes.scss"
@@ -80,6 +81,8 @@ const ThemesPage: React.FC = () => {
       setActivating(theme.id)
       const token = authManager.getState().accessToken || undefined
       await activateTheme(theme.id, token)
+      // Its page templates (#336) differ: the Pages list and editor re-read them.
+      resetPageTemplates()
       toast.success(`${theme.name} is now your theme`)
       await fetchData(true)
     } catch (error) {
