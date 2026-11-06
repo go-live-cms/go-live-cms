@@ -1,0 +1,301 @@
+import type { Editor } from "@tiptap/core"
+import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
+import { createImagePlaceholder } from "./mediaBlocks"
+
+// The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
+// insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
+// and the block-type toolbar all read it. It holds the core blocks and every installed
+// theme block; `menuEntries` decides which ones a menu offers (the role gate, the active
+// theme, and later the container slot's nesting table, #414).
+//
+// Adding a block = one entry in CORE_BLOCKS, in its group, in the order the menus show it.
+// Only `id`, `type`, `name`, `group`, `icon` and `insert` are required:
+//
+//   {
+//     id: "group",            // unique in the catalog; also Turn into's value
+//     type: "group",          // the Block Spec type it creates
+//     name: "Group",          // what the menus show, and what search matches
+//     group: "layout",        // text | media | layout | embeds | advanced
+//     keywords: ["container", "section"],
+//     icon: { path: "M4 8V4h4…" },  // a 24×24 stroke path, or { glyph: "H1" }
+//     insert: (editor, range) => editor.chain().focus().deleteRange(range).insertContent({ type: "group", … }).run(),
+//   }
+//
+// `insert` replaces `range` (the typed "/query", or an empty range on the line + opened
+// for) with the block and leaves the caret in it. It must be one ordinary command chain:
+// no appendTransaction, no writes around the editor (rules 7 and 11 in
+// lib/collaboration/CLAUDE.md).
+
+export type BlockGroup = "text" | "media" | "layout" | "embeds" | "advanced"
+
+/** The menus' groups, in the order the design shows them ("Inserting blocks"). */
+export const BLOCK_GROUPS: readonly { id: BlockGroup; label: string }[] = [
+  { id: "text", label: "Text" },
+  { id: "media", label: "Media" },
+  { id: "layout", label: "Layout" },
+  { id: "embeds", label: "Embeds" },
+  { id: "advanced", label: "Advanced" },
+]
+
+export type CatalogRole = "admin" | "editor" | "contributor"
+
+/** A 24×24 stroke icon (`path`, the design's icons) or a short text glyph ("H1"). */
+export type BlockIconSpec = { path: string; glyph?: never } | { glyph: string; path?: never }
+
+export interface InsertRange {
+  from: number
+  to: number
+}
+
+export interface CatalogEntry {
+  /** Unique in the catalog. Turn into's value; for core blocks the old TurnIntoValue ids. */
+  id: string
+  /** The Block Spec type it inserts ("heading", "theme:example/alert"). */
+  type: string
+  name: string
+  group: BlockGroup
+  /** More words search matches (by prefix), shown beside a result found through one. */
+  keywords?: readonly string[]
+  /** The Markdown shortcut that also makes it, shown on the right ("##"). Must be a real input rule (catalog.markdown.test.ts). */
+  markdown?: string
+  icon: BlockIconSpec
+  /**
+   * Who may insert it. Absent: everyone who can edit the post. An `advanced` entry is
+   * admins only unless it says otherwise. The menus only hide it: whatever must be
+   * enforced is enforced by the server (Custom HTML, #428).
+   */
+  roles?: readonly CatalogRole[]
+  /** Set on a theme block: offered only while that theme is active. */
+  theme?: string
+  insert: (editor: Editor, range: InsertRange) => void
+  /** Turns the block holding the selection into this one (Turn into, the block-type toolbar). */
+  turnInto?: (editor: Editor) => void
+}
+
+// The design's icons ("Inserting blocks"): 24×24, stroke 2, round caps.
+export const ICONS = {
+  text: "M4 7V5h16v2M9 19h6M12 5v14",
+  ul: "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01",
+  ol: "M10 6h10M10 12h10M10 18h10M4 4h1v4M4 8h2M4 14h2l-2 3h2",
+  quote: "M3 18c3 0 6-2 6-7V6H3v6h4M14 18c3 0 6-2 6-7V6h-6v6h4",
+  code: "m16 18 6-6-6-6M8 6l-6 6 6 6",
+  image: "M3 3h18v18H3zM8.5 8.5h.01M21 15l-5-5L5 21",
+  divider: "M3 12h18M8 6h8M8 18h8",
+  html: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",
+} as const
+
+const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
+
+const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const
+
+export const CORE_BLOCKS: readonly CatalogEntry[] = [
+  // Text
+  {
+    id: "paragraph",
+    type: "paragraph",
+    name: "Paragraph",
+    group: "text",
+    keywords: ["text", "plain"],
+    icon: { path: ICONS.text },
+    insert: (editor, range) => chain(editor, range).setParagraph().run(),
+    turnInto: (editor) => editor.chain().focus().setParagraph().run(),
+  },
+  ...HEADING_LEVELS.map(
+    (level): CatalogEntry => ({
+      id: `heading-${level}`,
+      type: "heading",
+      name: `Heading ${level}`,
+      group: "text",
+      keywords: [`h${level}`, "title", "heading"],
+      markdown: "#".repeat(level),
+      icon: { glyph: `H${level}` },
+      insert: (editor, range) => chain(editor, range).setHeading({ level }).run(),
+      turnInto: (editor) => editor.chain().focus().setHeading({ level }).run(),
+    })
+  ),
+  {
+    id: "bullet-list",
+    type: "bullet_list",
+    name: "Bulleted list",
+    group: "text",
+    keywords: ["ul", "unordered", "bullets", "list"],
+    markdown: "-",
+    icon: { path: ICONS.ul },
+    insert: (editor, range) => chain(editor, range).toggleBulletList().run(),
+    // Toggling again would take an existing bulleted list apart.
+    turnInto: (editor) => void (!editor.isActive("bulletList") && editor.chain().focus().toggleBulletList().run()),
+  },
+  {
+    id: "numbered-list",
+    type: "ordered_list",
+    name: "Numbered list",
+    group: "text",
+    keywords: ["ol", "ordered", "list"],
+    markdown: "1.",
+    icon: { path: ICONS.ol },
+    insert: (editor, range) => chain(editor, range).toggleOrderedList().run(),
+    turnInto: (editor) => void (!editor.isActive("orderedList") && editor.chain().focus().toggleOrderedList().run()),
+  },
+  {
+    id: "quote",
+    type: "blockquote",
+    name: "Quote",
+    group: "text",
+    keywords: ["blockquote", "citation"],
+    markdown: ">",
+    icon: { path: ICONS.quote },
+    insert: (editor, range) => chain(editor, range).setBlockquote().run(),
+    turnInto: (editor) => editor.chain().focus().setBlockquote().run(),
+  },
+  {
+    id: "code-block",
+    type: "code_block",
+    name: "Code",
+    group: "text",
+    keywords: ["codeblock", "snippet", "pre", "programming"],
+    markdown: "```",
+    icon: { path: ICONS.code },
+    insert: (editor, range) => chain(editor, range).setCodeBlock().run(),
+    turnInto: (editor) => editor.chain().focus().setCodeBlock().run(),
+  },
+  // Media
+  {
+    id: "image",
+    type: "image",
+    name: "Image",
+    group: "media",
+    keywords: ["img", "picture", "photo"],
+    icon: { path: ICONS.image },
+    insert: (editor, range) => createImagePlaceholder(editor, range),
+  },
+  // Layout
+  {
+    id: "divider",
+    type: "divider",
+    name: "Divider",
+    group: "layout",
+    keywords: ["hr", "horizontal rule", "separator", "line"],
+    markdown: "---",
+    icon: { path: ICONS.divider },
+    insert: (editor, range) => chain(editor, range).setHorizontalRule().run(),
+  },
+]
+
+/** The whole catalog: the core blocks, then every installed theme block (lib/theme-blocks). */
+export function catalogEntries(): CatalogEntry[] {
+  return [...CORE_BLOCKS, ...installedThemeBlockEditors.map((editor) => editor.entry)]
+}
+
+// --- Who sees what -----------------------------------------------------------------
+
+/** The roles that may insert `entry`, or null for everyone who can edit the post. */
+export function entryRoles(entry: CatalogEntry): readonly CatalogRole[] | null {
+  return entry.roles ?? (entry.group === "advanced" ? ["admin"] : null)
+}
+
+/** True when the menus show the "Admins" pill on `entry`. */
+export function isAdminOnly(entry: CatalogEntry): boolean {
+  const roles = entryRoles(entry)
+  return !!roles && roles.length === 1 && roles[0] === "admin"
+}
+
+export function canInsert(entry: CatalogEntry, role: string | null | undefined): boolean {
+  const roles = entryRoles(entry)
+  if (!roles) return true
+  return !!role && (roles as readonly string[]).includes(role.toLowerCase())
+}
+
+export interface MenuContext {
+  /** The signed-in user's role (a UI hint: the server enforces what matters). */
+  role?: string | null
+  /** The active theme's slug: only its theme blocks are offered. */
+  theme?: string | null
+  /** The slot being inserted into accepts this block (#414's nesting table). */
+  accepts?: (entry: CatalogEntry) => boolean
+}
+
+/** The entries a menu offers in `context`, in catalog order. */
+export function menuEntries(context: MenuContext, entries: readonly CatalogEntry[] = catalogEntries()): CatalogEntry[] {
+  return entries.filter(
+    (entry) =>
+      canInsert(entry, context.role) &&
+      (!entry.theme || entry.theme === (context.theme ?? "default")) &&
+      (context.accepts?.(entry) ?? true)
+  )
+}
+
+// The active theme, set by ThemeProvider when the admin loads (only its blocks are
+// offered; every installed one stays in the editor's schema, #376).
+let activeTheme = "default"
+
+export function setActiveTheme(slug: string) {
+  activeTheme = slug
+}
+
+export function getActiveTheme(): string {
+  return activeTheme
+}
+
+// --- Search ------------------------------------------------------------------------
+
+export interface CatalogMatch {
+  entry: CatalogEntry
+  /** The part of the name the query matched, [start, end), to show in bold. */
+  nameMatch?: [number, number]
+  /** The keyword the query matched, when the name didn't. */
+  keyword?: string
+}
+
+export interface CatalogSection {
+  group: BlockGroup
+  label: string
+  matches: CatalogMatch[]
+}
+
+const normalize = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim()
+const isWordChar = (char: string | undefined) => !!char && /[\p{L}\p{N}]/u.test(char)
+
+/**
+ * How `entry` matches `query` (normalized), or null. A name matches where a word of it
+ * starts with the query ("/vid" → **Vid**eo; "/list" → Bulleted **list**), never inside a
+ * word ("/h" isn't Paragrap**h**); a keyword matches when it starts with the query
+ * ("/vid" → YouTube, "video"). An empty query matches everything.
+ */
+export function matchEntry(entry: CatalogEntry, query: string): CatalogMatch | null {
+  const q = normalize(query)
+  if (!q) return { entry }
+  const name = entry.name.toLowerCase()
+  for (let at = name.indexOf(q); at !== -1; at = name.indexOf(q, at + 1)) {
+    if (!isWordChar(name[at - 1]) || !isWordChar(name[at])) return { entry, nameMatch: [at, at + q.length] }
+  }
+  const keyword = entry.keywords?.find((k) => normalize(k).startsWith(q))
+  return keyword ? { entry, keyword } : null
+}
+
+/**
+ * The menu's contents for `query`: the matching entries in their groups, groups in the
+ * design's order, entries in catalog order, empty groups left out. No cap: the list
+ * scrolls.
+ */
+export function searchCatalog(entries: readonly CatalogEntry[], query: string): CatalogSection[] {
+  const matches = entries.map((entry) => matchEntry(entry, query)).filter((m): m is CatalogMatch => m !== null)
+  return BLOCK_GROUPS.map(({ id, label }) => ({ group: id, label, matches: matches.filter((m) => m.entry.group === id) })).filter(
+    (section) => section.matches.length > 0
+  )
+}
+
+/** The sections' entries in screen order: what ↑↓ walk through, across groups. */
+export function flattenSections(sections: readonly CatalogSection[]): CatalogMatch[] {
+  return sections.flatMap((section) => section.matches)
+}
+
+// --- Turn into ---------------------------------------------------------------------
+
+/** The entries a block can be turned into, in menu order. */
+export function turnIntoEntries(entries: readonly CatalogEntry[] = CORE_BLOCKS): CatalogEntry[] {
+  return entries.filter((entry) => entry.turnInto)
+}
+
+export function findEntry(id: string, entries: readonly CatalogEntry[] = catalogEntries()): CatalogEntry | undefined {
+  return entries.find((entry) => entry.id === id)
+}

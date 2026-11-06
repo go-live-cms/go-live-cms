@@ -150,8 +150,7 @@ class SlashCommandManager {
     this.popup.style.left = `${coords.x}px`
     this.popup.style.top = `${coords.y + 8}px`
     this.popup.style.zIndex = "9999"
-    this.popup.style.maxHeight = "300px"
-    this.popup.style.overflowY = "auto"
+    // The list scrolls inside the menu (editor-insert__list), so the footer stays put.
 
     const popupRect = this.popup.getBoundingClientRect()
     const viewportHeight = window.innerHeight
@@ -179,6 +178,9 @@ class SlashCommandManager {
       return false
     }
 
+    // Esc closes the menu and keeps what was typed ("/map") as text (#415). The suggestion
+    // stays matched, so the menu doesn't reopen until the match ends (a space, the caret
+    // leaving it) and a new "/" starts one.
     if (props.event.key === "Escape") {
       this.cleanup()
       return true

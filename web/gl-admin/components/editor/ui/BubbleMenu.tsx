@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback, type CSSProperties, type ReactNode } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
-import { getTurnIntoCommandOptions } from "../blocks"
+import { turnIntoEntries } from "../blocks/catalog"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
 import CommandSelect, { type CommandSelectOption } from "../ui/CommandSelect"
+import { catalogSelectOptions } from "./BlockIcon"
 import { NodeSelection } from "@tiptap/pm/state"
 import { CAPTION_MARKS } from "@gl-admin/lib/blocks-spec"
 
@@ -35,7 +36,7 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
 
   useEffect(() => {
     if (!editor) return
-    setTurnIntoOptions(getTurnIntoCommandOptions())
+    setTurnIntoOptions(catalogSelectOptions(turnIntoEntries()))
     setTurnInto(computeTurnIntoFromSelection(editor))
   }, [editor])
 
@@ -100,7 +101,7 @@ const BubbleMenu = ({ editor, className = "", openLinkModal, ...props }: any) =>
                 if (!editor) return
                 const val = option.value as TurnIntoValue
                 setTurnInto(val)
-                applyTurnInto(editor, val, turnIntoOptions)
+                applyTurnInto(editor, val)
               }}
             />
             <span aria-hidden="true" className="editor-toolbar__divider" />

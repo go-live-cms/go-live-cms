@@ -1343,7 +1343,6 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
                 setFormData((prev) => ({ ...prev, content: html }))
                 setContentTextLen(text.trim().length)
               }}
-              placeholder={`Type '/' for commands… Write your ${contentTypeName.toLowerCase()} here.`}
               postId={initialData?.id}
               // The block menu's "Copy link to block" (#356): the post's public URL.
               postUrl={liveUrl}
