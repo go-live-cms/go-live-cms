@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react"
+import { useContext, useEffect, useId, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type RefObject } from "react"
 import { createPortal } from "react-dom"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { BLOCK_COLOR_TOKENS, type BlockColor, type BlockColorToken } from "@gl-admin/lib/blocks-spec"
 import { nextRovingIndex, useClickOutside, useFloating } from "@gl-admin/components/ui/a11y"
 import { toast } from "@gl-admin/components/ui/Toast"
 import { ChevronRightIcon } from "@gl-admin/components/ui/icons"
+import { authManager } from "@gl-admin/lib/auth"
+import { lastEditedLine } from "@gl-admin/lib/blockEdits"
+import type { BlockEditsSnapshot } from "@gl-admin/lib/blockEditsStore"
+import { BlockEditsContext } from "../blockEditsContext"
 import {
   blockLink,
   canColor,
@@ -19,9 +23,14 @@ import "@gl-admin/assets/styles/components/ui/menu.scss"
 
 // The block menu (#356, "Editor menus & states" › Block menu): opened from the drag
 // handle. Colour ›, Comment (#192, when the post has comments), Duplicate, Copy link to
-// block, Move to, Delete. Every action finds the
-// block by its id when it runs (blockActions.ts), so a collaborator's edit while the menu
-// is open never makes it act on another block.
+// block, Move to, Delete, and under them "Last edited by <name> · <when>" (#328, from the
+// API through BlockEditsContext; no line for a block with no attribution). Every action
+// finds the block by its id when it runs (blockActions.ts), so a collaborator's edit while
+// the menu is open never makes it act on another block.
+
+const NO_EDITS: BlockEditsSnapshot = { edits: new Map(), users: new Map(), loaded: false }
+const noSubscribe = () => () => {}
+const noSnapshot = () => NO_EDITS
 
 export const COLOR_LABELS: Record<BlockColorToken, string> = {
   gray: "Gray",
@@ -71,6 +80,10 @@ export default function BlockMenu({ editor, target, anchor, postUrl, onClose, on
   const colorable = !!block && canColor(block.node)
   const current = (block?.node.attrs.blockColor as BlockColor | null | undefined) ?? null
   const canMove = !!block && listHeadings(editor.state.doc).some((h) => h.pos !== block.pos)
+  const blockEdits = useContext(BlockEditsContext)
+  const edits = useSyncExternalStore(blockEdits?.subscribe ?? noSubscribe, blockEdits?.getSnapshot ?? noSnapshot)
+  const lastEdited = lastEditedLine(edits, blockId, authManager.getState().user?.id)
+  const lastEditedId = useId()
 
   useClickOutside([menuRef, subRef, anchor], true, () => onClose(false))
 
@@ -156,6 +169,7 @@ export default function BlockMenu({ editor, target, anchor, postUrl, onClose, on
         ref={menuRef}
         role="menu"
         aria-label="Block actions"
+        aria-describedby={lastEdited ? lastEditedId : undefined}
         className="gl-menu editor-block-menu"
         style={style}
         onKeyDown={(e) => onMenuKeyDown(e, menuRef.current, false)}
@@ -234,6 +248,11 @@ export default function BlockMenu({ editor, target, anchor, postUrl, onClose, on
         >
           Delete
         </Item>
+        {lastEdited && (
+          <div id={lastEditedId} className="editor-block-menu__meta">
+            {lastEdited}
+          </div>
+        )}
       </div>
       {colorsOpen && (
         <div

@@ -22,6 +22,7 @@ rollback. Guards, reseeding and verification: `docs/operations/collab-cutover.md
 | `api.ts` | Client for the API's internal listener (#280 contract). |
 | `load.ts` | `onLoadDocument`: restore stored state, or seed from `block_doc`. |
 | `store.ts` | `onStoreDocument` pipeline (`prepareStore`). |
+| `blockEdits.ts` | The block change tracker (#328): who changed which block, sent with stores that write `block_doc`. |
 | `server.ts` | `createCollabServer`: the hooks wired into a Hocuspocus `Server`, plus `flush`. |
 | `internal.ts` | Internal HTTP listener: `/healthz`, flush, user re-check (#333). |
 | `logsafe.ts` | `logEvent`, `requestIdFrom`, `docNameForLog`, `clientContextForLog`. |
@@ -189,7 +190,7 @@ disconnect. `prepareStore`:
 4. **empty guard:** an empty result is written only if a client edited the doc since it
    was loaded; never after a failed seed (`collab_store_empty_skipped`);
 5. unchanged `block_doc` → state only (no revision churn).
-Then `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?, base_revision}`
+Then `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?, base_revision, block_edits?}`
 (`base_revision` = the revision loaded or last stored, on **every** store, the seed's
 too: the API answers 400 to a state-only store without it and 409 when it's behind), and
 `broadcastStateless` `{"type":"stored","revision","block_doc"}` or `{"type":"store_failed"}`.
@@ -198,6 +199,39 @@ too: the API answers 400 to a state-only store without it and 409 when it's behi
   store is retried with backoff (2s → 60s), and `beforeUnloadDocument` refuses to unload
   a doc whose last store failed: it holds the only copy of those edits.
 - A store whose doc snapshot equals the last stored one is skipped (`Y.equalSnapshots`).
+
+## Per-block "Last edited by" (#328, `blockEdits.ts`)
+
+Design: `docs/design/block-map-yjs-schema.md` ("Block change tracker", "#328"). Each
+`Session` has a `BlockChangeTracker` on the `"default"` fragment (made after the load,
+destroyed on unload). Its `observeDeep` keys entries by **Y element** (a new block may
+have no id until the store stamps one) and takes the user from **`tr.origin.context.userId`**:
+Hocuspocus applies a client's update with its `Connection` as the origin (`readUpdate` /
+`readSyncStep2`) and drops a read-only connection's update first; `SERVER_ORIGIN` (seed,
+cleanup, stamping) has no context and is ignored. Never the Yjs `clientID`.
+- **Both detection paths:** an existing type in `tr.changed` (the event's target → the
+  nearest block at or above it, `isBlockNode`, any depth: a list item's paragraph → the
+  item, a caption → the image, a child added to a group → the group), and a **new element
+  in its parent's `changes.added`** (Yjs leaves types created in the transaction out of
+  `tr.changed`), with every block inside it (a pasted group).
+- **Store:** only when the decision is `write`, after `stampFragmentBlockIds`: `capture()`
+  resolves element → id, and `blockEditsFor` attributes the blocks that came from the
+  fragment (not ones `restoreDroppedBlocks` or the unconvertible fallback copied in) whose
+  `canonicalJSON` is new or differs from `previous`, to their entry, else to
+  `lastEditorId` when `clientEdited`. Sent as `block_edits: [{block_id, user_id,
+  edited_at}]` with the PUT; the API writes them in `StorePostCollabTx`. A move, or an edit
+  undone before the store, attributes nothing. A tracker exception logs
+  `collab_block_edits_failed` and the store goes on without attribution.
+- **Clearing:** only after a successful PUT that wrote `block_doc`, and only the entries
+  captured when the store was prepared (an entry replaced during the PUT stays). A failed
+  store keeps them for the retry; a state-only store (`unchanged`, `kept-invalid`,
+  `kept-empty`) sends and clears nothing, or an edit stored while the doc was invalid would
+  later fall back to whoever edited last.
+- After the PUT, `stored` (`block_doc: "written"`) carries `edits` (what was just written,
+  when any) so open editors merge it (`gl-admin/lib/blockEditsStore.ts`).
+- Tests: `blockEdits.test.ts` (plain Y.Doc), `gl-admin/lib/collaboration/blockEdits.hocuspocus.test.ts`
+  (relay: two users, new / nested / moved / pasted blocks, a failed store's retry, a
+  kept-invalid store, no churn, a restart). `FakeCollabApi.blockEdits` mirrors the API.
 
 ## Internal listener (`internal.ts`)
 
@@ -220,7 +254,7 @@ Own port (`INTERNAL_PORT`, default 1236), **never published**.
 `ws_access_revoked`, `ws_access_check_failed` (user id, doc, old → new mode), `collab_load`,
 `collab_load_failed`, `collab_store`,
 `collab_store_invalid`, `collab_store_empty_skipped`, `collab_store_unconvertible`,
-`collab_store_failed`, `collab_flush`, `collab_flush_denied`, `collab_listening`,
+`collab_store_failed`, `collab_block_edits_failed`, `collab_flush`, `collab_flush_denied`, `collab_listening`,
 `collab_startup_failed`, `collab_shutdown`. Users by id only.
 - **Never log the ticket, a secret, a request, its headers or params, or a store body.**
   `log-guard.test.ts` scans every log call in this directory's non-test files and fails

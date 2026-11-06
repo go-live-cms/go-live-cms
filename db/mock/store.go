@@ -3577,6 +3577,21 @@ func (mr *MockStoreMockRecorder) ListPostAuthorProfiles(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostAuthorProfiles", reflect.TypeOf((*MockStore)(nil).ListPostAuthorProfiles), arg0, arg1)
 }
 
+// ListPostBlockEdits mocks base method.
+func (m *MockStore) ListPostBlockEdits(arg0 context.Context, arg1 int64) ([]db.ListPostBlockEditsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostBlockEdits", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListPostBlockEditsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostBlockEdits indicates an expected call of ListPostBlockEdits.
+func (mr *MockStoreMockRecorder) ListPostBlockEdits(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostBlockEdits", reflect.TypeOf((*MockStore)(nil).ListPostBlockEdits), arg0, arg1)
+}
+
 // ListPostBylineAuthors mocks base method.
 func (m *MockStore) ListPostBylineAuthors(arg0 context.Context, arg1 int64) ([]db.ListPostBylineAuthorsRow, error) {
 	m.ctrl.T.Helper()
@@ -4261,6 +4276,20 @@ func (m *MockStore) Ping(arg0 context.Context) error {
 func (mr *MockStoreMockRecorder) Ping(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Ping", reflect.TypeOf((*MockStore)(nil).Ping), arg0)
+}
+
+// PrunePostBlockEdits mocks base method.
+func (m *MockStore) PrunePostBlockEdits(arg0 context.Context, arg1 db.PrunePostBlockEditsParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PrunePostBlockEdits", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PrunePostBlockEdits indicates an expected call of PrunePostBlockEdits.
+func (mr *MockStoreMockRecorder) PrunePostBlockEdits(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PrunePostBlockEdits", reflect.TypeOf((*MockStore)(nil).PrunePostBlockEdits), arg0, arg1)
 }
 
 // PublishPostTx mocks base method.
@@ -5652,6 +5681,20 @@ func (m *MockStore) UpsertExtensionSetting(arg0 context.Context, arg1 db.UpsertE
 func (mr *MockStoreMockRecorder) UpsertExtensionSetting(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertExtensionSetting", reflect.TypeOf((*MockStore)(nil).UpsertExtensionSetting), arg0, arg1)
+}
+
+// UpsertPostBlockEdits mocks base method.
+func (m *MockStore) UpsertPostBlockEdits(arg0 context.Context, arg1 db.UpsertPostBlockEditsParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertPostBlockEdits", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertPostBlockEdits indicates an expected call of UpsertPostBlockEdits.
+func (mr *MockStoreMockRecorder) UpsertPostBlockEdits(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPostBlockEdits", reflect.TypeOf((*MockStore)(nil).UpsertPostBlockEdits), arg0, arg1)
 }
 
 // UpsertPostMeta mocks base method.

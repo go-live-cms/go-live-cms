@@ -493,4 +493,7 @@ is a real block type for the editor, the collab server, the API and the public p
   `"default"` fragment stays the only source of content; no block-map binding. Block comments
   (#192) are built that way: Postgres rows keyed by block id, and the only collab part is the
   stateless `{"type":"comments"}` nudge (`onComments`; nothing in the doc). Per-block attribution
-  (#328) isn't built yet and goes the same way.
+  (#328) is built the same way: the server's block change tracker (`collab-server/blockEdits.ts`,
+  read-only on the doc) sends who changed which block with each store that writes `block_doc`,
+  the API keeps it in `post_block_edits`, and the `stored` message's `edits` reach open editors
+  (`lib/blockEditsStore.ts`). Nothing in the doc, `block_doc` or a version.

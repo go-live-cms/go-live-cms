@@ -71,6 +71,12 @@ export class FakeCollabApi implements InternalApi {
    */
   grants = new Set<string>()
   puts: { postId: string; body: CollabStoreBody }[] = []
+  /**
+   * post_block_edits (#328) as the API keeps it: post id → block id → the last edit.
+   * A store with block_doc upserts its block_edits (of blocks block_doc has) and drops
+   * the rows of every other block; a state-only store touches nothing.
+   */
+  blockEdits = new Map<string, Map<string, { user_id: number; edited_at: string }>>()
   accessCalls = 0
   failAccess = false
   failPut = false
@@ -146,11 +152,23 @@ export class FakeCollabApi implements InternalApi {
     if (body.block_doc) {
       post.block_doc = structuredClone(body.block_doc)
       post.block_revision += 1
+      const ids = new Set(Object.keys(body.block_doc.blocks))
+      const rows = this.blockEdits.get(postId) ?? new Map()
+      for (const id of [...rows.keys()]) if (!ids.has(id)) rows.delete(id)
+      for (const edit of body.block_edits ?? []) {
+        if (ids.has(edit.block_id)) rows.set(edit.block_id, { user_id: edit.user_id, edited_at: edit.edited_at })
+      }
+      this.blockEdits.set(postId, rows)
     }
     post.state = body.state
     post.epoch = body.epoch
     post.state_revision = post.block_revision
     return { block_revision: post.block_revision }
+  }
+
+  /** A post's stored attribution (#328): block id → user id. */
+  editorsOf(postId: string): Record<string, number> {
+    return Object.fromEntries([...(this.blockEdits.get(postId) ?? new Map()).entries()].map(([id, row]) => [id, row.user_id]))
   }
 
   /** The doc as the API would hand it to a fresh server: the stored state, decoded. */

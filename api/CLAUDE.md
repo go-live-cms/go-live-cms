@@ -210,7 +210,7 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
     if `post_ydoc_state.block_revision == posts.block_revision`; otherwise something wrote
     `block_doc` around the collab server and the state is omitted, so the server reseeds
     under a new epoch.
-  - `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?, base_revision?}`
+  - `PUT /internal/posts/:id/collab {state, epoch, block_doc?, last_editor_id?, base_revision?, block_edits?}`
     → `{block_revision, epoch}`. 16 MiB body (`collabStoreBodyLimit`), `block_doc` itself
     ≤ 4 MiB, and `prepareForStore` (limits, dedupe `blocks_order` and every `children`,
     sanitize, the nesting checks of #414, v1 + order integrity). `block_doc` omitted/null = store the Yjs state only (server-side
@@ -1109,6 +1109,25 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `{"type":"comments"}`. Mention notifications (#320) hook into `afterCommentWrite`.
 - Tests: `post_comments_test.go` (real DB: every role, CRUD, resolve, trash, nudges, activity, not
   public, the delete race) and `auth_comments_test.go`.
+
+## Per-block "Last edited by" (#328, `000049`, `post_block_edits.go`)
+
+- Design: `docs/design/block-map-yjs-schema.md` ("#328", #315 Option C). `post_block_edits`
+  (post, `block_id` = a key of `block_doc`'s `blocks`, `user_id` SET NULL, `edited_at`), one row
+  per block. **Only the collab store writes it**: `PUT /internal/posts/:id/collab`'s
+  `block_edits: [{block_id, user_id, edited_at}]` go into `StorePostCollabTx` with the
+  `block_doc` they describe (`writeBlockEdits`: prune the rows of blocks not in it, then upsert;
+  unknown users stored as NULL). Without `block_doc` they're ignored, so a state-only store
+  never touches attribution and no store is added for it (no revision churn). An edit of a
+  block `block_doc` doesn't have is left out with a warning, never a 400: attribution must not
+  block a content store.
+- Read: `GET /posts/:id/block-edits` (content roles, `canReadPost`) → `{"<block_id>": {user:
+  {id, username, full_name, avatar} | null, edited_at}}`, `no-store`. Listed in
+  `route_auth_test.go`'s `blockEditRoutes` (GET only, never public). Nothing in versions,
+  duplicates, templates or `/public`.
+- Tests: `db/sqlc/post_block_edit_test.go` (upsert, prune, state-only, rollback, SET NULL),
+  `post_block_edits_test.go` (real DB: stored through the internal PUT, every role, not public)
+  and `TestPutInternalPostCollab`'s `BlockEdits` cases.
 
 ## Theme blocks (#376)
 

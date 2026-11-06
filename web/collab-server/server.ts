@@ -8,11 +8,13 @@ import * as Y from "yjs"
 import { Server, type Document, type Hocuspocus } from "@hocuspocus/server"
 import type { Schema } from "prosemirror-model"
 import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
+import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
 import { schemaFingerprint } from "../gl-admin/lib/collaboration/schemaFingerprint"
 import { getInstalledCollabSchema } from "../gl-admin/lib/theme-blocks/collabSchema"
 import { isCollabDocName, postIdOf, TicketReplayGuard, type TicketClaims } from "./access"
-import type { CollabStoreBody, InternalApi } from "./api"
+import type { CollabBlockEdit, CollabStoreBody, InternalApi } from "./api"
 import { AuthRejection, createAuthenticate, DENY, type CollabContext } from "./auth"
+import { BlockChangeTracker, blockEditsFor, type BlockEditCapture } from "./blockEdits"
 import { loadIntoDoc, readMeta } from "./load"
 import { docNameForLog, errorMessage, logEvent } from "./logsafe"
 import { createAccessRecheck, type AccessRecheckOptions } from "./recheck"
@@ -40,7 +42,17 @@ export interface CollabServerOptions {
 
 /** Sent to every client of a doc with broadcastStateless after each store attempt. */
 export type StoreMessage =
-  | { type: "stored"; revision: number | null; block_doc: "written" | "kept-invalid" | "kept-empty" | "unchanged" }
+  | {
+      type: "stored"
+      revision: number | null
+      block_doc: "written" | "kept-invalid" | "kept-empty" | "unchanged"
+      /**
+       * The attribution this store just wrote (#328): only with `block_doc: "written"`,
+       * after the PUT succeeded, and only when there is some. Open editors merge it into
+       * what they read from GET /posts/:id/block-edits; older tabs ignore it.
+       */
+      edits?: CollabBlockEdit[]
+    }
   | { type: "store_failed" }
 
 /** Sent to every client of a doc when the API says its comments changed (#192). */
@@ -59,6 +71,8 @@ interface Session {
   failed: boolean
   retryTimer: NodeJS.Timeout | null
   retryDelay: number
+  /** Which block each user changed since the last store that wrote block_doc (#328). */
+  tracker: BlockChangeTracker
 }
 
 /** onLoadDocument for a post the API doesn't have (404). */
@@ -168,6 +182,24 @@ export function createCollabServer(options: CollabServerOptions) {
     }
     const { body, decision, unconvertible, stamped } = prepared
     withBaseRevision(body, session)
+    // Per-block attribution (#328), only with a block_doc write, resolved after the ids
+    // were stamped, and against the doc this store replaces. A tracker failure costs the
+    // attribution, never the store.
+    let capture: BlockEditCapture | null = null
+    let edits: CollabBlockEdit[] = []
+    if (decision.write) {
+      try {
+        capture = session.tracker.capture()
+        const fallback =
+          session.clientEdited && session.lastEditorId ? { userId: session.lastEditorId, at: Date.now() } : null
+        edits = blockEditsFor(decision.blockDoc, session.previous, capture, fallback)
+        if (edits.length > 0) body.block_edits = edits
+      } catch (error) {
+        capture = null
+        edits = []
+        logEvent("warn", "collab_block_edits_failed", { doc, error: errorMessage(error) })
+      }
+    }
     // What `body.state` holds (prepareStore encodes it synchronously). Taken before the
     // PUT: edits that arrive while it's in flight must not count as stored.
     const storing = Y.snapshot(document)
@@ -189,6 +221,8 @@ export function createCollabServer(options: CollabServerOptions) {
     try {
       const result = await api.putCollab(session.postId, body)
       if (decision.write) session.previous = decision.blockDoc
+      // Only what this store was prepared with; edits made during the PUT stay.
+      if (capture) session.tracker.clear(capture)
       if (result.block_revision !== null) session.revision = result.block_revision
       session.storedSnapshot = storing
       session.failed = false
@@ -208,9 +242,15 @@ export function createCollabServer(options: CollabServerOptions) {
         block_doc: kept,
         revision: session.revision,
         stamped_ids: stamped || undefined,
+        block_edits: edits.length || undefined,
         bytes: body.state.length,
       })
-      broadcast(document, { type: "stored", revision: session.revision, block_doc: kept })
+      broadcast(document, {
+        type: "stored",
+        revision: session.revision,
+        block_doc: kept,
+        ...(decision.write && edits.length > 0 ? { edits } : {}),
+      })
       return { ok: true, skipped: false }
     } catch (error) {
       return storeFailed(docName, document, session, trigger, error)
@@ -290,6 +330,8 @@ export function createCollabServer(options: CollabServerOptions) {
         failed: false,
         retryTimer: null,
         retryDelay: storeRetryMs,
+        // After the load: what it wrote (seed, cleanup) is the server's, not a client's.
+        tracker: new BlockChangeTracker(document.getXmlFragment(EDITOR_FRAGMENT)),
       }
       sessions.set(documentName, session)
       logEvent(outcome.kind === "seeded" && outcome.reason === "revision-mismatch" ? "warn" : "info", "collab_load", {
@@ -348,6 +390,7 @@ export function createCollabServer(options: CollabServerOptions) {
     async afterUnloadDocument({ documentName }) {
       const session = sessions.get(documentName)
       if (session?.retryTimer) clearTimeout(session.retryTimer)
+      session?.tracker.destroy()
       sessions.delete(documentName)
     },
 

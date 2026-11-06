@@ -25,6 +25,8 @@ import DragHandle from "./ui/DragHandle"
 import BlockComments from "./ui/BlockComments"
 import type { BlockRef } from "./utils/blockActions"
 import type { PostCommentsStore } from "@gl-admin/lib/commentsStore"
+import { PostBlockEditsStore } from "@gl-admin/lib/blockEditsStore"
+import { BlockEditsContext } from "./blockEditsContext"
 import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
@@ -411,6 +413,27 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   }, [comments])
   const commentsLive = !!comments && !!collab
 
+  // Per-block "Last edited by" (#328) for the block menu: read when bound and after every
+  // reconnect, then kept current from the server's `stored` messages (their `edits`).
+  // Created by the effect that destroys it (StrictMode; see saveStatus above).
+  const [blockEdits, setBlockEdits] = useState<PostBlockEditsStore | null>(null)
+  useEffect(() => {
+    if (!collab || !postId || readOnly) return
+    const store = new PostBlockEditsStore(postId)
+    setBlockEdits(store)
+    const offSynced = collab.onSynced(() => void store.refresh())
+    const offStored = collab.onStore((message) => {
+      if (message.type === "stored" && message.block_doc === "written") store.applyStored(message.edits)
+    })
+    void store.refresh()
+    return () => {
+      offSynced()
+      offStored()
+      store.destroy()
+      setBlockEdits(null)
+    }
+  }, [collab, postId, readOnly])
+
   if (!editor) return null
 
   return (
@@ -430,7 +453,11 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       {!readOnly && <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />}
       {!readOnly && <BlockTypeToolbar editor={editor} />}
       {!readOnly && <ImageToolbar editor={editor} />}
-      {!readOnly && <DragHandle editor={editor} postUrl={postUrl} onComment={commentsLive ? onComment : undefined} />}
+      {!readOnly && (
+        <BlockEditsContext.Provider value={blockEdits}>
+          <DragHandle editor={editor} postUrl={postUrl} onComment={commentsLive ? onComment : undefined} />
+        </BlockEditsContext.Provider>
+      )}
       {!readOnly && <MediaSelector editor={editor} postId={postId} />}
 
       <div className="editor-wrapper">

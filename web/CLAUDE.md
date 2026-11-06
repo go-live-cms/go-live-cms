@@ -531,6 +531,15 @@ are the most fragile part of the codebase. **Before editing anything under
   split, Enter at the start (the thread stays on the new empty block above), join, paste, turn-into,
   restore and reseed, and for blocks inside a Group (#414: moving the group or the block out of
   it, a restart, a reseed): `lib/collaboration/comments.hocuspocus.test.ts`.
+- **Per-block "Last edited by" (#328):** the block menu's footer, "Last edited by Ana Costa · 2
+  hours ago" ("you" for yourself, "a former member" for a removed one, no line for a block with no
+  attribution; `lib/blockEdits.ts`, tested). The data is the API's (`lib/api/blockEdits.ts`, `GET
+  /posts/:id/block-edits`), never the Yjs doc: the collab server writes it with each store that
+  writes `block_doc` (`collab-server/CLAUDE.md`). `Editor` owns one `PostBlockEditsStore`
+  (`lib/blockEditsStore.ts`, memory only) per bound, editable post and provides it through
+  `components/editor/blockEditsContext.ts` (so `DragHandle` passes nothing). It reads on bind and
+  after every reconnect, and merges the rows each `stored` message carries (`edits`), with one
+  more read for a user it can't name yet; a read answer never undoes a row merged meanwhile.
 - **Nested blocks and the Group block (#414):** containers hold their blocks by id
   (`gl-admin/lib/blocks-spec/nesting.ts` is the table; rules in
   `gl-admin/lib/collaboration/CLAUDE.md`, "Containers"). Group: a Layout entry in the block

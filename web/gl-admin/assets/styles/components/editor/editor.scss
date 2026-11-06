@@ -1004,6 +1004,18 @@
     overflow-y: auto;
   }
 
+  // "Last edited by Ana Costa · 2 hours ago" (#328): a footer under the items, edge to
+  // edge (the menu's 6px padding).
+  &__meta {
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+    margin: 6px -6px -6px;
+    max-width: 280px;
+    padding: var(--space-2) 14px 10px;
+  }
+
   &__group {
     color: var(--text-secondary);
     font-size: var(--type-footnote);

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -45,6 +47,46 @@ type storePostCollabRequest struct {
 	// the store is refused (409) if block_doc changed since. Optional with a
 	// block_doc, required without one (the state is recorded against it).
 	BaseRevision *int64 `json:"base_revision" binding:"required_without=BlockDoc,omitempty,min=1"`
+	// BlockEdits attribute the blocks whose content this store changed (#328):
+	// who changed each one and when. Only with BlockDoc (ignored without it,
+	// so a state-only store never touches attribution); at most one per block.
+	BlockEdits []collabBlockEdit `json:"block_edits" binding:"omitempty,max=10000,dive"`
+}
+
+// collabBlockEdit is one block's attribution in a collab store (#328).
+type collabBlockEdit struct {
+	BlockID  string    `json:"block_id" binding:"required,max=128"`
+	UserID   int64     `json:"user_id" binding:"required,min=1"`
+	EditedAt time.Time `json:"edited_at" binding:"required"`
+}
+
+// collabBlockEdits keeps the edits whose block is in doc (the stored
+// block_doc), one per block (the last wins), and returns them with every block
+// id of doc for the prune (#328). An edit of a block the doc doesn't have is
+// left out rather than refusing the store: attribution never costs content.
+// Returns how many edits were left out.
+func collabBlockEdits(doc *BlockDocV1, edits []collabBlockEdit) (ids []string, kept []db.PostBlockEditInput, dropped int) {
+	ids = make([]string, 0, len(doc.Blocks))
+	for id := range doc.Blocks {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	at := make(map[string]int, len(edits))
+	for _, edit := range edits {
+		if _, ok := doc.Blocks[edit.BlockID]; !ok {
+			dropped++
+			continue
+		}
+		input := db.PostBlockEditInput{BlockID: edit.BlockID, UserID: edit.UserID, EditedAt: edit.EditedAt}
+		if i, seen := at[edit.BlockID]; seen {
+			kept[i] = input
+			dropped++
+			continue
+		}
+		at[edit.BlockID] = len(kept)
+		kept = append(kept, input)
+	}
+	return ids, kept, dropped
 }
 
 // getInternalPostCollab serves the collab server's onLoadDocument (#206 /
@@ -105,6 +147,11 @@ func (server *Server) getInternalPostCollab(c *gin.Context) {
 // block_doc gets the structural check, sanitizing and limits of
 // prepareForStore, on top of the server's own Zod validation. This is the
 // only writer of block_doc for an existing post (#206).
+//
+// With block_doc, block_edits (#328) are upserted into post_block_edits in the
+// same transaction, and the rows of blocks not in block_doc are deleted; an
+// edit of a block block_doc doesn't have is left out (logged), never refused.
+// Without block_doc, block_edits are ignored.
 //
 // Path parameters:
 //   - id: Post's database primary key
@@ -175,6 +222,11 @@ func (server *Server) putInternalPostCollab(c *gin.Context) {
 		}
 		arg.BlockDoc = blockDoc
 		arg.ContentMedia = req.BlockDoc.contentMediaUses()
+		var dropped int
+		arg.BlockIDs, arg.BlockEdits, dropped = collabBlockEdits(req.BlockDoc, req.BlockEdits)
+		if dropped > 0 {
+			server.requestLog(c).Warn("collab store: block edits left out", "post_id", postID, "count", dropped)
+		}
 	}
 
 	result, err := server.store.StorePostCollabTx(c.Request.Context(), arg)

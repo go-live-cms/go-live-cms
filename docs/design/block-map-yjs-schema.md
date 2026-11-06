@@ -408,6 +408,17 @@ Edge cases:
   items attributes the list as well as the item. That's fine and needs no special case.
 - `post_ydoc_state.last_editor_id` stays as it is (one id per store, used for activity).
 
+**Settled when #328 was built (000049, `web/collab-server/blockEdits.ts`, `api/post_block_edits.go`):**
+
+- An edit of a block the stored `block_doc` doesn't have is **left out** (logged), not a 400:
+  a refused attribution would make the collab server retry the whole content store forever.
+- Nested blocks (#414): the tracker attributes the nearest block at any depth through the
+  shared `isBlockNode` predicate; a new block's whole subtree (a pasted group) is touched.
+- The editor reads the GET when it binds **and after every reconnect** (the `stored`
+  messages sent while it was away are lost), then merges each `stored` message's `edits`.
+  Names come from the GET's users only (not presence); an unknown user id triggers one more
+  read and shows no line until then. A removed member reads "a former member".
+
 ## #192: block comments
 
 **Correcting the issue body:** it predates Hocuspocus. `BlockPersistenceManager.ts`,
