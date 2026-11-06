@@ -46,6 +46,22 @@ type StorePostCollabTxParams struct {
 	// editor and post per window. It runs under the post's row lock, so two
 	// stores of one post can't both record one. 0 records nothing.
 	EditActivityWindow time.Duration
+	// BlockIDs are every key of BlockDoc's "blocks". With BlockDoc, the post's
+	// post_block_edits rows of any other block are deleted (#328). Ignored
+	// without BlockDoc.
+	BlockIDs []string
+	// BlockEdits attribute the blocks this store changed (#328): upserted into
+	// post_block_edits with BlockDoc, never without it, so a state-only store
+	// touches no attribution. Each BlockID must be one of BlockIDs (the caller
+	// checks). A user that no longer exists is stored as NULL.
+	BlockEdits []PostBlockEditInput
+}
+
+// PostBlockEditInput is one block's attribution in a collab store (#328).
+type PostBlockEditInput struct {
+	BlockID  string
+	UserID   int64
+	EditedAt time.Time
 }
 
 type StorePostCollabTxResult struct {
@@ -94,6 +110,11 @@ func (store *SQLStore) StorePostCollabTx(ctx context.Context, arg StorePostColla
 					return err
 				}
 			}
+			// Per-block attribution (#328): only with the block_doc it describes,
+			// and the rows of blocks no longer in it go.
+			if err := writeBlockEdits(ctx, q, arg); err != nil {
+				return err
+			}
 			// Only real edits (a block_doc store) count; the collab server sends
 			// one only when the derived doc changed (#307).
 			if arg.EditActivityWindow > 0 && arg.LastEditorID.Valid {
@@ -120,4 +141,31 @@ func (store *SQLStore) StorePostCollabTx(ctx context.Context, arg StorePostColla
 	})
 
 	return result, err
+}
+
+// writeBlockEdits prunes the post's post_block_edits to arg.BlockIDs and upserts
+// arg.BlockEdits, inside StorePostCollabTx (#328).
+func writeBlockEdits(ctx context.Context, q *Queries, arg StorePostCollabTxParams) error {
+	keep := arg.BlockIDs
+	if keep == nil {
+		keep = []string{}
+	}
+	if err := q.PrunePostBlockEdits(ctx, PrunePostBlockEditsParams{PostID: arg.PostID, KeepIds: keep}); err != nil {
+		return err
+	}
+	if len(arg.BlockEdits) == 0 {
+		return nil
+	}
+	params := UpsertPostBlockEditsParams{
+		PostID:    arg.PostID,
+		BlockIds:  make([]string, len(arg.BlockEdits)),
+		UserIds:   make([]int64, len(arg.BlockEdits)),
+		EditedAts: make([]string, len(arg.BlockEdits)),
+	}
+	for i, edit := range arg.BlockEdits {
+		params.BlockIds[i] = edit.BlockID
+		params.UserIds[i] = edit.UserID
+		params.EditedAts[i] = edit.EditedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return q.UpsertPostBlockEdits(ctx, params)
 }
