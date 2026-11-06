@@ -1216,6 +1216,13 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
 - The sanitizer still walks the flat map, so a nested block gets its type's rules.
   `sanitizeGroupAttrs` is an allowlist (`style` none/tinted, `align` content/wide/full; anything
   else deleted).
+- **Callout, pull quote, to-do list (#419):** flow types (`flowBlockTypes`); `todo_list` is a
+  list (`listBlockTypes`) whose items are `todo_item` (`listItemBlockTypes`). Their attrs are
+  allowlists like a group's (`keepOnlyAttrs`): callout `pm`/`text`/`tone` (`calloutTones`, an
+  unknown tone is dropped), pull quote `pm`/`text`/`cite` (`sanitizeCite`, the quote's rules),
+  to-do list none, to-do item `pm`/`text`/`checked` (a boolean, else dropped); the same attr in
+  `pm.attrs` is removed (`deletePMAttr`). Tests: `post_blocks_text_blocks_test.go` and the shared
+  `nestingVectors.json`. The search text (000024) already reads `text`, `cite` and `children`.
 - **`contentMediaUses` walks the tree** (`walkBlocks`: blocks_order, then children depth
   first, each once), so an image in a group is in `post_media` and "Used in".
   `blockDocMediaIDs` (the public `media` map) already walks the flat map. `regenerateBlockIDs`

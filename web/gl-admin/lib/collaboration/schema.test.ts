@@ -84,16 +84,16 @@ describe("schemaWithStandIns", () => {
   })
 
   it("adds a block stand-in that keeps a theme node's attributes and inline content", () => {
-    const callout = {
-      type: "callout",
-      attrs: { "data-block-id": "blk-callout-0001", variant: "warn", message: "Careful" },
+    const sidenote = {
+      type: "sidenote",
+      attrs: { "data-block-id": "blk-sidenote-0001", variant: "warn", message: "Careful" },
       content: [{ type: "text", text: "Hi", marks: [{ type: "bold" }] }],
     }
-    const schema = schemaWithStandIns(base, [callout])
-    const node = schema.nodeFromJSON(callout)
+    const schema = schemaWithStandIns(base, [sidenote])
+    const node = schema.nodeFromJSON(sidenote)
     expect(() => node.check()).not.toThrow()
-    expect(node.toJSON()).toEqual(callout)
-    expect(schema.nodes.callout.isBlock).toBe(true)
+    expect(node.toJSON()).toEqual(sidenote)
+    expect(schema.nodes.sidenote.isBlock).toBe(true)
   })
 
   it("adds a leaf stand-in for a theme node seen without content", () => {
@@ -132,10 +132,10 @@ describe("schemaWithStandIns", () => {
   })
 
   it("reuses the schema for the same stand-ins and builds a new one when they change", () => {
-    const callout = (attrs: Record<string, unknown>) => ({ type: "callout", attrs, content: [{ type: "text", text: "x" }] })
-    const first = schemaWithStandIns(base, [callout({ variant: "a" })])
-    expect(schemaWithStandIns(base, [callout({ variant: "b" })])).toBe(first)
-    expect(schemaWithStandIns(base, [callout({ variant: "a", icon: "i" })])).not.toBe(first)
+    const sidenote = (attrs: Record<string, unknown>) => ({ type: "sidenote", attrs, content: [{ type: "text", text: "x" }] })
+    const first = schemaWithStandIns(base, [sidenote({ variant: "a" })])
+    expect(schemaWithStandIns(base, [sidenote({ variant: "b" })])).toBe(first)
+    expect(schemaWithStandIns(base, [sidenote({ variant: "a", icon: "i" })])).not.toBe(first)
   })
 
   it("finds theme nodes nested inside core nodes and other theme nodes", () => {

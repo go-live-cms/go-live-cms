@@ -542,6 +542,16 @@ are the most fragile part of the codebase. **Before editing anything under
   default theme's styles in `themes/default/styles/theme.css`. History's diff compares a
   container's children by id (`blockDiff.ts`, `VersionDiff`'s `version-diff__container`).
   Theme blocks may hold text only since then (`THEME_BLOCK_CONTENT_NAMES`).
+- **Callout, pull quote, to-do list (#419):** Text entries in the block catalog (Callout:
+  `setParagraph().setCallout()`; Pull quote: `setPullQuote()`; To-do list: `toggleTaskList()`,
+  Markdown `[]`, TaskItem's own input rule, so `catalog.markdown.test.ts` types it too). The
+  callout's Type is its view's buttons (shown while the cursor is in it: the post sidebar has no
+  Block tab) and a picker in `BlockTypeToolbar` (`setCalloutTone`). Paste keeps
+  `div[data-type=callout][data-tone]`, `figure[data-type=pull-quote][data-cite]` and
+  `ul[data-type=taskList] > li[data-type=taskItem][data-checked]` with valid values only.
+  Public markup in `src/components/blocks/README.md`; the default theme's callout colours are
+  theme tokens (`info`/`infoBg`, …). History's diff treats a to-do list as a list (a ticked item is
+  a "Done" change). Rules: `gl-admin/lib/collaboration/CLAUDE.md`.
 - **Taxonomies and redirects (#331):** admin: one category per post. The editor sidebar's
   `PostTaxonomies` shows the `category` taxonomy as a radio group (picking one calls the PUT,
   which replaces the category; `post`-type posts have no "None", the API puts the default

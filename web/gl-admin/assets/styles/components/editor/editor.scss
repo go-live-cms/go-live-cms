@@ -402,13 +402,192 @@
     }
   }
 
+  // A callout (#419): the tone's icon and fill (the admin's status tokens), its
+  // paragraphs, and its Type setting while the cursor is in it.
+  .editor-callout {
+    background: var(--info-bg);
+    border-radius: var(--radius-md);
+    display: grid;
+    gap: var(--space-2) var(--space-3);
+    grid-template-columns: 18px minmax(0, 1fr);
+    margin: 12px 0;
+    padding: var(--space-3) var(--space-4);
+
+    &[data-tone="success"] {
+      background: var(--success-bg);
+    }
+
+    &[data-tone="warning"] {
+      background: var(--warning-bg);
+    }
+
+    &[data-tone="danger"] {
+      background: var(--danger-bg);
+    }
+  }
+
+  .editor-callout__icon {
+    color: var(--info-text);
+    line-height: 0;
+    padding-top: 0.2em;
+    user-select: none;
+  }
+
+  .editor-callout[data-tone="success"] > .editor-callout__icon {
+    color: var(--success-text);
+  }
+
+  .editor-callout[data-tone="warning"] > .editor-callout__icon {
+    color: var(--warning-text);
+  }
+
+  .editor-callout[data-tone="danger"] > .editor-callout__icon {
+    color: var(--danger-text);
+  }
+
+  .editor-callout__content > p {
+    margin: 0;
+  }
+
+  .editor-callout__content > p + p {
+    margin-top: 0.6em;
+  }
+
+  .editor-callout__settings {
+    align-items: center;
+    display: none;
+    flex-wrap: wrap;
+    gap: 2px;
+    grid-column: 1 / -1;
+    user-select: none;
+  }
+
+  .editor-callout.has-selection > .editor-callout__settings {
+    display: flex;
+  }
+
+  .editor-callout__label {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    margin-right: var(--space-1);
+  }
+
+  .editor-callout__option {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: var(--type-footnote);
+    gap: var(--space-1);
+    line-height: 1;
+    min-height: 28px;
+    padding: var(--space-1) var(--space-2);
+
+    &:hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+
+    &[aria-pressed="true"] {
+      background: var(--background);
+      border-color: var(--border-strong);
+      color: var(--text-primary);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  // A pull quote (#419): one line set large and centred, the citation under it.
+  .editor-pullquote {
+    border-top: 3px solid var(--border-strong);
+    margin: 24px 0;
+    padding-top: var(--space-4);
+    text-align: center;
+
+    > .editor-pullquote__text {
+      border: 0;
+      color: var(--text-primary);
+      font-size: 1.5em;
+      font-style: normal;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      line-height: 1.3;
+      margin: 0;
+      padding: 0;
+    }
+
+    > .editor-quote__cite {
+      margin-top: var(--space-2);
+      text-align: center;
+
+      input {
+        text-align: center;
+      }
+    }
+  }
+
+  .editor-pullquote.has-selection > .editor-quote__cite.is-empty,
+  .editor-pullquote:hover > .editor-quote__cite.is-empty {
+    display: block;
+  }
+
+  // A to-do list (#419): TipTap's task item markup, a checkbox beside each item.
+  ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0;
+
+    > li {
+      align-items: flex-start;
+      display: flex;
+      gap: var(--space-2);
+
+      > label {
+        flex: none;
+        line-height: 0;
+        padding-top: 0.3em;
+        user-select: none;
+
+        input {
+          accent-color: var(--accent-solid);
+          cursor: pointer;
+          height: 16px;
+          margin: 0;
+          width: 16px;
+        }
+      }
+
+      > div {
+        flex: 1 1 auto;
+        min-width: 0;
+
+        > p {
+          margin: 0;
+        }
+      }
+
+      &[data-checked="true"] > div {
+        color: var(--text-secondary);
+        text-decoration: line-through;
+      }
+    }
+  }
+
   // Nothing to add in a read-only editor. Also covers a demotion (#313), which changes
   // `contenteditable` without re-rendering the node views, and beats the display rules
   // above, which would otherwise override the views' [hidden].
   // stylelint-disable-next-line selector-class-pattern
   &[contenteditable="false"] .ProseMirror-selectednode > .editor-image__add-caption,
   &[contenteditable="false"] blockquote > .editor-quote__cite.is-empty,
-  &[contenteditable="false"] .editor-group > .editor-group__settings {
+  &[contenteditable="false"] .editor-pullquote > .editor-quote__cite.is-empty,
+  &[contenteditable="false"] .editor-group > .editor-group__settings,
+  &[contenteditable="false"] .editor-callout > .editor-callout__settings {
     display: none;
   }
 

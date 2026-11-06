@@ -491,9 +491,9 @@ tests at each step including the collab round trip.
 | Block | Kind | Block Spec attrs (beyond `pm`/`text`) | Notes |
 |---|---|---|---|
 | Highlight, superscript, subscript | marks | — | 3.3 |
-| Callout | flow | `tone` (`info`/`success`/`warning`/`danger`) | Icon plus a visually hidden label ("Info: "), `role="note"`. Content: paragraphs. |
-| Pull quote | flow | `cite` (as quote's, capped) | Rendered as `figure.pullquote` with `figcaption`. |
-| To-do list | flow | — | TipTap TaskList/TaskItem; items are blocks with `checked`, like list items (the id predicate's list rule covers `taskItem`). Published read-only checkboxes. |
+| Callout | flow | `tone` (`info`/`success`/`warning`/`danger`) | Icon plus a visually hidden label ("Info: "), `role="note"`. Content: paragraphs. Built in #419. |
+| Pull quote | flow | `cite` (as quote's, capped) | Rendered as `figure.pullquote` with `figcaption`. Built in #419 (a textblock, like a heading). |
+| To-do list | flow | — | TipTap TaskList/TaskItem; items are blocks with `checked`, like list items (the id predicate's list rule covers `taskItem`). Published read-only checkboxes. Built in #419: a third list type (`LIST_ITEMS`), `todo_item` children; the published look follows the default theme's tokens until the canvas has a board. |
 | Table | flow | `caption` (runs), `headerRow` | TipTap table, cells restricted to `paragraph+` (no blocks in cells); the table is one block with its rows in `pm`. Published in a scrolling, focusable region. |
 | Details | container | `summary` (runs), `open` | 2.4 (summary part, slot if TipTap's extension is used). |
 | Footnotes | container + inline node | `footnoteRef`: inline atom with `footnoteId`; `footnotes` holds `footnote` blocks (id = footnoteId) | Numbered by order of references. The `footnotes` block is created by the insert command, never by an appendTransaction (rule 7). |

@@ -322,7 +322,8 @@ func TestSanitize_ImageAlign(t *testing.T) {
 	})
 
 	t.Run("leaves other block types' attrs of the same name alone", func(t *testing.T) {
-		doc := singleBlock("callout", map[string]interface{}{"align": "left", "caption": "theme text", "cite": 7})
+		// A custom type (core since #419: callout, which has its own allowlist).
+		doc := singleBlock("alert", map[string]interface{}{"align": "left", "caption": "theme text", "cite": 7})
 		doc.sanitize()
 		require.Equal(t, map[string]interface{}{"align": "left", "caption": "theme text", "cite": 7}, attrsOf(doc))
 	})

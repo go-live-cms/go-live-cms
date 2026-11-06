@@ -973,6 +973,15 @@ These are always available and don't need registration:
 | `bullet_list`  | Unordered list                                            |
 | `ordered_list` | Ordered list                                              |
 | `list_item`    | A list's item                                             |
+| `callout`      | A note in one of four tones (`div.callout.is-info` / `is-success` / `is-warning` / `is-danger`, `role="note"`) |
+| `pull_quote`   | A line from the post set large (`figure.pullquote`), optional citation |
+| `todo_list`    | A checklist (`ul.todo-list`), read-only checkboxes on the public page |
+| `todo_item`    | A to-do list's item, `checked` or not                     |
+
+Every theme should style the three #419 blocks: they render with only their classes. The
+default theme's callout fills and icon colours are `colors.*.info` / `infoBg` (and `success`,
+`warning`, `danger`), `--color-info` / `--color-info-bg` in its stylesheet, checked for
+contrast by `themes/default/tokens.test.ts`.
 
 ---
 

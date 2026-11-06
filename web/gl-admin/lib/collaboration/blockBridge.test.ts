@@ -20,18 +20,18 @@ import { textOf } from "./testHelpers"
 // It defines `data-block-id` because the bridge injects that attr into every
 // node it reconstructs — a node type that doesn't declare it would throw in
 // schema.nodeFromJSON. This mirrors what a well-behaved theme extension must do.
-const Callout = Node.create({
-  name: "callout",
+const Sidenote = Node.create({
+  name: "sidenote",
   group: "block",
   content: "inline*",
   addAttributes() {
     return { "data-block-id": { default: null }, variant: { default: "info" } }
   },
   parseHTML() {
-    return [{ tag: "div[data-type=callout]" }]
+    return [{ tag: "div[data-type=sidenote]" }]
   },
   renderHTML() {
-    return ["div", { "data-type": "callout" }, 0]
+    return ["div", { "data-type": "sidenote" }, 0]
   },
 })
 
@@ -43,7 +43,7 @@ const schema: Schema = getSchema([
   TextAlign.configure({ types: ["heading", "paragraph"] }),
   ImageWithMediaId,
   BlockIdExtension,
-  Callout,
+  Sidenote,
 ])
 
 let counter = 0
@@ -188,12 +188,12 @@ describe("blockBridge — custom/theme node", () => {
       blocks: {
         [a]: {
           id: a,
-          type: "callout",
+          type: "sidenote",
           version: 1,
           attrs: {
             variant: "warn",
             pm: {
-              type: "callout",
+              type: "sidenote",
               attrs: { variant: "warn", "data-block-id": a },
               content: [{ type: "text", text: "heads up" }],
             },
@@ -202,7 +202,7 @@ describe("blockBridge — custom/theme node", () => {
       },
     }
     const out = roundTrip(doc)
-    expect(out.blocks[a].type).toBe("callout")
+    expect(out.blocks[a].type).toBe("sidenote")
     expect(textOf(out.blocks[a])).toBe("heads up")
   })
 })
@@ -391,15 +391,15 @@ describe("pmToBlockDoc — per type (PM → Block)", () => {
     const a = id()
     const out = pmToBlockDoc(
       pmDocOf({
-        type: "callout",
+        type: "sidenote",
         attrs: { variant: "warn", "data-block-id": a },
         content: [{ type: "text", text: "heads up" }],
       })
     )
     const block = out.blocks[out.blocks_order[0]]
-    expect(block.type).toBe("callout")
+    expect(block.type).toBe("sidenote")
     expect((block.attrs as any).variant).toBe("warn")
-    expect((block.attrs as any).pm.type).toBe("callout")
+    expect((block.attrs as any).pm.type).toBe("sidenote")
     // data-block-id is tracked on the block, not duplicated into attrs
     expect((block.attrs as any)["data-block-id"]).toBeUndefined()
   })

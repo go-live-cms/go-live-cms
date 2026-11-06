@@ -56,7 +56,22 @@ describe("the catalog", () => {
     expect(sectionNames("")).toEqual([
       [
         "Text",
-        ["Paragraph", "Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6", "Bulleted list", "Numbered list", "Quote", "Code"],
+        [
+          "Paragraph",
+          "Heading 1",
+          "Heading 2",
+          "Heading 3",
+          "Heading 4",
+          "Heading 5",
+          "Heading 6",
+          "Bulleted list",
+          "Numbered list",
+          "To-do list",
+          "Quote",
+          "Pull quote",
+          "Callout",
+          "Code",
+        ],
       ],
       ["Media", ["Image"]],
       ["Layout", ["Divider", "Group"]],
@@ -181,6 +196,9 @@ const PM_NODE: Record<string, string> = {
   image: "image",
   divider: "horizontalRule",
   group: "group",
+  callout: "callout",
+  pull_quote: "pullQuote",
+  todo_list: "taskList",
 }
 
 describe("insert", () => {
@@ -213,7 +231,10 @@ describe("turn into (turnInto.ts reads the catalog)", () => {
       "heading-6",
       "bullet-list",
       "numbered-list",
+      "todo-list",
       "quote",
+      "pull-quote",
+      "callout",
       "code-block",
     ])
   })

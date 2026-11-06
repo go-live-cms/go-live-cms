@@ -32,10 +32,25 @@ export const FLOW_TYPES = [
   "image",
   "bullet_list",
   "ordered_list",
+  // #419
+  "callout",
+  "pull_quote",
+  "todo_list",
 ] as const
 
-/** The list types: `children` are their items (`list_item`), as before #414. */
-export const LIST_TYPES = ["bullet_list", "ordered_list"] as const
+/**
+ * The list types: `children` are their items, as before #414. Each list has one item
+ * type: `list_item` for the bulleted and numbered lists, `todo_item` (with `checked`) for
+ * the to-do list (#419). An item is a block with its own id, never a list's flow child.
+ */
+export const LIST_TYPES = ["bullet_list", "ordered_list", "todo_list"] as const
+
+/** Each list type's item: its Block Spec type and ProseMirror node. */
+export const LIST_ITEMS: Readonly<Record<(typeof LIST_TYPES)[number], { type: string; node: string }>> = {
+  bullet_list: { type: "list_item", node: "listItem" },
+  ordered_list: { type: "list_item", node: "listItem" },
+  todo_list: { type: "todo_item", node: "taskItem" },
+}
 
 /** A container's row in the table. */
 export interface ContainerRule {
@@ -82,6 +97,10 @@ export const BLOCK_NODE_NAMES: Readonly<Record<string, string>> = {
   bullet_list: "bulletList",
   ordered_list: "orderedList",
   list_item: "listItem",
+  callout: "callout",
+  pull_quote: "pullQuote",
+  todo_list: "taskList",
+  todo_item: "taskItem",
   ...Object.fromEntries(Object.entries(CONTAINERS).map(([type, rule]) => [type, rule.node])),
 }
 
@@ -90,7 +109,20 @@ const FLOW = new Set<string>(FLOW_TYPES)
 const LISTS = new Set<string>(LIST_TYPES)
 /** The ProseMirror node names of the list types. */
 export const LIST_NODE_NAMES: ReadonlySet<string> = new Set(LIST_TYPES.map((type) => BLOCK_NODE_NAMES[type]))
-const LIST_NODES = LIST_NODE_NAMES
+/** List node → its item node ("bulletList" → "listItem", "taskList" → "taskItem"). */
+const ITEM_NODE_OF_LIST = new Map<string, string>(LIST_TYPES.map((type) => [BLOCK_NODE_NAMES[type], LIST_ITEMS[type].node]))
+/** The ProseMirror node names of the list items. */
+export const LIST_ITEM_NODE_NAMES: ReadonlySet<string> = new Set(ITEM_NODE_OF_LIST.values())
+
+/** The item node a list node holds, or undefined for a node that isn't a list. */
+export function listItemNodeOf(listNodeName: unknown): string | undefined {
+  return typeof listNodeName === "string" ? ITEM_NODE_OF_LIST.get(listNodeName) : undefined
+}
+
+/** The list type's item, or undefined for a type that isn't a list. */
+export function listItemOf(type: unknown): { type: string; node: string } | undefined {
+  return isListType(type) ? LIST_ITEMS[type as (typeof LIST_TYPES)[number]] : undefined
+}
 const CONTAINER_RULES: Readonly<Record<string, ContainerRule>> = CONTAINERS
 const CONTAINER_BY_NODE = new Map(Object.entries(CONTAINER_RULES).map(([type, rule]) => [rule.node, { type, ...rule }]))
 const SLOTS = new Map(
@@ -160,14 +192,15 @@ export function topLevelContent(): string {
 /**
  * **The block predicate** (design 2.6, #315's identity contract): a node is a block, and
  * gets a `data-block-id`, when its parent is the doc, a container or a container's slot,
- * or when it is a list's item. Parts (summary, captions) and slots are never blocks.
+ * or when it is a list's item (a `listItem` of a bulleted or numbered list, a `taskItem`
+ * of a to-do list, #419). Parts (summary, captions) and slots are never blocks.
  * `parentName` is null (or `"doc"`) at the top level. Used by `BlockIdExtension`,
  * `stampFragmentBlockIds` and `pmToBlockDoc`: one rule, so the editor, the server's
  * stamping and the stored doc agree on which nodes have ids.
  */
 export function isBlockNode(nodeName: string, parentName: string | null): boolean {
   if (parentName === null || parentName === "doc") return true
-  if (nodeName === "listItem") return LIST_NODES.has(parentName)
+  if (LIST_ITEM_NODE_NAMES.has(nodeName)) return ITEM_NODE_OF_LIST.get(parentName) === nodeName
   const container = CONTAINER_BY_NODE.get(parentName)
   if (container) return nodeName !== container.slot && !(container.parts ?? []).includes(nodeName)
   const slotOf = SLOTS.get(parentName)
