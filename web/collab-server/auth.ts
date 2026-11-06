@@ -3,17 +3,26 @@
 //
 //   doc name (isCollabDocName) → ticket present → verifyTicket (sig, iss, aud, type,
 //   exp, doc === documentName) → burn the jti (TicketReplayGuard, before the lookup, so a
-//   failed lookup can't be retried with the same ticket) → ticketIdentity → the API's
-//   access lookup (3s timeout, X-Request-ID) → read-write / read-only / deny → epoch.
+//   failed lookup can't be retried with the same ticket) → ticketIdentity → schema
+//   fingerprint (#416) → the API's access lookup (3s timeout, X-Request-ID) → read-write
+//   / read-only / deny → epoch.
 //
 // Throwing rejects the connection: Hocuspocus sends `permission-denied` with our
 // `reason`, and the client fetches a fresh ticket before it retries. The ticket arrives
 // in the auth message (not the URL), is never logged, and never leaves this process.
 // Users are logged by id only (#155).
 //
+// The auth message carries the ticket and the client's schema fingerprint as JSON
+// (gl-admin/lib/collaboration/schemaFingerprint.ts). A fingerprint that isn't the
+// server's, or none (a bundle from before #416), is refused with `schema-mismatch`
+// before the access lookup and before the doc is loaded, so the refused editor never
+// syncs and nothing is written for it. A connection already open keeps going until it
+// reconnects (a deploy's collab restart forces that).
+//
 // Dependencies are injected so the matrix is unit tested (auth.test.ts). Must NOT
 // import yjs.
 import type { IncomingHttpHeaders } from "node:http"
+import { decodeCollabAuthToken, SCHEMA_FINGERPRINT_PATTERN } from "../gl-admin/lib/collaboration/schemaFingerprint"
 import { accessMode, isCollabDocName, ticketIdentity, type DocAccess, type TicketClaims, type TicketIdentity } from "./access"
 import { clientContextForLog, docNameForLog, errorMessage, logEvent, requestIdFrom } from "./logsafe"
 
@@ -27,7 +36,18 @@ export const DENY = {
   staleEpoch: "stale-epoch",
   /** The post is in the trash (#327): don't retry; the editor says so. */
   trashed: "post-trashed",
+  /**
+   * The client's editor schema isn't this server's (#416), or it sent no fingerprint: don't
+   * retry, reload (a new bundle). Binding would let y-tiptap delete types it can't build.
+   */
+  schemaMismatch: "schema-mismatch",
 } as const
+
+/** A fingerprint as it may be logged: its first 12 characters, "missing" or "invalid". */
+export function fingerprintForLog(fingerprint: string | null): string {
+  if (fingerprint === null) return "missing"
+  return SCHEMA_FINGERPRINT_PATTERN.test(fingerprint) ? fingerprint.slice(0, 12) : "invalid"
+}
 
 export class AuthRejection extends Error {
   constructor(readonly reason: string, message: string) {
@@ -56,6 +76,8 @@ export interface AuthDeps {
    * one. null if it can't be determined, which rejects the client's epoch.
    */
   currentEpoch(docName: string, opts: { requestId: string }): Promise<string | null>
+  /** This server's schema fingerprint (schemaFingerprint of the schema it converts with). */
+  schemaFingerprint: string
 }
 
 export interface AuthPayload {
@@ -75,13 +97,18 @@ export function createAuthenticate(deps: AuthDeps) {
 
     // Rejections log the client context (origin, UA, peer IP) to make them traceable;
     // accepted connections don't, so we don't retain that for every editor connect.
-    const reject = (reason: string, logReason: string, { warn = false, userId }: { warn?: boolean; userId?: string } = {}) => {
+    const reject = (
+      reason: string,
+      logReason: string,
+      { warn = false, userId, fields }: { warn?: boolean; userId?: string; fields?: Record<string, string> } = {},
+    ) => {
       logEvent(warn ? "warn" : "error", "ws_deny", {
         request_id: requestId,
         doc: docName,
         reason: logReason,
         sent: reason,
         user_id: userId,
+        ...fields,
         client: clientContextForLog(payload.requestHeaders, payload.request?.socket?.remoteAddress),
       })
       return new AuthRejection(reason, logReason)
@@ -90,7 +117,7 @@ export function createAuthenticate(deps: AuthDeps) {
     if (!isCollabDocName(rawDocName)) {
       throw reject(DENY.forbidden, "Invalid document name", { warn: true })
     }
-    const ticket = typeof payload.token === "string" ? payload.token.trim() : ""
+    const { ticket, schema: clientSchema } = decodeCollabAuthToken(payload.token)
     if (!ticket) {
       throw reject(DENY.forbidden, "No ticket provided")
     }
@@ -113,6 +140,21 @@ export function createAuthenticate(deps: AuthDeps) {
     if (!identity) {
       throw reject(DENY.forbidden, "Ticket has no valid user_id/iat", { userId: claimedUserId })
     }
+
+    // Before the access lookup and long before the doc is loaded (the epoch check below
+    // loads it, and a load may seed and store): a refused editor causes no write at all.
+    if (clientSchema !== deps.schemaFingerprint) {
+      throw reject(
+        DENY.schemaMismatch,
+        clientSchema === null ? "No editor schema fingerprint (an editor from before #416)" : "Editor schema differs from the server's",
+        {
+          warn: true,
+          userId: identity.userId,
+          fields: { client_schema: fingerprintForLog(clientSchema), server_schema: fingerprintForLog(deps.schemaFingerprint) },
+        },
+      )
+    }
+
     let access: DocAccess | null
     try {
       access = await deps.fetchAccess(identity, rawDocName, { requestId })

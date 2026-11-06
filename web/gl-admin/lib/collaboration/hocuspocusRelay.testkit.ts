@@ -8,6 +8,7 @@
 import { verifyTicket } from "../../../collab-server/access"
 import { createCollabServer, type CollabServer } from "../../../collab-server/server"
 import { FakeClock, FakeCollabApi, ISSUER, ticketKeys, waitFor } from "../../../collab-server/testkit"
+import type { Schema } from "prosemirror-model"
 import type { BlockDocV1 } from "../blocks-spec"
 import { HocuspocusCollaboration } from "./HocuspocusCollaboration"
 
@@ -26,18 +27,32 @@ export interface Relay {
   url: string
   /**
    * A client as `userId` (1 admin, 2 editor, 3 contributor who doesn't own the post), on
-   * `POST_ID` unless `postId` names another post (add it to `api` first).
+   * `POST_ID` unless `postId` names another post (add it to `api` first). It sends the
+   * server's schema fingerprint (#416) unless `schemaFingerprint` says otherwise (another
+   * editor build).
    */
-  client(userId: string, options?: { epoch?: string; postId?: number }): HocuspocusCollaboration
+  client(userId: string, options?: { epoch?: string; postId?: number; schemaFingerprint?: string }): HocuspocusCollaboration
   /**
    * Stops the server (storing every doc) and starts a new one on the same port.
-   * `whileDown` runs in between (e.g. write block_doc around the server).
+   * `whileDown` runs in between (e.g. write block_doc around the server). `schema`: the new
+   * server's (a deploy that changed the editor schema, #416); default, the same as before.
    */
-  restart(whileDown?: () => void | Promise<void>): Promise<void>
+  restart(whileDown?: () => void | Promise<void>, options?: { schema?: Schema }): Promise<void>
+  /** A signed collab ticket for `userId` (for a raw Hocuspocus client, e.g. one from before #416). */
+  ticket(userId: string, docName?: string): Promise<string>
   destroy(): Promise<void>
 }
 
-export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?: BlockDocV1 | null; revision?: number } = {}): Promise<Relay> {
+export async function startRelay({
+  blockDoc = null,
+  revision = 1,
+  schema,
+}: {
+  blockDoc?: BlockDocV1 | null
+  revision?: number
+  /** The server's schema (default: the installed collab schema, as in production). */
+  schema?: Schema
+} = {}): Promise<Relay> {
   const { publicKey, sign } = await ticketKeys()
   const WebSocketPolyfill = await jsdomWebSocket()
   const api = new FakeCollabApi()
@@ -48,6 +63,7 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
 
   const clients: HocuspocusCollaboration[] = []
   const clock = new FakeClock()
+  let currentSchema = schema
   const make = (port = 0) =>
     createCollabServer({
       api,
@@ -58,6 +74,7 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
       maxDebounce: 500,
       storeRetryMs: 50,
       accessRecheck: { intervalMs: RECHECK_MS, jitter: 0, clock },
+      ...(currentSchema ? { schema: currentSchema } : {}),
     })
 
   let server = make()
@@ -71,10 +88,14 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
       return server
     },
     url,
-    client(userId, { epoch, postId = POST_ID } = {}) {
+    client(userId, { epoch, postId = POST_ID, schemaFingerprint } = {}) {
+      // Fixed when the client is made, like an editor bundle's: a restart onto another
+      // schema doesn't change it.
+      const fingerprint = schemaFingerprint ?? server.schemaFingerprint
       const client = new HocuspocusCollaboration(postId, {
         url,
         getTicket: async (docName) => sign({ user_id: userId, doc: docName, iat: new Date().toISOString() }),
+        schemaFingerprint: () => fingerprint,
         user: { name: `user-${userId}`, color: "#000000", id: Number(userId) },
         authRetryMs: 50,
         WebSocketPolyfill,
@@ -84,7 +105,7 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
       clients.push(client)
       return client
     },
-    async restart(whileDown) {
+    async restart(whileDown, options = {}) {
       // Hocuspocus's destroy() stores and unloads every doc and sends each client a close
       // message, but leaves the sockets open; the real process then exits, which drops
       // them. Do that here, or the clients never notice the restart.
@@ -92,9 +113,11 @@ export async function startRelay({ blockDoc = null, revision = 1 }: { blockDoc?:
       await server.destroy(2000)
       sockets.forEach((socket) => socket.terminate())
       await whileDown?.()
+      if (options.schema) currentSchema = options.schema
       server = make(port)
       await server.listen()
     },
+    ticket: (userId, docName = `post-${POST_ID}`) => sign({ user_id: userId, doc: docName, iat: new Date().toISOString() }),
     async destroy() {
       clients.forEach((client) => client.destroy())
       await server.destroy(2000)

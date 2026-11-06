@@ -1,6 +1,7 @@
 import * as Y from "yjs"
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider"
 import { collabDebug, collabDebugEnabled, contentFingerprint, fragmentStructure } from "./debug"
+import { encodeCollabAuthToken } from "./schemaFingerprint"
 
 // The client side of the Hocuspocus collab server (#206; server: web/collab-server).
 //
@@ -9,7 +10,13 @@ import { collabDebug, collabDebugEnabled, contentFingerprint, fragmentStructure 
 // and the derived block_doc, then tells every client with a stateless message.
 //
 //   - Auth: `token` fetches a fresh single-use ticket (POST /collab/tickets) on every
-//     connect and reconnect. It travels in Hocuspocus's auth message, never the URL.
+//     connect and reconnect. It travels in Hocuspocus's auth message, never the URL,
+//     together with the editor's schema fingerprint (#416, schemaFingerprint.ts).
+//   - Schema: the server refuses an editor whose schema isn't its own with
+//     `schema-mismatch` (a tab still on the bundle from before a deploy). Never retried:
+//     binding would let y-tiptap delete the node and mark types it can't build, for
+//     everyone. The instance stops for good (`outdated` in `getAccess()`), keeps its
+//     Y.Doc, and the editor asks for a reload, binding nothing until then.
 //   - Epoch: once synced, the doc's `meta.epoch` goes on the socket URL (`?epoch=`), so
 //     every reconnect of this Y.Doc tells the server which seeding its structs belong
 //     to. The server refuses a mismatch with `stale-epoch` (it reseeded since, e.g. after
@@ -35,6 +42,8 @@ export const DENY_REASON = {
   staleEpoch: "stale-epoch",
   /** The post is in the trash (#327): never retried. */
   trashed: "post-trashed",
+  /** This editor's schema isn't the server's (#416): never retried; reload. */
+  schemaMismatch: "schema-mismatch",
 } as const
 
 /** The close reason when the server's access re-check revokes a session (web/collab-server/recheck.ts). */
@@ -62,6 +71,11 @@ export interface CollabAccess {
   revoked: boolean
   /** Ended because the post went to the trash (post-trashed, #327); set only then. */
   trashed?: boolean
+  /**
+   * Refused because this editor's schema isn't the server's (schema-mismatch, #416): the
+   * editor was updated, reload. Set only then; never reconnects.
+   */
+  outdated?: boolean
 }
 
 /** Sent with broadcastStateless after each store attempt (web/collab-server/server.ts). */
@@ -69,7 +83,7 @@ export type StoreMessage =
   | { type: "stored"; revision: number | null; block_doc: "written" | "kept-invalid" | "kept-empty" | "unchanged" }
   | { type: "store_failed" }
 
-export type HocuspocusStatus = "connecting" | "connected" | "disconnected" | "denied" | "revoked"
+export type HocuspocusStatus = "connecting" | "connected" | "disconnected" | "denied" | "revoked" | "outdated"
 
 export const META_MAP = "meta"
 
@@ -87,6 +101,11 @@ export interface HocuspocusCollaborationOptions {
   url: string
   /** A fresh collab ticket for `docName`. Called on every (re)connect. */
   getTicket: (docName: string) => Promise<string>
+  /**
+   * The fingerprint of the schema this editor binds with (`schemaFingerprint`, #416), sent
+   * with every ticket. Called on every (re)connect.
+   */
+  schemaFingerprint: () => string
   user?: CollabUserInfo
   WebSocketPolyfill?: unknown
   /** First delay before retrying a connection the server couldn't authorize (doubles to 30s). */
@@ -126,6 +145,7 @@ export class HocuspocusCollaboration {
   private accessOverride: AccessMessage | null = null
   private _revoked = false
   private _trashed = false
+  private _outdated = false
   private readonly listeners = {
     store: new Set<Listener<StoreMessage>>(),
     access: new Set<Listener<CollabAccess>>(),
@@ -153,7 +173,7 @@ export class HocuspocusCollaboration {
       name: this.docName,
       document: this.doc,
       // Called on every connect and reconnect: tickets are single use and live 30s.
-      token: async () => options.getTicket(this.docName),
+      token: async () => encodeCollabAuthToken(await options.getTicket(this.docName), options.schemaFingerprint()),
       onSynced: () => this.handleSynced(),
       onAuthenticated: () => this.handleAuthenticated(),
       onAuthenticationFailed: ({ reason }) => this.handleAuthFailed(reason),
@@ -163,7 +183,7 @@ export class HocuspocusCollaboration {
         else if (event?.reason === POST_TRASHED) this.handleRevoked(true)
       },
       onStatus: ({ status }) => {
-        if (this.status !== "denied" && this.status !== "revoked") this.setStatus(status as HocuspocusStatus)
+        if (this.status !== "denied" && this.status !== "revoked" && this.status !== "outdated") this.setStatus(status as HocuspocusStatus)
       },
     })
     if (options.user) this.provider.setAwarenessField("user", options.user)
@@ -187,7 +207,7 @@ export class HocuspocusCollaboration {
    * post), by a later access change (#313), or by ending the session.
    */
   get readOnly(): boolean {
-    if (this._revoked) return true
+    if (this._revoked || this._outdated) return true
     if (this.accessOverride) return this.accessOverride.mode === "read"
     return this.provider.authorizedScope === "readonly"
   }
@@ -199,7 +219,13 @@ export class HocuspocusCollaboration {
   getAccess(): CollabAccess {
     const access: CollabAccess = { readOnly: this.readOnly, reason: this.accessOverride?.reason ?? null, revoked: this._revoked }
     if (this._trashed) access.trashed = true
+    if (this._outdated) access.outdated = true
     return access
+  }
+
+  /** Refused with schema-mismatch (#416): this instance never connects again; reload. */
+  get outdated(): boolean {
+    return this._outdated
   }
 
   /** Refused with stale-epoch: this Y.Doc must not be used again (remount). */
@@ -307,7 +333,7 @@ export class HocuspocusCollaboration {
   }
 
   private handleAuthenticated() {
-    if (this._revoked) return
+    if (this._revoked || this._outdated) return
     // A (re)connect looked access up again: its scope is current.
     const wasReadOnly = this.readOnly
     const hadOverride = this.accessOverride !== null
@@ -329,6 +355,23 @@ export class HocuspocusCollaboration {
     this.emit("access", this.getAccess())
   }
 
+  /**
+   * Refused with schema-mismatch (#416): the server runs a different editor schema (a
+   * deploy since this page loaded). Never retried: only a reload brings the matching
+   * bundle. Nothing from the server reaches this Y.Doc any more, so y-tiptap can't meet a
+   * type it would delete; it stays, so a bound editor keeps showing it read-only.
+   */
+  private handleOutdated() {
+    if (this._outdated || this._destroyed) return
+    console.warn(`[collab] ${this.docName}: the editor was updated on the server; reload to keep editing`)
+    this._outdated = true
+    if (this.authRetryTimer) clearTimeout(this.authRetryTimer)
+    this.authRetryTimer = null
+    this.setStatus("outdated")
+    this.socket.disconnect()
+    this.emit("access", this.getAccess())
+  }
+
   private handleAuthFailed(reason: string) {
     if (this._destroyed) return
     collabDebug("authentication failed", reason)
@@ -344,6 +387,10 @@ export class HocuspocusCollaboration {
     if (reason === DENY_REASON.trashed) {
       // Refused at connect (#327): the post is in the trash. Like a revoke, never retried.
       this.handleRevoked(true)
+      return
+    }
+    if (reason === DENY_REASON.schemaMismatch) {
+      this.handleOutdated()
       return
     }
     if (reason === DENY_REASON.forbidden) {
@@ -382,7 +429,7 @@ export class HocuspocusCollaboration {
     }
     if (type === "access") {
       const { mode, reason } = message as Partial<AccessMessage>
-      if ((mode !== "read" && mode !== "write") || this._revoked) return
+      if ((mode !== "read" && mode !== "write") || this._revoked || this._outdated) return
       collabDebug("access message", message)
       this.accessOverride = { type: "access", mode, reason: reason ?? (mode === "read" ? "demoted" : "restored") }
       if (mode === "read") console.warn(`[collab] ${this.docName}: the server made this session read-only (${reason})`)
@@ -405,13 +452,15 @@ export class HocuspocusCollaboration {
 
 // Per-post registry: the editor, the schema gate and the presence hook share one
 // connection per post. Ref-counted; destroyed shortly after the last release (StrictMode
-// mounts twice). A stale instance is never handed out again.
+// mounts twice). A stale, revoked or outdated instance is never handed out again (an
+// outdated one would only be asked again: if the server went back to this schema, a new
+// mount connects).
 const instances = new Map<number, { instance: HocuspocusCollaboration; refs: number; timer: number | null }>()
 const DESTROY_DELAY_MS = 750
 
 export function acquireHocuspocus(postId: number, create: () => HocuspocusCollaboration): HocuspocusCollaboration {
   const entry = instances.get(postId)
-  if (entry && !entry.instance.stale && !entry.instance.destroyed && !entry.instance.revoked) {
+  if (entry && !entry.instance.stale && !entry.instance.destroyed && !entry.instance.revoked && !entry.instance.outdated) {
     if (entry.timer !== null) {
       clearTimeout(entry.timer)
       entry.timer = null
