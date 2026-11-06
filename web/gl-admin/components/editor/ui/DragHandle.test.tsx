@@ -337,6 +337,19 @@ describe("the gutter at any depth (#417)", () => {
     expect(toolbar.contains(document.activeElement)).toBe(true)
   })
 
+  it("Tab on the handle of a block without a toolbar goes on and leaves the caret alone", () => {
+    editor.commands.setTextSelection(4) // inside "alpha"
+    hover(A)
+    handle().focus()
+    const event = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
+    act(() => {
+      handle().dispatchEvent(event)
+    })
+    expect(event.defaultPrevented).toBe(false)
+    expect(editor.state.selection.from).toBe(4)
+    expect(editor.state.selection.empty).toBe(true)
+  })
+
   it("drags a block into a group, between two of its blocks: one transaction, the block keeps its id", () => {
     layout({
       [GROUP]: { top: 0, bottom: 100, left: 0, right: 500 },

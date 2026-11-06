@@ -188,12 +188,20 @@ export function resolveEditorBlock(doc: PMNode, ref: BlockRef): EditorBlock | nu
  * group). A holder that is neither (a slot) is left to the schema, which the table generates.
  */
 export function holderAccepts(holder: PMNode, child: PMNode): boolean {
-  const type = blockSpecTypeOf(child.type.name)
-  const holderName = holder.type.name
+  return holderAcceptsType(holder.type.name, blockSpecTypeOf(child.type.name))
+}
+
+/**
+ * The one "what may go here" rule, by node name and Block Spec type: the top level (`doc`)
+ * takes flow and the top-level containers, a container what the table lets it hold, and
+ * anything else (a slot, or another block's own content: a list item, a quote) flow only.
+ * The slash menu (`slotAcceptsAt`), the gutter's + (`gutterAccepts`) and drops all read it.
+ */
+export function holderAcceptsType(holderName: string, type: string): boolean {
   if (holderName === "doc") return !isContainerType(type) || !!containerRule(type)?.topLevel
   const container = containerOfNode(holderName)
   if (container) return acceptsChild(container.type, type)
-  return holdsBlocks(holderName)
+  return !isContainerType(type)
 }
 
 function withChildren(holder: PMNode, children: PMNode[]): boolean {
@@ -325,8 +333,10 @@ export function deleteBlockTr(state: EditorState, block: EditorBlock): Transacti
     tr.setSelection(TextSelection.create(tr.doc, 1))
   } else {
     tr.delete(range.from, range.to)
+    // On to the block that took its place, as ProseMirror's own delete does; back only at
+    // the end of its container.
     const $at = tr.doc.resolve(Math.min(range.from, tr.doc.content.size))
-    tr.setSelection(Selection.near($at, $at.pos > 0 ? -1 : 1))
+    tr.setSelection($at.nodeAfter ? Selection.near($at, 1) : Selection.near($at, -1))
   }
   return tr.scrollIntoView()
 }

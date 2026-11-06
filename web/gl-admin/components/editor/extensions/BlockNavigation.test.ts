@@ -173,6 +173,16 @@ describe("⌘⇧↑ / ⌘⇧↓ and ⌫ (#417)", () => {
     expect(top).toEqual(["paragraph:after"])
   })
 
+  it("⌫ on a group's first block leaves the caret on the next block, inside the group", () => {
+    mount()
+    caretIn(A)
+    press("Escape")
+    press("Backspace")
+    expect(groupOrder()).toEqual([B, C])
+    const { $from } = editor.state.selection
+    expect($from.parent.attrs["data-block-id"]).toBe(B)
+  })
+
   it("Delete on the post's only block leaves an empty line", () => {
     mount(`<p data-block-id="${A}">alpha</p>`)
     caretIn(A)

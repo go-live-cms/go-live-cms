@@ -59,13 +59,19 @@ function boundsOf(caret: HTMLElement, root: HTMLElement): HTMLElement {
  * own styles change: the carets are widget decorations, whose DOM ProseMirror leaves alone.
  */
 export function placeCaretLabels(root: HTMLElement) {
-  const placed: (Box & { level: number })[] = []
-  for (const caret of Array.from(root.querySelectorAll<HTMLElement>(".collab-caret"))) {
+  const carets = Array.from(root.querySelectorAll<HTMLElement>(".collab-caret"))
+  if (carets.length === 0) return
+  // Every read first, then every write: one layout for the whole pass, not one per caret.
+  const measured = carets.flatMap((caret) => {
     const label = caret.querySelector<HTMLElement>(".collab-caret-label")
-    if (!label) continue
+    if (!label) return []
     const caretBox = caret.getBoundingClientRect()
     const width = label.offsetWidth || label.getBoundingClientRect().width
-    const flip = labelFlips(caretBox.left, width, boundsOf(caret, root).getBoundingClientRect().right)
+    return [{ label, caretBox, width, right: boundsOf(caret, root).getBoundingClientRect().right }]
+  })
+  const placed: (Box & { level: number })[] = []
+  for (const { label, caretBox, width, right } of measured) {
+    const flip = labelFlips(caretBox.left, width, right)
     const box = flip
       ? { left: caretBox.left - width, right: caretBox.left, top: caretBox.top }
       : { left: caretBox.left, right: caretBox.left + width, top: caretBox.top }

@@ -162,11 +162,12 @@ export default function DragHandle({
     if (event.key !== "Tab" || event.shiftKey || menuFor) return
     const block = currentBlock()
     if (!block) return
+    // No toolbar: Tab goes on out of the editor, leaving the caret where it was.
+    const control = blockToolbarControl(editor, block)
+    if (!control) return
     if (!(editor.state.selection instanceof NodeSelection && editor.state.selection.from === block.pos)) {
       editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, block.pos)))
     }
-    const control = blockToolbarControl(editor, block)
-    if (!control) return
     event.preventDefault()
     control.focus()
   }

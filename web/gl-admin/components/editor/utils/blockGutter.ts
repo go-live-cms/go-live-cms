@@ -1,8 +1,7 @@
 import { Extension, type Editor } from "@tiptap/core"
 import type { CatalogEntry } from "../blocks/catalog"
 import { refOf, resolveBlock, type BlockRef } from "./blockActions"
-import { editorBlockAtSelection } from "./blockTree"
-import { acceptsChild, containerOfNode, containerRule, isContainerType } from "@gl-admin/lib/blocks-spec/nesting"
+import { editorBlockAtSelection, holderAcceptsType } from "./blockTree"
 
 // The gutter's + (#415, "+ in the margin"): the "Add block" button beside the drag handle
 // (ui/DragHandle.tsx) opens the block catalog with its own search field (ui/AddBlockMenu.tsx).
@@ -50,12 +49,8 @@ export const BlockGutterKeys = Extension.create<Record<string, never>, BlockGutt
  * offers no group.
  */
 export function gutterAccepts(editor: Editor, ref: BlockRef): (entry: CatalogEntry) => boolean {
-  const block = resolveBlock(editor.state.doc, ref)
-  const holder = block?.holder.type.name ?? "doc"
-  if (holder === "doc") return (entry) => !isContainerType(entry.type) || !!containerRule(entry.type)?.topLevel
-  const container = containerOfNode(holder)
-  if (container) return (entry) => acceptsChild(container.type, entry.type)
-  return (entry) => !isContainerType(entry.type)
+  const holder = resolveBlock(editor.state.doc, ref)?.holder.type.name ?? "doc"
+  return (entry) => holderAcceptsType(holder, entry.type)
 }
 
 /**

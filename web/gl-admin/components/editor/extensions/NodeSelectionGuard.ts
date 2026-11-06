@@ -23,28 +23,20 @@ import type { EditorView } from "@tiptap/pm/view"
 // no appendTransaction (rule 7 in lib/collaboration/CLAUDE.md).
 
 type RelativeSelection = { type: string; anchor: unknown; head: unknown } | null
+type YType = { _item: { deleted: boolean } | null }
 type Binding = {
   doc: { on: (event: string, f: () => void) => void; off: (event: string, f: () => void) => void } | null
-  mapping: Map<{ _item: { deleted: boolean } | null }, PMNode | PMNode[]>
+  mapping: Map<YType, PMNode | PMNode[]>
   prosemirrorView: EditorView | null
   beforeTransactionSelection: RelativeSelection
 }
 
 const key = new PluginKey("nodeSelectionGuard")
 
-/** Whether the Yjs element the binding maps to `node` is still in the doc. */
-export function elementAlive(binding: Pick<Binding, "mapping">, node: PMNode): boolean {
-  for (const [type, mapped] of binding.mapping) {
-    if (mapped === node) return !type._item || !type._item.deleted
-  }
-  return false
-}
-
-/** The saved selection to restore: a deleted block's selection becomes a caret at its place. */
-export function safeSavedSelection(binding: Pick<Binding, "mapping">, saved: RelativeSelection, selection: unknown): RelativeSelection {
-  if (!saved || saved.type !== "node" || !(selection instanceof NodeSelection)) return saved
-  if (elementAlive(binding, selection.node)) return saved
-  return { type: "text", anchor: saved.anchor, head: saved.anchor }
+/** The Yjs element the binding maps to `node`, if any. */
+function elementOf(mapping: Binding["mapping"], node: PMNode): YType | null {
+  for (const [type, mapped] of mapping) if (mapped === node) return type
+  return null
 }
 
 export const NodeSelectionGuard = Extension.create({
@@ -58,9 +50,22 @@ export const NodeSelectionGuard = Extension.create({
           const binding = (ySyncPluginKey.getState(view.state) as { binding?: Binding } | undefined)?.binding
           const doc = binding?.doc
           if (!binding || !doc) return {}
+          // The selected block's Yjs element, found once per selected node (a remote
+          // keystroke elsewhere then costs one lookup, not a scan of the whole mapping).
+          // A moved block keeps its node but gets a new element, so a cached element counts
+          // only while the mapping still points it at that node.
+          let cached: { node: PMNode; type: YType | null } | null = null
           const guard = () => {
-            const current = binding.prosemirrorView ?? view
-            binding.beforeTransactionSelection = safeSavedSelection(binding, binding.beforeTransactionSelection, current.state.selection)
+            const saved = binding.beforeTransactionSelection
+            const { selection } = (binding.prosemirrorView ?? view).state
+            if (!saved || saved.type !== "node" || !(selection instanceof NodeSelection)) return
+            const node = selection.node
+            if (!cached || cached.node !== node || !cached.type || binding.mapping.get(cached.type) !== node) {
+              cached = { node, type: elementOf(binding.mapping, node) }
+            }
+            const alive = !!cached.type && (!cached.type._item || !cached.type._item.deleted)
+            // Deleted: restore a caret at its place, which y-tiptap does safely.
+            if (!alive) binding.beforeTransactionSelection = { type: "text", anchor: saved.anchor, head: saved.anchor }
           }
           doc.on("beforeObserverCalls", guard)
           return {

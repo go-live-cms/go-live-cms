@@ -107,7 +107,19 @@ export default function BlockSettingsPanel({ editor }: { editor: TiptapEditor })
   const [state, setState] = useState<Snapshot>(() => snapshot(editor))
 
   useEffect(() => {
-    const update = () => setState(snapshot(editor))
+    // Typing in a block gives it a new node, so it re-renders then; a transaction that
+    // leaves the selected block and its containers as they were keeps the panel as it is.
+    const update = () =>
+      setState((previous) => {
+        const next = snapshot(editor)
+        if (!previous || !next) return next
+        const same =
+          previous.block.node === next.block.node &&
+          previous.block.pos === next.block.pos &&
+          previous.path.length === next.path.length &&
+          previous.path.every((container, i) => container.node === next.path[i].node)
+        return same ? previous : next
+      })
     update()
     editor.on("transaction", update)
     return () => {
