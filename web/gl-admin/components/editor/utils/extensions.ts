@@ -12,6 +12,8 @@ import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { BlockActions } from "./blockActions"
 import { BlockGutterKeys } from "./blockGutter"
+import { BlockNavigationKeys, BlockSelectionKeys } from "../extensions/BlockNavigation"
+import { NodeSelectionGuard } from "../extensions/NodeSelectionGuard"
 import { authManager } from "@gl-admin/lib/auth"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
@@ -69,6 +71,9 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       BlockNodeViews,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
       BlockActions,
+      // Blocks at any depth from the keyboard (#417): Esc, ↵, ↑↓, ⌘⇧↑↓, ⌫; no schema.
+      BlockSelectionKeys,
+      BlockNavigationKeys,
       PasteSanitizer,
       Placeholder.configure({
         includeChildren: true,
@@ -151,6 +156,9 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
 
         const awareness = collabProvider.provider.awareness
         baseExtensions.push(CursorAwareness.configure({ awareness }))
+        // A selected block that a collaborator (or an undo) deletes must not break the
+        // sync (#417, y-tiptap's selection restore).
+        baseExtensions.push(NodeSelectionGuard)
       } else {
         console.warn("Collaboration provider not fully initialized, skipping collaboration extensions")
       }

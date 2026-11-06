@@ -542,6 +542,25 @@ are the most fragile part of the codebase. **Before editing anything under
   default theme's styles in `themes/default/styles/theme.css`. History's diff compares a
   container's children by id (`blockDiff.ts`, `VersionDiff`'s `version-diff__container`).
   Theme blocks may hold text only since then (`THEME_BLOCK_CONTENT_NAMES`).
+- **Editing nested blocks (#417, design `docs/design/block-library.md` 3.5):** the gutter is
+  our own plugin now (`components/editor/utils/gutterPlugin.ts`; TipTap 3.4.2's drag handle
+  only finds top-level blocks): it follows the pointer to the innermost block (a block in a
+  group; the group in its own left margin), and runs the drag: the drop line and target
+  follow the nesting table (`blockTree.ts` `dropTargetFor`), the drop is one move
+  (`applyBlockMove`, rules in `gl-admin/lib/collaboration/CLAUDE.md`). `ui/DragHandle.tsx`
+  renders the gutter through a portal into the plugin's element; the + offers only what the
+  block's container accepts (`gutterAccepts`). Keyboard (`extensions/BlockNavigation.ts`):
+  Esc selects the block around the caret, then its container; ↵ steps into a container's
+  first block or edits a block; ↑↓ move between the blocks beside it; ⌘⇧↑/↓ move it inside
+  its container; ⌫/Del delete a selected block (a container it leaves empty goes too);
+  Tab reaches + and the handle, then the block's own toolbar (`data-block-toolbar`, a
+  group's Width and Background: ← → move, Esc back); ⌘⇧, opens the settings panel's
+  **Block** tab (`ui/BlockSettingsPanel.tsx`: the selected block nested or not, its path of
+  containers, a group's settings; `Editor`'s `onEditorReady` hands it the editable editor).
+  Presence inside containers: `utils/cursorAwareness.ts` (label flip and stacking, remote
+  block outlines). Tests: `BlockNavigation.test.ts`, `blockTree.test.ts`,
+  `DragHandle.test.tsx`, `BlockSettingsPanel.test.tsx`, `cursorAwareness.test.ts` and the
+  relay's `blockMoves.collab.test.ts`.
 - **Taxonomies and redirects (#331):** admin: one category per post. The editor sidebar's
   `PostTaxonomies` shows the `category` taxonomy as a radio group (picking one calls the PUT,
   which replaces the category; `post`-type posts have no "None", the API puts the default

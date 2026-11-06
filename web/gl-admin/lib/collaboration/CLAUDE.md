@@ -389,7 +389,8 @@ kept so references in code stay valid.
   `ui/MoveToDialog.tsx`):** Duplicate (Ctrl D), Move to (Ctrl Shift P), Copy link to block,
   Colour, Delete, from the drag handle. Each is **one ProseMirror transaction, so one Yjs
   transaction** (collaborators see one move), and none is an appendTransaction (rule 7
-  doesn't apply). Blocks are found **by block id when the action runs**, not by the position
+  doesn't apply). Since #417 they act on the block at any depth, and Move to goes through
+  `applyBlockMove` (below). Blocks are found **by block id when the action runs**, not by the position
   the menu opened at. **Ids are never copied:** Duplicate strips every `data-block-id` in the
   copy (`withoutBlockIds`) and BlockIdExtension stamps fresh ones (top-level and list items,
   #238) in the same transaction; Move (delete + insert) keeps the block's own id. Pinned by
@@ -398,11 +399,40 @@ kept so references in code stay valid.
   copies `<public post URL>#b-<block id>`: the public renderer puts `id="b-<id>"`
   (`blockAnchorId`) on every top-level block; a heading keeps its #351 slug and carries the
   anchor on an empty span, and `headingAnchors` never gives a heading a `b-<id>` slug.
+- **Nested blocks in the editor (#417, design `docs/design/block-library.md` 3.5):** the
+  block menu, the gutter, the keyboard and drops act on a block **at any depth**
+  (`components/editor/utils/blockTree.ts`: an "editor block" is `isBlockNode` without list
+  items, so a list stays one block). A move is one ProseMirror transaction (`planBlockMove`:
+  insert the same node, so its id and every descendant's come along, then remove the
+  original, with a container it leaves empty), checked against the nesting table
+  (`dropTargetFor`: no group in a group, never inside itself; the nearest allowed place
+  up the tree). **Moves reach Yjs through `applyBlockMove` (`utils/blockMoveSync.ts`),
+  never a plain dispatch:** y-tiptap 3.0.0's `updateYFragment` matches children only from
+  both ends and rewrites every same-type element in between *in place*, so a reorder became
+  "rewrite gamma's element as end and end's as gamma", and a collaborator's concurrent move
+  of gamma deleted "end" (pinned by `blockMoves.collab.test.ts`). `applyBlockMove` syncs the
+  doc with only the removal, then the result, inside one Yjs transaction under the
+  binding's mutex: a delete and an insert, one update for collaborators, one undo stack item
+  (closed on both sides). Two people moving the same block at once get two copies, which the
+  server's `stampFragmentBlockIds` gives distinct ids (design 2.12). It uses y-tiptap's
+  binding internals (`mux`, `_prosemirrorChanged`): re-check it when bumping y-tiptap.
+  **`extensions/NodeSelectionGuard.ts`:** y-tiptap restores a saved NodeSelection with
+  `NodeSelection.create`, which throws inside the binding's Yjs observer when the selected
+  block was deleted and was the last in its container (a collaborator's delete, or an undo
+  right after a drop), so the editor would miss that change. Before the observers run
+  (`beforeObserverCalls`) the guard turns that saved selection into a caret; a block that's
+  still there stays selected. Neither adds an appendTransaction (rule 7).
 - **Presence (#356):** clicking a collaborator's avatar calls `EditorRef.jumpToCollaborator`
   (`scrollToCollaborator` in `utils/cursorAwareness.ts`): it scrolls to the caret drawn for
   their awareness client (`data-client-id`), else to their awareness selection; it never
   moves this user's selection. The offline status says "Offline · N edits waiting" from the
   provider's `unsyncedChanges` (`useCollabPresence`'s `unsyncedCount`): memory only, rule 0.
+  Inside nested blocks (#417): `placeCaretLabels` flips a label to the caret's left when it
+  would overflow its container (`data-collab-bounds`, the group's view) or the editor, and
+  stacks labels on one spot; a remote selection that is exactly one block is drawn as an
+  outline in their colour with their name (`.collab-block-selection`), not a tint; colours
+  pass `safeCaretColor` (hex only: awareness is any collaborator's to set). No container
+  sets `overflow`, so nothing clips a label.
 - Heading levels are **1–6** (`HeadingBlock.level`, `zHeading`, the bridge, and the
   editor schema; keep them in sync). The server's store runs `validateBlockDoc` (#214)
   before writing `block_doc`. A **known** block type must match its own Zod schema; only

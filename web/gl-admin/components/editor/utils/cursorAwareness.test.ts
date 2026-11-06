@@ -7,7 +7,16 @@ import * as Y from "yjs"
 import { Awareness } from "y-protocols/awareness"
 import { Editor } from "@tiptap/core"
 import StarterKit from "@tiptap/starter-kit"
-import { createCaretElement, CursorAwareness, scrollToCollaborator } from "./cursorAwareness"
+import {
+  createCaretElement,
+  CursorAwareness,
+  labelFlips,
+  placeCaretLabels,
+  safeCaretColor,
+  scrollToCollaborator,
+  stackLevel,
+} from "./cursorAwareness"
+import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
 
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8")
 
@@ -127,5 +136,107 @@ describe("jump to a collaborator's caret (#356)", () => {
     expect(scrollToCollaborator(editor.view, awareness, [7, 99])).toBe(false)
     expect(scrolled).toHaveLength(0)
     expect(editor.state.selection.from).toBe(3)
+  })
+})
+
+// Presence inside nested blocks (#417, "Others in nested layouts"): labels flip at a right
+// edge and stack on the same spot, a block someone selected gets their outline and name,
+// and only hex colours reach a style.
+describe("caret labels in nested blocks (#417)", () => {
+  it("a label flips to the caret's left when it would overflow the right edge", () => {
+    expect(labelFlips(100, 60, 400)).toBe(false)
+    expect(labelFlips(350, 60, 400)).toBe(true)
+    expect(labelFlips(340, 60, 400)).toBe(false)
+  })
+
+  it("two labels on one spot stack; apart, or on other lines, they don't", () => {
+    const placed = [{ left: 100, right: 160, top: 20, level: 0 }]
+    expect(stackLevel({ left: 120, right: 180, top: 20 }, placed)).toBe(1)
+    expect(stackLevel({ left: 170, right: 230, top: 20 }, placed)).toBe(0)
+    expect(stackLevel({ left: 100, right: 160, top: 60 }, placed)).toBe(0)
+    expect(stackLevel({ left: 100, right: 160, top: 20 }, [...placed, { left: 100, right: 160, top: 20, level: 1 }])).toBe(2)
+  })
+
+  function box(el: Element, left: number, top: number, width: number) {
+    el.getBoundingClientRect = () => ({ left, top, right: left + width, bottom: top + 16, width, height: 16, x: left, y: top, toJSON: () => ({}) }) as DOMRect
+  }
+
+  it("placeCaretLabels flips at the edge of the caret's container, not the editor's", () => {
+    const root = document.createElement("div")
+    const column = document.createElement("div")
+    column.setAttribute("data-collab-bounds", "")
+    root.append(column)
+    const near = createCaretElement("Priya Nair", "#7a3cc2", 2, 1)
+    const far = createCaretElement("Sofia", "#2a7e3b", 2, 2)
+    column.append(near, far)
+    box(root, 0, 0, 1000)
+    box(column, 0, 0, 300)
+    box(near, 280, 40, 0)
+    box(far, 40, 80, 0)
+    for (const caret of [near, far]) Object.defineProperty(caret.querySelector(".collab-caret-label")!, "offsetWidth", { value: 70 })
+    placeCaretLabels(root)
+    const nearLabel = near.querySelector<HTMLElement>(".collab-caret-label")!
+    const farLabel = far.querySelector<HTMLElement>(".collab-caret-label")!
+    expect(nearLabel.classList.contains("is-flipped")).toBe(true)
+    expect(nearLabel.style.right).toBe("-1px")
+    expect(nearLabel.style.left).toBe("auto")
+    expect(nearLabel.style.borderRadius).toBe("4px 4px 0 4px")
+    expect(farLabel.classList.contains("is-flipped")).toBe(false)
+    expect(farLabel.style.left).toBe("-1px")
+  })
+
+  it("placeCaretLabels stacks two labels at one caret position", () => {
+    const root = document.createElement("div")
+    const one = createCaretElement("Sofia Lima", "#2a7e3b", 2, 1)
+    const two = createCaretElement("Ana Costa", "#b4261a", 2, 2)
+    root.append(one, two)
+    box(root, 0, 0, 1000)
+    box(one, 100, 40, 0)
+    box(two, 103, 40, 0)
+    for (const caret of [one, two]) Object.defineProperty(caret.querySelector(".collab-caret-label")!, "offsetWidth", { value: 70 })
+    placeCaretLabels(root)
+    expect(one.querySelector<HTMLElement>(".collab-caret-label")!.style.transform).toBe("translateY(-100%)")
+    expect(two.querySelector<HTMLElement>(".collab-caret-label")!.style.transform).toBe("translateY(calc(-100% * 2 - 2px))")
+  })
+
+  it("only a hex colour reaches a style", () => {
+    expect(safeCaretColor("#2a7e3b")).toBe("#2a7e3b")
+    expect(safeCaretColor("red; background: url(https://x.test/)")).toBe("#3b82f6")
+    expect(safeCaretColor(undefined)).toBe("#3b82f6")
+  })
+})
+
+describe("a block someone else selected (#417)", () => {
+  const editors: Editor[] = []
+  afterEach(() => {
+    while (editors.length) editors.pop()!.destroy()
+  })
+
+  it("gets their outline and name on its top edge (in a group too), and no caret", () => {
+    const awareness = new Awareness(new Y.Doc())
+    const editor = new Editor({
+      element: document.createElement("div"),
+      extensions: [...Object.values(schemaExtensions({ collaborating: false })), CursorAwareness.configure({ awareness })],
+      content: '<div data-type="group"><p>one</p><p>two</p></div><p>after</p>',
+    })
+    editors.push(editor)
+    // The second paragraph in the group: positions 6..11.
+    const group = editor.state.doc.firstChild!
+    const from = 1 + group.firstChild!.nodeSize
+    const to = from + group.child(1).nodeSize
+    awareness.states.set(9, { user: { name: "Marco Ruiz", color: "#a3460a" }, selection: { anchor: from, head: to } })
+    awareness.emit("change", [{ added: [9], updated: [], removed: [] }, "remote"])
+    const outlined = editor.view.dom.querySelector<HTMLElement>(".collab-block-selection")!
+    expect(outlined.tagName).toBe("P")
+    expect(outlined.textContent).toBe("two")
+    expect(outlined.getAttribute("data-collab-name")).toBe("Marco Ruiz")
+    expect(outlined.style.getPropertyValue("--collab-color")).toBe("#a3460a")
+    expect(editor.view.dom.querySelector(".collab-caret")).toBeNull()
+
+    // A text selection inside it is a tint and a caret, as before.
+    awareness.states.set(9, { user: { name: "Marco Ruiz", color: "#a3460a" }, selection: { anchor: from + 1, head: from + 3 } })
+    awareness.emit("change", [{ added: [], updated: [9], removed: [] }, "remote"])
+    expect(editor.view.dom.querySelector(".collab-block-selection")).toBeNull()
+    expect(editor.view.dom.querySelector('.collab-caret[data-client-id="9"]')).not.toBeNull()
   })
 })

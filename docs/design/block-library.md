@@ -474,6 +474,16 @@ What the canvas asks for once there are containers ("Keyboard", "Moving between 
   flips side.
 - The settings panel's Block tab shows the selected block, nested or not.
 
+As built (#417): `components/editor/utils/blockTree.ts` (blocks at any depth, the table at a
+drop, moves and deletes), `utils/gutterPlugin.ts` (the gutter and the drag, replacing
+TipTap's top-level-only handle), `extensions/BlockNavigation.ts` (the keys),
+`ui/BlockSettingsPanel.tsx` (the Block tab) and `utils/cursorAwareness.ts` (labels). Two
+findings changed the plan: y-tiptap rewrites reordered siblings in place, which loses text
+when two people move the same block, so a move reaches Yjs as a delete then an insert in one
+Yjs transaction (`utils/blockMoveSync.ts`); and y-tiptap's restore of a selected block that
+was just deleted throws, which `extensions/NodeSelectionGuard.ts` prevents. Rules:
+`web/gl-admin/lib/collaboration/CLAUDE.md` ("Nested blocks in the editor").
+
 ### 3.6 Guard against stale editor tabs
 
 The schema fingerprint check from 2.7. It belongs to the foundation because every later

@@ -21,7 +21,8 @@ import { ApiError, errorMessage } from "@gl-admin/lib/api/errors"
 import { CollabStoreError } from "@gl-admin/lib/collaboration/CollabSaveStatus"
 import Editor, { type EditorRef } from "@gl-admin/components/editor/Editor"
 import EditorTopBar, { ArchiveIcon, OfflineIcon } from "@gl-admin/components/editor/ui/EditorTopBar"
-import PostSidebar from "@gl-admin/components/editor/ui/PostSidebar"
+import PostSidebar, { type SettingsTab } from "@gl-admin/components/editor/ui/PostSidebar"
+import type { Editor as TiptapEditor } from "@tiptap/core"
 import CommentsPanel from "@gl-admin/components/editor/ui/CommentsPanel"
 import { PostCommentsStore } from "@gl-admin/lib/commentsStore"
 import ScheduleDialog from "@gl-admin/components/editor/ui/ScheduleDialog"
@@ -482,6 +483,23 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
     }
   }, [commentsPostId])
   const [commentsOpen, setCommentsOpen] = useState(false)
+  // The settings panel's Block tab (#417): the editable editor, and ⌘⇧, (open the panel on
+  // Block, or close it when Block is what it shows).
+  const [blockEditor, setBlockEditor] = useState<TiptapEditor | null>(null)
+  const [settingsTabRequest, setSettingsTabRequest] = useState<{ tab: SettingsTab; key: number } | null>(null)
+  const settingsTab = useRef<SettingsTab>("post")
+  const settingsShown = useRef(false)
+  settingsShown.current = sidebarVisible && !commentsOpen
+  const toggleBlockSettings = useCallback(() => {
+    if (settingsShown.current && settingsTab.current === "block") {
+      // The key comes from the editor, which keeps focus.
+      setSidebarVisible(false)
+      return
+    }
+    setCommentsOpen(false)
+    setSidebarVisible(true)
+    setSettingsTabRequest((previous) => ({ tab: "block", key: (previous?.key ?? 0) + 1 }))
+  }, [])
   // Only the count: the store changes on every keystroke (the blocks), the count doesn't.
   const openComments = useSyncExternalStore(comments?.subscribe ?? noSubscribe, comments?.openCount ?? noCount)
 
@@ -1390,6 +1408,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               postUrl={liveUrl}
               // Block comments (#192)
               comments={comments}
+              // The settings panel's Block tab (#417)
+              onEditorReady={setBlockEditor}
+              onToggleBlockSettings={toggleBlockSettings}
               enableCollaboration={collabEnabled} // Edit mode, for users who may edit this post
               // Block Spec v1 persistence callbacks
               onSaveStart={() => {
@@ -1459,6 +1480,9 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
           onUpdate={handlePostUpdate}
           isVisible={sidebarVisible && !commentsOpen}
           onToggle={() => setSidebarVisible(!sidebarVisible)}
+          blockEditor={blockEditor}
+          tabRequest={settingsTabRequest}
+          onTabChange={(tab) => (settingsTab.current = tab)}
           sidebarWidth={sidebarWidth}
           onResize={handleSidebarResize}
           slug={formData.slug}

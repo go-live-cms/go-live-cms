@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle, useCallback } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
+import type { Editor as TiptapEditor } from "@tiptap/core"
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { authManager } from "@gl-admin/lib/auth"
 import { pmToBlockDoc, setEditorBlockDoc } from "@gl-admin/lib/collaboration/blockBridge"
@@ -102,6 +103,14 @@ export type EditorProps = {
    * "comments" nudge and on every reconnect, and reports its block ids. Live editors only.
    */
   comments?: PostCommentsStore | null
+  /**
+   * The editable TipTap editor once it's mounted, null while there is none (read-only,
+   * remounting, gone). The settings panel's Block tab (#417) reads the selected block from
+   * it and changes its settings with ordinary transactions.
+   */
+  onEditorReady?: (editor: TiptapEditor | null) => void
+  /** ⌘⇧, (#417, "Toolbar and settings"): open or close the settings panel on its Block tab. */
+  onToggleBlockSettings?: () => void
 }
 
 export interface EditorRef {
@@ -157,6 +166,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     onStored,
     postUrl,
     comments,
+    onEditorReady,
+    onToggleBlockSettings,
     collab,
     unbuildable,
     autoFocus = true,
@@ -406,6 +417,19 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       if (storage.openComment) storage.openComment = null
     }
   }, [editor, comments, collab])
+  // The settings panel's Block tab (#417) reads the editable editor; ⌘⇧, opens it.
+  const panel = useRef({ onEditorReady, onToggleBlockSettings })
+  panel.current = { onEditorReady, onToggleBlockSettings }
+  useEffect(() => {
+    if (!editor || readOnly) return
+    panel.current.onEditorReady?.(editor)
+    const storage = (editor.storage as unknown as Record<string, { toggleBlockSettings: (() => void) | null }>).blockNavigationKeys
+    if (storage) storage.toggleBlockSettings = () => panel.current.onToggleBlockSettings?.()
+    return () => {
+      if (storage) storage.toggleBlockSettings = null
+      panel.current.onEditorReady?.(null)
+    }
+  }, [editor, readOnly])
   const onComment = useCallback((ref: BlockRef) => {
     if (ref.id) comments?.focusBlock(ref.id, true)
   }, [comments])
