@@ -245,8 +245,49 @@ kept so references in code stay valid.
 
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
-  bullet_list/ordered_list/listItem). Custom/theme nodes must declare it too or
+  bullet_list/ordered_list/listItem and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
+- **Containers (#414, `blocks-spec/nesting.ts`, design `docs/design/block-library.md` 2.1–2.11).**
+  A container (Group today; columns, details, … later, each a row of the table) holds its
+  child blocks **by id** in `children`, each a full block in the flat `blocks` map, like a
+  list's items, and in the fragment it is one element with its children as elements (the
+  content stays in the one `"default"` fragment, #315 Option C). The table drives everything:
+  - **Schema:** a container is **not in TipTap's `block` group** (the quote's `block+`, the list
+    item's `paragraph block*` and theme blocks name `block`, and a container there would hide
+    its blocks inside that block's `pm`). The doc node is `GroupDocument` (`topLevelContent()`:
+    `(block | group)+`; StarterKit's `document` is off in `schema.ts`) and a container's
+    content is `containerContent(type)` (`block` = flow). Containers are `isolating` + `defining`.
+  - **The block predicate `isBlockNode(node, parent)`** is the one rule for which nodes are
+    blocks (parent is the doc, a container or a container's slot, or a list's item), used by
+    `BlockIdExtension`, `stampFragmentBlockIds`, `pmToBlockDoc` and `stampBlockIds`. Ids are
+    deduped across the whole doc at every depth, so a split inside a group, a duplicated group
+    (#356) and a pasted group (#128) all get fresh ids. Rule 7 unchanged.
+  - **Bridge:** `pmToBlockDoc` is recursive (a container becomes its block plus one block per
+    child; a childless one is skipped). `containerChildrenToPM` builds and `check()`s each child
+    on its own and requires a type the table allows; a bad one is dropped and reported with
+    `parentId` = the container, `afterId` = its previous sibling. Too few children left →
+    synthesized ones with **deterministic ids** (`synthesizedChildId`: `<containerId>-paragraph`).
+    `containersInProgress` (the old `listsInProgress`) catches cycles for lists and containers;
+    `referenced` drops a block at its second reference (two parents, or a parent and the top).
+    `restoreDroppedBlocks` copies a subtree without children that are already in `current` (or
+    missing from the source), so a restore never makes a block have two parents.
+  - **Store:** `fragmentToBlockDoc` converts a container's children one at a time: an
+    unconvertible child keeps its `previous` version under its container (`UnconvertibleBlock.
+    parentId`); a container with no convertible child falls back as a whole. Then
+    **`dedupeBlockRefs`** (repeats within one list, as the API's `deduplicateBlocks`) and
+    `validateBlockDoc`, which now also runs `nestingIssues` (references exist, one parent each,
+    no cycles, the table's types and counts, no `children` on core non-containers). The API runs
+    the same checks; `blocks-spec/nestingVectors.json` pins both.
+  - **Paste:** the containers are `data-pm-slice` contexts (attrs reset to null) and a group's
+    `<div data-type="group" data-style data-align>` survives the sanitizer with valid values only.
+  - **Stale clients:** an editor bundle from before #414 has no `group` type (and a `block+`
+    doc), so y-tiptap would delete a group a newer peer inserts. The schema fingerprint guard
+    (#416, rule 10) refuses such a tab with `schema-mismatch` before it syncs, and it reloads;
+    `schemaFingerprint.test.ts` pins that Group changes the fingerprint.
+  - Tests: `blocks-spec/nesting.test.ts` (vectors, table), `blockBridge.nesting.test.ts` (round
+    trips, drops, synthesized ids, cycles, the store's per-child fallback),
+    `components/editor/extensions/GroupBlock.test.ts` (commands, view, split/duplicate/paste ids)
+    and `GroupBlock.collab.test.ts` (two users in one group on the relay, the stored doc).
 - `pmToBlockDoc` regenerates duplicate/invalid block ids.
 - **Known limitation:** a `code_block` with empty code can't be shown in the editor
   (ProseMirror disallows empty text nodes). It is dropped like any other unbuildable
@@ -282,9 +323,9 @@ kept so references in code stay valid.
   nodes always get fresh ids from BlockIdExtension and a copied id can never re-key the
   original block. Pasted images are dropped by design (insert via the media library).
   Pinned by `PasteSanitizer.test.ts` and `PasteSanitizer.collab.test.ts`.
-- **Cycles:** `listItemsToPM` tracks the lists being converted. A list that (directly or
-  through another list) contains itself throws at the child that closes the cycle, so
-  that child is dropped and reported like any other bad child.
+- **Cycles:** `listItemsToPM` and `containerChildrenToPM` track the lists and containers
+  being converted. One that (directly or through another) contains itself throws at the
+  child that closes the cycle, so that child is dropped and reported like any other bad child.
 - **Image caption + width, quote citation (#346): image and blockquote are Block Spec
   v2** (`IMAGE_BLOCK_VERSION`, `BLOCKQUOTE_BLOCK_VERSION`); readers take v1 and v2, a
   missing attr is its default, so old docs load and render as before.

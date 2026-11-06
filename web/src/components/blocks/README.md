@@ -209,6 +209,13 @@ interface BlockComponentProps {
 }
 ```
 
+- **Containers (#414):** a container (`group/`) renders its children with
+  `renderBlock(childId)`, so every block type works inside one at any depth. The helpers that
+  read the doc walk the tree in reading order (`blocksInReadingOrder`): `headingAnchors` (a
+  heading in a group gets an anchor), `isFirstImageBlock` (the first image at any depth loads
+  eagerly) and `seo.ts`'s `firstParagraphText`. A container may re-provide
+  `ImageSizesContext` for its children when they render narrower. Group's markup:
+  `div.group` plus `is-tinted`, `alignwide` / `alignfull`.
 - **`anchorId`** (#356, "Copy link to block"): every top-level block's root element gets
   it as its `id`, so `/<post url>#b-<block id>` lands on it. A heading keeps its slug id
   (#351) and puts the anchor on an empty `<span class="gl-block-anchor">` at its start.

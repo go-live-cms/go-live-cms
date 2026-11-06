@@ -13,7 +13,7 @@ import {
   synthesizedItemId,
   walkBlockTree,
 } from "./blockBridge"
-import type { BlockDocV1 } from "../blocks-spec"
+import { validateBlockDoc, type BlockDocV1 } from "../blocks-spec"
 import { textOf } from "./testHelpers"
 
 // A minimal test-only custom node, standing in for a theme block (e.g. "alert").
@@ -793,7 +793,10 @@ describe("blockBridge — additional edge cases", () => {
       const out = restoreDroppedBlocks(pmToBlockDoc(node), source, dropped)
       expect(out.blocks_order).toEqual([a])
       expect(out.blocks[a].children).toEqual([b, synthesizedItemId(a)])
-      expect(out.blocks[b]).toEqual(source.blocks[b])
+      // b comes back without a: a is already the top-level list, and a block under two
+      // parents (here also a cycle) would make the stored doc invalid (#414).
+      expect(out.blocks[b]).toEqual({ ...source.blocks[b], children: [] })
+      expect(() => validateBlockDoc(out)).not.toThrow()
     })
 
     it("one invalid list item is dropped on its own; its valid siblings stay", () => {

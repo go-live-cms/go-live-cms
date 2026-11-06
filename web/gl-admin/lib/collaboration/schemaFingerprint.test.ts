@@ -149,6 +149,20 @@ describe("schemaFingerprint (#416)", () => {
       expect(withExtra(Indent)).not.toBe(core)
     })
 
+    it("the Group block (#414) changed it: a new node type and a wider doc", () => {
+      // The schema as it was before #414: no Group, and StarterKit's `block+` doc.
+      const { group: _group, document: _document, ...rest } = schemaExtensions({ collaborating: true })
+      const OldDocument = Node.create({ name: "doc", topNode: true, content: "block+" })
+      const before = getSchema([OldDocument, ...Object.values(rest)])
+      expect(before.nodes.group).toBeUndefined()
+      expect(getCoreSchema().nodes.group).toBeDefined()
+      expect(schemaFingerprint(before)).not.toBe(core)
+      // Each half on its own changes it too: a stale tab with either would be refused.
+      const onlyGroup = getSchema([OldDocument, ...Object.values({ ...rest, group: _group })])
+      expect(schemaFingerprint(onlyGroup)).not.toBe(schemaFingerprint(before))
+      expect(schemaFingerprint(onlyGroup)).not.toBe(core)
+    })
+
     it("an extension without schema doesn't", () => {
       expect(withExtra(Extension.create({ name: "shortcuts", addKeyboardShortcuts: () => ({}) }))).toBe(core)
     })

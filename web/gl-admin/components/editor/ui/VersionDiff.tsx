@@ -224,12 +224,23 @@ function renderOne(doc: BlockDocV1, id: string): React.ReactNode {
 }
 
 /** A changed block: its own markup with the diff inside, or the rendered block plus notes. */
-function ChangedBlock({ entry, version }: { entry: BlockDiffEntry; version: BlockDocV1 }) {
+function ChangedBlock({ entry, version, working }: { entry: BlockDiffEntry; version: BlockDocV1; working: BlockDocV1 }) {
   const block = version.blocks[entry.id]
   const typeChanged = entry.attrs.some((a) => a.key === "type")
   const text = entry.text
 
   if (entry.list && !typeChanged) return <DiffList list={entry.list} />
+
+  // A container in both (#414): each child as its own diff block, at any depth.
+  if (entry.children && !typeChanged) {
+    return (
+      <div className="version-diff__container" data-type={block.type}>
+        {entry.children.map((child) => (
+          <DiffBlock key={`${child.status}:${child.id}`} entry={child} version={version} working={working} />
+        ))}
+      </div>
+    )
+  }
 
   if (!typeChanged && text) {
     switch (block.type) {
@@ -319,7 +330,7 @@ function DiffBlock({ entry, version, working }: { entry: BlockDiffEntry; version
   return (
     <div className={className} data-block-id={entry.id}>
       {entry.moved && <DiffLabel kind="moved" />}
-      {entry.status === "changed" ? <ChangedBlock entry={entry} version={version} /> : renderOne(version, entry.id)}
+      {entry.status === "changed" ? <ChangedBlock entry={entry} version={version} working={working} /> : renderOne(version, entry.id)}
       <AttrNotes attrs={entry.attrs} />
     </div>
   )

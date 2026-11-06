@@ -6,7 +6,7 @@ import { OpenLinkModal } from "../extensions/OpenLinkModal"
 import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
-import { getActiveTheme, menuEntries, type CatalogEntry } from "../blocks/catalog"
+import { getActiveTheme, menuEntries, slotAcceptsAt, type CatalogEntry } from "../blocks/catalog"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
@@ -45,6 +45,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
     // conflict; non-collab editors keep it as their only undo stack.
     const schema = schemaExtensions({ collaborating: Boolean(collabProvider) })
     const baseExtensions = [
+      schema.document,
       schema.starterKit,
       schema.codeBlock,
       Typography,
@@ -63,6 +64,7 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
       schema.textAlign,
       schema.quoteCitation,
       schema.blockColor,
+      schema.group,
       schema.blockId,
       BlockNodeViews,
       // The block menu's Ctrl D / Ctrl Shift P (#356); no schema.
@@ -119,13 +121,15 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
           // The whole menu (the list filters by the query itself): the role gate and the
           // active theme (catalog.ts). The role is a UI hint; the server enforces.
           // Cached per role and theme: the plugin asks on every view update.
-          items: () => {
+          // Then only what the slot the line is in accepts (#414): no group inside a group,
+          // a list item or a quote.
+          items: ({ editor }: { editor: any }) => {
             const role = authManager.getState().user?.role ?? null
             const theme = getActiveTheme()
             if (!slashEntries || slashEntries.role !== role || slashEntries.theme !== theme) {
               slashEntries = { role, theme, entries: menuEntries({ role, theme }) }
             }
-            return slashEntries.entries
+            return slashEntries.entries.filter(slotAcceptsAt(editor))
           },
           render: () => ({
             onStart: (props: any) => slashCommandManager.start(props, getCursorCoords),

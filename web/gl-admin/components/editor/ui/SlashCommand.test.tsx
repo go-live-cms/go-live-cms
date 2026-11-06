@@ -167,7 +167,11 @@ describe("the slash menu", () => {
     press("ArrowDown")
     expect(active()!.textContent).toBe("Divider---")
     press("ArrowDown")
+    expect(active()!.textContent).toBe("Group")
+    press("ArrowDown")
     expect(active()!.textContent).toBe("Paragraph")
+    press("ArrowUp")
+    expect(active()!.textContent).toBe("Group")
     press("ArrowUp")
     expect(active()!.textContent).toBe("Divider---")
 

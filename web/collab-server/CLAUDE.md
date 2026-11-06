@@ -182,7 +182,8 @@ Hocuspocus `debounce: 2000`, `maxDebounce: 10000` (env-tunable), and on the last
 disconnect. `prepareStore`:
 1. `stampFragmentBlockIds` in the live doc (origin `SERVER_ORIGIN`; not a client edit);
 2. `fragmentToBlockDoc` with `meta.dropped` (→ `restoreDroppedBlocks`) and the previous
-   doc for nodes that can't be converted;
+   doc for nodes that can't be converted (a container's children one at a time, #414),
+   then `dedupeBlockRefs` (repeats within one list, as the API does);
 3. **`validateBlockDoc`** (#214 part 2). Invalid → `collab_store_invalid`, the Yjs state
    is stored **without** `block_doc`, so `posts.block_doc` keeps its last valid version;
 4. **empty guard:** an empty result is written only if a client edited the doc since it

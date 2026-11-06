@@ -59,7 +59,7 @@ describe("the catalog", () => {
         ["Paragraph", "Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6", "Bulleted list", "Numbered list", "Quote", "Code"],
       ],
       ["Media", ["Image"]],
-      ["Layout", ["Divider"]],
+      ["Layout", ["Divider", "Group"]],
     ])
     expect(BLOCK_GROUPS.map((g) => g.label)).toEqual(["Text", "Media", "Layout", "Embeds", "Advanced"])
   })
@@ -180,6 +180,7 @@ const PM_NODE: Record<string, string> = {
   code_block: "codeBlock",
   image: "image",
   divider: "horizontalRule",
+  group: "group",
 }
 
 describe("insert", () => {

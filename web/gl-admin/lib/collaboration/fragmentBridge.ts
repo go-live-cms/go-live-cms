@@ -1,7 +1,7 @@
 import * as Y from "yjs"
 import { prosemirrorToYXmlFragment, yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap"
 import type { Node as PMNode, Schema } from "prosemirror-model"
-import type { Block, BlockDocV1, BlockID } from "../blocks-spec"
+import { containerOfNode, isBlockNode, type Block, type BlockDocV1, type BlockID } from "../blocks-spec"
 import {
   blockDocToPMWithReport,
   pmToBlockDoc,
@@ -58,12 +58,14 @@ export function seedFragment(doc: BlockDocV1, fragment: Y.XmlFragment, base: Sch
   return { entries: dropped, blocks }
 }
 
-/** A top-level node of the live doc that `fragmentToBlockDoc` couldn't convert. */
+/** A node of the live doc that `fragmentToBlockDoc` couldn't convert: a top-level one, or a container's child. */
 export interface UnconvertibleBlock {
   /** Its `data-block-id`, if it had one. */
   id: BlockID | null
   type: string
   error: unknown
+  /** The container it is in (its `data-block-id`, if valid); absent for a top-level node. */
+  parentId?: BlockID | null
 }
 
 export interface FragmentToBlockDocOptions {
@@ -74,7 +76,7 @@ export interface FragmentToBlockDocOptions {
    * version from here instead of disappearing from `block_doc`.
    */
   previous?: BlockDocV1
-  /** Called for each top-level node that couldn't be converted. */
+  /** Called for each node (top-level, or a container's child) that couldn't be converted. */
   onUnconvertible?: (block: UnconvertibleBlock) => void
 }
 
@@ -83,6 +85,9 @@ export interface FragmentToBlockDocOptions {
  * node that can't be built (a malformed element from a buggy or newer peer; unknown
  * node and mark types get stand-ins, and unknown attributes are dropped) doesn't fail
  * the whole store: it is reported, and keeps its version from `previous` if there is one.
+ * A container's children get the same treatment at their level (#414): one that can't be
+ * built keeps its previous version under its container, not the whole container. A
+ * container left with no child that builds falls back as a whole.
  * The blocks seeding dropped are merged back in at their original positions
  * (restoreDroppedBlocks), so a store never deletes content the editors couldn't show.
  *
@@ -99,11 +104,37 @@ export function fragmentToBlockDoc(
 
   const nodes: PMNode[] = []
   const fallbacks: DroppedBlock[] = []
+  const idOf = (node: any): BlockID | null =>
+    typeof node?.attrs?.["data-block-id"] === "string" ? node.attrs["data-block-id"] : null
+
+  // A node, with a container's children built one at a time.
+  const build = (node: any): PMNode => {
+    if (!containerOfNode(node?.type)) return schema.nodeFromJSON(node)
+    const containerId = idOf(node)
+    const children: PMNode[] = []
+    let afterId: BlockID | null = null
+    for (const child of Array.isArray(node.content) ? node.content : []) {
+      const id = idOf(child)
+      try {
+        children.push(build(child))
+      } catch (error) {
+        // A part (a summary, a caption) isn't a block: it can't fall back on its own.
+        if (!isBlockNode(String(child?.type), node.type)) throw error
+        onUnconvertible?.({ id, type: String(child?.type), error, parentId: containerId })
+        if (id && containerId && previous?.blocks[id]) fallbacks.push({ id, parentId: containerId, afterId })
+      }
+      if (id) afterId = id
+    }
+    if (children.length === 0) throw new Error(`${node.type} ${containerId ?? ""} has no block that can be converted`)
+    const shell = schema.nodeFromJSON({ type: node.type, attrs: node.attrs, marks: node.marks })
+    return shell.type.create(shell.attrs, children, shell.marks)
+  }
+
   let afterId: BlockID | null = null
   for (const child of json.content ?? []) {
-    const id: BlockID | null = typeof child?.attrs?.["data-block-id"] === "string" ? child.attrs["data-block-id"] : null
+    const id = idOf(child)
     try {
-      nodes.push(schema.nodeFromJSON(child))
+      nodes.push(build(child))
     } catch (error) {
       onUnconvertible?.({ id, type: String(child?.type), error })
       if (id && previous?.blocks[id]) fallbacks.push({ id, parentId: null, afterId })
@@ -119,11 +150,10 @@ export function fragmentToBlockDoc(
   return doc
 }
 
-const isList = (name: string) => name === "bulletList" || name === "orderedList"
-
 /**
- * Give every node that becomes a block (top-level nodes, and list items of a list at any
- * depth) a valid, unique `data-block-id` in the live doc, by BlockIdExtension's rules:
+ * Give every node that becomes a block (`isBlockNode`: top-level nodes, list items of a
+ * list at any depth, and a container's children, #414) a valid, unique `data-block-id` in
+ * the live doc, by BlockIdExtension's rules:
  * missing, shorter than 10 characters, or a duplicate of an earlier one (doc order) gets
  * a new id. One transaction; returns how many ids it wrote (0 means no Yjs update).
  *
@@ -143,8 +173,7 @@ export function stampFragmentBlockIds(
   const walk = (parent: Y.XmlFragment | Y.XmlElement, parentName: string | null) => {
     for (const child of parent.toArray()) {
       if (!(child instanceof Y.XmlElement)) continue
-      const isBlock = parentName === null || (child.nodeName === "listItem" && isList(parentName))
-      if (isBlock) {
+      if (isBlockNode(child.nodeName, parentName)) {
         const id = child.getAttribute("data-block-id")
         if (typeof id === "string" && id.length >= 10 && !used.has(id)) used.add(id)
         else unstamped.push(child)

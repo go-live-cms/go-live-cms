@@ -1,5 +1,8 @@
 import { z } from "zod"
 import { isThemeBlockType, themeBlockIssues, type ThemeBlockLookup } from "./themeBlocks"
+import { nestingIssues } from "./nesting"
+
+export * from "./nesting"
 
 // Block Spec v1 - Authoritative Types
 export type BlockID = string
@@ -15,6 +18,7 @@ export type KnownBlockType =
   | "bullet_list"
   | "ordered_list"
   | "list_item"
+  | "group"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -42,6 +46,24 @@ export type ImageAlign = (typeof IMAGE_ALIGNS)[number]
 
 export function isImageAlign(value: unknown): value is ImageAlign {
   return typeof value === "string" && (IMAGE_ALIGNS as readonly string[]).includes(value)
+}
+
+/**
+ * Group (#414), the first container (`nesting.ts`): blocks kept together, optionally on
+ * the theme's surface colour (`tinted`), at the content, wide or full width. Defaults
+ * (`none`, `content`) are left out of the stored block.
+ */
+export const GROUP_STYLES = ["none", "tinted"] as const
+export type GroupStyle = (typeof GROUP_STYLES)[number]
+export const GROUP_ALIGNS = ["content", "wide", "full"] as const
+export type GroupAlign = (typeof GROUP_ALIGNS)[number]
+
+export function isGroupStyle(value: unknown): value is GroupStyle {
+  return typeof value === "string" && (GROUP_STYLES as readonly string[]).includes(value)
+}
+
+export function isGroupAlign(value: unknown): value is GroupAlign {
+  return typeof value === "string" && (GROUP_ALIGNS as readonly string[]).includes(value)
 }
 
 /** The marks a caption may carry, here and in the API sanitizer (`captionMarks`). */
@@ -199,6 +221,17 @@ export type ListItemBlock = BaseBlock<
   }
 >
 
+/** A container (#414): `children` are its blocks, flow types only (`nesting.ts`). */
+export type GroupBlock = BaseBlock<
+  "group",
+  {
+    /** Absent: "none". */
+    style?: GroupStyle
+    /** Absent: "content". */
+    align?: GroupAlign
+  }
+>
+
 /**
  * Custom block type for theme-defined blocks (e.g., alert, callout, etc.)
  * Preserves the full ProseMirror JSON for round-trip fidelity.
@@ -224,6 +257,7 @@ export type Block =
   | BulletListBlock
   | OrderedListBlock
   | ListItemBlock
+  | GroupBlock
   | CustomBlock
 
 export interface BlockDocV1 {
@@ -339,6 +373,16 @@ export const zListItem = zBase.extend({
   }),
 })
 
+export const zGroup = zBase.extend({
+  type: z.literal("group"),
+  attrs: z.object({
+    style: z.enum(GROUP_STYLES).optional(),
+    align: z.enum(GROUP_ALIGNS).optional(),
+  }),
+  // Count and child types are the nesting table's (nestingIssues).
+  children: z.array(zBlockID),
+})
+
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
  * block keeps the version its theme wrote even when that theme isn't installed here.
@@ -361,6 +405,7 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   bullet_list: zBulletList,
   ordered_list: zOrderedList,
   list_item: zListItem,
+  group: zGroup,
 }
 
 // A known type must match its own schema; only other types fall back to the custom
@@ -406,8 +451,11 @@ export interface ValidateOptions {
 // input itself, never a stripped copy.
 export function validateBlockDoc(doc: unknown, { themeBlocks }: ValidateOptions = {}): BlockDocV1 {
   zBlockDocV1.parse(doc)
+  // How blocks nest (#414, design 2.3): references, one parent each, no cycles, what each
+  // container holds. The same checks as the API's (nestingVectors.json). Repeats within
+  // one list are not an error here only after `dedupeBlockRefs`, which the store runs first.
+  const issues: z.ZodIssue[] = nestingIssues(doc).map((issue) => ({ code: z.ZodIssueCode.custom, ...issue }))
   if (themeBlocks) {
-    const issues: z.ZodIssue[] = []
     for (const [key, block] of Object.entries((doc as BlockDocV1).blocks)) {
       const spec = isThemeBlockType(block.type) ? themeBlocks(block.type) : undefined
       if (!spec) continue
@@ -415,8 +463,8 @@ export function validateBlockDoc(doc: unknown, { themeBlocks }: ValidateOptions 
         issues.push({ code: z.ZodIssueCode.custom, path: ["blocks", key, ...issue.path], message: issue.message })
       }
     }
-    if (issues.length > 0) throw new z.ZodError(issues)
   }
+  if (issues.length > 0) throw new z.ZodError(issues)
   return doc as BlockDocV1
 }
 

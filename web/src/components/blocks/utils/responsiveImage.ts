@@ -1,5 +1,5 @@
 import { createContext } from "react"
-import type { BlockDocV1 } from "@gl-admin/lib/blocks-spec"
+import { blocksInReadingOrder, type BlockDocV1 } from "@gl-admin/lib/blocks-spec"
 import { safeImageSrc } from "./safeUrl"
 
 // Image variants and focal point on the public site (#255).
@@ -122,11 +122,11 @@ export function responsiveImageAttrs(
 
 const round = (v: number) => Math.round(v * 10) / 10
 
-// isFirstImageBlock reports whether blockId is the first top-level image in
-// the doc. That image is often the largest thing above the fold, so it loads
-// eagerly; later ones are lazy.
+// isFirstImageBlock reports whether blockId is the first image in the doc, in
+// reading order at any depth (one inside a group counts, #414). That image is often
+// the largest thing above the fold, so it loads eagerly; later ones are lazy.
 export function isFirstImageBlock(doc: BlockDocV1, blockId: string): boolean {
   const blocks = doc.blocks as Record<string, { type?: string } | undefined>
-  const first = (doc.blocks_order || []).find((id) => blocks[id]?.type === "image")
+  const first = blocksInReadingOrder(doc).find((id) => blocks[id]?.type === "image")
   return first === blockId
 }
