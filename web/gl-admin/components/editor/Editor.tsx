@@ -142,7 +142,8 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
   {
     value,
     onChange,
-    placeholder = "Type '/' for commands...",
+    // An empty post's hint; the default is the design's (EMPTY_POST_HINT, #415).
+    placeholder,
     readOnly = false,
     minChars,
     maxChars,

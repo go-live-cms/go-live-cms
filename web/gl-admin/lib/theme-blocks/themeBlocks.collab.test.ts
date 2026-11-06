@@ -75,11 +75,11 @@ describe("the example theme's alert block on the Hocuspocus relay (#376)", () =>
     const b = makeEditor(pb.doc)
     await waitFor(() => b.getText().includes("start"), { what: "b to load" })
 
-    // A: the slash menu's entry, at the end of the doc, then text.
-    const slash = installedThemeBlockEditors.find((editor) => editor.type === alert.type)!.slash
+    // A: the block catalog's entry (what the slash and + menus run), at the end of the doc, then text.
+    const entry = installedThemeBlockEditors.find((editor) => editor.type === alert.type)!.entry
     const end = a.state.doc.content.size
     a.commands.setTextSelection(end - 1)
-    slash.command({ editor: a, range: { from: end - 1, to: end - 1 } })
+    entry.insert(a, { from: end - 1, to: end - 1 })
     expect(alertPos(a)).toBeGreaterThan(-1)
     a.commands.insertContent("Mind the gap")
 
