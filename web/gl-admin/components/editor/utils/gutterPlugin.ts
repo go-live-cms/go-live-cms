@@ -42,15 +42,21 @@ function topLevelBlocks(doc: PMNode): EditorBlock[] {
   return out
 }
 
-/** The block of `blocks` whose rect spans `y`, else the nearest one (y in a gap or padding). */
-function nearestAt(blocks: EditorBlock[], rectOf: (pos: number) => Rect | null, y: number) {
-  let best: { block: EditorBlock; rect: Rect; distance: number } | null = null
+const gap = (value: number, start: number, end: number) => (value < start ? start - value : value > end ? value - end : 0)
+
+/**
+ * The block of `blocks` whose rect spans `y`, else the nearest one (y in a gap or padding).
+ * Of blocks side by side at that height (columns), the one under or nearest to `x`.
+ */
+function nearestAt(blocks: EditorBlock[], rectOf: (pos: number) => Rect | null, x: number, y: number) {
+  let best: { block: EditorBlock; rect: Rect; dy: number; dx: number } | null = null
   for (const block of blocks) {
     const rect = rectOf(block.pos)
     if (!rect) continue
-    const distance = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0
-    if (!best || distance < best.distance) best = { block, rect, distance }
-    if (distance === 0) break
+    const dy = gap(y, rect.top, rect.bottom)
+    const dx = gap(x, rect.left, rect.right)
+    if (!best || dy < best.dy || (dy === best.dy && dx < best.dx)) best = { block, rect, dy, dx }
+    if (dy === 0 && dx === 0) break
   }
   return best
 }
@@ -65,7 +71,7 @@ export function pickBlock(doc: PMNode, rectOf: (pos: number) => Rect | null, x: 
   let level = topLevelBlocks(doc)
   let chosen: { block: EditorBlock; rect: Rect } | null = null
   for (;;) {
-    const hit = nearestAt(level, rectOf, y)
+    const hit = nearestAt(level, rectOf, x, y)
     if (!hit) return chosen
     chosen = { block: hit.block, rect: hit.rect }
     if (!isContainerBlock(hit.block) || x < hit.rect.left) return chosen
