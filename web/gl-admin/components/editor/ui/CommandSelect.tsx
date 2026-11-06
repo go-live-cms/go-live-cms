@@ -5,8 +5,8 @@ import { useSelect } from "@gl-admin/utils/select"
 export type CommandSelectOption = {
     value: string
     label: string
-    label_icon?: string
-    command?: ({ editor, range }: any) => void
+    // A glyph or an icon (catalog entries: BlockIcon), decorative.
+    label_icon?: React.ReactNode
 }
 
 export type CommandSelectProps = {

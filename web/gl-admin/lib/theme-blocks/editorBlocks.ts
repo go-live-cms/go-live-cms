@@ -1,11 +1,11 @@
-import { themeOfBlockType } from "../blocks-spec/themeBlocks"
 import { blockPathParts, installedThemeBlocks } from "./installed"
 import type { ThemeBlockEditor } from "./editor"
 
 // Every installed theme block's editor half (themes/<slug>/blocks/<Name>/editor.ts),
 // resolved when the admin is built (#376). The editor adds all of them to its schema, so
 // a block of a theme that is not active still loads and edits; only the active theme's
-// are offered in the slash menu (themeSlashBlocks).
+// are offered in the block menus (each editor's `entry`, read by
+// components/editor/blocks/catalog.ts).
 
 const EDITORS = import.meta.glob<{ default?: unknown }>("../../../themes/*/blocks/*/editor.ts", { eager: true })
 
@@ -33,7 +33,3 @@ export function collectThemeBlockEditors(modules: Record<string, { default?: unk
 }
 
 export const installedThemeBlockEditors: ThemeBlockEditor[] = collectThemeBlockEditors(EDITORS)
-
-/** The slash-menu entries of the active theme's blocks. */
-export const themeSlashBlocks = (slug: string) =>
-  installedThemeBlockEditors.filter((editor) => themeOfBlockType(editor.type) === slug).map((editor) => editor.slash)

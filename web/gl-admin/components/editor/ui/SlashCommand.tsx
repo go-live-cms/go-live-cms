@@ -1,154 +1,83 @@
-import React, { useState, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from "react"
-import { Extension } from "@tiptap/core"
-import { ReactRenderer } from "@tiptap/react"
+import { forwardRef, useEffect, useImperativeHandle } from "react"
+import { Extension, type Editor } from "@tiptap/core"
 import { PluginKey } from "prosemirror-state"
 import { Suggestion } from "../utils/suggestion"
+import type { CatalogEntry, InsertRange } from "../blocks/catalog"
+import { InsertMenuFooter, InsertMenuList, optionId, useInsertMenu } from "./InsertMenu"
 
-export interface SlashCommandItem {
-  title: string
-  description: string
-  icon: string
-  command: ({ editor, range }: any) => void
-  aliases?: string[]
-  hint?: string
-  group?: "media"
+// The slash menu (#415, "Inserting blocks"): "/" on an empty line or after a space opens the
+// block catalog; what follows the slash searches it. Focus stays in the text, so the
+// editor's element points at the list (aria-controls) and the highlighted option
+// (aria-activedescendant) while it's open. ↑↓ move across groups, ↵ inserts, Esc closes
+// and keeps the typed text (slashCommandManager), and with nothing matching ↵ and the
+// arrows are the editor's again.
+
+export const SLASH_MENU_ID = "gl-slash-menu"
+
+export interface SlashCommandListRef {
+  onKeyDown: (props: { event: KeyboardEvent }) => boolean
 }
 
-const GROUPS = ["basic", "media"] as const
-const GROUP_LABELS = { basic: "Basic blocks", media: "Media" } as const
+interface Props {
+  items: CatalogEntry[]
+  query: string
+  command: (entry: CatalogEntry) => void
+  editor: Editor
+}
 
-export const SlashCommandList = forwardRef<
-  any,
-  {
-    items: SlashCommandItem[]
-    command: (item: SlashCommandItem) => void
-    editor: any
-  }
->((props, ref) => {
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const commandListRef = useRef<HTMLDivElement>(null)
-  // In the order the menu shows them (by section), so the arrow keys follow the screen
-  // even when a theme registers a basic block after the media ones.
-  const items = useMemo(
-    () => GROUPS.flatMap((group) => props.items.filter((item) => (item.group ?? "basic") === group)),
-    [props.items]
-  )
-
-  const selectItem = (index: number) => {
-    const item = items[index]
-    if (item) {
-      props.command(item)
-    }
-  }
-
-  const upHandler = () => {
-    setSelectedIndex((prev) => {
-      const newIndex = prev > 0 ? prev - 1 : items.length - 1
-      return newIndex
-    })
-  }
-
-  const downHandler = () => {
-    setSelectedIndex((prev) => {
-      const newIndex = prev < items.length - 1 ? prev + 1 : 0
-      return newIndex
-    })
-  }
-
-  const enterHandler = () => {
-    selectItem(selectedIndex)
-  }
-
-  useEffect(() => {
-    setSelectedIndex(0)
-  }, [props.items])
-
-  useEffect(() => {
-    const selectedElement = commandListRef.current?.querySelector<HTMLElement>(`[data-index="${selectedIndex}"]`)
-    selectedElement?.scrollIntoView?.({ block: "nearest" })
-  }, [selectedIndex])
+export const SlashCommandList = forwardRef<SlashCommandListRef, Props>(function SlashCommandList({ items, query, command, editor }, ref) {
+  const menu = useInsertMenu(items, query)
 
   useImperativeHandle(ref, () => ({
-    onKeyDown: ({ event }: { event: KeyboardEvent }) => {
-      if (event.key === "ArrowUp") {
+    onKeyDown: ({ event }) => {
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        if (!menu.move(event.key)) return false
         event.preventDefault()
-        event.stopPropagation()
-        upHandler()
-        return true
-      }
-      if (event.key === "ArrowDown") {
-        event.preventDefault()
-        event.stopPropagation()
-        downHandler()
         return true
       }
       if (event.key === "Enter") {
+        if (!menu.activeEntry) return false
         event.preventDefault()
-        event.stopPropagation()
-        enterHandler()
-        return true
-      }
-      if (event.key === "Escape") {
-        event.preventDefault()
-        event.stopPropagation()
+        command(menu.activeEntry)
         return true
       }
       return false
     },
   }))
 
-  if (items.length === 0) {
-    return (
-      <div className="slash-command-list">
-        <div className="slash-command-empty">No blocks match</div>
-      </div>
-    )
-  }
-
-  // Sections in the design's order; items keep one flat index for the keyboard.
-  const sections = GROUPS.map((group) => ({
-    group,
-    items: items.map((item, index) => ({ item, index })).filter(({ item }) => (item.group ?? "basic") === group),
-  })).filter((s) => s.items.length > 0)
+  // The text is the combobox: point it at the list and the active option.
+  useEffect(() => {
+    if (editor.isDestroyed) return
+    const dom = editor.view.dom
+    if (menu.active >= 0) {
+      dom.setAttribute("aria-controls", `${SLASH_MENU_ID}-list`)
+      dom.setAttribute("aria-activedescendant", optionId(SLASH_MENU_ID, menu.active))
+    } else {
+      dom.removeAttribute("aria-controls")
+      dom.removeAttribute("aria-activedescendant")
+    }
+  }, [editor, menu.active, menu.options])
+  useEffect(
+    () => () => {
+      if (editor.isDestroyed) return
+      editor.view.dom.removeAttribute("aria-controls")
+      editor.view.dom.removeAttribute("aria-activedescendant")
+    },
+    [editor]
+  )
 
   return (
-    <div className="slash-command-list" ref={commandListRef} role="listbox" aria-label="Insert block">
-      {sections.map((section, i) => (
-        <div key={section.group} role="group" aria-label={GROUP_LABELS[section.group]}>
-          {i > 0 && <div className="slash-command-separator" aria-hidden="true" />}
-          <div className="slash-command-group" aria-hidden="true">
-            {GROUP_LABELS[section.group]}
-          </div>
-          {section.items.map(({ item, index }) => (
-            <button
-              className={`slash-command-item ${index === selectedIndex ? "selected" : ""}`}
-              key={`${item.title}-${index}`}
-              data-index={index}
-              role="option"
-              aria-selected={index === selectedIndex}
-              title={item.description}
-              onClick={() => selectItem(index)}
-              type="button"
-            >
-              <span className="icon" aria-hidden="true">
-                {item.icon}
-              </span>
-              <span className="title">{item.title}</span>
-              {item.hint && <span className="hint">{item.hint}</span>}
-            </button>
-          ))}
-        </div>
-      ))}
-      <div className="slash-command-footer" aria-hidden="true">
-        <span>↑↓ to move</span>
-        <span>↵ to insert</span>
-        <span>esc to close</span>
-      </div>
+    <div className="editor-insert slash-command-list">
+      <InsertMenuList menu={menu} query={query} idPrefix={SLASH_MENU_ID} onPick={command} />
+      <InsertMenuFooter
+        menu={menu}
+        query={query}
+        idle={["↑↓ to move", "↵ to insert", "esc to close"]}
+        noMatch={`esc closes the menu and keeps “/${query}” as text`}
+      />
     </div>
   )
 })
-
-SlashCommandList.displayName = "SlashCommandList"
 
 export const SlashCommandExtension = Extension.create({
   name: "slashCommand",
@@ -158,10 +87,10 @@ export const SlashCommandExtension = Extension.create({
       suggestion: {
         char: "/",
         pluginKey: new PluginKey("slashCommand"),
-        command: ({ editor, range, props }: any) => {
-          props.command({ editor, range })
+        command: ({ editor, range, props }: { editor: Editor; range: InsertRange; props: CatalogEntry }) => {
+          props.insert(editor, range)
         },
-        items: ({ query }: { query: string }) => [],
+        items: () => [] as CatalogEntry[],
         render: () => ({}),
       },
     }
