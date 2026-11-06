@@ -121,7 +121,7 @@ Two groups:
 | `cover` | flow | 1+ | `mediaId`, `alt`, `decorative`, `focal`, `overlay`, `align` |
 | `media_text` | flow, `details` | 1+ | `mediaId`, `alt`, `decorative`, `focal`, `position` (`left`/`right`) |
 | `details` | flow | 1+ | `open` (default false); **summary** as a child node, see 2.4 |
-| `gallery` | `image` only | 1+ | `columns` (2–4); caption as a child node |
+| `gallery` | `image` only | 0+ (empty is an editor state, not rendered) | `columns` (2–4); caption as a child node |
 | `footnotes` | `footnote` only | 1+ | at most one per doc, see 2.9 |
 
 Top level (`blocks_order`, the doc's `block+`) accepts flow and every container except
@@ -142,11 +142,17 @@ Today's checks stay. New ones, identical in Zod and Go, pinned by a shared vecto
 1. Every id in `blocks_order` or any `children` exists in `blocks` (the API checks
    `blocks_order` today; children are added).
 2. **Each block is referenced at most once** across `blocks_order` and all `children`.
-   Two parents sharing a child would render it twice and make moves ambiguous.
+   Two parents sharing a child would render it twice and make moves ambiguous. Repeats
+   *within one list* are removed first, not refused: the API already runs
+   `deduplicateBlocksOrder` before its checks because such docs exist, so it dedups each
+   `children` array the same way, and the collab store runs the same step before
+   `validateBlockDoc`. Only an id under two different parents (or under a parent and at
+   the top) is an error, so no stored post starts failing its stores.
 3. No cycles (implied by 2 plus the acyclic table, but checked directly, as the bridge's
    list cycle guard does now).
 4. A container's children are of the types and in the count the table allows; a
-   non-container has no `children` (lists keep theirs).
+   non-container has no `children`, except the list types (bullet, ordered and to-do
+   lists), whose children are their items, as today.
 5. An unreferenced block in `blocks` is not an error (restores and dropped blocks pass
    through such states); renderers ignore it.
 
@@ -201,8 +207,10 @@ happening in practice (2.5): it never produces a doc that breaks these rules.
   with **deterministic ids** derived from the container id (`synthesizedItemId`'s rule:
   `<containerId>-<role>`, always ≥ 10 characters), so the same doc gives the same ids on
   every load and the store sees no change. A `column` gets one empty paragraph; a
-  `columns` with fewer than 2 columns gets empty columns up to 2; a gallery left with
-  no images is dropped as a whole (the canvas renders an empty gallery as nothing).
+  `columns` with fewer than 2 columns gets empty columns up to 2. A gallery may be
+  empty (its content is `image*`): the editor shows the canvas's empty-gallery state
+  ("Errors & empty states", "An empty gallery") and the renderer leaves it out, caption
+  included, so nothing is synthesized or dropped for it.
 - **Cycles**: `listsInProgress` becomes `containersInProgress`; the child that closes a
   cycle is dropped like any other bad child. A child referenced twice is converted at its
   first reference only and dropped at the others.
@@ -225,7 +233,8 @@ One predicate, exported from `blocks-spec/nesting.ts`, used by `BlockIdExtension
 `stampFragmentBlockIds` and `pmToBlockDoc`:
 
 > A node is a block when its parent is the doc, a container, or a container's slot, or
-> when it is a `listItem` whose parent is a list.
+> when it is a list's item (`listItem` in a bullet or ordered list, `taskItem` in a
+> to-do list).
 
 - Rule 7 stays: `BlockIdExtension` ignores sync transactions (`isChangeOrigin`), and
   only the originating client stamps; the server stamps anything still missing before a
@@ -282,7 +291,9 @@ rules):
 - **`sanitize`**: still walks the flat map, so nested blocks are covered. Each new type
   gets a `sanitize<Type>Attrs` with an **allowlist of attrs** (unknown attrs deleted,
   enums enforced, numbers clamped, text capped), the way `sanitizeImageAttrs` does.
-  `children` is checked to be an array of strings.
+  `children` is checked to be an array of strings. URLs held in **node attrs** (a
+  button's `href`) need their own `isSafeURL` check: `sanitizePMNode` only checks link
+  marks' `href` today.
 - **`prepareForStore`**: the structural checks of 2.3, after `checkLimits` and before
   the theme block pass. Limits stay as they are: `maxBlockDocBlocks` (5000) counts nested
   blocks too, and per-block JSON depth is now small because children are separate blocks.
@@ -299,9 +310,16 @@ rules):
 - One folder per type, as today. A container renders its children with
   `renderBlock(childId)`; nothing else is needed for depth.
 - **`headingAnchors`** (and any table-of-contents caller) walks the tree, so a heading in
-  a column gets an anchor. `responsiveImage`'s lookups work by `mediaId` and need no
-  walk, but **`ImageSizesContext`** is re-provided by `column` / `media_text` (a column's
-  image is narrower than the text column, so its `sizes` must say so).
+  a column gets an anchor.
+- The other helpers that read only `blocks_order` walk the tree too:
+  **`isFirstImageBlock`** (`blocks/utils/responsiveImage.ts`; the first image in reading
+  order, at any depth, including a cover's or media & text's media, loads eagerly, since a
+  post that opens with a cover has its hero there) and **`firstParagraphText`**
+  (`src/lib/seo.ts`; the description and list excerpt fallback finds a post's first
+  paragraph inside a group or column).
+- `doc.media` lookups work by `mediaId` and need no walk, but **`ImageSizesContext`** is
+  re-provided by `column` / `media_text` (a column's image is narrower than the text
+  column, so its `sizes` must say so).
 - `BlockRenderer`'s trailing-blank-paragraph trim stays top-level only.
 - Missing media (#352): a block whose `mediaId` has no entry in `doc.media` because the
   media was deleted is not rendered, with its caption. The API has to tell "deleted"
@@ -346,11 +364,16 @@ Constraints this puts on #315, and on this design until #315 decides:
   paragraphs).
 - **No id-less wrappers between a container and its children** in Block Spec. A slot
   (2.4) exists only on the PM side and is flattened by the bridge.
-- **Moves are by id.** Dragging a block into another column is "remove id from one
-  `children`, insert into another"; the "referenced at most once" rule (2.3) is what a
-  map design needs to make concurrent moves resolvable (two peers moving the same block
-  must not leave it in two parents; in the fragment design Yjs's tree already guarantees
-  that, in a map design the store must enforce it).
+- **Moves are by id, and Yjs has no move.** Dragging a block into another column is
+  "remove from one `children`, insert into another". In the fragment that is a delete
+  plus an insert of a copy, so when two peers move the same block at once both inserts
+  survive: the block appears twice, the two copies share a `data-block-id`, and
+  `BlockIdExtension` / `stampFragmentBlockIds` give one of them a new id. The result is
+  duplicated content, never lost content, and the "referenced at most once" rule (2.3)
+  still holds, because the copies have different ids. Top-level drags behave this way
+  today. #417 pins it with a relay test and accepts it. A map design could do better
+  with a real move (one `children` entry rewritten, last writer wins), which is a point
+  in favour of #315 adopting maps, not something this design depends on.
 
 If #315 lands first and changes the id rules or how containers are bound, the foundation
 issue updates 2.5–2.6 before it starts; the Block Spec shape above does not change either
@@ -434,7 +457,8 @@ What the canvas asks for once there are containers ("Keyboard", "Moving between 
 - Esc selects the block around the caret; Esc again selects its container, up to the top;
   ↵ on a selected container steps into its first block; ↑↓ move between sibling blocks.
 - The gutter (+ and drag handle) follows the hovered block at any depth; drag and drop
-  works between slots (into another column), limited by the nesting table.
+  works between slots (into another column), limited by the nesting table. Two people
+  moving the same block at once get two copies, not a loss (2.12, "Moves are by id").
 - Remote carets, selections and name labels stay readable inside nested blocks: no
   `overflow: hidden` that clips a label at a column edge; a label that would overflow
   flips side.
@@ -469,7 +493,7 @@ tests at each step including the collab round trip.
 | Embed | flow | `provider`, `ref`, `title`, `caption` | Section 5. |
 | Columns / column | container | 2.2 | Stack in order on phones. |
 | Group | container | `style`, `align` | |
-| Buttons | flow | `align` (`left`/`center`); buttons as child nodes (`button`: `href`, `variant`, label text) | Not a container in Block Spec: the buttons are parts, kept in `pm`, hrefs checked by the link rules. |
+| Buttons | flow | `align` (`left`/`center`); buttons as child nodes (`button`: `href`, `variant`, label text) | Not a container in Block Spec: the buttons are parts, kept in `pm`. Their `href` is a node attr, which `sanitizePMNode` doesn't check today (it checks link marks only), so the Go side adds an `isSafeURL(href, safeHrefSchemes)` check on `button` nodes. |
 | Spacer | flow | `size` (a theme spacing step, not px) | |
 | Cover | container | 2.2 | Overlay 0–80 in steps of 5. |
 | Media & text | container | 2.2 | Media above text on phones. |
@@ -498,8 +522,13 @@ Each is confirmed (or changed) as the first acceptance item of its sub-issue.
   youtube.com") with no third-party request, not even a thumbnail. A small script builds
   the iframe on click, from a URL template per provider, with `referrerpolicy`,
   `sandbox` where the provider allows it, and `loading`; X is a card that loads the
-  provider's widget on click. The public CSP's `frame-src` (and `script-src` for X) lists
-  only the allowed providers.
+  provider's widget on click.
+- **The public site has no CSP today** (`src/middleware/csp.ts` covers the admin and
+  account pages only). #425 adds one for public pages with a single directive,
+  `frame-src` limited to the allowed providers' embed hosts, so iframes can only come
+  from them. No other directive, so themes' scripts, styles and fonts are unaffected.
+  X's widget script can't be limited without a `script-src` that would constrain themes;
+  that stays out of scope, and the script is only ever requested after a click.
 
 **Custom HTML is admin-only, enforced by the server**:
 
