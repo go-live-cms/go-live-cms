@@ -184,6 +184,7 @@ function DiffList({ list }: { list: ListDiff }) {
           <>
             <ItemMarker status={item.status} moved={item.moved} />
             <DiffText segments={item.text} />
+            {item.attrs && <AttrNotes attrs={item.attrs} />}
             {item.lists.map((nested, j) => (
               <DiffList key={j} list={nested} />
             ))}

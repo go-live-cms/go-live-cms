@@ -27,7 +27,7 @@ export const ids = {
   nestedItem: "blk-item-000003",
   numbers: "blk-numbers-0001",
   item4: "blk-item-000004",
-  callout: "blk-callout-0001",
+  sidenote: "blk-sidenote-0001",
   outro: "blk-outro-000001",
 } as const
 
@@ -53,7 +53,7 @@ export function richDoc(): BlockDocV1 {
       ids.image,
       ids.bullets,
       ids.numbers,
-      ids.callout,
+      ids.sidenote,
       ids.outro,
     ],
     blocks: {
@@ -103,12 +103,12 @@ export function richDoc(): BlockDocV1 {
       },
       [ids.numbers]: { id: ids.numbers, type: "ordered_list", version: 1, attrs: {}, children: [ids.item4] },
       [ids.item4]: { id: ids.item4, type: "list_item", version: 1, attrs: { text: "Numbered" } },
-      [ids.callout]: {
-        id: ids.callout,
-        type: "callout",
+      [ids.sidenote]: {
+        id: ids.sidenote,
+        type: "sidenote",
         version: 1,
         attrs: {
-          pm: { type: "callout", attrs: { "data-block-id": ids.callout, variant: "warn" }, content: [text("Theme block")] },
+          pm: { type: "sidenote", attrs: { "data-block-id": ids.sidenote, variant: "warn" }, content: [text("Theme block")] },
           text: "Theme block",
           variant: "warn",
         },

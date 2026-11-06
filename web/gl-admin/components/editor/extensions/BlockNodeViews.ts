@@ -3,8 +3,13 @@ import type { Node as PMNode } from "@tiptap/pm/model"
 import { NodeSelection, Plugin, PluginKey, TextSelection } from "@tiptap/pm/state"
 import { Decoration, DecorationSet, type EditorView, type NodeView } from "@tiptap/pm/view"
 import {
+  CALLOUT_TONE_ICONS,
+  CALLOUT_TONE_LABELS,
+  CALLOUT_TONES,
   CITE_MAX_LENGTH,
   capCite,
+  normalizeCalloutTone,
+  type CalloutTone,
   GROUP_ALIGNS,
   GROUP_STYLES,
   isGroupAlign,
@@ -37,10 +42,13 @@ export const BlockNodeViews = Extension.create({
           nodeViews: {
             image: (node, view, getPos) => new ImageView(node, view, getPos as () => number | undefined, editor),
             blockquote: (node, view, getPos) => new QuoteView(node, view, getPos as () => number | undefined),
+            pullQuote: (node, view, getPos) => new QuoteView(node, view, getPos as () => number | undefined, "pullQuote"),
             group: (node, view, getPos) => new GroupView(node, view, getPos as () => number | undefined),
+            callout: (node, view, getPos) => new CalloutView(node, view, getPos as () => number | undefined),
           },
-          // Marks the quote the cursor is in, so its empty citation field shows, and the
-          // group it is in (or that is selected), so its settings show.
+          // Marks the quote or pull quote the cursor is in, so its empty citation field
+          // shows, and the group or callout it is in (or the selected group), so its
+          // settings show.
           decorations: (state) => {
             if (!editor.isEditable) return null
             const { selection } = state
@@ -55,7 +63,7 @@ export const BlockNodeViews = Extension.create({
             if (selection instanceof NodeSelection && selection.node.type.name === "group") mark(selection.from, selection.node)
             for (let depth = $from.depth; depth > 0; depth--) {
               const name = $from.node(depth).type.name
-              if (name === "blockquote" || name === "group") mark($from.before(depth), $from.node(depth))
+              if (MARKED_WHILE_IN.has(name)) mark($from.before(depth), $from.node(depth))
             }
             return marked.length > 0 ? DecorationSet.create(state.doc, marked) : null
           },
@@ -64,6 +72,9 @@ export const BlockNodeViews = Extension.create({
     ]
   },
 })
+
+/** The nodes whose view shows a field or settings while the cursor is in them. */
+const MARKED_WHILE_IN = new Set(["blockquote", "pullQuote", "group", "callout"])
 
 /** The `data-block-id` the node's renderHTML would put on it (BlockIdExtension). */
 function setBlockId(dom: HTMLElement, node: PMNode) {
@@ -153,6 +164,11 @@ class ImageView implements NodeView {
   }
 }
 
+/**
+ * A quote (#346) or a pull quote (#419): its text, then the citation field. The two have
+ * the same `cite` rules (`normalizeCite`), so they share the view; a pull quote is a
+ * textblock, so its text goes straight into its `<blockquote>`.
+ */
 class QuoteView implements NodeView {
   dom: HTMLElement
   contentDOM: HTMLElement
@@ -163,9 +179,18 @@ class QuoteView implements NodeView {
     private node: PMNode,
     private view: EditorView,
     private getPos: () => number | undefined,
+    kind: "quote" | "pullQuote" = "quote",
   ) {
-    this.dom = document.createElement("blockquote")
-    this.contentDOM = document.createElement("div")
+    if (kind === "pullQuote") {
+      this.dom = document.createElement("figure")
+      this.dom.className = "editor-pullquote"
+      this.dom.dataset.type = "pull-quote"
+      this.contentDOM = document.createElement("blockquote")
+      this.contentDOM.className = "editor-pullquote__text"
+    } else {
+      this.dom = document.createElement("blockquote")
+      this.contentDOM = document.createElement("div")
+    }
     this.citeWrap = document.createElement("div")
     this.citeWrap.className = "editor-quote__cite"
     this.citeWrap.contentEditable = "false"
@@ -173,8 +198,8 @@ class QuoteView implements NodeView {
     this.input.type = "text"
     // Two UTF-16 units per code point at most; capCite enforces the real cap.
     this.input.maxLength = CITE_MAX_LENGTH * 2
-    this.input.placeholder = "Add a citation"
-    this.input.setAttribute("aria-label", "Quote citation")
+    this.input.placeholder = kind === "pullQuote" ? "Citation (optional)" : "Add a citation"
+    this.input.setAttribute("aria-label", kind === "pullQuote" ? "Pull quote citation" : "Quote citation")
     this.citeWrap.append(this.input)
     this.dom.append(this.contentDOM, this.citeWrap)
 
@@ -326,6 +351,120 @@ class GroupView implements NodeView {
     // Not hidden or disabled here: `editable` changes without an update (a demotion or a
     // promotion, #313). The editor's `[contenteditable="false"]` style hides the settings,
     // and `set` checks `editable` when a button is used.
+  }
+
+  update(node: PMNode) {
+    if (node.type !== this.node.type) return false
+    this.node = node
+    this.render()
+    return true
+  }
+
+  stopEvent(event: Event) {
+    const target = event.target as globalThis.Node | null
+    return Boolean(target && this.settings.contains(target))
+  }
+
+  ignoreMutation(mutation: MutationRecord | { type: "selection"; target: globalThis.Node }) {
+    if (mutation.type === "selection") return false
+    return !this.contentDOM.contains(mutation.target)
+  }
+}
+
+const SVG_NS = "http://www.w3.org/2000/svg"
+
+/** The tone's icon, decorative (`aria-hidden`): the tone is said in words beside it. */
+export function calloutIcon(tone: CalloutTone, size = 18): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg")
+  svg.setAttribute("width", String(size))
+  svg.setAttribute("height", String(size))
+  svg.setAttribute("viewBox", "0 0 24 24")
+  svg.setAttribute("fill", "none")
+  svg.setAttribute("stroke", "currentColor")
+  svg.setAttribute("stroke-width", "1.75")
+  svg.setAttribute("stroke-linecap", "round")
+  svg.setAttribute("stroke-linejoin", "round")
+  svg.setAttribute("aria-hidden", "true")
+  const path = document.createElementNS(SVG_NS, "path")
+  path.setAttribute("d", CALLOUT_TONE_ICONS[tone])
+  svg.append(path)
+  return svg
+}
+
+/**
+ * A callout (#419): the tone's icon, its paragraphs, and while the cursor is in it, its
+ * Type setting (Info, Success, Warning, Danger), as on the blocks canvas's "Callout" row.
+ * The settings are the block's own, like Group's (the post sidebar has no Block tab); the
+ * block toolbar has the same choice (`BlockTypeToolbar`). Each button is one
+ * `setNodeMarkup`, so one Yjs update; last writer wins, like any node attribute.
+ */
+class CalloutView implements NodeView {
+  dom: HTMLElement
+  contentDOM: HTMLElement
+  private icon: HTMLElement
+  private settings: HTMLElement
+  private buttons = new Map<CalloutTone, HTMLButtonElement>()
+  private tone: CalloutTone | null = null
+
+  constructor(
+    private node: PMNode,
+    private view: EditorView,
+    private getPos: () => number | undefined,
+  ) {
+    this.dom = document.createElement("div")
+    this.dom.className = "editor-callout"
+    this.dom.dataset.type = "callout"
+    this.icon = document.createElement("span")
+    this.icon.className = "editor-callout__icon"
+    this.icon.contentEditable = "false"
+    this.settings = document.createElement("div")
+    this.settings.className = "editor-callout__settings"
+    this.settings.contentEditable = "false"
+    this.settings.setAttribute("role", "group")
+    this.settings.setAttribute("aria-label", "Callout type")
+    const label = document.createElement("span")
+    label.className = "editor-callout__label"
+    label.textContent = "Type"
+    label.setAttribute("aria-hidden", "true")
+    this.settings.append(label)
+    for (const tone of CALLOUT_TONES) {
+      const button = document.createElement("button")
+      button.type = "button"
+      button.className = "editor-callout__option"
+      button.dataset.tone = tone
+      button.append(calloutIcon(tone, 14), document.createTextNode(CALLOUT_TONE_LABELS[tone]))
+      // Keep the cursor where it is.
+      button.addEventListener("mousedown", (event) => event.preventDefault())
+      button.addEventListener("click", () => this.set(tone))
+      this.buttons.set(tone, button)
+      this.settings.append(button)
+    }
+    this.contentDOM = document.createElement("div")
+    this.contentDOM.className = "editor-callout__content"
+    this.dom.append(this.icon, this.contentDOM, this.settings)
+    this.render()
+  }
+
+  private set(tone: CalloutTone) {
+    // `editable` can change without an update (a demotion, #313).
+    if (!this.view.editable) return
+    const pos = this.getPos()
+    const current = pos === undefined ? null : this.view.state.doc.nodeAt(pos)
+    if (pos === undefined || !current || current.type.name !== "callout" || current.attrs.tone === tone) return
+    this.view.dispatch(this.view.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, tone }))
+  }
+
+  private render() {
+    const tone = normalizeCalloutTone(this.node.attrs.tone)
+    this.dom.dataset.tone = tone
+    setBlockId(this.dom, this.node)
+    if (tone !== this.tone) {
+      this.icon.replaceChildren(calloutIcon(tone))
+      this.tone = tone
+    }
+    for (const [value, button] of this.buttons) button.setAttribute("aria-pressed", String(value === tone))
+    // Like Group's: not hidden here (`editable` changes without an update, #313); the
+    // editor's `[contenteditable="false"]` style hides the settings, and `set` checks.
   }
 
   update(node: PMNode) {

@@ -19,6 +19,10 @@ export type KnownBlockType =
   | "ordered_list"
   | "list_item"
   | "group"
+  | "callout"
+  | "pull_quote"
+  | "todo_list"
+  | "todo_item"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -64,6 +68,43 @@ export function isGroupStyle(value: unknown): value is GroupStyle {
 
 export function isGroupAlign(value: unknown): value is GroupAlign {
   return typeof value === "string" && (GROUP_ALIGNS as readonly string[]).includes(value)
+}
+
+/**
+ * Callout (#419): a note set apart from the text, in one of four tones. Each tone has its
+ * own icon and a visually hidden label ("Info: ") on the public page, so the meaning never
+ * rests on colour. Stored on every callout (`attrs.tone`); a missing or unknown one reads
+ * as `info`.
+ */
+export const CALLOUT_TONES = ["info", "success", "warning", "danger"] as const
+export type CalloutTone = (typeof CALLOUT_TONES)[number]
+export const DEFAULT_CALLOUT_TONE: CalloutTone = "info"
+/** What the menus, the settings and the hidden label call each tone. */
+export const CALLOUT_TONE_LABELS: Record<CalloutTone, string> = {
+  info: "Info",
+  success: "Success",
+  warning: "Warning",
+  danger: "Danger",
+}
+
+/**
+ * Each tone's icon (the blocks canvas's, 24×24, stroke 1.75, round caps), shared by the
+ * editor's view and the public renderer so both show the same one.
+ */
+export const CALLOUT_TONE_ICONS: Record<CalloutTone, string> = {
+  info: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 16v-4M12 8h.01",
+  success: "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M8 12l3 3 5-6",
+  warning: "M12 3 2 20h20zM12 10v4M12 17h.01",
+  danger: "M8 3h8l5 5v8l-5 5H8l-5-5V8zM12 8v5M12 16h.01",
+}
+
+export function isCalloutTone(value: unknown): value is CalloutTone {
+  return typeof value === "string" && (CALLOUT_TONES as readonly string[]).includes(value)
+}
+
+/** A stored, typed or pasted tone as the palette has it; anything else is the default. */
+export function normalizeCalloutTone(value: unknown): CalloutTone {
+  return isCalloutTone(value) ? value : DEFAULT_CALLOUT_TONE
 }
 
 /** The marks a caption may carry, here and in the API sanitizer (`captionMarks`). */
@@ -122,7 +163,12 @@ export function normalizeBlockColor(value: unknown): BlockColor | null {
  * anchor rather than a broken one). Heading ids (#351) never take one of these.
  */
 export function blockAnchorId(blockId: unknown): string | null {
-  return typeof blockId === "string" && /^[A-Za-z0-9_-]{10,128}$/.test(blockId) ? `b-${blockId}` : null
+  return isSafeBlockId(blockId) ? `b-${blockId}` : null
+}
+
+/** A block id that is safe in an HTML id and a URL fragment as is: 10–128 letters, digits, `-`, `_`. */
+export function isSafeBlockId(blockId: unknown): blockId is string {
+  return typeof blockId === "string" && /^[A-Za-z0-9_-]{10,128}$/.test(blockId)
 }
 
 /**
@@ -233,6 +279,47 @@ export type GroupBlock = BaseBlock<
 >
 
 /**
+ * Callout (#419), a flow block: its paragraphs live in its `pm` (like a quote's), the
+ * tone is canonical in `attrs.tone`, never in `pm`.
+ */
+export type CalloutBlock = BaseBlock<
+  "callout",
+  {
+    pm?: any
+    text?: string
+    /** Absent or unknown: "info". */
+    tone?: CalloutTone
+  }
+>
+
+/**
+ * Pull quote (#419), a flow block: one line of text set large, with an optional
+ * citation by the quote's rules (`normalizeCite`, `CITE_MAX_LENGTH`), canonical in
+ * `attrs.cite`, never in `pm`.
+ */
+export type PullQuoteBlock = BaseBlock<
+  "pull_quote",
+  {
+    pm?: any
+    text?: string
+    cite?: string
+  }
+>
+
+/** To-do list (#419): a list whose `children` are its `todo_item`s, like a bulleted list. */
+export type TodoListBlock = BaseBlock<"todo_list", {}>
+
+/** One item of a to-do list: its text in `pm`, its state in `attrs.checked` (never in `pm`). */
+export type TodoItemBlock = BaseBlock<
+  "todo_item",
+  {
+    pm?: any
+    text?: string
+    checked?: boolean
+  }
+>
+
+/**
  * Custom block type for theme-defined blocks (e.g., alert, callout, etc.)
  * Preserves the full ProseMirror JSON for round-trip fidelity.
  */
@@ -258,6 +345,10 @@ export type Block =
   | OrderedListBlock
   | ListItemBlock
   | GroupBlock
+  | CalloutBlock
+  | PullQuoteBlock
+  | TodoListBlock
+  | TodoItemBlock
   | CustomBlock
 
 export interface BlockDocV1 {
@@ -299,17 +390,54 @@ export const zHeading = zBase.extend({
 // Image and blockquote have a v2 (#346); readers take both.
 const zVersion1or2 = z.union([z.literal(1), z.literal(2)])
 
+const zCite = z
+  .string()
+  .refine((cite) => [...cite].length <= CITE_MAX_LENGTH, `at most ${CITE_MAX_LENGTH} characters`)
+  .optional()
+
 export const zBlockquote = zBase.extend({
   type: z.literal("blockquote"),
   version: zVersion1or2,
   attrs: z.object({
     pm: z.any().optional(),
     text: z.string().optional(),
-    cite: z
-      .string()
-      .refine((cite) => [...cite].length <= CITE_MAX_LENGTH, `at most ${CITE_MAX_LENGTH} characters`)
-      .optional(),
+    cite: zCite,
     blockColor: zBlockColor,
+  }),
+})
+
+// #419. The bridge always writes a tone from the palette and a boolean `checked`, so an
+// unknown value only comes from somewhere else, and is refused.
+export const zCallout = zBase.extend({
+  type: z.literal("callout"),
+  attrs: z.object({
+    pm: z.any().optional(),
+    text: z.string().optional(),
+    tone: z.enum(CALLOUT_TONES).optional(),
+  }),
+})
+
+export const zPullQuote = zBase.extend({
+  type: z.literal("pull_quote"),
+  attrs: z.object({
+    pm: z.any().optional(),
+    text: z.string().optional(),
+    cite: zCite,
+  }),
+})
+
+export const zTodoList = zBase.extend({
+  type: z.literal("todo_list"),
+  attrs: z.object({}),
+  children: z.array(zBlockID).optional(),
+})
+
+export const zTodoItem = zBase.extend({
+  type: z.literal("todo_item"),
+  attrs: z.object({
+    pm: z.any().optional(),
+    text: z.string().optional(),
+    checked: z.boolean().optional(),
   }),
 })
 
@@ -406,6 +534,10 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   ordered_list: zOrderedList,
   list_item: zListItem,
   group: zGroup,
+  callout: zCallout,
+  pull_quote: zPullQuote,
+  todo_list: zTodoList,
+  todo_item: zTodoItem,
 }
 
 // A known type must match its own schema; only other types fall back to the custom

@@ -247,8 +247,26 @@ kept so references in code stay valid.
 
 - Every block node type needs the **`data-block-id`** attr (added globally by
   `BlockIdExtension` to paragraph/heading/blockquote/codeBlock/horizontalRule/image/
-  bullet_list/ordered_list/listItem and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
+  bullet_list/ordered_list/listItem, callout/pullQuote/taskList/taskItem (#419) and every container, `CONTAINER_NODE_NAMES`). Custom/theme nodes must declare it too or
   `schema.nodeFromJSON` throws "Unsupported attribute".
+- **Callout, pull quote, to-do list (#419, three flow blocks).** Schema in `schemaExtensions`
+  (`components/editor/extensions/Callout.ts`, `PullQuote.ts`, `TodoList.ts`: TipTap's TaskList/
+  TaskItem 3.4.2, `nested: false`), views in `BlockNodeViews.ts` (callout: icon + Type buttons
+  while the cursor is in it; pull quote: the quote's citation field), TaskItem's own checkbox
+  view (reverts a click when not editable). Each one's own attr is **canonical on the block,
+  never in its `pm`**, like a quote's `cite`: `tone` (always written, `normalizeCalloutTone`:
+  unknown → info), `cite` (`normalizeCite`), `checked` (a boolean, always written). The to-do
+  list is a **third list type** (`LIST_ITEMS` in `nesting.ts`): `taskItem` is a block only in a
+  `taskList` (`isBlockNode`), the bridge's list path builds `taskItem`s (a paragraph child is
+  wrapped, a `list_item` child dropped and reported, an empty list gets one synthesized item,
+  `<listId>-list-item`). **Stale clients:** a bundle from before #419 lacks the four node types;
+  the fingerprint guard (#416) refuses it (`schemaFingerprint.test.ts` pins that each one changes
+  the fingerprint). **Old data:** before #419 tests used `callout` as an unknown custom type
+  (now `sidenote`); a stored pre-#376 custom block named `callout` now reads as the core callout
+  (its inline content fails `paragraph+`, so it is dropped at seed and kept, #213). Tests:
+  `blockBridge.textBlocks.test.ts`, `blocks-spec/textBlocks.test.ts`,
+  `components/editor/extensions/textBlocks.test.ts` (commands, views, read-only, paste) and
+  `textBlocks.collab.test.ts` (two users on the relay, the stored doc, a restart).
 - **Containers (#414, `blocks-spec/nesting.ts`, design `docs/design/block-library.md` 2.1–2.11).**
   A container (Group today; columns, details, … later, each a row of the table) holds its
   child blocks **by id** in `children`, each a full block in the flat `blocks` map, like a

@@ -52,13 +52,23 @@ const PM_NODE: Record<string, string> = {
   blockquote: "blockquote",
   code_block: "codeBlock",
   divider: "horizontalRule",
+  // #419: TaskItem's own input rule wraps the line in a to-do list.
+  todo_list: "taskList",
 }
 
 const shortcuts = CORE_BLOCKS.filter((entry) => entry.markdown)
 
 describe("Markdown shortcuts shown in the menus", () => {
-  it("are the design's list: # to ######, -, 1., >, ``` and ---", () => {
-    expect(shortcuts.map((e) => e.markdown)).toEqual(["#", "##", "###", "####", "#####", "######", "-", "1.", ">", "```", "---"])
+  it("are the design's list: # to ######, -, 1., [], >, ``` and ---", () => {
+    expect(shortcuts.map((e) => e.markdown)).toEqual(["#", "##", "###", "####", "#####", "######", "-", "1.", "[]", ">", "```", "---"])
+  })
+
+  it("[x] makes a to-do that is already done (#419)", () => {
+    const ed = makeEditor(true)
+    type(ed, "[x] ")
+    const item = ed.state.doc.firstChild!.firstChild!
+    expect(item.type.name).toBe("taskItem")
+    expect(item.attrs.checked).toBe(true)
   })
 
   it.each(shortcuts.map((e) => [e.markdown!, e] as const))("%s makes the block it's shown next to", (markdown, entry) => {

@@ -216,6 +216,15 @@ interface BlockComponentProps {
   eagerly) and `seo.ts`'s `firstParagraphText`. A container may re-provide
   `ImageSizesContext` for its children when they render narrower. Group's markup:
   `div.group` plus `is-tinted`, `alignwide` / `alignfull`.
+- **Callout, pull quote, to-do list (#419, the canvas's "Published · text"):** `callout/` is
+  `div.callout.is-<tone>` with `role="note"`, the tone's icon (`aria-hidden`, the same path as
+  the editor's, `CALLOUT_TONE_ICONS`) and `.callout-body` with one `<p>` per paragraph, the
+  first starting with `<span class="sr-only">Warning: </span>`; an unknown tone renders as
+  info. `pull_quote/` is `figure.pullquote > blockquote > p` plus the citation as
+  `<figcaption>` (plain text). `todo_list/` is `ul.todo-list > li.todo-item(.is-checked)` with a
+  **disabled** checkbox (readers can't toggle it, it isn't a tab stop) labelled by the item's
+  text (`aria-labelledby` = `todo-<item id>`, or `aria-label` for an id that isn't HTML-safe).
+  The default theme styles them (`themes/default/styles/theme.css`).
 - **`anchorId`** (#356, "Copy link to block"): every top-level block's root element gets
   it as its `id`, so `/<post url>#b-<block id>` lands on it. A heading keeps its slug id
   (#351) and puts the anchor on an empty `<span class="gl-block-anchor">` at its start.

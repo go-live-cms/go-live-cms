@@ -263,3 +263,96 @@ main {
 .gl-color-purple-background { background: var(--block-purple-background); color: var(--text-color); padding: 0.125em 0.5em; border-radius: 4px; }
 .gl-color-pink-background { background: var(--block-pink-background); color: var(--text-color); padding: 0.125em 0.5em; border-radius: 4px; }
 .gl-color-red-background { background: var(--block-red-background); color: var(--text-color); padding: 0.125em 0.5em; border-radius: 4px; }
+
+/* Callout, pull quote, to-do list (#419): core blocks every theme styles. The callout's
+   tone is also said in words for screen readers (.sr-only), so it never rests on colour;
+   its fills are light in both themes, with dark text on them. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.callout {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  margin: 1.5em 0;
+  padding: 16px 20px;
+  border-radius: 8px;
+  background: #e6f4fe;
+  color: #21201c;
+}
+.callout > svg {
+  margin-top: 0.15em;
+  color: #0d74ce;
+}
+.callout.is-success {
+  background: #e9f6e9;
+}
+.callout.is-success > svg {
+  color: #2a7e3b;
+}
+.callout.is-warning {
+  background: #fff7c2;
+}
+.callout.is-warning > svg {
+  color: #ab6400;
+}
+.callout.is-danger {
+  background: #feebe7;
+}
+.callout.is-danger > svg {
+  color: #d13415;
+}
+.callout-body > * {
+  margin: 0;
+}
+.callout-body > * + * {
+  margin-top: 0.8em;
+}
+.pullquote {
+  margin: 2em 0;
+  padding-top: 1em;
+  border-top: 3px solid currentColor;
+  text-align: center;
+}
+.pullquote blockquote {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-style: normal;
+}
+.pullquote blockquote::before {
+  content: none;
+}
+.pullquote p {
+  margin: 0;
+  font-size: 1.5em;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.pullquote figcaption {
+  margin-top: 0.75em;
+  font-size: 0.9em;
+  opacity: 0.75;
+}
+.todo-list {
+  padding-left: 0;
+  list-style: none;
+}
+.todo-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6em;
+}
+.todo-list input[type="checkbox"] {
+  flex: none;
+  margin: 0.35em 0 0;
+}
+.todo-list .is-checked > .todo-item__text {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
