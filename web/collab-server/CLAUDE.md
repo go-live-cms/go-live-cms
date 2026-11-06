@@ -56,8 +56,24 @@ ever sees it.
 
 doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, aud
 `golive.admin-ws`, `ws_ticket`, exp, `doc === documentName`) → **burn the jti**
-(`TicketReplayGuard`, before the lookup) → `ticketIdentity` → `fetchDocAccess`
-(`GET /internal/users/:id/access`, 3s timeout, `X-Request-ID`) → mode → epoch check.
+(`TicketReplayGuard`, before the lookup) → `ticketIdentity` → **schema fingerprint** (#416)
+→ `fetchDocAccess` (`GET /internal/users/:id/access`, 3s timeout, `X-Request-ID`) → mode →
+epoch check.
+
+- **Schema fingerprint (#416):** the auth message is JSON `{ticket, schema}`
+  (`gl-admin/lib/collaboration/schemaFingerprint.ts`, `decodeCollabAuthToken`; a bare
+  string is a pre-#416 client's ticket with no fingerprint). `schema` must equal
+  `schemaFingerprint(schema)` of the schema this server converts with
+  (`collab.schemaFingerprint`, logged in full as `schema_fingerprint` on
+  `collab_listening`); anything else, or none, is refused with **`schema-mismatch`**
+  before the access lookup and before the doc is loaded (the epoch check loads it, and a
+  load may seed and store), so the refused editor costs no write. Open connections aren't
+  re-checked: the fingerprint only changes with a new bundle, whose restart reconnects
+  every client. The admin bundle and this one must come from the same commit
+  (`process.test.ts` checks the bundle's fingerprint against the admin's schema's). See
+  rule 10 in `gl-admin/lib/collaboration/CLAUDE.md`. A tab from before #416 doesn't know
+  the reason and keeps retrying with backoff (≤30s), each refused (`ws_deny`,
+  `client_schema: "missing"`) until it is reloaded or closed: noisy, never a write.
 
 - **Mode** (`accessMode`): `can_edit: true` (admins, editors, a contributor on their own
   post, #135, or with an edit access grant on a published post, #321) → read-write. Any other content role (`admin`/`editor`/`contributor`,
@@ -65,8 +81,11 @@ doc name (`isCollabDocName`) → ticket present → `verifyTicket` (sig, iss, au
   Hocuspocus drops that connection's updates. Anything else, a 403/404 from the API, or
   a bad ticket → denied.
 - **Reasons sent to the client** (`DENY`): `permission-denied`, `access-unavailable` (the
-  API couldn't answer: retry with a fresh ticket), `stale-epoch` (see below). Each
-  denial logs `ws_deny` with the request id, user id and client context, never the ticket.
+  API couldn't answer: retry with a fresh ticket), `stale-epoch` (see below),
+  `post-trashed` (#327), `schema-mismatch` (#416: reload, never retry). Each denial logs
+  `ws_deny` with the request id, user id and client context, never the ticket; a schema
+  mismatch adds `client_schema` / `server_schema` (`fingerprintForLog`: 12 characters,
+  `missing` or `invalid`, never what the client sent otherwise).
 - The replay guard is in memory: **one collab process** (Hocuspocus keeps live docs in
   memory anyway).
 - The context carries the ticket's `issuedAt`: the access re-check sends it again.

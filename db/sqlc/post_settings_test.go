@@ -264,7 +264,8 @@ func TestRestorePostSettingsTx(t *testing.T) {
 	require.Equal(t, "Original title", working.Title)
 	require.Equal(t, f.media.ID, *working.FeaturedImage.ID)
 	require.Equal(t, thumbnailURL(f.media), working.FeaturedImage.URL)
-	require.Equal(t, []int64{f.terms[1].ID}, working.TermIDs)
+	// A post of type "post" left without a category gets the default one (#331).
+	require.Equal(t, []int64{f.terms[1].ID}, withoutDefaultCategory(t, working.TermIDs))
 	featured, err := testQueries.GetFeaturedImage(ctx, f.post.ID)
 	require.NoError(t, err)
 	require.Equal(t, f.media.ID, featured.MediaID)
@@ -427,4 +428,19 @@ func TestRefreshPublishedSettings(t *testing.T) {
 	post, err := testQueries.GetPost(ctx, draft.post.ID)
 	require.NoError(t, err)
 	require.False(t, post.PublishedSettings.Valid)
+}
+
+// withoutDefaultCategory drops the default category's id (#331: Uncategorized, which
+// a post of type "post" gets when it has no category) from a sorted term id list.
+func withoutDefaultCategory(t *testing.T, ids []int64) []int64 {
+	t.Helper()
+	category, err := testQueries.GetTaxonomyType(context.Background(), CategoryTaxonomy)
+	require.NoError(t, err)
+	kept := []int64{}
+	for _, id := range ids {
+		if !category.DefaultTermID.Valid || id != category.DefaultTermID.Int64 {
+			kept = append(kept, id)
+		}
+	}
+	return kept
 }

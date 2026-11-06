@@ -62,6 +62,8 @@ SELECT
   mi.post_id, mi.term_id, mi.post_type, mi.url,
   p.published_settings AS post_published_settings,
   p.title AS post_title, p.slug AS post_slug, p.post_type AS post_post_type, p.post_status AS post_status,
+  -- The post's published category, for /:category/:slug URLs (#331).
+  coalesce(golive_post_category_slug(p.id, true), '')::text AS post_category_slug,
   ppt.public AS post_type_public, ppt.is_active AS post_type_active,
   t.name AS term_name, t.slug AS term_slug, tt.name AS taxonomy_name, tt.public AS taxonomy_public,
   apt.label AS archive_label, apt.public AS archive_public, apt.is_active AS archive_active

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useGoLive } from "@gl-admin/contexts/GoLiveContext"
+import type { PostUrlStructure } from "@gl-admin/lib/api/settings"
 import { bulkPosts, getCreditedAuthors, getPostCounts, getPosts, searchPosts } from "@gl-admin/lib/api/posts"
 import { getCollaborations } from "@gl-admin/lib/api/postAccess"
 import { getAllTaxonomyTerms } from "@gl-admin/lib/api/taxonomies"
@@ -586,7 +587,7 @@ function PostsList({ typeName, postType, title }: ListProps) {
 
 // Phone width: the table becomes a list of links (the 375 board).
 // `user` is set for contributors, whose cards also say whether they can edit.
-function PostCards({ posts, structure, user }: { posts: Post[] | null; structure: "id" | "slug"; user: PermissionUser | null }) {
+function PostCards({ posts, structure, user }: { posts: Post[] | null; structure: PostUrlStructure; user: PermissionUser | null }) {
   const me = useAuthUser()
   if (!posts) return null
   return (

@@ -9,6 +9,7 @@ import { safeExecute } from "../lib/theme-api"
 import type { ThemeFunctions, ThemeFunctionsContext } from "../lib/theme-api"
 import { applyAdminCsp, isAccountPagePath, isAdminPath } from "./csp"
 import { isApiProxyPath, proxyToApi } from "./apiProxy"
+import { redirectOn404 } from "./redirects"
 import { shouldNoindex } from "../lib/seo"
 import { SERVER_MEDIA_URL } from "../../gl-admin/lib/server-api-url"
 import { hocuspocusUrl } from "../../gl-admin/lib/collaboration/backend"
@@ -172,7 +173,8 @@ async function handleRequest(context: APIContext, next: MiddlewareNext, proxied:
     })
   }
 
-  return withRobotsHeader(await next(), url.pathname)
+  // A page the site answers 404 for may have moved (#331, redirects.ts).
+  return withRobotsHeader(await redirectOn404(context.request, url, await next()), url.pathname)
 }
 
 // X-Robots-Tag: noindex on error responses (404/500, whatever the theme's

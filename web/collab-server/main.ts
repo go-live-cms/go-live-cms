@@ -116,6 +116,8 @@ logEvent("info", "collab_listening", {
   yjs_single_instance: true,
   // The theme blocks this bundle was built with (#376); process.test.ts checks the list.
   theme_blocks: installedThemeBlocks.map((block) => block.type),
+  // What editors must send to connect (#416); process.test.ts checks it is the admin's.
+  schema_fingerprint: collab.schemaFingerprint,
 })
 
 let stopping = false

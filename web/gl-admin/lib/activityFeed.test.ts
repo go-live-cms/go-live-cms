@@ -77,6 +77,23 @@ describe("describeActivity", () => {
     expect(line({ object_type: "settings", verb: "settings_updated", post: undefined, payload: { fields: ["site_title"] } })).toBe("Ana Costa updated the site settings")
   })
 
+  // #331: no title join for terms and redirects, so generic lines.
+  it("reads tag merges and redirects", () => {
+    const merged = describeActivity(
+      event({ object_type: "term", verb: "terms_merged", object_id: 5, post: undefined, payload: { source_ids: [7, 8], moved_posts: 3, taxonomy: "tag" } }),
+      99,
+      now
+    )
+    expect(`${merged.who} ${merged.verb} ${merged.what}`).toBe("Ana Costa merged tags")
+    expect(merged.href).toBe("/taxonomies?type=tag")
+    expect(line({ object_type: "term", verb: "terms_merged", post: undefined, payload: {} })).toBe("Ana Costa merged terms")
+
+    const added = describeActivity(event({ object_type: "redirect", verb: "redirect_created", post: undefined, payload: { status_code: 301, source: "manual" } }), 2, now)
+    expect(`${added.who} ${added.verb} ${added.what}`).toBe("You added a redirect")
+    expect(added.href).toBe("/settings#gl-settings-urls")
+    expect(line({ object_type: "redirect", verb: "redirect_deleted", post: undefined })).toBe("Ana Costa deleted a redirect")
+  })
+
   // #321: the member an access event is about is `subject`.
   it("reads edit access events, naming who they're about", () => {
     const kenji = { id: 5, username: "kenji", full_name: "Kenji Tanaka" }

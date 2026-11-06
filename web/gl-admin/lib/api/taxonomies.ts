@@ -1,6 +1,7 @@
 import type { TaxonomyType, TaxonomyTerm, TaxonomySortOption, PaginationParams, ApiResponse } from "./types"
 import { apiCall } from "../api"
 import { buildUrl } from "./utils"
+import type { Redirect } from "./redirects"
 
 // Routes live under /taxonomy/types and /taxonomy/terms (api/taxonomy_routes.go).
 // Reads are public; writes need an admin or editor (requireContentEditor).
@@ -148,12 +149,39 @@ export async function getPostTaxonomyTerms(postId: string | number): Promise<Tax
   return response.taxonomy_terms || []
 }
 
-// One term at a time (idempotent), so editors changing different terms of the
-// same post don't overwrite each other.
-export async function addPostTaxonomyTerm(postId: string | number, termId: number): Promise<void> {
-  await apiCall(`/posts/${postId}/taxonomy-terms/${termId}`, { method: "PUT" })
+export interface MergeTermsResult {
+  // The kept term, as it is after the merge.
+  taxonomy_term: TaxonomyTerm
+  merged_ids: number[]
+  moved_posts: number
+  redirects: Redirect[]
 }
 
-export async function removePostTaxonomyTerm(postId: string | number, termId: number): Promise<void> {
-  await apiCall(`/posts/${postId}/taxonomy-terms/${termId}`, { method: "DELETE" })
+// Merges `sourceIds` INTO `keepId` (#331): their posts get the kept term, the sources are
+// deleted, and each /{taxonomy}/{source-slug} redirects to the kept term's page. Flat
+// taxonomies only (400 merge_not_supported for categories); the default term can't be a
+// source (409 default_term).
+export async function mergeTaxonomyTerms(keepId: number, sourceIds: number[]): Promise<MergeTermsResult> {
+  const response = await apiCall(`/taxonomy/terms/${keepId}/merge`, { method: "POST", body: { source_ids: sourceIds } })
+  return {
+    taxonomy_term: response.taxonomy_term,
+    merged_ids: response.merged_ids ?? [],
+    moved_posts: response.moved_posts ?? 0,
+    redirects: response.redirects ?? [],
+  }
+}
+
+// One term at a time (idempotent), so editors changing different terms of the
+// same post don't overwrite each other. A category replaces the post's category
+// (#331: one per post); replaced_term_ids are the ones it took the place of.
+export async function addPostTaxonomyTerm(postId: string | number, termId: number): Promise<{ replaced_term_ids: number[] }> {
+  const response = await apiCall(`/posts/${postId}/taxonomy-terms/${termId}`, { method: "PUT" })
+  return { replaced_term_ids: response?.replaced_term_ids ?? [] }
+}
+
+// Removing a `post`-type post's category puts the default category back (#331):
+// default_term_id is then the category it has now.
+export async function removePostTaxonomyTerm(postId: string | number, termId: number): Promise<{ default_term_id: number | null }> {
+  const response = await apiCall(`/posts/${postId}/taxonomy-terms/${termId}`, { method: "DELETE" })
+  return { default_term_id: response?.default_term_id ?? null }
 }

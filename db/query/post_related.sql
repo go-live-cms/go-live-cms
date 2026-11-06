@@ -36,7 +36,9 @@ SELECT
         WHERE pm.post_id = p.id
     )::jsonb as meta,
     -- The published byline (#319): what the site credits until the next Update.
-    golive_post_published_byline(p.id)::jsonb as authors
+    golive_post_published_byline(p.id)::jsonb as authors,
+    -- The published category in the post's URL (#331).
+    coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
 FROM adjacent a
 JOIN posts p ON p.id = a.id;
 
@@ -63,6 +65,9 @@ WITH current_terms AS (
     WHERE ptr.post_id = @post_id::bigint
         AND (@taxonomy::text = '' OR ty.name = @taxonomy::text)
         AND (@term_id::bigint = 0 OR ptr.taxonomy_term_id = @term_id::bigint)
+        -- The default category (#331, Uncategorized) means no particular category: it
+        -- makes no post related, unless it is the term asked for.
+        AND (@term_id::bigint <> 0 OR tt.id IS DISTINCT FROM ty.default_term_id)
 ),
 shared AS (
     SELECT
@@ -95,7 +100,9 @@ SELECT
         WHERE pm.post_id = p.id
     )::jsonb as meta,
     -- The published byline (#319): what the site credits until the next Update.
-    golive_post_published_byline(p.id)::jsonb as authors
+    golive_post_published_byline(p.id)::jsonb as authors,
+    -- The published category in the post's URL (#331).
+    coalesce(golive_post_category_slug(p.id, true), '')::text AS category_slug
 FROM posts p
 LEFT JOIN shared s ON s.post_id = p.id
 WHERE p.id IN (SELECT shared.post_id FROM shared UNION SELECT latest.id FROM latest)

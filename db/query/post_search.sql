@@ -43,7 +43,9 @@ SELECT h.id, h.title, h.description, h.slug, h.post_type, h.created_at, h.change
            'HighlightAll=true, StartSel=' || chr(57344) || ', StopSel=' || chr(57345))::text AS title_highlight,
        x.excerpt::text AS excerpt_highlight,
        (left(x.plain, 24) = left(x.source, 24))::boolean AS excerpt_at_start,
-       (right(x.plain, 24) = right(x.source, 24))::boolean AS excerpt_at_end
+       (right(x.plain, 24) = right(x.source, 24))::boolean AS excerpt_at_end,
+       -- The published category in the hit's URL (#331).
+       coalesce(golive_post_category_slug(h.id, true), '')::text AS category_slug
 FROM hits h
 CROSS JOIN q
 CROSS JOIN LATERAL (
@@ -99,7 +101,9 @@ SELECT
         WHERE pm.post_id = p.id
     ) as meta,
     -- The working byline (#319): the admin list's avatars.
-    golive_post_byline(p.id)::jsonb as authors
+    golive_post_byline(p.id)::jsonb as authors,
+    -- The working category in the post's URL (#331), as ListPostsWithMeta.
+    coalesce(golive_post_category_slug(p.id, false), '')::text AS category_slug
 FROM post_search ps
 JOIN posts p ON p.id = ps.post_id
 -- The scheduled update (#335), as in ListPostsWithMeta.

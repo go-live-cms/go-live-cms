@@ -161,6 +161,7 @@ func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicP
 		for _, term := range terms {
 			view.TaxonomyTerms = append(view.TaxonomyTerms, toPostTaxonomyTermResponse(db.GetPostTaxonomyTermsRow(term)))
 		}
+		view.Post.CategorySlug = categorySlugOf(view.TaxonomyTerms)
 		return view, nil
 	}
 
@@ -180,7 +181,18 @@ func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicP
 	for _, term := range terms {
 		view.TaxonomyTerms = append(view.TaxonomyTerms, toPostTaxonomyTermResponse(term))
 	}
+	view.Post.CategorySlug = categorySlugOf(view.TaxonomyTerms)
 	return view, nil
+}
+
+// categorySlugOf is the slug of the category among terms (one per post, #331), or "".
+func categorySlugOf(terms []TaxonomyTermResponse) string {
+	for _, term := range terms {
+		if term.TaxonomyTypeName == db.CategoryTaxonomy {
+			return term.Slug
+		}
+	}
+	return ""
 }
 
 // listPublicPosts handles GET /public/posts?type=&sort=&order=&limit=&offset=:
@@ -224,12 +236,14 @@ func (server *Server) listPublicPosts(c *gin.Context) {
 		return
 	}
 	rows, err := server.store.ListPosts(ctx, db.ListPostsParams{
-		PostType:      postType,
-		PostStatus:    publishedStatus,
-		SortColumn:    sorting.Column,
-		SortDirection: sorting.Direction,
-		OffsetCount:   int32(offset),
-		LimitCount:    int32(limit),
+		PostType:   postType,
+		PostStatus: publishedStatus,
+		// The published category, for /:category/:slug URLs (#331).
+		PublishedCategory: true,
+		SortColumn:        sorting.Column,
+		SortDirection:     sorting.Direction,
+		OffsetCount:       int32(offset),
+		LimitCount:        int32(limit),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list posts"})

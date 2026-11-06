@@ -9,6 +9,8 @@ import { themeBlockLookup } from "@gl-admin/lib/blocks-spec/themeBlocks"
 import { fragmentToBlockDoc } from "@gl-admin/lib/collaboration/fragmentBridge"
 import { EDITOR_FRAGMENT } from "@gl-admin/lib/collaboration/schemaGuard"
 import { getInstalledCollabSchema } from "@gl-admin/lib/theme-blocks/collabSchema"
+import { installedThemeBlocks } from "@gl-admin/lib/theme-blocks/installed"
+import { getCollabSchema } from "@gl-admin/lib/collaboration/schema"
 import alert from "../../../themes/example/blocks/Alert/index"
 import { RECHECK_MS, startRelay, type Relay } from "@gl-admin/lib/collaboration/hocuspocusRelay.testkit"
 import { acquireHocuspocus, releaseHocuspocus } from "@gl-admin/lib/collaboration/HocuspocusCollaboration"
@@ -26,12 +28,14 @@ import { stubJsdomRangeLayout } from "@gl-admin/lib/collaboration/testHelpers"
 // API surfaces as an uncaught TypeError.
 stubJsdomRangeLayout()
 
-const state = vi.hoisted(() => ({ relay: null as any, user: "1", themeLoaded: true }))
+const state = vi.hoisted(() => ({ relay: null as any, user: "1", themeLoaded: true, schemaFingerprint: undefined as string | undefined }))
 
 vi.mock("@gl-admin/lib/collaboration/postCollab", () => ({
-  acquirePostCollab: (postId: number) => acquireHocuspocus(postId, () => state.relay.client(state.user)),
+  acquirePostCollab: (postId: number) =>
+    acquireHocuspocus(postId, () => state.relay.client(state.user, { schemaFingerprint: state.schemaFingerprint })),
   releasePostCollab: (instance: any) => releaseHocuspocus(instance),
 }))
+vi.mock("./utils/reloadPage", () => ({ reloadPage: vi.fn() }))
 vi.mock("@gl-admin/contexts/ThemeContext", () => ({
   useTheme: () => ({ isThemeLoaded: state.themeLoaded, themeSlug: "test" }),
 }))
@@ -74,6 +78,7 @@ vi.mock("./ui/LinkModal", () => ({ default: () => null }))
 
 import { blockAPIClient } from "@gl-admin/lib/api/blockAPI"
 import { authManager } from "@gl-admin/lib/auth"
+import { reloadPage } from "./utils/reloadPage"
 import Editor, { type EditorProps, type EditorRef } from "./Editor"
 
 const Callout = Node.create({
@@ -133,6 +138,7 @@ beforeEach(async () => {
   state.relay = relay
   state.user = "1"
   state.themeLoaded = true
+  state.schemaFingerprint = undefined
   tiptapExtensionRegistry.clear()
   vi.mocked(blockAPIClient.getPostBlocks).mockResolvedValue({
     doc: { doc_version: 1, blocks_order: ["intro-block-0001"], blocks: { "intro-block-0001": doc.blocks["intro-block-0001"] } },
@@ -439,5 +445,54 @@ describe("a new post's body (#384)", () => {
     const bound = await mount()
     await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
     expect(bound.current!.getBlockDoc()).toBeNull()
+  })
+})
+
+describe("Editor on a different schema than the collab server (#416)", () => {
+  const RELOAD_MESSAGE = "The editor was updated. Reload to keep editing."
+  const notice = () => container.querySelector(".editor-notice--outdated")
+
+  it("refused at connect: binds nothing, shows the reload notice over the stored copy, writes nothing", async () => {
+    tiptapExtensionRegistry.register(Callout)
+    // A tab whose bundle predates the server's: another schema fingerprint.
+    state.schemaFingerprint = "0".repeat(64)
+    const ref = await mount()
+    await until(() => !!notice(), "the reload notice")
+    expect(notice()!.textContent).toContain(RELOAD_MESSAGE)
+    expect(notice()!.getAttribute("role")).toBe("alert")
+    // Static, read-only, from REST: nothing bound to the shared doc.
+    await until(() => !!pm()?.textContent?.includes("Intro"), "the REST copy")
+    expect(pm()!.getAttribute("contenteditable")).toBe("false")
+    expect(relay.server.hocuspocus.getConnectionsCount()).toBe(0)
+    expect(relay.server.hocuspocus.documents.size).toBe(0)
+    expect(relay.api.puts).toEqual([])
+    expect(await ref.current!.publish()).toBeUndefined()
+    expect(blockAPIClient.publishPost).not.toHaveBeenCalled()
+
+    // Not retried: still refused, still the notice.
+    await settle(100)
+    expect(notice()).not.toBeNull()
+    expect(relay.server.hocuspocus.getConnectionsCount()).toBe(0)
+
+    const button = [...notice()!.querySelectorAll("button")].find((b) => b.textContent === "Reload")!
+    await act(async () => button.click())
+    expect(reloadPage).toHaveBeenCalledTimes(1)
+  })
+
+  it("refused on a reconnect after a deploy: the bound doc stays on screen, read-only, under the reload notice", async () => {
+    tiptapExtensionRegistry.register(Callout)
+    await mount()
+    await until(() => !!pm()?.textContent?.includes("Careful"), "the bound editor")
+    expect(pm()!.getAttribute("contenteditable")).toBe("true")
+    expect(notice()).toBeNull()
+
+    // The deploy: the collab server comes back with a schema that has a new block.
+    const PullQuote = Node.create({ name: "pullQuote", group: "block", content: "inline*", addAttributes: () => ({ "data-block-id": { default: null } }) })
+    await act(async () => relay.restart(undefined, { schema: getCollabSchema([...installedThemeBlocks.map((block) => block.node), PullQuote]) }))
+    await until(() => !!notice(), "the reload notice")
+    expect(notice()!.textContent).toContain(RELOAD_MESSAGE)
+    await until(() => pm()?.getAttribute("contenteditable") === "false", "the read-only editor")
+    expect(pm()!.textContent).toContain("Careful")
+    expect(relay.server.hocuspocus.getConnectionsCount()).toBe(0)
   })
 })

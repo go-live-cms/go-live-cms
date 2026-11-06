@@ -440,11 +440,11 @@ func TestValidMenuURL(t *testing.T) {
 }
 
 func TestMenuPostPath(t *testing.T) {
-	require.Equal(t, "/post/hello", menuPostPath("post", "hello", 7, "slug"))
-	require.Equal(t, "/post/7", menuPostPath("post", "hello", 7, "id"))
-	require.Equal(t, "/post/7", menuPostPath("post", "", 7, "slug"))
-	require.Equal(t, "/post/7", menuPostPath("post", "2026", 7, "slug"))
-	require.Equal(t, "/page/s%C3%A3o-paulo", menuPostPath("page", "são-paulo", 7, "slug"))
+	require.Equal(t, "/post/hello", menuPostPath("post", "hello", 7, "slug", ""))
+	require.Equal(t, "/post/7", menuPostPath("post", "hello", 7, "id", ""))
+	require.Equal(t, "/post/7", menuPostPath("post", "", 7, "slug", ""))
+	require.Equal(t, "/post/7", menuPostPath("post", "2026", 7, "slug", ""))
+	require.Equal(t, "/page/s%C3%A3o-paulo", menuPostPath("page", "são-paulo", 7, "slug", ""))
 }
 
 func TestParseMenuLocations(t *testing.T) {

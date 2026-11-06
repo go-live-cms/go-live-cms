@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react"
 import FeaturedImage from "./FeaturedImage"
 import { useFeaturedImage } from "@gl-admin/lib/hooks/useFeaturedImage"
 import type { Media, Post } from "@gl-admin/lib/api/types"
+import type { PostUrlStructure } from "@gl-admin/lib/api/settings"
 import type { PostVersion } from "@gl-admin/lib/api/blockAPI"
 import RevisionsPanel from "./RevisionsPanel"
 import PostTaxonomies from "./PostTaxonomies"
@@ -42,7 +43,7 @@ interface PostSidebarProps {
   // Disables every field for users who can't change the post's details (#216, #135)
   readOnly?: boolean
   // "id" or "slug": how the site builds this post's address (Settings)
-  urlStructure: "id" | "slug"
+  urlStructure: PostUrlStructure
   // Who has edit access through a grant (#321), for those who may revoke it; absent when
   // nobody does (PostEditAccess's PostCollaborators).
   editAccess?: React.ReactNode
@@ -253,7 +254,7 @@ export default function PostSidebar({
       <div className="post-settings__field">
         <span className="post-settings__label">Categories and tags</span>
         {mode === "edit" && post.id ? (
-          <PostTaxonomies key={settingsKey} postId={post.id} readOnly={readOnly} onChange={onSettingsSaved} />
+          <PostTaxonomies key={settingsKey} postId={post.id} postType={type} readOnly={readOnly} onChange={onSettingsSaved} />
         ) : (
           <small className="post-settings__hint">Save the post first, then add categories and tags here.</small>
         )}

@@ -55,7 +55,8 @@ func TestPostTemplatesDB(t *testing.T) {
 	require.NoError(t, err)
 	term, err := f.store.CreateTaxonomyTerm(ctx, db.CreateTaxonomyTermParams{Name: "News " + marker, Slug: "news-" + marker, TaxonomyTypeID: category.ID})
 	require.NoError(t, err)
-	_, err = f.store.AddPostToTaxonomyTerm(ctx, db.AddPostToTaxonomyTermParams{PostID: source.ID, TaxonomyTermID: term.ID})
+	// Replaces the default category the new post got (#331).
+	_, err = f.store.SetPostTermTx(ctx, db.SetPostTermTxParams{PostID: source.ID, TermID: term.ID})
 	require.NoError(t, err)
 	_, err = f.store.CreatePostMedia(ctx, db.CreatePostMediaParams{PostID: source.ID, MediaID: hero.ID, Order: 0})
 	require.NoError(t, err)

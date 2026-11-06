@@ -11,6 +11,9 @@ func (server *Server) RegisterSettingsRoutes(rg *gin.RouterGroup) {
 		settings.PUT("", server.requireAuth(), requireSiteAdmin(server), server.updateSettings)
 	}
 
+	// Settings › URLs & redirects (#331, redirects.go; admins)
+	server.registerRedirectRoutes(rg)
+
 	extensionSettings := rg.Group("/extension-settings")
 	{
 		// Extension settings (key-value; writes are admin only)

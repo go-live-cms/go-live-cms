@@ -196,3 +196,110 @@ WHERE taxonomy_term_id = $1;
 
 -- name: RemoveAllPostTaxonomiesByTerm :exec
 DELETE FROM post_taxonomy_relationships WHERE taxonomy_term_id = $1;
+-- One category per post, the default category, merges (#331, 000047).
+
+-- name: LockPostForTerms :one
+-- Taken first by every write that replaces a post's category, so two writers of one
+-- post can't both pass the one-category check (000047's trigger is the backstop).
+SELECT id, post_type FROM posts WHERE id = $1 FOR UPDATE;
+
+-- name: RemovePostCategoriesExcept :many
+-- Assigning a category replaces the post's other one(s).
+DELETE FROM post_taxonomy_relationships ptr
+USING taxonomy_terms tt, taxonomy_types ty
+WHERE ptr.post_id = @post_id::bigint
+  AND tt.id = ptr.taxonomy_term_id AND ty.id = tt.taxonomy_type_id AND ty.name = 'category'
+  AND ptr.taxonomy_term_id <> @keep_term_id::bigint
+  -- Only when the term assigned is a category itself.
+  AND EXISTS (
+    SELECT 1 FROM taxonomy_terms k JOIN taxonomy_types kt ON kt.id = k.taxonomy_type_id
+    WHERE k.id = @keep_term_id::bigint AND kt.name = 'category'
+  )
+RETURNING ptr.taxonomy_term_id;
+
+-- name: EnsureDefaultCategory :execrows
+-- A post of type "post" without a category gets the default one (Uncategorized). The
+-- other types may have none. Called by every writer of a post's terms.
+INSERT INTO post_taxonomy_relationships (post_id, taxonomy_term_id)
+SELECT p.id, ty.default_term_id
+FROM posts p
+JOIN taxonomy_types ty ON ty.name = 'category' AND ty.default_term_id IS NOT NULL
+WHERE p.id = ANY(@post_ids::bigint[]) AND p.post_type = 'post'
+  AND NOT EXISTS (
+    SELECT 1 FROM post_taxonomy_relationships ptr
+    JOIN taxonomy_terms tt ON tt.id = ptr.taxonomy_term_id
+    WHERE ptr.post_id = p.id AND tt.taxonomy_type_id = ty.id
+  )
+ON CONFLICT DO NOTHING;
+
+-- name: CountCategoryTerms :one
+-- How many of the given terms are categories (POST/PUT /posts allow one).
+SELECT COUNT(DISTINCT tt.id)::bigint
+FROM taxonomy_terms tt
+JOIN taxonomy_types ty ON ty.id = tt.taxonomy_type_id
+WHERE tt.id = ANY(@term_ids::bigint[]) AND ty.name = 'category';
+
+-- name: ListTermPostIDs :many
+SELECT post_id FROM post_taxonomy_relationships WHERE taxonomy_term_id = $1 ORDER BY post_id;
+
+-- name: CountTermChildren :one
+SELECT COUNT(*)::bigint FROM taxonomy_terms WHERE parent_id = $1;
+
+-- name: ReassignTermPosts :execrows
+-- A merge (#331): the source's posts get the target, unless they have it already (the
+-- leftover links go with the source term).
+UPDATE post_taxonomy_relationships ptr
+SET taxonomy_term_id = @target_id::bigint
+WHERE ptr.taxonomy_term_id = @source_id::bigint
+  AND NOT EXISTS (
+    SELECT 1 FROM post_taxonomy_relationships other
+    WHERE other.post_id = ptr.post_id AND other.taxonomy_term_id = @target_id::bigint
+  );
+
+-- name: ReplaceTermInPublishedSettings :execrows
+-- A merge, or a deleted category's posts moving to the default: the published sets
+-- (what the site shows) follow at once, like the working ones, so no published post
+-- shows a pending change for a taxonomy operation. Sorted and without repeats, like
+-- golive_post_settings(). The published-terms trigger mirrors it.
+UPDATE posts p
+SET published_settings = jsonb_set(p.published_settings, '{term_ids}', (
+  SELECT coalesce(jsonb_agg(DISTINCT x.id ORDER BY x.id), '[]'::jsonb)
+  FROM (
+    SELECT CASE WHEN t.value::bigint = @source_id::bigint THEN @target_id::bigint ELSE t.value::bigint END AS id
+    FROM jsonb_array_elements_text(p.published_settings->'term_ids') AS t(value)
+    WHERE t.value ~ '^[0-9]{1,18}$'
+  ) x
+))
+WHERE p.published_settings IS NOT NULL
+  AND jsonb_typeof(p.published_settings->'term_ids') = 'array'
+  AND p.published_settings->'term_ids' @> jsonb_build_array(@source_id::bigint);
+
+-- name: ReplaceTermInScheduledUpdates :execrows
+-- The same for pending scheduled updates (#335), which would publish their snapshot.
+UPDATE post_scheduled_updates su
+SET settings = jsonb_set(su.settings, '{term_ids}', (
+  SELECT coalesce(jsonb_agg(DISTINCT x.id ORDER BY x.id), '[]'::jsonb)
+  FROM (
+    SELECT CASE WHEN t.value::bigint = @source_id::bigint THEN @target_id::bigint ELSE t.value::bigint END AS id
+    FROM jsonb_array_elements_text(su.settings->'term_ids') AS t(value)
+    WHERE t.value ~ '^[0-9]{1,18}$'
+  ) x
+))
+WHERE jsonb_typeof(su.settings->'term_ids') = 'array'
+  AND su.settings->'term_ids' @> jsonb_build_array(@source_id::bigint);
+
+-- name: LinkPostTerm :exec
+-- Idempotent link (inside a transaction a unique violation would abort it).
+INSERT INTO post_taxonomy_relationships (post_id, taxonomy_term_id)
+VALUES (@post_id, @taxonomy_term_id)
+ON CONFLICT DO NOTHING;
+
+-- name: GetPostCategorySlug :one
+-- The category slug in one post's URL (golive_post_category_slug, 000047); '' = none.
+SELECT coalesce(golive_post_category_slug(@post_id::bigint, @published::boolean), '')::text AS slug;
+
+-- name: IsPostTypeOrTaxonomyName :one
+-- A category slug can't be a post type's or taxonomy's name: /{name}/... is that
+-- type's or taxonomy's URL, so /:category/:slug would never reach the post (#331).
+SELECT (EXISTS (SELECT 1 FROM post_types WHERE name = @name::text)
+     OR EXISTS (SELECT 1 FROM taxonomy_types WHERE name = @name::text))::boolean AS taken;

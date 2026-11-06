@@ -49,7 +49,7 @@ export function useCollabPresence(postId?: number, enabled = true) {
           ? "connected"
           : s === "connecting"
             ? "connecting"
-            : s === "denied" || s === "revoked"
+            : s === "denied" || s === "revoked" || s === "outdated"
               ? "ended"
               : "disconnected"
       )

@@ -96,6 +96,21 @@ func (mr *MockStoreMockRecorder) AddPostToTaxonomyTerm(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPostToTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).AddPostToTaxonomyTerm), arg0, arg1)
 }
 
+// AddRedirectTx mocks base method.
+func (m *MockStore) AddRedirectTx(arg0 context.Context, arg1 db.AddRedirectParams) (db.Redirect, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddRedirectTx", arg0, arg1)
+	ret0, _ := ret[0].(db.Redirect)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddRedirectTx indicates an expected call of AddRedirectTx.
+func (mr *MockStoreMockRecorder) AddRedirectTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRedirectTx", reflect.TypeOf((*MockStore)(nil).AddRedirectTx), arg0, arg1)
+}
+
 // BlockAllSessionsForUser mocks base method.
 func (m *MockStore) BlockAllSessionsForUser(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -418,6 +433,21 @@ func (mr *MockStoreMockRecorder) CopyTemplateTermsToPost(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopyTemplateTermsToPost", reflect.TypeOf((*MockStore)(nil).CopyTemplateTermsToPost), arg0, arg1)
 }
 
+// CountCategoryTerms mocks base method.
+func (m *MockStore) CountCategoryTerms(arg0 context.Context, arg1 []int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountCategoryTerms", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountCategoryTerms indicates an expected call of CountCategoryTerms.
+func (mr *MockStoreMockRecorder) CountCategoryTerms(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountCategoryTerms", reflect.TypeOf((*MockStore)(nil).CountCategoryTerms), arg0, arg1)
+}
+
 // CountEmailChangeTokensSince mocks base method.
 func (m *MockStore) CountEmailChangeTokensSince(arg0 context.Context, arg1 db.CountEmailChangeTokensSinceParams) (int64, error) {
 	m.ctrl.T.Helper()
@@ -613,6 +643,21 @@ func (mr *MockStoreMockRecorder) CountPublishedPostsByTerm(arg0, arg1 interface{
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountPublishedPostsByTerm", reflect.TypeOf((*MockStore)(nil).CountPublishedPostsByTerm), arg0, arg1)
 }
 
+// CountRedirects mocks base method.
+func (m *MockStore) CountRedirects(arg0 context.Context, arg1 string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountRedirects", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountRedirects indicates an expected call of CountRedirects.
+func (mr *MockStoreMockRecorder) CountRedirects(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountRedirects", reflect.TypeOf((*MockStore)(nil).CountRedirects), arg0, arg1)
+}
+
 // CountSearchPosts mocks base method.
 func (m *MockStore) CountSearchPosts(arg0 context.Context, arg1 db.CountSearchPostsParams) (int64, error) {
 	m.ctrl.T.Helper()
@@ -641,6 +686,21 @@ func (m *MockStore) CountTaxonomyTerms(arg0 context.Context, arg1 string) (int64
 func (mr *MockStoreMockRecorder) CountTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).CountTaxonomyTerms), arg0, arg1)
+}
+
+// CountTermChildren mocks base method.
+func (m *MockStore) CountTermChildren(arg0 context.Context, arg1 sql.NullInt64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountTermChildren", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountTermChildren indicates an expected call of CountTermChildren.
+func (mr *MockStoreMockRecorder) CountTermChildren(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountTermChildren", reflect.TypeOf((*MockStore)(nil).CountTermChildren), arg0, arg1)
 }
 
 // CountTotalPosts mocks base method.
@@ -1538,6 +1598,36 @@ func (mr *MockStoreMockRecorder) DeletePostType(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostType", reflect.TypeOf((*MockStore)(nil).DeletePostType), arg0, arg1)
 }
 
+// DeleteRedirect mocks base method.
+func (m *MockStore) DeleteRedirect(arg0 context.Context, arg1 int64) (db.Redirect, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteRedirect", arg0, arg1)
+	ret0, _ := ret[0].(db.Redirect)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteRedirect indicates an expected call of DeleteRedirect.
+func (mr *MockStoreMockRecorder) DeleteRedirect(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRedirect", reflect.TypeOf((*MockStore)(nil).DeleteRedirect), arg0, arg1)
+}
+
+// DeleteRedirectFromPath mocks base method.
+func (m *MockStore) DeleteRedirectFromPath(arg0 context.Context, arg1 string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteRedirectFromPath", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DeleteRedirectFromPath indicates an expected call of DeleteRedirectFromPath.
+func (mr *MockStoreMockRecorder) DeleteRedirectFromPath(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRedirectFromPath", reflect.TypeOf((*MockStore)(nil).DeleteRedirectFromPath), arg0, arg1)
+}
+
 // DeleteSignupRequestsByEmail mocks base method.
 func (m *MockStore) DeleteSignupRequestsByEmail(arg0 context.Context, arg1 string) error {
 	m.ctrl.T.Helper()
@@ -1721,6 +1811,21 @@ func (m *MockStore) DuplicatePostTx(arg0 context.Context, arg1 db.DuplicatePostT
 func (mr *MockStoreMockRecorder) DuplicatePostTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DuplicatePostTx", reflect.TypeOf((*MockStore)(nil).DuplicatePostTx), arg0, arg1)
+}
+
+// EnsureDefaultCategory mocks base method.
+func (m *MockStore) EnsureDefaultCategory(arg0 context.Context, arg1 []int64) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureDefaultCategory", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EnsureDefaultCategory indicates an expected call of EnsureDefaultCategory.
+func (mr *MockStoreMockRecorder) EnsureDefaultCategory(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureDefaultCategory", reflect.TypeOf((*MockStore)(nil).EnsureDefaultCategory), arg0, arg1)
 }
 
 // ExecTx mocks base method.
@@ -2110,6 +2215,21 @@ func (m *MockStore) GetPostBySlug(arg0 context.Context, arg1 string) (db.Post, e
 func (mr *MockStoreMockRecorder) GetPostBySlug(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostBySlug", reflect.TypeOf((*MockStore)(nil).GetPostBySlug), arg0, arg1)
+}
+
+// GetPostCategorySlug mocks base method.
+func (m *MockStore) GetPostCategorySlug(arg0 context.Context, arg1 db.GetPostCategorySlugParams) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPostCategorySlug", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPostCategorySlug indicates an expected call of GetPostCategorySlug.
+func (mr *MockStoreMockRecorder) GetPostCategorySlug(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPostCategorySlug", reflect.TypeOf((*MockStore)(nil).GetPostCategorySlug), arg0, arg1)
 }
 
 // GetPostChildren mocks base method.
@@ -2545,6 +2665,36 @@ func (m *MockStore) GetPublishedPostTaxonomyTerms(arg0 context.Context, arg1 int
 func (mr *MockStoreMockRecorder) GetPublishedPostTaxonomyTerms(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublishedPostTaxonomyTerms", reflect.TypeOf((*MockStore)(nil).GetPublishedPostTaxonomyTerms), arg0, arg1)
+}
+
+// GetRedirect mocks base method.
+func (m *MockStore) GetRedirect(arg0 context.Context, arg1 int64) (db.Redirect, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRedirect", arg0, arg1)
+	ret0, _ := ret[0].(db.Redirect)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRedirect indicates an expected call of GetRedirect.
+func (mr *MockStoreMockRecorder) GetRedirect(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRedirect", reflect.TypeOf((*MockStore)(nil).GetRedirect), arg0, arg1)
+}
+
+// GetRedirectByFromPath mocks base method.
+func (m *MockStore) GetRedirectByFromPath(arg0 context.Context, arg1 string) (db.Redirect, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRedirectByFromPath", arg0, arg1)
+	ret0, _ := ret[0].(db.Redirect)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRedirectByFromPath indicates an expected call of GetRedirectByFromPath.
+func (mr *MockStoreMockRecorder) GetRedirectByFromPath(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRedirectByFromPath", reflect.TypeOf((*MockStore)(nil).GetRedirectByFromPath), arg0, arg1)
 }
 
 // GetReviewRequest mocks base method.
@@ -2995,6 +3145,21 @@ func (mr *MockStoreMockRecorder) InsertPublishedVersionFromScheduledUpdate(arg0,
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertPublishedVersionFromScheduledUpdate", reflect.TypeOf((*MockStore)(nil).InsertPublishedVersionFromScheduledUpdate), arg0, arg1)
 }
 
+// InsertRedirect mocks base method.
+func (m *MockStore) InsertRedirect(arg0 context.Context, arg1 db.InsertRedirectParams) (db.Redirect, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InsertRedirect", arg0, arg1)
+	ret0, _ := ret[0].(db.Redirect)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// InsertRedirect indicates an expected call of InsertRedirect.
+func (mr *MockStoreMockRecorder) InsertRedirect(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InsertRedirect", reflect.TypeOf((*MockStore)(nil).InsertRedirect), arg0, arg1)
+}
+
 // InvalidateEmailChangeTokensForUser mocks base method.
 func (m *MockStore) InvalidateEmailChangeTokensForUser(arg0 context.Context, arg1 int64) error {
 	m.ctrl.T.Helper()
@@ -3036,6 +3201,35 @@ func (m *MockStore) IsPostCollaborator(arg0 context.Context, arg1 db.IsPostColla
 func (mr *MockStoreMockRecorder) IsPostCollaborator(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsPostCollaborator", reflect.TypeOf((*MockStore)(nil).IsPostCollaborator), arg0, arg1)
+}
+
+// IsPostTypeOrTaxonomyName mocks base method.
+func (m *MockStore) IsPostTypeOrTaxonomyName(arg0 context.Context, arg1 string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsPostTypeOrTaxonomyName", arg0, arg1)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsPostTypeOrTaxonomyName indicates an expected call of IsPostTypeOrTaxonomyName.
+func (mr *MockStoreMockRecorder) IsPostTypeOrTaxonomyName(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsPostTypeOrTaxonomyName", reflect.TypeOf((*MockStore)(nil).IsPostTypeOrTaxonomyName), arg0, arg1)
+}
+
+// LinkPostTerm mocks base method.
+func (m *MockStore) LinkPostTerm(arg0 context.Context, arg1 db.LinkPostTermParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LinkPostTerm", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LinkPostTerm indicates an expected call of LinkPostTerm.
+func (mr *MockStoreMockRecorder) LinkPostTerm(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LinkPostTerm", reflect.TypeOf((*MockStore)(nil).LinkPostTerm), arg0, arg1)
 }
 
 // ListAccessRequestReviewers mocks base method.
@@ -3608,6 +3802,21 @@ func (mr *MockStoreMockRecorder) ListPublishedPostsByTerm(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublishedPostsByTerm", reflect.TypeOf((*MockStore)(nil).ListPublishedPostsByTerm), arg0, arg1)
 }
 
+// ListRedirects mocks base method.
+func (m *MockStore) ListRedirects(arg0 context.Context, arg1 db.ListRedirectsParams) ([]db.ListRedirectsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListRedirects", arg0, arg1)
+	ret0, _ := ret[0].([]db.ListRedirectsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListRedirects indicates an expected call of ListRedirects.
+func (mr *MockStoreMockRecorder) ListRedirects(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRedirects", reflect.TypeOf((*MockStore)(nil).ListRedirects), arg0, arg1)
+}
+
 // ListRelatedPosts mocks base method.
 func (m *MockStore) ListRelatedPosts(arg0 context.Context, arg1 db.ListRelatedPostsParams) ([]db.ListRelatedPostsRow, error) {
 	m.ctrl.T.Helper()
@@ -3726,6 +3935,21 @@ func (m *MockStore) ListTaxonomyTypes(arg0 context.Context) ([]db.TaxonomyType, 
 func (mr *MockStoreMockRecorder) ListTaxonomyTypes(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTaxonomyTypes", reflect.TypeOf((*MockStore)(nil).ListTaxonomyTypes), arg0)
+}
+
+// ListTermPostIDs mocks base method.
+func (m *MockStore) ListTermPostIDs(arg0 context.Context, arg1 int64) ([]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListTermPostIDs", arg0, arg1)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListTermPostIDs indicates an expected call of ListTermPostIDs.
+func (mr *MockStoreMockRecorder) ListTermPostIDs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTermPostIDs", reflect.TypeOf((*MockStore)(nil).ListTermPostIDs), arg0, arg1)
 }
 
 // ListThemeSettings mocks base method.
@@ -3848,6 +4072,21 @@ func (mr *MockStoreMockRecorder) LockPostForPublish(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForPublish", reflect.TypeOf((*MockStore)(nil).LockPostForPublish), arg0, arg1)
 }
 
+// LockPostForTerms mocks base method.
+func (m *MockStore) LockPostForTerms(arg0 context.Context, arg1 int64) (db.LockPostForTermsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockPostForTerms", arg0, arg1)
+	ret0, _ := ret[0].(db.LockPostForTermsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LockPostForTerms indicates an expected call of LockPostForTerms.
+func (mr *MockStoreMockRecorder) LockPostForTerms(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostForTerms", reflect.TypeOf((*MockStore)(nil).LockPostForTerms), arg0, arg1)
+}
+
 // LockPostOwner mocks base method.
 func (m *MockStore) LockPostOwner(arg0 context.Context, arg1 int64) (db.LockPostOwnerRow, error) {
 	m.ctrl.T.Helper()
@@ -3891,6 +4130,20 @@ func (m *MockStore) LockPostStatusForUpdate(arg0 context.Context, arg1 int64) (s
 func (mr *MockStoreMockRecorder) LockPostStatusForUpdate(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockPostStatusForUpdate", reflect.TypeOf((*MockStore)(nil).LockPostStatusForUpdate), arg0, arg1)
+}
+
+// LockRedirects mocks base method.
+func (m *MockStore) LockRedirects(arg0 context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LockRedirects", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// LockRedirects indicates an expected call of LockRedirects.
+func (mr *MockStoreMockRecorder) LockRedirects(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockRedirects", reflect.TypeOf((*MockStore)(nil).LockRedirects), arg0)
 }
 
 // LockScheduledPostClaim mocks base method.
@@ -3979,6 +4232,21 @@ func (m *MockStore) LockUsersForUpdate(arg0 context.Context, arg1 []int64) ([]db
 func (mr *MockStoreMockRecorder) LockUsersForUpdate(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LockUsersForUpdate", reflect.TypeOf((*MockStore)(nil).LockUsersForUpdate), arg0, arg1)
+}
+
+// MergeTaxonomyTermsTx mocks base method.
+func (m *MockStore) MergeTaxonomyTermsTx(arg0 context.Context, arg1 db.MergeTaxonomyTermsTxParams) (db.MergeTaxonomyTermsTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MergeTaxonomyTermsTx", arg0, arg1)
+	ret0, _ := ret[0].(db.MergeTaxonomyTermsTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MergeTaxonomyTermsTx indicates an expected call of MergeTaxonomyTermsTx.
+func (mr *MockStoreMockRecorder) MergeTaxonomyTermsTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MergeTaxonomyTermsTx", reflect.TypeOf((*MockStore)(nil).MergeTaxonomyTermsTx), arg0, arg1)
 }
 
 // Ping mocks base method.
@@ -4083,6 +4351,21 @@ func (mr *MockStoreMockRecorder) ReassignPublishedBylines(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignPublishedBylines", reflect.TypeOf((*MockStore)(nil).ReassignPublishedBylines), arg0, arg1)
 }
 
+// ReassignTermPosts mocks base method.
+func (m *MockStore) ReassignTermPosts(arg0 context.Context, arg1 db.ReassignTermPostsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReassignTermPosts", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReassignTermPosts indicates an expected call of ReassignTermPosts.
+func (mr *MockStoreMockRecorder) ReassignTermPosts(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReassignTermPosts", reflect.TypeOf((*MockStore)(nil).ReassignTermPosts), arg0, arg1)
+}
+
 // RecordScheduledPublishFailure mocks base method.
 func (m *MockStore) RecordScheduledPublishFailure(arg0 context.Context, arg1 db.RecordScheduledPublishFailureParams) (int64, error) {
 	m.ctrl.T.Helper()
@@ -4155,6 +4438,21 @@ func (mr *MockStoreMockRecorder) RemoveAllPostTaxonomiesByTerm(arg0, arg1 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAllPostTaxonomiesByTerm", reflect.TypeOf((*MockStore)(nil).RemoveAllPostTaxonomiesByTerm), arg0, arg1)
 }
 
+// RemovePostCategoriesExcept mocks base method.
+func (m *MockStore) RemovePostCategoriesExcept(arg0 context.Context, arg1 db.RemovePostCategoriesExceptParams) ([]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemovePostCategoriesExcept", arg0, arg1)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemovePostCategoriesExcept indicates an expected call of RemovePostCategoriesExcept.
+func (mr *MockStoreMockRecorder) RemovePostCategoriesExcept(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostCategoriesExcept", reflect.TypeOf((*MockStore)(nil).RemovePostCategoriesExcept), arg0, arg1)
+}
+
 // RemovePostFromTaxonomyTerm mocks base method.
 func (m *MockStore) RemovePostFromTaxonomyTerm(arg0 context.Context, arg1 db.RemovePostFromTaxonomyTermParams) error {
 	m.ctrl.T.Helper()
@@ -4167,6 +4465,21 @@ func (m *MockStore) RemovePostFromTaxonomyTerm(arg0 context.Context, arg1 db.Rem
 func (mr *MockStoreMockRecorder) RemovePostFromTaxonomyTerm(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostFromTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).RemovePostFromTaxonomyTerm), arg0, arg1)
+}
+
+// RemovePostTermTx mocks base method.
+func (m *MockStore) RemovePostTermTx(arg0 context.Context, arg1 db.SetPostTermTxParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemovePostTermTx", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemovePostTermTx indicates an expected call of RemovePostTermTx.
+func (mr *MockStoreMockRecorder) RemovePostTermTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemovePostTermTx", reflect.TypeOf((*MockStore)(nil).RemovePostTermTx), arg0, arg1)
 }
 
 // RemoveUserTx mocks base method.
@@ -4242,6 +4555,36 @@ func (m *MockStore) ReplaceMenuItemsTx(arg0 context.Context, arg1 db.ReplaceMenu
 func (mr *MockStoreMockRecorder) ReplaceMenuItemsTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceMenuItemsTx", reflect.TypeOf((*MockStore)(nil).ReplaceMenuItemsTx), arg0, arg1)
+}
+
+// ReplaceTermInPublishedSettings mocks base method.
+func (m *MockStore) ReplaceTermInPublishedSettings(arg0 context.Context, arg1 db.ReplaceTermInPublishedSettingsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReplaceTermInPublishedSettings", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReplaceTermInPublishedSettings indicates an expected call of ReplaceTermInPublishedSettings.
+func (mr *MockStoreMockRecorder) ReplaceTermInPublishedSettings(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceTermInPublishedSettings", reflect.TypeOf((*MockStore)(nil).ReplaceTermInPublishedSettings), arg0, arg1)
+}
+
+// ReplaceTermInScheduledUpdates mocks base method.
+func (m *MockStore) ReplaceTermInScheduledUpdates(arg0 context.Context, arg1 db.ReplaceTermInScheduledUpdatesParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReplaceTermInScheduledUpdates", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReplaceTermInScheduledUpdates indicates an expected call of ReplaceTermInScheduledUpdates.
+func (mr *MockStoreMockRecorder) ReplaceTermInScheduledUpdates(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceTermInScheduledUpdates", reflect.TypeOf((*MockStore)(nil).ReplaceTermInScheduledUpdates), arg0, arg1)
 }
 
 // RequestEmailChangeTx mocks base method.
@@ -4376,6 +4719,21 @@ func (m *MockStore) RestorePostTitleAndDescription(arg0 context.Context, arg1 db
 func (mr *MockStoreMockRecorder) RestorePostTitleAndDescription(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestorePostTitleAndDescription", reflect.TypeOf((*MockStore)(nil).RestorePostTitleAndDescription), arg0, arg1)
+}
+
+// RetargetRedirects mocks base method.
+func (m *MockStore) RetargetRedirects(arg0 context.Context, arg1 db.RetargetRedirectsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RetargetRedirects", arg0, arg1)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RetargetRedirects indicates an expected call of RetargetRedirects.
+func (mr *MockStoreMockRecorder) RetargetRedirects(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetargetRedirects", reflect.TypeOf((*MockStore)(nil).RetargetRedirects), arg0, arg1)
 }
 
 // ReviewPostAccessRequest mocks base method.
@@ -4600,6 +4958,21 @@ func (m *MockStore) SetPostAuthorsTx(arg0 context.Context, arg1 db.SetPostAuthor
 func (mr *MockStoreMockRecorder) SetPostAuthorsTx(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostAuthorsTx", reflect.TypeOf((*MockStore)(nil).SetPostAuthorsTx), arg0, arg1)
+}
+
+// SetPostTermTx mocks base method.
+func (m *MockStore) SetPostTermTx(arg0 context.Context, arg1 db.SetPostTermTxParams) (db.SetPostTermTxResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetPostTermTx", arg0, arg1)
+	ret0, _ := ret[0].(db.SetPostTermTxResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetPostTermTx indicates an expected call of SetPostTermTx.
+func (mr *MockStoreMockRecorder) SetPostTermTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetPostTermTx", reflect.TypeOf((*MockStore)(nil).SetPostTermTx), arg0, arg1)
 }
 
 // SetPostTypeActive mocks base method.
@@ -5191,6 +5564,21 @@ func (mr *MockStoreMockRecorder) UpdateTaxonomyTerm(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTaxonomyTerm", reflect.TypeOf((*MockStore)(nil).UpdateTaxonomyTerm), arg0, arg1)
 }
 
+// UpdateTaxonomyTermTx mocks base method.
+func (m *MockStore) UpdateTaxonomyTermTx(arg0 context.Context, arg1 db.UpdateTaxonomyTermTxParams) (db.TaxonomyTerm, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTaxonomyTermTx", arg0, arg1)
+	ret0, _ := ret[0].(db.TaxonomyTerm)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateTaxonomyTermTx indicates an expected call of UpdateTaxonomyTermTx.
+func (mr *MockStoreMockRecorder) UpdateTaxonomyTermTx(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTaxonomyTermTx", reflect.TypeOf((*MockStore)(nil).UpdateTaxonomyTermTx), arg0, arg1)
+}
+
 // UpdateTaxonomyType mocks base method.
 func (m *MockStore) UpdateTaxonomyType(arg0 context.Context, arg1 db.UpdateTaxonomyTypeParams) (db.TaxonomyType, error) {
 	m.ctrl.T.Helper()
@@ -5308,6 +5696,21 @@ func (m *MockStore) UpsertPostYdocState(arg0 context.Context, arg1 db.UpsertPost
 func (mr *MockStoreMockRecorder) UpsertPostYdocState(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPostYdocState", reflect.TypeOf((*MockStore)(nil).UpsertPostYdocState), arg0, arg1)
+}
+
+// UpsertRedirect mocks base method.
+func (m *MockStore) UpsertRedirect(arg0 context.Context, arg1 db.UpsertRedirectParams) (db.Redirect, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertRedirect", arg0, arg1)
+	ret0, _ := ret[0].(db.Redirect)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertRedirect indicates an expected call of UpsertRedirect.
+func (mr *MockStoreMockRecorder) UpsertRedirect(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertRedirect", reflect.TypeOf((*MockStore)(nil).UpsertRedirect), arg0, arg1)
 }
 
 // UpsertScheduledUpdateFromPost mocks base method.

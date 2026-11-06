@@ -65,6 +65,12 @@ type Store interface {
 	DeleteTaxonomyTermTx(ctx context.Context, id int64) error
 	UpdatePostTaxonomyTermsTx(ctx context.Context, arg UpdatePostTaxonomyTermsTxParams) error
 	CreateTaxonomyTermAndLinkTx(ctx context.Context, arg CreateTaxonomyTermAndLinkTxParams) (CreateTaxonomyTermAndLinkTxResult, error)
+	// one category per post, merges and redirects (#331)
+	SetPostTermTx(ctx context.Context, arg SetPostTermTxParams) (SetPostTermTxResult, error)
+	RemovePostTermTx(ctx context.Context, arg SetPostTermTxParams) (int64, error)
+	UpdateTaxonomyTermTx(ctx context.Context, arg UpdateTaxonomyTermTxParams) (TaxonomyTerm, error)
+	MergeTaxonomyTermsTx(ctx context.Context, arg MergeTaxonomyTermsTxParams) (MergeTaxonomyTermsTxResult, error)
+	AddRedirectTx(ctx context.Context, arg AddRedirectParams) (Redirect, error)
 
 	CreatePostWithMediaTx(ctx context.Context, arg CreatePostWithMediaTxParams) (CreatePostWithMediaTxResult, error)
 	DeleteMediaTx(ctx context.Context, arg DeleteMediaTxParams) error
@@ -196,7 +202,9 @@ func (store *SQLStore) CreatePostTx(ctx context.Context, arg CreatePostTxParams)
 			}
 		}
 
-		return nil
+		// A post of type "post" starts in the default category (#331).
+		_, err = q.EnsureDefaultCategory(ctx, []int64{result.Post.ID})
+		return err
 	})
 
 	return result, err
@@ -548,18 +556,45 @@ func (store *SQLStore) CreatePostWithTaxonomyTermsTx(ctx context.Context, arg Cr
 			result.PostTaxonomyRelationships = append(result.PostTaxonomyRelationships, relationship)
 		}
 
-		return nil
+		// None of them a category: the default one (#331).
+		_, err = q.EnsureDefaultCategory(ctx, []int64{result.Post.ID})
+		return err
 	})
 
 	return result, err
 }
 
+// DeleteTaxonomyTermTx deletes a term and its post links. A category's posts move
+// to the default category (#331), in their published sets too (the site shows the
+// default at once rather than no category), and deleting the default itself is
+// ErrDefaultTerm.
 func (store *SQLStore) DeleteTaxonomyTermTx(ctx context.Context, termID int64) error {
 	err := store.ExecTx(ctx, func(q *Queries) error {
 		// validate that the taxonomy term exists
-		_, err := q.GetTaxonomyTerm(ctx, termID)
+		term, err := q.GetTaxonomyTerm(ctx, termID)
 		if err != nil {
 			return fmt.Errorf("taxonomy term %d not found: %w", termID, err)
+		}
+		taxonomy, err := q.GetTaxonomyTypeByID(ctx, term.TaxonomyTypeID)
+		if err != nil {
+			return fmt.Errorf("taxonomy type of term %d: %w", termID, err)
+		}
+		if taxonomy.DefaultTermID.Valid && taxonomy.DefaultTermID.Int64 == termID {
+			return ErrDefaultTerm
+		}
+
+		var postIDs []int64
+		if taxonomy.Name == CategoryTaxonomy && taxonomy.DefaultTermID.Valid {
+			if postIDs, err = q.ListTermPostIDs(ctx, termID); err != nil {
+				return fmt.Errorf("list posts of term %d: %w", termID, err)
+			}
+			move := ReplaceTermInPublishedSettingsParams{SourceID: termID, TargetID: taxonomy.DefaultTermID.Int64}
+			if _, err := q.ReplaceTermInPublishedSettings(ctx, move); err != nil {
+				return fmt.Errorf("move published posts of term %d: %w", termID, err)
+			}
+			if _, err := q.ReplaceTermInScheduledUpdates(ctx, ReplaceTermInScheduledUpdatesParams(move)); err != nil {
+				return fmt.Errorf("move scheduled updates of term %d: %w", termID, err)
+			}
 		}
 
 		err = q.RemoveAllPostTaxonomiesByTerm(ctx, termID)
@@ -572,6 +607,11 @@ func (store *SQLStore) DeleteTaxonomyTermTx(ctx context.Context, termID int64) e
 			return fmt.Errorf("failed to delete taxonomy term %d: %w", termID, err)
 		}
 
+		if len(postIDs) > 0 {
+			if _, err := q.EnsureDefaultCategory(ctx, postIDs); err != nil {
+				return fmt.Errorf("default category for the posts of term %d: %w", termID, err)
+			}
+		}
 		return nil
 	})
 
@@ -585,8 +625,9 @@ type UpdatePostTaxonomyTermsTxParams struct {
 
 func (store *SQLStore) UpdatePostTaxonomyTermsTx(ctx context.Context, arg UpdatePostTaxonomyTermsTxParams) error {
 	err := store.ExecTx(ctx, func(q *Queries) error {
-		// Validate that the post exists
-		_, err := q.GetPost(ctx, arg.PostID)
+		// Validate that the post exists; the lock keeps another term writer of the
+		// post out until the new set (one category, #331) is in place.
+		_, err := q.LockPostForTerms(ctx, arg.PostID)
 		if err != nil {
 			return fmt.Errorf("post %d not found: %w", arg.PostID, err)
 		}
@@ -616,6 +657,10 @@ func (store *SQLStore) UpdatePostTaxonomyTermsTx(ctx context.Context, arg Update
 			}
 		}
 
+		// No category in the new set: the default one (#331).
+		if _, err := q.EnsureDefaultCategory(ctx, []int64{arg.PostID}); err != nil {
+			return fmt.Errorf("default category for post %d: %w", arg.PostID, err)
+		}
 		return nil
 	})
 
@@ -635,7 +680,7 @@ func (store *SQLStore) CreateTaxonomyTermAndLinkTx(ctx context.Context, arg Crea
 		}
 
 		// Validate that the post exists
-		_, err = q.GetPost(ctx, arg.PostID)
+		_, err = q.LockPostForTerms(ctx, arg.PostID)
 		if err != nil {
 			return fmt.Errorf("post %d not found: %w", arg.PostID, err)
 		}
@@ -644,6 +689,11 @@ func (store *SQLStore) CreateTaxonomyTermAndLinkTx(ctx context.Context, arg Crea
 		result.TaxonomyTerm, err = q.CreateTaxonomyTerm(ctx, arg.CreateTaxonomyTermParams)
 		if err != nil {
 			return fmt.Errorf("failed to create taxonomy term: %w", err)
+		}
+
+		// A new category replaces the post's category (#331: one per post).
+		if _, err := q.RemovePostCategoriesExcept(ctx, RemovePostCategoriesExceptParams{PostID: arg.PostID, KeepTermID: result.TaxonomyTerm.ID}); err != nil {
+			return fmt.Errorf("failed to replace the post's category: %w", err)
 		}
 
 		// link the term to the post
@@ -711,6 +761,9 @@ type UpdatePostMediaTxParams struct {
 type UpdatePostWithSlugTxParams struct {
 	UpdatePostParams
 	Slug string
+	// Redirect from the post's old public URL to the new one (#331); nil for none
+	// (an unpublished post, or URLs by id).
+	Redirect *AddRedirectParams
 }
 
 // UpdatePostWithSlugTx applies UpdatePost and the slug change in one
@@ -725,6 +778,10 @@ func (store *SQLStore) UpdatePostWithSlugTx(ctx context.Context, arg UpdatePostW
 		}
 		var err error
 		post, err = q.UpdatePostSlug(ctx, UpdatePostSlugParams{ID: arg.ID, Slug: arg.Slug})
+		if err != nil {
+			return err
+		}
+		_, err = addRedirects(ctx, q, []*AddRedirectParams{arg.Redirect})
 		return err
 	})
 	return post, err
@@ -808,7 +865,9 @@ func (store *SQLStore) CreatePostWithMediaTx(ctx context.Context, arg CreatePost
 			result.PostMedia = append(result.PostMedia, postMedia)
 		}
 
-		return nil
+		// A post of type "post" starts in the default category (#331).
+		_, err = q.EnsureDefaultCategory(ctx, []int64{result.Post.ID})
+		return err
 	})
 
 	return result, err

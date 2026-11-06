@@ -262,8 +262,10 @@ is **deployment**:
   library adds about twenty types over a dozen deploys, so the foundation includes a
   guard: the client sends its schema fingerprint (a hash of the schema spec) in the auth
   message, and the server refuses a mismatch with a new reason (`schema-mismatch`) that
-  makes the client reload. Until that lands, each block PR's description says "reload
-  open admin tabs after deploying" as #346's did.
+  makes the client reload. **Built in #416** (`schemaFingerprint.ts`; rule 10 in
+  `web/gl-admin/lib/collaboration/CLAUDE.md` says what counts as a change). A block PR that
+  ships before it reaches production still says "reload open admin tabs after deploying",
+  as #346's did.
 - `meta.dropped` entries with a container `parentId` need no format change.
 
 ### 2.8 Paste (#128)

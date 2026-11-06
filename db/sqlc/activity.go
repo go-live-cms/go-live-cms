@@ -10,6 +10,10 @@ const (
 	ActivityObjectUser       = "user"
 	ActivityObjectInvitation = "invitation"
 	ActivityObjectSettings   = "settings"
+	// Taxonomies and redirects (#331): admin-only in the feed (ListActivity shows
+	// moderators only post and media events).
+	ActivityObjectTerm     = "term"
+	ActivityObjectRedirect = "redirect"
 )
 
 const (
@@ -70,6 +74,14 @@ const (
 
 	// Site settings.
 	ActivitySettingsUpdated = "settings_updated"
+
+	// Taxonomies and redirects (#331). terms_merged is on the kept term, payload
+	// source_ids, moved_posts and taxonomy; the redirect events have status_code and
+	// source (manual). Automatic redirects (slug changes) are part of the change that
+	// made them and aren't recorded on their own.
+	ActivityTermsMerged     = "terms_merged"
+	ActivityRedirectCreated = "redirect_created"
+	ActivityRedirectDeleted = "redirect_deleted"
 
 	// Edit access (#321), on the post. The requester is the actor of
 	// access_requested; the others are the reviewer's, with the requester (or

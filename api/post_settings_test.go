@@ -216,7 +216,7 @@ func TestListPublicPosts(t *testing.T) {
 		store.EXPECT().GetPostType(gomock.Any(), "post").Times(1).Return(publicType, nil)
 		store.EXPECT().CountFilteredPosts(gomock.Any(), db.CountFilteredPostsParams{PostType: "post", PostStatus: "published"}).Times(1).Return(int64(2), nil)
 		store.EXPECT().ListPosts(gomock.Any(), db.ListPostsParams{
-			PostType: "post", PostStatus: "published", SortColumn: "created_at", SortDirection: "desc", LimitCount: 20,
+			PostType: "post", PostStatus: "published", SortColumn: "created_at", SortDirection: "desc", LimitCount: 20, PublishedCategory: true,
 		}).Times(1).Return([]db.ListPostsRow{
 			{
 				ID: 1, Title: "Working title", Description: "Working excerpt", PostStatus: "published",

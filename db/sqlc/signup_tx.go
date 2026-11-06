@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+
+	"github.com/lib/pq"
 )
 
 // SignupRole is the role every account created by open signup gets (#191). It is
@@ -96,6 +98,15 @@ func (store *SQLStore) ConfirmSignupTx(ctx context.Context, tokenHash []byte) (U
 // IsUniqueViolation reports a unique constraint violation, by message, so no
 // driver type is needed (the api package's isUniqueViolation uses it).
 func IsUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	// By SQLSTATE too: a trigger raising unique_violation (000047's one category per
+	// post) has its own message.
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+		return true
+	}
 	msg := err.Error()
 	return strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "unique constraint")
 }

@@ -89,6 +89,10 @@ func (store *SQLStore) CreatePostFromTemplateTx(ctx context.Context, arg CreateP
 		if err := q.CopyTemplateTermsToPost(ctx, CopyTemplateTermsToPostParams{NewPostID: post.ID, TemplateID: template.ID}); err != nil {
 			return err
 		}
+		// A template saved without its category: the default one (#331).
+		if _, err := q.EnsureDefaultCategory(ctx, []int64{post.ID}); err != nil {
+			return err
+		}
 		if template.FeaturedMediaID.Valid {
 			if err := setTemplateFeaturedImage(ctx, q, post.ID, template.FeaturedMediaID.Int64, arg.PublicMediaPath); err != nil {
 				return err
