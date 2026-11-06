@@ -128,6 +128,7 @@ type Post struct {
 	PublishError         sql.NullString        `json:"publish_error"`
 	DeletedAt            sql.NullTime          `json:"deleted_at"`
 	TrashedFromStatus    sql.NullString        `json:"trashed_from_status"`
+	PageTemplate         string                `json:"page_template"`
 }
 
 type PostAccessRequest struct {
@@ -295,6 +296,7 @@ type Setting struct {
 	EditorMarkdownShortcuts bool           `json:"editor_markdown_shortcuts"`
 	EditorAllowedEmbeds     []string       `json:"editor_allowed_embeds"`
 	AllowSignup             bool           `json:"allow_signup"`
+	FrontPageID             sql.NullInt64  `json:"front_page_id"`
 }
 
 type SignupRequest struct {

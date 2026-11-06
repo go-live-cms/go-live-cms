@@ -166,6 +166,15 @@ func parseThemeConfig(slug, configPath, themePath string) (DiscoveredTheme, erro
 	// Extract postTypes declarations
 	theme.PostTypes = parsePostTypes(configStr)
 
+	// Page templates (#336, page_templates.go): the page layouts the theme ships, for
+	// the admin's picker and PUT /posts/:id/template.
+	if templates := scanPageTemplates(themePath, configStr); len(templates) > 0 {
+		if theme.Config == nil {
+			theme.Config = map[string]interface{}{}
+		}
+		theme.Config["page_templates"] = templates
+	}
+
 	// Menu locations (#347): the admin's Menus screen offers these.
 	if locations := parseMenuLocations(configStr); len(locations) > 0 {
 		if theme.Config == nil {

@@ -89,6 +89,7 @@ func (server *Server) restorePostVersionSettings(c *gin.Context) {
 		Noindex:        settings.Noindex,
 		CanonicalURL:   settings.CanonicalURL,
 		AuthorIDs:      settings.AuthorIDs,
+		PageTemplate:   settings.PageTemplate,
 	}
 	if settings.FeaturedImage != nil {
 		restored.FeaturedImageID = settings.FeaturedImage.ID

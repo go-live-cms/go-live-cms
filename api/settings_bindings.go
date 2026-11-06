@@ -1,6 +1,9 @@
 package api
 
-import "database/sql"
+import (
+	"database/sql"
+	"encoding/json"
+)
 
 // UpdateSettingsRequest represents the request body for updating settings
 type UpdateSettingsRequest struct {
@@ -16,6 +19,9 @@ type UpdateSettingsRequest struct {
 	EditorAllowedEmbeds     *[]string `json:"editor_allowed_embeds" binding:"omitempty,max=20,dive,max=32,embed_provider"`
 	// "Allow anyone to sign up" (#191). Admins only, like every settings write.
 	AllowSignup *bool `json:"allow_signup"`
+	// The front page (#336, front_page.go): a published page's id, null for the
+	// latest posts, absent to keep it.
+	FrontPageID json.RawMessage `json:"front_page_id"`
 }
 
 // setFields lists the JSON names of the settings the request sets, in field
@@ -37,6 +43,7 @@ func (req UpdateSettingsRequest) setFields() []string {
 	add(req.EditorMarkdownShortcuts != nil, "editor_markdown_shortcuts")
 	add(req.EditorAllowedEmbeds != nil, "editor_allowed_embeds")
 	add(req.AllowSignup != nil, "allow_signup")
+	add(len(req.FrontPageID) > 0, "front_page_id")
 	return fields
 }
 
@@ -55,6 +62,9 @@ type SettingsResponse struct {
 	// Open signup (#191). Public on purpose: the sign-in page reads it to decide
 	// whether to offer "Create an account".
 	AllowSignup bool `json:"allow_signup"`
+	// The page shown at / (#336), or null for the latest posts. As stored: it may
+	// name a page that isn't published any more, which / then doesn't show.
+	FrontPageID *int64 `json:"front_page_id"`
 	// The public origin (PUBLIC_BASE_URL), read-only: the domain is deploy config
 	// (docs/operations/deploy.md, "Change domain"). "" when it isn't configured.
 	SiteAddress string `json:"site_address"`

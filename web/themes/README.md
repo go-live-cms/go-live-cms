@@ -421,6 +421,27 @@ layouts: {
 
 If a requested variant doesn't exist, the system falls back to `default`. If the entire theme layout fails, it falls back to the `default` theme's layout.
 
+### Page Templates
+
+Each page picks one of the active theme's page layouts as its **template** (the editor's Template field; the Pages list shows it). The choices are the `.astro` files in `layouts/page/`, so a new file is a new template once the images are rebuilt. Name and describe them in `theme.config.ts`:
+
+```typescript
+layouts: {
+  page: {
+    default: { file: "layouts/page/default.astro", label: "Default", description: "One reading column" },
+    landing: { file: "layouts/page/landing.astro", label: "Landing", description: "A hero, then full-width sections" },
+  },
+}
+```
+
+- `default` is listed first and is required (`layouts/page/default.astro`).
+- A file without an entry is still offered, labelled from its name (`full-width.astro` → "Full width"); an entry without its file is not.
+- Names are the file names: letters, digits, `-` and `_`.
+- A page's template is a setting like its title: on a published page a new template goes live on **Update**.
+- **Switching themes:** a page whose template the new theme doesn't have renders with the new theme's `default` page layout. Its choice is kept, so switching back brings it back.
+
+The site's **front page** (Settings › General) is a page too: `/` renders it with its template, and its canonical address is `/`.
+
 ### Base Layouts
 
 For themes with shared HTML structure (header, footer, meta tags), create a `base.astro` wrapper:

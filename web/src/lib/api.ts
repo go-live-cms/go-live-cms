@@ -223,6 +223,19 @@ export async function getPublicPost(idOrSlug: string | number): Promise<PublicPo
   return { post: body.post, featured_image: body.featured_image ?? null, taxonomy_terms: body.taxonomy_terms ?? [], seo: body.seo ?? undefined }
 }
 
+// The page the site shows at / (#336, GET /public/front-page), as getPublicPost answers
+// it, or null when / shows the latest posts (none chosen, or it isn't a published page
+// any more). Any other failure throws: an API error must not turn the front page into the
+// post list.
+export async function getPublicFrontPage(): Promise<PublicPost | null> {
+  const response = await fetch(`${SERVER_MEDIA_URL}/public/front-page`, { headers: requestIdHeaders() })
+  if (response.status === 404) return null
+  if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status} loading the front page`), { status: response.status })
+  const body = await response.json()
+  if (!body?.post) return null
+  return { post: body.post, featured_image: body.featured_image ?? null, taxonomy_terms: body.taxonomy_terms ?? [], seo: body.seo ?? undefined }
+}
+
 // A public type's published posts with their published titles and excerpts (#358,
 // GET /public/posts): the feeds and short "latest posts" lists. Same sort and paging
 // parameters as the admin list (GET /posts); a type that isn't public is an error (404).

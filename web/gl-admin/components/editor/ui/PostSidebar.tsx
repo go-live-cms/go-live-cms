@@ -9,6 +9,7 @@ import PostAuthors from "./PostAuthors"
 import PostOwner from "./PostOwner"
 import type { TransferPostResult } from "@gl-admin/lib/api/posts"
 import PostSeoPanel from "./PostSeoPanel"
+import PageTemplateField from "./PageTemplateField"
 import Tabs from "@gl-admin/components/ui/Tabs"
 import type { PostSEOSettings } from "@gl-admin/lib/api/types"
 import { EXCERPT_GUIDE, softCount } from "@gl-admin/lib/postSeo"
@@ -23,8 +24,8 @@ import "@gl-admin/assets/styles/components/editor/post-settings.scss"
 // and History. Status changes go through the top bar's publish menu (Publish / Unpublish /
 // Archive); Publish date (#147) opens the Schedule dialog for a draft or a scheduled post.
 // Owner (#353) is who the post belongs to (access), with Transfer for admins; Authors
-// (#319) is the byline, separate from the owner. Not built yet, so not shown: move to
-// trash (#327).
+// (#319) is the byline, separate from the owner. A page has its Template (#336,
+// PageTemplateField). Not built yet, so not shown: move to trash (#327).
 
 type SettingsTab = "post" | "seo" | "history"
 
@@ -153,8 +154,8 @@ export default function PostSidebar({
         {status === "published" && (
           <small className="post-settings__hint" role="status">
             {settingsPending
-              ? "Settings changed: the site shows the old title, excerpt, image, terms, authors and SEO until you update."
-              : "The title, excerpt, image, terms, authors and SEO go live when you update. The URL changes at once."}
+              ? `Settings changed: the site shows the old title, excerpt, image, terms, authors${type === "page" ? ", template" : ""} and SEO until you update.`
+              : `The title, excerpt, image, terms, authors${type === "page" ? ", template" : ""} and SEO go live when you update. The URL changes at once.`}
           </small>
         )}
       </div>
@@ -257,6 +258,18 @@ export default function PostSidebar({
           <small className="post-settings__hint">Save the post first, then add categories and tags here.</small>
         )}
       </div>
+
+      {type === "page" && mode === "edit" && post.id ? (
+        <div className="post-settings__field">
+          <PageTemplateField
+            postId={post.id}
+            initial={post.page_template}
+            readOnly={readOnly}
+            settingsKey={settingsKey}
+            onSaved={onSettingsSaved}
+          />
+        </div>
+      ) : null}
 
       <div className="post-settings__field">
         <FeaturedImage value={featuredImage} onChange={setFeaturedImage} postId={post.id} disabled={!post.id || readOnly} />

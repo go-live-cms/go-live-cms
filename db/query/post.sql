@@ -10,9 +10,11 @@ INSERT INTO posts (
     post_parent,
     menu_order,
     slug,
-    block_doc
+    block_doc,
+    -- A page's template (#336): '' unless a duplicate copies it.
+    page_template
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 ) RETURNING *;
 
 -- name: CreateUserPost :one
@@ -70,7 +72,10 @@ SELECT p.id, p.title, p.description, p.user_id, p.username, p.url, p.post_type, 
     -- The Trash tab (#327): when, and the status a restore brings back.
     p.deleted_at, p.trashed_from_status,
     -- A published post's scheduled update (#335, 000035), for the list's pill.
-    su.update_at
+    su.update_at,
+    -- The page's template (#336, 000045): the Pages list's Template column. The
+    -- public list answers the published one instead.
+    p.page_template
 FROM posts p
 -- One row at most per post (the primary key). The ORDER BY below names every column
 -- with p.: su has a created_at too, and may gain others.
@@ -152,6 +157,16 @@ SET seo_title = sqlc.arg(seo_title),
     social_image_id = sqlc.narg(social_image_id),
     noindex = sqlc.arg(noindex),
     canonical_url = sqlc.arg(canonical_url),
+    changed_at = now()
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: UpdatePostPageTemplate :one
+-- PUT /posts/:id/template (#336): the page's working template ('' = the theme's
+-- default). On a published page it reaches the site on Update (golive_post_settings,
+-- 000045).
+UPDATE posts
+SET page_template = sqlc.arg(page_template),
     changed_at = now()
 WHERE id = sqlc.arg(id)
 RETURNING *;

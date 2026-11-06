@@ -261,6 +261,23 @@
     color: inherit;
     font-family: var(--font-sans);
   }
+
+  // The title and its Front page badge (#336).
+  &__heading {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  &__front {
+    flex: none;
+  }
+
+  &__template {
+    color: var(--text-secondary);
+  }
 }
 
 // Tree / List: two radios drawn as a segmented control.

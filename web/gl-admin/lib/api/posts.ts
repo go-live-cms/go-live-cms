@@ -153,6 +153,20 @@ export async function updatePostSEO(id: string | number, seo: PostSEOSettings): 
   return response.json()
 }
 
+// PUT /posts/:id/template (#336): a page's template, "" for the theme's default. Like its
+// other settings (canEditPostDetails); on a published page it reaches the site on Update.
+export async function setPageTemplate(id: string | number, template: string): Promise<{ post: Post }> {
+  const response = await authenticatedFetch(`/api/v1/posts/${id}/template`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ page_template: template }),
+  })
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, { fallback: "Saving the template failed" })
+  }
+  return response.json()
+}
+
 // The byline (#319): who the post credits, in order. Separate from the owner
 // (user_id), which alone decides access; on a published post a change reaches the
 // site on Update.

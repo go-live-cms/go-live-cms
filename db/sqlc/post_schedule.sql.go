@@ -22,7 +22,7 @@ SET post_status = 'draft',
     publish_error = NULL
 WHERE id = $1
   AND post_status = 'scheduled'
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template
 `
 
 // Unscheduling: back to draft, the time cleared. No row: not scheduled (or missing).
@@ -63,6 +63,7 @@ func (q *Queries) CancelPostSchedule(ctx context.Context, id int64) (Post, error
 		&i.PublishError,
 		&i.DeletedAt,
 		&i.TrashedFromStatus,
+		&i.PageTemplate,
 	)
 	return i, err
 }
@@ -206,7 +207,7 @@ SET post_status = 'scheduled',
     publish_error = NULL
 WHERE id = $3::bigint
   AND post_status IN ('draft', 'scheduled')
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template
 `
 
 type SchedulePostParams struct {
@@ -258,6 +259,7 @@ func (q *Queries) SchedulePost(ctx context.Context, arg SchedulePostParams) (Pos
 		&i.PublishError,
 		&i.DeletedAt,
 		&i.TrashedFromStatus,
+		&i.PageTemplate,
 	)
 	return i, err
 }

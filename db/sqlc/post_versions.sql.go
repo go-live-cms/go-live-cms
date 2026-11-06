@@ -405,17 +405,20 @@ SET seo_title = $1,
     seo_description = $2,
     social_image_id = (SELECT m.id FROM media m WHERE m.id = $3::bigint),
     noindex = $4,
-    canonical_url = $5
-WHERE posts.id = $6::bigint
+    canonical_url = $5,
+    -- The template (#336): NULL keeps the working one (a version without it).
+    page_template = COALESCE($6::text, page_template)
+WHERE posts.id = $7::bigint
 `
 
 type RestorePostSEOParams struct {
-	SeoTitle       string        `json:"seo_title"`
-	SeoDescription string        `json:"seo_description"`
-	SocialImageID  sql.NullInt64 `json:"social_image_id"`
-	Noindex        bool          `json:"noindex"`
-	CanonicalUrl   string        `json:"canonical_url"`
-	PostID         int64         `json:"post_id"`
+	SeoTitle       string         `json:"seo_title"`
+	SeoDescription string         `json:"seo_description"`
+	SocialImageID  sql.NullInt64  `json:"social_image_id"`
+	Noindex        bool           `json:"noindex"`
+	CanonicalUrl   string         `json:"canonical_url"`
+	PageTemplate   sql.NullString `json:"page_template"`
+	PostID         int64          `json:"post_id"`
 }
 
 // Restoring a version's settings (#358, #357): the working SEO fields. A social
@@ -427,6 +430,7 @@ func (q *Queries) RestorePostSEO(ctx context.Context, arg RestorePostSEOParams) 
 		arg.SocialImageID,
 		arg.Noindex,
 		arg.CanonicalUrl,
+		arg.PageTemplate,
 		arg.PostID,
 	)
 	return err
@@ -438,7 +442,7 @@ SET title = $2,
     description = $3,
     changed_at = now()
 WHERE id = $1
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template
 `
 
 type RestorePostTitleAndDescriptionParams struct {
@@ -486,6 +490,7 @@ func (q *Queries) RestorePostTitleAndDescription(ctx context.Context, arg Restor
 		&i.PublishError,
 		&i.DeletedAt,
 		&i.TrashedFromStatus,
+		&i.PageTemplate,
 	)
 	return i, err
 }
@@ -534,7 +539,7 @@ SET post_status = 'draft',
 WHERE id = $1
   -- A trashed post comes back only through restore (#327). No row: missing or trashed.
   AND post_status <> 'trash'
-RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status
+RETURNING id, title, description, user_id, username, url, post_type, post_status, post_parent, menu_order, created_at, changed_at, block_doc, block_revision, published_version_id, published_block_doc, slug, published_settings, block_doc_hash, published_block_hash, seo_title, seo_description, social_image_id, noindex, canonical_url, publish_at, publish_scheduled_by, publish_attempts, publish_next_attempt_at, publish_failed_at, publish_error, deleted_at, trashed_from_status, page_template
 `
 
 // Back to draft and drop the public snapshot (#136), settings included (#358).
@@ -576,6 +581,7 @@ func (q *Queries) UnpublishPost(ctx context.Context, id int64) (Post, error) {
 		&i.PublishError,
 		&i.DeletedAt,
 		&i.TrashedFromStatus,
+		&i.PageTemplate,
 	)
 	return i, err
 }

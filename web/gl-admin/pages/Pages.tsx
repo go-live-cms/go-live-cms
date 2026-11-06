@@ -13,8 +13,14 @@ import { PageIcon, PlusIcon } from "@gl-admin/components/ui/icons"
 import { LastEdited } from "@gl-admin/components/content/PostMeta"
 import { AccessCell, ListHeader, RowActionsCell } from "@gl-admin/components/content/ListParts"
 import { useNewPostChooser } from "@gl-admin/components/content/NewPostDialog"
+import Pill from "@gl-admin/components/ui/Pill"
 import { errorMessage } from "@gl-admin/lib/api/errors"
+import { updateSettings } from "@gl-admin/lib/api/settings"
+import { authManager } from "@gl-admin/lib/auth"
 import { canCreateContent, isContentModerator } from "@gl-admin/lib/roles"
+import { FRONT_PAGE_BADGE, canSetFrontPage, isFrontPage } from "@gl-admin/lib/frontPage"
+import { describeTemplate, missingTemplateNote, templateValue } from "@gl-admin/lib/pageTemplates"
+import { usePageTemplates } from "@gl-admin/lib/hooks/usePageTemplates"
 import { useAuthUser } from "@gl-admin/lib/hooks/useAuthUser"
 import { useSiteSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { useListParams } from "@gl-admin/lib/hooks/useListParams"
@@ -29,8 +35,12 @@ import "@gl-admin/assets/styles/pages/content-list.scss"
 // load in pages of 100 instead of through Pagination.
 //
 // New offers Blank or one of the type's post templates (#322), when it has any.
-// Hidden until their issues land: search, the Front page badge and the (page layout)
-// Template column (#336). A published page with changes not published (#326) shows that pill.
+// A published page with changes not published (#326) shows that pill. The front page
+// (#336) has a badge; admins set it from a published page's row menu ("Set as front
+// page", PUT /settings), and unpublishing, archiving or trashing it asks first. The
+// Template column (#336, moderators: contributors' rows come from with_meta lists,
+// which don't carry it) names each page's layout in the active theme (lib/pageTemplates).
+// Hidden until its issue lands: search.
 
 // The moderators' status tabs: pages have no "My posts" view.
 const TABS = MODERATOR_TABS
@@ -68,7 +78,13 @@ export default function Pages({ typeName, postType }: PagesProps) {
   const user = useAuthUser()
   const moderator = isContentModerator(user?.role)
   const canCreate = canCreateContent(user?.role)
-  const structure = useSiteSettings()?.post_url_structure ?? "id"
+  const siteSettings = useSiteSettings()
+  const structure = siteSettings?.post_url_structure ?? "id"
+  // The front page (#336): the saved setting, then what "Set as front page" chose here.
+  const [chosenFrontPage, setChosenFrontPage] = useState<number | null | undefined>(undefined)
+  const frontPageId = chosenFrontPage !== undefined ? chosenFrontPage : (siteSettings?.front_page_id ?? null)
+  const { templates } = usePageTemplates()
+  const pageType = typeName === "page"
   const [params, setParam] = useListParams()
   const tab = findTab(TABS, params.get("view"))
   const layout = params.get("layout") === "list" ? "list" : "tree"
@@ -121,6 +137,12 @@ export default function Pages({ typeName, postType }: PagesProps) {
 
   const open = (post: Post) => navigate(`/content/edit/${post.id}`)
 
+  const setFrontPage = async (page: Post) => {
+    const token = authManager.getState().accessToken || undefined
+    const saved = await updateSettings({ front_page_id: page.id }, token)
+    setChosenFrontPage(saved.front_page_id ?? page.id)
+  }
+
   const columns: TableColumnWithRender<PageRow<Post>>[] = [
     {
       key: "page",
@@ -145,9 +167,16 @@ export default function Pages({ typeName, postType }: PagesProps) {
             )}
             <PageIcon className="gl-page-row__icon" />
             <div className="gl-content-list__title">
-              <Link to={`/content/edit/${page.id}`} className="gl-content-list__link">
-                {page.title || "Untitled"}
-              </Link>
+              <span className="gl-page-row__heading">
+                <Link to={`/content/edit/${page.id}`} className="gl-content-list__link">
+                  {page.title || "Untitled"}
+                </Link>
+                {isFrontPage(page, frontPageId) && (
+                  <Pill tone="neutral" dot={false} className="gl-page-row__front">
+                    {FRONT_PAGE_BADGE}
+                  </Pill>
+                )}
+              </span>
               <span className="gl-content-list__path gl-content-list__path--mono">
                 {postPath(page, structure)}
                 {/* The parent is in another tab (or gone): say where the page lives. */}
@@ -175,8 +204,26 @@ export default function Pages({ typeName, postType }: PagesProps) {
         />
       ),
     },
-    { key: "orphan", name: "Last edited", width: "8.5rem", render: (_, row) => <LastEdited post={row?.page ?? null} /> },
   ]
+  if (moderator && pageType) {
+    columns.push({
+      key: "template" as keyof PageRow<Post>,
+      name: "Template",
+      width: "8.5rem",
+      render: (_, row) => {
+        if (!row) return <Skeleton shape="text" width={64} />
+        const shown = describeTemplate(templates, row.page.page_template)
+        const note = shown.missing ? missingTemplateNote(templateValue(row.page.page_template), shown.label) : undefined
+        return (
+          <span className="gl-page-row__template" title={note ?? shown.description}>
+            {shown.label}
+            {note && <span className="gl-content-list__sr">. {note}</span>}
+          </span>
+        )
+      },
+    })
+  }
+  columns.push({ key: "orphan", name: "Last edited", width: "8.5rem", render: (_, row) => <LastEdited post={row?.page ?? null} /> })
   if (!moderator) {
     columns.push({
       key: "access" as keyof PageRow<Post>,
@@ -190,7 +237,19 @@ export default function Pages({ typeName, postType }: PagesProps) {
     name: "Actions",
     width: moderator ? "3.5rem" : "8.5rem",
     render: (_, row) =>
-      row && <RowActionsCell post={row.page} user={user} onOpen={open} onChanged={reload} noun={singular} />,
+      row && (
+        <RowActionsCell
+          post={row.page}
+          user={user}
+          onOpen={open}
+          onChanged={reload}
+          noun={singular}
+          frontPage={{
+            isFront: isFrontPage(row.page, frontPageId),
+            onSet: canSetFrontPage(user, row.page, frontPageId) ? () => setFrontPage(row.page) : undefined,
+          }}
+        />
+      ),
   })
 
   const newButton = canCreate && (

@@ -366,6 +366,11 @@
     }
   }
 
+  // The front page (#336) isn't published: the home page shows the latest posts.
+  &__front-warning {
+    color: var(--warning-text);
+  }
+
   // The date presets in a row, each labelled with today's date in that format.
   & &__date-format {
     display: flex;

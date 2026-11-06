@@ -60,8 +60,23 @@ vi.mock("@gl-admin/lib/api/postTypes", () => ({
       ],
     }),
 }))
+const site = vi.hoisted(() => ({ frontPageId: null as number | null, updateSettings: vi.fn() }))
 vi.mock("@gl-admin/lib/api/settings", () => ({
-  getSettings: () => Promise.resolve({ post_url_structure: "slug", site_title: "GoLive Blog" }),
+  getSettings: () => Promise.resolve({ post_url_structure: "slug", site_title: "GoLive Blog", front_page_id: site.frontPageId }),
+  updateSettings: site.updateSettings,
+}))
+// The active theme's page templates (#336).
+vi.mock("@gl-admin/lib/api/themes", () => ({
+  getActiveTheme: () =>
+    Promise.resolve({
+      slug: "default",
+      config: {
+        page_templates: [
+          { name: "default", label: "Default", description: "One reading column" },
+          { name: "fullwidth", label: "Full width" },
+        ],
+      },
+    }),
 }))
 
 import Content from "./Content"
@@ -556,6 +571,108 @@ describe("Pages list", () => {
     api.getPosts.mockImplementation(() => list([]))
     await render("/content/page")
     expect(text()).toContain("No pages yet")
+  })
+})
+
+describe("Front page and templates in Pages (#336)", () => {
+  const settle = () =>
+    act(async () => {
+      for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0))
+    })
+  const pages = () =>
+    list([
+      post(1, { title: "About", post_type: "page", post_status: "published", page_template: "fullwidth" }),
+      post(2, { title: "Team", post_type: "page", post_status: "draft", page_template: "landing" }),
+      post(3, { title: "Home", post_type: "page", post_status: "published", page_template: "" }),
+    ])
+  const row = (title: string) =>
+    Array.from(container.querySelectorAll<HTMLTableRowElement>("tbody tr")).find((tr) => tr.querySelector(".gl-content-list__link")?.textContent === title)!
+  const openMenu = async (title: string) => {
+    await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label='Actions for ${title}']`)!.click())
+  }
+  const menuItem = (label: string) =>
+    Array.from(document.querySelectorAll<HTMLElement>("[role='menuitem']")).find((m) => m.textContent?.startsWith(label))
+  const dialog = () => document.querySelector<HTMLElement>("[role='alertdialog']")
+
+  beforeEach(() => {
+    site.frontPageId = 3
+    site.updateSettings.mockReset()
+    api.getPosts.mockImplementation(pages)
+  })
+  afterEach(() => {
+    site.frontPageId = null
+    vi.restoreAllMocks()
+  })
+
+  it("marks the front page and names each page's template", async () => {
+    await render("/content/page")
+    await settle()
+    expect(row("Home").textContent).toContain("Front page")
+    expect(row("About").textContent).not.toContain("Front page")
+    const headers = Array.from(container.querySelectorAll("thead th")).map((th) => th.textContent)
+    expect(headers).toContain("Template")
+    const template = (title: string) => row(title).querySelector(".gl-page-row__template")!
+    expect(template("About").textContent).toBe("Full width")
+    expect(template("Home").textContent).toBe("Default")
+    // A template the active theme doesn't have: the default, and why.
+    expect(template("Team").textContent).toContain("Default")
+    expect(template("Team").getAttribute("title")).toBe("“landing” isn’t in the active theme, so the page uses Default.")
+  })
+
+  it("lets an admin make a published page the front page from its row menu", async () => {
+    api.user.role = "admin"
+    const success = vi.spyOn(toast, "success")
+    site.updateSettings.mockResolvedValue({ front_page_id: 1 })
+    await render("/content/page")
+    await settle()
+
+    await openMenu("Home")
+    expect(menuItem("Set as front page")).toBeUndefined()
+    await act(async () => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })))
+    await openMenu("Team")
+    expect(menuItem("Set as front page")).toBeUndefined()
+    await act(async () => document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })))
+
+    await openMenu("About")
+    await act(async () => menuItem("Set as front page")!.click())
+    await settle()
+    expect(site.updateSettings).toHaveBeenCalledWith({ front_page_id: 1 }, undefined)
+    expect(success).toHaveBeenCalledWith("“About” is now your front page")
+    expect(row("About").textContent).toContain("Front page")
+    expect(row("Home").textContent).not.toContain("Front page")
+  })
+
+  it("gives editors no Set as front page: settings are admins' only", async () => {
+    await render("/content/page")
+    await settle()
+    await openMenu("About")
+    expect(menuItem("Duplicate")).toBeDefined()
+    expect(menuItem("Set as front page")).toBeUndefined()
+  })
+
+  it("asks before moving the front page to the trash", async () => {
+    api.trashPost.mockResolvedValue({ post: post(3, { post_type: "page", post_status: "trash" }) })
+    await render("/content/page")
+    await settle()
+
+    await openMenu("Home")
+    await act(async () => menuItem("Move to trash")!.click())
+    await settle()
+    expect(api.trashPost).not.toHaveBeenCalled()
+    expect(dialog()?.textContent).toContain("Move your front page to the trash?")
+    expect(dialog()?.textContent).toContain("the home page shows your latest posts instead")
+
+    const confirm = Array.from(dialog()!.querySelectorAll("button")).find((b) => b.textContent === "Move to trash")!
+    await act(async () => confirm.click())
+    await settle()
+    expect(api.trashPost).toHaveBeenCalledWith(3)
+
+    // Any other page goes straight to the trash.
+    api.trashPost.mockClear()
+    await openMenu("About")
+    await act(async () => menuItem("Move to trash")!.click())
+    await settle()
+    expect(api.trashPost).toHaveBeenCalledWith(1)
   })
 })
 

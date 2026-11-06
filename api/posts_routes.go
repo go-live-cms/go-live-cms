@@ -96,6 +96,9 @@ func (server *Server) RegisterPostRoutes(rg *gin.RouterGroup) {
 
 		// SEO settings (#357): editors and admins; contributors see them read-only
 		posts.PUT("/:id/seo", auth, requireContentEditor(server), server.updatePostSEO)
+		// A page's template (#336, page_templates.go): canEditPostDetails, like its
+		// featured image
+		posts.PUT("/:id/template", auth, author, server.updatePostPageTemplate)
 
 		// Byline authors (#319): read with canReadPost, set with canEditPostDetails
 		posts.GET("/:id/authors", auth, author, server.getPostAuthors)

@@ -19,15 +19,20 @@ const MAX_AGE_SECONDS = 600
 const cache = new Map<string, { xml: Promise<string>; expires: number }>()
 
 function buildSitemap(siteUrl: string): Promise<string> {
+  // One settings read for the URL structure and the front page (#336).
+  const settings = getSettings().catch((error) => {
+    log.warn("sitemap_settings_fetch_failed", { fallback: "id urls", error })
+    return null
+  })
   return collectSitemapEntries(siteUrl, {
     getPublicPostTypeNames,
     getUrlStructure: async () => {
-      try {
-        return normalizeUrlStructure((await getSettings())?.post_url_structure)
-      } catch (error) {
-        log.warn("sitemap_settings_fetch_failed", { fallback: "id urls", error })
-        return "id"
-      }
+      const loaded = await settings
+      return loaded ? normalizeUrlStructure(loaded.post_url_structure) : "id"
+    },
+    getFrontPageId: async () => {
+      const id = (await settings)?.front_page_id
+      return typeof id === "number" && id > 0 ? id : null
     },
     getPublishedPosts: async (type, limit, offset) =>
       (await getPublishedPosts(type, { sort: "id", order: "asc", limit, offset })).data,

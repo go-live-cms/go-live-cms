@@ -353,6 +353,9 @@ export interface SitemapSource {
   getAuthors?(): Promise<{ username: string; last_modified?: string }[]>
   // Every term archive with a post (#348) and that post's newest change. Optional too.
   getTerms?(): Promise<{ taxonomy: string; slug: string; last_modified?: string }[]>
+  // The front page's id (#336): it lives at /, which the sitemap always lists, so its
+  // own URL (whose canonical is /) is left out. Optional; null = none.
+  getFrontPageId?(): Promise<number | null>
 }
 
 // An author's page (#350).
@@ -385,7 +388,11 @@ export async function collectSitemapEntries(siteUrl: string, source: SitemapSour
   // rejections unhandled meanwhile (awaiting them below still rethrows).
   authorsPromise.catch(() => {})
   termsPromise.catch(() => {})
-  const [types, structure] = await Promise.all([source.getPublicPostTypeNames(), source.getUrlStructure()])
+  const [types, structure, frontPageId] = await Promise.all([
+    source.getPublicPostTypeNames(),
+    source.getUrlStructure(),
+    source.getFrontPageId?.() ?? Promise.resolve(null),
+  ])
   // Types are fetched in parallel (each still pages sequentially), then joined
   // in the API's type order.
   const perType = await Promise.all(
@@ -397,6 +404,7 @@ export async function collectSitemapEntries(siteUrl: string, source: SitemapSour
         for (const post of page) {
           if (post.post_status !== "published" || (post.post_type && post.post_type !== type)) continue
           if (post.noindex) continue
+          if (type === "page" && frontPageId != null && post.id === frontPageId) continue
           const lastmod = postLastmod(post)
           if (lastmod && (!newest || lastmod > newest)) newest = lastmod
           postEntries.push({ loc: absoluteUrl(siteUrl, postPath({ ...post, post_type: type }, structure)), lastmod })

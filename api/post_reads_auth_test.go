@@ -371,6 +371,8 @@ func TestPublicNeverServesDrafts(t *testing.T) {
 		fmt.Sprintf("/public/posts/%d/adjacent", f.published.ID),
 		fmt.Sprintf("/public/posts/%d/related", f.published.ID),
 		"/public/terms",
+		// The front page (#336): only ever a published page.
+		"/public/front-page",
 	} {
 		recorder := f.get(t, nil, path)
 		require.Less(t, recorder.Code, http.StatusInternalServerError, "%s: %s", path, recorder.Body.String())

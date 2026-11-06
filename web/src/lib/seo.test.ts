@@ -218,6 +218,24 @@ describe("collectSitemapEntries", () => {
     ])
   })
 
+  // #336: the front page lives at /; its own URL's canonical is /, so it isn't listed.
+  it("lists the front page only as /", async () => {
+    const entries = await collectSitemapEntries("https://example.org", {
+      ...source({
+        post: [post({ id: 3 })],
+        page: [post({ id: 3, post_type: "page" }), post({ id: 4, post_type: "page" })],
+      }),
+      getFrontPageId: async () => 3,
+    })
+    expect(entries.map((e) => e.loc)).toEqual([
+      "https://example.org/",
+      "https://example.org/post",
+      "https://example.org/post/3",
+      "https://example.org/page",
+      "https://example.org/page/4",
+    ])
+  })
+
   it("skips drafts (incl. unpublished posts) and archived posts even if the API returns them", async () => {
     const entries = await collectSitemapEntries(
       "https://example.org",

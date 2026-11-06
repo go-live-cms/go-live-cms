@@ -138,10 +138,12 @@ func (server *Server) publicPostView(ctx context.Context, post db.Post) (publicP
 	resp.Title, resp.Description = publicTitleAndDescription(post.Title, post.Description, post.PublishedSettings)
 	// The working SEO settings wait for Update: only the published ones (below) go out.
 	resp.SEO = nil
+	settings, published := decodePostSettings(post.PublishedSettings)
+	// So does a page's template (#336).
+	resp.PageTemplate = publishedPageTemplate(settings, post.PageTemplate)
 	server.attachBlockMedia(ctx, resp.PublishedBlocks)
 	view := publicPostView{Post: resp, TaxonomyTerms: []TaxonomyTermResponse{}}
 
-	settings, published := decodePostSettings(post.PublishedSettings)
 	if published {
 		seo, err := server.publicSEO(ctx, settings)
 		if err != nil {
@@ -245,6 +247,7 @@ func (server *Server) listPublicPosts(c *gin.Context) {
 		posts[i].Title, posts[i].Description = publicTitleAndDescription(row.Title, row.Description, row.PublishedSettings)
 		settings, _ := decodePostSettings(row.PublishedSettings)
 		posts[i].Noindex = publishedNoindex(settings)
+		posts[i].PageTemplate = publishedPageTemplate(settings, row.PageTemplate)
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"posts": posts,

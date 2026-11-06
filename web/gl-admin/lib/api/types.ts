@@ -161,6 +161,10 @@ export interface Post {
   scheduled_update?: ScheduledUpdate | null
   // Its open review request (#323): with_meta list rows, for reviewers and the owner.
   review_request?: ReviewRequestSummary | null
+  // A page's template (#336): one of the active theme's page layouts, "" = the theme's
+  // default. The working one in admin responses (not with_meta rows), the published one
+  // from /public.
+  page_template?: string
 }
 
 // A published post's pending update (#335): its content was frozen at scheduled_at.

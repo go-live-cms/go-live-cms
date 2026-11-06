@@ -14,6 +14,7 @@ import Skeleton from "@gl-admin/components/ui/Skeleton"
 import Button from "@gl-admin/components/ui/Button"
 import EmptyState from "@gl-admin/components/ui/EmptyState"
 import UnsavedChangesBar from "@gl-admin/components/ui/UnsavedChangesBar"
+import FrontPageField from "@gl-admin/components/settings/FrontPageField"
 import { CheckIcon, ExternalIcon, WarningIcon } from "@gl-admin/components/ui/icons"
 import { errorMessage } from "@gl-admin/lib/api/errors"
 import {
@@ -32,6 +33,8 @@ import {
 } from "@gl-admin/lib/settingsForm"
 import "@gl-admin/assets/styles/pages/workspace.scss"
 
+// General also has the Front page (#336, FrontPageField; not on the board), also set from
+// a page's row menu in Pages.
 // Settings (#343, #330; the Settings board): General, Editor and Accounts (#191: open
 // signup; the board has no Accounts section, so it reuses the Editor card). Changes wait in the
 // sticky unsaved-changes bar until saved or discarded. Admins only (the route's
@@ -136,7 +139,7 @@ const SettingsPage: React.FC = () => {
     try {
       setSaving(true)
       const token = authManager.getState().accessToken || undefined
-      const updatedSettings = await updateSettings(toUpdateRequest(draft), token)
+      const updatedSettings = await updateSettings(toUpdateRequest(draft, saved), token)
       // Scheduled times (#147) are shown in the site's zone: re-read it.
       resetSiteDateSettings()
 
@@ -326,6 +329,7 @@ const SettingsPage: React.FC = () => {
                   />
                 </div>
 
+                <FrontPageField value={draft.front_page_id} onChange={(id) => update({ front_page_id: id })} />
                 <Input
                   title="Posts per page"
                   unmasked

@@ -56,6 +56,10 @@ type PostResponse struct {
 	UpdateAt *time.Time `json:"update_at,omitempty"`
 	// ScheduledUpdate is that update in full, on GET /posts/:id and /slug/:slug.
 	ScheduledUpdate *ScheduledUpdateResponse `json:"scheduled_update,omitempty"`
+	// PageTemplate is a page's layout in the active theme (#336, page_templates.go;
+	// "" = the theme's default). The admin gets the working one; /public answers the
+	// published one (publishedPageTemplate). Not in the with_meta lists.
+	PageTemplate string `json:"page_template"`
 }
 
 // ScheduleFailureResponse says why a scheduled post isn't live yet (#147) and
@@ -181,6 +185,7 @@ func toPostResponse(post db.Post) PostResponse {
 		ScheduleFailure:   scheduleFailure(post),
 		DeletedAt:         nullTimePtr(post.DeletedAt),
 		TrashedFromStatus: post.TrashedFromStatus.String,
+		PageTemplate:      post.PageTemplate,
 	}
 }
 
@@ -216,6 +221,7 @@ func toPostResponseFromListRow(post db.ListPostsRow) PostResponse {
 		DeletedAt:             nullTimePtr(post.DeletedAt),
 		TrashedFromStatus:     post.TrashedFromStatus.String,
 		UpdateAt:              nullTimePtr(post.UpdateAt),
+		PageTemplate:          post.PageTemplate,
 	}
 }
 

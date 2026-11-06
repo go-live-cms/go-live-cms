@@ -35,6 +35,23 @@ export async function loadThemeLayout(glob: LayoutGlob, candidates: string[]): P
 // error, author, term, search): a post type with one of these names must not pick them up.
 export const RESERVED_LAYOUT_KINDS = new Set(["home", "archive", "error", "author", "term", "search"])
 
+// A page template's name (#336): a layout file's name, the API's rule
+// (api/page_templates.go).
+const PAGE_TEMPLATE_NAME = /^[A-Za-z0-9_-]{1,64}$/
+
+// The layout variant a page renders with (#336): its own template (published, from
+// /public) when the active theme has that page layout in this build, else the type's
+// variant (the theme's layout_variants setting) when it has that one, else "default".
+// A template the theme doesn't have (after a theme switch) renders as the default and
+// stays stored, so switching back brings it back.
+export function pageLayoutVariant(glob: LayoutGlob, prefix: string, themeSlug: string, template: string | undefined, typeVariant: string): string {
+  const has = (name: string | undefined): name is string =>
+    !!name && PAGE_TEMPLATE_NAME.test(name) && `${prefix}/${themeSlug}/layouts/page/${name}.astro` in glob
+  if (has(template)) return template
+  if (has(typeVariant)) return typeVariant
+  return "default"
+}
+
 // The post route's chain: the type's own variant, the theme's generic post layouts, then
 // the default theme's.
 export function postLayoutCandidates(prefix: string, themeSlug: string, postType: string, variant: string): string[] {

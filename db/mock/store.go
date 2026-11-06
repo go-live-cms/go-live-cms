@@ -2368,6 +2368,21 @@ func (mr *MockStoreMockRecorder) GetPublicAuthor(arg0, arg1 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicAuthor", reflect.TypeOf((*MockStore)(nil).GetPublicAuthor), arg0, arg1)
 }
 
+// GetPublicFrontPage mocks base method.
+func (m *MockStore) GetPublicFrontPage(arg0 context.Context) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPublicFrontPage", arg0)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPublicFrontPage indicates an expected call of GetPublicFrontPage.
+func (mr *MockStoreMockRecorder) GetPublicFrontPage(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPublicFrontPage", reflect.TypeOf((*MockStore)(nil).GetPublicFrontPage), arg0)
+}
+
 // GetPublicTerm mocks base method.
 func (m *MockStore) GetPublicTerm(arg0 context.Context, arg1 db.GetPublicTermParams) (db.GetPublicTermRow, error) {
 	m.ctrl.T.Helper()
@@ -4787,6 +4802,21 @@ func (m *MockStore) UpdatePostMeta(arg0 context.Context, arg1 db.UpdatePostMetaP
 func (mr *MockStoreMockRecorder) UpdatePostMeta(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostMeta", reflect.TypeOf((*MockStore)(nil).UpdatePostMeta), arg0, arg1)
+}
+
+// UpdatePostPageTemplate mocks base method.
+func (m *MockStore) UpdatePostPageTemplate(arg0 context.Context, arg1 db.UpdatePostPageTemplateParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePostPageTemplate", arg0, arg1)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePostPageTemplate indicates an expected call of UpdatePostPageTemplate.
+func (mr *MockStoreMockRecorder) UpdatePostPageTemplate(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostPageTemplate", reflect.TypeOf((*MockStore)(nil).UpdatePostPageTemplate), arg0, arg1)
 }
 
 // UpdatePostSEO mocks base method.
