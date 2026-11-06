@@ -1320,10 +1320,11 @@ export default function PostForm({ mode, initialData, onSuccess, onError, conten
               readOnly={contentReadOnly}
               // The server re-checked access and it changed (#313): the role cached here is
               // stale. Not after a revoke (the editor shows "sign in again"), nor when the
-              // server just couldn't confirm access (the API is struggling; no role change).
+              // server just couldn't confirm access (the API is struggling; no role change),
+              // nor when it refused this editor's schema (#416: only a reload helps).
               // A grant or a revoke (#321) changes the access too: re-read it with the role.
               onAccessChange={(change) => {
-                if (change.revoked || change.reason === "unverified") return
+                if (change.revoked || change.outdated || change.reason === "unverified") return
                 void authManager.refreshUser().then((user) => setMe(user ?? undefined))
                 void reloadAccess()
                 // Or the post changed owner (#353): a contributor who lost it keeps

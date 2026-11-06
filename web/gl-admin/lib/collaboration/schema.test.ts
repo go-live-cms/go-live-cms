@@ -3,6 +3,8 @@ import { getSchema } from "@tiptap/core"
 import type { Schema } from "prosemirror-model"
 import { getExtensions } from "@gl-admin/components/editor/utils/extensions"
 import { getCoreSchema, schemaExtensions, schemaWithStandIns } from "./schema"
+import { schemaFingerprint } from "./schemaFingerprint"
+import { editorSchemaFingerprint } from "@gl-admin/components/editor/utils/editorSchema"
 import { getInstalledCollabSchema } from "../theme-blocks/collabSchema"
 import { installedThemeBlocks } from "../theme-blocks/installed"
 
@@ -36,6 +38,19 @@ describe("collab schema parity (#206)", () => {
   it("the editor's schema is exactly the collab server's", () => {
     const editorSchema = getSchema(getExtensions({ collabProvider: null })())
     expect(describeSchema(editorSchema)).toEqual(describeSchema(getInstalledCollabSchema()))
+  })
+
+  // #416: the server refuses an editor whose fingerprint isn't its own, so the admin bundle
+  // and the collab bundle built from one commit must agree, or nobody could connect.
+  it("the editor's schema fingerprint is exactly the collab server's", () => {
+    const serverFingerprint = schemaFingerprint(getInstalledCollabSchema())
+    expect(schemaFingerprint(getSchema(getExtensions({ collabProvider: null })()))).toBe(serverFingerprint)
+    // What the admin sends (postCollab.ts): the editor's own schema (editorSchema.ts).
+    expect(editorSchemaFingerprint()).toBe(serverFingerprint)
+    // Collaborating or not (StarterKit's undo/redo registers no schema).
+    const solo = getSchema(Object.values(schemaExtensions({ collaborating: false })))
+    expect(schemaFingerprint(solo)).toBe(schemaFingerprint(getCoreSchema()))
+    expect(serverFingerprint).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it("the collab server's schema is the core schema plus the installed theme blocks, and nothing else", () => {

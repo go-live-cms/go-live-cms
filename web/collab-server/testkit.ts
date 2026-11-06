@@ -9,6 +9,8 @@ import * as Y from "yjs"
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider"
 import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { EDITOR_FRAGMENT } from "../gl-admin/lib/collaboration/fragmentBridge"
+import { encodeCollabAuthToken, schemaFingerprint } from "../gl-admin/lib/collaboration/schemaFingerprint"
+import { getInstalledCollabSchema } from "../gl-admin/lib/theme-blocks/collabSchema"
 import { TICKET_AUDIENCE, TICKET_TYPE, type DocAccess, type TicketIdentity } from "./access"
 import { InternalApiError, type CollabRecord, type CollabStoreBody, type CollabStoreResult, type InternalApi } from "./api"
 import type { Clock } from "./recheck"
@@ -301,8 +303,23 @@ export interface Client {
   destroy(): void
 }
 
-/** A Hocuspocus client for `docName`. `token` runs on every (re)connect, like the editor's ticket fetch. */
-export function connect(url: string, docName: string, token: () => Promise<string> | string, { epoch }: { epoch?: string } = {}): Client {
+/**
+ * The fingerprint of the schema a server converts with by default (the installed collab
+ * schema, #416): what an editor built from this commit sends.
+ */
+export const SCHEMA_FINGERPRINT = schemaFingerprint(getInstalledCollabSchema())
+
+/**
+ * A Hocuspocus client for `docName`. `token` runs on every (re)connect, like the editor's
+ * ticket fetch; the ticket goes out with `schema` (default `SCHEMA_FINGERPRINT`), or bare
+ * when `schema` is null, as a client from before #416 sends it.
+ */
+export function connect(
+  url: string,
+  docName: string,
+  token: () => Promise<string> | string,
+  { epoch, schema = SCHEMA_FINGERPRINT }: { epoch?: string; schema?: string | null } = {},
+): Client {
   const doc = new Y.Doc()
   const stateless: unknown[] = []
   const closes: string[] = []
@@ -317,7 +334,10 @@ export function connect(url: string, docName: string, token: () => Promise<strin
     websocketProvider: socket,
     name: docName,
     document: doc,
-    token: async () => token(),
+    token: async () => {
+      const ticket = await token()
+      return schema === null ? ticket : encodeCollabAuthToken(ticket, schema)
+    },
     onSynced: () => settle({ synced: true, readOnly: provider.authorizedScope === "readonly" }),
     onAuthenticationFailed: ({ reason }) => settle({ synced: false, reason }),
     onStateless: ({ payload }) => stateless.push(JSON.parse(payload)),

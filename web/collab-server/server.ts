@@ -8,6 +8,7 @@ import * as Y from "yjs"
 import { Server, type Document, type Hocuspocus } from "@hocuspocus/server"
 import type { Schema } from "prosemirror-model"
 import type { BlockDocV1 } from "../gl-admin/lib/blocks-spec"
+import { schemaFingerprint } from "../gl-admin/lib/collaboration/schemaFingerprint"
 import { getInstalledCollabSchema } from "../gl-admin/lib/theme-blocks/collabSchema"
 import { isCollabDocName, postIdOf, TicketReplayGuard, type TicketClaims } from "./access"
 import type { CollabStoreBody, InternalApi } from "./api"
@@ -25,7 +26,10 @@ export interface CollabServerOptions {
   /** onStoreDocument debounce (ms). */
   debounce?: number
   maxDebounce?: number
-  /** Default: the core schema plus every installed theme block (#376). */
+  /**
+   * Default: the core schema plus every installed theme block (#376). Clients must bind
+   * with the same schema: the auth hook refuses any other fingerprint (#416).
+   */
   schema?: Schema
   newEpoch?: () => string
   /** First retry delay after a failed store (doubles up to 60s). */
@@ -86,6 +90,7 @@ export function createCollabServer(options: CollabServerOptions) {
     newEpoch,
     storeRetryMs = 2000,
   } = options
+  const fingerprint = schemaFingerprint(schema)
   const sessions = new Map<string, Session>()
   const replayGuard = new TicketReplayGuard()
   const recheck = createAccessRecheck({
@@ -108,6 +113,7 @@ export function createCollabServer(options: CollabServerOptions) {
   }
 
   const authenticate = createAuthenticate({
+    schemaFingerprint: fingerprint,
     verifyTicket: options.verifyTicket,
     consumeTicket: (claims) => replayGuard.consume(claims),
     fetchAccess: (identity, docName, { requestId }) => api.fetchAccess(identity, docName, { requestId }),
@@ -390,6 +396,8 @@ export function createCollabServer(options: CollabServerOptions) {
       return hocuspocus
     },
     flush,
+    /** The schema fingerprint clients must send (#416). */
+    schemaFingerprint: fingerprint,
     /** Re-checks a user's open connections now (internal listener, #333). */
     recheckUser: (userId: string) => recheck.checkUser(userId),
     /** Re-checks a document's open connections now (internal listener; trash, #327). */
