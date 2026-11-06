@@ -384,5 +384,5 @@ is a real block type for the editor, the collab server, the API and the public p
 - Server-side restore through `openDirectConnection` (#286).
 - Block-keyed features: decided in `docs/design/block-map-yjs-schema.md` (#315). The
   `"default"` fragment stays the only source of content; no block-map binding. Per-block
-  attribution (#328) and block comments (#192) live in Postgres, keyed by block id, and
-  not in Yjs root maps.
+  attribution (#328) and block comments (#192), neither built yet, are to be kept in
+  Postgres, keyed by block id, not in Yjs root maps.

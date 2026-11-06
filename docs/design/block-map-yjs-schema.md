@@ -40,7 +40,7 @@ TipTap 3.4.2 + y-tiptap 3.0.0 (ySyncPlugin)
         ▼
 Y.Doc "post-<id>"
   ├─ "default"  Y.XmlFragment   content + order (one Y.XmlElement per PM node)
-  └─ "meta"     Y.Map           server-owned: epoch, dropped (plus the client's restore record)
+  └─ "meta"     Y.Map           epoch, dropped (the server writes both; a restoring client rewrites dropped)
         │
         ▼ collab server (the only writer of block_doc)
   load:  block_doc → seedFragment → "default"          (load.ts, only when no usable state)
@@ -155,7 +155,7 @@ upstream's.
 The fragment and `ySyncPlugin` stay as they are. New root maps sit next to them, e.g.
 `Y.Map("block_meta")` for attribution and `Y.Map("comments")` for threads, keyed by
 `data-block-id`. TipTap needs no change: the editor reads `ydoc.getMap(...)` like
-`liveRestore.ts` reads `meta`. This is cheap, and existing docs need no migration (a
+`liveRestore.ts` writes `meta.dropped`. This is cheap, and existing docs need no migration (a
 root map that doesn't exist yet is just empty).
 
 Its problems are trust and lifetime, not binding:
@@ -247,10 +247,13 @@ Everything keyed by block id depends on when an id survives. As built today:
 | Edit | Block id | Why |
 |---|---|---|
 | Typing, formatting, attribute changes | Kept | Same node |
-| Turn into (heading ⇄ paragraph, etc.) | Kept | `data-block-id` is a global attribute, carried over (Block Spec README) |
+| Turn into (heading ⇄ paragraph, etc.), caret or selection in one block | Kept | TipTap's `setNode` copies the block's attrs, `data-block-id` included, when the selection's anchor and head share a parent |
+| Turn into, selection across several blocks | New ids | `setNode` copies no attrs then, so BlockIdExtension stamps the nodes as new |
 | Drag-handle move | Kept | PM moves the node with its attrs; the old copy is deleted in the same transaction, so BlockIdExtension sees no duplicate |
-| Split (Enter) | First half keeps it, second half gets a new one | BlockIdExtension regenerates the later duplicate in doc order |
+| Split (Enter) mid-block or at the end | First half keeps it, second half gets a new one | The split copies attrs; BlockIdExtension regenerates the later duplicate in doc order |
+| Enter at the very start of a block | The id stays on the new **empty** block above; the content moves to a node with a new id | Same rule: the content-bearing node is the later one |
 | Join (Backspace at start) | The block that absorbs the other keeps its id; the absorbed id is gone | Node removed |
+| Backspace at the start, block above empty | The block keeps its id; the empty one is removed | `joinBackward` deletes the empty block |
 | Copy and paste, cut and paste | New id | `PasteSanitizer` strips `data-block-id` (#128/#264), also in `data-pm-slice` |
 | Wrap a paragraph into a list | The list and its item get new ids; the paragraph is no longer a block | Only top-level nodes and list items are blocks (#238) |
 | Restore a version | The version's ids come back | `setEditorBlockDoc` builds nodes with the version's ids, and y-tiptap's diff keeps unchanged nodes |
@@ -329,8 +332,13 @@ fragment.observeDeep((events, tr) => {
 - New Y elements don't show up in `tr.changed`. They appear as `changes.added` on their
   parent's event, which is why the sketch looks at inserted children too. Pin both paths
   with tests on the relay testkit (`hocuspocusRelay.testkit.ts`).
-- Clear the entries a store covered only once the PUT succeeds, as `storedSnapshot` is
-  handled. A failed store keeps them for the retry.
+- Clear entries only after a successful PUT **that wrote `block_doc`**, and only the
+  entries that existed when that store was prepared (edits that arrive while the PUT is in
+  flight stay, as `storedSnapshot` is taken before the PUT). A failed store keeps them for
+  the retry. A state-only store (`unchanged`, `kept-invalid`, `kept-empty`) writes no
+  attribution, so it must not clear anything either. Otherwise an edit stored while the doc
+  was invalid would be attributed by the fallback, to whoever edited last, once a later
+  store writes `block_doc`.
 - #352 can use the same per-connection view to refuse admin-only blocks from a non-admin
   connection. Refusing has to happen before or instead of applying an update, which this
   tracker doesn't do: that part is #352's design.
@@ -380,9 +388,13 @@ Why this meets the acceptance criteria:
 - **Can't be forged by a client:** clients never write it.
 
 **Reading it:** `GET /posts/:id/block-edits` → `{ "<block_id>": { user: {id, name,
-avatar}, edited_at } }` for anyone who can read the post in the admin. The editor loads it
-once and refetches (debounced) on the collab server's `stored` message with `block_doc:
-"written"`, the same trigger #326 and #355 already use. No change to the collab protocol.
+avatar}, edited_at } }` for anyone who can read the post in the admin, once when the editor
+opens. After that, the collab server adds the rows it just stored to its `stored` message
+(`edits: [{block_id, user_id, edited_at}]`, only when `block_doc: "written"`, and only after
+the PUT succeeded), and the editor merges them, without another request. Names and avatars
+come from the user ids already loaded (the GET's users, presence). An unknown id triggers
+one refetch of the GET. Older tabs ignore the extra field. Refetching the whole table on
+every `stored` would make each open editor re-read it every few seconds while anyone types.
 The block menu reads it by the block's `data-block-id`. A block with no row (never edited
 since this shipped, or from a duplicate or template) shows no line. Avatars render through
 `Avatar` / `safeAvatarSrc` as everywhere else.
@@ -477,8 +489,12 @@ a follow-up, not part of #192's acceptance.
 - **Two places hold block-related data** (the fragment and the side tables) and are kept
   in step only by block ids. The identity contract is what keeps them consistent, so the
   tests that pin it (BlockIdExtension, stamping, paste) now protect comments and
-  attribution too. Each feature's tests should include move, split, join, paste, restore
-  and reseed.
+  attribution too. Each feature's tests should include move, split, Enter at the start of
+  a block, join, turn-into across several blocks, paste, restore and reseed. Enter at the
+  start of a commented block is the surprising case: the thread stays on the new empty
+  block above. If that turns out to confuse people, the fix belongs in BlockIdExtension's
+  split handling (give the id to the node that keeps the content), not in the comments
+  code.
 - **The concurrent move-and-edit loss stays.** Reconsider Option A if it is ever seen in
   practice, or if #352's nested containers make y-tiptap's fragment diff too lossy (for
   example, moving a column with everything in it). The anchor contract, the tracker and
