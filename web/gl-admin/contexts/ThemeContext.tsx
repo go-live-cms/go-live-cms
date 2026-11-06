@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react"
-import { editorBlockRegistry } from "../components/editor/blocks"
-import { themeSlashBlocks } from "../lib/theme-blocks/editorBlocks"
+import { setActiveTheme } from "../components/editor/blocks/catalog"
 
 interface ThemeContextValue {
   isThemeLoaded: boolean
@@ -48,8 +47,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!config) console.warn(`[ThemeProvider] Theme "${slug}" is not in this build`)
 
         // The editor already has every installed theme block in its schema (built in,
-        // #376); the active theme only decides which ones the slash menu offers.
-        if (!cancelled) themeSlashBlocks(slug).forEach((block) => editorBlockRegistry.register(block))
+        // #376); the active theme only decides which ones the block menus offer (#415).
+        if (!cancelled) setActiveTheme(slug)
 
         if (!cancelled) {
           console.log(`[ThemeProvider] Theme loaded: ${slug}`)

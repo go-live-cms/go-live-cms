@@ -1,4 +1,3 @@
-import type { Block } from "./index"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { getMediaURL } from "@gl-admin/lib/api"
 import { createPostMedia } from "@gl-admin/lib/api/posts"
@@ -149,16 +148,3 @@ export class MediaBlockManager {
     }
   }
 }
-
-export const createMediaBlocks = (): Block[] => [
-  {
-    title: "Image",
-    description: "Add an image from media library",
-    icon: "Img",
-    group: "media",
-    command: ({ editor, range }) => {
-      createImagePlaceholder(editor, range)
-    },
-    aliases: ["img", "image", "picture"],
-  },
-]

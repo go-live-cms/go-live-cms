@@ -910,9 +910,12 @@ export default themeBlockEditor(alert, {
   nodeView: AlertNodeView,
   icon: "⚠️",
   description: "Colored alert box for important messages",
-  aliases: ["alert", "warning", "notice", "callout"],
+  group: "text",
+  keywords: ["warning", "notice", "callout"],
 })
 ```
+
+The block is listed in the editor's block menus (the slash menu and the + in the margin, #415) by its definition's `title`, in `group` (`text`, the default, `media`, `layout` or `embeds`; Advanced is for core admin-only blocks), with `icon` (a short glyph) in its tile. Search matches the start of any word of the title and the start of any `keywords` entry (`aliases`, the older name, still works). The menus only offer the active theme's blocks.
 
 The node view is a normal TipTap React node view (`ReactNodeViewProps`): wrap it in `<NodeViewWrapper>`, put `<NodeViewContent>` where people type, read attrs from `node.attrs` and change them with `updateAttributes` (every collaborator sees the change). Mark controls that aren't text `contentEditable={false}`, and disable them when `!editor.isEditable` (read-only viewers). Don't add schema in the node view: it must stay the definition's node.
 
@@ -1098,7 +1101,7 @@ Understanding the full lifecycle helps when debugging:
 
 1. The editor's schema already has every installed theme block (`themes/*/blocks/*/editor.ts`, resolved when the admin is built), whichever theme is active
 2. `ThemeContext` reads `window.__ACTIVE_THEME__` (injected by middleware) and loads its `theme.config.ts` from the build
-3. It adds the active theme's blocks to the slash command menu
+3. The block menus (slash and +) offer the active theme's blocks from the block catalog (`components/editor/blocks/catalog.ts`)
 
 ---
 
@@ -1250,9 +1253,10 @@ Theme settings are automatically namespaced by slug. Your theme cannot access an
 
 **Solutions:**
 
-1. The theme must be the active one: the slash menu only offers the active theme's blocks
-2. `blocks/<Name>/editor.ts` must default-export `themeBlockEditor(...)`
-3. The admin image must have been rebuilt since the block was added (`npm test` runs `themeBlocks.loadable.test.ts`, which names what's wrong)
+1. The theme must be the active one: the block menus only offer the active theme's blocks
+2. Search matches the start of a word of the block's `title` or of a `keywords` entry: `/lert` finds nothing, `/alert` does
+3. `blocks/<Name>/editor.ts` must default-export `themeBlockEditor(...)`
+4. The admin image must have been rebuilt since the block was added (`npm test` runs `themeBlocks.loadable.test.ts`, which names what's wrong)
 
 ### "Unknown node type" error in editor
 

@@ -8,6 +8,7 @@ import { isBlockNode, validateBlockDoc } from "@gl-admin/lib/blocks-spec"
 import { BlockNodeViews } from "./BlockNodeViews"
 import { PasteSanitizer, sanitizePastedHTML } from "./PasteSanitizer"
 import { duplicateBlock } from "../utils/blockActions"
+import { CORE_BLOCKS, slotAcceptsAt } from "../blocks/catalog"
 
 // The Group block in the editor (#414): its commands and view, where the schema lets it
 // go, and fresh, unique ids for every nested block after a split, a duplicate and a paste
@@ -128,6 +129,31 @@ describe("Group commands", () => {
     // Outside any group.
     ed.commands.setTextSelection(ed.state.doc.content.size - 2)
     expect(ed.commands.setGroupAttrs({ style: "tinted" })).toBe(false)
+  })
+})
+
+describe("the menus offer what the slot accepts (#414 + #415)", () => {
+  const entry = (id: string) => CORE_BLOCKS.find((e) => e.id === id)!
+  it("Group at the top level, not inside a group or a list item; flow blocks everywhere", () => {
+    const ed = makeEditor(groupDoc())
+    // In the group's paragraph.
+    ed.commands.setTextSelection(3)
+    expect(slotAcceptsAt(ed)(entry("group"))).toBe(false)
+    expect(slotAcceptsAt(ed)(entry("paragraph"))).toBe(true)
+    expect(slotAcceptsAt(ed)(entry("image"))).toBe(true)
+    // In the list item's paragraph, inside the group.
+    let inItem = -1
+    ed.state.doc.descendants((node, pos) => {
+      if (node.type.name === "listItem" && inItem === -1) inItem = pos + 2
+    })
+    ed.commands.setTextSelection(inItem)
+    expect(slotAcceptsAt(ed)(entry("group"))).toBe(false)
+    expect(slotAcceptsAt(ed)(entry("quote"))).toBe(true)
+    // In the top-level paragraph after the group.
+    ed.commands.setTextSelection(ed.state.doc.content.size - 2)
+    expect(slotAcceptsAt(ed)(entry("group"))).toBe(true)
+    // Inserting from the catalog there makes a group.
+    expect(entry("group").insert).toBeTypeOf("function")
   })
 })
 

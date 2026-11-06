@@ -2,21 +2,14 @@ import { useEffect, useState, useCallback } from "react"
 import { BubbleMenu as TipTapBubbleMenu } from "@tiptap/react/menus"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { applyTurnInto, computeTurnIntoFromSelection, type TurnIntoValue } from "../utils/turnInto"
+import { turnIntoEntries } from "../blocks/catalog"
 import CommandSelect, { type CommandSelectOption } from "./CommandSelect"
+import { catalogSelectOptions } from "./BlockIcon"
 
-/**
- * Block type options for WordPress-style dropdown
- * Shows Paragraph and H1-H6
- */
-const blockTypeOptions: CommandSelectOption[] = [
-  { value: "paragraph", label: "Text", label_icon: "Aa" },
-  { value: "heading-1", label: "Heading 1", label_icon: "H1" },
-  { value: "heading-2", label: "Heading 2", label_icon: "H2" },
-  { value: "heading-3", label: "Heading 3", label_icon: "H3" },
-  { value: "heading-4", label: "Heading 4", label_icon: "H4" },
-  { value: "heading-5", label: "Heading 5", label_icon: "H5" },
-  { value: "heading-6", label: "Heading 6", label_icon: "H6" },
-]
+/** The block type picker's options: the catalog's paragraph and headings 1–6 (#415). */
+const blockTypeOptions: CommandSelectOption[] = catalogSelectOptions(
+  turnIntoEntries().filter((entry) => entry.type === "paragraph" || entry.type === "heading")
+)
 
 // Alignment icons as inline SVGs
 const AlignLeftIcon = () => (
@@ -105,7 +98,7 @@ const BlockTypeToolbar = ({ editor }: BlockTypeToolbarProps) => {
             if (!editor) return
             const val = option.value as TurnIntoValue
             setBlockType(val)
-            applyTurnInto(editor, val, blockTypeOptions)
+            applyTurnInto(editor, val)
           }}
         />
         <span aria-hidden="true" className="editor-toolbar__divider" />

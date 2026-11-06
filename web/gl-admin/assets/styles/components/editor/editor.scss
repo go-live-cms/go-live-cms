@@ -509,102 +509,213 @@
   }
 }
 
-// Slash menu ("Post editor"): 328px, grouped, a keyboard footer.
+// The block menus (#415, "Inserting blocks"): the slash menu and the gutter's + menu share
+// the list (ui/InsertMenu.tsx). 320px, five groups, the matched part in bold, a keyboard
+// footer; the list scrolls, the footer stays.
 .slash-command-popup {
   transform: translateZ(0);
   will-change: transform;
   z-index: var(--z-dropdown) !important;
+}
 
-  .slash-command-list {
-    @include mixins.floating-surface;
+.editor-insert {
+  @include mixins.floating-surface;
 
-    box-sizing: border-box;
-    font-size: var(--type-body);
-    line-height: var(--type-body-lh);
-    max-height: 300px; // slashCommandManager caps the popup at 300px too
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
+  padding: 6px;
+  width: min(320px, calc(100vw - 16px));
+
+  &__list {
+    max-height: min(400px, calc(100vh - 160px));
     overflow-y: auto;
-    padding: 6px;
+    padding-right: 2px;
     scroll-behavior: smooth;
-    width: min(328px, calc(100vw - 16px));
 
     @media (prefers-reduced-motion: reduce) {
       scroll-behavior: auto;
     }
   }
 
-  .slash-command-group {
+  &--add &__list {
+    max-height: min(260px, calc(100vh - 200px));
+  }
+
+  &__group {
     color: var(--text-secondary);
     font-size: var(--type-footnote);
     font-weight: 500;
-    padding: 6px var(--space-2) var(--space-1);
+    line-height: var(--type-footnote-lh);
+    padding: var(--space-2) var(--space-2) var(--space-1);
   }
 
-  .slash-command-separator {
-    background: var(--border-color);
-    height: 1px;
-    margin: 6px -6px;
-  }
-
-  .slash-command-item {
+  &__option {
     @include mixins.menu-row;
 
-    background: transparent;
-    border: 0;
-    font-family: inherit;
     gap: 10px;
-    height: 36px;
-    text-align: left;
-    width: 100%;
+    min-height: 36px;
 
-    &.selected {
+    &.is-active {
       background: var(--background-hover);
     }
-
-    .icon {
-      background: var(--background);
-      border: 1px solid var(--border-strong);
-      border-radius: 5px;
-      color: var(--text-primary);
-      display: grid;
-      flex: none;
-      font-size: var(--type-caption);
-      font-weight: 600;
-      height: 24px;
-      line-height: 1;
-      place-items: center;
-      width: 24px;
-    }
-
-    .title {
-      color: var(--text-primary);
-      flex: 1;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .hint {
-      color: var(--text-secondary);
-      font-family: var(--font-mono);
-      font-size: var(--type-footnote);
-    }
   }
 
-  .slash-command-empty {
+  &__tile {
+    background: var(--background);
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    color: var(--text-primary);
+    display: grid;
+    flex: none;
+    font-size: var(--type-caption);
+    font-weight: 600;
+    height: 24px;
+    line-height: 1;
+    place-items: center;
+    width: 24px;
+  }
+
+  &__name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__match {
+    font-weight: 600;
+  }
+
+  &__pill {
+    align-items: center;
+    background: var(--background-hover);
+    border-radius: var(--radius-full);
     color: var(--text-secondary);
-    padding: var(--space-2);
+    display: inline-flex;
+    font-size: var(--type-caption);
+    font-weight: 600;
+    height: 20px;
+    line-height: 1;
+    padding: 0 7px;
+    white-space: nowrap;
   }
 
-  .slash-command-footer {
+  &__meta {
+    color: var(--text-secondary);
+    font-size: var(--type-footnote);
+    line-height: var(--type-footnote-lh);
+  }
+
+  &__key {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: 14px 10px 12px;
+
+    b {
+      font-weight: 600;
+    }
+
+    span {
+      color: var(--text-secondary);
+    }
+  }
+
+  &__footer {
     border-top: 1px solid var(--border-color);
     color: var(--text-secondary);
     display: flex;
     flex-wrap: wrap;
-    font-size: var(--type-footnote);
+    font-size: 12px;
     gap: var(--space-3);
+    line-height: 16px;
     margin: 6px -6px -6px;
     padding: var(--space-2) 14px;
+
+    // global.scss gives every element --text-primary.
+    span {
+      color: inherit;
+    }
+  }
+
+  // The + menu's own search field.
+  &__search {
+    align-items: center;
+    background: var(--background);
+    border: 1px solid var(--focus-ring);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 0 0 2px var(--accent-subtle-hover);
+    color: var(--text-secondary);
+    display: flex;
+    flex: none;
+    gap: var(--space-2);
+    height: 32px;
+    margin-bottom: var(--space-1);
+    padding: 0 10px;
+
+    svg {
+      color: var(--text-secondary);
+      flex: none;
+    }
+  }
+
+  &__input {
+    background: transparent;
+    border: 0;
+    color: var(--text-primary);
+    flex: 1;
+    font: inherit;
+    min-width: 0;
+    outline: none;
+
+    &::placeholder {
+      color: var(--text-placeholder);
+    }
+  }
+
+  &__label {
+    @include mixins.visually-hidden;
+  }
+}
+
+// The gutter beside the hovered block: + (add a block) and the drag handle.
+.editor-gutter {
+  align-items: center;
+  display: flex;
+  gap: 2px;
+  margin-right: 6px;
+
+  &__add {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: grid;
+    height: 24px;
+    padding: 0;
+    place-items: center;
+    width: 22px;
+
+    &:hover {
+      background: var(--background-hover);
+      color: var(--text-primary);
+    }
+
+    &.is-open {
+      background: var(--background-active);
+      color: var(--text-primary);
+    }
   }
 }
 
@@ -728,8 +839,10 @@
 
   &__glyph {
     color: var(--text-secondary);
+    display: inline-grid;
     font-size: var(--type-footnote);
     font-weight: 600;
+    place-items: center;
     text-align: center;
     width: 20px;
   }
@@ -749,7 +862,6 @@
   cursor: grab;
   display: grid;
   height: 24px;
-  margin-right: 6px;
   place-items: center;
   transition: opacity var(--duration-fast) var(--ease-out);
   width: 18px;

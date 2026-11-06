@@ -213,6 +213,27 @@ are the most fragile part of the codebase. **Before editing anything under
   bar's collaborator avatars are buttons (Tooltip "Editing · Click to jump to cursor") that
   scroll to their caret, and offline it says "Offline · N edits waiting" (the provider's
   `unsyncedChanges`).
+- **Block catalog and menus (#415, design `docs/design/block-library.md` 3.1–3.2):** every
+  insertable block is one entry in `components/editor/blocks/catalog.ts` (`id`, Block Spec
+  `type`, `name`, `group` text/media/layout/embeds/advanced, `keywords`, `markdown`, `icon`,
+  `roles`, `insert(editor, range)`, optional `turnInto`; the header comment shows how to add
+  one). Core blocks are `CORE_BLOCKS`; installed theme blocks come from their
+  `themeBlockEditor(...).entry` (`group`, `keywords` options), offered only while their theme
+  is active (`setActiveTheme`, set by `ThemeProvider`). `menuEntries({ role, theme, accepts })`
+  is what a menu offers: `advanced` entries (and any with `roles`) are admins only, with the
+  "Admins" pill (a UI hint; Custom HTML is enforced by the server, #428), and `accepts` is the
+  hook for a container slot's nesting table (#414). `searchCatalog` matches the start of a
+  word of the name (bold) or the start of a keyword (shown on the right), groups in the
+  design's order, no cap. Readers: the slash menu (`ui/SlashCommand.tsx`: `/` at the start
+  of a line, not in code or a caption; the text keeps focus and points at the listbox with
+  `aria-activedescendant`; Esc closes and keeps the text), the gutter's **+**
+  (`ui/AddBlockMenu.tsx`, its own search field; inserts into the line when it's empty, else
+  on a new line below, `utils/blockGutter.ts`; Esc returns focus to +; Tab in the text
+  reaches + then the drag handle), both through `ui/InsertMenu.tsx`, plus Turn into and the
+  block-type toolbar (`utils/turnInto.ts`: values are catalog ids). The Markdown hints are
+  StarterKit's/CodeBlock's own input rules, gated by the setting
+  (`catalog.markdown.test.ts` types each one, on and off). The empty-line hint ("Type / for
+  blocks", "…, or start writing" in an empty post) shows on the focused line only.
 - **History "Highlight changes" (#355):** the History panel's switch (`lib/history/highlightChanges.ts`,
   in memory only: rule 0 rules out sessionStorage too, it survives a reload; on by default)
   makes `VersionPreview` compare the version with the working copy **as the collab server
@@ -495,8 +516,9 @@ are the most fragile part of the codebase. **Before editing anything under
   address (the API doesn't say), then `/login?reason=signup-confirmed`.
 - **Nested blocks and the Group block (#414):** containers hold their blocks by id
   (`gl-admin/lib/blocks-spec/nesting.ts` is the table; rules in
-  `gl-admin/lib/collaboration/CLAUDE.md`, "Containers"). Group: the slash menu's Layout section
-  (`components/editor/blocks/layoutBlocks.ts`; #415's catalog takes it over), the node
+  `gl-admin/lib/collaboration/CLAUDE.md`, "Containers"). Group: a Layout entry in the block
+  catalog (`components/editor/blocks/catalog.ts`; the slash menu offers only what the slot
+  the line is in accepts, `slotAcceptsAt`: no group inside a group, a list item or a quote), the node
   `extensions/GroupBlock.ts` (schema, commands) with its view in `BlockNodeViews.ts` (Width:
   Content/Wide/Full, Background: None/Tinted, shown while the cursor is in the group), the public
   `src/components/blocks/group/` (`div.group`, `is-tinted`, `alignwide`/`alignfull`) and the

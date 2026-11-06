@@ -1,22 +1,15 @@
 import { NodeSelection } from "@tiptap/pm/state"
 import type { Editor as TiptapEditor } from "@tiptap/core"
-import type { CommandSelectOption } from "../ui/CommandSelect"
+import { findEntry, turnIntoEntries, type CatalogEntry } from "../blocks/catalog"
 
-export type TurnIntoValue =
-  | "paragraph"
-  | "heading-1"
-  | "heading-2"
-  | "heading-3"
-  | "heading-4"
-  | "heading-5"
-  | "heading-6"
-  | "bullet-list"
-  | "numbered-list"
-  | "quote"
-  | "code-block"
-  | "divider"
-  | "image"
+// Turn into (the selection toolbar's and the block-type toolbar's picker) reads the block
+// catalog (#415): the options are the catalog entries that have a `turnInto`, the value
+// is the entry's id.
 
+/** A catalog entry id ("paragraph", "heading-2", "bullet-list", …). */
+export type TurnIntoValue = string
+
+/** The catalog id of the block holding the selection ("divider" and "image" have no Turn into). */
 export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValue => {
   const { state } = editor
   const sel = state.selection
@@ -30,8 +23,8 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
     if (node.type.name === "orderedList") return "numbered-list"
     if (node.type.name === "bulletList") return "bullet-list"
     if (node.type.name === "heading") {
-      const lvl = (node.attrs?.level ?? 1) as 1 | 2 | 3 | 4 | 5 | 6
-      return `heading-${Math.min(Math.max(lvl, 1), 6)}` as TurnIntoValue
+      const lvl = (node.attrs?.level ?? 1) as number
+      return `heading-${Math.min(Math.max(lvl, 1), 6)}`
     }
     return "paragraph"
   }
@@ -41,12 +34,9 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
   if (editor.isActive("orderedList")) return "numbered-list"
   if (editor.isActive("bulletList")) return "bullet-list"
 
-  if (editor.isActive("heading", { level: 1 })) return "heading-1"
-  if (editor.isActive("heading", { level: 2 })) return "heading-2"
-  if (editor.isActive("heading", { level: 3 })) return "heading-3"
-  if (editor.isActive("heading", { level: 4 })) return "heading-4"
-  if (editor.isActive("heading", { level: 5 })) return "heading-5"
-  if (editor.isActive("heading", { level: 6 })) return "heading-6"
+  for (const level of [1, 2, 3, 4, 5, 6]) {
+    if (editor.isActive("heading", { level })) return `heading-${level}`
+  }
 
   const $from = sel.$from
   for (let d = $from.depth; d >= 0; d--) {
@@ -58,57 +48,13 @@ export const computeTurnIntoFromSelection = (editor: TiptapEditor): TurnIntoValu
   return "paragraph"
 }
 
-export const applyTurnInto = (editor: TiptapEditor, value: TurnIntoValue, options: CommandSelectOption[]) => {
-  const opt = options.find((o) => o.value === value)
-  if (opt?.command) {
-    opt.command({ editor, range: editor.state.selection })
-    return
-  }
-
-  // Fallbacks
-  const chain = editor.chain().focus()
-  switch (value) {
-    case "paragraph":
-      chain.setParagraph().run()
-      break
-    case "heading-1":
-      chain.setHeading({ level: 1 }).run()
-      break
-    case "heading-2":
-      chain.setHeading({ level: 2 }).run()
-      break
-    case "heading-3":
-      chain.setHeading({ level: 3 }).run()
-      break
-    case "heading-4":
-      chain.setHeading({ level: 4 }).run()
-      break
-    case "heading-5":
-      chain.setHeading({ level: 5 }).run()
-      break
-    case "heading-6":
-      chain.setHeading({ level: 6 }).run()
-      break
-    case "bullet-list":
-      if (editor.isActive("orderedList")) chain.toggleOrderedList()
-      chain.toggleBulletList().run()
-      break
-    case "numbered-list":
-      if (editor.isActive("bulletList")) chain.toggleBulletList()
-      chain.toggleOrderedList().run()
-      break
-    case "quote":
-      chain.toggleBlockquote().run()
-      break
-    case "code-block":
-      chain.toggleCodeBlock().run()
-      break
-    case "divider":
-      chain.setHorizontalRule().run()
-      break
-    case "image":
-      break
-    default:
-      break
-  }
+/**
+ * Turns the block holding the selection into the catalog entry `value`. False when the
+ * entry doesn't exist or has no Turn into (an image can't become a paragraph).
+ */
+export const applyTurnInto = (editor: TiptapEditor, value: TurnIntoValue, entries: readonly CatalogEntry[] = turnIntoEntries()): boolean => {
+  const entry = findEntry(value, entries)
+  if (!entry?.turnInto) return false
+  entry.turnInto(editor)
+  return true
 }

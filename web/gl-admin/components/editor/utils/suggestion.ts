@@ -43,6 +43,7 @@ function findSuggestionMatch({
   from,
   to,
   char,
+  startOfLine,
   allow,
 }: {
   editor: any
@@ -50,6 +51,7 @@ function findSuggestionMatch({
   from: number
   to: number
   char: string
+  startOfLine?: boolean
   allow?: (props: { editor: any; state: any; range: Range }) => boolean
 }) {
   const { doc } = state
@@ -59,9 +61,10 @@ function findSuggestionMatch({
   }
 
   const $pos = doc.resolve(from)
-  const textBefore = $pos.parent.textBetween(Math.max(0, $pos.parentOffset - 100), $pos.parentOffset, null, "\ufffc")
+  // startOfLine: only when the trigger is the first thing in its line (the slash menu, #415).
+  const textBefore = $pos.parent.textBetween(startOfLine ? 0 : Math.max(0, $pos.parentOffset - 100), $pos.parentOffset, null, "\ufffc")
 
-  const match = textBefore.match(new RegExp(`(^|\\s)(\\${char}([^\\s]*))$`))
+  const match = textBefore.match(new RegExp(startOfLine ? `^()(\\${char}([^\\s]*))$` : `(^|\\s)(\\${char}([^\\s]*))$`))
 
   if (!match) {
     return null
@@ -136,6 +139,7 @@ export const Suggestion = Extension.create<SuggestionOptions>({
               from,
               to,
               char: options.char,
+              startOfLine: options.startOfLine,
               allow: options.allow,
             })
 
@@ -185,6 +189,7 @@ export const Suggestion = Extension.create<SuggestionOptions>({
                 from,
                 to,
                 char: options.char,
+                startOfLine: options.startOfLine,
                 allow: options.allow,
               })
 
@@ -259,6 +264,7 @@ export const Suggestion = Extension.create<SuggestionOptions>({
               from,
               to,
               char: options.char,
+              startOfLine: options.startOfLine,
               allow: options.allow,
             })
 

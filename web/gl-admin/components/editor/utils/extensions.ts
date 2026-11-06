@@ -6,11 +6,13 @@ import { OpenLinkModal } from "../extensions/OpenLinkModal"
 import { slashCommandManager } from "./slashCommandManager"
 import { getCursorCoords } from "./cursorCoords"
 import { CursorAwareness } from "./cursorAwareness"
-import { getSlashCommandItems } from "../blocks"
+import { getActiveTheme, menuEntries, slotAcceptsAt, type CatalogEntry } from "../blocks/catalog"
 import { SlashCommandExtension } from "../ui/SlashCommand"
 import { PasteSanitizer } from "../extensions/PasteSanitizer"
 import { BlockNodeViews } from "../extensions/BlockNodeViews"
 import { BlockActions } from "./blockActions"
+import { BlockGutterKeys } from "./blockGutter"
+import { authManager } from "@gl-admin/lib/auth"
 import { tiptapExtensionRegistry } from "./extensionRegistry"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
 import { schemaExtensions } from "@gl-admin/lib/collaboration/schema"
@@ -28,8 +30,13 @@ const headingLabel = (lvl?: number) => {
   }
 }
 
+// "Inserting blocks" › "Empty insert states" (#415).
+export const EMPTY_POST_HINT = "Type / for blocks, or start writing"
+export const EMPTY_LINE_HINT = "Type / for blocks"
+
 const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }) => {
   return () => {
+    let slashEntries: { role: string | null; theme: string; entries: CatalogEntry[] } | null = null
     // The schema-defining extensions are shared with the collab server
     // (lib/collaboration/schema.ts, #206). Collaboration ships its own Yjs-aware
     // undo/redo (with Mod-z / Mod-y / Shift-Mod-z keymaps), so StarterKit's bundled
@@ -91,28 +98,38 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               if (editor.isActive("heading", { level: 1 })) return headingLabel(1)
               if (editor.isActive("heading", { level: 2 })) return headingLabel(2)
               if (editor.isActive("heading", { level: 3 })) return headingLabel(3)
-              return placeholder || "Type '/' for commands…"
+              // "Empty insert states" (#415): the hint is on the focused empty line only
+              // (showOnlyCurrent), never on every empty line of an unfocused post.
+              if (!editor.isFocused) return ""
+              return editor.isEmpty ? placeholder || EMPTY_POST_HINT : EMPTY_LINE_HINT
             }
           }
         },
       }),
       CharacterCount.configure({ limit: maxChars }),
+      // Tab from the text reaches the block's + and drag handle (#415).
+      BlockGutterKeys,
       SlashCommandExtension.configure({
         suggestion: {
-          // No block commands inside an image caption (#346): it holds text only.
-          allow: ({ state, range }: { state: any; range: { from: number } }) =>
-            state.doc.resolve(range.from).parent.type.name !== "imageCaption",
-          items: ({ query }: { query: string }) => {
-            return getSlashCommandItems()
-              .filter((item) => {
-                const searchTerm = query.toLowerCase()
-                return (
-                  item.title.toLowerCase().includes(searchTerm) ||
-                  item.description.toLowerCase().includes(searchTerm) ||
-                  (item.aliases && item.aliases.some((alias) => alias.includes(searchTerm)))
-                )
-              })
-              .slice(0, 10)
+          // "/" at the start of a line (#415, "Type / on an empty line").
+          startOfLine: true,
+          // No block commands inside an image caption (#346, it holds text only) or in code.
+          allow: ({ state, range }: { state: any; range: { from: number } }) => {
+            const parent = state.doc.resolve(range.from).parent
+            return parent.type.name !== "imageCaption" && !parent.type.spec.code
+          },
+          // The whole menu (the list filters by the query itself): the role gate and the
+          // active theme (catalog.ts). The role is a UI hint; the server enforces.
+          // Cached per role and theme: the plugin asks on every view update.
+          // Then only what the slot the line is in accepts (#414): no group inside a group,
+          // a list item or a quote.
+          items: ({ editor }: { editor: any }) => {
+            const role = authManager.getState().user?.role ?? null
+            const theme = getActiveTheme()
+            if (!slashEntries || slashEntries.role !== role || slashEntries.theme !== theme) {
+              slashEntries = { role, theme, entries: menuEntries({ role, theme }) }
+            }
+            return slashEntries.entries.filter(slotAcceptsAt(editor))
           },
           render: () => ({
             onStart: (props: any) => slashCommandManager.start(props, getCursorCoords),
