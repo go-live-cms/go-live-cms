@@ -57,7 +57,7 @@ const at = (index: number): BlockRef => {
   return refOf(topLevelBlockAt(editor.state.doc, pos)!)
 }
 
-function open(target: BlockRef, props: { postUrl?: string | null } = {}) {
+function open(target: BlockRef, props: { postUrl?: string | null; onComment?: (ref: BlockRef) => void } = {}) {
   const onClose = vi.fn()
   const onMoveTo = vi.fn()
   const ref = createRef<HTMLElement>() as { current: HTMLElement | null }
@@ -72,6 +72,32 @@ const item = (label: string) =>
     b.querySelector(".gl-menu__label")?.textContent === label
   )!
 const labels = () => Array.from(menu().querySelectorAll(".gl-menu__label")).map((l) => l.textContent)
+
+describe("BlockMenu: Comment (#192)", () => {
+  it("offers Comment (Ctrl M) after Colour when the post has comments, and opens it for that block", () => {
+    const onComment = vi.fn()
+    const { onClose } = open(at(1), { onComment })
+    expect(labels()).toEqual(["Colour", "Comment", "Duplicate", "Copy link to block", "Move to", "Delete"])
+    expect(item("Comment").textContent).toContain("Ctrl M")
+    act(() => item("Comment").click())
+    expect(onClose).toHaveBeenCalledWith(false)
+    expect(onComment).toHaveBeenCalledWith(at(1))
+  })
+
+  it("leaves Comment out without comments", () => {
+    open(at(1))
+    expect(labels()).not.toContain("Comment")
+  })
+
+  it("Ctrl M in the editor comments on the block holding the cursor", () => {
+    const openComment = vi.fn()
+    ;(editor.storage as any).blockActions.openComment = openComment
+    editor.commands.setTextSelection(at(1).pos + 2)
+    const event = new KeyboardEvent("keydown", { key: "m", ctrlKey: true, bubbles: true, cancelable: true })
+    editor.view.someProp("handleKeyDown", (f) => f(editor.view, event))
+    expect(openComment).toHaveBeenCalledWith(at(1))
+  })
+})
 
 describe("BlockMenu (#356)", () => {
   it("offers Colour, Duplicate, Copy link to block, Move to and Delete, with shortcuts", () => {

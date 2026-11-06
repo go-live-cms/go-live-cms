@@ -48,6 +48,14 @@ const (
 	// too, recorded once as the member's "removed".
 	ActivityTransferred = "transferred"
 
+	// Block comments (#192, 000048), on the post. Payload: thread_id, plus
+	// comment_id and reply on commented, and author_id on comment_deleted (whose
+	// comment it was). Never the body or the block id's content (content).
+	ActivityCommented       = "commented"
+	ActivityCommentResolved = "comment_resolved"
+	ActivityCommentReopened = "comment_reopened"
+	ActivityCommentDeleted  = "comment_deleted"
+
 	// Media (ActivityDeleted too).
 	ActivityUploaded = "uploaded"
 	ActivityReplaced = "replaced"

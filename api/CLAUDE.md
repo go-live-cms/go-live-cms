@@ -1021,6 +1021,36 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   lists it, the web resolves names against its own build (`pageLayoutVariant`). A stored template the
   active theme lacks (theme switch) is kept and renders as the default.
 
+## Block comments (#192, `000048`, `post_comments.go`)
+
+- Design: `docs/design/block-map-yjs-schema.md` ("#192: block comments", #315 Option C). Threads
+  (`post_comment_threads`: post, `block_id` = the block's `data-block-id`, `resolved_at/_by`) and
+  plain-text `post_comments` (≤4000 characters, trimmed, no NUL; `edited_at`, `deleted_at`) are API
+  rows, **never in the Yjs doc, `block_doc` or a version**, so reseeds, restores and restarts keep
+  them. The API checks only a block id's **format** (`^[!-~]{10,128}$`, the table's CHECK), not that
+  it's in the stored `block_doc` (a block typed a second ago isn't stored yet); the editor lists
+  threads whose block isn't in its doc as orphans. Duplicates and templates copy none. User FKs SET
+  NULL, the post CASCADE.
+- **Who (`auth_posts.go`):** read and write comments = `canReadPost` (`canCommentOnPost` adds "not
+  trashed", 409): moderators any post, a contributor their own and published ones (view-only
+  included, with or without a #321 grant). Resolve/reopen (`canResolveCommentThread`) = the thread's
+  starter or `canEditWorkingCopy` (moderators, the contributor owner, a granted collaborator), so the
+  owner of a post under review (#323) resolves the reviewer's threads. Edit = the author only (admins
+  too). Delete = the author or a moderator. A deleted comment keeps its row (body emptied); deleting a
+  thread's last live comment deletes the thread (`DeletePostCommentTx`, thread row locked first).
+- Routes (content roles; every one answers the whole `CommentsResponse` with per-item `can_*`):
+  `GET|POST /posts/:id/comments`, `PUT|DELETE /posts/:id/comments/:comment_id`, `POST
+  /posts/:id/comment-threads/:thread_id/{replies,resolve,unresolve}` (resolve/unresolve idempotent).
+  Listed in `route_auth_test.go`'s `commentRoutes` (every method answers 401 anonymously, none under
+  `/public`) and `postReadRouteTemplates`.
+- After every write `afterCommentWrite`: activity (`commented` with `reply`, `comment_resolved`,
+  `comment_reopened`, `comment_deleted` with `author_id`; ids only, never the body; edits aren't
+  recorded) and `notifyCollabComments` → the collab server's `POST
+  /internal/documents/post-<id>/comments` (best effort, after the response), which broadcasts
+  `{"type":"comments"}`. Mention notifications (#320) hook into `afterCommentWrite`.
+- Tests: `post_comments_test.go` (real DB: every role, CRUD, resolve, trash, nudges, activity, not
+  public, the delete race) and `auth_comments_test.go`.
+
 ## Theme blocks (#376)
 
 - Themes' custom blocks (`theme:<slug>/<block>`) are declared in TypeScript, so the web

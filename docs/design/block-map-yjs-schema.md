@@ -478,6 +478,16 @@ CREATE TABLE post_comments (
   the id's format and the orphan rule covers the rest. Pick one on #192.
 - Duplicating a post or creating one from a template copies no threads (the ids are new).
 
+**Settled when #192 was built (000048, `api/post_comments.go`):**
+
+- The API checks only the block id's format, not that it's in the stored `block_doc`, so a
+  comment on a block typed a second ago needs no wait; the orphan rule covers the rest.
+- Who: reading and commenting follow `canReadPost` (view-only contributors on a published post
+  comment too), resolving is for the thread's starter and whoever may edit the working copy
+  (`canEditWorkingCopy`, #321 grants included), editing is the author's only, deleting the author's
+  or a moderator's. Nothing on a trashed post (409).
+- Nudge: `POST /internal/documents/:doc/comments` on the collab server's internal listener.
+
 **Later, text-range comments** (the History board's note that comments stay attached to
 the text they're about): keep the block anchor as the fallback and add an optional range
 stored with the thread as encoded Yjs relative positions in the block. Relative positions

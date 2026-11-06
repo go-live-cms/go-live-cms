@@ -1,0 +1,268 @@
+// Block comments (#192): the markers and hover button beside blocks (BlockComments.tsx)
+// and the comments panel (CommentsPanel.tsx), which reuses the settings panel's shell
+// (post-settings.scss). Design tokens only.
+
+// ---- In the editor --------------------------------------------------------------
+
+.editor-comments {
+  position: relative;
+}
+
+// An overlay over the editor's content box: only its buttons take the pointer.
+.editor-comments-layer {
+  inset: 0 0 auto 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: var(--z-raised);
+
+  &__active {
+    border-radius: var(--radius-sm);
+    box-shadow: inset 0 0 0 1px var(--accent-border);
+    left: calc(-1 * var(--space-2));
+    position: absolute;
+    right: calc(-1 * var(--space-2));
+  }
+}
+
+.editor-comment-marker,
+.editor-comment-add {
+  align-items: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: var(--type-caption);
+  gap: 4px;
+  height: 24px;
+  justify-content: center;
+  pointer-events: auto;
+  position: absolute;
+  // In the canvas's right margin, clear of the text.
+  right: calc(-1 * (24px + var(--space-3)));
+}
+
+.editor-comment-marker {
+  background: var(--accent-subtle);
+  color: var(--text-selected, var(--text-primary));
+  min-width: 24px;
+  padding: 0 6px;
+  right: calc(-1 * (36px + var(--space-3)));
+
+  &:hover,
+  &.is-active {
+    background: var(--accent-subtle-hover);
+  }
+}
+
+.editor-comment-add {
+  background: transparent;
+  color: var(--text-secondary);
+  width: 24px;
+
+  &:hover {
+    background: var(--background-hover);
+    color: var(--text-primary);
+  }
+}
+
+// At phone width the canvas has no margin to spare: inside the block's right edge.
+@media (max-width: 768px) {
+  .editor-comment-marker,
+  .editor-comment-add {
+    right: 0;
+  }
+
+  .editor-comment-add {
+    background: var(--background);
+  }
+}
+
+.editor-comment-marker:focus-visible,
+.editor-comment-add:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+// The top bar's Comments toggle and its open count.
+.editor-top-bar__comments {
+  display: inline-flex;
+  position: relative;
+}
+
+.editor-top-bar__count {
+  background: var(--accent-solid);
+  border-radius: var(--radius-full);
+  color: var(--accent-on);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  min-width: 14px;
+  padding: 0 3px;
+  pointer-events: none;
+  position: absolute;
+  right: -2px;
+  text-align: center;
+  top: -2px;
+}
+
+// ---- The panel ------------------------------------------------------------------
+
+.post-comments {
+  &__content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    overflow-y: auto;
+    padding: var(--space-4) var(--space-3);
+  }
+
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  &__group {
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+
+    &.is-active {
+      box-shadow: 0 0 0 1px var(--accent-border);
+    }
+  }
+
+  &__block {
+    background: transparent;
+    border: 0;
+    border-left: 2px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--type-label);
+    overflow: hidden;
+    padding: 2px var(--space-2);
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+  }
+
+  &__section-title {
+    color: var(--text-secondary);
+    font-size: var(--type-label);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  &__hint {
+    color: var(--text-secondary);
+    font-size: var(--type-caption);
+    margin: 0;
+  }
+
+  &__thread {
+    background: var(--background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-3);
+
+    &.is-resolved {
+      background: var(--background-subtle);
+    }
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  &__comment {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  &__meta {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  &__name {
+    font-size: var(--type-label);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__time,
+  &__edited,
+  &__resolved,
+  &__deleted {
+    color: var(--text-secondary);
+    font-size: var(--type-caption);
+  }
+
+  &__resolved {
+    margin: 0;
+  }
+
+  &__deleted {
+    font-style: italic;
+  }
+
+  &__menu {
+    margin-left: auto;
+  }
+
+  &__body {
+    margin: 0;
+    overflow-wrap: anywhere;
+    // Plain text: keep the writer's line breaks.
+    white-space: pre-wrap;
+  }
+
+  &__error {
+    color: var(--danger-text);
+    font-size: var(--type-caption);
+    margin: 0;
+  }
+
+  &__actions,
+  &__composer-actions {
+    display: flex;
+    gap: var(--space-1);
+    justify-content: flex-end;
+  }
+
+  &__composer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  &__empty {
+    padding: var(--space-6) var(--space-2);
+    text-align: center;
+  }
+
+  &__empty-title {
+    font-weight: 600;
+    margin: 0 0 var(--space-1);
+  }
+}

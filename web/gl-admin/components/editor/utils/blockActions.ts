@@ -178,17 +178,20 @@ export function blockLink(postUrl: string | null | undefined, blockId: string | 
 type BlockActionsStorage = {
   /** Set by the editor's block menu: opens Move to for that block (Ctrl Shift P). */
   openMoveTo: ((ref: BlockRef) => void) | null
+  /** Set by the editor when the post has comments (#192): opens a new thread on that block (Ctrl M). */
+  openComment: ((ref: BlockRef) => void) | null
 }
 
 /**
  * The block menu's keyboard shortcuts, for the block holding the cursor: Ctrl D
- * duplicates it, Ctrl Shift P opens Move to. Editable editors only. No schema.
+ * duplicates it, Ctrl Shift P opens Move to, Ctrl M comments on it (#192). Editable
+ * editors only (a view-only reader comments from the block's hover button). No schema.
  */
 export const BlockActions = Extension.create<Record<string, never>, BlockActionsStorage>({
   name: "blockActions",
 
   addStorage() {
-    return { openMoveTo: null }
+    return { openMoveTo: null, openComment: null }
   },
 
   addKeyboardShortcuts() {
@@ -199,6 +202,14 @@ export const BlockActions = Extension.create<Record<string, never>, BlockActions
         if (!block) return false
         duplicateBlock(this.editor, refOf(block))
         // Never the browser's bookmark dialog from inside the editor.
+        return true
+      },
+      "Mod-m": () => {
+        const open = this.storage.openComment
+        if (!this.editor.isEditable || !open) return false
+        const block = topLevelBlockAtSelection(this.editor.state)
+        if (!block || !refOf(block).id) return false
+        open(refOf(block))
         return true
       },
       "Mod-Shift-p": () => {

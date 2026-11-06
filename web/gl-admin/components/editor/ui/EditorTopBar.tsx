@@ -16,8 +16,8 @@ import "@gl-admin/assets/styles/components/editor/editor-top-bar.scss"
 // The editor's top bar (#341, "Post editor" on the redesign canvas): breadcrumb and
 // status, what is happening to your edits, who's here, settings, view, and the publish
 // button with its menu. Everything it does was there before the redesign; features in
-// the design without a backend yet (Comments, Move to trash) stay out until their issues
-// land (table on #341). Clicking a collaborator's avatar scrolls to their caret, and
+// the design without a backend yet (Move to trash) stay out until their issues land (table
+// on #341). Comments (#192) toggles the comments panel, next to Post settings. Clicking a collaborator's avatar scrolls to their caret, and
 // offline the status counts the edits waiting in this tab (#356). Schedule… (#147) and Schedule update… (#335) open ScheduleDialog,
 // which PostForm owns.
 
@@ -49,6 +49,11 @@ type EditorTopBarProps = {
   isSaving: boolean
   settingsOpen: boolean
   onSettingsToggle: () => void
+  // Block comments (#192): the panel toggle (absent in create mode) and how many threads
+  // are open, for its label.
+  commentsOpen?: boolean
+  onCommentsToggle?: () => void
+  openComments?: number
   // Create mode: the post doesn't exist yet, so it's saved by hand.
   onSave: () => void
   onPublish: () => void
@@ -91,6 +96,11 @@ export const OfflineIcon = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={size > 14 ? 1.75 : 2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M2 2l20 20" />
     <path d="M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.8M19 13a10 10 0 0 0-2.3-1.7M2 8.8a15 15 0 0 1 4.2-2.7M22 8.8A15 15 0 0 0 11 5" />
+  </svg>
+)
+export const CommentIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
   </svg>
 )
 const PanelIcon = () => (
@@ -274,6 +284,9 @@ export default function EditorTopBar({
   isSaving,
   settingsOpen,
   onSettingsToggle,
+  commentsOpen = false,
+  onCommentsToggle,
+  openComments = 0,
   onSave,
   onPublish,
   onUnpublish,
@@ -399,6 +412,23 @@ export default function EditorTopBar({
             />
 
             {people.length > 0 && <PresenceAvatars people={people} max={4} paused={connection !== "online"} onJump={jump} />}
+
+            {onCommentsToggle && (
+              <span className="editor-top-bar__comments">
+                <IconButton
+                  aria-label={openComments > 0 ? `Comments, ${openComments} open` : "Comments"}
+                  aria-pressed={commentsOpen}
+                  icon={<CommentIcon />}
+                  className={commentsOpen ? "is-pressed" : ""}
+                  onClick={onCommentsToggle}
+                />
+                {openComments > 0 && (
+                  <span className="editor-top-bar__count" aria-hidden="true">
+                    {openComments > 99 ? "99+" : openComments}
+                  </span>
+                )}
+              </span>
+            )}
 
             <IconButton
               aria-label="Post settings"

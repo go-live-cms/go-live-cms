@@ -59,7 +59,16 @@ func (server *Server) recheckCollabDoc(requestID string, postID int64) {
 	server.recheckCollab(requestID, "collab_doc_recheck", fmt.Sprintf("/internal/documents/post-%d/recheck", postID), "post_id", postID)
 }
 
-// recheckCollab is the best-effort POST both re-checks make, after the response
+// notifyCollabComments asks the collab server to tell post-<id>'s open editors
+// that its comments changed (#192): it broadcasts {"type":"comments"} to the
+// doc's connections and the editors refetch GET /posts/:id/comments. Best effort
+// and after the response like the re-checks: editors also refetch on reconnect
+// and when the tab is shown again, so a lost nudge only delays the update.
+func (server *Server) notifyCollabComments(requestID string, postID int64) {
+	server.recheckCollab(requestID, "collab_comments_nudge", fmt.Sprintf("/internal/documents/post-%d/comments", postID), "post_id", postID)
+}
+
+// recheckCollab is the best-effort POST both re-checks (and the comments nudge) make, after the response
 // (runInBackground); a failure logs <task>_failed with the subject (idKey, id).
 func (server *Server) recheckCollab(requestID, task, path, idKey string, id int64) {
 	server.runInBackground(requestID, task, func() {

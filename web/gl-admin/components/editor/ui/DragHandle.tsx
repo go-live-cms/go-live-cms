@@ -8,8 +8,8 @@ import { refOf, topLevelBlockAt, type BlockRef } from "../utils/blockActions"
 
 // The block handle in the gutter ("Post editor": the hovered block). Drag to move; click
 // (or Enter/Space on it) for the block menu (#356): Colour, Duplicate, Copy link to block,
-// Move to, Delete. The design's "add block below" button, Turn into, Comment (#192) and
-// "Last edited by" aren't built here.
+// Move to, Delete, and Comment (#192) when the post has comments. The design's "add block
+// below" button, Turn into and "Last edited by" aren't built here.
 //
 // The menu and the Move to dialog render outside this element (a portal / Modal): the
 // drag-handle plugin moves this element into the editor's DOM.
@@ -25,7 +25,15 @@ export function setHandleLock(editor: TiptapEditor, locked: boolean) {
   editor.view.dispatch(editor.state.tr.setMeta("lockDragHandle", locked))
 }
 
-export default function DragHandle({ editor, postUrl }: { editor: TiptapEditor; postUrl?: string | null }) {
+export default function DragHandle({
+  editor,
+  postUrl,
+  onComment,
+}: {
+  editor: TiptapEditor
+  postUrl?: string | null
+  onComment?: (ref: BlockRef) => void
+}) {
   const [showDrag, setShowDrag] = useState(false)
   const hovered = useRef<{ node: PMNode; pos: number } | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -98,6 +106,7 @@ export default function DragHandle({ editor, postUrl }: { editor: TiptapEditor; 
           postUrl={postUrl}
           onClose={closeMenu}
           onMoveTo={(ref) => setMoveFor(ref)}
+          onComment={onComment}
         />
       )}
       <MoveToDialog editor={editor} target={moveFor} onClose={() => setMoveFor(null)} />

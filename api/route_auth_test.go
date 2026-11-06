@@ -78,6 +78,45 @@ func TestGETRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+// commentRoutes are the block comment routes (#192), every method: none is public, and
+// TestCommentRoutesRequireAuth fails when a comment route is added without being listed
+// here (so its rule gets a look) or answers an anonymous request.
+var commentRoutes = map[string]string{
+	"GET /api/v1/posts/:id/comments":                              "canReadPost",
+	"POST /api/v1/posts/:id/comments":                             "canCommentOnPost",
+	"PUT /api/v1/posts/:id/comments/:comment_id":                  "canEditComment: the author",
+	"DELETE /api/v1/posts/:id/comments/:comment_id":               "canDeleteComment: the author or a moderator",
+	"POST /api/v1/posts/:id/comment-threads/:thread_id/replies":   "canCommentOnPost",
+	"POST /api/v1/posts/:id/comment-threads/:thread_id/resolve":   "canResolveCommentThread",
+	"POST /api/v1/posts/:id/comment-threads/:thread_id/unresolve": "canResolveCommentThread",
+}
+
+func TestCommentRoutesRequireAuth(t *testing.T) {
+	store := mockdb.NewMockStore(gomock.NewController(t))
+	server := newTestServer(t, store)
+
+	registered := map[string]bool{}
+	for _, route := range server.router.Routes() {
+		if !strings.Contains(route.Path, "comment") {
+			continue
+		}
+		key := route.Method + " " + route.Path
+		registered[key] = true
+		_, listed := commentRoutes[key]
+		require.True(t, listed, "%s is a comment route missing from commentRoutes", key)
+		require.False(t, strings.HasPrefix(route.Path, "/public"), "comments never reach the public site: %s", key)
+
+		t.Run(key, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			server.router.ServeHTTP(recorder, httptest.NewRequest(route.Method, routeExample(route.Path), strings.NewReader(`{"block_id":"blk-anon-000001","body":"x"}`)))
+			require.Equal(t, http.StatusUnauthorized, recorder.Code, "%s answers without a token", key)
+		})
+	}
+	for key := range commentRoutes {
+		require.True(t, registered[key], "commentRoutes lists %s, which is no longer a route", key)
+	}
+}
+
 // routeExample fills a route template's parameters: /posts/:id/meta becomes
 // /posts/1/meta.
 func routeExample(path string) string {

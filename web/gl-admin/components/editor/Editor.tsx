@@ -23,6 +23,9 @@ import BubbleMenu from "./ui/BubbleMenu"
 import BlockTypeToolbar from "./ui/BlockTypeToolbar"
 import ImageToolbar from "./ui/ImageToolbar"
 import DragHandle from "./ui/DragHandle"
+import BlockComments from "./ui/BlockComments"
+import type { BlockRef } from "./utils/blockActions"
+import type { PostCommentsStore } from "@gl-admin/lib/commentsStore"
 import CharacterCount from "./ui/CharacterCount"
 import MediaSelector from "./ui/MediaSelector"
 import { getExtensions } from "./utils/extensions"
@@ -87,6 +90,12 @@ export type EditorProps = {
   onStored?: () => void
   /** The post's public URL, for the block menu's "Copy link to block" (#356). */
   postUrl?: string | null
+  /**
+   * The post's block comments (#192): markers on blocks, the hover "Comment" button, the
+   * block menu's Comment and Ctrl M. The editor refetches them on the collab server's
+   * "comments" nudge and on every reconnect, and reports its block ids. Live editors only.
+   */
+  comments?: PostCommentsStore | null
 }
 
 export interface EditorRef {
@@ -140,6 +149,7 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     onPublishError,
     onStored,
     postUrl,
+    comments,
     collab,
     unbuildable,
     autoFocus = true,
@@ -358,6 +368,38 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [editor, readOnly, openLinkModalWithEditor])
 
+  // Block comments (#192): refetch on the server's nudge and after every (re)sync (a nudge
+  // may have been missed while disconnected); the blocks the editor can't show (#213).
+  useEffect(() => {
+    if (!collab || !comments) return
+    const offNudge = collab.onComments(() => void comments.refresh())
+    const offSynced = collab.onSynced(() => void comments.refresh())
+    return () => {
+      offNudge()
+      offSynced()
+    }
+  }, [collab, comments])
+  useEffect(() => {
+    if (!saveStatus || !comments) return
+    return saveStatus.watchDroppedBlocks((entries) => comments.setHiddenIds(entries.map((entry) => entry.id)))
+  }, [saveStatus, comments])
+  // Ctrl M: comment on the block holding the cursor (blockActions.ts).
+  useEffect(() => {
+    if (!editor || !comments || !collab) return
+    const storage = (editor.storage as unknown as Record<string, { openComment: ((ref: BlockRef) => void) | null }>).blockActions
+    if (!storage) return
+    storage.openComment = (ref) => {
+      if (ref.id) comments.focusBlock(ref.id, true)
+    }
+    return () => {
+      if (storage.openComment) storage.openComment = null
+    }
+  }, [editor, comments, collab])
+  const onComment = useCallback((ref: BlockRef) => {
+    if (ref.id) comments?.focusBlock(ref.id, true)
+  }, [comments])
+  const commentsLive = !!comments && !!collab
+
   if (!editor) return null
 
   return (
@@ -377,11 +419,17 @@ const EditorInner = forwardRef<EditorRef, InnerProps>(function EditorInner(
       {!readOnly && <BubbleMenu editor={editor} openLinkModal={openLinkModalWithEditor} />}
       {!readOnly && <BlockTypeToolbar editor={editor} />}
       {!readOnly && <ImageToolbar editor={editor} />}
-      {!readOnly && <DragHandle editor={editor} postUrl={postUrl} />}
+      {!readOnly && <DragHandle editor={editor} postUrl={postUrl} onComment={commentsLive ? onComment : undefined} />}
       {!readOnly && <MediaSelector editor={editor} postId={postId} />}
 
       <div className="editor-wrapper">
-        <EditorContent editor={editor} />
+        {commentsLive && comments ? (
+          <BlockComments editor={editor} store={comments}>
+            <EditorContent editor={editor} />
+          </BlockComments>
+        ) : (
+          <EditorContent editor={editor} />
+        )}
       </div>
 
       {isLinkModalOpen && (

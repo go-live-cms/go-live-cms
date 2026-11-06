@@ -132,6 +132,7 @@ export class HocuspocusCollaboration {
     stale: new Set<Listener<void>>(),
     status: new Set<Listener<HocuspocusStatus>>(),
     synced: new Set<Listener<void>>(),
+    comments: new Set<Listener<void>>(),
   }
 
   constructor(postId: number, options: HocuspocusCollaborationOptions) {
@@ -232,6 +233,14 @@ export class HocuspocusCollaboration {
   }
   onStatus(listener: Listener<HocuspocusStatus>): () => void {
     return this.subscribe("status", listener)
+  }
+  /**
+   * The server's "comments changed" nudge (#192): the API wrote a comment on this post.
+   * Carries nothing: listeners refetch `GET /posts/:id/comments`. Read-only connections
+   * get it too. Nothing about the doc changes.
+   */
+  onComments(listener: Listener<void>): () => void {
+    return this.subscribe("comments", listener)
   }
   /** Every (re)sync. */
   onSynced(listener: Listener<void>): () => void {
@@ -378,6 +387,11 @@ export class HocuspocusCollaboration {
     if (type === "stored" || type === "store_failed") {
       collabDebug("store message", message)
       this.emit("store", message as StoreMessage)
+      return
+    }
+    if (type === "comments") {
+      collabDebug("comments message")
+      this.emit("comments", undefined)
       return
     }
     if (type === "access") {
