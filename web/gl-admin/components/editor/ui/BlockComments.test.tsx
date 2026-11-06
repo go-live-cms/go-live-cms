@@ -132,3 +132,45 @@ describe("BlockComments (#192)", () => {
     expect(store.getSnapshot()).toMatchObject({ blocks: [], blocksKnown: false })
   })
 })
+
+describe("BlockComments inside a Group (#414)", () => {
+  it("marks a block nested in a group and offers Comment on it", async () => {
+    const G = "blk-group-000001"
+    const N = "blk-nested-00001"
+    act(() => root.render(<div />))
+    editor.destroy()
+    editor = new Editor({
+      element: document.createElement("div"),
+      extensions: Object.values(schemaExtensions({ collaborating: false })),
+      content: {
+        type: "doc",
+        content: [
+          { type: "group", attrs: { "data-block-id": G }, content: [{ type: "paragraph", attrs: { "data-block-id": N }, content: [{ type: "text", text: "nested" }] }] },
+        ],
+      },
+    })
+    state = { post_id: 7, can_comment: true, threads: [thread(9, N)] }
+    await act(async () => store.refresh())
+    await act(async () =>
+      root.render(
+        <BlockComments editor={editor} store={store}>
+          <div
+            ref={(el) => {
+              if (el && !el.contains(editor.view.dom)) el.appendChild(editor.view.dom)
+            }}
+          />
+        </BlockComments>
+      )
+    )
+    // The group, then its child (TipTap's TrailingNode may add an empty paragraph after a
+    // doc that ends in a group).
+    expect(store.getSnapshot().blocks.map((b) => b.id).slice(0, 2)).toEqual([G, N])
+    expect(markers().map((m) => m.getAttribute("aria-label"))).toEqual(["1 comment open on this block"])
+    // Hovering the nested paragraph offers Comment on it, not on the group.
+    state.threads = []
+    await act(async () => store.refresh())
+    await hover(N)
+    await act(async () => container.querySelector<HTMLButtonElement>(".editor-comment-add")!.click())
+    expect(store.getSnapshot().focus).toMatchObject({ blockId: N, compose: true })
+  })
+})

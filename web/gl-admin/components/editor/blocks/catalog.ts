@@ -1,12 +1,13 @@
 import type { Editor } from "@tiptap/core"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
+import { acceptsChild, containerOfNode, containerRule, isContainerType } from "@gl-admin/lib/blocks-spec/nesting"
 import { createImagePlaceholder } from "./mediaBlocks"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
 // insert, in one list. The slash menu, the + menu in the gutter, Turn into (turnInto.ts)
 // and the block-type toolbar all read it. It holds the core blocks and every installed
 // theme block; `menuEntries` decides which ones a menu offers (the role gate, the active
-// theme, and later the container slot's nesting table, #414).
+// theme, and the container slot's nesting table, #414: `slotAcceptsAt`).
 //
 // Adding a block = one entry in CORE_BLOCKS, in its group, in the order the menus show it.
 // Only `id`, `type`, `name`, `group`, `icon` and `insert` are required:
@@ -82,6 +83,7 @@ export const ICONS = {
   image: "M3 3h18v18H3zM8.5 8.5h.01M21 15l-5-5L5 21",
   divider: "M3 12h18M8 6h8M8 18h8",
   html: "M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16",
+  group: "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h8v8H8z",
 } as const
 
 const chain = (editor: Editor, range: InsertRange) => editor.chain().focus().deleteRange(range)
@@ -189,6 +191,16 @@ export const CORE_BLOCKS: readonly CatalogEntry[] = [
     icon: { path: ICONS.divider },
     insert: (editor, range) => chain(editor, range).setHorizontalRule().run(),
   },
+  // #414: the first container. The line it's typed on becomes its first block.
+  {
+    id: "group",
+    type: "group",
+    name: "Group",
+    group: "layout",
+    keywords: ["section", "container", "box", "tint"],
+    icon: { path: ICONS.group },
+    insert: (editor, range) => chain(editor, range).setGroup().run(),
+  },
 ]
 
 /** The whole catalog: the core blocks, then every installed theme block (lib/theme-blocks). */
@@ -232,6 +244,21 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
       (!entry.theme || entry.theme === (context.theme ?? "default")) &&
       (context.accepts?.(entry) ?? true)
   )
+}
+
+/**
+ * What the slot holding the selection accepts (#414's nesting table), for `MenuContext.accepts`:
+ * the block the caret is in sits at the top level (every container allowed there), in a
+ * container (only what it may hold: no group in a group), or inside another block's own
+ * content (a list item, a quote, a theme block), where no container can go.
+ */
+export function slotAcceptsAt(editor: Editor): (entry: CatalogEntry) => boolean {
+  const { $from } = editor.state.selection
+  const parent = $from.depth > 1 ? $from.node($from.depth - 1) : null
+  if (!parent || parent.type.name === "doc") return (entry) => !isContainerType(entry.type) || !!containerRule(entry.type)?.topLevel
+  const container = containerOfNode(parent.type.name)
+  if (container) return (entry) => acceptsChild(container.type, entry.type)
+  return (entry) => !isContainerType(entry.type)
 }
 
 // The active theme, set by ThemeProvider when the admin loads (only its blocks are

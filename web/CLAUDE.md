@@ -529,7 +529,19 @@ are the most fragile part of the codebase. **Before editing anything under
   draws no panel, so it's built from the settings panel's shell and the #338 components. Rules and
   wording: `lib/comments.ts` (tested, limits checked against the Go). Anchoring through move,
   split, Enter at the start (the thread stays on the new empty block above), join, paste, turn-into,
-  restore and reseed: `lib/collaboration/comments.hocuspocus.test.ts`.
+  restore and reseed, and for blocks inside a Group (#414: moving the group or the block out of
+  it, a restart, a reseed): `lib/collaboration/comments.hocuspocus.test.ts`.
+- **Nested blocks and the Group block (#414):** containers hold their blocks by id
+  (`gl-admin/lib/blocks-spec/nesting.ts` is the table; rules in
+  `gl-admin/lib/collaboration/CLAUDE.md`, "Containers"). Group: a Layout entry in the block
+  catalog (`components/editor/blocks/catalog.ts`; the slash menu offers only what the slot
+  the line is in accepts, `slotAcceptsAt`: no group inside a group, a list item or a quote), the node
+  `extensions/GroupBlock.ts` (schema, commands) with its view in `BlockNodeViews.ts` (Width:
+  Content/Wide/Full, Background: None/Tinted, shown while the cursor is in the group), the public
+  `src/components/blocks/group/` (`div.group`, `is-tinted`, `alignwide`/`alignfull`) and the
+  default theme's styles in `themes/default/styles/theme.css`. History's diff compares a
+  container's children by id (`blockDiff.ts`, `VersionDiff`'s `version-diff__container`).
+  Theme blocks may hold text only since then (`THEME_BLOCK_CONTENT_NAMES`).
 - **Taxonomies and redirects (#331):** admin: one category per post. The editor sidebar's
   `PostTaxonomies` shows the `category` taxonomy as a radio group (picking one calls the PUT,
   which replaces the category; `post`-type posts have no "None", the API puts the default

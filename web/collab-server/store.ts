@@ -3,7 +3,8 @@
 //   1. stamp missing/duplicate block ids into the live doc (stampFragmentBlockIds), so
 //      ids don't churn between stores;
 //   2. fragment → ProseMirror → pmToBlockDoc, per top-level node (fragmentToBlockDoc),
-//      with the blocks seeding dropped (meta.dropped) merged back (restoreDroppedBlocks);
+//      with the blocks seeding dropped (meta.dropped) merged back (restoreDroppedBlocks),
+//      then repeats within one list removed (dedupeBlockRefs, #414);
 //   3. validateBlockDoc (Zod) — #214 part 2. An invalid doc is NOT written: the Yjs
 //      state is stored alone and `posts.block_doc` keeps its last valid version;
 //   4. empty-doc guard: an empty result is written only if a client edited the doc since
@@ -11,7 +12,7 @@
 //   5. PUT /internal/posts/:id/collab.
 import * as Y from "yjs"
 import type { Schema } from "prosemirror-model"
-import { validateBlockDoc, type BlockDocV1 } from "../gl-admin/lib/blocks-spec"
+import { dedupeBlockRefs, validateBlockDoc, type BlockDocV1 } from "../gl-admin/lib/blocks-spec"
 import { themeBlockLookup } from "../gl-admin/lib/blocks-spec/themeBlocks"
 import {
   EDITOR_FRAGMENT,
@@ -76,11 +77,16 @@ export function prepareStore(doc: Y.Doc, schema: Schema, input: StoreInput): Pre
   if (!epoch) throw new Error("document has no epoch (it was not loaded by this server)")
 
   const unconvertible: UnconvertibleBlock[] = []
-  const derived = fragmentToBlockDoc(fragment, schema, {
-    dropped: dropped ?? undefined,
-    previous: input.previous ?? undefined,
-    onUnconvertible: (block) => unconvertible.push(block),
-  })
+  // Repeats within one `blocks_order` or `children` list are removed before validating,
+  // as the API does (#414, design 2.3): docs with them exist (restored or fallen-back
+  // blocks carry stored lists), and refusing them would make a post stop storing.
+  const derived = dedupeBlockRefs(
+    fragmentToBlockDoc(fragment, schema, {
+      dropped: dropped ?? undefined,
+      previous: input.previous ?? undefined,
+      onUnconvertible: (block) => unconvertible.push(block),
+    }),
+  )
 
   let decision: BlockDocDecision
   try {

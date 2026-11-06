@@ -16,6 +16,8 @@ export interface ThemeBlockDefinition extends ThemeBlockSpec {
   title: string
   /** The TipTap node: name = `type`, attrs = the declared attrs plus `data-block-id`. */
   node: Node
+  /** Its content expression, as given (`collectThemeBlocks` checks it, #414). */
+  content: string
 }
 
 export interface ThemeBlockInput extends ThemeBlockSpec {
@@ -23,6 +25,8 @@ export interface ThemeBlockInput extends ThemeBlockSpec {
   /**
    * The node's ProseMirror content expression, over core node types and groups only (a
    * theme block is one node). Default `"inline*"`; `""` makes it a leaf (attrs only).
+   * Text only (#414, `THEME_BLOCK_CONTENT_NAMES`): no `block`, list, quote, image or
+   * container, so no block or media can hide inside a theme block's `pm`.
    */
   content?: string
   /** The marks allowed inside it (ProseMirror `marks`); default: all. */
@@ -93,5 +97,5 @@ export function defineThemeBlock(input: ThemeBlockInput): ThemeBlockDefinition {
     },
   })
 
-  return { ...spec, title, node }
+  return { ...spec, title, node, content }
 }

@@ -1141,6 +1141,50 @@ body {
   padding-inline: var(--container-gutter);
 }
 
+/* Group (#414): blocks kept together, on the surface colour when tinted. Its blocks
+   reset the prose rhythm for themselves; wide and full use the image width classes above.
+   A full-width group keeps its text in the content column. */
+.prose .group > * {
+  margin: 0;
+}
+.prose .group > * + * {
+  margin-top: 0.8em;
+}
+.prose .group.is-tinted {
+  padding: clamp(20px, 4vw, 40px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+.prose .group.is-tinted.alignfull {
+  border-radius: 0;
+  border-inline: 0;
+  padding-inline: var(--container-gutter);
+}
+.prose .group.alignfull > * {
+  max-width: var(--content-width);
+  margin-inline: auto;
+}
+/* Headings in a group take the sizes they have at the top level. */
+.prose .group > h1 {
+  font-size: var(--size-3xl);
+}
+.prose .group > h2 {
+  font-size: var(--size-2xl);
+}
+.prose .group > h3 {
+  font-size: var(--size-xl);
+}
+.prose .group > h4 {
+  font-size: var(--size-lg);
+}
+.prose .group > h6 {
+  font-size: var(--size-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
 /* ---------- single post ---------- */
 .post-header {
   display: flex;

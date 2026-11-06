@@ -31,6 +31,7 @@ const PM_NODE: Record<string, string> = {
   code_block: "codeBlock",
   image: "image",
   divider: "horizontalRule",
+  group: "group",
 }
 
 const types = (ed: Editor) => {

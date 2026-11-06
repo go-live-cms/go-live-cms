@@ -476,6 +476,13 @@
     }
   }
 
+  // A container in both (#414): its children's diffs inside its outline.
+  &__container {
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+  }
+
   // A whole block or list item only on one side. <ins>/<del> are transparent, so the
   // block keeps its own markup inside.
   &__whole {

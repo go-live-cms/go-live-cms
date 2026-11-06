@@ -9,6 +9,7 @@ import { ImageWithMediaId } from "../../components/editor/extensions/ImageWithMe
 import { BlockIdExtension } from "../../components/editor/extensions/BlockIdExtension"
 import { QuoteCitation } from "../../components/editor/extensions/QuoteCitation"
 import { BlockColor } from "../../components/editor/extensions/BlockColor"
+import { Group, GroupDocument } from "../../components/editor/extensions/GroupBlock"
 
 const lowlight = createLowlight(common)
 
@@ -26,9 +27,13 @@ const lowlight = createLowlight(common)
  */
 export function schemaExtensions({ collaborating }: { collaborating: boolean }) {
   return {
+    // The doc node: flow plus the top-level containers (blocks-spec/nesting.ts, #414).
+    document: GroupDocument,
     starterKit: StarterKit.configure({
       heading: { levels: [1, 2, 3, 4, 5, 6] },
       codeBlock: false,
+      // The doc's content comes from the nesting table (#414): `document` below.
+      document: false,
       dropcursor: { width: 2, color: "var(--editor-cursor,#3b82f6)" },
       link: false,
       undoRedo: collaborating ? false : undefined,
@@ -58,6 +63,8 @@ export function schemaExtensions({ collaborating }: { collaborating: boolean }) 
     quoteCitation: QuoteCitation,
     // #356: the block menu's Colour (a palette token, never a free colour).
     blockColor: BlockColor,
+    // #414: the first container. Its content expression is the nesting table's.
+    group: Group,
     blockId: BlockIdExtension,
   }
 }

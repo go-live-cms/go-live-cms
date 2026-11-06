@@ -1,0 +1,284 @@
+{
+  "description": "How blocks nest (#414, docs/design/block-library.md 2.3). Read by blocks-spec/nesting.test.ts (dedupeBlockRefs + validateBlockDoc) and api/post_blocks_nesting_test.go (dedupe + checkBlockNesting + prepareForStore). `valid` is the result after the dedupe step; `deduped`, when present, is blocks_order and every block's children after it.",
+  "vectors": [
+    {
+      "name": "a flat doc",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["para-00001", "image-0001"],
+        "blocks": {
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } },
+          "image-0001": { "id": "image-0001", "type": "image", "version": 2, "attrs": { "mediaId": 12 } }
+        }
+      }
+    },
+    {
+      "name": "a group holding flow blocks",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": { "style": "tinted", "align": "full" }, "children": ["head-00001", "para-00001", "image-0001", "list-00001"] },
+          "head-00001": { "id": "head-00001", "type": "heading", "version": 1, "attrs": { "level": 3, "text": "Inside" } },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } },
+          "image-0001": { "id": "image-0001", "type": "image", "version": 2, "attrs": { "mediaId": 12 } },
+          "list-00001": { "id": "list-00001", "type": "bullet_list", "version": 1, "attrs": {}, "children": ["item-00001", "item-00002"] },
+          "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": { "text": "one" } },
+          "item-00002": { "id": "item-00002", "type": "list_item", "version": 1, "attrs": { "text": "two" } }
+        }
+      }
+    },
+    {
+      "name": "a group holding a theme block and a type this build doesn't know (both flow)",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["theme-0001", "alert-0001"] },
+          "theme-0001": { "id": "theme-0001", "type": "theme:example/alert", "version": 1, "attrs": { "text": "Heads up" } },
+          "alert-0001": { "id": "alert-0001", "type": "alert", "version": 1, "attrs": { "text": "Old custom block" } }
+        }
+      }
+    },
+    {
+      "name": "an unreferenced block is not an error",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["para-00001"],
+        "blocks": {
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} },
+          "orphan-001": { "id": "orphan-001", "type": "paragraph", "version": 1, "attrs": { "text": "left over" } }
+        }
+      }
+    },
+    {
+      "name": "a list's children aren't type-checked (the bridge wraps a paragraph child)",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["list-00001"],
+        "blocks": {
+          "list-00001": { "id": "list-00001", "type": "ordered_list", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "item" } }
+        }
+      }
+    },
+    {
+      "name": "a repeat within one group's children is removed first",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001", "para-00002", "para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      },
+      "deduped": {
+        "blocks_order": ["group-0001"],
+        "children": { "group-0001": ["para-00001", "para-00002"] }
+      }
+    },
+    {
+      "name": "repeats within blocks_order and within a list are removed first",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["list-00001", "para-00001", "list-00001"],
+        "blocks": {
+          "list-00001": { "id": "list-00001", "type": "bullet_list", "version": 1, "attrs": {}, "children": ["item-00001", "item-00001"] },
+          "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": {} },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      },
+      "deduped": {
+        "blocks_order": ["list-00001", "para-00001"],
+        "children": { "list-00001": ["item-00001"] }
+      }
+    },
+    {
+      "name": "an empty group",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": [] }
+        }
+      }
+    },
+    {
+      "name": "a group without children",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a group inside a group (the table is acyclic)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["group-0002"] },
+          "group-0002": { "id": "group-0002", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a group holding a list item",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["item-00001"] },
+          "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a group holding a block that isn't an object",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["odd-000001"] },
+          "odd-000001": "paragraph"
+        }
+      }
+    },
+    {
+      "name": "children on a paragraph",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["para-00001"],
+        "blocks": {
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {}, "children": ["para-00002"] },
+          "para-00002": { "id": "para-00002", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "an empty children array on a list item",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["list-00001"],
+        "blocks": {
+          "list-00001": { "id": "list-00001", "type": "bullet_list", "version": 1, "attrs": {}, "children": ["item-00001"] },
+          "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": {}, "children": [] }
+        }
+      }
+    },
+    {
+      "name": "a child that isn't in blocks",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001", "missing-01"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a top-level id that isn't in blocks",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["para-00001", "missing-01"],
+        "blocks": {
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a block under two groups",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001", "group-0002"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "group-0002": { "id": "group-0002", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "a block both at the top and in a group",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["para-00001", "group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "two blocks that hold each other (a cycle off the top level)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["para-00001"],
+        "blocks": {
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} },
+          "alert-0001": { "id": "alert-0001", "type": "alert", "version": 1, "attrs": {}, "children": ["alert-0002"] },
+          "alert-0002": { "id": "alert-0002", "type": "alert", "version": 1, "attrs": {}, "children": ["alert-0001"] }
+        }
+      }
+    },
+    {
+      "name": "a list that lists itself",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["list-00001"],
+        "blocks": {
+          "list-00001": { "id": "list-00001", "type": "bullet_list", "version": 1, "attrs": {}, "children": ["list-00001"] }
+        }
+      }
+    },
+    {
+      "name": "children that aren't an array",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["group-0001"],
+        "blocks": {
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": "para-00001" },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": {} }
+        }
+      }
+    },
+    {
+      "name": "children that aren't all ids",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["list-00001"],
+        "blocks": {
+          "list-00001": { "id": "list-00001", "type": "bullet_list", "version": 1, "attrs": {}, "children": ["item-00001", 7] },
+          "item-00001": { "id": "item-00001", "type": "list_item", "version": 1, "attrs": {} }
+        }
+      }
+    }
+  ]
+}

@@ -13,6 +13,7 @@ import { restoreVersionLive } from "./liveRestore"
 import { schemaExtensions } from "./schema"
 import { canonical } from "./fragmentBridge.fixtures"
 import { startRelay, waitFor, POST_ID, type Relay } from "./hocuspocusRelay.testkit"
+import { BlockNodeViews } from "@gl-admin/components/editor/extensions/BlockNodeViews"
 
 // Block comments (#192) on the real collab server (hocuspocusRelay.testkit.ts):
 //   - the "comments" nudge the API asks for reaches every open editor of the post, the
@@ -311,6 +312,121 @@ describe("thread anchoring by block id (#192, the identity contract)", () => {
       anchored: [
         { text: "alpha one", threads: [ids.alpha] },
         { text: "gamma three", threads: [ids.gamma] },
+      ],
+      orphaned: [],
+    })
+  })
+})
+
+describe("thread anchoring inside a Group (#414)", () => {
+  const GROUP = "blk-0192-group-000001"
+  const ONE = "blk-0192-inner-000001"
+  const TWO = "blk-0192-inner-000002"
+  const AFTER = "blk-0192-after-000001"
+  const groupDoc = (): BlockDocV1 =>
+    canonical({
+      doc_version: 1,
+      blocks_order: [GROUP, AFTER],
+      blocks: {
+        [GROUP]: { id: GROUP, type: "group", version: 1, attrs: {}, children: [ONE, TWO] },
+        [ONE]: { id: ONE, type: "paragraph", version: 1, attrs: { text: "inside one" } },
+        [TWO]: { id: TWO, type: "paragraph", version: 1, attrs: { text: "inside two" } },
+        [AFTER]: { id: AFTER, type: "paragraph", version: 1, attrs: { text: "after" } },
+      },
+    } as BlockDocV1)
+
+  beforeEach(async () => {
+    // Replace the outer relay with one seeded with a group.
+    await relay.destroy()
+    relay = await startRelay({ blockDoc: groupDoc(), revision: 3 })
+  })
+
+  function bindWithViews(collab: HocuspocusCollaboration): Editor {
+    const editor = new Editor({
+      element: document.createElement("div"),
+      extensions: [...Object.values(schemaExtensions({ collaborating: true })), BlockNodeViews, Collaboration.configure({ document: collab.doc })],
+    })
+    editors.push(editor)
+    return editor
+  }
+
+  async function twoEditors() {
+    const ca = relay.client("1")
+    const cb = relay.client("2")
+    await Promise.all([ca.whenSynced(), cb.whenSynced()])
+    const a = bindWithViews(ca)
+    const b = bindWithViews(cb)
+    await waitFor(() => b.getText().includes("inside two"), { what: "the group on b" })
+    return { a, b }
+  }
+
+  /** The node with this id at any depth, and its position. */
+  function find(editor: Editor, id: string): { node: any; pos: number } {
+    let found: { node: any; pos: number } | null = null
+    editor.state.doc.descendants((node, pos) => {
+      if (!found && node.attrs["data-block-id"] === id) found = { node, pos }
+    })
+    if (!found) throw new Error(`no ${id}`)
+    return found
+  }
+
+  it("a thread on a block inside a group is anchored, and the group itself has its own", async () => {
+    const { b } = await twoEditors()
+    expect(b.state.doc.child(0).type.name).toBe("group")
+    expect(placement(b, [thread(ONE), thread(GROUP)])).toEqual({
+      anchored: [
+        { text: "inside oneinside two", threads: [GROUP] },
+        { text: "inside one", threads: [ONE] },
+      ],
+      orphaned: [],
+    })
+  })
+
+  it("moving the whole group, or the block out of it, keeps the thread", async () => {
+    const { a, b } = await twoEditors()
+    const threads = [thread(ONE)]
+
+    // The group moves below "after" (the drag handle's delete + insert, attrs kept).
+    const group = find(a, GROUP)
+    let tr = a.state.tr.delete(group.pos, group.pos + group.node.nodeSize)
+    tr.insert(tr.doc.content.size, group.node)
+    a.view.dispatch(tr)
+    await converged(a, b, "the group move to reach b")
+    expect(docBlocks(b.state.doc)[0].id).toBe(AFTER)
+    expect(placement(b, threads).anchored).toEqual([{ text: "inside one", threads: [ONE] }])
+
+    // ONE moves out of the group to the top of the post.
+    const one = find(a, ONE)
+    tr = a.state.tr.delete(one.pos, one.pos + one.node.nodeSize)
+    tr.insert(0, one.node)
+    a.view.dispatch(tr)
+    await converged(a, b, "the move out of the group to reach b")
+    expect(b.state.doc.child(0).attrs["data-block-id"]).toBe(ONE)
+    expect(placement(b, threads)).toEqual({ anchored: [{ text: "inside one", threads: [ONE] }], orphaned: [] })
+  })
+
+  it("survives a reload (server restart) and a reseed", async () => {
+    const threads = [thread(ONE), thread(TWO)]
+    const first = relay.client("2")
+    await first.whenSynced()
+    first.destroy()
+
+    await relay.restart()
+    const reloaded = relay.client("1")
+    await reloaded.whenSynced()
+    const r = bindWithViews(reloaded)
+    await waitFor(() => r.getText().includes("inside two"), { what: "the reloaded doc" })
+    expect(placement(r, threads).orphaned).toEqual([])
+
+    await relay.restart(() => relay.api.writeAround(String(POST_ID), groupDoc()))
+    const reseeded = relay.client("1")
+    await reseeded.whenSynced()
+    const s = bindWithViews(reseeded)
+    await waitFor(() => s.getText().includes("inside two"), { what: "the reseeded doc" })
+    expect(placement(s, threads)).toEqual({
+      anchored: [
+        { text: "inside one", threads: [ONE] },
+        { text: "inside two", threads: [TWO] },
       ],
       orphaned: [],
     })
