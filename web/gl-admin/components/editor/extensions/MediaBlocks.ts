@@ -17,9 +17,10 @@ declare module "@tiptap/core" {
       insertMediaBlock: (name: NewMediaNodeName) => ReturnType
       /**
        * Point the media block at `pos` at a media library item (Choose, Upload, Replace).
-       * A file block with no label of its own gets `label` (the file's name).
+       * A file block's label stays as it is: with none, the file's own name is shown (it is
+       * never stored, so a Replace shows the new file's name).
        */
-      setBlockMedia: (pos: number, mediaId: number, extra?: { label?: string | null }) => ReturnType
+      setBlockMedia: (pos: number, mediaId: number) => ReturnType
       /** Add an empty caption to the selected video or audio block, or remove its caption. */
       toggleMediaCaption: () => ReturnType
     }
@@ -174,16 +175,12 @@ export const MediaBlockCommands = Extension.create({
           return commands.insertContent({ type: name })
         },
       setBlockMedia:
-        (pos, mediaId, extra = {}) =>
+        (pos, mediaId) =>
         ({ state, tr, dispatch }) => {
           const node = state.doc.nodeAt(pos)
           if (!node || !isMediaNodeName(node.type.name) || !Number.isInteger(mediaId) || mediaId <= 0) return false
           if (dispatch) {
-            const attrs: Record<string, unknown> = { ...node.attrs, mediaId }
-            if (node.type.name === "file" && !normalizeFileLabel(node.attrs.label)) {
-              attrs.label = normalizeFileLabel(extra.label)
-            }
-            tr.setNodeMarkup(pos, undefined, attrs)
+            tr.setNodeMarkup(pos, undefined, { ...node.attrs, mediaId })
             if (state.selection instanceof NodeSelection && state.selection.from === pos) {
               tr.setSelection(NodeSelection.create(tr.doc, pos))
             }

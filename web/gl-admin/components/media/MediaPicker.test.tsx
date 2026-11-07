@@ -192,6 +192,20 @@ describe("MediaPicker", () => {
     expect(form.get("description")).toBe("Uploaded file: new.mp4")
   })
 
+  it("picks nothing when it was closed before the upload ended", async () => {
+    let finish: (value: unknown) => void = () => {}
+    api.createMedia.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const onSelect = vi.fn()
+    const picker = (isOpen: boolean) => <MediaPicker isOpen={isOpen} onClose={() => {}} onSelect={onSelect} kind="image" />
+    await render(picker(true))
+    await chooseFiles(uploadInput(), [new File(["x"], "late.jpg", { type: "image/jpeg" })])
+    await act(async () => root!.render(picker(false)))
+    await act(async () => finish({ media: media(70) }))
+    await flush()
+    expect(api.createMedia).toHaveBeenCalledTimes(1)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it("refuses to upload a file of another kind", async () => {
     await render(<MediaPicker isOpen onClose={() => {}} onSelect={() => {}} kind="audio" />)
     await chooseFiles(uploadInput(), [new File(["x"], "photo.png", { type: "image/png" })])

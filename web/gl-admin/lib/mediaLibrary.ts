@@ -1,4 +1,5 @@
 import type { FocalPoint, Media, MediaSortOption } from "@gl-admin/lib/types"
+import { formatFileSize as formatBlockFileSize } from "./blocks-spec/media"
 
 // The media library's rules (#342): file kinds and their tags, the line under a tile,
 // the type filter, and the "Used in" rows. Kept out of the components so they're tested
@@ -66,14 +67,9 @@ export function formatTag(media: Pick<Media, "media_path">): string {
   return fileExtension(media.media_path).toUpperCase() || "FILE"
 }
 
+// 412 KB, 1.4 MB (the media blocks' formatter, #423), "0 B" for none.
 export function formatFileSize(bytes: number | null | undefined): string {
-  if (!bytes || bytes <= 0) return "0 B"
-  const units = ["B", "KB", "MB", "GB"]
-  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
-  const value = bytes / Math.pow(1024, i)
-  // 412 KB, 1.4 MB: one decimal only where it says something.
-  const shown = i === 0 || value >= 10 ? Math.round(value) : Math.round(value * 10) / 10
-  return `${shown} ${units[i]}`
+  return formatBlockFileSize(bytes) || "0 B"
 }
 
 export function formatDuration(seconds: number | null | undefined): string {

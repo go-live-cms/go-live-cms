@@ -69,6 +69,9 @@ export default function MediaPicker({
   const [uploading, setUploading] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const request = useRef(0)
+  // One per opening: an upload that ends after the picker closed (or reopened for another
+  // block) picks nothing.
+  const session = useRef(0)
   const fileInput = useRef<HTMLInputElement>(null)
   const grid = useRef<HTMLUListElement>(null)
   const ids = useId()
@@ -114,6 +117,7 @@ export default function MediaPicker({
     if (isOpen) return
     // Closed: the next open starts over (another block may open it with another kind).
     request.current++
+    session.current++
     setSelected([])
     setUploadError(null)
     setUploading(null)
@@ -150,18 +154,21 @@ export default function MediaPicker({
       return
     }
     setUploadError(null)
+    const started = session.current
     const uploaded: Media[] = []
     try {
       for (const file of multiple ? files : files.slice(0, 1)) {
         setUploading(file.name)
         uploaded.push(await uploadMediaFile(file))
+        if (started !== session.current) return
       }
     } catch (e) {
-      setUploadError(`Upload failed: ${errorMessage(e, "the file couldn't be uploaded")}`)
+      if (started === session.current) setUploadError(`Upload failed: ${errorMessage(e, "the file couldn't be uploaded")}`)
     } finally {
-      setUploading(null)
+      if (started === session.current) setUploading(null)
     }
-    if (uploaded.length === 0) return
+    // Closed meanwhile: the file is in the library, but nothing is picked.
+    if (uploaded.length === 0 || started !== session.current) return
     setItems((prev) => [...uploaded, ...prev.filter((m) => !uploaded.some((u) => u.id === m.id))])
     if (multiple) setSelected((prev) => [...prev, ...uploaded.filter((u) => !prev.some((m) => m.id === u.id))])
     else pick(uploaded[0])

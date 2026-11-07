@@ -21,12 +21,17 @@ export interface MediaPickRequest {
   onPick: (media: Media) => void
 }
 
-type Host = (request: MediaPickRequest) => void
+export interface MediaPickerHostHandlers {
+  /** Shows the picker. */
+  open: (request: MediaPickRequest) => void
+  /** Called after a block took `media` (picked or uploaded): links it to the post. */
+  applied?: (media: Media) => void
+}
 
-const hosts = new WeakMap<Editor, Host>()
+const hosts = new WeakMap<Editor, MediaPickerHostHandlers>()
 
 /** Called by `MediaPickerHost`; returns the unregister function. */
-export function registerMediaPickerHost(editor: Editor, host: Host): () => void {
+export function registerMediaPickerHost(editor: Editor, host: MediaPickerHostHandlers): () => void {
   hosts.set(editor, host)
   return () => {
     if (hosts.get(editor) === host) hosts.delete(editor)
@@ -37,7 +42,7 @@ export function registerMediaPickerHost(editor: Editor, host: Host): () => void 
 export function requestMediaPick(editor: Editor, request: MediaPickRequest): boolean {
   const host = hosts.get(editor)
   if (!host) return false
-  host(request)
+  host.open(request)
   return true
 }
 
@@ -51,8 +56,9 @@ export function mediaKindOfNode(node: PMNode): MediaPickerKind | null {
  * Points the block `ref` names at `media`, in one transaction. An image also takes the
  * media's URL, alt text and name, as before #423 (`MediaBlockManager`): its caption and
  * width stay, the media's description isn't copied anywhere, and a decorative image gets an
- * empty alt (#325). A file block with no label gets the media's name. False when the block
- * is gone or isn't a media block any more.
+ * empty alt (#325). A file block keeps its label (none shows the file's name). The host is
+ * told (it links the media to the post), whether the file was picked or uploaded. False when
+ * the block is gone or isn't a media block any more.
  */
 export function applyMediaToBlock(editor: Editor, ref: BlockRef, media: Media): boolean {
   if (!editor.isEditable) return false
@@ -68,9 +74,12 @@ export function applyMediaToBlock(editor: Editor, ref: BlockRef, media: Media): 
       mediaId: media.id,
     })
     editor.view.dispatch(tr)
+    hosts.get(editor)?.applied?.(media)
     return true
   }
-  return editor.commands.setBlockMedia(block.pos, media.id, { label: media.name || media.original_filename })
+  const applied = editor.commands.setBlockMedia(block.pos, media.id)
+  if (applied) hosts.get(editor)?.applied?.(media)
+  return applied
 }
 
 /** The block's current media when already looked up (for the picker's mark). */

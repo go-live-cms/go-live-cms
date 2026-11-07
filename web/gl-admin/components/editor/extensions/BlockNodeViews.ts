@@ -205,7 +205,7 @@ class ImageView implements NodeView {
     }
     if (!this.missing) {
       const name = typeof this.node.attrs.title === "string" && this.node.attrs.title.trim() ? this.node.attrs.title.trim() : "This image"
-      this.missing = missingPanel("image", `${name} is no longer in Media. Its caption is kept for the replacement.`, () => {
+      this.missing = missingPanel("image", "missing", `${name} is no longer in Media. Its caption is kept for the replacement.`, () => {
         const pos = this.getPos()
         if (pos !== undefined && this.view.editable) chooseMediaFor(this.editor, pos)
       })

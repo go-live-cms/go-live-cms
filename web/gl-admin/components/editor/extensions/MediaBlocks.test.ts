@@ -72,7 +72,7 @@ function makeEditor(content: object, { editable = true } = {}): Editor {
   const element = document.createElement("div")
   document.body.appendChild(element)
   editor = new Editor({ element, editable, extensions: [...Object.values(schemaExtensions({ collaborating: false })), BlockNodeViews], content })
-  registerMediaPickerHost(editor, (request) => requests.push(request))
+  registerMediaPickerHost(editor, { open: (request) => requests.push(request) })
   return editor
 }
 
@@ -126,14 +126,17 @@ describe("choosing the file (#423)", () => {
     expect(pmToBlockDoc(ed.state.doc).blocks[VIDEO]).toMatchObject({ type: "video", attrs: { mediaId: 12 } })
   })
 
-  it("asks for documents for a file block and gives it the file's name as its label", async () => {
+  it("asks for documents for a file block, whose label stays empty (the file's name shows)", async () => {
     const ed = makeEditor({ type: "doc", content: [{ type: "file", attrs: { "data-block-id": FILE } }, para()] })
     buttonNamed(dom(ed, FILE), "Choose from Media")!.click()
     expect(requests[0].kind).toBe("document")
     requests[0].onPick(media(14, { name: "import-checklist.pdf", mime_type: "application/pdf", file_size: 245_760, original_filename: "import-checklist.pdf", media_path: "/uploads/media/c.pdf" }))
     await flush()
-    expect(ed.state.doc.firstChild!.attrs).toMatchObject({ mediaId: 14, label: "import-checklist.pdf" })
+    expect(ed.state.doc.firstChild!.attrs).toMatchObject({ mediaId: 14, label: null })
+    expect((dom(ed, FILE).querySelector("input.editor-media__label") as HTMLInputElement).placeholder).toBe("import-checklist.pdf")
     expect(dom(ed, FILE).querySelector(".editor-media__meta")!.textContent).toBe("PDF · 240 KB")
+    // A Replace shows the new file's name: nothing of the old one was stored.
+    expect(pmToBlockDoc(ed.state.doc).blocks[FILE].attrs).toEqual({ mediaId: 14 })
   })
 
   it("finds the block again by its id when the file arrives, after a collaborator moved it", () => {

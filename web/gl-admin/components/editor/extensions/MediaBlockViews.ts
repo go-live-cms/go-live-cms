@@ -85,7 +85,12 @@ function button(label: string, className = "editor-media__button"): HTMLButtonEl
  * title, one line and Replace. `role="group"` named by the title, so a screen reader
  * hears what's wrong before the button.
  */
-export function missingPanel(kind: MediaNode, text: string, onReplace: () => void): { dom: HTMLElement; replace: HTMLButtonElement } {
+export function missingPanel(
+  kind: MediaNode,
+  state: "missing" | "unknown",
+  text: string,
+  onReplace: () => void,
+): { dom: HTMLElement; replace: HTMLButtonElement } {
   const dom = document.createElement("div")
   dom.className = "editor-media__missing"
   dom.contentEditable = "false"
@@ -93,7 +98,7 @@ export function missingPanel(kind: MediaNode, text: string, onReplace: () => voi
   const title = document.createElement("b")
   title.className = "editor-media__missing-title"
   title.id = `missing-${Math.random().toString(36).slice(2, 10)}`
-  title.textContent = text === UNKNOWN_TEXT ? `${BLOCK_NAMES[kind]}: details unavailable` : MISSING_TITLES[kind]
+  title.textContent = state === "unknown" ? `${BLOCK_NAMES[kind]}: details unavailable` : MISSING_TITLES[kind]
   dom.setAttribute("aria-labelledby", title.id)
   const line = document.createElement("span")
   line.className = "editor-media__missing-text"
@@ -263,7 +268,7 @@ export class MediaBlockView implements NodeView {
 
     if (!state) return this.renderEmpty(editable)
     if (state.status === "missing" || state.status === "unknown") {
-      const { dom, replace } = missingPanel(this.kind, state.status === "missing" ? MISSING_TEXT : UNKNOWN_TEXT, () => this.choose())
+      const { dom, replace } = missingPanel(this.kind, state.status, state.status === "missing" ? MISSING_TEXT : UNKNOWN_TEXT, () => this.choose())
       replace.hidden = !editable
       this.body.append(dom)
       return
