@@ -1146,12 +1146,13 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   "a former member"), a link → `{label, href}` with the target's current path (`postHref`, the
   site's URL structure and published category) **only while the target is published in a public,
   active type** (a draft, the trash or a private type: `{label}`, which the site renders as text),
-  a chip → `{date, time}`. No user id, post id or email leaves through them
+  a chip → `{date, time}`. A renamed mention's stored `@label` in the block's plain `text`
+  (excerpts, meta descriptions) is replaced with the current name too. No user id, post id or email leaves through them
   (`TestPublicInlineNodesWithoutIDsOrEmails` checks every route). A new `/public` route that
   returns published blocks must call it.
 - **@ menu routes** (content roles, contributors included, public fields only, never an email):
   `GET /mentions/people?q=` (content-role members by name/username, 5) and `?ids=` (≤100, the
-  editor's current names), `GET /mentions/content?q=` (what the caller may read, `canReadPost` via
+  editor's current names; content roles only too), `GET /mentions/content?q=` (what the caller may read, `canReadPost` via
   `viewer_id`, never trashed, latest edited first, 5).
 - **Mention emails** (`mention_notifications.go`): only after a collab store that writes
   `block_doc`. `collabInlineNodes` reads one entry per mentioned member (preferring a block this
@@ -1165,14 +1166,16 @@ that route and the squash call are gone. `NewServer` requires `COLLAB_INTERNAL_U
   `emailed=false`, so publishing later sends nothing late. ≤25 emails per store. Template `mention`
   (title + admin link, never content), after the response (`runInBackground`).
 - **Reminders** (`reminders.go`): `StorePostCollabTx` keeps `post_reminders` in step with the
-  working copy (`DeleteStalePostReminders` drops pending rows whose chip is gone or moved;
+  working copy, a chip being its **block, day and time** (UNIQUE), never the instant (`DeleteStalePostReminders`
+  drops pending rows whose chip is gone or moved; `RetimePostReminders` moves `remind_at` when the
+  site's zone changed;
   `AddPostReminders` adds chips with an owner, the block's `block_edits` user, and a time still
   ahead, in the site's zone: `reminderInstant`, a DST gap fires when it ends). The store reads the
   site's zone only for a doc with a reminder. **The #147 scheduler sends them**
   (`RunScheduledPublishing` → `sendDueReminders`, after publishes and updates): `ClaimDueReminders`
   (`FOR UPDATE SKIP LOCKED`, the lease is the fencing token), `canReadPost` checked at send time
   (else `skipped`), retries with #147's backoff up to 5 attempts (`failed`), `sent` rows never fire
-  again. Template `reminder`.
+  again. At most 10 per round (`reminderMaxPerRound`): the sends share the publishing loop. Template `reminder`.
 - Tests: `inline_nodes_test.go` (vectors, sanitizer, extraction, DST), `mentions_db_test.go` (real
   DB: once per member and post, no leak, self/unattributed/trash, the public routes, the menu routes,
   reminders kept in step and sent once, skipped without access), `mailer` `TestMentionAndReminderTemplates`.

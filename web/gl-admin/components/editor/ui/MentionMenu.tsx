@@ -6,7 +6,8 @@ import Avatar from "@gl-admin/components/ui/Avatar"
 import { searchMentionContent, searchMentionPeople, type MentionContent, type MentionPerson } from "@gl-admin/lib/api/mentions"
 import { rememberMentionPeople } from "@gl-admin/lib/mentionNames"
 import { flattenMentionSections, mentionSections, optionLabel, type MentionOption } from "@gl-admin/lib/mentionMenu"
-import { loadedSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
+import { loadedSiteDateSettings, loadSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
+import { authManager } from "@gl-admin/lib/auth"
 import { DEFAULT_DATE_SETTINGS, siteDay } from "@/lib/siteDates"
 import { openDateChipDialog } from "./DateChipDialog"
 
@@ -39,9 +40,12 @@ interface Results {
   content: MentionContent[]
 }
 
-// One answer per query for the session (memory only, rule 0), so typing back and forth
-// doesn't ask again.
+// One answer per member and query for the session (memory only, rule 0), so typing back and
+// forth doesn't ask again. Keyed by the signed-in member: another member signing in on this
+// tab must never see results (draft titles) the API gave someone else. A failed answer isn't
+// kept, so the next keystroke asks again.
 const cache = new Map<string, Results>()
+const cacheKey = (query: string) => `${authManager.getState().user?.id ?? "anon"}:${query}`
 
 /** Tests: forget the answers. */
 export function resetMentionMenuCache(): void {
@@ -50,23 +54,28 @@ export function resetMentionMenuCache(): void {
 
 function useMentionResults(query: string): { results: Results | null; loading: boolean } {
   const key = query.trim().toLowerCase()
-  const [results, setResults] = useState<Results | null>(() => cache.get(key) ?? null)
+  const [results, setResults] = useState<Results | null>(() => cache.get(cacheKey(key)) ?? null)
   const latest = useRef(key)
 
   useEffect(() => {
     latest.current = key
-    const cached = cache.get(key)
+    const cached = cache.get(cacheKey(key))
     if (cached) {
       setResults(cached)
       return
     }
     const timer = setTimeout(async () => {
+      let failed = false
+      const fail = <T,>(): T[] => {
+        failed = true
+        return []
+      }
       const [people, content] = await Promise.all([
-        searchMentionPeople(key).catch(() => [] as MentionPerson[]),
-        searchMentionContent(key).catch(() => [] as MentionContent[]),
+        searchMentionPeople(key).catch(() => fail<MentionPerson>()),
+        searchMentionContent(key).catch(() => fail<MentionContent>()),
       ])
       const answer = { query: key, people, content }
-      cache.set(key, answer)
+      if (!failed) cache.set(cacheKey(key), answer)
       rememberMentionPeople(people)
       if (latest.current === key) setResults(answer)
     }, MENTION_SEARCH_DEBOUNCE_MS)
@@ -130,7 +139,17 @@ function OptionBody({ option }: { option: MentionOption }) {
 
 export const MentionMenuList = forwardRef<MentionMenuListRef, Props>(function MentionMenuList({ query, command, editor }, ref) {
   const { results, loading } = useMentionResults(query)
-  const today = siteDay(new Date(), loadedSiteDateSettings() ?? DEFAULT_DATE_SETTINGS)
+  // Today is the site's day: load the settings (once per page) if nothing has yet.
+  const [dateSettings, setDateSettings] = useState(() => loadedSiteDateSettings())
+  useEffect(() => {
+    if (dateSettings) return
+    let live = true
+    void loadSiteDateSettings().then((s) => live && s && setDateSettings(s))
+    return () => {
+      live = false
+    }
+  }, [dateSettings])
+  const today = siteDay(new Date(), dateSettings ?? DEFAULT_DATE_SETTINGS)
   const sections = useMemo(
     () => mentionSections({ query, people: results?.people ?? [], content: results?.content ?? [], today }),
     [query, results, today]

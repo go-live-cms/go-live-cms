@@ -219,14 +219,15 @@ func TestPublicInlineNodesWithoutIDsOrEmails(t *testing.T) {
 	target := publishForTest(t, f.store, scheduleDraft(t, f.store, f.editor, scheduleWord()), f.editor)
 	draftTarget := scheduleDraft(t, f.store, f.editor, scheduleWord())
 	post := scheduleDraft(t, f.store, f.editor, scheduleWord())
-	f.storeDoc(t, post, []map[string]any{
-		inlineBlock("blk-pub-0001",
-			textNode("Thanks "), mentionOf(f.viewer, "Old Label"),
-			textNode(", see "), map[string]any{"type": "contentLink", "attrs": map[string]any{"postId": target.ID, "label": "The guide"}},
-			textNode(" and "), map[string]any{"type": "contentLink", "attrs": map[string]any{"postId": draftTarget.ID, "label": "Coming soon"}},
-			textNode(" by "), map[string]any{"type": "dateChip", "attrs": map[string]any{"date": "2026-12-01", "time": "10:00", "reminder": true}},
-		),
-	}, map[string]db.User{"blk-pub-0001": f.editor})
+	publicBlock := inlineBlock("blk-pub-0001",
+		textNode("Thanks "), mentionOf(f.viewer, "Old Label"),
+		textNode(", see "), map[string]any{"type": "contentLink", "attrs": map[string]any{"postId": target.ID, "label": "The guide"}},
+		textNode(" and "), map[string]any{"type": "contentLink", "attrs": map[string]any{"postId": draftTarget.ID, "label": "Coming soon"}},
+		textNode(" by "), map[string]any{"type": "dateChip", "attrs": map[string]any{"date": "2026-12-01", "time": "10:00", "reminder": true}},
+	)
+	// The plain text the bridge builds from the stored labels (excerpts read it).
+	publicBlock["attrs"].(map[string]any)["text"] = "Thanks @Old Label, see The guide and Coming soon by Dec 1, 2026"
+	f.storeDoc(t, post, []map[string]any{publicBlock}, map[string]db.User{"blk-pub-0001": f.editor})
 	_, err := f.conn.Exec(`UPDATE users SET full_name = 'Renamed Member' WHERE id = $1`, f.viewer.ID)
 	require.NoError(t, err)
 	post = publishForTest(t, f.store, post, f.editor)
@@ -259,6 +260,7 @@ func TestPublicInlineNodesWithoutIDsOrEmails(t *testing.T) {
 			require.Contains(t, body, fmt.Sprintf(`"href":%q`, wantHref), path)
 			// The draft's link is its text alone.
 			require.Contains(t, body, `{"label":"Coming soon"}`, path)
+			require.Contains(t, body, "Thanks @Renamed Member, see", path)
 			require.Contains(t, body, `"date":"2026-12-01"`, path)
 		}
 	}
@@ -365,6 +367,18 @@ func TestReminders_KeptInStepAndSentOnce(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, "11:00", rows[0].ChipTime)
+
+	// The site's zone changed (simulated: the stored instant is off by an hour): the next
+	// store, by someone editing another block, moves it back to the chip's time and keeps it.
+	_, err = f.conn.Exec(`UPDATE post_reminders SET remind_at = remind_at + interval '1 hour' WHERE id = $1`, rows[0].ID)
+	require.NoError(t, err)
+	f.storeDoc(t, post, []map[string]any{inlineBlock("blk-rem-0001", textNode("Ship it by "), reminderChip(day, "11:00")), inlineBlock("blk-rem-0009", textNode("x"))}, map[string]db.User{"blk-rem-0009": f.admin})
+	retimed, err := f.store.ListPostReminders(ctx, post.ID)
+	require.NoError(t, err)
+	require.Len(t, retimed, 1)
+	require.Equal(t, rows[0].ID, retimed[0].ID)
+	require.True(t, rows[0].RemindAt.Equal(retimed[0].RemindAt), "%v vs %v", rows[0].RemindAt, retimed[0].RemindAt)
+	require.Equal(t, f.editor.ID, retimed[0].UserID)
 
 	// A reminder in the past, or one nobody typed in a store, isn't added.
 	f.storeDoc(t, post, []map[string]any{

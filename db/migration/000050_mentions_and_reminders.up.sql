@@ -52,7 +52,9 @@ CREATE TABLE "post_reminders" (
   "attempts" integer NOT NULL DEFAULT 0,
   "done_at" timestamptz NULL,
   "created_at" timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT "post_reminders_once" UNIQUE ("post_id", "block_id", "remind_at")
+  -- A chip is its block, day and time as written (not the instant: a change of the site's
+  -- time zone moves remind_at, never the reminder's identity).
+  CONSTRAINT "post_reminders_once" UNIQUE ("post_id", "block_id", "chip_date", "chip_time")
 );
 
 CREATE INDEX "idx_post_reminders_due" ON "post_reminders" ("remind_at") WHERE "status" = 'pending';

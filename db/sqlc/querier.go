@@ -20,8 +20,8 @@ type Querier interface {
 	// 000047: the lowest non-default id), and EnsureDefaultCategory fills in none.
 	AddExistingTermsToPost(ctx context.Context, arg AddExistingTermsToPostParams) error
 	// The store's new reminders (parallel arrays; remind_ats as RFC 3339 text), each owned by
-	// whoever wrote it. One already recorded for the same block and time is left as it is
-	// (its owner and status). Returns the rows it inserted.
+	// whoever wrote it. One already recorded for the same block, day and time is left as it
+	// is (its owner and status). Returns the rows it inserted.
 	AddPostReminders(ctx context.Context, arg AddPostRemindersParams) ([]AddPostRemindersRow, error)
 	// Post-Taxonomy Relationships
 	AddPostToTaxonomyTerm(ctx context.Context, arg AddPostToTaxonomyTermParams) (PostTaxonomyRelationship, error)
@@ -202,9 +202,9 @@ type Querier interface {
 	// other pending link for it.
 	DeleteSignupRequestsByEmail(ctx context.Context, email string) error
 	// A store's reminders replace the post's pending ones: a pending row whose chip is gone
-	// (removed, or moved to another time: keys are "<block_id> <remind_at as RFC 3339>") is
+	// (removed, or moved to another day or time: keys are "<block_id> <YYYY-MM-DD> <HH:MM>") is
 	// deleted. Sent, skipped and failed rows stay, so a chip never fires twice. Runs inside
-	// StorePostCollabTx, like AddPostReminders.
+	// StorePostCollabTx, like the two below.
 	DeleteStalePostReminders(ctx context.Context, arg DeleteStalePostRemindersParams) error
 	// Expired rows hold unconfirmed details nobody can use any more.
 	DeleteStaleSignupRequests(ctx context.Context) (int64, error)
@@ -479,9 +479,9 @@ type Querier interface {
 	// moderator, every post; else their own and published ones, canReadPost), never one in
 	// the trash, whose title matches @pattern ('' = all), the latest edited first.
 	ListMentionContent(ctx context.Context, arg ListMentionContentParams) ([]ListMentionContentRow, error)
-	// Members by id (the editor's current names; the public API's mention names). A removed
-	// member has no row.
-	ListMentionPeopleByIDs(ctx context.Context, ids []int64) ([]ListMentionPeopleByIDsRow, error)
+	// Members with one of @roles (the content roles) by id: the editor's current names, the
+	// public API's mention names. A removed member, or one without a content role, has no row.
+	ListMentionPeopleByIDs(ctx context.Context, arg ListMentionPeopleByIDsParams) ([]ListMentionPeopleByIDsRow, error)
 	// A menu's items with what their URL and visibility are resolved from: the
 	// post (and its type), the term (and its taxonomy) or the archive's post type.
 	// A target that no longer exists comes back as NULLs. A post's published
@@ -737,6 +737,9 @@ type Querier interface {
 	RestorePostTitleAndDescription(ctx context.Context, arg RestorePostTitleAndDescriptionParams) (Post, error)
 	// Chain collapse: what pointed at old_to now points at new_to (A→B, then B→C: A→C).
 	RetargetRedirects(ctx context.Context, arg RetargetRedirectsParams) (int64, error)
+	// Pending reminders whose instant changed while the chip didn't (the site's time zone
+	// changed) take the new one (parallel arrays; remind_ats as RFC 3339 text).
+	RetimePostReminders(ctx context.Context, arg RetimePostRemindersParams) error
 	// Answers an open request (claims it: a request already answered returns no
 	// row). Run by ReviewPostAccessRequestTx under the request's row lock.
 	ReviewPostAccessRequest(ctx context.Context, arg ReviewPostAccessRequestParams) (PostAccessRequest, error)

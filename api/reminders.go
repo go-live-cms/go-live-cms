@@ -30,7 +30,9 @@ import (
 )
 
 const (
-	reminderMaxPerRound = 100
+	// reminderMaxPerRound is small on purpose: the sends share the publishing loop, so a
+	// slow mail relay (mailSendTimeout each) must not hold up the next round's publishes.
+	reminderMaxPerRound = 10
 	reminderMaxAttempts = 5
 
 	reminderSent    = "sent"

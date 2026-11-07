@@ -88,9 +88,10 @@ type ReminderInput struct {
 	UserID int64
 }
 
-// ReminderKey is how DeleteStalePostReminders names a reminder: its block and instant.
-func ReminderKey(blockID string, remindAt time.Time) string {
-	return blockID + " " + remindAt.UTC().Format("2006-01-02T15:04:05Z")
+// ReminderKey is how DeleteStalePostReminders names a reminder: its block, and its day and
+// time as written (never the instant, which a change of the site's zone moves).
+func ReminderKey(blockID, chipDate, chipTime string) string {
+	return blockID + " " + chipDate + " " + chipTime
 }
 
 // PostBlockEditInput is one block's attribution in a collab store (#328).
@@ -241,10 +242,22 @@ func recordMentions(ctx context.Context, q *Queries, arg StorePostCollabTxParams
 func syncReminders(ctx context.Context, q *Queries, arg StorePostCollabTxParams) error {
 	keep := make([]string, len(arg.Reminders))
 	for i, r := range arg.Reminders {
-		keep[i] = ReminderKey(r.BlockID, r.RemindAt)
+		keep[i] = ReminderKey(r.BlockID, r.ChipDate, r.ChipTime)
 	}
 	if err := q.DeleteStalePostReminders(ctx, DeleteStalePostRemindersParams{PostID: arg.PostID, KeepKeys: keep}); err != nil {
 		return err
+	}
+	if len(arg.Reminders) > 0 {
+		retime := RetimePostRemindersParams{PostID: arg.PostID}
+		for _, r := range arg.Reminders {
+			retime.BlockIds = append(retime.BlockIds, r.BlockID)
+			retime.ChipDates = append(retime.ChipDates, r.ChipDate)
+			retime.ChipTimes = append(retime.ChipTimes, r.ChipTime)
+			retime.RemindAts = append(retime.RemindAts, r.RemindAt.UTC().Format(time.RFC3339))
+		}
+		if err := q.RetimePostReminders(ctx, retime); err != nil {
+			return err
+		}
 	}
 	now := arg.Now
 	if now.IsZero() {

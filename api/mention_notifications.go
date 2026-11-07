@@ -102,7 +102,7 @@ func collabInlineNodes(doc *BlockDocV1, edits []db.PostBlockEditInput, loc *time
 				if !ok {
 					return
 				}
-				key := db.ReminderKey(id, at)
+				key := db.ReminderKey(id, date, clock)
 				if seenReminder[key] {
 					return
 				}
@@ -153,14 +153,10 @@ func reminderInstant(date, clock string, loc *time.Location) (time.Time, bool) {
 	return t.UTC(), true
 }
 
-// siteZone is the site's time zone for stores and the scheduler (UTC when unset or
-// unreadable: a reminder an hour off beats a store that fails).
+// siteZone is the site's time zone for stores and the scheduler (siteTimeZone), UTC when
+// it can't be read: a reminder an hour off beats a store that fails.
 func (server *Server) siteZone(ctx context.Context) *time.Location {
-	settings, err := server.store.GetSettings(ctx)
-	if err != nil || settings.SiteTimezone == "" {
-		return time.UTC
-	}
-	loc, err := time.LoadLocation(settings.SiteTimezone)
+	loc, err := server.siteTimeZone(ctx)
 	if err != nil {
 		return time.UTC
 	}

@@ -28,6 +28,12 @@ vi.mock("@gl-admin/lib/api/mentions", () => ({
   getMentionPeople: vi.fn(async (ids: number[]) => people.filter((p) => ids.includes(p.id))),
 }))
 
+// The site's date settings, as loaded (UTC): no request to the settings API.
+vi.mock("@gl-admin/lib/hooks/useSiteSettings", () => {
+  const settings = { language: "en-US", timeZone: "UTC", dateFormat: "month_day_year" }
+  return { loadedSiteDateSettings: () => settings, loadSiteDateSettings: async () => settings }
+})
+
 stubJsdomRangeLayout()
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -229,6 +235,22 @@ describe("the @ menu", () => {
     expect(dialog.fields.time.value).toBe("09:00")
     expect(dialog.submit()).toBe(true)
     expect(inline()).toEqual([{ type: "dateChip", attrs: { date: day, time: "09:00", reminder: true } }])
+  })
+
+  it("doesn't keep a failed answer: the same query asks again", async () => {
+    const api = await import("@gl-admin/lib/api/mentions")
+    const search = vi.mocked(api.searchMentionPeople)
+    search.mockRejectedValueOnce(new Error("429"))
+    makeEditor()
+    type(" @ana")
+    await settle()
+    expect(labels()).not.toContain("Ana Costa, Editor")
+    const calls = search.mock.calls.length
+    makeEditor()
+    type(" @ana")
+    await settle()
+    expect(search.mock.calls.length).toBe(calls + 1)
+    expect(labels()).toContain("Ana Costa, Editor")
   })
 
   it("Esc closes the menu and keeps what was typed", async () => {

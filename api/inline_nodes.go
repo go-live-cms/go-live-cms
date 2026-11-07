@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	db "github.com/go-live-cms/go-live-cms/db/sqlc"
 )
 
 const (
@@ -265,7 +267,7 @@ func (server *Server) publicizeInlineNodes(ctx context.Context, docs ...map[stri
 
 	names := map[int64]string{}
 	if len(userIDs) > 0 {
-		rows, err := server.store.ListMentionPeopleByIDs(ctx, keysOf(userIDs))
+		rows, err := server.store.ListMentionPeopleByIDs(ctx, db.ListMentionPeopleByIDsParams{Ids: keysOf(userIDs), Roles: contentRoles})
 		if err != nil {
 			server.logger.Warn("public mentions: member lookup failed", "count", len(userIDs), "error", err)
 		}
@@ -300,16 +302,23 @@ func (server *Server) publicizeInlineNodes(ctx context.Context, docs ...map[stri
 		if doc == nil {
 			continue
 		}
-		docInlineNodes(doc, func(_ string, node map[string]interface{}) {
+		// A block's plain `text` (excerpts, meta descriptions) was built from the stored
+		// labels ("@Ana Lima"): the same renames go there, per block.
+		renames := map[string][][2]string{}
+		docInlineNodes(doc, func(blockID string, node map[string]interface{}) {
 			attrs, _ := node["attrs"].(map[string]interface{})
 			label := normalizeInlineLabel(attrs["label"])
 			switch stringOf(node["type"]) {
 			case mentionNodeType:
+				stored := label
 				if id, ok := normalizeEntityID(attrs["userId"]); ok && names[id] != "" {
 					label = names[id]
 				}
 				if label == "" {
 					label = formerMemberLabel
+				}
+				if stored != "" && stored != label {
+					renames[blockID] = append(renames[blockID], [2]string{"@" + stored, "@" + label})
 				}
 				node["attrs"] = map[string]interface{}{"label": label}
 			case contentLinkNodeType:
@@ -327,6 +336,19 @@ func (server *Server) publicizeInlineNodes(ctx context.Context, docs ...map[stri
 				node["attrs"] = map[string]interface{}{"date": chip["date"], "time": chip["time"]}
 			}
 		})
+		blocks, _ := doc["blocks"].(map[string]interface{})
+		for blockID, pairs := range renames {
+			block, _ := blocks[blockID].(map[string]interface{})
+			attrs, _ := block["attrs"].(map[string]interface{})
+			text, ok := attrs["text"].(string)
+			if !ok {
+				continue
+			}
+			for _, pair := range pairs {
+				text = strings.Replace(text, pair[0], pair[1], 1)
+			}
+			attrs["text"] = text
+		}
 	}
 }
 

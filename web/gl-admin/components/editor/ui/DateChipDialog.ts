@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core"
 import { DEFAULT_REMINDER_TIME, normalizeChipDate, normalizeChipTime } from "@gl-admin/lib/blocks-spec/inlineNodes"
-import { loadedSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
+import { loadedSiteDateSettings, loadSiteDateSettings } from "@gl-admin/lib/hooks/useSiteSettings"
 import { zonedToUtc } from "@gl-admin/lib/schedule"
 import { DEFAULT_DATE_SETTINGS, siteDay } from "@/lib/siteDates"
 
@@ -66,7 +66,7 @@ export function openDateChipDialog(editor: Editor): DateChipDialogHandle | null 
   open?.close({ refocus: false })
   if (!editor.isEditable) return null
   const doc = editor.view.dom.ownerDocument
-  const settings = loadedSiteDateSettings() ?? DEFAULT_DATE_SETTINGS
+  let settings = loadedSiteDateSettings() ?? DEFAULT_DATE_SETTINGS
 
   const dialog = doc.createElement("div")
   dialog.className = "editor-table-picker editor-date-dialog"
@@ -99,7 +99,8 @@ export function openDateChipDialog(editor: Editor): DateChipDialogHandle | null 
     fields.append(wrap)
     return input
   }
-  const date = field("Date", "date", siteDay(new Date(), settings))
+  const initialDay = siteDay(new Date(), settings)
+  const date = field("Date", "date", initialDay)
   const time = field("Time (optional)", "time", "")
 
   const remindWrap = doc.createElement("label")
@@ -200,6 +201,17 @@ export function openDateChipDialog(editor: Editor): DateChipDialogHandle | null 
   dialog.addEventListener("keydown", onKeyDown)
   doc.addEventListener("mousedown", onDocumentDown, true)
   editor.on("destroy", destroyed)
+
+  // Not loaded yet (the site's zone decides today and whether a reminder is ahead): load,
+  // then move the untouched default day to the site's.
+  if (!loadedSiteDateSettings()) {
+    void loadSiteDateSettings().then((loaded) => {
+      if (!loaded || open !== handle) return
+      settings = loaded
+      remindHint.textContent = `You get an email then (${loaded.timeZone}).`
+      if (date.value === initialDay) date.value = siteDay(new Date(), loaded)
+    })
+  }
 
   doc.body.append(dialog)
   open = handle

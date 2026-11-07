@@ -26,7 +26,7 @@ INSERT INTO post_reminders (post_id, block_id, remind_at, chip_date, chip_time, 
 SELECT $1, reminders.block_id, reminders.remind_at, reminders.chip_date, reminders.chip_time, users.id
 FROM reminders
 JOIN users ON users.id = reminders.user_id
-ON CONFLICT (post_id, block_id, remind_at) DO NOTHING
+ON CONFLICT (post_id, block_id, chip_date, chip_time) DO NOTHING
 RETURNING id, post_id, block_id, remind_at, user_id
 `
 
@@ -48,8 +48,8 @@ type AddPostRemindersRow struct {
 }
 
 // The store's new reminders (parallel arrays; remind_ats as RFC 3339 text), each owned by
-// whoever wrote it. One already recorded for the same block and time is left as it is
-// (its owner and status). Returns the rows it inserted.
+// whoever wrote it. One already recorded for the same block, day and time is left as it
+// is (its owner and status). Returns the rows it inserted.
 func (q *Queries) AddPostReminders(ctx context.Context, arg AddPostRemindersParams) ([]AddPostRemindersRow, error) {
 	rows, err := q.db.QueryContext(ctx, addPostReminders,
 		arg.PostID,
@@ -160,7 +160,7 @@ const deleteStalePostReminders = `-- name: DeleteStalePostReminders :exec
 DELETE FROM post_reminders
 WHERE post_id = $1
     AND status = 'pending'
-    AND NOT ((block_id || ' ' || to_char(remind_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) = ANY($2::text[]))
+    AND NOT ((block_id || ' ' || to_char(chip_date, 'YYYY-MM-DD') || ' ' || chip_time) = ANY($2::text[]))
 `
 
 type DeleteStalePostRemindersParams struct {
@@ -169,9 +169,9 @@ type DeleteStalePostRemindersParams struct {
 }
 
 // A store's reminders replace the post's pending ones: a pending row whose chip is gone
-// (removed, or moved to another time: keys are "<block_id> <remind_at as RFC 3339>") is
+// (removed, or moved to another day or time: keys are "<block_id> <YYYY-MM-DD> <HH:MM>") is
 // deleted. Sent, skipped and failed rows stay, so a chip never fires twice. Runs inside
-// StorePostCollabTx, like AddPostReminders.
+// StorePostCollabTx, like the two below.
 func (q *Queries) DeleteStalePostReminders(ctx context.Context, arg DeleteStalePostRemindersParams) error {
 	_, err := q.db.ExecContext(ctx, deleteStalePostReminders, arg.PostID, pq.Array(arg.KeepKeys))
 	return err
@@ -367,8 +367,14 @@ const listMentionPeopleByIDs = `-- name: ListMentionPeopleByIDs :many
 SELECT id, username, full_name, avatar_url, role
 FROM users
 WHERE id = ANY($1::bigint[])
+    AND lower(role) = ANY($2::text[])
 ORDER BY id
 `
+
+type ListMentionPeopleByIDsParams struct {
+	Ids   []int64  `json:"ids"`
+	Roles []string `json:"roles"`
+}
 
 type ListMentionPeopleByIDsRow struct {
 	ID        int64  `json:"id"`
@@ -378,10 +384,10 @@ type ListMentionPeopleByIDsRow struct {
 	Role      string `json:"role"`
 }
 
-// Members by id (the editor's current names; the public API's mention names). A removed
-// member has no row.
-func (q *Queries) ListMentionPeopleByIDs(ctx context.Context, ids []int64) ([]ListMentionPeopleByIDsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listMentionPeopleByIDs, pq.Array(ids))
+// Members with one of @roles (the content roles) by id: the editor's current names, the
+// public API's mention names. A removed member, or one without a content role, has no row.
+func (q *Queries) ListMentionPeopleByIDs(ctx context.Context, arg ListMentionPeopleByIDsParams) ([]ListMentionPeopleByIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMentionPeopleByIDs, pq.Array(arg.Ids), pq.Array(arg.Roles))
 	if err != nil {
 		return nil, err
 	}
@@ -605,4 +611,40 @@ func (q *Queries) ReleaseReminder(ctx context.Context, arg ReleaseReminderParams
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const retimePostReminders = `-- name: RetimePostReminders :exec
+UPDATE post_reminders r
+SET remind_at = x.remind_at::timestamptz
+FROM (
+    SELECT b.block_id, d.chip_date::date AS chip_date, t.chip_time, a.remind_at
+    FROM unnest($2::text[]) WITH ORDINALITY AS b(block_id, ord)
+    JOIN unnest($3::text[]) WITH ORDINALITY AS d(chip_date, ord) ON d.ord = b.ord
+    JOIN unnest($4::text[]) WITH ORDINALITY AS t(chip_time, ord) ON t.ord = b.ord
+    JOIN unnest($5::text[]) WITH ORDINALITY AS a(remind_at, ord) ON a.ord = b.ord
+) x
+WHERE r.post_id = $1 AND r.status = 'pending'
+    AND r.block_id = x.block_id AND r.chip_date = x.chip_date AND r.chip_time = x.chip_time
+    AND r.remind_at <> x.remind_at::timestamptz
+`
+
+type RetimePostRemindersParams struct {
+	PostID    int64    `json:"post_id"`
+	BlockIds  []string `json:"block_ids"`
+	ChipDates []string `json:"chip_dates"`
+	ChipTimes []string `json:"chip_times"`
+	RemindAts []string `json:"remind_ats"`
+}
+
+// Pending reminders whose instant changed while the chip didn't (the site's time zone
+// changed) take the new one (parallel arrays; remind_ats as RFC 3339 text).
+func (q *Queries) RetimePostReminders(ctx context.Context, arg RetimePostRemindersParams) error {
+	_, err := q.db.ExecContext(ctx, retimePostReminders,
+		arg.PostID,
+		pq.Array(arg.BlockIds),
+		pq.Array(arg.ChipDates),
+		pq.Array(arg.ChipTimes),
+		pq.Array(arg.RemindAts),
+	)
+	return err
 }

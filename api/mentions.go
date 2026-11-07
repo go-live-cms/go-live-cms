@@ -3,7 +3,8 @@ package api
 // The editor's @ menu (#320; inline nodes in inline_nodes.go):
 //   - GET /mentions/people?q=  members with a content role whose name or username
 //     contains q (everyone, by name, without), for People;
-//   - GET /mentions/people?ids=1,2  those members (a removed one is left out), for the
+//   - GET /mentions/people?ids=1,2  those members (content roles only, as ?q=; a removed one
+//     is left out), for the
 //     editor's current names of the mentions it shows;
 //   - GET /mentions/content?q=  posts and pages the caller may read (canReadPost: their
 //     own and published ones for a contributor), never one in the trash, whose title
@@ -85,7 +86,7 @@ func (server *Server) listMentionPeople(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "ids must be at most 100 comma-separated positive integers"})
 			return
 		}
-		rows, err := server.store.ListMentionPeopleByIDs(c.Request.Context(), ids)
+		rows, err := server.store.ListMentionPeopleByIDs(c.Request.Context(), db.ListMentionPeopleByIDsParams{Ids: ids, Roles: contentRoles})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list members"})
 			return

@@ -3577,7 +3577,7 @@ func (mr *MockStoreMockRecorder) ListMentionContent(arg0, arg1 interface{}) *gom
 }
 
 // ListMentionPeopleByIDs mocks base method.
-func (m *MockStore) ListMentionPeopleByIDs(arg0 context.Context, arg1 []int64) ([]db.ListMentionPeopleByIDsRow, error) {
+func (m *MockStore) ListMentionPeopleByIDs(arg0 context.Context, arg1 db.ListMentionPeopleByIDsParams) ([]db.ListMentionPeopleByIDsRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListMentionPeopleByIDs", arg0, arg1)
 	ret0, _ := ret[0].([]db.ListMentionPeopleByIDsRow)
@@ -4956,6 +4956,20 @@ func (m *MockStore) RetargetRedirects(arg0 context.Context, arg1 db.RetargetRedi
 func (mr *MockStoreMockRecorder) RetargetRedirects(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetargetRedirects", reflect.TypeOf((*MockStore)(nil).RetargetRedirects), arg0, arg1)
+}
+
+// RetimePostReminders mocks base method.
+func (m *MockStore) RetimePostReminders(arg0 context.Context, arg1 db.RetimePostRemindersParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RetimePostReminders", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RetimePostReminders indicates an expected call of RetimePostReminders.
+func (mr *MockStoreMockRecorder) RetimePostReminders(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RetimePostReminders", reflect.TypeOf((*MockStore)(nil).RetimePostReminders), arg0, arg1)
 }
 
 // ReviewPostAccessRequest mocks base method.

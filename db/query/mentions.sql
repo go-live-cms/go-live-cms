@@ -12,11 +12,12 @@ ORDER BY lower(full_name), username, id
 LIMIT sqlc.arg(limit_count)::int;
 
 -- name: ListMentionPeopleByIDs :many
--- Members by id (the editor's current names; the public API's mention names). A removed
--- member has no row.
+-- Members with one of @roles (the content roles) by id: the editor's current names, the
+-- public API's mention names. A removed member, or one without a content role, has no row.
 SELECT id, username, full_name, avatar_url, role
 FROM users
 WHERE id = ANY(sqlc.arg(ids)::bigint[])
+    AND lower(role) = ANY(sqlc.arg(roles)::text[])
 ORDER BY id;
 
 -- name: ListMentionContent :many
@@ -77,18 +78,34 @@ ORDER BY block_id, user_id;
 
 -- name: DeleteStalePostReminders :exec
 -- A store's reminders replace the post's pending ones: a pending row whose chip is gone
--- (removed, or moved to another time: keys are "<block_id> <remind_at as RFC 3339>") is
+-- (removed, or moved to another day or time: keys are "<block_id> <YYYY-MM-DD> <HH:MM>") is
 -- deleted. Sent, skipped and failed rows stay, so a chip never fires twice. Runs inside
--- StorePostCollabTx, like AddPostReminders.
+-- StorePostCollabTx, like the two below.
 DELETE FROM post_reminders
 WHERE post_id = @post_id
     AND status = 'pending'
-    AND NOT ((block_id || ' ' || to_char(remind_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) = ANY(@keep_keys::text[]));
+    AND NOT ((block_id || ' ' || to_char(chip_date, 'YYYY-MM-DD') || ' ' || chip_time) = ANY(@keep_keys::text[]));
+
+-- name: RetimePostReminders :exec
+-- Pending reminders whose instant changed while the chip didn't (the site's time zone
+-- changed) take the new one (parallel arrays; remind_ats as RFC 3339 text).
+UPDATE post_reminders r
+SET remind_at = x.remind_at::timestamptz
+FROM (
+    SELECT b.block_id, d.chip_date::date AS chip_date, t.chip_time, a.remind_at
+    FROM unnest(@block_ids::text[]) WITH ORDINALITY AS b(block_id, ord)
+    JOIN unnest(@chip_dates::text[]) WITH ORDINALITY AS d(chip_date, ord) ON d.ord = b.ord
+    JOIN unnest(@chip_times::text[]) WITH ORDINALITY AS t(chip_time, ord) ON t.ord = b.ord
+    JOIN unnest(@remind_ats::text[]) WITH ORDINALITY AS a(remind_at, ord) ON a.ord = b.ord
+) x
+WHERE r.post_id = @post_id AND r.status = 'pending'
+    AND r.block_id = x.block_id AND r.chip_date = x.chip_date AND r.chip_time = x.chip_time
+    AND r.remind_at <> x.remind_at::timestamptz;
 
 -- name: AddPostReminders :many
 -- The store's new reminders (parallel arrays; remind_ats as RFC 3339 text), each owned by
--- whoever wrote it. One already recorded for the same block and time is left as it is
--- (its owner and status). Returns the rows it inserted.
+-- whoever wrote it. One already recorded for the same block, day and time is left as it
+-- is (its owner and status). Returns the rows it inserted.
 WITH reminders AS (
     SELECT b.block_id, r.remind_at::timestamptz AS remind_at, d.chip_date::date AS chip_date, t.chip_time, u.user_id
     FROM unnest(@block_ids::text[]) WITH ORDINALITY AS b(block_id, ord)
@@ -101,7 +118,7 @@ INSERT INTO post_reminders (post_id, block_id, remind_at, chip_date, chip_time, 
 SELECT @post_id, reminders.block_id, reminders.remind_at, reminders.chip_date, reminders.chip_time, users.id
 FROM reminders
 JOIN users ON users.id = reminders.user_id
-ON CONFLICT (post_id, block_id, remind_at) DO NOTHING
+ON CONFLICT (post_id, block_id, chip_date, chip_time) DO NOTHING
 RETURNING id, post_id, block_id, remind_at, user_id;
 
 -- name: ListPostReminders :many
