@@ -2,17 +2,33 @@ import { Extension, type Editor } from "@tiptap/core"
 import type { Node as PMNode } from "prosemirror-model"
 import { NodeSelection, Selection, TextSelection, type EditorState, type Transaction } from "prosemirror-state"
 import { blockAnchorId, normalizeBlockColor, type BlockColor } from "@gl-admin/lib/blocks-spec"
+import {
+  deleteBlockTr,
+  editorBlockAtSelection,
+  holderAccepts,
+  planBlockMove,
+  refOfBlock,
+  resolveEditorBlock,
+  type BlockRef,
+  type EditorBlock,
+} from "./blockTree"
+import { applyBlockMove } from "./blockMoveSync"
 
 // The block menu's actions (#356, "Editor menus & states" › Block menu). Each one is a
-// single ProseMirror transaction on the top-level block, so ySyncPlugin sends it as one Yjs
+// single ProseMirror transaction on the block, so ySyncPlugin sends it as one Yjs
 // transaction: collaborators see one duplicate, one move, one colour change. None of them
 // is an appendTransaction or filterTransaction, so rule 7 (lib/collaboration/CLAUDE.md)
 // doesn't apply: they run only when this user acts.
+//
+// Since #417 they act on a block at any depth (a block inside a group as well as the group;
+// `blockTree.ts`), the one the gutter or the caret is on.
 //
 // Blocks are found by their block id (`data-block-id`) when the action runs, not by the
 // position the menu opened at: a collaborator's edit in between moves positions, never ids.
 // Block ids are never copied: Duplicate strips every id in the copy and BlockIdExtension
 // stamps fresh ones on the same transaction (#238), and Move keeps the block's own id.
+
+export type { BlockRef } from "./blockTree"
 
 export type TopLevelBlock = { node: PMNode; pos: number; index: number }
 
@@ -45,17 +61,13 @@ export function topLevelBlockAtSelection(state: EditorState): TopLevelBlock | nu
   return topLevelBlockAt(state.doc, $from.before(1))
 }
 
-/** What the menu acts on: the block's id when it has one (it should), else its position. */
-export type BlockRef = { id: string | null; pos: number }
-
-export function refOf(block: TopLevelBlock): BlockRef {
-  const id = block.node.attrs[BLOCK_ID]
-  return { id: typeof id === "string" && id ? id : null, pos: block.pos }
+export function refOf(block: { node: PMNode; pos: number }): BlockRef {
+  return refOfBlock(block)
 }
 
-export function resolveBlock(doc: PMNode, ref: BlockRef): TopLevelBlock | null {
-  if (ref.id) return topLevelBlockById(doc, ref.id)
-  return topLevelBlockAt(doc, ref.pos)
+/** The block a ref names now, at any depth: by id, else the block at its position. */
+export function resolveBlock(doc: PMNode, ref: BlockRef): EditorBlock | null {
+  return resolveEditorBlock(doc, ref)
 }
 
 /** Node JSON with every block id removed, at any depth (list items, nested lists). */
@@ -91,6 +103,8 @@ export function duplicateBlock(editor: Editor, ref: BlockRef): number | null {
   const block = resolveBlock(state.doc, ref)
   if (!block) return null
   const copy = state.schema.nodeFromJSON(withoutBlockIds(block.node.toJSON()))
+  // A container that is full (the table's maximum) takes no copy.
+  if (!block.holder.canReplaceWith(block.index + 1, block.index + 1, copy.type)) return null
   const at = block.pos + block.node.nodeSize
   const tr = placeCursorIn(state.tr.insert(at, copy), at)
   editor.view.dispatch(tr)
@@ -126,16 +140,19 @@ export function moveBlockUnder(editor: Editor, ref: BlockRef, headingRef: BlockR
   const block = resolveBlock(state.doc, ref)
   const heading = resolveBlock(state.doc, headingRef)
   if (!block || !heading || heading.node.type.name !== "heading" || block.pos === heading.pos) return false
-  const target = heading.pos + heading.node.nodeSize
-  if (target === block.pos) {
+  // The headings are top-level blocks; a block inside a group moves out of it (with the
+  // group, when it was the group's only block: blockTree's removalRange).
+  if (heading.holderPos !== -1 || !holderAccepts(state.doc, block.node)) return false
+  const target = { pos: heading.pos + heading.node.nodeSize, holderPos: -1, index: heading.index + 1 }
+  if (target.pos === block.pos) {
     // Already there: nothing to send.
     editor.view.dispatch(placeCursorIn(state.tr, block.pos))
     return true
   }
-  const tr = state.tr.delete(block.pos, block.pos + block.node.nodeSize)
-  const at = tr.mapping.map(target)
-  tr.insert(at, block.node)
-  editor.view.dispatch(placeCursorIn(tr, at))
+  const move = planBlockMove(state, block, target)
+  if (!move) return false
+  const at = move.tr.mapping.slice(1).map(target.pos, -1)
+  applyBlockMove(editor.view, { ...move, tr: placeCursorIn(move.tr, at) })
   return true
 }
 
@@ -156,11 +173,17 @@ export function setBlockColor(editor: Editor, ref: BlockRef, color: BlockColor |
   return true
 }
 
+/**
+ * Delete (and ⌫ on a selected block, #417): the block, with its container when it was the
+ * container's only block. The post's last block becomes an empty line.
+ */
 export function deleteBlock(editor: Editor, ref: BlockRef): boolean {
   const { state } = editor
   const block = resolveBlock(state.doc, ref)
   if (!block) return false
-  editor.view.dispatch(state.tr.delete(block.pos, block.pos + block.node.nodeSize).scrollIntoView())
+  const tr = deleteBlockTr(state, block)
+  if (!tr) return false
+  editor.view.dispatch(tr)
   return true
 }
 
@@ -198,7 +221,7 @@ export const BlockActions = Extension.create<Record<string, never>, BlockActions
     return {
       "Mod-d": () => {
         if (!this.editor.isEditable) return false
-        const block = topLevelBlockAtSelection(this.editor.state)
+        const block = editorBlockAtSelection(this.editor.state)
         if (!block) return false
         duplicateBlock(this.editor, refOf(block))
         // Never the browser's bookmark dialog from inside the editor.
@@ -207,7 +230,7 @@ export const BlockActions = Extension.create<Record<string, never>, BlockActions
       "Mod-m": () => {
         const open = this.storage.openComment
         if (!this.editor.isEditable || !open) return false
-        const block = topLevelBlockAtSelection(this.editor.state)
+        const block = editorBlockAtSelection(this.editor.state)
         if (!block || !refOf(block).id) return false
         open(refOf(block))
         return true
@@ -215,7 +238,7 @@ export const BlockActions = Extension.create<Record<string, never>, BlockActions
       "Mod-Shift-p": () => {
         const open = this.storage.openMoveTo
         if (!this.editor.isEditable || !open) return false
-        const block = topLevelBlockAtSelection(this.editor.state)
+        const block = editorBlockAtSelection(this.editor.state)
         if (!block) return false
         open(refOf(block))
         return true

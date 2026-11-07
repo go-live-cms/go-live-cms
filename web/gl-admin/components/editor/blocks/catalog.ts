@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core"
 import { installedThemeBlockEditors } from "@gl-admin/lib/theme-blocks/editorBlocks"
-import { acceptsChild, containerOfNode, containerRule, isContainerType } from "@gl-admin/lib/blocks-spec/nesting"
+import { holderAcceptsType } from "../utils/blockTree"
 import { createImagePlaceholder } from "./mediaBlocks"
 
 // The block catalog (#415, docs/design/block-library.md 3.1): every block the editor can
@@ -294,13 +294,11 @@ export function menuEntries(context: MenuContext, entries: readonly CatalogEntry
 export function slotAcceptsAt(editor: Editor): (entry: CatalogEntry) => boolean {
   const { $from } = editor.state.selection
   const parent = $from.depth > 1 ? $from.node($from.depth - 1) : null
-  if (!parent || parent.type.name === "doc") return (entry) => !isContainerType(entry.type) || !!containerRule(entry.type)?.topLevel
-  const container = containerOfNode(parent.type.name)
-  if (container) return (entry) => acceptsChild(container.type, entry.type)
   // A block that holds paragraphs only (a callout, a to-do item, #419): any other entry
   // would delete the typed /query and then fail to make its block there.
-  if (parent.type.spec.content === "paragraph+") return (entry) => entry.type === "paragraph"
-  return (entry) => !isContainerType(entry.type)
+  if (parent && parent.type.spec.content === "paragraph+") return (entry) => entry.type === "paragraph"
+  const holder = parent?.type.name ?? "doc"
+  return (entry) => holderAcceptsType(holder, entry.type)
 }
 
 // The active theme, set by ThemeProvider when the admin loads (only its blocks are

@@ -1,6 +1,7 @@
 import { Extension, type Editor } from "@tiptap/core"
 import type { CatalogEntry } from "../blocks/catalog"
-import { refOf, resolveBlock, topLevelBlockAtSelection, type BlockRef } from "./blockActions"
+import { refOf, resolveBlock, type BlockRef } from "./blockActions"
+import { editorBlockAtSelection, holderAcceptsType } from "./blockTree"
 
 // The gutter's + (#415, "+ in the margin"): the "Add block" button beside the drag handle
 // (ui/DragHandle.tsx) opens the block catalog with its own search field (ui/AddBlockMenu.tsx).
@@ -11,11 +12,13 @@ type BlockGutterStorage = {
 }
 
 /**
- * Tab in the text reaches the block's + (then the drag handle, then on out of the editor):
- * "Keyboard" › "Tab: reach its + and drag handle". Lists keep Tab for indenting (their
+ * Tab in the text, or on a selected block (#417, Esc selects it), reaches the block's +
+ * (then the drag handle, then the block's toolbar if it has one, then on out of the
+ * editor): "Keyboard" › "Tab: reach its + and drag handle, then its toolbar". The block is
+ * the innermost one, at any depth (blockTree.ts). Lists keep Tab for indenting (their
  * keymap runs first and wins when it can sink the item), and code blocks keep the
- * browser's Tab. The gutter is hidden until hovered (the drag-handle plugin), so the
- * keyboard needs this way in. No document change.
+ * browser's Tab. The gutter is hidden until hovered (gutterPlugin.ts), so the keyboard
+ * needs this way in. No document change.
  */
 export const BlockGutterKeys = Extension.create<Record<string, never>, BlockGutterStorage>({
   name: "blockGutter",
@@ -33,12 +36,22 @@ export const BlockGutterKeys = Extension.create<Record<string, never>, BlockGutt
         if (!this.editor.isEditable || !focus) return false
         const { state } = this.editor
         if (state.selection.$from.parent.type.spec.code) return false
-        const block = topLevelBlockAtSelection(state)
+        const block = editorBlockAtSelection(state)
         return block ? focus(refOf(block)) : false
       },
     }
   },
 })
+
+/**
+ * What the + of `ref`'s block may insert (#414's nesting table, as the slash menu's
+ * `slotAcceptsAt`): the new block goes beside it, in the same holder, so a + inside a group
+ * offers no group.
+ */
+export function gutterAccepts(editor: Editor, ref: BlockRef): (entry: CatalogEntry) => boolean {
+  const holder = resolveBlock(editor.state.doc, ref)?.holder.type.name ?? "doc"
+  return (entry) => holderAcceptsType(holder, entry.type)
+}
 
 /**
  * Inserts `entry` from the + of `ref`'s block: into that line when it's an empty

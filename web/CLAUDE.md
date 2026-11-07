@@ -554,13 +554,31 @@ are the most fragile part of the codebase. **Before editing anything under
 - **Callout, pull quote, to-do list (#419):** Text entries in the block catalog (Callout:
   `setParagraph().setCallout()`; Pull quote: `setPullQuote()`; To-do list: `toggleTaskList()`,
   Markdown `[]`, TaskItem's own input rule, so `catalog.markdown.test.ts` types it too). The
-  callout's Type is its view's buttons (shown while the cursor is in it: the post sidebar has no
-  Block tab) and a picker in `BlockTypeToolbar` (`setCalloutTone`). Paste keeps
+  callout's Type is its view's buttons (shown while the cursor is in it) and a picker in `BlockTypeToolbar` (`setCalloutTone`). Paste keeps
   `div[data-type=callout][data-tone]`, `figure[data-type=pull-quote][data-cite]` and
   `ul[data-type=taskList] > li[data-type=taskItem][data-checked]` with valid values only.
   Public markup in `src/components/blocks/README.md`; the default theme's callout colours are
   theme tokens (`info`/`infoBg`, …). History's diff treats a to-do list as a list (a ticked item is
   a "Done" change). Rules: `gl-admin/lib/collaboration/CLAUDE.md`.
+- **Editing nested blocks (#417, design `docs/design/block-library.md` 3.5):** the gutter is
+  our own plugin now (`components/editor/utils/gutterPlugin.ts`; TipTap 3.4.2's drag handle
+  only finds top-level blocks): it follows the pointer to the innermost block (a block in a
+  group; the group in its own left margin), and runs the drag: the drop line and target
+  follow the nesting table (`blockTree.ts` `dropTargetFor`), the drop is one move
+  (`applyBlockMove`, rules in `gl-admin/lib/collaboration/CLAUDE.md`). `ui/DragHandle.tsx`
+  renders the gutter through a portal into the plugin's element; the + offers only what the
+  block's container accepts (`gutterAccepts`). Keyboard (`extensions/BlockNavigation.ts`):
+  Esc selects the block around the caret, then its container; ↵ steps into a container's
+  first block or edits a block; ↑↓ move between the blocks beside it; ⌘⇧↑/↓ move it inside
+  its container; ⌫/Del delete a selected block (a container it leaves empty goes too);
+  Tab reaches + and the handle, then the block's own toolbar (`data-block-toolbar`, a
+  group's Width and Background: ← → move, Esc back); ⌘⇧, opens the settings panel's
+  **Block** tab (`ui/BlockSettingsPanel.tsx`: the selected block nested or not, its path of
+  containers, a group's settings; `Editor`'s `onEditorReady` hands it the editable editor).
+  Presence inside containers: `utils/cursorAwareness.ts` (label flip and stacking, remote
+  block outlines). Tests: `BlockNavigation.test.ts`, `blockTree.test.ts`,
+  `DragHandle.test.tsx`, `BlockSettingsPanel.test.tsx`, `cursorAwareness.test.ts` and the
+  relay's `blockMoves.collab.test.ts`.
 - **Taxonomies and redirects (#331):** admin: one category per post. The editor sidebar's
   `PostTaxonomies` shows the `category` taxonomy as a radio group (picking one calls the PUT,
   which replaces the category; `post`-type posts have no "None", the API puts the default

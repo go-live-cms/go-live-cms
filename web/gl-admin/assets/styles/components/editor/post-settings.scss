@@ -935,3 +935,100 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+// The Block tab (#417, ui/BlockSettingsPanel.tsx): the selected block's icon and name, its
+// place inside containers, and its settings as segmented choices.
+.block-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+
+  &__identity {
+    align-items: center;
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  &__tile {
+    border: 1px solid var(--border-strong);
+    border-radius: 5px;
+    display: grid;
+    flex: none;
+    font-size: var(--type-caption);
+    font-weight: 600;
+    height: 24px;
+    place-items: center;
+    width: 24px;
+  }
+
+  &__name {
+    font-weight: 600;
+  }
+
+  &__path {
+    align-items: center;
+    color: var(--text-secondary);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: var(--type-footnote);
+    gap: var(--space-1);
+  }
+
+  &__crumb {
+    align-items: center;
+    display: inline-flex;
+    gap: var(--space-1);
+  }
+
+  &__crumb-button {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    cursor: pointer;
+    font: inherit;
+    padding: 0 2px;
+    text-decoration: underline;
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &__segment {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  &__option {
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--type-footnote);
+    min-height: 32px;
+    padding: var(--space-1) var(--space-3);
+
+    &:hover {
+      background: var(--background-hover);
+    }
+
+    &[aria-checked="true"] {
+      background: var(--accent-subtle);
+      border-color: var(--accent-border);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 1px;
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+  }
+}

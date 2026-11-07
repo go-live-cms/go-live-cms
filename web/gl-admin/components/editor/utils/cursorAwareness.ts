@@ -1,6 +1,7 @@
 import { Extension } from "@tiptap/core"
 import { Plugin, PluginKey } from "prosemirror-state"
 import { Decoration, DecorationSet, type EditorView } from "prosemirror-view"
+import { isEditorBlock } from "./blockTree"
 
 type CursorAwarenessOpts = {
   awareness: any
@@ -10,6 +11,90 @@ type CursorAwarenessOpts = {
 }
 
 const key = new PluginKey("cursorAwareness")
+
+const DEFAULT_COLOR = "#3b82f6"
+
+/**
+ * A presence colour, or the default. Colours come from other clients' awareness, which any
+ * collaborator can set, and end up in a style: only a hex colour (what postCollab.ts sends)
+ * gets through.
+ */
+export function safeCaretColor(color: unknown): string {
+  return typeof color === "string" && /^#[0-9a-f]{3,8}$/i.test(color) ? color : DEFAULT_COLOR
+}
+
+/**
+ * Whether a caret's name label, drawn to the right of the caret, would overflow the right
+ * edge of what holds it (its container block, else the editor): then it flips to the
+ * caret's left (#417, "Others in nested layouts": "Near a right edge the label flips").
+ */
+export function labelFlips(caretLeft: number, labelWidth: number, boundsRight: number): boolean {
+  return caretLeft + labelWidth > boundsRight
+}
+
+type Box = { left: number; right: number; top: number }
+
+/** How many label heights up a label goes so it doesn't cover one placed before it (stacking). */
+export function stackLevel(box: Box, placed: (Box & { level: number })[], lineTolerance = 4): number {
+  let level = 0
+  for (;;) {
+    const clash = placed.some(
+      (other) => other.level === level && Math.abs(other.top - box.top) <= lineTolerance && box.left < other.right && other.left < box.right
+    )
+    if (!clash) return level
+    level++
+  }
+}
+
+/** The element a caret's label must stay inside: its container block (`data-collab-bounds`), else the editor. */
+function boundsOf(caret: HTMLElement, root: HTMLElement): HTMLElement {
+  const bounds = caret.closest<HTMLElement>("[data-collab-bounds]")
+  return bounds && root.contains(bounds) ? bounds : root
+}
+
+/**
+ * Places every remote caret's label after a render (#417): flipped to the caret's left when
+ * it would overflow its container's or the editor's right edge, and raised above another
+ * label on the same spot ("Two carets in one place stack their labels"). Only the labels'
+ * own styles change: the carets are widget decorations, whose DOM ProseMirror leaves alone.
+ */
+export function placeCaretLabels(root: HTMLElement) {
+  const carets = Array.from(root.querySelectorAll<HTMLElement>(".collab-caret"))
+  if (carets.length === 0) return
+  // Every read first, then every write: one layout for the whole pass, not one per caret.
+  const measured = carets.flatMap((caret) => {
+    const label = caret.querySelector<HTMLElement>(".collab-caret-label")
+    if (!label) return []
+    const caretBox = caret.getBoundingClientRect()
+    const width = label.offsetWidth || label.getBoundingClientRect().width
+    return [{ label, caretBox, width, right: boundsOf(caret, root).getBoundingClientRect().right }]
+  })
+  const placed: (Box & { level: number })[] = []
+  for (const { label, caretBox, width, right } of measured) {
+    const flip = labelFlips(caretBox.left, width, right)
+    const box = flip
+      ? { left: caretBox.left - width, right: caretBox.left, top: caretBox.top }
+      : { left: caretBox.left, right: caretBox.left + width, top: caretBox.top }
+    const level = stackLevel(box, placed)
+    placed.push({ ...box, level })
+    label.classList.toggle("is-flipped", flip)
+    label.style.left = flip ? "auto" : "-1px"
+    label.style.right = flip ? "-1px" : "auto"
+    label.style.borderRadius = flip ? "4px 4px 0 4px" : "4px 4px 4px 0"
+    label.style.transform = level === 0 ? "translateY(-100%)" : `translateY(calc(-100% * ${level + 1} - ${2 * level}px))`
+  }
+}
+
+/**
+ * Whether a remote selection [from, to] is exactly one block (they pressed Esc, or dragged
+ * it): shown as an outline in their colour with their name on its top edge, not as a tint.
+ */
+function selectedBlockAt(doc: import("prosemirror-model").Node, from: number, to: number): boolean {
+  const node = doc.nodeAt(from)
+  if (!node || node.isInline || from + node.nodeSize !== to) return false
+  const $from = doc.resolve(from)
+  return isEditorBlock(node, $from.parent)
+}
 
 /**
  * A remote user's caret + name label, as a widget decoration's DOM.
@@ -37,12 +122,15 @@ export function createCaretElement(label: string, color: string, caretWidth = 2,
   labelEl.className = "collab-caret-label"
   labelEl.textContent = label
   // The design's name label (#341): 11px semibold white on the person's colour (every
-  // presence colour passes 4.5:1 with white), square bottom-left corner on the caret.
+  // presence colour passes 4.5:1 with white), square bottom-left corner on the caret, and
+  // a 2px ring in the page colour that keeps it apart from a tinted group (#417).
+  // `placeCaretLabels` flips it to the left at a right edge and stacks it over another.
   labelEl.style.cssText = `
     position:absolute; left:-${caretWidth / 2}px; top:0; transform:translateY(-100%);
     background:${color}; color:#ffffff; font-family:var(--font-sans); font-size:11px; line-height:16px;
     font-weight:600; font-style:normal; letter-spacing:normal; text-transform:none; text-decoration:none;
     padding:0 6px; border-radius:4px 4px 4px 0; white-space:nowrap;
+    box-shadow:0 0 0 2px var(--background); z-index:1;
     pointer-events:none; user-select:none;
   `
   caret.appendChild(labelEl)
@@ -94,7 +182,8 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
 
     const caretWidth = this.options.caretWidth ?? 2
     const buildLabel = this.options.buildLabel ?? ((u: any) => u?.name ?? "Guest")
-    const buildColor = this.options.buildColor ?? ((u: any) => u?.color ?? "#3b82f6")
+    const pickColor = this.options.buildColor ?? ((u: any) => u?.color)
+    const buildColor = (user: any) => safeCaretColor(pickColor(user))
 
     return [
       new Plugin({
@@ -140,11 +229,25 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               const color = buildColor(user)
               const label = buildLabel(user)
 
+              if (to > from && selectedBlockAt(view.state.doc, from, to)) {
+                // A block they selected (#417): their colour as an outline, inside this
+                // user's own, with their name on its top edge (CSS: .collab-block-selection).
+                decos.push(
+                  Decoration.node(from, to, {
+                    class: "collab-block-selection",
+                    style: `--collab-color: ${color};`,
+                    "data-collab-name": label,
+                  })
+                )
+                continue
+              }
+
               if (to > from) {
                 decos.push(
                   Decoration.inline(from, to, {
-                    // A 13% tint of their colour (#341); the colours are hex (postCollab.ts).
-                    style: `background: ${color}21;`,
+                    // A 20% tint of their colour (#341, #417: text under it keeps its
+                    // contrast on white, on dark and on a group's tint); hex colours only.
+                    style: `background: ${color}33;`,
                   })
                 )
               }
@@ -181,11 +284,21 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
           window.addEventListener("blur", onBlur)
           awareness.on("change", onAwarenessChange)
 
+          // Labels are placed once the carets are on screen (#417: flip, stack).
+          let labelsRaf = 0
+          const placeLabels = () => {
+            cancelAnimationFrame(labelsRaf)
+            labelsRaf = requestAnimationFrame(() => {
+              if (view.dom.isConnected) placeCaretLabels(view.dom)
+            })
+          }
+
           return {
             destroy() {
               window.removeEventListener("blur", onBlur)
               awareness.off("change", onAwarenessChange)
               cancelAnimationFrame(raf)
+              cancelAnimationFrame(labelsRaf)
               awareness.setLocalStateField("selection", null)
             },
             update() {
@@ -193,6 +306,7 @@ export const CursorAwareness = Extension.create<CursorAwarenessOpts>({
               raf = requestAnimationFrame(() => {
                 pushSelection()
               })
+              placeLabels()
             },
           }
         },
