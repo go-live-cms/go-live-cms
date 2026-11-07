@@ -21,6 +21,7 @@ import {
 
 import { TableView } from "@tiptap/extension-table"
 import { hasHeaderRow } from "./TableBlock"
+import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "./DetailsBlock"
 
 const blockNodeViewsKey = new PluginKey("blockNodeViews")
 
@@ -436,10 +437,6 @@ class GroupView implements NodeView {
   }
 }
 
-/** "Open by default" (#421), the canvas's settings: what it does, for the switch's description. */
-export const DETAILS_OPEN_LABEL = "Open by default"
-export const DETAILS_OPEN_HELP = "Readers can open and close it either way. It starts closed unless this is on."
-
 /**
  * A details (#421): a chevron, its summary and its blocks (the editor always shows them,
  * open or not), plus its toolbar while the cursor is in it (or it is selected): the
@@ -472,7 +469,7 @@ class DetailsView implements NodeView {
       svg.setAttribute(name, value)
     }
     const path = doc.createElementNS(SVG_NS, "path")
-    path.setAttribute("d", "m6 9 6 6 6-6")
+    path.setAttribute("d", CHEVRON)
     svg.append(path)
     chevron.append(svg)
     this.toolbar = doc.createElement("div")
@@ -495,7 +492,12 @@ class DetailsView implements NodeView {
     this.toolbar.addEventListener("keydown", (event) => this.onToolbarKey(event))
     this.contentDOM = doc.createElement("div")
     this.contentDOM.className = "editor-details__content"
-    this.dom.append(this.toolbar, chevron, this.contentDOM)
+    // The chevron sits beside the summary, the first line of the content, whether the
+    // toolbar above shows or not.
+    const body = doc.createElement("div")
+    body.className = "editor-details__body"
+    body.append(chevron, this.contentDOM)
+    this.dom.append(this.toolbar, body)
     this.render()
   }
 

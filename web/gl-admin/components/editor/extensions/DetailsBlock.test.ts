@@ -240,6 +240,16 @@ describe("Details keys (#421, the canvas's Keyboard)", () => {
     expect(ed.state.doc.child(0).child(0).textContent).toBe("Can contributors publish?")
   })
 
+  it("↵ over a selection in the summary replaces it, then moves into the content", () => {
+    const ed = makeEditor(detailsDoc())
+    // "contributors " selected.
+    ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, SUMMARY_START + 4, SUMMARY_START + 17)))
+    expect(press(ed, "Enter")).toBe(true)
+    expect(ed.state.doc.child(0).child(0).textContent).toBe("Can publish?")
+    expect(caretParent(ed).attrs["data-block-id"]).toBe(INNER)
+    expect(ed.state.selection.$from.parentOffset).toBe(0)
+  })
+
   it("↵ in the summary adds an empty paragraph when the first block isn't text", () => {
     const ed = makeEditor({
       type: "doc",
@@ -392,6 +402,21 @@ describe("Details ids (#238)", () => {
     expect(all[1].child(0).textContent).toBe("Can contributors publish?")
     expect(all[1].attrs["data-block-id"]).not.toBe(DETAILS)
     expectUniqueValidIds(ed.state.doc)
+  })
+
+  it("pasting a slice copied from inside a details recreates a valid details (a summary filled in) with no copied ids", () => {
+    const ed = makeEditor(detailsDoc(true))
+    // The first block, as ProseMirror copies it: the details is its slice context.
+    const context = JSON.stringify(["details", { open: true, "data-block-id": DETAILS }])
+    const html = `<p data-pm-slice='1 1 ${context}' data-block-id="${INNER}">No.</p>`
+    ed.view.dispatch(ed.state.tr.setSelection(TextSelection.create(ed.state.doc, ed.state.doc.content.size - 1)))
+    ed.view.pasteHTML(html, pasteEvent())
+    expect(() => ed.state.doc.check()).not.toThrow()
+    ed.state.doc.forEach((node) => {
+      if (node.type.name === "details") expect(node.child(0).type.name).toBe("detailsSummary")
+    })
+    expectUniqueValidIds(ed.state.doc)
+    expect(blockIds(ed.state.doc).filter((id) => id === INNER || id === DETAILS)).toHaveLength(2)
   })
 
   it("pasting a page's <details open><summary> makes a details", () => {

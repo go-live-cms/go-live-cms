@@ -417,19 +417,19 @@
     margin-top: -12px;
   }
 
+  .editor-details__body {
+    position: relative;
+  }
+
+  // Beside the summary, the first line of the content.
   .editor-details__chevron {
     color: var(--text-secondary);
     display: flex;
     left: 0;
     pointer-events: none;
     position: absolute;
-    // The summary's first line (the toolbar, when shown, sits above it).
-    top: calc(var(--space-2) + 4px);
+    top: 4px;
     user-select: none;
-  }
-
-  .editor-details.has-selection > .editor-details__chevron {
-    top: calc(var(--space-2) + 4px + 28px + var(--space-2));
   }
 
   .editor-details__summary {

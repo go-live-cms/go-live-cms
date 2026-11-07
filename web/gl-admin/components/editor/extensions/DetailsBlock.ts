@@ -18,6 +18,10 @@ declare module "@tiptap/core" {
   }
 }
 
+/** "Open by default" (#421, the canvas's settings), for the view's switch and the Block tab. */
+export const DETAILS_OPEN_LABEL = "Open by default"
+export const DETAILS_OPEN_HELP = "Readers can open and close it either way. It starts closed unless this is on."
+
 /** The details block the selection is on (a NodeSelection) or in. */
 export function findDetails(state: EditorState): { pos: number; node: PMNode } | null {
   const { selection } = state
@@ -185,14 +189,17 @@ export const DetailsKeyboard = Extension.create({
 
     const enter = () => {
       const { state, view } = this.editor
-      const { $from } = state.selection
+      const { $from, $to } = state.selection
       if (!editable() || $from.parent.type.name !== "detailsSummary") return false
+      // A selection that leaves the summary is the default Enter's (it replaces it).
+      if ($to.parent !== $from.parent) return false
       const detailsPos = $from.before($from.depth - 1)
-      const details = $from.node($from.depth - 1)
+      // A selection in the summary is replaced, as Enter does anywhere: deleted, then on.
+      const tr = state.tr.deleteSelection()
+      const details = tr.doc.nodeAt(detailsPos) as PMNode
       const summary = details.firstChild as PMNode
       const contentStart = detailsPos + 1 + summary.nodeSize
       const first = details.childCount > 1 ? details.child(1) : null
-      const tr = state.tr
       if (first?.isTextblock) {
         tr.setSelection(TextSelection.create(tr.doc, contentStart + 1))
       } else {

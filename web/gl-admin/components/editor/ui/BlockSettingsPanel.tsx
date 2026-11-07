@@ -12,7 +12,7 @@ import {
 import { catalogEntries, type BlockIconSpec } from "../blocks/catalog"
 import { BlockIcon } from "./BlockIcon"
 import Switch from "../../ui/Switch"
-import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "../extensions/BlockNodeViews"
+import { DETAILS_OPEN_HELP, DETAILS_OPEN_LABEL } from "../extensions/DetailsBlock"
 import {
   ancestorBlocks,
   blockSpecTypeOf,

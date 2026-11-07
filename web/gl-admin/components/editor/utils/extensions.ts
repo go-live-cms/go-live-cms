@@ -38,6 +38,7 @@ const headingLabel = (lvl?: number) => {
 // "Inserting blocks" › "Empty insert states" (#415).
 export const EMPTY_POST_HINT = "Type / for blocks, or start writing"
 export const EMPTY_LINE_HINT = "Type / for blocks"
+export const DETAILS_CONTENT_HINT = "Hidden content. Type / to add blocks."
 
 const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkModalOpen }) => {
   return () => {
@@ -125,6 +126,8 @@ const extensions = ({ collabProvider, maxChars, placeholder, setUrl, setIsLinkMo
               if (editor.isActive("heading", { level: 3 })) return headingLabel(3)
               // A table cell holds paragraphs only (#420): no block menu there, so no hint.
               if (editor.isActive("tableCell") || editor.isActive("tableHeader")) return ""
+              // #421, the canvas's empty details: what's typed here is hidden until a reader opens it.
+              if (editor.isActive("details")) return editor.isFocused ? DETAILS_CONTENT_HINT : ""
               // "Empty insert states" (#415): the hint is on the focused empty line only
               // (showOnlyCurrent), never on every empty line of an unfocused post.
               if (!editor.isFocused) return ""
