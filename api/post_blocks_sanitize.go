@@ -91,6 +91,10 @@ func sanitizeBlock(block map[string]interface{}) {
 		sanitizeTodoItemAttrs(attrs)
 	case "table":
 		sanitizeTableAttrs(attrs)
+	case "video", "audio":
+		sanitizePlayableAttrs(attrs)
+	case "file":
+		sanitizeFileAttrs(attrs)
 	}
 
 	// Block colour (#356): a palette token on the core blocks that take one.
@@ -366,31 +370,71 @@ func sanitizeTodoItemAttrs(attrs map[string]interface{}) {
 	}
 }
 
-// sanitizeCite makes attrs' `cite` plain text (see sanitizeBlockquoteAttrs).
-func sanitizeCite(attrs map[string]interface{}) {
-	raw, present := attrs["cite"]
+// fileLabelMaxRunes caps a file block's label (Block Spec `FILE_LABEL_MAX_LENGTH`, in code
+// points too).
+const fileLabelMaxRunes = 200
+
+// sanitizeMediaID keeps `mediaId` only as a positive integer (a JSON number): the media
+// sync and the public `media` map read nothing else, and the block then has no file.
+func sanitizeMediaID(attrs map[string]interface{}) {
+	raw, present := attrs["mediaId"]
 	if !present {
 		return
 	}
-	cite, ok := raw.(string)
-	if !ok {
-		delete(attrs, "cite")
+	if f, ok := raw.(float64); !ok || f < 1 || f != math.Trunc(f) || f > 1<<53 {
+		delete(attrs, "mediaId")
+	}
+}
+
+// sanitizePlayableAttrs (#423): a video or audio block keeps `mediaId` and `caption` only
+// (no `src`: the public page takes the file's URL from the media library, so it is only
+// ever served from /uploads). The caption is reduced like an image's.
+func sanitizePlayableAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs, "mediaId", "caption")
+	sanitizeMediaID(attrs)
+	sanitizeCaption(attrs)
+}
+
+// sanitizeFileAttrs (#423): a file block keeps `mediaId` and `label` only; the label is
+// plain text by the citation's rules (control characters to spaces, trimmed, capped at
+// fileLabelMaxRunes, dropped when empty: the file's name is shown instead).
+func sanitizeFileAttrs(attrs map[string]interface{}) {
+	keepOnlyAttrs(attrs, "mediaId", "label")
+	sanitizeMediaID(attrs)
+	sanitizePlainText(attrs, "label", fileLabelMaxRunes)
+}
+
+// sanitizeCite makes attrs' `cite` plain text (see sanitizeBlockquoteAttrs).
+func sanitizeCite(attrs map[string]interface{}) {
+	sanitizePlainText(attrs, "cite", citeMaxRunes)
+}
+
+// sanitizePlainText makes attrs[name] plain text: control characters become spaces, it's
+// trimmed and capped at maxRunes, and a non-string or empty one is dropped.
+func sanitizePlainText(attrs map[string]interface{}, name string, maxRunes int) {
+	raw, present := attrs[name]
+	if !present {
 		return
 	}
-	cite = strings.TrimSpace(strings.Map(func(r rune) rune {
+	text, ok := raw.(string)
+	if !ok {
+		delete(attrs, name)
+		return
+	}
+	text = strings.TrimSpace(strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '
 		}
 		return r
-	}, cite))
-	if runes := []rune(cite); len(runes) > citeMaxRunes {
-		cite = strings.TrimSpace(string(runes[:citeMaxRunes]))
+	}, text))
+	if runes := []rune(text); len(runes) > maxRunes {
+		text = strings.TrimSpace(string(runes[:maxRunes]))
 	}
-	if cite == "" {
-		delete(attrs, "cite")
+	if text == "" {
+		delete(attrs, name)
 		return
 	}
-	attrs["cite"] = cite
+	attrs[name] = text
 }
 
 func stringOf(v interface{}) string {

@@ -26,6 +26,8 @@ describe("buildAdminCsp", () => {
   it("allows the API origin and the same-host collab websocket", () => {
     expect(prod["connect-src"]).toEqual(["'self'", "wss://cms.example.com", "https://api.example.com"])
     expect(prod["img-src"]).toContain("https://api.example.com")
+    // #423: the editor's players load /uploads like the images.
+    expect(prod["media-src"]).toEqual(["'self'", "https://api.example.com"])
     expect(prod["connect-src"]).not.toContain("ws://localhost:1234")
   })
 

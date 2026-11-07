@@ -174,6 +174,32 @@
       }
     },
     {
+      "name": "video, audio and file (#423) are flow: at the top and in a group",
+      "valid": true,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["video-0001", "group-0001"],
+        "blocks": {
+          "video-0001": { "id": "video-0001", "type": "video", "version": 1, "attrs": { "mediaId": 12, "caption": [{ "type": "text", "text": "Launch" }] } },
+          "group-0001": { "id": "group-0001", "type": "group", "version": 1, "attrs": {}, "children": ["audio-0001", "file-00001"] },
+          "audio-0001": { "id": "audio-0001", "type": "audio", "version": 1, "attrs": { "mediaId": 13 } },
+          "file-00001": { "id": "file-00001", "type": "file", "version": 1, "attrs": { "mediaId": 14, "label": "Checklist" } }
+        }
+      }
+    },
+    {
+      "name": "children on a video (#423: it holds no blocks)",
+      "valid": false,
+      "doc": {
+        "doc_version": 1,
+        "blocks_order": ["video-0001"],
+        "blocks": {
+          "video-0001": { "id": "video-0001", "type": "video", "version": 1, "attrs": { "mediaId": 12 }, "children": ["para-00001"] },
+          "para-00001": { "id": "para-00001", "type": "paragraph", "version": 1, "attrs": { "text": "Hello" } }
+        }
+      }
+    },
+    {
       "name": "children on a table (#420: its rows are in its pm, it holds no blocks)",
       "valid": false,
       "doc": {

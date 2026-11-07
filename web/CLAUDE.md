@@ -283,7 +283,7 @@ are the most fragile part of the codebase. **Before editing anything under
   file's stem) and an image may be marked **decorative** (`media.decorative`). Missing =
   an image (SVG too), not decorative, alt empty or only whitespace: `missingAlt` in
   `lib/mediaLibrary.ts`, the same rule as the API's `GET /media?missing_alt=true`. Tiles and
-  the editor's image picker (`FeaturedImageSelector`, UI only) show "No alt text"; the
+  the shared media picker (`components/media/MediaPicker.tsx`, #423, UI only) show "No alt text"; the
   library's filter is `?alt=missing`. `AltTextField` (panel and detail page) holds the alt
   text and "Decorative image"; an empty alt saves as empty (name and description still
   can't be cleared). The public `ImageBlock` renders `alt=""` when `doc.media[id].decorative`.
@@ -639,6 +639,28 @@ are the most fragile part of the codebase. **Before editing anything under
   asks `GET /public/redirects?path=`, so a redirect never hides a live page; 301 (cached an
   hour) or 302 (`no-cache`), the request's query kept for a site path. A failed lookup keeps
   the 404.
+- **Media blocks and the media picker (#423, design `docs/design/block-library.md` 3.4, 2.10):**
+  `components/media/MediaPicker.tsx` is the one picker (it replaced `MediaSelector` and
+  `FeaturedImageSelector`): a `kind` (`image`/`video`/`audio`/`document`, the API's `type`; without
+  one, the library's kind filter), one file or several (`multiple`, `onSelectMany`), **Upload** in
+  place (`lib/mediaLookup.ts` `uploadMediaFile`, the library's own upload, which `pages/Media.tsx`
+  uses too; picks what it uploaded), "No alt text" on images (#325), Remove for the file in use
+  (`removeLabel`; the featured and social images keep their wording), every tile a button (arrow
+  keys, Home, End). In the editor, plain-DOM node views ask for it through
+  `components/editor/blocks/mediaPicking.ts` (`chooseMediaFor`, `uploadMediaFor`; the block is
+  found again by id when the file arrives), and `ui/MediaPickerHost.tsx` (mounted by `Editor`)
+  shows it; image placeholders open it too. Video, audio and file are Media entries in the catalog
+  (an empty block: Upload / Choose from Media), nodes in `extensions/MediaBlocks.ts` (schema and
+  commands), views in `extensions/MediaBlockViews.ts` (the player, the download row with its
+  label field, the missing state), Replace and Caption on the media toolbar (`ui/ImageToolbar.tsx`,
+  every media block now) and the file with Replace in the settings panel's Block tab
+  (`ui/MediaBlockSettings.tsx`). **Missing media:** the views look the media up
+  (`lib/mediaLookup.ts`: 404 = missing, "The video file is missing" with Replace, the image's too;
+  any other failure is not shown as missing); the API lists deleted ids in `media_missing` and the
+  public renderer leaves those blocks out with their caption (`src/components/blocks/README.md`).
+  History's preview fills the `media` map from the same lookups (`lib/docMedia.ts`). The admin CSP
+  has `media-src` for the players. Rules: `gl-admin/lib/collaboration/CLAUDE.md` (blockBridge
+  notes, Media blocks).
 - The admin Content list route `/content/:typeName` keys its component by `typeName`
   (`ContentByType` in `app.tsx`) so switching post types remounts + refetches.
 

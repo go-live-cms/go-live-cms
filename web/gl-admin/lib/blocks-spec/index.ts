@@ -1,8 +1,10 @@
 import { z } from "zod"
 import { isThemeBlockType, themeBlockIssues, type ThemeBlockLookup } from "./themeBlocks"
 import { nestingIssues } from "./nesting"
+import { FILE_LABEL_MAX_LENGTH } from "./media"
 
 export * from "./nesting"
+export * from "./media"
 export * from "./inlineNodes"
 
 // Block Spec v1 - Authoritative Types
@@ -25,6 +27,9 @@ export type KnownBlockType =
   | "todo_list"
   | "todo_item"
   | "table"
+  | "video"
+  | "audio"
+  | "file"
 
 /** BlockType allows known types + arbitrary custom types from themes */
 export type BlockType = KnownBlockType | (string & {})
@@ -396,6 +401,39 @@ export type TodoItemBlock = BaseBlock<
 >
 
 /**
+ * Video and audio (#423), flow blocks: a media library file played by the browser's own
+ * player (never on its own: no autoplay), and a caption like an image's. `media.ts`.
+ */
+export type VideoBlock = BaseBlock<
+  "video",
+  {
+    /** The media library item. Absent: the block has no file yet. */
+    mediaId?: number
+    caption?: CaptionText[]
+  }
+>
+
+export type AudioBlock = BaseBlock<
+  "audio",
+  {
+    mediaId?: number
+    caption?: CaptionText[]
+  }
+>
+
+/**
+ * File (#423), a flow block: a download link to a media library file, with its type and
+ * size. `label` is the link text (plain, `normalizeFileLabel`); absent: the file's name.
+ */
+export type FileBlock = BaseBlock<
+  "file",
+  {
+    mediaId?: number
+    label?: string
+  }
+>
+
+/**
  * Custom block type for theme-defined blocks (e.g., alert, callout, etc.)
  * Preserves the full ProseMirror JSON for round-trip fidelity.
  */
@@ -426,6 +464,9 @@ export type Block =
   | TodoListBlock
   | TodoItemBlock
   | TableBlock
+  | VideoBlock
+  | AudioBlock
+  | FileBlock
   | CustomBlock
 
 export interface BlockDocV1 {
@@ -612,6 +653,37 @@ export const zTable = zBase.extend({
   }),
 })
 
+// #423. A media id is a positive integer (the API's media sync skips anything else).
+const zMediaId = z.number().int().positive().optional()
+
+export const zVideo = zBase.extend({
+  type: z.literal("video"),
+  attrs: z.object({
+    mediaId: zMediaId,
+    caption: z.array(zCaptionText).optional(),
+  }),
+})
+
+export const zAudio = zBase.extend({
+  type: z.literal("audio"),
+  attrs: z.object({
+    mediaId: zMediaId,
+    caption: z.array(zCaptionText).optional(),
+  }),
+})
+
+export const zFile = zBase.extend({
+  type: z.literal("file"),
+  attrs: z.object({
+    mediaId: zMediaId,
+    label: z
+      .string()
+      .min(1)
+      .refine((label) => [...label].length <= FILE_LABEL_MAX_LENGTH, `at most ${FILE_LABEL_MAX_LENGTH} characters`)
+      .optional(),
+  }),
+})
+
 /**
  * Catch-all for theme/custom block types not in the known set. Any version: a theme
  * block keeps the version its theme wrote even when that theme isn't installed here.
@@ -640,6 +712,9 @@ const knownBlockSchemas: Record<KnownBlockType, z.ZodTypeAny> = {
   todo_list: zTodoList,
   todo_item: zTodoItem,
   table: zTable,
+  video: zVideo,
+  audio: zAudio,
+  file: zFile,
 }
 
 // A known type must match its own schema; only other types fall back to the custom

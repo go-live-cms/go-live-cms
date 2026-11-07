@@ -23,6 +23,12 @@ export interface BlockMedia {
   focal_point?: { x: number; y: number } | null
   // The image needs no alt text: rendered alt="" (#325).
   decorative?: boolean
+  // For a video, audio or file block only (#423, `utils/mediaFile.ts`): the type and
+  // size ("PDF · 240 KB"), the media's name and the uploaded file's name.
+  mime_type?: string
+  file_size?: number
+  name?: string
+  filename?: string
 }
 
 // Default `sizes` for block images: a content column up to ~1000px wide.
